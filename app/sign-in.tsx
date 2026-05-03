@@ -1,26 +1,34 @@
-import { useSSO } from "@clerk/clerk-expo";
-import * as Linking from "expo-linking";
+import { useSignInWithApple, isClerkAPIResponseError } from "@clerk/clerk-expo";
 import { StyleSheet, View, Text, Alert } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useCallback } from "react";
 
 export default function SignInScreen() {
-  const { startSSOFlow } = useSSO();
+  const { startAppleAuthenticationFlow } = useSignInWithApple();
 
   const onApplePress = useCallback(async () => {
     try {
-      const { createdSessionId, setActive } = await startSSOFlow({
-        strategy: "oauth_apple",
-        redirectUrl: Linking.createURL("/oauth-callback"),
-      });
+      const { createdSessionId, setActive } = await startAppleAuthenticationFlow();
       if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Sign in failed";
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code?: string }).code === "ERR_REQUEST_CANCELED"
+      ) {
+        return;
+      }
+      const message = isClerkAPIResponseError(error)
+        ? error.errors[0]?.message ?? "Sign in failed"
+        : error instanceof Error
+          ? error.message
+          : "Sign in failed";
       Alert.alert("Sign in failed", message);
     }
-  }, [startSSOFlow]);
+  }, [startAppleAuthenticationFlow]);
 
   return (
     <View style={styles.container}>
