@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native
 import { ClerkLoaded, ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as WebBrowser from "expo-web-browser";
 import { useEffect } from "react";
 import "react-native-reanimated";
 
@@ -35,13 +36,13 @@ export default function RootLayout() {
   );
 }
 
-const AUTH_SEGMENTS = ["sign-in", "sign-up"] as const;
+const AUTH_SEGMENTS = ["sign-in", "sign-up"];
 
 function AuthGate() {
   const { isSignedIn, isLoaded } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const onAuthScreen = (AUTH_SEGMENTS as readonly string[]).includes(segments[0] ?? "");
+  const onAuthScreen = AUTH_SEGMENTS.some((s) => s === segments[0]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -51,6 +52,16 @@ function AuthGate() {
       router.replace("/");
     }
   }, [isLoaded, isSignedIn, onAuthScreen, router]);
+
+  // Warm up the OAuth browser once while signed-out so the first SSO tap is snappy.
+  // Hoisted out of the auth screens so swapping sign-in ↔ sign-up doesn't thrash.
+  useEffect(() => {
+    if (!isLoaded || isSignedIn) return;
+    void WebBrowser.warmUpAsync();
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, [isLoaded, isSignedIn]);
 
   return (
     <Stack>

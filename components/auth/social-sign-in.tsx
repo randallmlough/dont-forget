@@ -1,9 +1,9 @@
-import { useSignIn, useSignUp, useSSO, isClerkAPIResponseError } from "@clerk/clerk-expo";
+import { useSignIn, useSignUp, useSSO } from "@clerk/clerk-expo";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect } from "react";
 import { Alert, Pressable, StyleSheet, Text } from "react-native";
+import { userMessage } from "@/lib/clerk-errors";
 
 const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
 
@@ -14,17 +14,8 @@ export function SocialSignIn() {
   const { signUp, isLoaded: signUpLoaded } = useSignUp();
   const { startSSOFlow } = useSSO();
 
-  useEffect(() => {
-    void WebBrowser.warmUpAsync();
-    return () => {
-      void WebBrowser.coolDownAsync();
-    };
-  }, []);
-
   async function onApplePress() {
     if (!signInLoaded || !signUpLoaded) return;
-    const activate = setActive;
-
     try {
       // Clerk verifies the nonce hash embedded in Apple's identity token JWT;
       // omitting it causes "Unauthorized request".
@@ -46,18 +37,16 @@ export function SocialSignIn() {
         token: credential.identityToken,
       });
 
-      if (signIn.firstFactorVerification.status === "transferable") {
-        await signUp.create({
-          transfer: true,
-          emailAddress: credential.email ?? undefined,
-          firstName: credential.fullName?.givenName ?? undefined,
-          lastName: credential.fullName?.familyName ?? undefined,
-        });
-        await activateOrReport(activate, "Sign up", signUp.createdSessionId, signUp.status, signUp.missingFields);
+      const sessionId =
+        signIn.firstFactorVerification.status === "transferable"
+          ? await transferToSignUp(signUp, credential)
+          : signIn.createdSessionId;
+
+      if (sessionId) {
+        await setActive({ session: sessionId });
         return;
       }
-
-      await activateOrReport(activate, "Sign in", signIn.createdSessionId, signIn.status);
+      Alert.alert("Sign in incomplete", "Please try again.");
     } catch (error) {
       if (isAppleCanceledError(error)) return;
       Alert.alert("Sign in failed", userMessage(error));
@@ -68,14 +57,10 @@ export function SocialSignIn() {
     try {
       const result = await startSSOFlow({ strategy: "oauth_google" });
       if (isCanceledAuthSession(result.authSessionResult)) return;
-
       if (result.createdSessionId && result.setActive) {
         await result.setActive({ session: result.createdSessionId });
         return;
       }
-      console.warn("[social-sign-in] Google flow incomplete", {
-        status: result.signIn?.status ?? result.signUp?.status,
-      });
       Alert.alert("Sign in incomplete", "Please try again.");
     } catch (error) {
       Alert.alert("Sign in failed", userMessage(error));
@@ -104,19 +89,18 @@ export function SocialSignIn() {
   );
 }
 
-async function activateOrReport(
-  activate: (params: { session: string }) => Promise<unknown>,
-  label: string,
-  sessionId: string | null | undefined,
-  status: string | null | undefined,
-  missingFields?: readonly string[],
-) {
-  if (sessionId) {
-    await activate({ session: sessionId });
-    return;
-  }
-  console.warn(`[social-sign-in] ${label} incomplete`, { status, missingFields });
-  Alert.alert(`${label} incomplete`, "Please try again.");
+async function transferToSignUp(
+  signUp: ReturnType<typeof useSignUp>["signUp"],
+  credential: AppleAuthentication.AppleAuthenticationCredential,
+): Promise<string | null> {
+  if (!signUp) return null;
+  await signUp.create({
+    transfer: true,
+    emailAddress: credential.email ?? undefined,
+    firstName: credential.fullName?.givenName ?? undefined,
+    lastName: credential.fullName?.familyName ?? undefined,
+  });
+  return signUp.createdSessionId;
 }
 
 function isAppleCanceledError(error: unknown): boolean {
@@ -133,12 +117,6 @@ function isCanceledAuthSession(
 ): boolean {
   if (!result) return false;
   return result.type === "cancel" || result.type === "dismiss" || result.type === "locked";
-}
-
-export function userMessage(error: unknown): string {
-  if (isClerkAPIResponseError(error)) return error.errors[0]?.message ?? "Sign in failed";
-  if (error instanceof Error) return error.message;
-  return "Sign in failed";
 }
 
 const styles = StyleSheet.create({
