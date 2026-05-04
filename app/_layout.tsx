@@ -35,13 +35,13 @@ export default function RootLayout() {
   );
 }
 
-const SIGN_IN_SEGMENT = "sign-in";
+const AUTH_SEGMENTS = ["sign-in", "sign-up"] as const;
 
 function AuthGate() {
   const { isSignedIn, isLoaded } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const onAuthScreen = segments[0] === SIGN_IN_SEGMENT;
+  const onAuthScreen = (AUTH_SEGMENTS as readonly string[]).includes(segments[0] ?? "");
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -56,7 +56,8 @@ function AuthGate() {
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: "modal", title: "Modal" }} />
-      <Stack.Screen name={SIGN_IN_SEGMENT} options={{ headerShown: false }} />
+      <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+      <Stack.Screen name="sign-up" options={{ headerShown: false }} />
     </Stack>
   );
 }
