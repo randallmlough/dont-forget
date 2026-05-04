@@ -2,15 +2,34 @@ import { useSignIn, useSignUp, isClerkAPIResponseError } from "@clerk/clerk-expo
 import { StyleSheet, View, Text, Alert } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
-import { useCallback } from "react";
+
+const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded: signInLoaded } = useSignIn();
   const { signUp, isLoaded: signUpLoaded } = useSignUp();
 
-  const onApplePress = useCallback(async () => {
+  async function onApplePress() {
     if (!signInLoaded || !signUpLoaded) return;
+    const activate = setActive;
+
+    async function activateOrReport(
+      label: string,
+      sessionId: string | null | undefined,
+      status: string | null | undefined,
+      missingFields?: readonly string[],
+    ) {
+      if (sessionId) {
+        await activate({ session: sessionId });
+        return;
+      }
+      console.warn(`[sign-in] ${label} incomplete`, { status, missingFields });
+      Alert.alert(`${label} incomplete`, "Please try again.");
+    }
+
     try {
+      // Clerk verifies the nonce hash embedded in Apple's identity token JWT;
+      // omitting it causes "Unauthorized request".
       const nonce = Crypto.randomUUID();
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
@@ -29,47 +48,23 @@ export default function SignInScreen() {
         token: credential.identityToken,
       });
 
-      const needsSignUp = signIn.firstFactorVerification.status === "transferable";
-      if (needsSignUp) {
+      if (signIn.firstFactorVerification.status === "transferable") {
         await signUp.create({
           transfer: true,
           emailAddress: credential.email ?? undefined,
           firstName: credential.fullName?.givenName ?? undefined,
           lastName: credential.fullName?.familyName ?? undefined,
         });
-        if (signUp.createdSessionId) {
-          await setActive({ session: signUp.createdSessionId });
-        } else {
-          Alert.alert(
-            "Sign up incomplete",
-            `status=${signUp.status} missing=${(signUp.missingFields ?? []).join(",") || "none"}`,
-          );
-        }
+        await activateOrReport("Sign up", signUp.createdSessionId, signUp.status, signUp.missingFields);
         return;
       }
 
-      if (signIn.createdSessionId) {
-        await setActive({ session: signIn.createdSessionId });
-      } else {
-        Alert.alert("Sign in incomplete", `status=${signIn.status}`);
-      }
+      await activateOrReport("Sign in", signIn.createdSessionId, signIn.status);
     } catch (error) {
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        (error as { code?: string }).code === "ERR_REQUEST_CANCELED"
-      ) {
-        return;
-      }
-      const message = isClerkAPIResponseError(error)
-        ? error.errors[0]?.message ?? "Sign in failed"
-        : error instanceof Error
-          ? error.message
-          : "Sign in failed";
-      Alert.alert("Sign in failed", message);
+      if (isAppleCanceledError(error)) return;
+      Alert.alert("Sign in failed", userMessage(error));
     }
-  }, [signIn, signUp, setActive, signInLoaded, signUpLoaded]);
+  }
 
   return (
     <View style={styles.container}>
@@ -84,6 +79,21 @@ export default function SignInScreen() {
       />
     </View>
   );
+}
+
+function isAppleCanceledError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === APPLE_CANCELED_CODE
+  );
+}
+
+function userMessage(error: unknown): string {
+  if (isClerkAPIResponseError(error)) return error.errors[0]?.message ?? "Sign in failed";
+  if (error instanceof Error) return error.message;
+  return "Sign in failed";
 }
 
 const styles = StyleSheet.create({

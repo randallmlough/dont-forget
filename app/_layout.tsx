@@ -35,26 +35,28 @@ export default function RootLayout() {
   );
 }
 
+const SIGN_IN_SEGMENT = "sign-in";
+
 function AuthGate() {
   const { isSignedIn, isLoaded } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const onAuthScreen = segments[0] === SIGN_IN_SEGMENT;
 
   useEffect(() => {
     if (!isLoaded) return;
-    const onAuthScreen = segments[0] === "sign-in";
     if (!isSignedIn && !onAuthScreen) {
       router.replace("/sign-in");
     } else if (isSignedIn && onAuthScreen) {
       router.replace("/");
     }
-  }, [isLoaded, isSignedIn, segments, router]);
+  }, [isLoaded, isSignedIn, onAuthScreen, router]);
 
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: "modal", title: "Modal" }} />
-      <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+      <Stack.Screen name={SIGN_IN_SEGMENT} options={{ headerShown: false }} />
     </Stack>
   );
 }

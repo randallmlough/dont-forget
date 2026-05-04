@@ -35,8 +35,7 @@ export const items = sqliteTable(
   ],
 );
 
-// Per-Member check state. Existence + non-null checked_at = checked.
-// Splitting this out keeps the highest-collision field off the items row (ADR-0002).
+// Split out from `items` so the highest-collision field can't conflict under LWW (ADR-0002).
 export const itemChecks = sqliteTable(
   "item_checks",
   {
