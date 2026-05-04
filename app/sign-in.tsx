@@ -1,13 +1,25 @@
-import { useSignIn, useSignUp, isClerkAPIResponseError } from "@clerk/clerk-expo";
-import { StyleSheet, View, Text, Alert } from "react-native";
+import { useSignIn, useSignUp, useSSO, isClerkAPIResponseError } from "@clerk/clerk-expo";
+import { StyleSheet, View, Text, Alert, Pressable } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
+import * as WebBrowser from "expo-web-browser";
+import { useEffect } from "react";
 
 const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded: signInLoaded } = useSignIn();
   const { signUp, isLoaded: signUpLoaded } = useSignUp();
+  const { startSSOFlow } = useSSO();
+
+  useEffect(() => {
+    void WebBrowser.warmUpAsync();
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, []);
 
   async function onApplePress() {
     if (!signInLoaded || !signUpLoaded) return;
@@ -66,6 +78,24 @@ export default function SignInScreen() {
     }
   }
 
+  async function onGooglePress() {
+    try {
+      const result = await startSSOFlow({ strategy: "oauth_google" });
+      if (isCanceledAuthSession(result.authSessionResult)) return;
+
+      if (result.createdSessionId && result.setActive) {
+        await result.setActive({ session: result.createdSessionId });
+        return;
+      }
+      console.warn("[sign-in] Google flow incomplete", {
+        status: result.signIn?.status ?? result.signUp?.status,
+      });
+      Alert.alert("Sign in incomplete", "Please try again.");
+    } catch (error) {
+      Alert.alert("Sign in failed", userMessage(error));
+    }
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Don&apos;t Forget</Text>
@@ -74,9 +104,18 @@ export default function SignInScreen() {
         buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
         buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
         cornerRadius={8}
-        style={styles.appleButton}
+        style={styles.providerButton}
         onPress={onApplePress}
       />
+      <Pressable
+        onPress={onGooglePress}
+        style={({ pressed }) => [
+          styles.providerButton,
+          styles.googleButton,
+          pressed && styles.googleButtonPressed,
+        ]}>
+        <Text style={styles.googleLabel}>Continue with Google</Text>
+      </Pressable>
     </View>
   );
 }
@@ -88,6 +127,13 @@ function isAppleCanceledError(error: unknown): boolean {
     "code" in error &&
     (error as { code?: unknown }).code === APPLE_CANCELED_CODE
   );
+}
+
+function isCanceledAuthSession(
+  result: WebBrowser.WebBrowserAuthSessionResult | null | undefined,
+): boolean {
+  if (!result) return false;
+  return result.type === "cancel" || result.type === "dismiss" || result.type === "locked";
 }
 
 function userMessage(error: unknown): string {
@@ -102,7 +148,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 32,
-    gap: 16,
+    gap: 12,
   },
   title: {
     fontSize: 32,
@@ -114,8 +160,24 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 24,
   },
-  appleButton: {
+  providerButton: {
     width: "100%",
     height: 52,
+  },
+  googleButton: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#dadce0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleButtonPressed: {
+    opacity: 0.7,
+  },
+  googleLabel: {
+    color: "#1f1f1f",
+    fontSize: 17,
+    fontWeight: "500",
   },
 });
