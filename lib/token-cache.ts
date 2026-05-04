@@ -1,6 +1,8 @@
 import type { TokenCache } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
 
+import { logger } from "./logger";
+
 const isWeb = process.env.EXPO_OS === "web";
 
 export const tokenCache: TokenCache = {
@@ -9,7 +11,7 @@ export const tokenCache: TokenCache = {
     try {
       return await SecureStore.getItemAsync(key);
     } catch (error) {
-      console.warn(`[tokenCache] failed to read "${key}":`, error);
+      logger.warn("token cache read failed", { key, error });
       return null;
     }
   },

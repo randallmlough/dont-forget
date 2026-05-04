@@ -3,6 +3,7 @@ import Constants from 'expo-constants'
 
 const apiKey = Constants.expoConfig?.extra?.posthogProjectToken as string | undefined
 const host = Constants.expoConfig?.extra?.posthogHost as string | undefined
+const appVersion = Constants.expoConfig?.version
 const isPostHogConfigured = !!apiKey && apiKey !== 'phc_your_project_token_here'
 
 if (!isPostHogConfigured) {
@@ -18,4 +19,9 @@ export const posthog = new PostHog(apiKey || 'placeholder_key', {
   captureAppLifecycleEvents: true,
   flushAt: 20,
   flushInterval: 10000,
+  logs: {
+    serviceName: 'dont-forget',
+    environment: __DEV__ ? 'development' : 'production',
+    serviceVersion: appVersion,
+  },
 })

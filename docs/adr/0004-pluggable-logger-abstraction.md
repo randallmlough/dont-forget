@@ -1,0 +1,14 @@
+# Logger abstraction sits between call sites and PostHog
+
+Diagnostic logging in the RN app goes through `lib/logger.ts` rather than calling `posthog.logger.*` directly. The abstraction exposes four levels (`debug`, `info`, `warn`, `error`) and a `.with(boundAttributes)` method for child loggers; a `useLogger()` React hook returns a logger pre-bound with the current Clerk user id. The PostHog adapter normalizes `Error` instances into flat fields (`error_message`, `error_name`, `error_stack`, `error_cause`) and runs a deny-list + regex pass to redact `Bearer` tokens and JWT-shaped strings before forwarding. In `__DEV__`, the same record is mirrored to `console`.
+
+The abstraction is **logger-only**. Product analytics events (`posthog.capture("user_signed_in", ...)`) continue to call PostHog directly through `lib/posthog.ts` — they have a different lifecycle (curated event vocabulary, dashboards, funnels) than diagnostic logs and do not share the swap pressure that motivated this layer.
+
+## Consequences
+
+- **Swappable provider.** Replacing PostHog as the *log* sink is a single-file change: write a new `LoggerAdapter` implementation, point the singleton at it, done. Call sites do not move. This does not give us free swap-out of analytics — `posthog.capture` calls remain coupled to PostHog by design.
+- **Identity binding survives the swap.** `useLogger()` reads Clerk and binds `user_id` into every record via `.with(...)`. This duplicates work that PostHog's logger already does (it auto-tags `distinct_id` from `posthog.identify`), but doing it ourselves means a non-PostHog adapter inherits the same user context without any auth-side changes.
+- **Errors become structured, not stringified.** Because `JSON.stringify(error)` drops `message` and `stack`, the adapter explicitly extracts those into top-level attributes. Searching logs by `error_name` or filtering on stack content works without server-side parsing.
+- **Redaction is best-effort, not airtight.** The Bearer/JWT regex catches the realistic accidents (e.g. an `Error` from `fetch` carrying an auth header in its message). It will not catch novel secret formats. This trade was deliberate: an allow-list on attribute keys would turn diagnostic logging into a config-edit ritual and discourage logging during incidents.
+- **Bootstrap and CLI code stays on `console`.** `lib/posthog.ts` warns on missing config before the logger could possibly be initialized; `db/migrate.ts` is a developer-facing CLI whose "logs" are operator status, not telemetry. Both keep `console.*` and are expected to.
+- **One indirection per log call.** `BaseLogger.write` allocates a merged attribute object and dispatches through an adapter. At RN call volumes this is invisible; if logging ever lands on a hot path (e.g. per-frame), the call site should reconsider whether it should be logging at all.
