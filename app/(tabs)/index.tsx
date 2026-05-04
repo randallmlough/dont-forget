@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { Platform, Pressable, StyleSheet } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
+import { usePostHog } from 'posthog-react-native';
 
 import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
@@ -11,6 +12,7 @@ import { Link } from 'expo-router';
 export default function HomeScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
+  const posthog = usePostHog();
 
   return (
     <ParallaxScrollView
@@ -89,7 +91,7 @@ export default function HomeScreen() {
           </ThemedText>
         )}
         <Pressable
-          onPress={() => signOut()}
+          onPress={() => { posthog.capture('user_signed_out'); posthog.reset(); void signOut(); }}
           style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutButtonPressed]}>
           <ThemedText type="defaultSemiBold" style={styles.signOutLabel}>
             Sign out

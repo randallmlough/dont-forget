@@ -1,6 +1,7 @@
 import { useSignIn } from "@clerk/clerk-expo";
 import { useState } from "react";
 import { Alert } from "react-native";
+import { usePostHog } from "posthog-react-native";
 import { AuthFooterLink } from "@/components/auth/auth-footer-link";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { AuthTextInput } from "@/components/auth/auth-text-input";
@@ -14,6 +15,7 @@ export default function SignInScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const posthog = usePostHog();
 
   async function onSubmit() {
     if (!isLoaded) return;
@@ -26,6 +28,8 @@ export default function SignInScreen() {
     try {
       const attempt = await signIn.create({ identifier, password });
       if (attempt.createdSessionId) {
+        posthog.identify(identifier, { $set: { email: identifier } });
+        posthog.capture("user_signed_in", { method: "email" });
         await setActive({ session: attempt.createdSessionId });
         return;
       }
