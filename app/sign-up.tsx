@@ -1,7 +1,6 @@
 import { useSignUp } from "@clerk/clerk-expo";
 import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text } from "react-native";
-import { usePostHog } from "posthog-react-native";
 import { AuthFooterLink } from "@/components/auth/auth-footer-link";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { AuthTextInput } from "@/components/auth/auth-text-input";
@@ -9,6 +8,7 @@ import { OrDivider } from "@/components/auth/or-divider";
 import { PrimaryButton } from "@/components/auth/primary-button";
 import { SocialSignIn } from "@/components/auth/social-sign-in";
 import { userMessage } from "@/lib/clerk-errors";
+import { track } from "@/lib/analytics";
 
 export default function SignUpScreen() {
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
@@ -39,7 +39,6 @@ function CreateAccountForm({ onPendingVerification }: { onPendingVerification: (
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const posthog = usePostHog();
 
   async function onCreate() {
     if (!isLoaded) return;
@@ -56,13 +55,12 @@ function CreateAccountForm({ onPendingVerification }: { onPendingVerification: (
     try {
       const attempt = await signUp.create({ emailAddress: trimmedEmail, password });
       if (attempt.createdSessionId) {
-        posthog.identify(trimmedEmail, { $set: { email: trimmedEmail }, $set_once: { created_at: new Date().toISOString() } });
-        posthog.capture("user_signed_up", { method: "email" });
+        track("user_signed_up", { method: "email" });
         await setActive({ session: attempt.createdSessionId });
         return;
       }
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-      posthog.capture("user_signed_up", { method: "email" });
+      track("user_signed_up", { method: "email" });
       onPendingVerification(trimmedEmail);
     } catch (error) {
       Alert.alert("Sign up failed", userMessage(error));
@@ -110,7 +108,6 @@ function VerifyEmailForm({ onBack }: { onBack: () => void }) {
   const { signUp, setActive, isLoaded } = useSignUp();
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const posthog = usePostHog();
 
   async function onVerify() {
     if (!isLoaded) return;
@@ -123,11 +120,7 @@ function VerifyEmailForm({ onBack }: { onBack: () => void }) {
     try {
       const attempt = await signUp.attemptEmailAddressVerification({ code: trimmedCode });
       if (attempt.createdSessionId) {
-        const email = signUp.emailAddress ?? undefined;
-        if (email) {
-          posthog.identify(email, { $set: { email }, $set_once: { created_at: new Date().toISOString() } });
-        }
-        posthog.capture("user_email_verified");
+        track("user_email_verified", {});
         await setActive({ session: attempt.createdSessionId });
         return;
       }

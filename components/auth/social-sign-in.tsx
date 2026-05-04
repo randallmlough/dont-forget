@@ -3,8 +3,8 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { Alert, Pressable, StyleSheet, Text } from "react-native";
-import { usePostHog } from "posthog-react-native";
 import { userMessage } from "@/lib/clerk-errors";
+import { track } from "@/lib/analytics";
 
 const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
 
@@ -14,7 +14,6 @@ export function SocialSignIn() {
   const { signIn, setActive, isLoaded: signInLoaded } = useSignIn();
   const { signUp, isLoaded: signUpLoaded } = useSignUp();
   const { startSSOFlow } = useSSO();
-  const posthog = usePostHog();
 
   async function onApplePress() {
     if (!signInLoaded || !signUpLoaded) return;
@@ -45,10 +44,7 @@ export function SocialSignIn() {
           : signIn.createdSessionId;
 
       if (sessionId) {
-        if (credential.email) {
-          posthog.identify(credential.email, { $set: { email: credential.email } });
-        }
-        posthog.capture("user_signed_in_apple", { method: "apple" });
+        track("user_signed_in", { method: "apple" });
         await setActive({ session: sessionId });
         return;
       }
@@ -64,7 +60,7 @@ export function SocialSignIn() {
       const result = await startSSOFlow({ strategy: "oauth_google" });
       if (isCanceledAuthSession(result.authSessionResult)) return;
       if (result.createdSessionId && result.setActive) {
-        posthog.capture("user_signed_in_google", { method: "google" });
+        track("user_signed_in", { method: "google" });
         await result.setActive({ session: result.createdSessionId });
         return;
       }

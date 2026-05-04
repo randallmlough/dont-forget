@@ -10,6 +10,7 @@ import { PostHogProvider } from "posthog-react-native";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { tokenCache } from "@/lib/token-cache";
 import { posthog } from "@/lib/posthog";
+import { screen, useAnalyticsIdentity } from "@/lib/analytics";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -31,7 +32,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (previousPathname.current !== pathname) {
-      posthog.screen(pathname, { previous_screen: previousPathname.current ?? null, ...params });
+      screen(pathname, { previous_screen: previousPathname.current ?? null, ...params });
       previousPathname.current = pathname;
     }
   }, [pathname, params]);
@@ -60,6 +61,8 @@ function AuthGate() {
   const segments = useSegments();
   const router = useRouter();
   const onAuthScreen = AUTH_SEGMENTS.some((s) => s === segments[0]);
+
+  useAnalyticsIdentity();
 
   useEffect(() => {
     if (!isLoaded) return;
