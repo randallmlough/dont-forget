@@ -24,44 +24,9 @@ export default function SignInScreen() {
         throw new Error("Apple did not return an identity token");
       }
 
-      const decodeJwtPayload = (jwt: string) => {
-        try {
-          const part = jwt.split(".")[1];
-          const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
-          const b64 = padded.replace(/-/g, "+").replace(/_/g, "/");
-          return JSON.parse(
-            decodeURIComponent(
-              atob(b64)
-                .split("")
-                .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-                .join(""),
-            ),
-          );
-        } catch (e) {
-          return { _decodeError: String(e) };
-        }
-      };
-
-      console.log("[apple] credential", {
-        email: credential.email,
-        givenName: credential.fullName?.givenName,
-        familyName: credential.fullName?.familyName,
-        user: credential.user,
-      });
-      console.log("[apple] identityToken claims", decodeJwtPayload(credential.identityToken));
-
       await signIn.create({
         strategy: "oauth_token_apple",
         token: credential.identityToken,
-      });
-      console.log("[apple] signIn after create", {
-        status: signIn.status,
-        identifier: signIn.identifier,
-        firstFactorStatus: signIn.firstFactorVerification?.status,
-        firstFactorStrategy: signIn.firstFactorVerification?.strategy,
-        firstFactorError: signIn.firstFactorVerification?.error,
-        userData: (signIn as unknown as { userData?: unknown }).userData,
-        createdSessionId: signIn.createdSessionId,
       });
 
       const needsSignUp = signIn.firstFactorVerification.status === "transferable";
@@ -71,16 +36,6 @@ export default function SignInScreen() {
           emailAddress: credential.email ?? undefined,
           firstName: credential.fullName?.givenName ?? undefined,
           lastName: credential.fullName?.familyName ?? undefined,
-        });
-        console.log("[apple] signUp after create", {
-          status: signUp.status,
-          emailAddress: signUp.emailAddress,
-          missingFields: signUp.missingFields,
-          unverifiedFields: signUp.unverifiedFields,
-          requiredFields: signUp.requiredFields,
-          optionalFields: signUp.optionalFields,
-          verifications: signUp.verifications,
-          createdSessionId: signUp.createdSessionId,
         });
         if (signUp.createdSessionId) {
           await setActive({ session: signUp.createdSessionId });
