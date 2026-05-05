@@ -44,3 +44,4 @@ app-example
 .vscode
 .idea/
 /.pnpm-store/
+/docs/.obsidian/
