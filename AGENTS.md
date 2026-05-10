@@ -63,12 +63,15 @@ pnpm ios
 pnpm android
 pnpm web
 pnpm lint
-pnpm exec tsc --noEmit
+pnpm typecheck
+pnpm test
+pnpm test:ci
+pnpm test:coverage
 pnpm db:generate
 pnpm db:migrate
 ```
 
-There is no test runner configured yet. For TS/TSX changes, run `pnpm exec tsc --noEmit` and `pnpm lint` when practical. Only run `pnpm db:migrate` when intentionally applying migrations to configured databases.
+For TS/TSX changes, run `pnpm typecheck`, `pnpm lint`, and `pnpm test:ci` when practical. Use `pnpm test` for local watch mode and `pnpm test:coverage` when you need a coverage report. Only run `pnpm db:migrate` when intentionally applying migrations to configured databases.
 
 ## Architecture Constraints
 
@@ -98,6 +101,7 @@ Use the smallest proof that covers the change:
 
 - Docs-only: proofread and search for stale terms.
 - TS/TSX: run typecheck and lint when practical.
+- Tests: run `pnpm test:ci` when practical; database tests use isolated local libSQL files created by `test/db.ts`.
 - Auth/routing/provider changes: run an Expo target when practical.
 - Analytics/logging: confirm typed events and structured, redacted attributes.
 - DB schema: generate migrations and inspect SQL before applying.

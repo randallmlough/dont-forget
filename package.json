@@ -9,9 +9,13 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "test": "jest --watch",
+    "test:ci": "jest --runInBand",
+    "test:coverage": "jest --coverage --runInBand",
+    "typecheck": "tsc --noEmit",
     "db:generate:directory": "drizzle-kit generate --config=drizzle.directory.config.ts",
     "db:generate:household": "drizzle-kit generate --config=drizzle.household.config.ts",
-    "db:generate": "npm run db:generate:directory && npm run db:generate:household",
+    "db:generate": "pnpm run db:generate:directory && pnpm run db:generate:household",
     "db:migrate": "tsx db/migrate.ts"
   },
   "dependencies": {
@@ -52,10 +56,14 @@
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^13.3.3",
+    "@types/jest": "29.5.14",
     "@types/react": "~19.1.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "jest": "~29.7.0",
+    "jest-expo": "~54.0.17",
     "tsx": "^4.21.0",
     "typescript": "~5.9.2"
   },
