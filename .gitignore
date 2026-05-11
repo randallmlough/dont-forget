@@ -45,3 +45,6 @@ app-example
 .idea/
 /.pnpm-store/
 /docs/.obsidian/
+
+*storybook.log
+storybook-static

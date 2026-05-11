@@ -32,12 +32,17 @@ _Avoid_: entry, todo, task
 A token issued by a Member to invite a User to join their Household. Single-use, 7-day expiration, revocable. Delivered via email (Resend) and/or a shareable link.
 _Avoid_: invite link, share, request
 
+**Home**:
+The authenticated app surface showing the current List for the active Household.
+_Avoid_: dashboard, landing page
+
 ## Relationships
 
 - A **User** is a **Member** of zero or more **Households**
 - A **Household** has one or more **Members**
 - A **Household** owns zero or more **Lists**
 - A **List** contains zero or more **Items**
+- **Home** shows one **List** from the active **Household**
 
 ## Decisions in flight
 
@@ -51,6 +56,7 @@ _Avoid_: invite link, share, request
 - **Conflict resolution**: row-level last-write-wins on `items` and `lists`; the `checked` state lives in a separate `item_checks` table (per-Member, per-Item) so the highest-collision field can't conflict. _Decided 2026-04-29._
 - **Soft-delete**: tombstones (`deleted_at`) on every replicated table; no hard deletes from the app; server-side GC after replicas catch up. _Decided 2026-04-29._
 - **First-run flow**: on first sign-in, server auto-creates a Household named after the User's first name (or "Untitled" if Apple didn't return one). User lands on an empty list, can rename or invite later. Invitation links route through a separate accept flow. _Decided 2026-04-29._
+- **Home surface**: after authentication, Home is the current List view for the active Household, not a generic dashboard. First-run Home shows the auto-created Household and an empty List state. _Decided 2026-05-10._
 - **Real-time delivery**: pure polling via Turso's RN sync (1s foregrounded list view, 30s elsewhere foregrounded, off backgrounded). Silent APNs push hints deferred to a later iteration. _Decided 2026-04-29._
 - **ORM & migrations**: Drizzle for schema definition (shared between Expo app and API Routes); drizzle-kit for migration generation; custom runner fans out across the directory DB and all Household DBs (see ADR-0003). _Decided 2026-04-29._
 

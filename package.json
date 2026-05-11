@@ -8,6 +8,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "storybook": "STORYBOOK_ENABLED=true expo start",
+    "storybook:ios": "STORYBOOK_ENABLED=true expo start --ios",
+    "storybook:android": "STORYBOOK_ENABLED=true expo start --android",
+    "storybook:generate": "sb-rn-get-stories",
     "lint": "expo lint",
     "test": "jest --watch",
     "test:ci": "jest --runInBand",
@@ -19,12 +23,21 @@
     "db:migrate": "tsx db/migrate.ts"
   },
   "dependencies": {
+    "@babel/core": "^7.29.0",
     "@clerk/clerk-expo": "^2.19.31",
     "@expo/vector-icons": "^15.0.3",
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@libsql/client": "^0.17.3",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/datetimepicker": "^8.4.4",
+    "@react-native-community/slider": "^5.0.1",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
+    "@storybook/addon-ondevice-actions": "^10.4.1",
+    "@storybook/addon-ondevice-controls": "^10.4.1",
+    "@storybook/react-native": "^10.4.1",
+    "babel-loader": "^8.4.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "expo": "~54.0.33",
@@ -53,7 +66,8 @@
     "react-native-screens": "~4.16.0",
     "react-native-svg": "^15.15.4",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.5.1"
+    "react-native-worklets": "0.5.1",
+    "storybook": "^10.3.6"
   },
   "devDependencies": {
     "@testing-library/react-native": "^13.3.3",

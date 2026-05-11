@@ -31,6 +31,7 @@
       "expo-router",
       "expo-apple-authentication",
       "expo-secure-store",
+      "@react-native-community/datetimepicker",
       [
         "expo-splash-screen",
         {
