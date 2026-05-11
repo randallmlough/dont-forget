@@ -16,6 +16,7 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | `make android` | Build and run the app on Android. |
 | `make storybook` | Start native React Native Storybook. |
 | `make verify` | Run typecheck, lint, and tests. |
+| `make ci` | Run the full CI contract locally. |
 
 ## App
 
@@ -41,11 +42,14 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | Command | Description |
 | --- | --- |
 | `make verify` | Run typecheck, lint, and tests. |
+| `make ci` | Run typecheck, lint, tests, Expo checks, and high-severity dependency audit. |
 | `make typecheck` | First pass for TypeScript and TSX changes. |
 | `make lint` | Style and lint proof for app code. |
 | `make test-ci` | Preferred test proof for CI-like local verification. |
 | `make test-coverage` | Run Jest with coverage output. |
+| `make audit` | Audit dependencies for high-severity vulnerabilities. |
 | `make expo-check` | Check Expo SDK package compatibility. |
+| `make expo-config-check` | Validate dynamic public Expo config without printing it. |
 | `make expo-clear` | Start Expo with a cleared Metro cache. Useful after dependency or Metro config changes. |
 
 ## Tests

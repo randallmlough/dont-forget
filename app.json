@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "dontforget",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dont-forget.app",
@@ -20,7 +19,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -30,7 +28,9 @@
     "plugins": [
       "expo-router",
       "expo-apple-authentication",
+      "expo-font",
       "expo-secure-store",
+      "expo-web-browser",
       "@react-native-community/datetimepicker",
       [
         "expo-splash-screen",

@@ -67,11 +67,13 @@ pnpm typecheck
 pnpm test
 pnpm test:ci
 pnpm test:coverage
+pnpm expo install --check
+pnpm audit --audit-level high
 pnpm db:generate
 pnpm db:migrate
 ```
 
-For TS/TSX changes, run `pnpm typecheck`, `pnpm lint`, and `pnpm test:ci` when practical. Use `pnpm test` for local watch mode and `pnpm test:coverage` when you need a coverage report. Only run `pnpm db:migrate` when intentionally applying migrations to configured databases.
+For TS/TSX changes, run `pnpm typecheck`, `pnpm lint`, and `pnpm test:ci` when practical. Use `pnpm test` for local watch mode and `pnpm test:coverage` when you need a coverage report. For CI parity, run `make ci` when practical. Only run `pnpm db:migrate` when intentionally applying migrations to configured databases.
 
 ## Architecture Constraints
 

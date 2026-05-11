@@ -26,10 +26,13 @@ android: ## Run the native Android target *common*
 
 .PHONY: storybook
 storybook: ## Start native React Native Storybook *common*
-	@$(PNPM) storybook
+	@$(PNPM) storybook:start
 
 .PHONY: verify
 verify: typecheck lint test-ci ## Run typecheck, lint, and tests *common*
+
+.PHONY: ci
+ci: verify expo-check expo-config-check audit ## Run the full CI contract *common*
 
 ##@ App
 
@@ -65,9 +68,17 @@ typecheck: ## Run TypeScript without emitting files *common*
 lint: ## Run Expo lint *common*
 	@$(PNPM) lint
 
+.PHONY: audit
+audit: ## Audit dependencies for high-severity vulnerabilities
+	@$(PNPM) audit --audit-level high
+
 .PHONY: expo-check
 expo-check: ## Check Expo SDK package compatibility
 	@$(PNPM) expo install --check
+
+.PHONY: expo-config-check
+expo-config-check: ## Resolve the public Expo config without printing it
+	@$(PNPM) expo config --type public > /dev/null
 
 .PHONY: expo-clear
 expo-clear: ## Start Expo with a cleared Metro cache
