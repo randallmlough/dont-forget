@@ -2,6 +2,7 @@
   "name": "dont-forget",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "packageManager": "pnpm@10.11.0",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -24,7 +25,7 @@
   },
   "dependencies": {
     "@babel/core": "^7.29.0",
-    "@clerk/clerk-expo": "^2.19.31",
+    "@clerk/clerk-expo": "^2.19.36",
     "@expo/ui": "~55.0.15",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.14",
