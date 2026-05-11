@@ -26,7 +26,7 @@ android: ## Run the native Android target *common*
 
 .PHONY: storybook
 storybook: ## Start native React Native Storybook *common*
-	@$(PNPM) storybook
+	@$(PNPM) storybook:start
 
 .PHONY: verify
 verify: typecheck lint test-ci ## Run typecheck, lint, and tests *common*
