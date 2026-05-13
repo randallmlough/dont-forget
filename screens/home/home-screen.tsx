@@ -1,16 +1,50 @@
+import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
 import { ActiveList, type ActiveListInitialState } from "@/components/active-list";
+import { reset, track } from "@/lib/analytics";
 
-export type HomeScreenProps = {
+export type HomeScreenViewProps = {
   currentMemberName: string;
   initialList: ActiveListInitialState;
   onSignOut?: () => void;
 };
 
-export function HomeScreen({ currentMemberName, initialList, onSignOut }: HomeScreenProps) {
+export default function HomeScreen() {
+  const { signOut } = useAuth();
+  const { user } = useUser();
+  const currentMemberName =
+    user?.fullName ?? user?.firstName ?? user?.primaryEmailAddress?.emailAddress ?? "Member";
+  const householdName = user?.firstName ?? "Untitled";
+
+  const initialList = useMemo<ActiveListInitialState>(
+    () => ({
+      householdName,
+      listName: "Groceries",
+      items: [],
+    }),
+    [householdName],
+  );
+
+  function onSignOut() {
+    track("user_signed_out", {});
+    reset();
+    void signOut();
+  }
+
+  return (
+    <HomeScreenView
+      currentMemberName={currentMemberName}
+      initialList={initialList}
+      onSignOut={onSignOut}
+    />
+  );
+}
+
+export function HomeScreenView({ currentMemberName, initialList, onSignOut }: HomeScreenViewProps) {
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.root}>
       <View style={styles.accountBar}>

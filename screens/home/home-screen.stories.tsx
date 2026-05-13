@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import { type ActiveListInitialState } from "@/components/active-list";
-import { HomeScreen } from "@/components/home/home-screen";
+import { HomeScreenView } from "@/screens/home/home-screen";
 
 const emptyHomeList: ActiveListInitialState = {
   householdName: "Avery",
@@ -23,7 +23,7 @@ const populatedHomeList: ActiveListInitialState = {
 
 const meta = {
   title: "Home/HomeScreen",
-  component: HomeScreen,
+  component: HomeScreenView,
   parameters: {
     noSafeArea: true,
   },
@@ -34,7 +34,7 @@ const meta = {
       </View>
     ),
   ],
-} satisfies Meta<typeof HomeScreen>;
+} satisfies Meta<typeof HomeScreenView>;
 
 export default meta;
 

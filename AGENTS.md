@@ -20,7 +20,7 @@
 
 - Single iOS-only Expo app, no workspace packages. The JS entrypoint is `index.ts`, which loads Unistyles before `expo-router/entry`; app-wide PostHog, Clerk, theme, auth gating, and screen tracking are wired in `app/_layout.tsx`.
 - Do not add duplicate Clerk/PostHog providers. Auth screens should track typed events and call `setActive(...)`; `useAnalyticsIdentity()` in the root syncs identity. Sign-out order is `track("user_signed_out", {})`, then `reset()`, then `signOut()`.
-- `app/index.tsx` is Home. Current active-List UI lives in `components/active-list` and `components/home`; do not infer product behavior from Expo starter scaffold.
+- Expo Router uses route groups: `app/(app)` for authenticated app routes and `app/(auth)` for signed-out auth routes. `/` is Home at `app/(app)/index.tsx`; route-owned screen code lives in `screens/`; reusable feature UI such as Active List lives in `components/active-list`.
 - Data is split between a server-only directory DB (`db/schema/directory.ts`) for Households/Memberships/Invitations and one replicated Household libSQL DB (`db/schema/household.ts`) per Household for Lists/Items/`item_checks`. Do not perform cross-Household SQL joins.
 - Replicated data uses row-level last-write-wins; `item_checks` is separate from `items` to avoid checked-state conflicts. App delete paths write tombstones (`deleted_at`), not hard deletes.
 - Drizzle migrations have two folders. `drizzle.household.config.ts` is SQL-only; `db/migrate.ts` migrates the directory DB, then every active Household DB, and partial success is possible. Schema changes must stay compatible with the previous shipped app version; use two-phase renames/drops and inspect generated SQL.
@@ -29,6 +29,7 @@
 ## App Conventions
 
 - Use the `@/*` root alias and iOS-safe React Native primitives. Android and Web are not supported targets; avoid adding platform forks for them.
+- Keep `app/` files as thin route entries when practical. Put route-owned UI and screen-local side effects in `screens/<surface>/`, and put reusable app components in `components/`.
 - Unistyles is the app-owned styling foundation. Migrate existing `StyleSheet.create` surfaces to Unistyles rather than adding NativeWind/Uniwind className styling. Keep `@expo/ui/swift-ui` controls behind app-owned wrappers when introduced; style SwiftUI internals with Expo UI modifiers, not by assuming normal React Native style inheritance.
 - React Compiler is enabled in `app.json`; do not add memoization hooks reflexively, but preserve deliberate list/perf patterns in nearby code.
 - For composed feature surfaces, prefer domain-shaped context `{ state, actions, meta }`; use compound exports only when there is a real shared provider, as in `ActiveList`.

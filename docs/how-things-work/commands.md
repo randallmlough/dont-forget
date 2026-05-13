@@ -78,5 +78,5 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | `make why PKG=<package>` | Inspect why a package is installed. |
 | `make outdated` | Show dependencies with available newer versions. |
 | `pnpm exec <bin>` | Run a package binary directly from the project dependency graph. |
-| `rg "<term>" docs app components lib db` | Search docs and source for a term. |
+| `rg "<term>" docs app screens components lib db` | Search docs and source for a term. |
 | `make status` | Check the current worktree without verbose output. |

@@ -1,6 +1,6 @@
 import { ThemeProvider } from "@react-navigation/native";
 import { ClerkLoaded, ClerkProvider, useAuth } from "@clerk/clerk-expo";
-import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
+import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useRef } from "react";
@@ -14,7 +14,7 @@ import { screen, useAnalyticsIdentity } from "@/lib/analytics";
 import { navigationTheme } from "@/lib/unistyles/navigation-theme";
 
 export const unstable_settings = {
-  anchor: "index",
+  anchor: "(app)",
 };
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -46,7 +46,7 @@ export default function RootLayout() {
         <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
           <ClerkLoaded>
             <ThemeProvider value={navigationTheme}>
-              <AuthGate />
+              <AuthGate pathname={pathname} />
               <StatusBar style="dark" />
             </ThemeProvider>
           </ClerkLoaded>
@@ -56,13 +56,12 @@ export default function RootLayout() {
   );
 }
 
-const AUTH_SEGMENTS = ["sign-in", "sign-up"];
+const AUTH_PATHS = new Set(["/sign-in", "/sign-up"]);
 
-function AuthGate() {
+function AuthGate({ pathname }: { pathname: string }) {
   const { isSignedIn, isLoaded } = useAuth();
-  const segments = useSegments();
   const router = useRouter();
-  const onAuthScreen = AUTH_SEGMENTS.some((s) => s === segments[0]);
+  const onAuthScreen = AUTH_PATHS.has(pathname);
 
   useAnalyticsIdentity();
 
@@ -86,10 +85,9 @@ function AuthGate() {
   }, [isLoaded, isSignedIn]);
 
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-      <Stack.Screen name="sign-up" options={{ headerShown: false }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(app)" />
+      <Stack.Screen name="(auth)" />
     </Stack>
   );
 }

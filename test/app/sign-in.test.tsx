@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { Alert } from "react-native";
 
-import SignInScreen from "@/app/sign-in";
+import SignInScreen from "@/screens/auth/sign-in-screen";
 import { clerkMocks } from "@/test/mocks/clerk";
 import { analyticsMocks } from "@/test/mocks/analytics";
 

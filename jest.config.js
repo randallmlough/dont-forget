@@ -16,6 +16,7 @@ module.exports = {
     "db/**/*.{ts,tsx}",
     "hooks/**/*.{ts,tsx}",
     "lib/**/*.{ts,tsx}",
+    "screens/**/*.{ts,tsx}",
     "!**/*.d.ts",
     "!**/db/migrations/**",
   ],
