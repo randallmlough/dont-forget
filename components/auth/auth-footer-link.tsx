@@ -1,5 +1,6 @@
 import { Link, type Href } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
 export function AuthFooterLink({
   prompt,
@@ -20,19 +21,19 @@ export function AuthFooterLink({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   row: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 16,
+    marginTop: theme.spacing(4),
   },
   text: {
-    color: "#5f6368",
+    color: theme.colors.textMuted,
     fontSize: 15,
   },
   link: {
-    color: "#1a73e8",
+    color: theme.colors.link,
     fontSize: 15,
     fontWeight: "600",
   },
-});
+}));

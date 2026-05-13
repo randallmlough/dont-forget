@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
 export function OrDivider() {
   return (
@@ -10,20 +11,20 @@ export function OrDivider() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginVertical: 8,
+    gap: theme.spacing(3),
+    marginVertical: theme.spacing(2),
   },
   line: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "#c0c0c0",
+    backgroundColor: theme.colors.divider,
   },
   text: {
     fontSize: 13,
-    color: "#9aa0a6",
+    color: theme.colors.textSubtle,
   },
-});
+}));

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
 import { AuthFooterLink } from "@/components/auth/auth-footer-link";
 import { AuthScreen } from "@/components/auth/auth-screen";
@@ -88,8 +89,9 @@ export const WithDivider: Story = {
 
 function noop() {}
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   canvas: {
     flex: 1,
+    backgroundColor: theme.colors.authBackground,
   },
-});
+}));

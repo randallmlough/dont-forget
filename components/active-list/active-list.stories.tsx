@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
 import { ActiveList, type ActiveListInitialState } from "@/components/active-list";
 
@@ -50,8 +51,9 @@ function ActiveListStory({ initialState }: { initialState: ActiveListInitialStat
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   canvas: {
     flex: 1,
+    backgroundColor: theme.colors.background,
   },
-});
+}));

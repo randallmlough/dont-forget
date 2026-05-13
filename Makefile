@@ -20,10 +20,6 @@ start: ## Start Expo for normal app development *common*
 ios: ## Run the native iOS target *common*
 	@$(PNPM) ios
 
-.PHONY: android
-android: ## Run the native Android target *common*
-	@$(PNPM) android
-
 .PHONY: storybook
 storybook: ## Start native React Native Storybook *common*
 	@$(PNPM) storybook:start
@@ -34,12 +30,6 @@ verify: typecheck lint test-ci ## Run typecheck, lint, and tests *common*
 .PHONY: ci
 ci: verify expo-check expo-config-check audit ## Run the full CI contract *common*
 
-##@ App
-
-.PHONY: web
-web: ## Start the Expo web target
-	@$(PNPM) web
-
 .PHONY: reset-project
 reset-project: ## Run Expo starter reset script
 	@$(PNPM) reset-project
@@ -49,10 +39,6 @@ reset-project: ## Run Expo starter reset script
 .PHONY: storybook-ios
 storybook-ios: ## Start Storybook and open the iOS target
 	@$(PNPM) storybook:ios
-
-.PHONY: storybook-android
-storybook-android: ## Start Storybook and open the Android target
-	@$(PNPM) storybook:android
 
 .PHONY: storybook-generate
 storybook-generate: ## Regenerate Storybook story imports

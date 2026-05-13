@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
 import { ActiveList, type ActiveListInitialState } from "@/components/active-list";
 
@@ -42,52 +43,52 @@ export function HomeScreen({ currentMemberName, initialList, onSignOut }: HomeSc
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: theme.colors.background,
   },
   accountBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 12,
-    backgroundColor: "#FFFFFF",
+    gap: theme.spacing(3),
+    paddingHorizontal: theme.spacing(5),
+    paddingTop: theme.spacing(4.5),
+    paddingBottom: theme.spacing(3),
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#D9E2EC",
+    borderBottomColor: theme.colors.border,
   },
   accountTextGroup: {
     flex: 1,
     minWidth: 0,
   },
   accountLabel: {
-    color: "#627D98",
+    color: theme.colors.textMuted,
     fontSize: 13,
     fontWeight: "600",
   },
   accountName: {
-    color: "#102A43",
+    color: theme.colors.text,
     fontSize: 17,
     fontWeight: "700",
   },
   signOutButton: {
     minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 8,
+    paddingHorizontal: theme.spacing(3.5),
+    borderRadius: theme.radii.control,
     borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E53E3E",
+    backgroundColor: theme.colors.destructive,
   },
   signOutButtonPressed: {
     opacity: 0.72,
   },
   signOutLabel: {
-    color: "#FFFFFF",
+    color: theme.colors.inverseText,
     fontSize: 15,
     fontWeight: "700",
   },
-});
+}));

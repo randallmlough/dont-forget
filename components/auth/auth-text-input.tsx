@@ -1,9 +1,12 @@
-import { StyleSheet, TextInput, type TextInputProps } from "react-native";
+import { TextInput, type TextInputProps } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export function AuthTextInput(props: TextInputProps) {
+  const { theme } = useUnistyles();
+
   return (
     <TextInput
-      placeholderTextColor="#9aa0a6"
+      placeholderTextColor={theme.colors.textSubtle}
       autoCapitalize="none"
       {...props}
       style={[styles.input, props.style]}
@@ -11,15 +14,16 @@ export function AuthTextInput(props: TextInputProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   input: {
     height: 48,
-    borderRadius: 8,
+    borderRadius: theme.radii.control,
+    borderCurve: "continuous",
     borderWidth: 1,
-    borderColor: "#dadce0",
-    paddingHorizontal: 14,
+    borderColor: theme.colors.authBorder,
+    paddingHorizontal: theme.spacing(3.5),
     fontSize: 16,
-    backgroundColor: "#fff",
-    color: "#1f1f1f",
+    backgroundColor: theme.colors.authBackground,
+    color: theme.colors.textStrong,
   },
-});
+}));

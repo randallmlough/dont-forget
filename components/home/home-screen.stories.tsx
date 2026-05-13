@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
 import { type ActiveListInitialState } from "@/components/active-list";
 import { HomeScreen } from "@/components/home/home-screen";
@@ -54,8 +55,9 @@ export const WithItems: Story = {
 
 function noop() {}
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   canvas: {
     flex: 1,
+    backgroundColor: theme.colors.background,
   },
-});
+}));

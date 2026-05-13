@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
+import { ActivityIndicator, Pressable, Text } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export function PrimaryButton({
   label,
@@ -9,21 +10,28 @@ export function PrimaryButton({
   onPress: () => void;
   loading?: boolean;
 }) {
+  const { theme } = useUnistyles();
+
   return (
     <Pressable
       onPress={onPress}
       disabled={loading}
       style={({ pressed }) => [styles.button, (pressed || loading) && styles.pressed]}>
-      {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.label}>{label}</Text>}
+      {loading ? (
+        <ActivityIndicator color={theme.colors.inverseText} />
+      ) : (
+        <Text style={styles.label}>{label}</Text>
+      )}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   button: {
     height: 52,
-    borderRadius: 8,
-    backgroundColor: "#1f1f1f",
+    borderRadius: theme.radii.control,
+    borderCurve: "continuous",
+    backgroundColor: theme.colors.authPrimary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -31,8 +39,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   label: {
-    color: "#fff",
+    color: theme.colors.inverseText,
     fontSize: 17,
     fontWeight: "600",
   },
-});
+}));

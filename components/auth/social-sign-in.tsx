@@ -2,7 +2,8 @@ import { useSignIn, useSignUp, useSSO } from "@clerk/clerk-expo";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
-import { Alert, Pressable, StyleSheet, Text } from "react-native";
+import { Alert, Pressable, Text } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { userMessage } from "@/lib/clerk-errors";
 import { track } from "@/lib/analytics";
 
@@ -11,6 +12,7 @@ const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
 WebBrowser.maybeCompleteAuthSession();
 
 export function SocialSignIn() {
+  const { theme } = useUnistyles();
   const { signIn, setActive, isLoaded: signInLoaded } = useSignIn();
   const { signUp, isLoaded: signUpLoaded } = useSignUp();
   const { startSSOFlow } = useSSO();
@@ -75,7 +77,7 @@ export function SocialSignIn() {
       <AppleAuthentication.AppleAuthenticationButton
         buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
         buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-        cornerRadius={8}
+        cornerRadius={theme.radii.control}
         style={styles.providerButton}
         onPress={onApplePress}
       />
@@ -122,16 +124,17 @@ function isCanceledAuthSession(
   return result.type === "cancel" || result.type === "dismiss" || result.type === "locked";
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   providerButton: {
     width: "100%",
     height: 52,
   },
   googleButton: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
+    backgroundColor: theme.colors.authBackground,
+    borderRadius: theme.radii.control,
+    borderCurve: "continuous",
     borderWidth: 1,
-    borderColor: "#dadce0",
+    borderColor: theme.colors.authBorder,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -139,8 +142,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   googleLabel: {
-    color: "#1f1f1f",
+    color: theme.colors.textStrong,
     fontSize: 17,
     fontWeight: "500",
   },
-});
+}));

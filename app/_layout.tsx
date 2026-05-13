@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import { ThemeProvider } from "@react-navigation/native";
 import { ClerkLoaded, ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -7,13 +7,13 @@ import { useEffect, useRef } from "react";
 import "react-native-reanimated";
 import { PostHogProvider } from "posthog-react-native";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
 import { tokenCache } from "@/lib/token-cache";
 import { posthog } from "@/lib/posthog";
 import { screen, useAnalyticsIdentity } from "@/lib/analytics";
+import { navigationTheme } from "@/navigation-theme";
 
 export const unstable_settings = {
-  anchor: "(tabs)",
+  anchor: "index",
 };
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -25,7 +25,6 @@ if (!publishableKey) {
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const previousPathname = useRef<string | undefined>(undefined);
@@ -44,9 +43,9 @@ export default function RootLayout() {
     >
       <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
         <ClerkLoaded>
-          <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+          <ThemeProvider value={navigationTheme}>
             <AuthGate />
-            <StatusBar style="auto" />
+            <StatusBar style="dark" />
           </ThemeProvider>
         </ClerkLoaded>
       </ClerkProvider>
@@ -85,8 +84,7 @@ function AuthGate() {
 
   return (
     <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="modal" options={{ presentation: "modal", title: "Modal" }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       <Stack.Screen name="sign-up" options={{ headerShown: false }} />
     </Stack>

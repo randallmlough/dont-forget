@@ -1,7 +1,8 @@
 import { ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from "react-native";
+import { KeyboardAvoidingView, ScrollView, Text } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
-const KAV_BEHAVIOR = Platform.OS === "ios" ? ("padding" as const) : undefined;
+const KAV_BEHAVIOR = "padding" as const;
 
 export function AuthScreen({
   title,
@@ -23,24 +24,25 @@ export function AuthScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
+const styles = StyleSheet.create((theme) => ({
+  flex: { flex: 1, backgroundColor: theme.colors.authBackground },
   container: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 32,
-    paddingVertical: 48,
-    gap: 12,
+    paddingHorizontal: theme.spacing(8),
+    paddingVertical: theme.spacing(12),
+    gap: theme.spacing(3),
   },
   title: {
+    color: theme.colors.textStrong,
     fontSize: 28,
     fontWeight: "700",
     textAlign: "center",
   },
   subtitle: {
+    color: theme.colors.textMuted,
     fontSize: 15,
-    opacity: 0.6,
     textAlign: "center",
-    marginBottom: 16,
+    marginBottom: theme.spacing(4),
   },
-});
+}));

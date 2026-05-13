@@ -1,6 +1,7 @@
 import { useSignUp } from "@clerk/clerk-expo";
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text } from "react-native";
+import { Alert, Pressable, Text } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { AuthFooterLink } from "@/components/auth/auth-footer-link";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { AuthTextInput } from "@/components/auth/auth-text-input";
@@ -152,14 +153,14 @@ function VerifyEmailForm({ onBack }: { onBack: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   backButton: {
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: theme.spacing(2),
   },
   backLabel: {
-    color: "#1a73e8",
+    color: theme.colors.link,
     fontSize: 15,
     fontWeight: "500",
   },
-});
+}));

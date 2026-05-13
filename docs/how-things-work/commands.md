@@ -1,6 +1,6 @@
 # Commands
 
-Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm` or `yarn` unless you are explicitly fixing package scripts.
+Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm` or `yarn` unless you are explicitly fixing package scripts. Don't Forget is iOS-only: Android and Web targets are unsupported.
 
 <!-- ==================================================================================== -->
 <!-- COMMANDS                                                                              -->
@@ -13,7 +13,6 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | `make install` | Install dependencies. |
 | `make start` | Start the Expo development server for the app. |
 | `make ios` | Build and run the app on iOS. |
-| `make android` | Build and run the app on Android. |
 | `make storybook` | Start native React Native Storybook. |
 | `make verify` | Run typecheck, lint, and tests. |
 | `make ci` | Run the full CI contract locally. |
@@ -24,8 +23,6 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | --- | --- |
 | `make start` | Start Expo for normal app development. |
 | `make ios` | Run the native iOS target. |
-| `make android` | Run the native Android target. |
-| `make web` | Run the web target. |
 | `make reset-project` | Run Expo's starter reset script. Use only when intentionally resetting scaffolded files. |
 
 ## Storybook
@@ -34,7 +31,6 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | --- | --- |
 | `make storybook` | Start native React Native Storybook with `STORYBOOK_ENABLED=true`. |
 | `make storybook-ios` | Start Storybook and open the iOS target. |
-| `make storybook-android` | Start Storybook and open the Android target. |
 | `make storybook-generate` | Regenerate `.rnstorybook/storybook.requires.ts` after adding, moving, or removing stories. |
 
 ## Verification
