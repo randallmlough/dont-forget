@@ -14,6 +14,8 @@ Stories should render presentational components with typed fixture data and call
 
 For route screens, extract composed view components for Storybook and keep hooks, analytics, auth, database reads, and navigation side effects in the route container. Prefer the [React composition pattern](../best-practices/react-composition-pattern.md) for surfaces with shared state and actions, instead of passing a long list of callbacks through the top-level screen.
 
+If a Story renders an app route shell that already owns safe-area handling, set `parameters.noSafeArea = true` on that Story or meta. React Native Storybook's mobile UI adds safe-area padding by default, and route shells such as `HomeScreen` already apply their own safe area.
+
 For Home, use an active-List provider whose context is shaped around `state`, `actions`, and `meta`. The Storybook provider can use local state; the app provider can later adapt Household DB behavior behind the same active-List actions. Do not inject raw Turso clients, Drizzle row types, or generic storage repositories into presentational components.
 
 Use dot-notation compound exports for the active List surface only, such as `ActiveList.Provider`, `ActiveList.Header`, `ActiveList.Items`, and `ActiveList.AddItemForm`. Do not force simple standalone components like `AuthScreen` into a compound namespace unless they grow shared state.

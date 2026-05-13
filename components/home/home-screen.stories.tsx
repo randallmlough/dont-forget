@@ -24,6 +24,9 @@ const populatedHomeList: ActiveListInitialState = {
 const meta = {
   title: "Home/HomeScreen",
   component: HomeScreen,
+  parameters: {
+    noSafeArea: true,
+  },
   decorators: [
     (Story) => (
       <View style={styles.canvas}>
