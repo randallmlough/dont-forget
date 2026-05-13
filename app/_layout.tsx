@@ -11,7 +11,7 @@ import { PostHogProvider } from "posthog-react-native";
 import { tokenCache } from "@/lib/token-cache";
 import { posthog } from "@/lib/posthog";
 import { screen, useAnalyticsIdentity } from "@/lib/analytics";
-import { navigationTheme } from "@/navigation-theme";
+import { navigationTheme } from "@/lib/unistyles/navigation-theme";
 
 export const unstable_settings = {
   anchor: "index",

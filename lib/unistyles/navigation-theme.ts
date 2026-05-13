@@ -1,6 +1,6 @@
 import { DefaultTheme, type Theme } from "@react-navigation/native";
 
-import { lightTheme } from "@/unistyles";
+import { lightTheme } from "@/lib/unistyles/unistyles";
 
 export const navigationTheme: Theme = {
   ...DefaultTheme,

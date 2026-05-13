@@ -1,7 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
   preset: "jest-expo",
-  setupFiles: ["react-native-unistyles/mocks", "<rootDir>/unistyles.ts"],
+  setupFiles: ["react-native-unistyles/mocks", "<rootDir>/lib/unistyles/unistyles.ts"],
   setupFilesAfterEnv: ["<rootDir>/test/setup.ts"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
