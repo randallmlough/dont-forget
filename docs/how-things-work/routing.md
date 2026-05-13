@@ -65,4 +65,4 @@ Put screen-owned code in `screens/<surface>/`. Put reusable product components i
 
 ## Tests
 
-Do not put tests in `app/`; Expo Router treats files there as route entries. Route and screen behavior tests belong in `test/app` or next to the relevant module outside `app/`.
+Do not put tests in `app/`; Expo Router treats files there as route entries. Route and screen behavior tests live next to the relevant screen outside `app/`.

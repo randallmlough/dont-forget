@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { memberships, households } from "@/db/schema/directory";
 import { itemChecks, items, lists } from "@/db/schema/household";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/test/db";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 
 describe("test database migrations", () => {
   it("applies directory and Household migrations to isolated local databases", async () => {

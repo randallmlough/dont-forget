@@ -2,7 +2,8 @@
 module.exports = {
   preset: "jest-expo",
   setupFiles: ["react-native-unistyles/mocks", "<rootDir>/lib/unistyles/unistyles.ts"],
-  setupFilesAfterEnv: ["<rootDir>/test/setup.ts"],
+  setupFilesAfterEnv: ["<rootDir>/lib/test/setup.ts"],
+  testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
   },
@@ -18,6 +19,9 @@ module.exports = {
     "lib/**/*.{ts,tsx}",
     "screens/**/*.{ts,tsx}",
     "!**/*.d.ts",
+    "!**/*.test.{ts,tsx}",
     "!**/db/migrations/**",
+    "!db/test.ts",
+    "!lib/test/**/*",
   ],
 };

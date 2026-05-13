@@ -40,9 +40,9 @@
 ## Testing Notes
 
 - Tests are React Native-first with `jest-expo` and React Native Testing Library; there is no separate jsdom or MSW track.
-- `test/setup.ts` mocks Clerk, native auth/browser/storage, and PostHog. Mock external SDK/native boundaries, not local product behavior.
-- Do not put tests in `app/`; Expo Router treats files there as routes/layouts. Route tests live in `test/app`; colocated tests are fine elsewhere.
-- DB tests use `test/db.ts` to create temp local libSQL files and apply checked-in migration SQL from `db/migrations/**`; never use `db:migrate` in tests.
+- `lib/test/setup.ts` mocks Clerk, native auth/browser/storage, and PostHog. Reusable mocks live in `lib/test/mocks/`. Mock external SDK/native boundaries, not local product behavior.
+- Do not put tests in `app/`; Expo Router treats files there as routes/layouts. Colocate tests next to the screen or module they exercise outside `app/`.
+- DB tests use `db/test.ts` to create temp local libSQL files and apply checked-in migration SQL from `db/migrations/**`; never use `db:migrate` in tests.
 - Storybook is native-only via `STORYBOOK_ENABLED=true` and `withStorybook`. Do not add a `/storybook` route; `.rnstorybook/index.ts` must keep `registerRootComponent(StorybookUIRoot)`.
 
 ## Change Hygiene

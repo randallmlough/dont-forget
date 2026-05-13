@@ -2,10 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 import { Alert } from "react-native";
 
 import SignInScreen from "@/screens/auth/sign-in-screen";
-import { clerkMocks } from "@/test/mocks/clerk";
-import { analyticsMocks } from "@/test/mocks/analytics";
+import { clerkMocks } from "@/lib/test/mocks/clerk";
+import { analyticsMocks } from "@/lib/test/mocks/analytics";
 
-jest.mock("@/lib/analytics", () => require("../mocks/analytics"));
+jest.mock("@/lib/analytics", () => require("@/lib/test/mocks/analytics"));
 
 jest.mock("expo-router", () => {
   const React = require("react");

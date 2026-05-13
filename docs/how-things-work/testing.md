@@ -41,7 +41,7 @@ Database integration tests mirror production topology:
 - one directory DB for Households, Members, and Invitations
 - one Household DB per test Household for Lists, Items, and `item_checks`
 
-Use helpers from `test/db.ts`. They create temp local libSQL files and apply SQL from:
+Use helpers from `db/test.ts`. They create temp local libSQL files and apply SQL from:
 
 - `db/migrations/directory/*.sql`
 - `db/migrations/household/*.sql`
@@ -50,11 +50,12 @@ Do not use `pnpm db:migrate` in tests. That command is for intentionally applyin
 
 ## File Layout
 
-- `test/setup.ts` configures global Jest setup and native/SDK mocks.
-- `test/db.ts` owns local temp DB helpers.
-- `test/mocks/` contains reusable mock modules.
-- `test/app/` contains route and screen flow tests for files under `app/`.
-- Non-route modules can colocate tests next to source, e.g. `lib/redact.test.ts`.
+- `lib/test/setup.ts` configures global Jest setup and native/SDK mocks.
+- `lib/test/mocks/` contains reusable mock modules.
+- `db/test.ts` owns local temp DB helpers.
+- Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `db/test.ts` for test suites.
+- Screen flow tests live next to the screen they exercise, e.g. `screens/auth/sign-in-screen.test.tsx`.
+- Non-route modules colocate tests next to source, e.g. `lib/redact.test.ts`.
 
 Do not put test files in `app/`; Expo Router treats files there as routes or layouts.
 
@@ -90,5 +91,5 @@ Coverage is visible through `pnpm test:coverage`, but there is no global thresho
 ## Examples To Copy
 
 - `lib/redact.test.ts` shows a focused pure-helper unit test.
-- `test/db/migrations.test.ts` shows a local directory + Household DB integration test.
-- `test/app/sign-in.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.
+- `db/migrations.test.ts` shows a local directory + Household DB integration test.
+- `screens/auth/sign-in-screen.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.

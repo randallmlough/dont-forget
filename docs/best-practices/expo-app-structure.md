@@ -18,7 +18,6 @@ screens/
 components/
 lib/
 db/
-test/
 docs/
 ```
 
@@ -86,7 +85,7 @@ Use Unistyles for app-owned React Native styling. Do not add NativeWind, Uniwind
 
 ## Tests And Stories
 
-Do not place tests or stories in `app/`; Expo Router treats files there as routes. Route tests belong in `test/app`. Component and screen stories can be colocated next to the rendered surface outside `app/`.
+Do not place tests or stories in `app/`; Expo Router treats files there as routes. Colocate tests next to the module they exercise outside `app/`, and keep reusable Jest setup or mocks under `lib/test`.
 
 After adding, moving, or deleting stories, run `make storybook-generate`.
 
