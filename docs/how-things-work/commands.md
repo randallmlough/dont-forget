@@ -60,9 +60,7 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 
 | Command | Description |
 | --- | --- |
-| `make db-generate-directory` | Generate Drizzle migrations for the directory DB schema. |
-| `make db-generate-household` | Generate Drizzle migrations for the replicated Household DB schema. |
-| `make db-generate` | Generate both directory and Household migrations. |
+| `make db-generate` | Generate migrations for every Drizzle config in `db/drizzle`. |
 | `make db-migrate` | Apply migrations to configured databases. Only run when intentionally migrating real configured targets. |
 
 <!-- ==================================================================================== -->

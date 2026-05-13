@@ -86,14 +86,6 @@ test-coverage: ## Run all tests once and report coverage
 
 ##@ Database
 
-.PHONY: db-generate-directory
-db-generate-directory: ## Generate Drizzle migrations for the directory DB schema
-	@$(PNPM) db:generate:directory
-
-.PHONY: db-generate-household
-db-generate-household: ## Generate Drizzle migrations for the replicated Household DB schema
-	@$(PNPM) db:generate:household
-
 .PHONY: db-generate
 db-generate: ## Generate both directory and Household migrations
 	@$(PNPM) db:generate

@@ -15,9 +15,7 @@
     "test:ci": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand",
     "typecheck": "tsc --noEmit",
-    "db:generate:directory": "drizzle-kit generate --config=drizzle.directory.config.ts",
-    "db:generate:household": "drizzle-kit generate --config=drizzle.household.config.ts",
-    "db:generate": "pnpm run db:generate:directory && pnpm run db:generate:household",
+    "db:generate": "tsx db/generate.ts",
     "db:migrate": "tsx db/migrate.ts"
   },
   "dependencies": {

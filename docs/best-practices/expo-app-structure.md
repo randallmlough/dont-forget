@@ -91,7 +91,7 @@ After adding, moving, or deleting stories, run `make storybook-generate`.
 
 ## Server Code
 
-When Expo API Routes are added, put them under `app/api` to avoid collisions with app screens. Put shared server-only helpers in a clearly server-owned folder and keep secrets out of client code. The existing `db/` folder stays at the root because it is shared by schema generation, migrations, tests, and future API routes.
+When Expo API Routes are added, put them under `app/api` to avoid collisions with app screens. Put shared server-only helpers in a clearly server-owned folder and keep secrets out of client code. The existing `db/` folder stays at the root because it is shared by schema generation, Drizzle config, migrations, tests, and future API routes.
 
 ## Platform Code
 
