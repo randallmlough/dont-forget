@@ -13,7 +13,7 @@
 - App dev: `make start`, `make ios`. Android and Web are unsupported targets; do not preserve Android/Web compatibility unless the platform policy changes.
 - Standard TS/TSX proof: `make verify` runs `typecheck -> lint -> test-ci`. Full CI parity: `make ci` adds Expo package check, public config resolution, and high-severity audit.
 - Focused Jest proof: `pnpm exec jest --runInBand --runTestsByPath <test-file>`; add `-t "<test name>"` for one test. `pnpm test` is watch mode.
-- Storybook: `make storybook`, `make storybook-ios`; after adding, moving, or deleting stories, run `make storybook-generate`.
+- Storybook: `make storybook` starts the dev server for an installed native iOS build/dev client; `make storybook-ios` builds/runs Storybook with `expo run:ios`. Do not use Expo Go for Storybook. After adding, moving, or deleting stories, run `make storybook-generate`.
 - Database: `make db-generate-directory`, `make db-generate-household`, or `make db-generate`. Run `make db-migrate` only when intentionally applying migrations to configured Turso databases.
 
 ## Architecture

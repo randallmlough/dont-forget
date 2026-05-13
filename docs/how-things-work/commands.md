@@ -13,7 +13,7 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | `make install` | Install dependencies. |
 | `make start` | Start the Expo development server for the app. |
 | `make ios` | Build and run the app on iOS. |
-| `make storybook` | Start native React Native Storybook. |
+| `make storybook` | Start Storybook for an installed native iOS build/dev client. |
 | `make verify` | Run typecheck, lint, and tests. |
 | `make ci` | Run the full CI contract locally. |
 
@@ -29,8 +29,8 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 
 | Command | Description |
 | --- | --- |
-| `make storybook` | Start native React Native Storybook with `STORYBOOK_ENABLED=true`. |
-| `make storybook-ios` | Start Storybook and open the iOS target. |
+| `make storybook` | Start the Storybook dev server for an installed native iOS build/dev client. |
+| `make storybook-ios` | Build and run Storybook on iOS with `expo run:ios`. |
 | `make storybook-generate` | Regenerate `.rnstorybook/storybook.requires.ts` after adding, moving, or removing stories. |
 
 ## Verification

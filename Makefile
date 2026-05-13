@@ -21,7 +21,7 @@ ios: ## Run the native iOS target *common*
 	@$(PNPM) ios
 
 .PHONY: storybook
-storybook: ## Start native React Native Storybook *common*
+storybook: ## Start Storybook for the native iOS build *common*
 	@$(PNPM) storybook:start
 
 .PHONY: verify
@@ -37,7 +37,7 @@ reset-project: ## Run Expo starter reset script
 ##@ Storybook
 
 .PHONY: storybook-ios
-storybook-ios: ## Start Storybook and open the iOS target
+storybook-ios: ## Build and run Storybook on iOS
 	@$(PNPM) storybook:ios
 
 .PHONY: storybook-generate
