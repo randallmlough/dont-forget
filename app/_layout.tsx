@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useRef } from "react";
 import "react-native-reanimated";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { PostHogProvider } from "posthog-react-native";
 
 import { tokenCache } from "@/lib/token-cache";
@@ -41,14 +42,16 @@ export default function RootLayout() {
       client={posthog}
       autocapture={{ captureScreens: false, captureTouches: true, propsToCapture: ["testID"] }}
     >
-      <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-        <ClerkLoaded>
-          <ThemeProvider value={navigationTheme}>
-            <AuthGate />
-            <StatusBar style="dark" />
-          </ThemeProvider>
-        </ClerkLoaded>
-      </ClerkProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+          <ClerkLoaded>
+            <ThemeProvider value={navigationTheme}>
+              <AuthGate />
+              <StatusBar style="dark" />
+            </ThemeProvider>
+          </ClerkLoaded>
+        </ClerkProvider>
+      </SafeAreaProvider>
     </PostHogProvider>
   );
 }

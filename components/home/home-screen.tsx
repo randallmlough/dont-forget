@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
 import { ActiveList, type ActiveListInitialState } from "@/components/active-list";
@@ -11,7 +12,7 @@ export type HomeScreenProps = {
 
 export function HomeScreen({ currentMemberName, initialList, onSignOut }: HomeScreenProps) {
   return (
-    <View style={styles.root}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.root}>
       <View style={styles.accountBar}>
         <View style={styles.accountTextGroup}>
           <Text style={styles.accountLabel}>Signed in</Text>
@@ -39,7 +40,7 @@ export function HomeScreen({ currentMemberName, initialList, onSignOut }: HomeSc
           <ActiveList.AddItemForm />
         </ActiveList.Screen>
       </ActiveList.Provider>
-    </View>
+    </SafeAreaView>
   );
 }
 
