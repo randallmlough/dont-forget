@@ -14,15 +14,15 @@ install: ## Install dependencies *common*
 
 .PHONY: start
 start: ## Start Expo for normal app development *common*
-	@$(PNPM) start
+	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) start
 
 .PHONY: ios
 ios: ## Run the native iOS target *common*
-	@$(PNPM) ios
+	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) ios
 
 .PHONY: storybook
 storybook: ## Start Storybook for the native iOS build *common*
-	@$(PNPM) storybook:start
+	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) storybook:start
 
 .PHONY: verify
 verify: typecheck lint test-ci ## Run typecheck, lint, and tests *common*
@@ -38,7 +38,7 @@ reset-project: ## Run Expo starter reset script
 
 .PHONY: storybook-ios
 storybook-ios: ## Build and run Storybook on iOS
-	@$(PNPM) storybook:ios
+	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) storybook:ios
 
 .PHONY: storybook-generate
 storybook-generate: ## Regenerate Storybook story imports
@@ -64,7 +64,7 @@ expo-check: ## Check Expo SDK package compatibility
 
 .PHONY: expo-config-check
 expo-config-check: ## Resolve the public Expo config without printing it
-	@$(PNPM) expo config --type public > /dev/null
+	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) expo config --type public > /dev/null
 
 .PHONY: expo-clear
 expo-clear: ## Start Expo with a cleared Metro cache
@@ -92,7 +92,7 @@ db-generate: ## Generate both directory and Household migrations
 
 .PHONY: db-migrate
 db-migrate: ## Apply migrations to configured databases
-	@$(PNPM) db:migrate
+	@APP_ENV="$(APP_ENV)" CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" $(PNPM) db:migrate
 
 # ==================================================================================== #
 # UTILITIES
@@ -102,7 +102,7 @@ db-migrate: ## Apply migrations to configured databases
 
 .PHONY: expo-config
 expo-config: ## Print the public Expo config
-	@$(PNPM) expo config --type public
+	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) expo config --type public
 
 .PHONY: why
 why: ## Inspect why a package is installed. Usage: make why PKG=<package>

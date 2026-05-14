@@ -2,6 +2,8 @@
 
 Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm` or `yarn` unless you are explicitly fixing package scripts. Don't Forget is iOS-only: Android and Web targets are unsupported.
 
+App and Storybook make targets default to `APP_ENV=local` unless you pass another environment. Database migrations are the exception: they require an explicit `APP_ENV`.
+
 <!-- ==================================================================================== -->
 <!-- COMMANDS                                                                              -->
 <!-- ==================================================================================== -->
@@ -45,7 +47,7 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | `make test-coverage` | Run Jest with coverage output. |
 | `make audit` | Audit dependencies for high-severity vulnerabilities. |
 | `make expo-check` | Check Expo SDK package compatibility. |
-| `make expo-config-check` | Validate dynamic public Expo config without printing it. |
+| `make expo-config-check` | Validate dynamic public Expo config without printing it. Defaults to `APP_ENV=local` unless `APP_ENV` is provided. |
 | `make expo-clear` | Start Expo with a cleared Metro cache. Useful after dependency or Metro config changes. |
 
 ## Tests
@@ -61,7 +63,7 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 | Command | Description |
 | --- | --- |
 | `make db-generate` | Generate migrations for every Drizzle config in `db/drizzle`. |
-| `make db-migrate` | Apply migrations to configured databases. Only run when intentionally migrating real configured targets. |
+| `make db-migrate APP_ENV=staging` | Apply migrations to the selected environment. Only run when intentionally migrating real configured targets. Production also requires `CONFIRM_APP_ENV=production`. |
 
 <!-- ==================================================================================== -->
 <!-- UTILITIES                                                                             -->

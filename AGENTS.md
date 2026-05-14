@@ -14,7 +14,7 @@
 - Standard TS/TSX proof: `make verify` runs `typecheck -> lint -> test-ci`. Full CI parity: `make ci` adds Expo package check, public config resolution, and high-severity audit.
 - Focused Jest proof: `pnpm exec jest --runInBand --runTestsByPath <test-file>`; add `-t "<test name>"` for one test. `pnpm test` is watch mode.
 - Storybook: `make storybook` starts the dev server for an installed native iOS build/dev client; `make storybook-ios` builds/runs Storybook with `expo run:ios`. Do not use Expo Go for Storybook. After adding, moving, or deleting stories, run `make storybook-generate`.
-- Database: `make db-generate` runs every Drizzle config in `db/drizzle`. Run `make db-migrate` only when intentionally applying migrations to configured Turso databases.
+- Database: `make db-generate` runs every Drizzle config in `db/drizzle`. Run `make db-migrate APP_ENV=staging` only when intentionally applying migrations to configured Turso databases; production also requires `CONFIRM_APP_ENV=production`.
 
 ## Architecture
 
@@ -24,7 +24,7 @@
 - Data is split between a server-only directory DB (`db/schema/directory.ts`) for Households/Memberships/Invitations and one replicated Household libSQL DB (`db/schema/household.ts`) per Household for Lists/Items/`item_checks`. Do not perform cross-Household SQL joins.
 - Replicated data uses row-level last-write-wins; `item_checks` is separate from `items` to avoid checked-state conflicts. App delete paths write tombstones (`deleted_at`), not hard deletes.
 - Drizzle migrations have two folders. `db/drizzle/household.config.ts` is SQL-only; `db/migrate.ts` migrates the directory DB, then every active Household DB, and partial success is possible. Schema changes must stay compatible with the previous shipped app version; use two-phase renames/drops and inspect generated SQL.
-- Env safety: `.env.example` separates client-safe `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` from server/operator secrets. `app.config.js` should expose only public PostHog config through Expo `extra`; never expose Turso platform tokens, Clerk secrets, or Resend secrets to client code.
+- Env safety: `APP_ENV` is the app-owned backend selector (`local`, `test`, `staging`, `production`). Use the same secret names per selected environment rather than suffixed production/staging names in one process. `.env.example` separates client-safe `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` from server/operator secrets. `app.config.ts` should expose only public config through Expo `extra`; never expose Turso platform tokens, Clerk secrets, or Resend secrets to client code.
 
 ## App Conventions
 

@@ -1,5 +1,8 @@
 import { resetClerkMocks } from "./mocks/clerk";
 
+process.env.APP_ENV ??= "test";
+process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ??= "pk_test_jest";
+
 jest.mock("@clerk/clerk-expo", () => require("./mocks/clerk"));
 
 jest.mock("expo-apple-authentication", () => {

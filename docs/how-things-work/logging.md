@@ -90,9 +90,9 @@ This is best-effort, not airtight. Still:
 
 ## Where logs go
 
-- **Dev (`__DEV__ === true`)**: console (Metro / Expo logs) **and** PostHog. The console output is your fast feedback loop; PostHog ingest is non-zero so you're also exercising the production path.
-- **Prod**: PostHog only. Records buffer up to 10s before flushing, on app foreground/background, on buffer fill, or via `posthog.flushLogs()`.
-- **PostHog Logs UI**: project dashboard → Logs. Service name `dont-forget`; environment tagged `development` or `production`; version from `app.json`.
+- **Local app development**: console (Metro / Expo logs) **and** PostHog when configured. The console output is your fast feedback loop; optional PostHog ingest exercises the production path.
+- **Staging/production**: PostHog only. Records buffer up to 10s before flushing, on app foreground/background, on buffer fill, or via `posthog.flushLogs()`.
+- **PostHog Logs UI**: project dashboard → Logs. Service name `dont-forget`; environment tagged from `APP_ENV`; version from `app.json`.
 
 ## What not to do
 

@@ -1,6 +1,6 @@
 import { createClient, type Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { requireEnv } from "@/lib/env";
+import { readTursoConfig } from "@/lib/env";
 import * as directorySchema from "./schema/directory";
 import * as householdSchema from "./schema/household";
 
@@ -8,9 +8,10 @@ export type DirectoryDb = ReturnType<typeof directoryDb>;
 export type HouseholdDb = ReturnType<typeof householdDb>;
 
 export function directoryClient(): Client {
+  const config = readTursoConfig();
   return createClient({
-    url: requireEnv("TURSO_DIRECTORY_URL"),
-    authToken: requireEnv("TURSO_DIRECTORY_AUTH_TOKEN"),
+    url: config.directoryUrl,
+    authToken: config.directoryAuthToken,
   });
 }
 
@@ -19,7 +20,7 @@ export function directoryDb(client: Client) {
 }
 
 export function householdDbUrl(tursoDbName: string): string {
-  return `libsql://${tursoDbName}-${requireEnv("TURSO_ORG")}.turso.io`;
+  return `libsql://${tursoDbName}-${readTursoConfig().org}.turso.io`;
 }
 
 export function householdClient(url: string, authToken: string): Client {

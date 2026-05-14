@@ -78,7 +78,7 @@ You don't call `identify` from sign-in/sign-up code. After `setActive(...)`, Cle
 
 - PostHog Persons UI keys on `distinct_id = clerk_user.id`. Search by email via the `email` person property.
 - Events appear in the Activity feed within seconds; funnels and insights index over a few minutes.
-- Service name `dont-forget`; environment tag matches `__DEV__` (`development` / `production`). Filter dashboards by environment to keep dev noise out.
+- Service name `dont-forget`; environment tag comes from `APP_ENV` (`local`, `test`, `staging`, `production`). Filter dashboards by environment to keep non-production noise out.
 
 ## Redaction
 

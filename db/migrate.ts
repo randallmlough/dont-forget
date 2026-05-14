@@ -1,8 +1,8 @@
-import "dotenv/config";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { isNull } from "drizzle-orm";
-import { requireEnv } from "@/lib/env";
+import { assertProductionConfirmation, readTursoMigrationConfig } from "@/lib/env";
+import { loadEnvFile } from "@/lib/load-env";
 import { directoryClient, householdClient, householdDbUrl } from "./client";
 import { households } from "./schema/directory";
 
@@ -10,6 +10,14 @@ const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
 const HOUSEHOLD_MIGRATIONS = "./db/migrations/household";
 
 async function main(): Promise<void> {
+  const productionConfirmation = process.env.CONFIRM_APP_ENV;
+  const appEnv = loadEnvFile();
+  assertProductionConfirmation(appEnv, { CONFIRM_APP_ENV: productionConfirmation });
+  const config = readTursoMigrationConfig();
+
+  console.log(`[env] ${config.appEnv}`);
+  console.log(`[directory] ${config.directoryUrl}`);
+
   const directory = directoryClient();
   try {
     console.log("[directory] migrating…");
@@ -46,9 +54,10 @@ async function migrateAllHouseholds(directory: ReturnType<typeof directoryClient
 }
 
 export async function migrateHouseholdDb(tursoDbName: string): Promise<void> {
+  const config = readTursoMigrationConfig();
   const client = householdClient(
     householdDbUrl(tursoDbName),
-    requireEnv("TURSO_PLATFORM_GROUP_TOKEN"),
+    config.platformGroupToken,
   );
   try {
     await migrate(drizzle(client), { migrationsFolder: HOUSEHOLD_MIGRATIONS });

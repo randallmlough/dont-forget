@@ -41,6 +41,8 @@ Database integration tests mirror production topology:
 - one directory DB for Households, Members, and Invitations
 - one Household DB per test Household for Lists, Items, and `item_checks`
 
+The `test` environment means automated tests only. It is not a persistent cloud environment; staging is the persistent pre-production environment.
+
 Use helpers from `db/test.ts`. They create temp local libSQL files and apply SQL from:
 
 - `db/migrations/directory/*.sql`

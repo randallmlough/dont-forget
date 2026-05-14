@@ -1,5 +1,6 @@
 import { ThemeProvider } from "@react-navigation/native";
 import { ClerkLoaded, ClerkProvider, useAuth } from "@clerk/clerk-expo";
+import Constants from "expo-constants";
 import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
@@ -12,18 +13,22 @@ import { tokenCache } from "@/lib/token-cache";
 import { posthog } from "@/lib/posthog";
 import { screen, useAnalyticsIdentity } from "@/lib/analytics";
 import { navigationTheme } from "@/lib/unistyles/navigation-theme";
+import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
 
 export const unstable_settings = {
   anchor: "(app)",
 };
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const appEnv = readAppEnvFromExpoExtra(Constants.expoConfig?.extra);
 
 if (!publishableKey) {
   throw new Error(
-    "Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in env. Copy .env.example to .env.local and fill it in.",
+    "Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in env. Copy .env.example to .env.local and fill it in with APP_ENV=local.",
   );
 }
+
+validateClerkKeyForEnv(appEnv, "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY", publishableKey);
 
 export default function RootLayout() {
   const pathname = usePathname();
