@@ -19,7 +19,7 @@ Persistent Turso resources are isolated by environment group and redundant datab
 
 - Turso group: `dont-forget-<env>` for persistent shared environments, with per-developer local groups such as `dont-forget-local-<name>`.
 - Directory DB: `dont-forget-<env>-directory`.
-- Household DBs: `dont-forget-<env>-household-<household-id-suffix>`.
+- Household DBs: `df-<env>-hh-<compact-household-id>` so names stay within Turso's 51-character database-name limit.
 
 The Turso group represents the app environment, not the data type. There is no nested `household` group; each environment group contains that environment's directory DB and all of its Household DBs. Household DB names are based on generated Household IDs, not Household names, so they remain stable and avoid personal information.
 

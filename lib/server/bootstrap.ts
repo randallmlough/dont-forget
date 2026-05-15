@@ -105,8 +105,12 @@ export async function bootstrapUser(
 }
 
 export function householdDatabaseName(appEnv: AppEnv, householdId: string): string {
-  const suffix = householdId.replace(/^hh_/, "").replace(/[^a-z0-9-]/gi, "-").toLowerCase();
-  return `dont-forget-${appEnv}-household-${suffix}`;
+  const suffix = householdId.replace(/^hh_/, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  if (!suffix) {
+    throw new Error("Household ID must include a database-safe suffix");
+  }
+
+  return `df-${appEnv}-hh-${suffix.slice(0, 32)}`;
 }
 
 async function upsertUser(profile: ServerUserProfile, deps: BootstrapServiceDeps): Promise<User> {
@@ -149,12 +153,12 @@ async function getOrCreateActiveMembership(
   deps: BootstrapServiceDeps,
 ): Promise<ActiveMembershipRow> {
   const active = await oldestActiveMembership(user.id, deps.directory);
-  if (active) return active;
+  if (active) return repairUnprovisionedDatabaseName(active, deps);
 
   const pending = await pendingCreatedHousehold(user.id, deps.directory);
   if (pending) {
     const membership = await ensureOwnerMembership(pending.id, user.id, deps);
-    return activeRowFrom(pending, membership);
+    return repairUnprovisionedDatabaseName(activeRowFrom(pending, membership), deps);
   }
 
   const now = deps.now();
@@ -180,6 +184,23 @@ async function getOrCreateActiveMembership(
   await deps.directory.insert(households).values(household);
   await deps.directory.insert(memberships).values(membership);
   return activeRowFrom(household, membership);
+}
+
+async function repairUnprovisionedDatabaseName(
+  active: ActiveMembershipRow,
+  deps: BootstrapServiceDeps,
+): Promise<ActiveMembershipRow> {
+  if (active.householdProvisioningCompletedAt || isValidTursoDatabaseName(active.householdTursoDbName)) {
+    return active;
+  }
+
+  const tursoDbName = householdDatabaseName(deps.appEnv, active.householdId);
+  await deps.directory.update(households).set({ tursoDbName }).where(eq(households.id, active.householdId));
+  return { ...active, householdTursoDbName: tursoDbName };
+}
+
+function isValidTursoDatabaseName(name: string): boolean {
+  return /^[a-z0-9-]{1,51}$/.test(name);
 }
 
 async function oldestActiveMembership(

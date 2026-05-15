@@ -1,4 +1,4 @@
-import { createClient, type Client } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client/http";
 import { drizzle } from "drizzle-orm/libsql";
 import { readTursoConfig } from "@/lib/env";
 import * as directorySchema from "./schema/directory";

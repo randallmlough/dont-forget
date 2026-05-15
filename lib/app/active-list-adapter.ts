@@ -1,4 +1,4 @@
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/web";
 import * as Crypto from "expo-crypto";
 
 import type { ActiveListInitialState, ActiveListItem } from "@/components/active-list";

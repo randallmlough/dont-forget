@@ -13,6 +13,14 @@ import type { AppIdPrefix } from "@/lib/ids";
 import type { ServerUserProfile } from "@/lib/server/auth";
 
 describe("bootstrapUser", () => {
+  it("generates Turso-safe Household database names", () => {
+    const name = householdDatabaseName("production", "hh_48489c0d-46cd-4a90-a545-850d7b7feaf1");
+
+    expect(name).toBe("df-production-hh-48489c0d46cd4a90a545850d7b7feaf1");
+    expect(name.length).toBeLessThanOrEqual(51);
+    expect(name).toMatch(/^[a-z0-9-]+$/);
+  });
+
   it("creates a first-run User, Household, Owner Membership, Household DB, and default List", async () => {
     const harness = await createBootstrapHarness();
 
@@ -147,6 +155,45 @@ describe("bootstrapUser", () => {
         .from(households)
         .where(eq(households.id, "hh_pending"));
       expect(pending.provisioningCompletedAt).toEqual(expect.any(Number));
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("repairs invalid unprovisioned legacy Household database names before provisioning", async () => {
+    const harness = await createBootstrapHarness();
+    const expectedDbName = householdDatabaseName("test", "hh_48489c0d-46cd-4a90-a545-850d7b7feaf1");
+
+    try {
+      await harness.directory.db.insert(users).values({
+        id: "usr_existing",
+        clerkUserId: "clerk_avery",
+        displayName: "Avery Chen",
+      });
+      await harness.directory.db.insert(households).values({
+        id: "hh_48489c0d-46cd-4a90-a545-850d7b7feaf1",
+        name: "Avery",
+        tursoDbName: "dont-forget-test-household-48489c0d-46cd-4a90-a545-850d7b7feaf1",
+        createdByUserId: "usr_existing",
+        provisioningCompletedAt: null,
+      });
+      await harness.directory.db.insert(memberships).values({
+        id: "mbr_existing",
+        householdId: "hh_48489c0d-46cd-4a90-a545-850d7b7feaf1",
+        userId: "usr_existing",
+        role: "owner",
+      });
+
+      const response = await bootstrapUser(averyProfile, harness.deps);
+
+      expect(response.householdDatabase.authToken).toBe(`token-${expectedDbName}`);
+      expect(harness.createdDatabases).toEqual([expectedDbName]);
+      const [household] = await harness.directory.db
+        .select()
+        .from(households)
+        .where(eq(households.id, "hh_48489c0d-46cd-4a90-a545-850d7b7feaf1"));
+      expect(household.tursoDbName).toBe(expectedDbName);
+      expect(household.provisioningCompletedAt).toEqual(expect.any(Number));
     } finally {
       await harness.close();
     }

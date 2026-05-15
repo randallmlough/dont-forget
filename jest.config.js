@@ -5,6 +5,7 @@ module.exports = {
   setupFilesAfterEnv: ["<rootDir>/lib/test/setup.ts"],
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   moduleNameMapper: {
+    "^@libsql/client$": "@libsql/client/http",
     "^@/(.*)$": "<rootDir>/$1",
   },
   transformIgnorePatterns: [

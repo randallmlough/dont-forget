@@ -1,20 +1,28 @@
-import { directoryClient, directoryDb } from "@/db/client";
-import { bootstrapUser, createProductionBootstrapDeps } from "@/lib/server/bootstrap";
-import { UnauthorizedError, verifyClerkRequest } from "@/lib/server/auth";
-
 export async function POST(request: Request): Promise<Response> {
+  let UnauthorizedError: (typeof import("@/lib/server/auth"))["UnauthorizedError"] | null = null;
+
   try {
-    const profile = await verifyClerkRequest(request);
-    const client = directoryClient();
+    const [db, bootstrap, auth] = await Promise.all([
+      import("@/db/client"),
+      import("@/lib/server/bootstrap"),
+      import("@/lib/server/auth"),
+    ]);
+    UnauthorizedError = auth.UnauthorizedError;
+
+    const profile = await auth.verifyClerkRequest(request);
+    const client = db.directoryClient();
 
     try {
-      const response = await bootstrapUser(profile, createProductionBootstrapDeps(directoryDb(client)));
+      const response = await bootstrap.bootstrapUser(
+        profile,
+        bootstrap.createProductionBootstrapDeps(db.directoryDb(client)),
+      );
       return Response.json(response);
     } finally {
       await client.close();
     }
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
+    if (UnauthorizedError && error instanceof UnauthorizedError) {
       return Response.json({ error: error.message }, { status: 401 });
     }
 

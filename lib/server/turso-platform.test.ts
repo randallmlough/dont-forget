@@ -1,4 +1,4 @@
-import { createTursoPlatformClient } from "@/lib/server/turso-platform";
+import { createTursoPlatformClient, TursoPlatformError } from "@/lib/server/turso-platform";
 import type { TursoOperatorConfig } from "@/lib/env";
 
 describe("createTursoPlatformClient", () => {
@@ -37,6 +37,18 @@ describe("createTursoPlatformClient", () => {
       }),
     );
   });
+
+  it("includes platform error response details", async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(response(400, { error: "group not found" }, false));
+    const client = createTursoPlatformClient(config, fetchMock as typeof fetch);
+
+    await expect(client.ensureDatabase("db-one")).rejects.toMatchObject({
+      name: "TursoPlatformError",
+      status: 400,
+      message: 'Turso Platform request failed with 400: {"error":"group not found"}',
+      details: '{"error":"group not found"}',
+    } satisfies Partial<TursoPlatformError>);
+  });
 });
 
 const config: TursoOperatorConfig = {
@@ -54,5 +66,6 @@ function response(status: number, body: unknown, ok = true) {
     ok,
     status,
     json: async () => body,
+    text: async () => JSON.stringify(body),
   };
 }

@@ -16,6 +16,7 @@ export class TursoPlatformError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    readonly details?: string,
   ) {
     super(message);
     this.name = "TursoPlatformError";
@@ -45,9 +46,16 @@ export function createTursoPlatformClient(
     });
 
     if (!response.ok) {
+      const details = await response.text().catch(() => "");
       throw new TursoPlatformError(
-        `Turso Platform request failed with ${response.status}`,
+        [
+          `Turso Platform request failed with ${response.status}`,
+          details ? details.slice(0, 500) : null,
+        ]
+          .filter(Boolean)
+          .join(": "),
         response.status,
+        details || undefined,
       );
     }
 

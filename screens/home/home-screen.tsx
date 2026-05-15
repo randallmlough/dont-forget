@@ -1,5 +1,5 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
@@ -32,6 +32,11 @@ export default function HomeScreen() {
   const { user } = useUser();
   const [content, setContent] = useState<HomeContentState>({ status: "loading" });
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const getTokenRef = useRef(getToken);
+
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -44,7 +49,7 @@ export default function HomeScreen() {
 
     async function loadHome() {
       try {
-        const bootstrap = await bootstrapWithClerk(() => getToken());
+        const bootstrap = await bootstrapWithClerk(() => getTokenRef.current());
         adapter = createRemoteActiveListAdapter({
           household: bootstrap.activeHousehold,
           list: bootstrap.activeList,
@@ -79,7 +84,7 @@ export default function HomeScreen() {
         void adapter?.close?.();
       }
     };
-  }, [getToken, isLoaded, isSignedIn, loadAttempt]);
+  }, [isLoaded, isSignedIn, loadAttempt]);
 
   const currentMemberName = memberName(content, user);
 
