@@ -1,14 +1,21 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "612f48cf-8b54-4fb7-a315-6ac4a349fb2e",
-  "prevId": "c41083ac-9108-4df1-a829-c3e0e6637c1a",
+  "id": "9a9924cd-bb73-42ef-8b68-c51accfea815",
+  "prevId": "612f48cf-8b54-4fb7-a315-6ac4a349fb2e",
   "tables": {
     "item_checks": {
       "name": "item_checks",
       "columns": {
         "item_id": {
           "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "clerk_user_id": {
+          "name": "clerk_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -54,12 +61,12 @@
         }
       },
       "compositePrimaryKeys": {
-        "item_checks_item_id_user_id_pk": {
+        "item_checks_item_id_clerk_user_id_pk": {
           "columns": [
             "item_id",
-            "user_id"
+            "clerk_user_id"
           ],
-          "name": "item_checks_item_id_user_id_pk"
+          "name": "item_checks_item_id_clerk_user_id_pk"
         }
       },
       "uniqueConstraints": {},
@@ -99,6 +106,13 @@
         "position": {
           "name": "position",
           "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by_clerk_user_id": {
+          "name": "created_by_clerk_user_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -181,6 +195,13 @@
         },
         "name": {
           "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by_clerk_user_id": {
+          "name": "created_by_clerk_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

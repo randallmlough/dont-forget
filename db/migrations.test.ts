@@ -22,11 +22,13 @@ describe("test database migrations", () => {
         id: "household_1",
         name: "Test Household",
         tursoDbName: "test-household",
+        createdByClerkUserId: "clerk_user_1",
         createdByUserId: "usr_1",
       });
       await directory.db.insert(memberships).values({
         id: "membership_1",
         householdId: "household_1",
+        clerkUserId: "clerk_user_1",
         userId: "usr_1",
         role: "owner",
       });
@@ -34,6 +36,7 @@ describe("test database migrations", () => {
       await household.db.insert(lists).values({
         id: "list_1",
         name: "Groceries",
+        createdByClerkUserId: "clerk_user_1",
         createdByUserId: "usr_1",
       });
       await household.db.insert(items).values({
@@ -41,10 +44,12 @@ describe("test database migrations", () => {
         listId: "list_1",
         name: "Milk",
         position: 0,
+        createdByClerkUserId: "clerk_user_1",
         createdByUserId: "usr_1",
       });
       await household.db.insert(itemChecks).values({
         itemId: "item_1",
+        clerkUserId: "clerk_user_1",
         userId: "usr_1",
         checkedAt: 1_700_000_000_000,
       });
@@ -64,6 +69,7 @@ describe("test database migrations", () => {
       expect(checkRows).toEqual([
         {
           itemId: "item_1",
+          clerkUserId: "clerk_user_1",
           userId: "usr_1",
           checkedAt: 1_700_000_000_000,
           updatedAt: expect.any(Number),

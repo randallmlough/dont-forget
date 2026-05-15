@@ -13,6 +13,7 @@ describe("createRemoteActiveListAdapter", () => {
       await household.db.insert(lists).values({
         id: DEFAULT_LIST_ID,
         name: DEFAULT_LIST_NAME,
+        createdByClerkUserId: "clerk_avery",
         createdByUserId: "usr_avery",
       });
 
@@ -22,12 +23,25 @@ describe("createRemoteActiveListAdapter", () => {
           list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
           currentUser: {
             id: "usr_avery",
+            clerkUserId: "clerk_avery",
             email: "avery@example.com",
             displayName: "Avery Chen",
           },
           members: [
-            { membershipId: "mbr_avery", userId: "usr_avery", role: "owner", displayName: "Avery Chen" },
-            { membershipId: "mbr_blake", userId: "usr_blake", role: "member", displayName: "Blake" },
+            {
+              membershipId: "mbr_avery",
+              userId: "usr_avery",
+              clerkUserId: "clerk_avery",
+              role: "owner",
+              displayName: "Avery Chen",
+            },
+            {
+              membershipId: "mbr_blake",
+              userId: "usr_blake",
+              clerkUserId: "clerk_blake",
+              role: "member",
+              displayName: "Blake",
+            },
           ],
           database: { url: `file:${household.path}`, authToken: "unused", expiresAt: now + 1 },
         },
@@ -60,6 +74,7 @@ describe("createRemoteActiveListAdapter", () => {
 
       await household.db.insert(itemChecks).values({
         itemId: milk.id,
+        clerkUserId: "clerk_blake",
         userId: "usr_blake",
         checkedAt: null,
         updatedAt: now + 100,

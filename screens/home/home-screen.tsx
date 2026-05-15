@@ -14,7 +14,7 @@ type HomeContentState =
   | { status: "error"; message: string }
   | {
       status: "ready";
-      currentMemberName: string;
+      activeMemberName: string;
       initialList: ActiveListInitialState;
       adapter: ActiveListDataAdapter;
     };
@@ -73,9 +73,9 @@ export default function HomeScreen() {
           return;
         }
 
-        const currentMemberName = bootstrap.activeMember.displayName ?? bootstrap.user.email ?? "Member";
+        const activeMemberName = bootstrap.activeMember.displayName ?? bootstrap.user.email ?? "Member";
         handedOffAdapter = true;
-        setContent({ status: "ready", currentMemberName, initialList, adapter });
+        setContent({ status: "ready", activeMemberName, initialList, adapter });
       } catch {
         await closeUnclaimedAdapter().catch(() => undefined);
         if (!cancelled) {
@@ -118,13 +118,15 @@ export default function HomeScreen() {
 }
 
 export function HomeScreenView({ currentMemberName, content, onRetry, onSignOut }: HomeScreenViewProps) {
+  const displayMemberName = content.status === "ready" ? content.activeMemberName : currentMemberName;
+
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.root}>
-      <View style={styles.accountBar}>
-        <View style={styles.accountTextGroup}>
-          <Text style={styles.accountLabel}>Signed in</Text>
-          <Text style={styles.accountName} numberOfLines={1}>
-            {currentMemberName}
+      <View style={styles.memberBar}>
+        <View style={styles.memberTextGroup}>
+          <Text style={styles.memberLabel}>Signed in</Text>
+          <Text style={styles.memberName} numberOfLines={1}>
+            {displayMemberName}
           </Text>
         </View>
         {onSignOut ? (
@@ -143,7 +145,7 @@ export function HomeScreenView({ currentMemberName, content, onRetry, onSignOut 
       {content.status === "ready" ? (
         <ActiveList.Provider
           initialState={content.initialList}
-          currentMemberName={currentMemberName}
+          currentMemberName={displayMemberName}
           adapter={content.adapter}
         >
           <ActiveList.Screen>
@@ -153,7 +155,7 @@ export function HomeScreenView({ currentMemberName, content, onRetry, onSignOut 
           </ActiveList.Screen>
         </ActiveList.Provider>
       ) : content.status === "loading" ? (
-        <HomeStatus title="Preparing your Household" body="Loading your durable List data.">
+        <HomeStatus title="Preparing your Household" body="Loading your Household List.">
           <ActivityIndicator />
         </HomeStatus>
       ) : (
@@ -186,7 +188,7 @@ function HomeStatus({ title, body, children }: { title: string; body: string; ch
 
 function memberName(content: HomeContentState, user: ReturnType<typeof useUser>["user"]): string {
   if (content.status === "ready") {
-    return content.currentMemberName;
+    return content.activeMemberName;
   }
 
   return user?.fullName ?? user?.firstName ?? user?.primaryEmailAddress?.emailAddress ?? "Member";
@@ -197,7 +199,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  accountBar: {
+  memberBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -209,16 +211,16 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.border,
   },
-  accountTextGroup: {
+  memberTextGroup: {
     flex: 1,
     minWidth: 0,
   },
-  accountLabel: {
+  memberLabel: {
     color: theme.colors.textMuted,
     fontSize: 13,
     fontWeight: "600",
   },
-  accountName: {
+  memberName: {
     color: theme.colors.text,
     fontSize: 17,
     fontWeight: "700",

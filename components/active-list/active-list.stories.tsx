@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useMemo } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -38,12 +39,14 @@ export const WithItems: Story = {
 };
 
 function ActiveListStory({ initialState }: { initialState: ActiveListInitialState }) {
+  const adapter = useMemo(() => storyAdapter(initialState), [initialState]);
+
   return (
     <View style={styles.canvas}>
       <ActiveList.Provider
         initialState={initialState}
         currentMemberName="Avery Chen"
-        adapter={storyAdapter(initialState)}>
+        adapter={adapter}>
         <ActiveList.Screen>
           <ActiveList.Header />
           <ActiveList.Items />

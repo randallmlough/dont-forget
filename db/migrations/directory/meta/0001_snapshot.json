@@ -1,85 +1,9 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f8c25c2d-3e2f-42db-baf5-b5dd019b08df",
-  "prevId": "c92a2793-fb9b-49c8-957e-c5573b4f2a51",
+  "id": "adfdd4e4-7ef0-4ef1-8595-0129ffb59d4f",
+  "prevId": "f8c25c2d-3e2f-42db-baf5-b5dd019b08df",
   "tables": {
-    "users": {
-      "name": "users",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "clerk_user_id": {
-          "name": "clerk_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "first_name": {
-          "name": "first_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_name": {
-          "name": "last_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "display_name": {
-          "name": "display_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
-        }
-      },
-      "indexes": {
-        "users_clerk_user_id_unique": {
-          "name": "users_clerk_user_id_unique",
-          "columns": [
-            "clerk_user_id"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "households": {
       "name": "households",
       "columns": {
@@ -99,6 +23,13 @@
         },
         "turso_db_name": {
           "name": "turso_db_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by_clerk_user_id": {
+          "name": "created_by_clerk_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -162,110 +93,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "memberships": {
-      "name": "memberships",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "household_id": {
-          "name": "household_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "joined_at": {
-          "name": "joined_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch() * 1000)"
-        },
-        "removed_at": {
-          "name": "removed_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "memberships_user_idx": {
-          "name": "memberships_user_idx",
-          "columns": [
-            "user_id"
-          ],
-          "isUnique": false
-        },
-        "memberships_household_idx": {
-          "name": "memberships_household_idx",
-          "columns": [
-            "household_id"
-          ],
-          "isUnique": false
-        },
-        "memberships_active_unique": {
-          "name": "memberships_active_unique",
-          "columns": [
-            "household_id",
-            "user_id"
-          ],
-          "isUnique": true,
-          "where": "\"memberships\".\"removed_at\" IS NULL"
-        }
-      },
-      "foreignKeys": {
-        "memberships_household_id_households_id_fk": {
-          "name": "memberships_household_id_households_id_fk",
-          "tableFrom": "memberships",
-          "tableTo": "households",
-          "columnsFrom": [
-            "household_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "memberships_user_id_users_id_fk": {
-          "name": "memberships_user_id_users_id_fk",
-          "tableFrom": "memberships",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "invitations": {
       "name": "invitations",
       "columns": {
@@ -297,6 +124,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "created_by_clerk_user_id": {
+          "name": "created_by_clerk_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "created_by_user_id": {
           "name": "created_by_user_id",
           "type": "text",
@@ -322,6 +156,13 @@
         "accepted_at": {
           "name": "accepted_at",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "accepted_by_clerk_user_id": {
+          "name": "accepted_by_clerk_user_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -398,6 +239,216 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "memberships": {
+      "name": "memberships",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "clerk_user_id": {
+          "name": "clerk_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "joined_at": {
+          "name": "joined_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "turso_token_id": {
+          "name": "turso_token_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "memberships_user_idx": {
+          "name": "memberships_user_idx",
+          "columns": [
+            "clerk_user_id"
+          ],
+          "isUnique": false
+        },
+        "memberships_app_user_idx": {
+          "name": "memberships_app_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "memberships_household_idx": {
+          "name": "memberships_household_idx",
+          "columns": [
+            "household_id"
+          ],
+          "isUnique": false
+        },
+        "memberships_active_unique": {
+          "name": "memberships_active_unique",
+          "columns": [
+            "household_id",
+            "clerk_user_id"
+          ],
+          "isUnique": true,
+          "where": "\"memberships\".\"removed_at\" IS NULL"
+        },
+        "memberships_active_app_user_unique": {
+          "name": "memberships_active_app_user_unique",
+          "columns": [
+            "household_id",
+            "user_id"
+          ],
+          "isUnique": true,
+          "where": "\"memberships\".\"removed_at\" IS NULL"
+        }
+      },
+      "foreignKeys": {
+        "memberships_household_id_households_id_fk": {
+          "name": "memberships_household_id_households_id_fk",
+          "tableFrom": "memberships",
+          "tableTo": "households",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "memberships_user_id_users_id_fk": {
+          "name": "memberships_user_id_users_id_fk",
+          "tableFrom": "memberships",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "clerk_user_id": {
+          "name": "clerk_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_name": {
+          "name": "first_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "users_clerk_user_id_unique": {
+          "name": "users_clerk_user_id_unique",
+          "columns": [
+            "clerk_user_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

@@ -24,13 +24,16 @@ async function main(): Promise<void> {
     await migrate(drizzle(directory), { migrationsFolder: DIRECTORY_MIGRATIONS });
     console.log("[directory] done");
 
-    await migrateAllHouseholds(directory);
+    await migrateAllHouseholds(directory, config);
   } finally {
     await directory.close();
   }
 }
 
-async function migrateAllHouseholds(directory: ReturnType<typeof directoryClient>): Promise<void> {
+async function migrateAllHouseholds(
+  directory: ReturnType<typeof directoryClient>,
+  config: ReturnType<typeof readTursoMigrationConfig>,
+): Promise<void> {
   const rows = await drizzle(directory)
     .select({ id: households.id, tursoDbName: households.tursoDbName })
     .from(households)
@@ -41,7 +44,7 @@ async function migrateAllHouseholds(directory: ReturnType<typeof directoryClient
 
   for (const row of rows) {
     try {
-      await migrateHouseholdDb(row.tursoDbName);
+      await migrateHouseholdDb(row.tursoDbName, config);
     } catch (error) {
       failures.push({ id: row.id, error });
       console.error(`[households] ${row.id} (${row.tursoDbName}) failed:`, error);

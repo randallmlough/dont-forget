@@ -76,18 +76,35 @@ function ActiveListProvider({
   const [state, setState] = useState<ActiveListState>(initialState);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const mounted = useRef(true);
   const nextItemNumber = useRef(initialState.items.length + 1);
+  const stateRef = useRef(initialState);
+
+  const replaceState = useCallback((nextState: ActiveListState) => {
+    if (!mounted.current) return;
+    stateRef.current = nextState;
+    setState(nextState);
+  }, []);
+
+  const updateState = useCallback((updater: (previous: ActiveListState) => ActiveListState) => {
+    if (!mounted.current) return;
+    const nextState = updater(stateRef.current);
+    stateRef.current = nextState;
+    setState(nextState);
+  }, []);
 
   useEffect(() => {
+    mounted.current = true;
     return () => {
+      mounted.current = false;
       void adapter.close();
     };
   }, [adapter]);
 
   const loadFromAdapter = useCallback(async () => {
     const nextState = await adapter.load();
-    setState(nextState);
-  }, [adapter]);
+    replaceState(nextState);
+  }, [adapter, replaceState]);
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -96,9 +113,13 @@ function ActiveListProvider({
     try {
       await loadFromAdapter();
     } catch {
-      setErrorMessage("Unable to refresh this List. Please try again.");
+      if (mounted.current) {
+        setErrorMessage("Unable to refresh this List. Please try again.");
+      }
     } finally {
-      setIsRefreshing(false);
+      if (mounted.current) {
+        setIsRefreshing(false);
+      }
     }
   }, [loadFromAdapter]);
 
@@ -114,30 +135,34 @@ function ActiveListProvider({
     };
     nextItemNumber.current += 1;
 
-    setState((previous) => ({
+    updateState((previous) => ({
       ...previous,
       items: [...previous.items, item],
     }));
 
     try {
       const persistedItem = await adapter.addItem(name);
-      setState((previous) => ({
+      updateState((previous) => ({
         ...previous,
         items: previous.items.map((existing) => (existing.id === item.id ? persistedItem : existing)),
       }));
-      setErrorMessage(null);
+      if (mounted.current) {
+        setErrorMessage(null);
+      }
     } catch {
-      setErrorMessage("Unable to save that Item. The List was refreshed from the database.");
+      if (mounted.current) {
+        setErrorMessage("Unable to save that Item. The List was refreshed.");
+      }
       await loadFromAdapter().catch(() => undefined);
     }
-  }, [adapter, loadFromAdapter]);
+  }, [adapter, loadFromAdapter, updateState]);
 
   const toggleItem = useCallback(async (itemId: string) => {
-    const target = state.items.find((item) => item.id === itemId);
+    const target = stateRef.current.items.find((item) => item.id === itemId);
     if (!target) return;
 
     const checked = !target.checked;
-    setState((previous) => ({
+    updateState((previous) => ({
       ...previous,
       items: previous.items.map((item) => {
         if (item.id !== itemId) return item;
@@ -151,12 +176,16 @@ function ActiveListProvider({
 
     try {
       await adapter.setItemChecked(itemId, checked);
-      setErrorMessage(null);
+      if (mounted.current) {
+        setErrorMessage(null);
+      }
     } catch {
-      setErrorMessage("Unable to save that change. The List was refreshed from the database.");
+      if (mounted.current) {
+        setErrorMessage("Unable to save that change. The List was refreshed.");
+      }
       await loadFromAdapter().catch(() => undefined);
     }
-  }, [adapter, currentMemberName, loadFromAdapter, state.items]);
+  }, [adapter, currentMemberName, loadFromAdapter, updateState]);
 
   const actions = useMemo<ActiveListActions>(
     () => ({ addItem, refresh, toggleItem }),

@@ -78,7 +78,7 @@ function noop() {}
 function readyContent(initialList: ActiveListInitialState) {
   return {
     status: "ready" as const,
-    currentMemberName: "Avery Chen",
+    activeMemberName: "Avery Chen",
     initialList,
     adapter: storyAdapter(initialList),
   };

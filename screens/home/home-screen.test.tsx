@@ -90,7 +90,7 @@ describe("HomeScreenView", () => {
     expect(retry).toHaveBeenCalledTimes(1);
   });
 
-  it("renders durable Active List data after bootstrap succeeds", () => {
+  it("renders Active List data after bootstrap succeeds", () => {
     const initialList = initialListFixture();
 
     render(
@@ -98,7 +98,7 @@ describe("HomeScreenView", () => {
         currentMemberName="Avery Chen"
         content={{
           status: "ready",
-          currentMemberName: "Avery Chen",
+          activeMemberName: "Avery Chen",
           initialList,
           adapter: noopAdapter(initialList),
         }}
@@ -116,14 +116,27 @@ function bootstrapFixture() {
   return {
     user: {
       id: "usr_avery",
+      clerkUserId: "clerk_avery",
       email: "avery@example.com",
       displayName: "Avery Chen",
     },
     activeHousehold: { id: "hh_avery", name: "Avery" },
-    activeMember: { id: "mbr_avery", userId: "usr_avery", role: "owner" as const, displayName: "Avery Chen" },
+    activeMember: {
+      id: "mbr_avery",
+      userId: "usr_avery",
+      clerkUserId: "clerk_avery",
+      role: "owner" as const,
+      displayName: "Avery Chen",
+    },
     activeList: { id: "lst_default_groceries", name: "Groceries" },
     members: [
-      { membershipId: "mbr_avery", userId: "usr_avery", role: "owner" as const, displayName: "Avery Chen" },
+      {
+        membershipId: "mbr_avery",
+        userId: "usr_avery",
+        clerkUserId: "clerk_avery",
+        role: "owner" as const,
+        displayName: "Avery Chen",
+      },
     ],
     householdDatabase: {
       url: "libsql://example.turso.io",

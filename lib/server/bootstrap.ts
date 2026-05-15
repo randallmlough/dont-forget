@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 
 import { householdClient, householdDb, householdDbUrl, type DirectoryDb } from "@/db/client";
 import { migrateHouseholdDb } from "@/db/household-migrations";
@@ -24,6 +24,10 @@ type ActiveMembershipRow = {
   householdProvisioningCompletedAt: number | null;
 };
 
+type DirectoryTransaction = Parameters<Parameters<DirectoryDb["transaction"]>[0]>[0];
+type DirectorySession = DirectoryDb | DirectoryTransaction;
+type BootstrapDirectoryDeps = Omit<BootstrapServiceDeps, "directory"> & { directory: DirectorySession };
+
 export type BootstrapServiceDeps = {
   appEnv: AppEnv;
   directory: DirectoryDb;
@@ -31,6 +35,7 @@ export type BootstrapServiceDeps = {
   createId: (prefix: AppIdPrefix) => string;
   provisionHouseholdDatabase: (input: {
     tursoDbName: string;
+    createdByClerkUserId: string;
     createdByUserId: string;
     now: number;
   }) => Promise<{ url: string }>;
@@ -47,10 +52,16 @@ export function createProductionBootstrapDeps(directory: DirectoryDb): Bootstrap
     directory,
     now: Date.now,
     createId: createAppId,
-    provisionHouseholdDatabase: async ({ tursoDbName, createdByUserId, now }) => {
+    provisionHouseholdDatabase: async ({ tursoDbName, createdByClerkUserId, createdByUserId, now }) => {
       const database = await platform.ensureDatabase(tursoDbName);
-      await migrateHouseholdDb(tursoDbName);
-      await ensureDefaultListInRemoteHousehold(database.url, config.platformGroupToken, createdByUserId, now);
+      await migrateHouseholdDb(tursoDbName, config);
+      await ensureDefaultListInRemoteHousehold(
+        database.url,
+        config.platformGroupToken,
+        createdByClerkUserId,
+        createdByUserId,
+        now,
+      );
       return database;
     },
     createHouseholdDatabaseToken: (tursoDbName) => platform.createDatabaseAuthToken(tursoDbName, "24h"),
@@ -64,7 +75,7 @@ export async function bootstrapUser(
 ): Promise<BootstrapResponse> {
   const user = await upsertUser(profile, deps);
   const active = await getOrCreateActiveMembership(user, profile, deps);
-  const database = await ensureProvisioned(active, user.id, deps);
+  const database = await ensureProvisioned(active, user, deps);
   const expiresAt = deps.now() + HOUSEHOLD_TOKEN_TTL_MS;
   const authToken = await deps.createHouseholdDatabaseToken(active.householdTursoDbName);
   const members = await activeMembers(active.householdId, deps.directory);
@@ -72,6 +83,7 @@ export async function bootstrapUser(
   return {
     user: {
       id: user.id,
+      clerkUserId: user.clerkUserId,
       email: user.email,
       displayName: user.displayName,
     },
@@ -82,6 +94,7 @@ export async function bootstrapUser(
     activeMember: {
       id: active.membershipId,
       userId: user.id,
+      clerkUserId: user.clerkUserId,
       role: active.membershipRole,
       displayName: user.displayName,
     },
@@ -109,35 +122,37 @@ export function householdDatabaseName(appEnv: AppEnv, householdId: string): stri
 
 async function upsertUser(profile: ServerUserProfile, deps: BootstrapServiceDeps): Promise<User> {
   const now = deps.now();
-  const [existing] = await deps.directory
+  const profileFields = {
+    email: profile.email,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    displayName: profile.displayName,
+    updatedAt: now,
+  };
+
+  await deps.directory
+    .insert(users)
+    .values({
+      id: deps.createId("usr"),
+      clerkUserId: profile.clerkUserId,
+      ...profileFields,
+      createdAt: now,
+    })
+    .onConflictDoUpdate({
+      target: users.clerkUserId,
+      set: profileFields,
+    });
+
+  const [user] = await deps.directory
     .select()
     .from(users)
     .where(eq(users.clerkUserId, profile.clerkUserId))
     .limit(1);
 
-  if (existing) {
-    const update = {
-      email: profile.email,
-      firstName: profile.firstName,
-      lastName: profile.lastName,
-      displayName: profile.displayName,
-      updatedAt: now,
-    };
-    await deps.directory.update(users).set(update).where(eq(users.id, existing.id));
-    return { ...existing, ...update };
+  if (!user) {
+    throw new Error("Unable to load bootstrapped User");
   }
 
-  const user: User = {
-    id: deps.createId("usr"),
-    clerkUserId: profile.clerkUserId,
-    email: profile.email,
-    firstName: profile.firstName,
-    lastName: profile.lastName,
-    displayName: profile.displayName,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await deps.directory.insert(users).values(user);
   return user;
 }
 
@@ -146,43 +161,49 @@ async function getOrCreateActiveMembership(
   profile: ServerUserProfile,
   deps: BootstrapServiceDeps,
 ): Promise<ActiveMembershipRow> {
-  const active = await oldestActiveMembership(user.id, deps.directory);
-  if (active) return active;
+  return deps.directory.transaction(async (tx) => {
+    const txDeps: BootstrapDirectoryDeps = { ...deps, directory: tx };
+    const active = await oldestActiveMembership(user, tx);
+    if (active) return active;
 
-  const pending = await pendingCreatedHousehold(user.id, deps.directory);
-  if (pending) {
-    const membership = await ensureOwnerMembership(pending.id, user.id, deps);
-    return activeRowFrom(pending, membership);
-  }
+    const pending = await pendingCreatedHousehold(user, tx);
+    if (pending) {
+      const membership = await ensureOwnerMembership(pending.id, user, txDeps);
+      return activeRowFrom(pending, membership);
+    }
 
-  const now = deps.now();
-  const householdId = deps.createId("hh");
-  const household: Household = {
-    id: householdId,
-    name: profile.firstName ?? "Untitled",
-    tursoDbName: householdDatabaseName(deps.appEnv, householdId),
-    createdByUserId: user.id,
-    provisioningCompletedAt: null,
-    createdAt: now,
-    deletedAt: null,
-  };
-  const membership: Membership = {
-    id: deps.createId("mbr"),
-    householdId,
-    userId: user.id,
-    role: "owner",
-    joinedAt: now,
-    removedAt: null,
-  };
+    const now = deps.now();
+    const householdId = deps.createId("hh");
+    const household: Household = {
+      id: householdId,
+      name: profile.firstName ?? "Untitled",
+      tursoDbName: householdDatabaseName(deps.appEnv, householdId),
+      createdByClerkUserId: user.clerkUserId,
+      createdByUserId: user.id,
+      provisioningCompletedAt: null,
+      createdAt: now,
+      deletedAt: null,
+    };
+    const membership: Membership = {
+      id: deps.createId("mbr"),
+      householdId,
+      clerkUserId: user.clerkUserId,
+      userId: user.id,
+      role: "owner",
+      joinedAt: now,
+      removedAt: null,
+      tursoTokenId: null,
+    };
 
-  await deps.directory.insert(households).values(household);
-  await deps.directory.insert(memberships).values(membership);
-  return activeRowFrom(household, membership);
+    await tx.insert(households).values(household);
+    await tx.insert(memberships).values(membership);
+    return activeRowFrom(household, membership);
+  });
 }
 
 async function oldestActiveMembership(
-  userId: string,
-  directory: DirectoryDb,
+  user: User,
+  directory: DirectorySession,
 ): Promise<ActiveMembershipRow | null> {
   const [row] = await directory
     .select({
@@ -196,7 +217,11 @@ async function oldestActiveMembership(
     .from(memberships)
     .innerJoin(households, eq(households.id, memberships.householdId))
     .where(
-      and(eq(memberships.userId, userId), isNull(memberships.removedAt), isNull(households.deletedAt)),
+      and(
+        or(eq(memberships.userId, user.id), eq(memberships.clerkUserId, user.clerkUserId)),
+        isNull(memberships.removedAt),
+        isNull(households.deletedAt),
+      ),
     )
     .orderBy(asc(memberships.joinedAt), asc(memberships.id))
     .limit(1);
@@ -205,15 +230,15 @@ async function oldestActiveMembership(
 }
 
 async function pendingCreatedHousehold(
-  userId: string,
-  directory: DirectoryDb,
+  user: User,
+  directory: DirectorySession,
 ): Promise<Household | null> {
   const [row] = await directory
     .select()
     .from(households)
     .where(
       and(
-        eq(households.createdByUserId, userId),
+        or(eq(households.createdByUserId, user.id), eq(households.createdByClerkUserId, user.clerkUserId)),
         isNull(households.provisioningCompletedAt),
         isNull(households.deletedAt),
       ),
@@ -226,8 +251,8 @@ async function pendingCreatedHousehold(
 
 async function ensureOwnerMembership(
   householdId: string,
-  userId: string,
-  deps: BootstrapServiceDeps,
+  user: User,
+  deps: BootstrapDirectoryDeps,
 ): Promise<Membership> {
   const [existing] = await deps.directory
     .select()
@@ -235,7 +260,7 @@ async function ensureOwnerMembership(
     .where(
       and(
         eq(memberships.householdId, householdId),
-        eq(memberships.userId, userId),
+        or(eq(memberships.userId, user.id), eq(memberships.clerkUserId, user.clerkUserId)),
         isNull(memberships.removedAt),
       ),
     )
@@ -246,10 +271,12 @@ async function ensureOwnerMembership(
   const membership: Membership = {
     id: deps.createId("mbr"),
     householdId,
-    userId,
+    clerkUserId: user.clerkUserId,
+    userId: user.id,
     role: "owner",
     joinedAt: deps.now(),
     removedAt: null,
+    tursoTokenId: null,
   };
   await deps.directory.insert(memberships).values(membership);
   return membership;
@@ -257,16 +284,17 @@ async function ensureOwnerMembership(
 
 async function ensureProvisioned(
   active: ActiveMembershipRow,
-  userId: string,
+  user: User,
   deps: BootstrapServiceDeps,
 ): Promise<{ url: string }> {
-  if (active.householdProvisioningCompletedAt) {
+  if (active.householdProvisioningCompletedAt !== null) {
     return { url: deps.householdDatabaseUrl(active.householdTursoDbName) };
   }
 
   const database = await deps.provisionHouseholdDatabase({
     tursoDbName: active.householdTursoDbName,
-    createdByUserId: userId,
+    createdByClerkUserId: user.clerkUserId,
+    createdByUserId: user.id,
     now: deps.now(),
   });
   await deps.directory
@@ -285,12 +313,13 @@ async function activeMembers(
     .select({
       membershipId: memberships.id,
       userId: users.id,
+      clerkUserId: users.clerkUserId,
       role: memberships.role,
       displayName: users.displayName,
       joinedAt: memberships.joinedAt,
     })
     .from(memberships)
-    .innerJoin(users, eq(users.id, memberships.userId))
+    .innerJoin(users, or(eq(users.id, memberships.userId), eq(users.clerkUserId, memberships.clerkUserId)))
     .where(and(eq(memberships.householdId, householdId), isNull(memberships.removedAt)))
     .orderBy(asc(memberships.joinedAt), asc(memberships.id));
 
@@ -311,6 +340,7 @@ function activeRowFrom(household: Household, membership: Membership): ActiveMemb
 async function ensureDefaultListInRemoteHousehold(
   url: string,
   authToken: string,
+  createdByClerkUserId: string,
   createdByUserId: string,
   now: number,
 ): Promise<void> {
@@ -322,6 +352,7 @@ async function ensureDefaultListInRemoteHousehold(
       .values({
         id: DEFAULT_LIST_ID,
         name: DEFAULT_LIST_NAME,
+        createdByClerkUserId,
         createdByUserId,
         createdAt: now,
         updatedAt: now,
