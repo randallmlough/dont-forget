@@ -10,7 +10,7 @@ Concurrent edits to the same Item row could lose data under naive row-level LWW 
 ## Consequences
 
 - The `items` table holds durable attributes only (`name`, `notes`, `position`, `deleted_at`). Two Members editing those simultaneously can lose one edit — acceptable in practice for shopping-list use.
-- The visible checked state is derived from the newest `item_checks.updated_at` row for the Item across Members. If that row has non-null `checked_at`, the Item is checked; if it has null `checked_at`, the Item is unchecked. Each Member only upserts their own `(item_id, clerk_user_id)` row.
+- The visible checked state is derived from the newest `item_checks.updated_at` row for the Item across Members. If that row has non-null `checked_at`, the Item is checked; if it has null `checked_at`, the Item is unchecked. Each Member only upserts their own `(item_id, user_id)` row.
 - Per-Member check state enables a free "X added this to the cart" UX hint.
 - Tombstoned rows must be GC'd server-side (cron, ≥30 days old, after replicas have caught up) to keep DBs from growing unbounded.
 - No hard deletes from the app — every delete path writes `deleted_at` instead.

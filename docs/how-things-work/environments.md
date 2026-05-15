@@ -49,6 +49,8 @@ PostHog analytics and logs are tagged with `APP_ENV`. Do not derive analytics/lo
 
 App builds point at one API base URL for their selected environment. Local can use a simulator-safe local URL or tunnel; staging and production use separate hosted API deployments/domains.
 
+`EXPO_PUBLIC_API_BASE_URL` is required for `local`, `staging`, and `production` app builds. `test` may omit it because tests mock app/API boundaries directly.
+
 ## iOS App Identity
 
 Staging is a separately installable iOS app with a distinct bundle identifier and visible app name suffix. Production keeps the final bundle identifier and app name. Local development can use a development suffix when needed.

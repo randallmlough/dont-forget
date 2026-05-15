@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@babel/core": "^7.29.0",
+    "@clerk/backend": "^3.4.7",
     "@clerk/clerk-expo": "^2.19.36",
     "@expo/ui": "~55.0.15",
     "@expo/vector-icons": "^15.0.3",

@@ -21,6 +21,7 @@ type SignUpState = {
 };
 
 export const clerkMocks = {
+  getToken: jest.fn(),
   signInCreate: jest.fn(),
   signUpCreate: jest.fn(),
   prepareEmailAddressVerification: jest.fn(),
@@ -87,6 +88,7 @@ export function ClerkLoaded({ children }: { children: ReactNode }) {
 export function useAuth() {
   return {
     ...authState,
+    getToken: clerkMocks.getToken,
     signOut: clerkMocks.signOut,
   };
 }

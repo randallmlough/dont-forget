@@ -3,11 +3,11 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import { isNull } from "drizzle-orm";
 import { assertProductionConfirmation, readTursoMigrationConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
-import { directoryClient, householdClient, householdDbUrl } from "./client";
+import { directoryClient } from "./client";
+import { migrateHouseholdDb } from "./household-migrations";
 import { households } from "./schema/directory";
 
 const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
-const HOUSEHOLD_MIGRATIONS = "./db/migrations/household";
 
 async function main(): Promise<void> {
   const productionConfirmation = process.env.CONFIRM_APP_ENV;
@@ -50,19 +50,6 @@ async function migrateAllHouseholds(directory: ReturnType<typeof directoryClient
 
   if (failures.length > 0) {
     throw new Error(`Migration failed for ${failures.length} household DB(s)`);
-  }
-}
-
-export async function migrateHouseholdDb(tursoDbName: string): Promise<void> {
-  const config = readTursoMigrationConfig();
-  const client = householdClient(
-    householdDbUrl(tursoDbName),
-    config.platformGroupToken,
-  );
-  try {
-    await migrate(drizzle(client), { migrationsFolder: HOUSEHOLD_MIGRATIONS });
-  } finally {
-    await client.close();
   }
 }
 

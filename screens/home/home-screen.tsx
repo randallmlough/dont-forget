@@ -1,33 +1,91 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
-import { ActiveList, type ActiveListInitialState } from "@/components/active-list";
+import { ActiveList, type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
+import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
+import { createRemoteActiveListAdapter } from "@/lib/app/active-list-adapter";
+import type { BootstrapResponse } from "@/lib/bootstrap";
+
+type HomeContentState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | {
+      status: "ready";
+      bootstrap: BootstrapResponse;
+      initialList: ActiveListInitialState;
+      adapter: ActiveListDataAdapter;
+    };
 
 export type HomeScreenViewProps = {
   currentMemberName: string;
-  initialList: ActiveListInitialState;
+  content: HomeContentState;
+  onRetry?: () => void;
   onSignOut?: () => void;
 };
 
 export default function HomeScreen() {
-  const { signOut } = useAuth();
+  const { getToken, isLoaded, isSignedIn, signOut } = useAuth();
   const { user } = useUser();
-  const currentMemberName =
-    user?.fullName ?? user?.firstName ?? user?.primaryEmailAddress?.emailAddress ?? "Member";
-  const householdName = user?.firstName ?? "Untitled";
+  const [content, setContent] = useState<HomeContentState>({ status: "loading" });
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
-  const initialList = useMemo<ActiveListInitialState>(
-    () => ({
-      householdName,
-      listName: "Groceries",
-      items: [],
-    }),
-    [householdName],
-  );
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+
+    let cancelled = false;
+    let handedOffAdapter = false;
+    let adapter: ActiveListDataAdapter | null = null;
+
+    setContent({ status: "loading" });
+
+    async function loadHome() {
+      try {
+        const bootstrap = await bootstrapWithClerk(() => getToken());
+        adapter = createRemoteActiveListAdapter({
+          household: bootstrap.activeHousehold,
+          list: bootstrap.activeList,
+          currentUser: bootstrap.user,
+          members: bootstrap.members,
+          database: bootstrap.householdDatabase,
+        });
+        const initialList = await adapter.load();
+
+        if (cancelled) return;
+        handedOffAdapter = true;
+        setContent({ status: "ready", bootstrap, initialList, adapter });
+      } catch {
+        if (!handedOffAdapter) {
+          void adapter?.close?.();
+          adapter = null;
+        }
+        if (!cancelled) {
+          setContent({
+            status: "error",
+            message: "Unable to prepare your Household. Please try again.",
+          });
+        }
+      }
+    }
+
+    void loadHome();
+
+    return () => {
+      cancelled = true;
+      if (!handedOffAdapter) {
+        void adapter?.close?.();
+      }
+    };
+  }, [getToken, isLoaded, isSignedIn, loadAttempt]);
+
+  const currentMemberName = memberName(content, user);
+
+  const retry = useCallback(() => {
+    setLoadAttempt((attempt) => attempt + 1);
+  }, []);
 
   function onSignOut() {
     track("user_signed_out", {});
@@ -38,13 +96,14 @@ export default function HomeScreen() {
   return (
     <HomeScreenView
       currentMemberName={currentMemberName}
-      initialList={initialList}
+      content={content}
+      onRetry={retry}
       onSignOut={onSignOut}
     />
   );
 }
 
-export function HomeScreenView({ currentMemberName, initialList, onSignOut }: HomeScreenViewProps) {
+export function HomeScreenView({ currentMemberName, content, onRetry, onSignOut }: HomeScreenViewProps) {
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.root}>
       <View style={styles.accountBar}>
@@ -67,15 +126,56 @@ export function HomeScreenView({ currentMemberName, initialList, onSignOut }: Ho
         ) : null}
       </View>
 
-      <ActiveList.Provider initialState={initialList} currentMemberName={currentMemberName}>
-        <ActiveList.Screen>
-          <ActiveList.Header />
-          <ActiveList.Items />
-          <ActiveList.AddItemForm />
-        </ActiveList.Screen>
-      </ActiveList.Provider>
+      {content.status === "ready" ? (
+        <ActiveList.Provider
+          initialState={content.initialList}
+          currentMemberName={currentMemberName}
+          adapter={content.adapter}
+        >
+          <ActiveList.Screen>
+            <ActiveList.Header />
+            <ActiveList.Items />
+            <ActiveList.AddItemForm />
+          </ActiveList.Screen>
+        </ActiveList.Provider>
+      ) : content.status === "loading" ? (
+        <HomeStatus title="Preparing your Household" body="Loading your durable List data.">
+          <ActivityIndicator />
+        </HomeStatus>
+      ) : (
+        <HomeStatus title="Household unavailable" body={content.message}>
+          {onRetry ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onRetry}
+              style={({ pressed }) => [styles.retryButton, pressed ? styles.retryButtonPressed : undefined]}>
+              <Text style={styles.retryButtonLabel}>Try again</Text>
+            </Pressable>
+          ) : null}
+        </HomeStatus>
+      )}
     </SafeAreaView>
   );
+}
+
+function HomeStatus({ title, body, children }: { title: string; body: string; children: ReactNode }) {
+  return (
+    <View style={styles.statusRoot}>
+      <View style={styles.statusCard}>
+        <Text style={styles.statusTitle}>{title}</Text>
+        <Text style={styles.statusBody}>{body}</Text>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function memberName(content: HomeContentState, user: ReturnType<typeof useUser>["user"]): string {
+  if (content.status === "ready") {
+    return content.bootstrap.activeMember.displayName ?? content.bootstrap.user.email ?? "Member";
+  }
+
+  return user?.fullName ?? user?.firstName ?? user?.primaryEmailAddress?.emailAddress ?? "Member";
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -124,6 +224,50 @@ const styles = StyleSheet.create((theme) => ({
   signOutLabel: {
     color: theme.colors.inverseText,
     fontSize: 15,
+    fontWeight: "700",
+  },
+  statusRoot: {
+    flex: 1,
+    justifyContent: "center",
+    padding: theme.spacing(5),
+    backgroundColor: theme.colors.background,
+  },
+  statusCard: {
+    alignItems: "center",
+    gap: theme.spacing(3),
+    padding: theme.spacing(7),
+    borderRadius: theme.radii.card,
+    borderCurve: "continuous",
+    backgroundColor: theme.colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+  },
+  statusTitle: {
+    color: theme.colors.text,
+    fontSize: 20,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  statusBody: {
+    color: theme.colors.textMuted,
+    fontSize: 15,
+    textAlign: "center",
+  },
+  retryButton: {
+    minHeight: 44,
+    paddingHorizontal: theme.spacing(4),
+    borderRadius: theme.radii.control,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.primary,
+  },
+  retryButtonPressed: {
+    opacity: 0.72,
+  },
+  retryButtonLabel: {
+    color: theme.colors.inverseText,
+    fontSize: 16,
     fontWeight: "700",
   },
 }));

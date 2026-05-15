@@ -28,13 +28,22 @@ describe("environment config", () => {
     ).toThrow("pk_live_");
   });
 
-  it("requires API base URLs for persistent environments", () => {
+  it("requires API base URLs for app builds that call API routes", () => {
     expect(() =>
       readPublicExpoConfig({
-        APP_ENV: "staging",
+        APP_ENV: "local",
         EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
       }),
     ).toThrow("EXPO_PUBLIC_API_BASE_URL");
+  });
+
+  it("allows tests to omit the API base URL", () => {
+    expect(
+      readPublicExpoConfig({
+        APP_ENV: "test",
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+      }).apiBaseUrl,
+    ).toBeUndefined();
   });
 
   it("requires confirmation for production operations", () => {
