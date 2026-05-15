@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c41083ac-9108-4df1-a829-c3e0e6637c1a",
+  "id": "246ffce6-03c7-4792-8c51-2308ef86a47b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "item_checks": {
@@ -14,8 +14,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "clerk_user_id": {
-          "name": "clerk_user_id",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -54,12 +54,12 @@
         }
       },
       "compositePrimaryKeys": {
-        "item_checks_item_id_clerk_user_id_pk": {
+        "item_checks_item_id_user_id_pk": {
           "columns": [
             "item_id",
-            "clerk_user_id"
+            "user_id"
           ],
-          "name": "item_checks_item_id_clerk_user_id_pk"
+          "name": "item_checks_item_id_user_id_pk"
         }
       },
       "uniqueConstraints": {},
@@ -103,8 +103,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "created_by_clerk_user_id": {
-          "name": "created_by_clerk_user_id",
+        "created_by_user_id": {
+          "name": "created_by_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -186,8 +186,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "created_by_clerk_user_id": {
-          "name": "created_by_clerk_user_id",
+        "created_by_user_id": {
+          "name": "created_by_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

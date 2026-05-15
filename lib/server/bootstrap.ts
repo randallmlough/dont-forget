@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 
 import { householdClient, householdDb, householdDbUrl, type DirectoryDb } from "@/db/client";
 import { migrateHouseholdDb } from "@/db/household-migrations";
@@ -35,7 +35,6 @@ export type BootstrapServiceDeps = {
   createId: (prefix: AppIdPrefix) => string;
   provisionHouseholdDatabase: (input: {
     tursoDbName: string;
-    createdByClerkUserId: string;
     createdByUserId: string;
     now: number;
   }) => Promise<{ url: string }>;
@@ -52,16 +51,10 @@ export function createProductionBootstrapDeps(directory: DirectoryDb): Bootstrap
     directory,
     now: Date.now,
     createId: createAppId,
-    provisionHouseholdDatabase: async ({ tursoDbName, createdByClerkUserId, createdByUserId, now }) => {
+    provisionHouseholdDatabase: async ({ tursoDbName, createdByUserId, now }) => {
       const database = await platform.ensureDatabase(tursoDbName);
       await migrateHouseholdDb(tursoDbName, config);
-      await ensureDefaultListInRemoteHousehold(
-        database.url,
-        config.platformGroupToken,
-        createdByClerkUserId,
-        createdByUserId,
-        now,
-      );
+      await ensureDefaultListInRemoteHousehold(database.url, config.platformGroupToken, createdByUserId, now);
       return database;
     },
     createHouseholdDatabaseToken: (tursoDbName) => platform.createDatabaseAuthToken(tursoDbName, "24h"),
@@ -83,7 +76,6 @@ export async function bootstrapUser(
   return {
     user: {
       id: user.id,
-      clerkUserId: user.clerkUserId,
       email: user.email,
       displayName: user.displayName,
     },
@@ -94,7 +86,6 @@ export async function bootstrapUser(
     activeMember: {
       id: active.membershipId,
       userId: user.id,
-      clerkUserId: user.clerkUserId,
       role: active.membershipRole,
       displayName: user.displayName,
     },
@@ -163,10 +154,10 @@ async function getOrCreateActiveMembership(
 ): Promise<ActiveMembershipRow> {
   return deps.directory.transaction(async (tx) => {
     const txDeps: BootstrapDirectoryDeps = { ...deps, directory: tx };
-    const active = await oldestActiveMembership(user, tx);
+    const active = await oldestActiveMembership(user.id, tx);
     if (active) return active;
 
-    const pending = await pendingCreatedHousehold(user, tx);
+    const pending = await pendingCreatedHousehold(user.id, tx);
     if (pending) {
       const membership = await ensureOwnerMembership(pending.id, user, txDeps);
       return activeRowFrom(pending, membership);
@@ -178,7 +169,6 @@ async function getOrCreateActiveMembership(
       id: householdId,
       name: profile.firstName ?? "Untitled",
       tursoDbName: householdDatabaseName(deps.appEnv, householdId),
-      createdByClerkUserId: user.clerkUserId,
       createdByUserId: user.id,
       provisioningCompletedAt: null,
       createdAt: now,
@@ -187,12 +177,10 @@ async function getOrCreateActiveMembership(
     const membership: Membership = {
       id: deps.createId("mbr"),
       householdId,
-      clerkUserId: user.clerkUserId,
       userId: user.id,
       role: "owner",
       joinedAt: now,
       removedAt: null,
-      tursoTokenId: null,
     };
 
     await tx.insert(households).values(household);
@@ -202,7 +190,7 @@ async function getOrCreateActiveMembership(
 }
 
 async function oldestActiveMembership(
-  user: User,
+  userId: string,
   directory: DirectorySession,
 ): Promise<ActiveMembershipRow | null> {
   const [row] = await directory
@@ -217,11 +205,7 @@ async function oldestActiveMembership(
     .from(memberships)
     .innerJoin(households, eq(households.id, memberships.householdId))
     .where(
-      and(
-        or(eq(memberships.userId, user.id), eq(memberships.clerkUserId, user.clerkUserId)),
-        isNull(memberships.removedAt),
-        isNull(households.deletedAt),
-      ),
+      and(eq(memberships.userId, userId), isNull(memberships.removedAt), isNull(households.deletedAt)),
     )
     .orderBy(asc(memberships.joinedAt), asc(memberships.id))
     .limit(1);
@@ -230,7 +214,7 @@ async function oldestActiveMembership(
 }
 
 async function pendingCreatedHousehold(
-  user: User,
+  userId: string,
   directory: DirectorySession,
 ): Promise<Household | null> {
   const [row] = await directory
@@ -238,7 +222,7 @@ async function pendingCreatedHousehold(
     .from(households)
     .where(
       and(
-        or(eq(households.createdByUserId, user.id), eq(households.createdByClerkUserId, user.clerkUserId)),
+        eq(households.createdByUserId, userId),
         isNull(households.provisioningCompletedAt),
         isNull(households.deletedAt),
       ),
@@ -260,7 +244,7 @@ async function ensureOwnerMembership(
     .where(
       and(
         eq(memberships.householdId, householdId),
-        or(eq(memberships.userId, user.id), eq(memberships.clerkUserId, user.clerkUserId)),
+        eq(memberships.userId, user.id),
         isNull(memberships.removedAt),
       ),
     )
@@ -271,12 +255,10 @@ async function ensureOwnerMembership(
   const membership: Membership = {
     id: deps.createId("mbr"),
     householdId,
-    clerkUserId: user.clerkUserId,
     userId: user.id,
     role: "owner",
     joinedAt: deps.now(),
     removedAt: null,
-    tursoTokenId: null,
   };
   await deps.directory.insert(memberships).values(membership);
   return membership;
@@ -293,7 +275,6 @@ async function ensureProvisioned(
 
   const database = await deps.provisionHouseholdDatabase({
     tursoDbName: active.householdTursoDbName,
-    createdByClerkUserId: user.clerkUserId,
     createdByUserId: user.id,
     now: deps.now(),
   });
@@ -313,13 +294,12 @@ async function activeMembers(
     .select({
       membershipId: memberships.id,
       userId: users.id,
-      clerkUserId: users.clerkUserId,
       role: memberships.role,
       displayName: users.displayName,
       joinedAt: memberships.joinedAt,
     })
     .from(memberships)
-    .innerJoin(users, or(eq(users.id, memberships.userId), eq(users.clerkUserId, memberships.clerkUserId)))
+    .innerJoin(users, eq(users.id, memberships.userId))
     .where(and(eq(memberships.householdId, householdId), isNull(memberships.removedAt)))
     .orderBy(asc(memberships.joinedAt), asc(memberships.id));
 
@@ -340,7 +320,6 @@ function activeRowFrom(household: Household, membership: Membership): ActiveMemb
 async function ensureDefaultListInRemoteHousehold(
   url: string,
   authToken: string,
-  createdByClerkUserId: string,
   createdByUserId: string,
   now: number,
 ): Promise<void> {
@@ -352,7 +331,6 @@ async function ensureDefaultListInRemoteHousehold(
       .values({
         id: DEFAULT_LIST_ID,
         name: DEFAULT_LIST_NAME,
-        createdByClerkUserId,
         createdByUserId,
         createdAt: now,
         updatedAt: now,

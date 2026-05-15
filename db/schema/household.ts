@@ -6,8 +6,6 @@ export const lists = sqliteTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    // Kept during the app-User migration so previously shipped clients can keep writing.
-    createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
     updatedAt: integer("updated_at").notNull().default(sql`(unixepoch() * 1000)`),
@@ -26,8 +24,6 @@ export const items = sqliteTable(
     name: text("name").notNull(),
     notes: text("notes"),
     position: real("position").notNull(),
-    // Kept during the app-User migration so previously shipped clients can keep writing.
-    createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
     updatedAt: integer("updated_at").notNull().default(sql`(unixepoch() * 1000)`),
@@ -46,13 +42,11 @@ export const itemChecks = sqliteTable(
     itemId: text("item_id")
       .notNull()
       .references(() => items.id),
-    // Kept during the app-User migration so previously shipped clients can keep writing.
-    clerkUserId: text("clerk_user_id").notNull(),
     userId: text("user_id").notNull(),
     checkedAt: integer("checked_at"),
     updatedAt: integer("updated_at").notNull().default(sql`(unixepoch() * 1000)`),
   },
-  (t) => [primaryKey({ columns: [t.itemId, t.clerkUserId] })],
+  (t) => [primaryKey({ columns: [t.itemId, t.userId] })],
 );
 
 export type List = typeof lists.$inferSelect;

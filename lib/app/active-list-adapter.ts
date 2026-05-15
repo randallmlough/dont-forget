@@ -41,10 +41,8 @@ export function createRemoteActiveListAdapter(
 
   for (const member of config.members) {
     memberNames.set(member.userId, member.displayName);
-    memberNames.set(member.clerkUserId, member.displayName);
   }
   memberNames.set(config.currentUser.id, config.currentUser.displayName);
-  memberNames.set(config.currentUser.clerkUserId, config.currentUser.displayName);
 
   return {
     async load() {
@@ -53,14 +51,14 @@ export function createRemoteActiveListAdapter(
           SELECT
             i.id,
             i.name,
-            COALESCE(c.user_id, c.clerk_user_id) AS checked_by_member_key,
+            c.user_id AS checked_by_user_id,
             c.checked_at AS checked_at
           FROM items i
           LEFT JOIN item_checks c ON c.rowid = (
             SELECT c2.rowid
             FROM item_checks c2
             WHERE c2.item_id = i.id
-            ORDER BY c2.updated_at DESC, COALESCE(c2.user_id, c2.clerk_user_id) DESC
+            ORDER BY c2.updated_at DESC, c2.user_id DESC
             LIMIT 1
           )
           WHERE i.list_id = ? AND i.deleted_at IS NULL
@@ -92,23 +90,13 @@ export function createRemoteActiveListAdapter(
             list_id,
             name,
             position,
-            created_by_clerk_user_id,
             created_by_user_id,
             created_at,
             updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
-        args: [
-          id,
-          config.list.id,
-          name,
-          position,
-          config.currentUser.clerkUserId,
-          config.currentUser.id,
-          timestamp,
-          timestamp,
-        ],
+        args: [id, config.list.id, name, position, config.currentUser.id, timestamp, timestamp],
       });
 
       return { id, name, checked: false, checkedByMemberName: null };
@@ -117,20 +105,13 @@ export function createRemoteActiveListAdapter(
       const timestamp = now();
       await client.execute({
         sql: `
-          INSERT INTO item_checks (item_id, clerk_user_id, user_id, checked_at, updated_at)
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(item_id, clerk_user_id) DO UPDATE SET
-            user_id = excluded.user_id,
+          INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(item_id, user_id) DO UPDATE SET
             checked_at = excluded.checked_at,
             updated_at = excluded.updated_at
         `,
-        args: [
-          itemId,
-          config.currentUser.clerkUserId,
-          config.currentUser.id,
-          checked ? timestamp : null,
-          timestamp,
-        ],
+        args: [itemId, config.currentUser.id, checked ? timestamp : null, timestamp],
       });
     },
     async close() {
@@ -153,14 +134,14 @@ async function nextPosition(client: ActiveListClient, listId: string): Promise<n
 function itemFromRow(row: Record<string, unknown>, memberNames: Map<string, string | null>): ActiveListItem {
   const id = stringColumn(row.id, "id");
   const name = stringColumn(row.name, "name");
-  const checkedByMemberKey = nullableStringColumn(row.checked_by_member_key);
+  const checkedByUserId = nullableStringColumn(row.checked_by_user_id);
   const checked = row.checked_at !== null && row.checked_at !== undefined;
 
   return {
     id,
     name,
     checked,
-    checkedByMemberName: checked && checkedByMemberKey ? memberNames.get(checkedByMemberKey) ?? null : null,
+    checkedByMemberName: checked && checkedByUserId ? memberNames.get(checkedByUserId) ?? null : null,
   };
 }
 

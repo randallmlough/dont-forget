@@ -97,7 +97,6 @@ describe("bootstrapUser", () => {
           id: "hh_newer",
           name: "Newer",
           tursoDbName: "db-newer",
-          createdByClerkUserId: "clerk_avery",
           createdByUserId: "usr_existing",
           provisioningCompletedAt: 1,
           createdAt: 1,
@@ -106,7 +105,6 @@ describe("bootstrapUser", () => {
           id: "hh_older",
           name: "Older",
           tursoDbName: "db-older",
-          createdByClerkUserId: "clerk_avery",
           createdByUserId: "usr_existing",
           provisioningCompletedAt: 1,
           createdAt: 1,
@@ -116,7 +114,6 @@ describe("bootstrapUser", () => {
         {
           id: "mbr_newer",
           householdId: "hh_newer",
-          clerkUserId: "clerk_avery",
           userId: "usr_existing",
           role: "member",
           joinedAt: 20,
@@ -124,7 +121,6 @@ describe("bootstrapUser", () => {
         {
           id: "mbr_older",
           householdId: "hh_older",
-          clerkUserId: "clerk_avery",
           userId: "usr_existing",
           role: "owner",
           joinedAt: 10,
@@ -154,7 +150,6 @@ describe("bootstrapUser", () => {
         id: "hh_pending",
         name: "Avery",
         tursoDbName: "db-pending",
-        createdByClerkUserId: "clerk_avery",
         createdByUserId: "usr_existing",
         provisioningCompletedAt: null,
       });
@@ -171,47 +166,6 @@ describe("bootstrapUser", () => {
         .from(households)
         .where(eq(households.id, "hh_pending"));
       expect(pending.provisioningCompletedAt).toEqual(expect.any(Number));
-    } finally {
-      await harness.close();
-    }
-  });
-
-  it("loads active Memberships that were still written with Clerk IDs", async () => {
-    const harness = await createBootstrapHarness();
-
-    try {
-      await harness.directory.db.insert(users).values({
-        id: "usr_existing",
-        clerkUserId: "clerk_avery",
-        displayName: "Avery Chen",
-      });
-      await harness.directory.client.execute({
-        sql: `
-          INSERT INTO households (
-            id,
-            name,
-            turso_db_name,
-            created_by_clerk_user_id,
-            provisioning_completed_at,
-            created_at
-          ) VALUES (?, ?, ?, ?, ?, ?)
-        `,
-        args: ["hh_legacy", "Legacy", "db-legacy", "clerk_avery", 1, 10],
-      });
-      await harness.directory.client.execute({
-        sql: `
-          INSERT INTO memberships (id, household_id, clerk_user_id, role, joined_at)
-          VALUES (?, ?, ?, ?, ?)
-        `,
-        args: ["mbr_legacy", "hh_legacy", "clerk_avery", "owner", 10],
-      });
-
-      const response = await bootstrapUser(averyProfile, harness.deps);
-
-      expect(response.activeHousehold).toEqual({ id: "hh_legacy", name: "Legacy" });
-      expect(response.members).toMatchObject([
-        { membershipId: "mbr_legacy", userId: "usr_existing", clerkUserId: "clerk_avery" },
-      ]);
     } finally {
       await harness.close();
     }
@@ -243,12 +197,7 @@ async function createBootstrapHarness() {
       counters.set(prefix, next);
       return `${prefix}_${next}`;
     },
-    async provisionHouseholdDatabase({
-      tursoDbName,
-      createdByClerkUserId,
-      createdByUserId,
-      now: listNow,
-    }) {
+    async provisionHouseholdDatabase({ tursoDbName, createdByUserId, now: listNow }) {
       if (!householdDbs.has(tursoDbName)) {
         householdDbs.set(tursoDbName, await createTestHouseholdDb());
         createdDatabases.push(tursoDbName);
@@ -260,7 +209,6 @@ async function createBootstrapHarness() {
         .values({
           id: DEFAULT_LIST_ID,
           name: DEFAULT_LIST_NAME,
-          createdByClerkUserId,
           createdByUserId,
           createdAt: listNow,
           updatedAt: listNow,

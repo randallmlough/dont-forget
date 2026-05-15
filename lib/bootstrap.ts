@@ -6,7 +6,6 @@ export const HOUSEHOLD_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 export type BootstrapResponse = {
   user: {
     id: string;
-    clerkUserId: string;
     email: string | null;
     displayName: string | null;
   };
@@ -17,7 +16,6 @@ export type BootstrapResponse = {
   activeMember: {
     id: string;
     userId: string;
-    clerkUserId: string;
     role: "owner" | "member";
     displayName: string | null;
   };
@@ -28,7 +26,6 @@ export type BootstrapResponse = {
   members: Array<{
     membershipId: string;
     userId: string;
-    clerkUserId: string;
     role: "owner" | "member";
     displayName: string | null;
   }>;

@@ -116,7 +116,6 @@ function bootstrapFixture() {
   return {
     user: {
       id: "usr_avery",
-      clerkUserId: "clerk_avery",
       email: "avery@example.com",
       displayName: "Avery Chen",
     },
@@ -124,7 +123,6 @@ function bootstrapFixture() {
     activeMember: {
       id: "mbr_avery",
       userId: "usr_avery",
-      clerkUserId: "clerk_avery",
       role: "owner" as const,
       displayName: "Avery Chen",
     },
@@ -133,7 +131,6 @@ function bootstrapFixture() {
       {
         membershipId: "mbr_avery",
         userId: "usr_avery",
-        clerkUserId: "clerk_avery",
         role: "owner" as const,
         displayName: "Avery Chen",
       },
