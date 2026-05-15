@@ -79,7 +79,7 @@ export function createTursoPlatformClient(
 
   async function getDatabase(databaseName: string): Promise<TursoDatabase> {
     const payload = (await request(`/databases/${databaseName}`)) as TursoDatabasePayload;
-    return normalizeDatabase(payload, databaseName, config.org);
+    return normalizeDatabase(payload);
   }
 
   return {
@@ -103,27 +103,23 @@ export function createTursoPlatformClient(
   };
 }
 
-function normalizeDatabase(
-  payload: TursoDatabasePayload,
-  fallbackName: string,
-  org: string,
-): TursoDatabase {
-  const database = (payload.database ?? payload) as Record<string, unknown>;
-  const name = stringValue(database.name) ?? stringValue(database.Name) ?? fallbackName;
-  const hostname = stringValue(database.hostname) ?? stringValue(database.Hostname);
-  const url = stringValue(database.url) ?? stringValue(database.DbUrl) ?? urlFromHostname(hostname, name, org);
+function normalizeDatabase(payload: TursoDatabasePayload): TursoDatabase {
+  const database = recordValue(payload.database) ?? payload;
+  const name = requiredString(database.Name ?? database.name, "database name");
+  const hostname = requiredString(database.Hostname ?? database.hostname, "database hostname");
+  const url = hostname.startsWith("libsql://") ? hostname : `libsql://${hostname}`;
 
   return { name, url };
 }
 
-function urlFromHostname(hostname: string | null, databaseName: string, org: string): string {
-  if (hostname) {
-    return hostname.startsWith("libsql://") ? hostname : `libsql://${hostname}`;
-  }
-
-  return `libsql://${databaseName}-${org}.turso.io`;
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
 
-function stringValue(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
+function requiredString(value: unknown, label: string): string {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+
+  throw new TursoPlatformError(`Turso Platform database response did not include ${label}`);
 }

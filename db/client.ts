@@ -19,8 +19,8 @@ export function directoryDb(client: Client) {
   return drizzle(client, { schema: directorySchema });
 }
 
-export function householdDbUrl(tursoDbName: string): string {
-  return `libsql://${tursoDbName}-${readTursoConfig().org}.turso.io`;
+export function householdDbUrl(tursoDbName: string, org = readTursoConfig().org): string {
+  return `libsql://${tursoDbName}-${org}.turso.io`;
 }
 
 export function householdClient(url: string, authToken: string): Client {

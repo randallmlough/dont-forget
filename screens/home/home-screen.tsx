@@ -8,14 +8,13 @@ import { ActiveList, type ActiveListDataAdapter, type ActiveListInitialState } f
 import { reset, track } from "@/lib/analytics";
 import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
 import { createRemoteActiveListAdapter } from "@/lib/app/active-list-adapter";
-import type { BootstrapResponse } from "@/lib/bootstrap";
 
 type HomeContentState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | {
       status: "ready";
-      bootstrap: BootstrapResponse;
+      currentMemberName: string;
       initialList: ActiveListInitialState;
       adapter: ActiveListDataAdapter;
     };
@@ -45,11 +44,21 @@ export default function HomeScreen() {
     let handedOffAdapter = false;
     let adapter: ActiveListDataAdapter | null = null;
 
+    async function closeUnclaimedAdapter() {
+      if (handedOffAdapter || !adapter) return;
+
+      const current = adapter;
+      adapter = null;
+      await current.close();
+    }
+
     setContent({ status: "loading" });
 
     async function loadHome() {
       try {
         const bootstrap = await bootstrapWithClerk(() => getTokenRef.current());
+        if (cancelled) return;
+
         adapter = createRemoteActiveListAdapter({
           household: bootstrap.activeHousehold,
           list: bootstrap.activeList,
@@ -59,14 +68,16 @@ export default function HomeScreen() {
         });
         const initialList = await adapter.load();
 
-        if (cancelled) return;
-        handedOffAdapter = true;
-        setContent({ status: "ready", bootstrap, initialList, adapter });
-      } catch {
-        if (!handedOffAdapter) {
-          void adapter?.close?.();
-          adapter = null;
+        if (cancelled) {
+          await closeUnclaimedAdapter();
+          return;
         }
+
+        const currentMemberName = bootstrap.activeMember.displayName ?? bootstrap.user.email ?? "Member";
+        handedOffAdapter = true;
+        setContent({ status: "ready", currentMemberName, initialList, adapter });
+      } catch {
+        await closeUnclaimedAdapter().catch(() => undefined);
         if (!cancelled) {
           setContent({
             status: "error",
@@ -80,9 +91,7 @@ export default function HomeScreen() {
 
     return () => {
       cancelled = true;
-      if (!handedOffAdapter) {
-        void adapter?.close?.();
-      }
+      void closeUnclaimedAdapter().catch(() => undefined);
     };
   }, [isLoaded, isSignedIn, loadAttempt]);
 
@@ -177,7 +186,7 @@ function HomeStatus({ title, body, children }: { title: string; body: string; ch
 
 function memberName(content: HomeContentState, user: ReturnType<typeof useUser>["user"]): string {
   if (content.status === "ready") {
-    return content.bootstrap.activeMember.displayName ?? content.bootstrap.user.email ?? "Member";
+    return content.currentMemberName;
   }
 
   return user?.fullName ?? user?.firstName ?? user?.primaryEmailAddress?.emailAddress ?? "Member";

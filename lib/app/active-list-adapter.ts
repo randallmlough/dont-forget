@@ -1,7 +1,7 @@
 import { createClient } from "@libsql/client/web";
 import * as Crypto from "expo-crypto";
 
-import type { ActiveListInitialState, ActiveListItem } from "@/components/active-list";
+import type { ActiveListDataAdapter, ActiveListInitialState, ActiveListItem } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
 import { createAppId, type RandomUuid } from "@/lib/ids";
 
@@ -12,13 +12,6 @@ type ExecuteResult = {
 type ActiveListClient = {
   execute: (statement: string | { sql: string; args?: Array<string | number | null> }) => Promise<ExecuteResult>;
   close?: () => void | Promise<void>;
-};
-
-export type ActiveListDataAdapter = {
-  load: () => Promise<ActiveListInitialState>;
-  addItem: (name: string) => Promise<ActiveListItem>;
-  setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-  close: () => Promise<void>;
 };
 
 export type RemoteActiveListAdapterConfig = {

@@ -22,10 +22,7 @@ describe("createRemoteActiveListAdapter", () => {
           list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
           currentUser: {
             id: "usr_avery",
-            clerkUserId: "clerk_avery",
             email: "avery@example.com",
-            firstName: "Avery",
-            lastName: "Chen",
             displayName: "Avery Chen",
           },
           members: [

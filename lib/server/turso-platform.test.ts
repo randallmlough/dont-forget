@@ -49,6 +49,18 @@ describe("createTursoPlatformClient", () => {
       details: '{"error":"group not found"}',
     } satisfies Partial<TursoPlatformError>);
   });
+
+  it("fails clearly when the database response is malformed", async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(response(201, { database: { Name: "db-one", Hostname: "db-one-org.turso.io" } }))
+      .mockResolvedValueOnce(response(200, { database: { Name: "db-one" } }));
+    const client = createTursoPlatformClient(config, fetchMock as typeof fetch);
+
+    await expect(client.ensureDatabase("db-one")).rejects.toThrow(
+      "Turso Platform database response did not include database hostname",
+    );
+  });
 });
 
 const config: TursoOperatorConfig = {

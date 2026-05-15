@@ -12,18 +12,16 @@ import {
 } from "@/lib/bootstrap";
 import { createAppId, type AppIdPrefix } from "@/lib/ids";
 import { readTursoOperatorConfig, type AppEnv } from "@/lib/env";
-import { createTursoPlatformClient, type TursoPlatformClient } from "./turso-platform";
+import { createTursoPlatformClient } from "./turso-platform";
 import type { ServerUserProfile } from "./auth";
 
 type ActiveMembershipRow = {
   membershipId: string;
   membershipRole: "owner" | "member";
-  membershipJoinedAt: number;
   householdId: string;
   householdName: string;
   householdTursoDbName: string;
   householdProvisioningCompletedAt: number | null;
-  householdCreatedAt: number;
 };
 
 export type BootstrapServiceDeps = {
@@ -31,9 +29,11 @@ export type BootstrapServiceDeps = {
   directory: DirectoryDb;
   now: () => number;
   createId: (prefix: AppIdPrefix) => string;
-  ensureHouseholdDatabase: (tursoDbName: string) => Promise<{ url: string }>;
-  migrateHouseholdDatabase: (tursoDbName: string) => Promise<void>;
-  ensureDefaultList: (input: { tursoDbName: string; createdByUserId: string; now: number }) => Promise<void>;
+  provisionHouseholdDatabase: (input: {
+    tursoDbName: string;
+    createdByUserId: string;
+    now: number;
+  }) => Promise<{ url: string }>;
   createHouseholdDatabaseToken: (tursoDbName: string) => Promise<string>;
   householdDatabaseUrl: (tursoDbName: string) => string;
 };
@@ -47,17 +47,14 @@ export function createProductionBootstrapDeps(directory: DirectoryDb): Bootstrap
     directory,
     now: Date.now,
     createId: createAppId,
-    ensureHouseholdDatabase: async (tursoDbName) => {
+    provisionHouseholdDatabase: async ({ tursoDbName, createdByUserId, now }) => {
       const database = await platform.ensureDatabase(tursoDbName);
-      return { url: database.url };
+      await migrateHouseholdDb(tursoDbName);
+      await ensureDefaultListInRemoteHousehold(database.url, config.platformGroupToken, createdByUserId, now);
+      return database;
     },
-    migrateHouseholdDatabase: migrateHouseholdDb,
-    ensureDefaultList: async ({ tursoDbName, createdByUserId, now }) => {
-      await ensureDefaultListInRemoteHousehold(tursoDbName, createdByUserId, now);
-    },
-    createHouseholdDatabaseToken: (tursoDbName) =>
-      createHouseholdDatabaseToken(platform, tursoDbName),
-    householdDatabaseUrl: householdDbUrl,
+    createHouseholdDatabaseToken: (tursoDbName) => platform.createDatabaseAuthToken(tursoDbName, "24h"),
+    householdDatabaseUrl: (tursoDbName) => householdDbUrl(tursoDbName, config.org),
   };
 }
 
@@ -75,10 +72,7 @@ export async function bootstrapUser(
   return {
     user: {
       id: user.id,
-      clerkUserId: user.clerkUserId,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
       displayName: user.displayName,
     },
     activeHousehold: {
@@ -153,12 +147,12 @@ async function getOrCreateActiveMembership(
   deps: BootstrapServiceDeps,
 ): Promise<ActiveMembershipRow> {
   const active = await oldestActiveMembership(user.id, deps.directory);
-  if (active) return repairUnprovisionedDatabaseName(active, deps);
+  if (active) return active;
 
   const pending = await pendingCreatedHousehold(user.id, deps.directory);
   if (pending) {
     const membership = await ensureOwnerMembership(pending.id, user.id, deps);
-    return repairUnprovisionedDatabaseName(activeRowFrom(pending, membership), deps);
+    return activeRowFrom(pending, membership);
   }
 
   const now = deps.now();
@@ -186,23 +180,6 @@ async function getOrCreateActiveMembership(
   return activeRowFrom(household, membership);
 }
 
-async function repairUnprovisionedDatabaseName(
-  active: ActiveMembershipRow,
-  deps: BootstrapServiceDeps,
-): Promise<ActiveMembershipRow> {
-  if (active.householdProvisioningCompletedAt || isValidTursoDatabaseName(active.householdTursoDbName)) {
-    return active;
-  }
-
-  const tursoDbName = householdDatabaseName(deps.appEnv, active.householdId);
-  await deps.directory.update(households).set({ tursoDbName }).where(eq(households.id, active.householdId));
-  return { ...active, householdTursoDbName: tursoDbName };
-}
-
-function isValidTursoDatabaseName(name: string): boolean {
-  return /^[a-z0-9-]{1,51}$/.test(name);
-}
-
 async function oldestActiveMembership(
   userId: string,
   directory: DirectoryDb,
@@ -211,12 +188,10 @@ async function oldestActiveMembership(
     .select({
       membershipId: memberships.id,
       membershipRole: memberships.role,
-      membershipJoinedAt: memberships.joinedAt,
       householdId: households.id,
       householdName: households.name,
       householdTursoDbName: households.tursoDbName,
       householdProvisioningCompletedAt: households.provisioningCompletedAt,
-      householdCreatedAt: households.createdAt,
     })
     .from(memberships)
     .innerJoin(households, eq(households.id, memberships.householdId))
@@ -257,7 +232,13 @@ async function ensureOwnerMembership(
   const [existing] = await deps.directory
     .select()
     .from(memberships)
-    .where(and(eq(memberships.householdId, householdId), eq(memberships.userId, userId), isNull(memberships.removedAt)))
+    .where(
+      and(
+        eq(memberships.householdId, householdId),
+        eq(memberships.userId, userId),
+        isNull(memberships.removedAt),
+      ),
+    )
     .limit(1);
 
   if (existing) return existing;
@@ -283,9 +264,7 @@ async function ensureProvisioned(
     return { url: deps.householdDatabaseUrl(active.householdTursoDbName) };
   }
 
-  const database = await deps.ensureHouseholdDatabase(active.householdTursoDbName);
-  await deps.migrateHouseholdDatabase(active.householdTursoDbName);
-  await deps.ensureDefaultList({
+  const database = await deps.provisionHouseholdDatabase({
     tursoDbName: active.householdTursoDbName,
     createdByUserId: userId,
     now: deps.now(),
@@ -295,7 +274,7 @@ async function ensureProvisioned(
     .set({ provisioningCompletedAt: deps.now() })
     .where(eq(households.id, active.householdId));
 
-  return { url: database.url || deps.householdDatabaseUrl(active.householdTursoDbName) };
+  return database;
 }
 
 async function activeMembers(
@@ -322,29 +301,20 @@ function activeRowFrom(household: Household, membership: Membership): ActiveMemb
   return {
     membershipId: membership.id,
     membershipRole: membership.role,
-    membershipJoinedAt: membership.joinedAt,
     householdId: household.id,
     householdName: household.name,
     householdTursoDbName: household.tursoDbName,
     householdProvisioningCompletedAt: household.provisioningCompletedAt,
-    householdCreatedAt: household.createdAt,
   };
 }
 
-async function createHouseholdDatabaseToken(
-  platform: TursoPlatformClient,
-  tursoDbName: string,
-): Promise<string> {
-  return platform.createDatabaseAuthToken(tursoDbName, "24h");
-}
-
 async function ensureDefaultListInRemoteHousehold(
-  tursoDbName: string,
+  url: string,
+  authToken: string,
   createdByUserId: string,
   now: number,
 ): Promise<void> {
-  const config = readTursoOperatorConfig();
-  const client = householdClient(householdDbUrl(tursoDbName), config.platformGroupToken);
+  const client = householdClient(url, authToken);
 
   try {
     await householdDb(client)

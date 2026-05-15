@@ -78,44 +78,36 @@ function noop() {}
 function readyContent(initialList: ActiveListInitialState) {
   return {
     status: "ready" as const,
-    bootstrap: {
-      user: {
-        id: "usr_avery",
-        clerkUserId: "clerk_avery",
-        email: "avery@example.com",
-        firstName: "Avery",
-        lastName: "Chen",
-        displayName: "Avery Chen",
-      },
-      activeHousehold: { id: "hh_avery", name: initialList.householdName },
-      activeMember: { id: "mbr_avery", userId: "usr_avery", role: "owner" as const, displayName: "Avery Chen" },
-      activeList: { id: "lst_default_groceries", name: initialList.listName },
-      members: [
-        { membershipId: "mbr_avery", userId: "usr_avery", role: "owner" as const, displayName: "Avery Chen" },
-      ],
-      householdDatabase: {
-        url: "libsql://example.turso.io",
-        authToken: "story-token",
-        expiresAt: Date.now() + 86_400_000,
-      },
-    },
+    currentMemberName: "Avery Chen",
     initialList,
     adapter: storyAdapter(initialList),
   };
 }
 
 function storyAdapter(initialList: ActiveListInitialState): ActiveListDataAdapter {
+  let state = initialList;
   let nextItem = initialList.items.length + 1;
+
   return {
     async load() {
-      return initialList;
+      return state;
     },
     async addItem(name) {
       const item = { id: `story-item-${nextItem}`, name, checked: false, checkedByMemberName: null };
       nextItem += 1;
+      state = { ...state, items: [...state.items, item] };
       return item;
     },
-    async setItemChecked() {},
+    async setItemChecked(itemId, checked) {
+      state = {
+        ...state,
+        items: state.items.map((item) =>
+          item.id === itemId
+            ? { ...item, checked, checkedByMemberName: checked ? "Avery Chen" : null }
+            : item,
+        ),
+      };
+    },
     async close() {},
   };
 }

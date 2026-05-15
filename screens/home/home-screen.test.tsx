@@ -41,6 +41,32 @@ describe("HomeScreen", () => {
     expect(bootstrapWithClerk).toHaveBeenCalledTimes(1);
     expect(createRemoteActiveListAdapter).toHaveBeenCalledTimes(1);
   });
+
+  it("closes an adapter that is still loading when Home unmounts", async () => {
+    const load = deferred<ActiveListInitialState>();
+    const close = jest.fn().mockResolvedValue(undefined);
+    jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
+    jest.mocked(createRemoteActiveListAdapter).mockReturnValue({
+      async load() {
+        return load.promise;
+      },
+      async addItem(name) {
+        return { id: "itm_new", name, checked: false, checkedByMemberName: null };
+      },
+      async setItemChecked() {},
+      close,
+    });
+    clerkMocks.getToken.mockResolvedValue("session-token");
+    setMockAuthState({ isSignedIn: true });
+
+    const { unmount } = render(<HomeScreen />);
+
+    await waitFor(() => expect(createRemoteActiveListAdapter).toHaveBeenCalledTimes(1));
+    unmount();
+
+    expect(close).toHaveBeenCalledTimes(1);
+    load.resolve(initialListFixture());
+  });
 });
 
 describe("HomeScreenView", () => {
@@ -72,9 +98,7 @@ describe("HomeScreenView", () => {
         currentMemberName="Avery Chen"
         content={{
           status: "ready",
-          bootstrap: {
-            ...bootstrapFixture(),
-          },
+          currentMemberName: "Avery Chen",
           initialList,
           adapter: noopAdapter(initialList),
         }}
@@ -92,10 +116,7 @@ function bootstrapFixture() {
   return {
     user: {
       id: "usr_avery",
-      clerkUserId: "clerk_avery",
       email: "avery@example.com",
-      firstName: "Avery",
-      lastName: "Chen",
       displayName: "Avery Chen",
     },
     activeHousehold: { id: "hh_avery", name: "Avery" },
@@ -120,7 +141,7 @@ function initialListFixture(): ActiveListInitialState {
   };
 }
 
-function noopAdapter(initialList: ActiveListInitialState): ActiveListDataAdapter & { close: () => Promise<void> } {
+function noopAdapter(initialList: ActiveListInitialState): ActiveListDataAdapter {
   return {
     async load() {
       return initialList;
@@ -131,4 +152,13 @@ function noopAdapter(initialList: ActiveListInitialState): ActiveListDataAdapter
     async setItemChecked() {},
     async close() {},
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
 }

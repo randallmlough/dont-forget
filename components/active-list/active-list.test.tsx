@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
-import { ActiveList, type ActiveListInitialState } from "@/components/active-list";
+import { ActiveList, type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
 
 const emptyList: ActiveListInitialState = {
   householdName: "Avery",
@@ -21,13 +21,16 @@ describe("ActiveList", () => {
     fireEvent.changeText(input, " Milk ");
     fireEvent.press(screen.getByText("Add"));
 
-    const milk = await screen.findByRole("checkbox", { name: "Milk" });
-    expect(milk.props.accessibilityState).toEqual({ checked: false });
+    await waitFor(() => {
+      expect(screen.getByRole("checkbox", { name: "Milk" }).props.accessibilityState).toEqual({
+        checked: false,
+      });
+    });
     expect(screen.getByText("0 of 1 Items checked")).toBeTruthy();
     expect(screen.queryByText("This List is empty.")).toBeNull();
     expect(input.props.value).toBe("");
 
-    fireEvent.press(milk);
+    fireEvent.press(screen.getByRole("checkbox", { name: "Milk" }));
 
     await waitFor(() => {
       expect(screen.getByRole("checkbox", { name: "Milk" }).props.accessibilityState).toEqual({
@@ -41,7 +44,10 @@ describe("ActiveList", () => {
 
 function renderActiveList(initialState: ActiveListInitialState) {
   return render(
-    <ActiveList.Provider initialState={initialState} currentMemberName="Avery Chen">
+    <ActiveList.Provider
+      initialState={initialState}
+      currentMemberName="Avery Chen"
+      adapter={memoryAdapter(initialState)}>
       <ActiveList.Screen>
         <ActiveList.Header />
         <ActiveList.Items />
@@ -49,4 +55,32 @@ function renderActiveList(initialState: ActiveListInitialState) {
       </ActiveList.Screen>
     </ActiveList.Provider>,
   );
+}
+
+function memoryAdapter(initialState: ActiveListInitialState): ActiveListDataAdapter {
+  let state = initialState;
+  let nextItem = initialState.items.length + 1;
+
+  return {
+    async load() {
+      return state;
+    },
+    async addItem(name) {
+      const item = { id: `test-item-${nextItem}`, name, checked: false, checkedByMemberName: null };
+      nextItem += 1;
+      state = { ...state, items: [...state.items, item] };
+      return item;
+    },
+    async setItemChecked(itemId, checked) {
+      state = {
+        ...state,
+        items: state.items.map((item) =>
+          item.id === itemId
+            ? { ...item, checked, checkedByMemberName: checked ? "Avery Chen" : null }
+            : item,
+        ),
+      };
+    },
+    async close() {},
+  };
 }

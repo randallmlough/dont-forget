@@ -50,7 +50,7 @@ export type ActiveListDataAdapter = {
   load: () => Promise<ActiveListInitialState>;
   addItem: (name: string) => Promise<ActiveListItem>;
   setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-  close?: () => Promise<void>;
+  close: () => Promise<void>;
 };
 
 type ActiveListContextValue = {
@@ -62,7 +62,7 @@ type ActiveListContextValue = {
 type ActiveListProviderProps = PropsWithChildren<{
   initialState: ActiveListInitialState;
   currentMemberName: string;
-  adapter?: ActiveListDataAdapter;
+  adapter: ActiveListDataAdapter;
 }>;
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
@@ -80,18 +80,16 @@ function ActiveListProvider({
 
   useEffect(() => {
     return () => {
-      void adapter?.close?.();
+      void adapter.close();
     };
   }, [adapter]);
 
   const loadFromAdapter = useCallback(async () => {
-    if (!adapter) return;
     const nextState = await adapter.load();
     setState(nextState);
   }, [adapter]);
 
   const refresh = useCallback(async () => {
-    if (!adapter) return;
     setIsRefreshing(true);
     setErrorMessage(null);
 
@@ -102,14 +100,14 @@ function ActiveListProvider({
     } finally {
       setIsRefreshing(false);
     }
-  }, [adapter, loadFromAdapter]);
+  }, [loadFromAdapter]);
 
   const addItem = useCallback(async (rawName: string) => {
     const name = rawName.trim();
     if (!name) return;
 
     const item: ActiveListItem = {
-      id: `${adapter ? "pending" : "local"}-item-${nextItemNumber.current}`,
+      id: `pending-item-${nextItemNumber.current}`,
       name,
       checked: false,
       checkedByMemberName: null,
@@ -120,8 +118,6 @@ function ActiveListProvider({
       ...previous,
       items: [...previous.items, item],
     }));
-
-    if (!adapter) return;
 
     try {
       const persistedItem = await adapter.addItem(name);
@@ -152,8 +148,6 @@ function ActiveListProvider({
         };
       }),
     }));
-
-    if (!adapter) return;
 
     try {
       await adapter.setItemChecked(itemId, checked);

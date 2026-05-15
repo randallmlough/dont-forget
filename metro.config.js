@@ -6,6 +6,7 @@ const defaultResolveRequest = config.resolver.resolveRequest;
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === "@libsql/client") {
+    // Drizzle's libsql adapter resolves the package root; native bundles must use the HTTP entrypoint.
     return context.resolveRequest(context, "@libsql/client/http", platform);
   }
 
