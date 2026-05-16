@@ -66,4 +66,16 @@ make db-migrate APP_ENV=production CONFIRM_APP_ENV=production
 
 Production migrations also require the extra non-interactive confirmation shown above. Keep `CONFIRM_APP_ENV=production` out of `.env.production`; it should be an operator action at the time the command is run.
 
+## Database Reset
+
+Database reset deletes app data from the selected environment's directory DB and every Household DB known from directory rows. It preserves migration metadata tables.
+
+```bash
+make db-reset APP_ENV=local CONFIRM_DB_RESET=local
+make db-reset APP_ENV=staging CONFIRM_DB_RESET=staging
+make db-reset APP_ENV=production CONFIRM_DB_RESET=production CONFIRM_APP_ENV=production
+```
+
+`CONFIRM_DB_RESET` must match `APP_ENV` for every reset. Production also requires `CONFIRM_APP_ENV=production`.
+
 Tests must not call the real migration command. They use local temp databases loaded from `db/migrations/**` through test helpers.

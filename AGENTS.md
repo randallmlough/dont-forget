@@ -14,7 +14,7 @@
 - Standard TS/TSX proof: `make verify` runs `typecheck -> lint -> test-ci`. Full CI parity: `make ci` adds Expo package check, public config resolution, and high-severity audit.
 - Focused Jest proof: `pnpm exec jest --runInBand --runTestsByPath <test-file>`; add `-t "<test name>"` for one test. `pnpm test` is watch mode.
 - Storybook: `make storybook` starts the dev server for an installed native iOS build/dev client; `make storybook-ios` builds/runs Storybook with `expo run:ios`. Do not use Expo Go for Storybook. After adding, moving, or deleting stories, run `make storybook-generate`.
-- Database: `make db-generate` runs every Drizzle config in `db/drizzle`. Run `make db-migrate APP_ENV=staging` only when intentionally applying migrations to configured Turso databases; production also requires `CONFIRM_APP_ENV=production`.
+- Database: `make db-generate` runs every Drizzle config in `db/drizzle`. Run `make db-migrate APP_ENV=staging` only when intentionally applying migrations to configured Turso databases; production also requires `CONFIRM_APP_ENV=production`. Run `make db-reset APP_ENV=<env> CONFIRM_DB_RESET=<env>` only when intentionally deleting app data from the directory DB and all known Household DBs; production also requires `CONFIRM_APP_ENV=production`.
 
 ## Architecture
 

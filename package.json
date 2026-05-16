@@ -16,7 +16,8 @@
     "test:coverage": "jest --coverage --runInBand",
     "typecheck": "tsc --noEmit",
     "db:generate": "tsx db/generate.ts",
-    "db:migrate": "tsx db/migrate.ts"
+    "db:migrate": "tsx db/migrate.ts",
+    "db:reset": "tsx db/reset.ts"
   },
   "dependencies": {
     "@babel/core": "^7.29.0",

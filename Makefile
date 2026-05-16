@@ -94,6 +94,10 @@ db-generate: ## Generate both directory and Household migrations
 db-migrate: ## Apply migrations to configured databases
 	@APP_ENV="$(APP_ENV)" CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" $(PNPM) db:migrate
 
+.PHONY: db-reset
+db-reset: ## Delete app data from configured databases
+	@APP_ENV="$(APP_ENV)" CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" CONFIRM_DB_RESET="$(CONFIRM_DB_RESET)" $(PNPM) db:reset
+
 # ==================================================================================== #
 # UTILITIES
 # ==================================================================================== #
