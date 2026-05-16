@@ -1,4 +1,4 @@
-import { createClient, type Client } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client/http";
 import { drizzle } from "drizzle-orm/libsql";
 import { readTursoConfig } from "@/lib/env";
 import * as directorySchema from "./schema/directory";
@@ -19,8 +19,8 @@ export function directoryDb(client: Client) {
   return drizzle(client, { schema: directorySchema });
 }
 
-export function householdDbUrl(tursoDbName: string): string {
-  return `libsql://${tursoDbName}-${readTursoConfig().org}.turso.io`;
+export function householdDbUrl(tursoDbName: string, org = readTursoConfig().org): string {
+  return `libsql://${tursoDbName}-${org}.turso.io`;
 }
 
 export function householdClient(url: string, authToken: string): Client {

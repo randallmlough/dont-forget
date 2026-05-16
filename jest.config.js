@@ -5,6 +5,8 @@ module.exports = {
   setupFilesAfterEnv: ["<rootDir>/lib/test/setup.ts"],
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
   moduleNameMapper: {
+    // Keep Jest aligned with Metro: Drizzle may resolve the libsql package root.
+    "^@libsql/client$": "@libsql/client/http",
     "^@/(.*)$": "<rootDir>/$1",
   },
   transformIgnorePatterns: [

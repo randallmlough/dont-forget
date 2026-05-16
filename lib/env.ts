@@ -16,6 +16,7 @@ export type TursoConfig = {
   appEnv: AppEnv;
   directoryAuthToken: string;
   directoryUrl: string;
+  group: string;
   org: string;
 };
 
@@ -25,6 +26,11 @@ export type TursoMigrationConfig = TursoConfig & {
 
 export type TursoOperatorConfig = TursoMigrationConfig & {
   platformApiToken: string;
+};
+
+export type ClerkServerConfig = {
+  appEnv: AppEnv;
+  secretKey: string;
 };
 
 export function requireEnv(key: string, source: EnvSource = process.env): string {
@@ -58,7 +64,7 @@ export function readPublicExpoConfig(source: EnvSource = process.env): PublicExp
   validateClerkKeyForEnv(appEnv, "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY", clerkPublishableKey);
 
   const apiBaseUrl = optionalEnv("EXPO_PUBLIC_API_BASE_URL", source);
-  if (isPersistentAppEnv(appEnv) && !apiBaseUrl) {
+  if (appEnv !== "test" && !apiBaseUrl) {
     throw new Error(`Missing required env var for ${appEnv}: EXPO_PUBLIC_API_BASE_URL`);
   }
 
@@ -77,6 +83,7 @@ export function readTursoConfig(source: EnvSource = process.env): TursoConfig {
     appEnv,
     directoryAuthToken: requireEnv("TURSO_DIRECTORY_AUTH_TOKEN", source),
     directoryUrl: requireEnv("TURSO_DIRECTORY_URL", source),
+    group: requireEnv("TURSO_GROUP", source),
     org: requireEnv("TURSO_ORG", source),
   };
 }
@@ -93,6 +100,14 @@ export function readTursoOperatorConfig(source: EnvSource = process.env): TursoO
     ...readTursoMigrationConfig(source),
     platformApiToken: requireEnv("TURSO_PLATFORM_API_TOKEN", source),
   };
+}
+
+export function readClerkServerConfig(source: EnvSource = process.env): ClerkServerConfig {
+  const appEnv = readAppEnv(source);
+  const secretKey = requireEnv("CLERK_SECRET_KEY", source);
+  validateClerkKeyForEnv(appEnv, "CLERK_SECRET_KEY", secretKey);
+
+  return { appEnv, secretKey };
 }
 
 export function readAppEnvFromExpoExtra(extra: Record<string, unknown> | undefined): AppEnv {

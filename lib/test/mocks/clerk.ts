@@ -21,6 +21,7 @@ type SignUpState = {
 };
 
 export const clerkMocks = {
+  getToken: jest.fn(),
   signInCreate: jest.fn(),
   signUpCreate: jest.fn(),
   prepareEmailAddressVerification: jest.fn(),
@@ -35,6 +36,7 @@ let authState: AuthState;
 let userState: UserState;
 let signInState: SignInState;
 let signUpState: SignUpState;
+let authCallbacksAreUnstable: boolean;
 
 export function resetClerkMocks() {
   for (const mock of Object.values(clerkMocks)) {
@@ -43,6 +45,7 @@ export function resetClerkMocks() {
 
   authState = { isLoaded: true, isSignedIn: false };
   userState = { user: null };
+  authCallbacksAreUnstable = false;
   signInState = {
     isLoaded: true,
     createdSessionId: null,
@@ -62,6 +65,10 @@ export function resetClerkMocks() {
 
 export function setMockAuthState(next: Partial<AuthState>) {
   authState = { ...authState, ...next };
+}
+
+export function setMockAuthCallbacksUnstable(next: boolean) {
+  authCallbacksAreUnstable = next;
 }
 
 export function setMockUserState(next: Partial<UserState>) {
@@ -87,7 +94,8 @@ export function ClerkLoaded({ children }: { children: ReactNode }) {
 export function useAuth() {
   return {
     ...authState,
-    signOut: clerkMocks.signOut,
+    getToken: authCallbacksAreUnstable ? () => clerkMocks.getToken() : clerkMocks.getToken,
+    signOut: authCallbacksAreUnstable ? () => clerkMocks.signOut() : clerkMocks.signOut,
   };
 }
 

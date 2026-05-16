@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import { memberships, households } from "@/db/schema/directory";
+import { memberships, households, users } from "@/db/schema/directory";
 import { itemChecks, items, lists } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 
@@ -10,34 +10,42 @@ describe("test database migrations", () => {
     const household = await createTestHouseholdDb();
 
     try {
+      await directory.db.insert(users).values({
+        id: "usr_1",
+        clerkUserId: "clerk_user_1",
+        email: "avery@example.com",
+        firstName: "Avery",
+        lastName: "Chen",
+        displayName: "Avery Chen",
+      });
       await directory.db.insert(households).values({
         id: "household_1",
         name: "Test Household",
         tursoDbName: "test-household",
-        createdByClerkUserId: "user_1",
+        createdByUserId: "usr_1",
       });
       await directory.db.insert(memberships).values({
         id: "membership_1",
         householdId: "household_1",
-        clerkUserId: "user_1",
+        userId: "usr_1",
         role: "owner",
       });
 
       await household.db.insert(lists).values({
         id: "list_1",
         name: "Groceries",
-        createdByClerkUserId: "user_1",
+        createdByUserId: "usr_1",
       });
       await household.db.insert(items).values({
         id: "item_1",
         listId: "list_1",
         name: "Milk",
         position: 0,
-        createdByClerkUserId: "user_1",
+        createdByUserId: "usr_1",
       });
       await household.db.insert(itemChecks).values({
         itemId: "item_1",
-        clerkUserId: "user_1",
+        userId: "usr_1",
         checkedAt: 1_700_000_000_000,
       });
 
@@ -56,7 +64,7 @@ describe("test database migrations", () => {
       expect(checkRows).toEqual([
         {
           itemId: "item_1",
-          clerkUserId: "user_1",
+          userId: "usr_1",
           checkedAt: 1_700_000_000_000,
           updatedAt: expect.any(Number),
         },

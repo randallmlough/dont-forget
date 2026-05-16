@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useMemo } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
-import { ActiveList, type ActiveListInitialState } from "@/components/active-list";
+import { ActiveList, type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
 
 const emptyList: ActiveListInitialState = {
   householdName: "Avery",
@@ -38,9 +39,14 @@ export const WithItems: Story = {
 };
 
 function ActiveListStory({ initialState }: { initialState: ActiveListInitialState }) {
+  const adapter = useMemo(() => storyAdapter(initialState), [initialState]);
+
   return (
     <View style={styles.canvas}>
-      <ActiveList.Provider initialState={initialState} currentMemberName="Avery Chen">
+      <ActiveList.Provider
+        initialState={initialState}
+        currentMemberName="Avery Chen"
+        adapter={adapter}>
         <ActiveList.Screen>
           <ActiveList.Header />
           <ActiveList.Items />
@@ -49,6 +55,34 @@ function ActiveListStory({ initialState }: { initialState: ActiveListInitialStat
       </ActiveList.Provider>
     </View>
   );
+}
+
+function storyAdapter(initialState: ActiveListInitialState): ActiveListDataAdapter {
+  let state = initialState;
+  let nextItem = initialState.items.length + 1;
+
+  return {
+    async load() {
+      return state;
+    },
+    async addItem(name) {
+      const item = { id: `story-item-${nextItem}`, name, checked: false, checkedByMemberName: null };
+      nextItem += 1;
+      state = { ...state, items: [...state.items, item] };
+      return item;
+    },
+    async setItemChecked(itemId, checked) {
+      state = {
+        ...state,
+        items: state.items.map((item) =>
+          item.id === itemId
+            ? { ...item, checked, checkedByMemberName: checked ? "Avery Chen" : null }
+            : item,
+        ),
+      };
+    },
+    async close() {},
+  };
 }
 
 const styles = StyleSheet.create((theme) => ({

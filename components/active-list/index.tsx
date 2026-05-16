@@ -1,4 +1,14 @@
-import { PropsWithChildren, createContext, memo, useCallback, useContext, useMemo, useRef, useState } from "react";
+import {
+  PropsWithChildren,
+  createContext,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   FlatList,
   Pressable,
@@ -25,12 +35,22 @@ export type ActiveListState = {
 export type ActiveListInitialState = ActiveListState;
 
 export type ActiveListActions = {
-  addItem: (name: string) => void;
-  toggleItem: (itemId: string) => void;
+  addItem: (name: string) => Promise<void>;
+  toggleItem: (itemId: string) => Promise<void>;
+  refresh: () => Promise<void>;
 };
 
 export type ActiveListMeta = {
   currentMemberName: string;
+  errorMessage: string | null;
+  isRefreshing: boolean;
+};
+
+export type ActiveListDataAdapter = {
+  load: () => Promise<ActiveListInitialState>;
+  addItem: (name: string) => Promise<ActiveListItem>;
+  setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
+  close: () => Promise<void>;
 };
 
 type ActiveListContextValue = {
@@ -42,6 +62,7 @@ type ActiveListContextValue = {
 type ActiveListProviderProps = PropsWithChildren<{
   initialState: ActiveListInitialState;
   currentMemberName: string;
+  adapter: ActiveListDataAdapter;
 }>;
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
@@ -49,49 +70,131 @@ const ActiveListContext = createContext<ActiveListContextValue | null>(null);
 function ActiveListProvider({
   initialState,
   currentMemberName,
+  adapter,
   children,
 }: ActiveListProviderProps) {
   const [state, setState] = useState<ActiveListState>(initialState);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const mounted = useRef(true);
   const nextItemNumber = useRef(initialState.items.length + 1);
+  const stateRef = useRef(initialState);
 
-  const addItem = useCallback((rawName: string) => {
+  const replaceState = useCallback((nextState: ActiveListState) => {
+    if (!mounted.current) return;
+    stateRef.current = nextState;
+    setState(nextState);
+  }, []);
+
+  const updateState = useCallback((updater: (previous: ActiveListState) => ActiveListState) => {
+    if (!mounted.current) return;
+    const nextState = updater(stateRef.current);
+    stateRef.current = nextState;
+    setState(nextState);
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      void adapter.close();
+    };
+  }, [adapter]);
+
+  const loadFromAdapter = useCallback(async () => {
+    const nextState = await adapter.load();
+    replaceState(nextState);
+  }, [adapter, replaceState]);
+
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
+    setErrorMessage(null);
+
+    try {
+      await loadFromAdapter();
+    } catch {
+      if (mounted.current) {
+        setErrorMessage("Unable to refresh this List. Please try again.");
+      }
+    } finally {
+      if (mounted.current) {
+        setIsRefreshing(false);
+      }
+    }
+  }, [loadFromAdapter]);
+
+  const addItem = useCallback(async (rawName: string) => {
     const name = rawName.trim();
     if (!name) return;
 
     const item: ActiveListItem = {
-      id: `local-item-${nextItemNumber.current}`,
+      id: `pending-item-${nextItemNumber.current}`,
       name,
       checked: false,
       checkedByMemberName: null,
     };
     nextItemNumber.current += 1;
 
-    setState((previous) => ({
+    updateState((previous) => ({
       ...previous,
       items: [...previous.items, item],
     }));
-  }, []);
 
-  const toggleItem = useCallback(
-    (itemId: string) => {
-      setState((previous) => ({
+    try {
+      const persistedItem = await adapter.addItem(name);
+      updateState((previous) => ({
         ...previous,
-        items: previous.items.map((item) => {
-          if (item.id !== itemId) return item;
-          const checked = !item.checked;
-          return {
-            ...item,
-            checked,
-            checkedByMemberName: checked ? currentMemberName : null,
-          };
-        }),
+        items: previous.items.map((existing) => (existing.id === item.id ? persistedItem : existing)),
       }));
-    },
-    [currentMemberName],
-  );
+      if (mounted.current) {
+        setErrorMessage(null);
+      }
+    } catch {
+      if (mounted.current) {
+        setErrorMessage("Unable to save that Item. The List was refreshed.");
+      }
+      await loadFromAdapter().catch(() => undefined);
+    }
+  }, [adapter, loadFromAdapter, updateState]);
 
-  const actions = useMemo<ActiveListActions>(() => ({ addItem, toggleItem }), [addItem, toggleItem]);
-  const meta = useMemo<ActiveListMeta>(() => ({ currentMemberName }), [currentMemberName]);
+  const toggleItem = useCallback(async (itemId: string) => {
+    const target = stateRef.current.items.find((item) => item.id === itemId);
+    if (!target) return;
+
+    const checked = !target.checked;
+    updateState((previous) => ({
+      ...previous,
+      items: previous.items.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          checked,
+          checkedByMemberName: checked ? currentMemberName : null,
+        };
+      }),
+    }));
+
+    try {
+      await adapter.setItemChecked(itemId, checked);
+      if (mounted.current) {
+        setErrorMessage(null);
+      }
+    } catch {
+      if (mounted.current) {
+        setErrorMessage("Unable to save that change. The List was refreshed.");
+      }
+      await loadFromAdapter().catch(() => undefined);
+    }
+  }, [adapter, currentMemberName, loadFromAdapter, updateState]);
+
+  const actions = useMemo<ActiveListActions>(
+    () => ({ addItem, refresh, toggleItem }),
+    [addItem, refresh, toggleItem],
+  );
+  const meta = useMemo<ActiveListMeta>(
+    () => ({ currentMemberName, errorMessage, isRefreshing }),
+    [currentMemberName, errorMessage, isRefreshing],
+  );
   const value = useMemo<ActiveListContextValue>(
     () => ({ state, actions, meta }),
     [actions, meta, state],
@@ -113,7 +216,7 @@ function ActiveListScreen({ children }: PropsWithChildren) {
 }
 
 function ActiveListHeader() {
-  const { state } = useActiveList();
+  const { actions, meta, state } = useActiveList();
   const itemCount = state.items.length;
   const checkedCount = state.items.filter((item) => item.checked).length;
   const progressLabel =
@@ -121,9 +224,18 @@ function ActiveListHeader() {
 
   return (
     <View style={styles.header}>
-      <Text style={styles.householdName}>{state.householdName}</Text>
+      <View style={styles.headerTopRow}>
+        <Text style={styles.householdName}>{state.householdName}</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void actions.refresh()}
+          style={({ pressed }) => [styles.refreshButton, pressed ? styles.refreshButtonPressed : undefined]}>
+          <Text style={styles.refreshButtonLabel}>{meta.isRefreshing ? "Refreshing" : "Refresh"}</Text>
+        </Pressable>
+      </View>
       <Text style={styles.listName}>{state.listName}</Text>
       <Text style={styles.progressLabel}>{progressLabel}</Text>
+      {meta.errorMessage ? <Text style={styles.errorMessage}>{meta.errorMessage}</Text> : null}
     </View>
   );
 }
@@ -155,7 +267,7 @@ function ActiveListAddItemForm() {
 
   const submit = useCallback(() => {
     if (!canSubmit) return;
-    actions.addItem(trimmedName);
+    void actions.addItem(trimmedName);
     setName("");
   }, [actions, canSubmit, trimmedName]);
 
@@ -188,7 +300,7 @@ const ItemRow = memo(function ItemRow({ item }: { item: ActiveListItem }) {
   const { actions } = useActiveList();
 
   const toggle = useCallback(() => {
-    actions.toggleItem(item.id);
+    void actions.toggleItem(item.id);
   }, [actions, item.id]);
 
   return (
@@ -255,10 +367,36 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.border,
   },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing(3),
+  },
   householdName: {
+    flex: 1,
     color: theme.colors.textMuted,
     fontSize: 14,
     fontWeight: "600",
+  },
+  refreshButton: {
+    minHeight: 32,
+    paddingHorizontal: theme.spacing(2.5),
+    borderRadius: theme.radii.control,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.background,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+  },
+  refreshButtonPressed: {
+    opacity: 0.72,
+  },
+  refreshButtonLabel: {
+    color: theme.colors.text,
+    fontSize: 13,
+    fontWeight: "700",
   },
   listName: {
     color: theme.colors.text,
@@ -268,6 +406,12 @@ const styles = StyleSheet.create((theme) => ({
   progressLabel: {
     color: theme.colors.textMuted,
     fontSize: 15,
+  },
+  errorMessage: {
+    marginTop: theme.spacing(2),
+    color: theme.colors.destructive,
+    fontSize: 14,
+    fontWeight: "600",
   },
   itemsContent: {
     padding: theme.spacing(5),

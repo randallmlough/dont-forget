@@ -4,6 +4,8 @@ Tests are React Native-first. The default stack is Jest through `jest-expo` plus
 
 There is no separate React DOM/jsdom track. Add one later only if the app grows web-specific behavior that cannot be exercised through the React Native surface.
 
+Native end-to-end coverage uses Maestro. Add Maestro flows when behavior depends on a real iOS app runtime, native modules, app relaunch, device state, or offline/online transitions that Jest cannot prove.
+
 ## Commands
 
 ```bash
@@ -18,6 +20,7 @@ pnpm lint
 - `pnpm test:ci` runs Jest once with `--runInBand`; prefer this for verification because integration tests may create temp databases.
 - `pnpm test:coverage` reports coverage but does not enforce a threshold.
 - The standard proof for TS/TSX changes is `pnpm typecheck`, `pnpm lint`, and `pnpm test:ci` when practical.
+- Maestro flows run against an installed iOS build with the Maestro CLI or EAS Workflows. Add exact commands here when the first `.maestro/` flow and build profile are committed.
 
 ## Test Boundaries
 
@@ -31,6 +34,14 @@ Mock true external SDK and native boundaries:
 - Expo browser and secure storage APIs
 
 Do not mock product behavior that can run locally. Database behavior should use an isolated local libSQL database loaded from checked-in migration SQL.
+
+Use Maestro, not Jest, to prove native database module behavior such as op-sqlite open/sync, offline cold start, app relaunch, and airplane-mode transitions.
+
+Maestro flows that are specifically about native database/offline behavior may use a test-only auth path gated to `APP_ENV=local` or `APP_ENV=test` plus explicit E2E flags/secrets on both client and server. The client may return a fake signed-in session, and the bootstrap API may accept a matching server-only bearer token that maps to a fixed test User profile. The bypass must fail closed in staging and production. Keep real Clerk email/password or OAuth automation in separate auth-focused smoke flows so database/offline tests are deterministic.
+
+Database/offline Maestro flows should use a fixed E2E User profile and run an explicit local/test reset before the flow. Do not create a new Household DB per run unless the cleanup path is part of the test harness.
+
+When a Maestro flow verifies offline writes that should sync later, pair the UI flow with a local/test-only post-flow assertion that queries the Household DB and confirms the offline Item reached the remote database.
 
 MSW is intentionally not part of the first testing setup. Add MSW only when app-owned HTTP/API routes exist and tests need to exercise those network boundaries. Clerk is mocked at the SDK-hook boundary because feature code does not call Clerk HTTP endpoints directly.
 

@@ -6,7 +6,7 @@ export const lists = sqliteTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
     createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
     updatedAt: integer("updated_at").notNull().default(sql`(unixepoch() * 1000)`),
     deletedAt: integer("deleted_at"),
@@ -24,7 +24,7 @@ export const items = sqliteTable(
     name: text("name").notNull(),
     notes: text("notes"),
     position: real("position").notNull(),
-    createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
     createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
     updatedAt: integer("updated_at").notNull().default(sql`(unixepoch() * 1000)`),
     deletedAt: integer("deleted_at"),
@@ -42,11 +42,11 @@ export const itemChecks = sqliteTable(
     itemId: text("item_id")
       .notNull()
       .references(() => items.id),
-    clerkUserId: text("clerk_user_id").notNull(),
+    userId: text("user_id").notNull(),
     checkedAt: integer("checked_at"),
     updatedAt: integer("updated_at").notNull().default(sql`(unixepoch() * 1000)`),
   },
-  (t) => [primaryKey({ columns: [t.itemId, t.clerkUserId] })],
+  (t) => [primaryKey({ columns: [t.itemId, t.userId] })],
 );
 
 export type List = typeof lists.$inferSelect;

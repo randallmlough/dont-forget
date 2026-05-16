@@ -19,9 +19,9 @@ Persistent Turso resources are isolated by environment group and redundant datab
 
 - Turso group: `dont-forget-<env>` for persistent shared environments, with per-developer local groups such as `dont-forget-local-<name>`.
 - Directory DB: `dont-forget-<env>-directory`.
-- Household DBs: `dont-forget-<env>-household-<id-or-slug>`.
+- Household DBs: `df-<env>-hh-<compact-household-id>` so names stay within Turso's 51-character database-name limit.
 
-The Turso group represents the app environment, not the data type. There is no nested `household` group; each environment group contains that environment's directory DB and all of its Household DBs.
+The Turso group represents the app environment, not the data type. There is no nested `household` group; each environment group contains that environment's directory DB and all of its Household DBs. Household DB names are based on generated Household IDs, not Household names, so they remain stable and avoid personal information.
 
 ## Secrets
 
@@ -49,6 +49,8 @@ PostHog analytics and logs are tagged with `APP_ENV`. Do not derive analytics/lo
 
 App builds point at one API base URL for their selected environment. Local can use a simulator-safe local URL or tunnel; staging and production use separate hosted API deployments/domains.
 
+`EXPO_PUBLIC_API_BASE_URL` is required for `local`, `staging`, and `production` app builds. `test` may omit it because tests mock app/API boundaries directly.
+
 ## iOS App Identity
 
 Staging is a separately installable iOS app with a distinct bundle identifier and visible app name suffix. Production keeps the final bundle identifier and app name. Local development can use a development suffix when needed.
@@ -63,5 +65,17 @@ make db-migrate APP_ENV=production CONFIRM_APP_ENV=production
 ```
 
 Production migrations also require the extra non-interactive confirmation shown above. Keep `CONFIRM_APP_ENV=production` out of `.env.production`; it should be an operator action at the time the command is run.
+
+## Database Reset
+
+Database reset deletes app data from the selected environment's directory DB and every Household DB known from directory rows. It preserves migration metadata tables.
+
+```bash
+make db-reset APP_ENV=local CONFIRM_DB_RESET=local
+make db-reset APP_ENV=staging CONFIRM_DB_RESET=staging
+make db-reset APP_ENV=production CONFIRM_DB_RESET=production CONFIRM_APP_ENV=production
+```
+
+`CONFIRM_DB_RESET` must match `APP_ENV` for every reset. Production also requires `CONFIRM_APP_ENV=production`.
 
 Tests must not call the real migration command. They use local temp databases loaded from `db/migrations/**` through test helpers.

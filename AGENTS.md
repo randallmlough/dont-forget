@@ -6,6 +6,20 @@
 - Before non-trivial work, search `CONTEXT.md` and `docs/`, then confirm behavior in source. `CONTEXT.md` owns domain language: `Household`, `Member`, `Owner`, `User`, `List`, `Item`, and `Invitation`; do not replace them with group/team/account/todo/invite link terminology.
 - Keep shared agent guidance in `AGENTS.md`; there is no repo-wide `CLAUDE.md`, Cursor rule, or Copilot instruction file to update.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live in GitHub Issues for `randallmlough/dont-forget`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default triage label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo with one root `CONTEXT.md` and root `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Commands
 
 - CI runs Node 22 and `pnpm@10.11.0`. Prefer `make` targets; if invoking package scripts directly, use `pnpm`, never the README's `npm` or `npx` examples.
@@ -14,12 +28,12 @@
 - Standard TS/TSX proof: `make verify` runs `typecheck -> lint -> test-ci`. Full CI parity: `make ci` adds Expo package check, public config resolution, and high-severity audit.
 - Focused Jest proof: `pnpm exec jest --runInBand --runTestsByPath <test-file>`; add `-t "<test name>"` for one test. `pnpm test` is watch mode.
 - Storybook: `make storybook` starts the dev server for an installed native iOS build/dev client; `make storybook-ios` builds/runs Storybook with `expo run:ios`. Do not use Expo Go for Storybook. After adding, moving, or deleting stories, run `make storybook-generate`.
-- Database: `make db-generate` runs every Drizzle config in `db/drizzle`. Run `make db-migrate APP_ENV=staging` only when intentionally applying migrations to configured Turso databases; production also requires `CONFIRM_APP_ENV=production`.
+- Database: `make db-generate` runs every Drizzle config in `db/drizzle`. Run `make db-migrate APP_ENV=staging` only when intentionally applying migrations to configured Turso databases; production also requires `CONFIRM_APP_ENV=production`. Run `make db-reset APP_ENV=<env> CONFIRM_DB_RESET=<env>` only when intentionally deleting app data from the directory DB and all known Household DBs; production also requires `CONFIRM_APP_ENV=production`.
 
 ## Architecture
 
 - Single iOS-only Expo app, no workspace packages. The JS entrypoint is `index.ts`, which loads Unistyles before `expo-router/entry`; app-wide PostHog, Clerk, theme, auth gating, and screen tracking are wired in `app/_layout.tsx`.
-- Do not add duplicate Clerk/PostHog providers. Auth screens should track typed events and call `setActive(...)`; `useAnalyticsIdentity()` in the root syncs identity. Sign-out order is `track("user_signed_out", {})`, then `reset()`, then `signOut()`.
+- Do not add duplicate Clerk/PostHog providers. Auth screens support Apple, Google, and email/password through Clerk; they should track typed events and call `setActive(...)`. `useAnalyticsIdentity()` in the root syncs identity. Sign-out order is `track("user_signed_out", {})`, then `reset()`, then clear local Household cache/DB files, then `signOut()`.
 - Expo Router uses route groups: `app/(app)` for authenticated app routes and `app/(auth)` for signed-out auth routes. `/` is Home at `app/(app)/index.tsx`; route-owned screen code lives in `screens/`; reusable feature UI such as Active List lives in `components/active-list`.
 - Data is split between a server-only directory DB (`db/schema/directory.ts`) for Households/Memberships/Invitations and one replicated Household libSQL DB (`db/schema/household.ts`) per Household for Lists/Items/`item_checks`. Do not perform cross-Household SQL joins.
 - Replicated data uses row-level last-write-wins; `item_checks` is separate from `items` to avoid checked-state conflicts. App delete paths write tombstones (`deleted_at`), not hard deletes.
@@ -40,6 +54,7 @@
 ## Testing Notes
 
 - Tests are React Native-first with `jest-expo` and React Native Testing Library; there is no separate jsdom or MSW track.
+- Native E2E uses Maestro for behavior that needs a real iOS runtime, app relaunch, native modules, or offline/online device state. Add exact commands after the first `.maestro/` flow and build profile exist.
 - `lib/test/setup.ts` mocks Clerk, native auth/browser/storage, and PostHog. Reusable mocks live in `lib/test/mocks/`. Mock external SDK/native boundaries, not local product behavior.
 - Do not put tests in `app/`; Expo Router treats files there as routes/layouts. Colocate tests next to the screen or module they exercise outside `app/`.
 - DB tests use `db/test.ts` to create temp local libSQL files and apply checked-in migration SQL from `db/migrations/**`; never use `db:migrate` in tests.

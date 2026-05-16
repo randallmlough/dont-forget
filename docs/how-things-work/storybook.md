@@ -16,7 +16,7 @@ For route screens, extract composed view components for Storybook and keep hooks
 
 If a Story renders an app route shell that already owns safe-area handling, set `parameters.noSafeArea = true` on that Story or meta. React Native Storybook's mobile UI adds safe-area padding by default, and route shells such as `HomeScreen` already apply their own safe area.
 
-For Home, use an active-List provider whose context is shaped around `state`, `actions`, and `meta`. The Storybook provider can use local state; the app provider can later adapt Household DB behavior behind the same active-List actions. Do not inject raw Turso clients, Drizzle row types, or generic storage repositories into presentational components.
+For Home, use an active-List provider whose context is shaped around `state`, `actions`, and `meta`. Stories can use local state; the app provider adapts Household DB behavior behind the same active-List actions. Do not inject raw Turso clients, Drizzle row types, or generic storage repositories into presentational components.
 
 Use dot-notation compound exports for the active List surface only, such as `ActiveList.Provider`, `ActiveList.Header`, `ActiveList.Items`, and `ActiveList.AddItemForm`. Do not force simple standalone components like `AuthScreen` into a compound namespace unless they grow shared state.
 
@@ -24,9 +24,9 @@ Keep User/session controls outside `ActiveList.*`. Sign-out and account affordan
 
 The first active List provider models only the current List for the active Household. Do not add multiple-List switching until that product slice is being built.
 
-Active List stories may use a UI-facing Item shape with an effective checked state for the current Member, plus optional display metadata such as who checked it. A later Household DB-backed provider can compute that shape from `items` and `item_checks`.
+Active List stories may use a UI-facing Item shape with an effective checked state for the current Member, plus optional display metadata such as who checked it. The Household DB-backed adapter computes that shape from `items` and `item_checks`.
 
-The first Add Item flow is text-only. Append Items in local state for Storybook and the temporary Home route; notes, manual ordering, and richer Item editing belong to later product slices.
+The first Add Item flow is text-only. Append Items in local state for Storybook; the app writes Items through the Household DB adapter. Notes, manual ordering, and richer Item editing belong to later product slices.
 
 Co-locate stories next to the component or view they describe under `components/`. Use a separate top-level stories folder only for cross-component compositions that do not belong to a single component.
 
@@ -35,7 +35,7 @@ Co-locate stories next to the component or view they describe under `components/
 - `AuthScreen` stories show authentication layout states.
 - `Home` stories render the current List for the active Household.
 - Home stories cover at least an empty List and a List with Items. Home stories may use local React state for lightweight Item interactions, such as checking an Item or appending fixture Items.
-- The first implementation should replace the Expo starter Home route with a thin product-shaped composition using the same active List surface and in-memory state. Real Household DB wiring belongs to a later slice.
+- The first implementation replaces the Expo starter Home route with a thin product-shaped composition using the same active List surface that production backs with Household DB data.
 
 ## Commands
 
