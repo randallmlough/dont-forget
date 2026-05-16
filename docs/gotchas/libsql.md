@@ -13,6 +13,10 @@ The fix is to make the runtime explicit:
 - Metro and Jest map exact package-root imports from `@libsql/client` to `@libsql/client/http` because Drizzle's libsql adapter can resolve the package root internally.
 - Expo API Route modules avoid eager server imports at module scope; `app/api/bootstrap+api.ts` lazy-loads server-only modules inside `POST`.
 
+ADR-0009 changes the target app-side direction: `@libsql/client/web` is a temporary remote-client bridge for Home, not the desired native app database runtime. The iOS app should move Household DB access to `@op-engineering/op-sqlite` with its Turso backend so Home can use a local synced Household DB. Server/API route, migration, reset, and Node test code may continue using explicit `@libsql/client` server-safe entrypoints.
+
+op-sqlite does **not** solve the `app/api/bootstrap+api.ts` lazy-loading problem. That problem comes from Expo API Route module discovery/evaluation crossing the native bundle boundary; removing the lazy imports is a separate bundling proof tracked in `docs/tech-debt/bootstrap-api-lazy-imports.md`.
+
 ## What Failed
 
 The first working implementation accidentally crossed runtime seams.
@@ -47,17 +51,17 @@ The important distinction is:
 - `@libsql/client/http` is safe for server/API Route and Node-style HTTP access.
 - `@libsql/client` package-root imports are unsafe in this codebase unless deliberately remapped.
 
-## The Solution
+## The Current Containment
 
-Use explicit libSQL entrypoints at app-owned seams.
+Use explicit libSQL entrypoints at app-owned seams until the native app Household DB path moves to op-sqlite.
 
-App-side Household List reads/writes live behind `createRemoteActiveListAdapter`:
+The temporary app-side Household List reads/writes live behind `createRemoteActiveListAdapter`:
 
 ```ts
 import { createClient } from "@libsql/client/web";
 ```
 
-That keeps direct remote Household DB access out of components and prevents native app code from importing the package root.
+That keeps direct remote Household DB access out of components and prevents native app code from importing the package root. This is not the final local-first shape; ADR-0009 chooses a synced op-sqlite adapter as the replacement.
 
 Server-side DB clients live in `db/client.ts`:
 
@@ -82,11 +86,12 @@ Finally, `app/api/bootstrap+api.ts` lazy-loads server modules inside `POST`. Tha
 ## Rules Going Forward
 
 - Do not import `@libsql/client` from product code.
-- Use `@libsql/client/web` only from app-side adapters that run in the iOS app.
+- Do not add new app-side `@libsql/client/web` usage. Existing app-side remote access is temporary and should be replaced by the op-sqlite synced Household adapter.
 - Use `@libsql/client/http` for server/API Route, migration, and Node verification code.
 - Keep direct Household SQL behind app-owned adapters such as `lib/app/active-list-adapter.ts` so true local replica sync can replace it later.
 - Keep API Route files thin and lazy-load server-only dependencies inside request handlers.
 - If removing the Metro/Jest mapping, first prove Drizzle no longer resolves the package root during native export and Jest runs.
+- If removing `bootstrap+api.ts` lazy imports, treat it as a separate Expo API Route bundling proof; op-sqlite does not make that safe by itself.
 
 ## How To Verify Changes
 
@@ -109,3 +114,5 @@ The iOS export catches native bundle leaks. The web export catches API Route bun
 - `jest.config.js`
 - `db/client.test.ts`
 - `lib/server/bootstrap-api-route.test.ts`
+- `docs/adr/0009-op-sqlite-for-native-household-sync.md`
+- `docs/tech-debt/bootstrap-api-lazy-imports.md`
