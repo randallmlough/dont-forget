@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import { type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
-import { createRemoteActiveListAdapter } from "@/lib/app/active-list-adapter";
+import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
 import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
 import { clerkMocks, setMockAuthCallbacksUnstable, setMockAuthState, setMockUserState } from "@/lib/test/mocks/clerk";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
@@ -11,19 +11,19 @@ jest.mock("@/lib/app/bootstrap-client", () => ({
 }));
 
 jest.mock("@/lib/app/active-list-adapter", () => ({
-  createRemoteActiveListAdapter: jest.fn(),
+  createHouseholdActiveListAdapter: jest.fn(),
 }));
 
 beforeEach(() => {
   jest.mocked(bootstrapWithClerk).mockReset();
-  jest.mocked(createRemoteActiveListAdapter).mockReset();
+  jest.mocked(createHouseholdActiveListAdapter).mockReset();
 });
 
 describe("HomeScreen", () => {
   it("does not restart bootstrap when auth callbacks are not referentially stable", async () => {
     const initialList = initialListFixture();
     jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
-    jest.mocked(createRemoteActiveListAdapter).mockReturnValue(noopAdapter(initialList));
+    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue(noopAdapter(initialList));
     clerkMocks.getToken.mockResolvedValue("session-token");
     setMockAuthState({ isSignedIn: true });
     setMockAuthCallbacksUnstable(true);
@@ -39,14 +39,14 @@ describe("HomeScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
     expect(bootstrapWithClerk).toHaveBeenCalledTimes(1);
-    expect(createRemoteActiveListAdapter).toHaveBeenCalledTimes(1);
+    expect(createHouseholdActiveListAdapter).toHaveBeenCalledTimes(1);
   });
 
   it("closes an adapter that is still loading when Home unmounts", async () => {
     const load = deferred<ActiveListInitialState>();
     const close = jest.fn().mockResolvedValue(undefined);
     jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
-    jest.mocked(createRemoteActiveListAdapter).mockReturnValue({
+    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue({
       async load() {
         return load.promise;
       },
@@ -61,7 +61,7 @@ describe("HomeScreen", () => {
 
     const { unmount } = render(<HomeScreen />);
 
-    await waitFor(() => expect(createRemoteActiveListAdapter).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(createHouseholdActiveListAdapter).toHaveBeenCalledTimes(1));
     unmount();
 
     expect(close).toHaveBeenCalledTimes(1);

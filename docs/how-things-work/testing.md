@@ -35,7 +35,7 @@ Mock true external SDK and native boundaries:
 
 Do not mock product behavior that can run locally. Database behavior should use an isolated local libSQL database loaded from checked-in migration SQL.
 
-Use Maestro, not Jest, to prove native database module behavior such as op-sqlite open/sync, offline cold start, app relaunch, and airplane-mode transitions.
+Use Maestro, not Jest, to prove native database module behavior such as Turso React Native open/sync, offline cold start, app relaunch, and airplane-mode transitions.
 
 Maestro flows that are specifically about native database/offline behavior may use a test-only auth path gated to `APP_ENV=local` or `APP_ENV=test` plus explicit E2E flags/secrets on both client and server. The client may return a fake signed-in session, and the bootstrap API may accept a matching server-only bearer token that maps to a fixed test User profile. The bypass must fail closed in staging and production. Keep real Clerk email/password or OAuth automation in separate auth-focused smoke flows so database/offline tests are deterministic.
 

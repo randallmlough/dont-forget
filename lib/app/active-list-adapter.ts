@@ -1,20 +1,16 @@
-import { createClient } from "@libsql/client/web";
 import * as Crypto from "expo-crypto";
 
 import type { ActiveListDataAdapter, ActiveListInitialState, ActiveListItem } from "@/components/active-list";
+import { openHouseholdDb, type HouseholdDb, type OpenHouseholdDbConfig } from "@/lib/app/household-db";
 import type { BootstrapResponse } from "@/lib/bootstrap";
 import { createAppId, type RandomUuid } from "@/lib/ids";
 
-type ExecuteResult = {
-  rows: Array<Record<string, unknown>>;
+type ActiveListDb = {
+  execute: (statement: Parameters<HouseholdDb["execute"]>[0]) => Promise<{ rows: Array<Record<string, unknown>> }>;
+  close: () => void | Promise<void>;
 };
 
-type ActiveListClient = {
-  execute: (statement: string | { sql: string; args?: Array<string | number | null> }) => Promise<ExecuteResult>;
-  close?: () => void | Promise<void>;
-};
-
-export type RemoteActiveListAdapterConfig = {
+export type HouseholdActiveListAdapterConfig = {
   household: BootstrapResponse["activeHousehold"];
   list: BootstrapResponse["activeList"];
   currentUser: BootstrapResponse["user"];
@@ -23,17 +19,20 @@ export type RemoteActiveListAdapterConfig = {
 };
 
 type AdapterOptions = {
-  client?: ActiveListClient;
+  db?: ActiveListDb;
+  openDb?: (config: OpenHouseholdDbConfig) => Promise<ActiveListDb>;
   now?: () => number;
   randomUuid?: RandomUuid;
 };
 
-export function createRemoteActiveListAdapter(
-  config: RemoteActiveListAdapterConfig,
+export function createHouseholdActiveListAdapter(
+  config: HouseholdActiveListAdapterConfig,
   options: AdapterOptions = {},
 ): ActiveListDataAdapter {
-  const client = options.client ?? createClient({ url: config.database.url, authToken: config.database.authToken });
-  const ownsClient = !options.client;
+  const dbPromise = options.db
+    ? Promise.resolve(options.db)
+    : (options.openDb ?? openHouseholdDb)({ householdId: config.household.id, database: config.database });
+  const ownsDb = !options.db;
   const now = options.now ?? Date.now;
   const randomUuid = options.randomUuid ?? Crypto.randomUUID;
   const memberNames = new Map<string, string | null>();
@@ -46,7 +45,8 @@ export function createRemoteActiveListAdapter(
 
   return {
     async load() {
-      const result = await client.execute({
+      const db = await dbPromise;
+      const result = await db.execute({
         sql: `
           SELECT
             i.id,
@@ -74,16 +74,17 @@ export function createRemoteActiveListAdapter(
       };
     },
     async addItem(rawName) {
+      const db = await dbPromise;
       const name = rawName.trim();
       if (!name) {
         throw new Error("Item name is required");
       }
 
-      const position = await nextPosition(client, config.list.id);
+      const position = await nextPosition(db, config.list.id);
       const id = createAppId("itm", randomUuid);
       const timestamp = now();
 
-      await client.execute({
+      await db.execute({
         sql: `
           INSERT INTO items (
             id,
@@ -102,8 +103,9 @@ export function createRemoteActiveListAdapter(
       return { id, name, checked: false, checkedByMemberName: null };
     },
     async setItemChecked(itemId, checked) {
+      const db = await dbPromise;
       const timestamp = now();
-      await client.execute({
+      await db.execute({
         sql: `
           INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
           VALUES (?, ?, ?, ?)
@@ -115,15 +117,16 @@ export function createRemoteActiveListAdapter(
       });
     },
     async close() {
-      if (!ownsClient || closed) return;
+      if (!ownsDb || closed) return;
       closed = true;
-      await client.close?.();
+      const db = await dbPromise.catch(() => null);
+      await db?.close();
     },
   };
 }
 
-async function nextPosition(client: ActiveListClient, listId: string): Promise<number> {
-  const result = await client.execute({
+async function nextPosition(db: ActiveListDb, listId: string): Promise<number> {
+  const result = await db.execute({
     sql: "SELECT COALESCE(MAX(position), -1) + 1 AS position FROM items WHERE list_id = ? AND deleted_at IS NULL",
     args: [listId],
   });

@@ -7,7 +7,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { ActiveList, type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
 import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
-import { createRemoteActiveListAdapter } from "@/lib/app/active-list-adapter";
+import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
 
 type HomeContentState =
   | { status: "loading" }
@@ -59,7 +59,7 @@ export default function HomeScreen() {
         const bootstrap = await bootstrapWithClerk(() => getTokenRef.current());
         if (cancelled) return;
 
-        adapter = createRemoteActiveListAdapter({
+        adapter = createHouseholdActiveListAdapter({
           household: bootstrap.activeHousehold,
           list: bootstrap.activeList,
           currentUser: bootstrap.user,

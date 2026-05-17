@@ -2,9 +2,9 @@
 
 ## Context
 
-The first op-sqlite Household sync milestone intentionally keeps the Active List adapter on raw SQL. The goal is to prove the native sync path, offline local writes, and Expo/iOS bundling behavior with the smallest possible runtime change.
+The first Turso React Native Household sync milestone intentionally keeps the Active List adapter on raw SQL. The goal is to prove the native sync path, offline local writes, and Expo/iOS bundling behavior with the smallest possible runtime change.
 
-Drizzle remains the app's schema and migration source for Household tables, but the server-migrated Turso Household DB is the schema authority. The app should not introduce bundled Household migrations just to use `drizzle-orm/op-sqlite`.
+Drizzle remains the app's schema and migration source for Household tables, but the server-migrated Turso Household DB is the schema authority. The app should not introduce bundled Household migrations just to use an app-side ORM.
 
 ## Why This Is Debt
 
@@ -12,13 +12,13 @@ Raw SQL is acceptable while the app-side query surface is small. As Home grows b
 
 ## Revisit When
 
-- The op-sqlite Turso sync path has passed a native iOS proof.
+- The Turso React Native sync path has passed a native iOS proof.
 - Offline cold start, local Item writes, and online sync recovery are covered by tests.
 - The app-side Household query surface grows beyond the Active List adapter's current handful of statements.
 
 ## Desired Direction
 
-Evaluate `drizzle-orm/op-sqlite` for app-side Household queries while preserving these constraints:
+Evaluate app-side Drizzle support for Household queries while preserving these constraints:
 
 - Do not bundle or run Household schema migrations in the app.
 - Do not import `@libsql/client` from app-side code.

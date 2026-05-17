@@ -1,9 +1,9 @@
 import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
-import { createRemoteActiveListAdapter } from "@/lib/app/active-list-adapter";
+import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
 
-describe("createRemoteActiveListAdapter", () => {
+describe("createHouseholdActiveListAdapter", () => {
   it("loads, appends, and persists latest-check-wins Item state", async () => {
     const household = await createTestHouseholdDb();
     let uuid = 0;
@@ -16,7 +16,7 @@ describe("createRemoteActiveListAdapter", () => {
         createdByUserId: "usr_avery",
       });
 
-      const adapter = createRemoteActiveListAdapter(
+      const adapter = createHouseholdActiveListAdapter(
         {
           household: { id: "hh_avery", name: "Avery" },
           list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
@@ -42,7 +42,7 @@ describe("createRemoteActiveListAdapter", () => {
           database: { url: `file:${household.path}`, authToken: "unused", expiresAt: now + 1 },
         },
         {
-          client: household.client,
+          db: household.client,
           now: () => now++,
           randomUuid: () => `uuid-${++uuid}`,
         },
