@@ -28,6 +28,8 @@ type AdapterOptions = {
   randomUuid?: RandomUuid;
 };
 
+let lastAppTimestamp: number | null = null;
+
 export function createHouseholdActiveListAdapter(
   config: HouseholdActiveListAdapterConfig,
   options: AdapterOptions = {},
@@ -36,7 +38,7 @@ export function createHouseholdActiveListAdapter(
     ? Promise.resolve(options.db)
     : (options.openDb ?? openHouseholdDb)({ householdId: config.household.id, database: config.database });
   const ownsDb = !options.db;
-  const now = options.now ?? Date.now;
+  const now = createTimestampSource(options.now);
   const randomUuid = options.randomUuid ?? Crypto.randomUUID;
   const memberNames = new Map<string, string | null>();
   const log = logger.with({ household_id: config.household.id, list_id: config.list.id });
@@ -142,6 +144,33 @@ function requestPush(db: ActiveListDb, log: Logger, attributes: { item_id: strin
   void db.push().catch((error) => {
     log.warn("household push failed", { ...attributes, error });
   });
+}
+
+function createTimestampSource(now?: () => number): () => number {
+  if (!now) {
+    return nextAppTimestamp;
+  }
+
+  let lastTimestamp: number | null = null;
+
+  return () => {
+    lastTimestamp = nextMonotonicTimestamp(now(), lastTimestamp);
+    return lastTimestamp;
+  };
+}
+
+function nextAppTimestamp(): number {
+  lastAppTimestamp = nextMonotonicTimestamp(Date.now(), lastAppTimestamp);
+  return lastAppTimestamp;
+}
+
+function nextMonotonicTimestamp(rawTimestamp: number, previousTimestamp: number | null): number {
+  const timestamp = Math.trunc(rawTimestamp);
+  if (!Number.isFinite(timestamp)) {
+    throw new Error("Timestamp source must return a finite number");
+  }
+
+  return previousTimestamp === null || timestamp > previousTimestamp ? timestamp : previousTimestamp + 1;
 }
 
 async function nextPosition(db: ActiveListDb, listId: string): Promise<number> {

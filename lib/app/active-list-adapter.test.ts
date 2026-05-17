@@ -2,6 +2,7 @@ import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
+import type { HouseholdSqlStatement } from "@/lib/app/household-db";
 
 describe("createHouseholdActiveListAdapter", () => {
   it("requests a remote push after local Item mutations", async () => {
@@ -62,6 +63,41 @@ describe("createHouseholdActiveListAdapter", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it("uses monotonic app-generated timestamps for local Item writes", async () => {
+    let uuid = 0;
+    const rawTimestamps = [1_700_000_000_000, 1_699_999_999_999, 1_699_999_999_999];
+    const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
+      const sql = statementSql(statement);
+      return sql.includes("MAX(position)") ? { rows: [{ position: 0 }] } : { rows: [] };
+    });
+    const adapter = createHouseholdActiveListAdapter(
+      adapterConfigFixture(),
+      {
+        db: {
+          execute,
+          close: jest.fn(async () => undefined),
+        },
+        now: () => rawTimestamps.shift() ?? 1_699_999_999_999,
+        randomUuid: () => `uuid-${++uuid}`,
+      },
+    );
+
+    const milk = await adapter.addItem("Milk");
+    await adapter.addItem("Eggs");
+    await adapter.setItemChecked(milk.id, true);
+
+    const itemWrites = execute.mock.calls
+      .map(([statement]) => statement)
+      .filter((statement) => statementSql(statement).includes("INSERT INTO items"));
+    const checkWrite = execute.mock.calls
+      .map(([statement]) => statement)
+      .find((statement) => statementSql(statement).includes("INSERT INTO item_checks"));
+
+    expect(statementArgs(itemWrites[0]).slice(-2)).toEqual([1_700_000_000_000, 1_700_000_000_000]);
+    expect(statementArgs(itemWrites[1]).slice(-2)).toEqual([1_700_000_000_001, 1_700_000_000_001]);
+    expect(statementArgs(checkWrite)).toEqual([milk.id, "usr_avery", 1_700_000_000_002, 1_700_000_000_002]);
   });
 
   it("loads, appends, and persists latest-check-wins Item state", async () => {
@@ -178,4 +214,14 @@ function adapterConfigFixture() {
     ],
     database: { url: "libsql://example.turso.io", authToken: "token", expiresAt: 1 },
   };
+}
+
+function statementSql(statement: HouseholdSqlStatement | undefined): string {
+  if (!statement) return "";
+  return typeof statement === "string" ? statement : statement.sql;
+}
+
+function statementArgs(statement: HouseholdSqlStatement | undefined) {
+  if (!statement || typeof statement === "string") return [];
+  return statement.args ?? [];
 }
