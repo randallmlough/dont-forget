@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import { ActiveList, type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
 
@@ -19,7 +19,9 @@ describe("ActiveList", () => {
 
     const input = screen.getByPlaceholderText("Add an Item");
     fireEvent.changeText(input, " Milk ");
-    fireEvent.press(screen.getByText("Add"));
+    await act(async () => {
+      fireEvent.press(screen.getByText("Add"));
+    });
 
     await waitFor(() => {
       expect(screen.getByRole("checkbox", { name: "Milk" }).props.accessibilityState).toEqual({
@@ -30,7 +32,9 @@ describe("ActiveList", () => {
     expect(screen.queryByText("This List is empty.")).toBeNull();
     expect(input.props.value).toBe("");
 
-    fireEvent.press(screen.getByRole("checkbox", { name: "Milk" }));
+    await act(async () => {
+      fireEvent.press(screen.getByRole("checkbox", { name: "Milk" }));
+    });
 
     await waitFor(() => {
       expect(screen.getByRole("checkbox", { name: "Milk" }).props.accessibilityState).toEqual({
@@ -40,14 +44,54 @@ describe("ActiveList", () => {
     expect(screen.getByText("1 of 1 Items checked")).toBeTruthy();
     expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
   });
+
+  it("shows pending and failed sync without discarding local Item changes", async () => {
+    const sync = deferred<{ changed: boolean }>();
+    renderActiveList(emptyList, memoryAdapter(emptyList, { sync: () => sync.promise }));
+
+    fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+    await act(async () => {
+      fireEvent.press(screen.getByText("Add"));
+    });
+
+    await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
+
+    await act(async () => {
+      sync.reject(new Error("offline"));
+    });
+
+    await waitFor(() => expect(screen.getByText("Sync failed - changes saved locally")).toBeTruthy());
+    expect(screen.getByRole("checkbox", { name: "Milk" })).toBeTruthy();
+  });
+
+  it("shows offline sync state when sync is not authorized", () => {
+    renderActiveList(emptyList, memoryAdapter(emptyList, { syncAuthorized: false }));
+
+    expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
+  });
+
+  it("pulls remote changes before refreshing the List view", async () => {
+    const adapter = memoryAdapter(emptyList);
+    const pull = jest.spyOn(adapter, "pull");
+
+    renderActiveList(emptyList, adapter);
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Refresh"));
+    });
+
+    await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+    expect(await screen.findByText("Remote Apples")).toBeTruthy();
+    expect(pull).toHaveBeenCalledTimes(1);
+  });
 });
 
-function renderActiveList(initialState: ActiveListInitialState) {
+function renderActiveList(initialState: ActiveListInitialState, adapter = memoryAdapter(initialState)) {
   return render(
     <ActiveList.Provider
       initialState={initialState}
       currentMemberName="Avery Chen"
-      adapter={memoryAdapter(initialState)}>
+      adapter={adapter}>
       <ActiveList.Screen>
         <ActiveList.Header />
         <ActiveList.Items />
@@ -57,11 +101,15 @@ function renderActiveList(initialState: ActiveListInitialState) {
   );
 }
 
-function memoryAdapter(initialState: ActiveListInitialState): ActiveListDataAdapter {
+function memoryAdapter(
+  initialState: ActiveListInitialState,
+  overrides: Partial<ActiveListDataAdapter> = {},
+): ActiveListDataAdapter {
   let state = initialState;
   let nextItem = initialState.items.length + 1;
 
   return {
+    syncAuthorized: true,
     async load() {
       return state;
     },
@@ -81,6 +129,31 @@ function memoryAdapter(initialState: ActiveListInitialState): ActiveListDataAdap
         ),
       };
     },
+    async pull() {
+      state = {
+        ...state,
+        items: [
+          ...state.items,
+          { id: "test-item-remote", name: "Remote Apples", checked: false, checkedByMemberName: null },
+        ],
+      };
+      return { changed: true };
+    },
+    async sync() {
+      return { changed: false };
+    },
     async close() {},
+    ...overrides,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, resolve, reject };
 }

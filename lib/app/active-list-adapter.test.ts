@@ -5,64 +5,27 @@ import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter"
 import type { HouseholdSqlStatement } from "@/lib/app/household-db";
 
 describe("createHouseholdActiveListAdapter", () => {
-  it("requests a remote push after local Item mutations", async () => {
-    const push = jest.fn(async () => undefined);
+  it("exposes explicit app-owned pull and sync operations", async () => {
+    const pull = jest.fn(async () => ({ changed: true }));
+    const sync = jest.fn(async () => ({ changed: false }));
     const adapter = createHouseholdActiveListAdapter(
       adapterConfigFixture(),
       {
         db: {
-          execute: jest.fn(async (statement) => {
-            const sql = typeof statement === "string" ? statement : statement.sql;
-            return sql.includes("MAX(position)") ? { rows: [{ position: 0 }] } : { rows: [] };
-          }),
-          push,
+          syncAuthorized: true,
+          execute: jest.fn(async () => ({ rows: [] })),
+          pull,
+          sync,
           close: jest.fn(async () => undefined),
         },
-        now: () => 1_700_000_000_000,
-        randomUuid: () => "uuid-1",
       },
     );
 
-    await adapter.addItem("Milk");
-    await adapter.setItemChecked("itm_uuid-1", true);
-
-    expect(push).toHaveBeenCalledTimes(2);
-  });
-
-  it("keeps local Item mutations successful when push fails", async () => {
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
-    const push = jest.fn(async () => {
-      throw new Error("offline");
-    });
-    const adapter = createHouseholdActiveListAdapter(
-      adapterConfigFixture(),
-      {
-        db: {
-          execute: jest.fn(async (statement) => {
-            const sql = typeof statement === "string" ? statement : statement.sql;
-            return sql.includes("MAX(position)") ? { rows: [{ position: 0 }] } : { rows: [] };
-          }),
-          push,
-          close: jest.fn(async () => undefined),
-        },
-        now: () => 1_700_000_000_000,
-        randomUuid: () => "uuid-1",
-      },
-    );
-
-    try {
-      await expect(adapter.addItem("Milk")).resolves.toEqual({
-        id: "itm_uuid-1",
-        name: "Milk",
-        checked: false,
-        checkedByMemberName: null,
-      });
-      await Promise.resolve();
-
-      expect(push).toHaveBeenCalledTimes(1);
-    } finally {
-      warn.mockRestore();
-    }
+    expect(adapter.syncAuthorized).toBe(true);
+    await expect(adapter.pull()).resolves.toEqual({ changed: true });
+    await expect(adapter.sync()).resolves.toEqual({ changed: false });
+    expect(pull).toHaveBeenCalledTimes(1);
+    expect(sync).toHaveBeenCalledTimes(1);
   });
 
   it("uses monotonic app-generated timestamps for local Item writes", async () => {
@@ -144,7 +107,10 @@ describe("createHouseholdActiveListAdapter", () => {
           database: { url: `file:${household.path}`, authToken: "unused", expiresAt: now + 1 },
         },
         {
-          db: household.client,
+          db: {
+            execute: household.client.execute.bind(household.client),
+            close: jest.fn(async () => undefined),
+          },
           now: () => now++,
           randomUuid: () => `uuid-${++uuid}`,
         },

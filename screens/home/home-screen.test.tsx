@@ -55,6 +55,7 @@ describe("HomeScreen", () => {
     const close = jest.fn().mockResolvedValue(undefined);
     jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
     jest.mocked(createHouseholdActiveListAdapter).mockReturnValue({
+      syncAuthorized: true,
       async load() {
         return load.promise;
       },
@@ -62,6 +63,12 @@ describe("HomeScreen", () => {
         return { id: "itm_new", name, checked: false, checkedByMemberName: null };
       },
       async setItemChecked() {},
+      async pull() {
+        return { changed: false };
+      },
+      async sync() {
+        return { changed: false };
+      },
       close,
     });
     clerkMocks.getToken.mockResolvedValue("session-token");
@@ -161,6 +168,7 @@ function initialListFixture(): ActiveListInitialState {
 
 function noopAdapter(initialList: ActiveListInitialState): ActiveListDataAdapter {
   return {
+    syncAuthorized: true,
     async load() {
       return initialList;
     },
@@ -168,6 +176,12 @@ function noopAdapter(initialList: ActiveListInitialState): ActiveListDataAdapter
       return { id: "itm_new", name, checked: false, checkedByMemberName: null };
     },
     async setItemChecked() {},
+    async pull() {
+      return { changed: false };
+    },
+    async sync() {
+      return { changed: false };
+    },
     async close() {},
   };
 }

@@ -89,6 +89,7 @@ function storyAdapter(initialList: ActiveListInitialState): ActiveListDataAdapte
   let nextItem = initialList.items.length + 1;
 
   return {
+    syncAuthorized: true,
     async load() {
       return state;
     },
@@ -107,6 +108,12 @@ function storyAdapter(initialList: ActiveListInitialState): ActiveListDataAdapte
             : item,
         ),
       };
+    },
+    async pull() {
+      return { changed: false };
+    },
+    async sync() {
+      return { changed: false };
     },
     async close() {},
   };

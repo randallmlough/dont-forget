@@ -1,14 +1,20 @@
 import * as Crypto from "expo-crypto";
 
-import type { ActiveListDataAdapter, ActiveListInitialState, ActiveListItem } from "@/components/active-list";
+import type {
+  ActiveListDataAdapter,
+  ActiveListInitialState,
+  ActiveListItem,
+  ActiveListSyncResult,
+} from "@/components/active-list";
 import { openHouseholdDb, type HouseholdDb, type OpenHouseholdDbConfig } from "@/lib/app/household-db";
 import type { BootstrapResponse } from "@/lib/bootstrap";
 import { createAppId, type RandomUuid } from "@/lib/ids";
-import { logger, type Logger } from "@/lib/logger";
 
 type ActiveListDb = {
+  syncAuthorized?: boolean;
   execute: (statement: Parameters<HouseholdDb["execute"]>[0]) => Promise<{ rows: Array<Record<string, unknown>> }>;
-  push?: () => Promise<void>;
+  pull?: () => Promise<ActiveListSyncResult>;
+  sync?: () => Promise<ActiveListSyncResult>;
   close: () => void | Promise<void>;
 };
 
@@ -41,7 +47,9 @@ export function createHouseholdActiveListAdapter(
   const now = createTimestampSource(options.now);
   const randomUuid = options.randomUuid ?? Crypto.randomUUID;
   const memberNames = new Map<string, string | null>();
-  const log = logger.with({ household_id: config.household.id, list_id: config.list.id });
+  const syncAuthorized = options.db
+    ? Boolean(options.db.syncAuthorized && options.db.pull && options.db.sync)
+    : Boolean(config.database.url && config.database.authToken);
   let closed = false;
 
   for (const member of config.members) {
@@ -50,6 +58,7 @@ export function createHouseholdActiveListAdapter(
   memberNames.set(config.activeMember.userId, config.activeMember.displayName ?? config.currentUser.displayName);
 
   return {
+    syncAuthorized,
     async load() {
       const db = await dbPromise;
       const listResult = await db.execute({
@@ -110,7 +119,6 @@ export function createHouseholdActiveListAdapter(
         `,
         args: [id, config.list.id, name, position, config.activeMember.userId, timestamp, timestamp],
       });
-      requestPush(db, log, { item_id: id });
 
       return { id, name, checked: false, checkedByMemberName: null };
     },
@@ -127,7 +135,18 @@ export function createHouseholdActiveListAdapter(
         `,
         args: [itemId, config.activeMember.userId, checked ? timestamp : null, timestamp],
       });
-      requestPush(db, log, { item_id: itemId });
+    },
+    async pull() {
+      if (!syncAuthorized) return { changed: false };
+
+      const db = await dbPromise;
+      return db.pull ? db.pull() : { changed: false };
+    },
+    async sync() {
+      if (!syncAuthorized) return { changed: false };
+
+      const db = await dbPromise;
+      return db.sync ? db.sync() : { changed: false };
     },
     async close() {
       if (!ownsDb || closed) return;
@@ -136,14 +155,6 @@ export function createHouseholdActiveListAdapter(
       await db?.close();
     },
   };
-}
-
-function requestPush(db: ActiveListDb, log: Logger, attributes: { item_id: string }) {
-  if (!db.push) return;
-
-  void db.push().catch((error) => {
-    log.warn("household push failed", { ...attributes, error });
-  });
 }
 
 function createTimestampSource(now?: () => number): () => number {

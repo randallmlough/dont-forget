@@ -21,3 +21,9 @@ This revises the earlier op-sqlite candidate after the Issue #6 spike found Turs
 - Turso Sync's package-level conflict behavior is still documented as last-push-wins. App writes must continue using row-level LWW timestamps, `item_checks`, and tombstones so the replicated rows remain semantically mergeable even though transport ordering is push-based.
 - The package requires native linking and its JS entrypoint installs JSI bindings at module load. Keep the app-owned wrapper's import lazy so Jest and non-native code can test against mocks without loading the native module.
 - `app/api/bootstrap+api.ts` lazy imports are not solved by the native Household DB package. Removing them is tracked separately in `docs/tech-debt/bootstrap-api-lazy-imports.md`.
+
+## Issue #9 Sync Orchestration Finding
+
+`Home` and `ActiveList` can compose with Turso Sync when feature UI depends only on the app-owned Active List adapter. Local Item writes commit to the local Household DB first, then the UI marks sync pending and asks the adapter to run an explicit app-owned `sync()` operation. If that sync attempt fails, the List keeps the locally written Item state and surfaces a failed sync state instead of treating the local write as failed.
+
+Manual refresh pulls first through the same adapter, then reloads List rows through the normal adapter `load()` path. Turso Sync's documented last-push-wins transport behavior is compatible with Don't Forget's row-level timestamp LWW model only because List and Item rows still carry app-generated `updated_at` values, checked state remains isolated in `item_checks`, and app deletes remain tombstones. The app should continue to treat package sync ordering as transport, not as the domain conflict-resolution strategy.
