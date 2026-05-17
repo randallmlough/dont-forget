@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 import { readPublicExpoConfig, type AppEnv } from "./lib/env.ts";
@@ -11,6 +14,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   return {
     ...config,
+    plugins: withLocalConfigPlugins(config.plugins),
     name: process.env.EXPO_APP_NAME ?? appNameForEnv(config.name ?? "Don't Forget", publicConfig.appEnv),
     slug: config.slug ?? "dont-forget",
     scheme: process.env.EXPO_SCHEME ?? schemeForEnv(baseScheme, publicConfig.appEnv),
@@ -29,6 +33,32 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
   };
 };
+
+function withLocalConfigPlugins(plugins: ExpoConfig["plugins"]): ExpoConfig["plugins"] {
+  const resolvedPlugins = [...(plugins ?? [])];
+
+  if (process.env.EXPO_WITH_ROCKETSIM_CONNECT !== "1") {
+    return resolvedPlugins;
+  }
+
+  const rocketSimPlugin = "./plugins/withRocketSimConnect.js";
+  if (!existsSync(resolve(process.cwd(), rocketSimPlugin))) {
+    console.warn(`Skipping RocketSim config plugin because ${rocketSimPlugin} does not exist.`);
+    return resolvedPlugins;
+  }
+
+  if (
+    !resolvedPlugins.some(
+      (plugin) =>
+        plugin === rocketSimPlugin ||
+        (Array.isArray(plugin) && plugin[0] === rocketSimPlugin)
+    )
+  ) {
+    resolvedPlugins.push(rocketSimPlugin);
+  }
+
+  return resolvedPlugins;
+}
 
 function appNameForEnv(baseName: string, appEnv: AppEnv): string {
   if (appEnv === "production") {

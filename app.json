@@ -43,8 +43,7 @@
             "backgroundColor": "#000000"
           }
         }
-      ],
-      "./plugins/withRocketSimConnect.js"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
