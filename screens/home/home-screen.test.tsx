@@ -22,7 +22,8 @@ beforeEach(() => {
 describe("HomeScreen", () => {
   it("does not restart bootstrap when auth callbacks are not referentially stable", async () => {
     const initialList = initialListFixture();
-    jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
+    const bootstrap = bootstrapFixture();
+    jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrap);
     jest.mocked(createHouseholdActiveListAdapter).mockReturnValue(noopAdapter(initialList));
     clerkMocks.getToken.mockResolvedValue("session-token");
     setMockAuthState({ isSignedIn: true });
@@ -39,7 +40,14 @@ describe("HomeScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
     expect(bootstrapWithClerk).toHaveBeenCalledTimes(1);
-    expect(createHouseholdActiveListAdapter).toHaveBeenCalledTimes(1);
+    expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
+      household: bootstrap.activeHousehold,
+      activeMember: bootstrap.activeMember,
+      list: bootstrap.activeList,
+      currentUser: bootstrap.user,
+      members: bootstrap.members,
+      database: bootstrap.householdDatabase,
+    });
   });
 
   it("closes an adapter that is still loading when Home unmounts", async () => {

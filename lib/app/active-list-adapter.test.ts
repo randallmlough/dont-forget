@@ -72,13 +72,19 @@ describe("createHouseholdActiveListAdapter", () => {
     try {
       await household.db.insert(lists).values({
         id: DEFAULT_LIST_ID,
-        name: DEFAULT_LIST_NAME,
+        name: "Weekend Groceries",
         createdByUserId: "usr_avery",
       });
 
       const adapter = createHouseholdActiveListAdapter(
         {
           household: { id: "hh_avery", name: "Avery" },
+          activeMember: {
+            id: "mbr_avery",
+            userId: "usr_avery",
+            role: "owner",
+            displayName: "Avery Chen",
+          },
           list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
           currentUser: {
             id: "usr_avery",
@@ -113,7 +119,7 @@ describe("createHouseholdActiveListAdapter", () => {
 
       expect(await adapter.load()).toEqual({
         householdName: "Avery",
-        listName: "Groceries",
+        listName: "Weekend Groceries",
         items: [
           { id: milk.id, name: "Milk", checked: false, checkedByMemberName: null },
           { id: eggs.id, name: "Eggs", checked: false, checkedByMemberName: null },
@@ -150,6 +156,12 @@ describe("createHouseholdActiveListAdapter", () => {
 function adapterConfigFixture() {
   return {
     household: { id: "hh_avery", name: "Avery" },
+    activeMember: {
+      id: "mbr_avery",
+      userId: "usr_avery",
+      role: "owner" as const,
+      displayName: "Avery Chen",
+    },
     list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
     currentUser: {
       id: "usr_avery",

@@ -14,6 +14,7 @@ type ActiveListDb = {
 
 export type HouseholdActiveListAdapterConfig = {
   household: BootstrapResponse["activeHousehold"];
+  activeMember: BootstrapResponse["activeMember"];
   list: BootstrapResponse["activeList"];
   currentUser: BootstrapResponse["user"];
   members: BootstrapResponse["members"];
@@ -44,11 +45,16 @@ export function createHouseholdActiveListAdapter(
   for (const member of config.members) {
     memberNames.set(member.userId, member.displayName);
   }
-  memberNames.set(config.currentUser.id, config.currentUser.displayName);
+  memberNames.set(config.activeMember.userId, config.activeMember.displayName ?? config.currentUser.displayName);
 
   return {
     async load() {
       const db = await dbPromise;
+      const listResult = await db.execute({
+        sql: "SELECT name FROM lists WHERE id = ? AND deleted_at IS NULL LIMIT 1",
+        args: [config.list.id],
+      });
+      const listName = stringColumn(listResult.rows[0]?.name, "list name");
       const result = await db.execute({
         sql: `
           SELECT
@@ -72,7 +78,7 @@ export function createHouseholdActiveListAdapter(
 
       return {
         householdName: config.household.name,
-        listName: config.list.name,
+        listName,
         items: result.rows.map((row) => itemFromRow(row, memberNames)),
       };
     },
@@ -100,7 +106,7 @@ export function createHouseholdActiveListAdapter(
           )
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
-        args: [id, config.list.id, name, position, config.currentUser.id, timestamp, timestamp],
+        args: [id, config.list.id, name, position, config.activeMember.userId, timestamp, timestamp],
       });
       requestPush(db, log, { item_id: id });
 
@@ -117,7 +123,7 @@ export function createHouseholdActiveListAdapter(
             checked_at = excluded.checked_at,
             updated_at = excluded.updated_at
         `,
-        args: [itemId, config.currentUser.id, checked ? timestamp : null, timestamp],
+        args: [itemId, config.activeMember.userId, checked ? timestamp : null, timestamp],
       });
       requestPush(db, log, { item_id: itemId });
     },

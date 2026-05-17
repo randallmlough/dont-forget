@@ -61,6 +61,7 @@ export default function HomeScreen() {
 
         adapter = createHouseholdActiveListAdapter({
           household: bootstrap.activeHousehold,
+          activeMember: bootstrap.activeMember,
           list: bootstrap.activeList,
           currentUser: bootstrap.user,
           members: bootstrap.members,
