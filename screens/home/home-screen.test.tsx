@@ -1,10 +1,23 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import { type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
+import { reset, track } from "@/lib/analytics";
 import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
 import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
+import {
+  clearCachedHouseholdSession,
+  discardCachedBootstrapMetadataIfUnauthorized,
+  readCachedBootstrapMetadata,
+  saveCachedBootstrapMetadata,
+  type CachedBootstrapMetadata,
+} from "@/lib/app/offline-bootstrap-cache";
 import { clerkMocks, setMockAuthCallbacksUnstable, setMockAuthState, setMockUserState } from "@/lib/test/mocks/clerk";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
+
+jest.mock("@/lib/analytics", () => ({
+  reset: jest.fn(),
+  track: jest.fn(),
+}));
 
 jest.mock("@/lib/app/bootstrap-client", () => ({
   bootstrapWithClerk: jest.fn(),
@@ -14,9 +27,22 @@ jest.mock("@/lib/app/active-list-adapter", () => ({
   createHouseholdActiveListAdapter: jest.fn(),
 }));
 
+jest.mock("@/lib/app/offline-bootstrap-cache", () => ({
+  clearCachedHouseholdSession: jest.fn(),
+  discardCachedBootstrapMetadataIfUnauthorized: jest.fn(),
+  readCachedBootstrapMetadata: jest.fn(),
+  saveCachedBootstrapMetadata: jest.fn(),
+}));
+
 beforeEach(() => {
+  jest.mocked(track).mockReset();
+  jest.mocked(reset).mockReset();
   jest.mocked(bootstrapWithClerk).mockReset();
   jest.mocked(createHouseholdActiveListAdapter).mockReset();
+  jest.mocked(clearCachedHouseholdSession).mockResolvedValue(undefined);
+  jest.mocked(discardCachedBootstrapMetadataIfUnauthorized).mockResolvedValue(null);
+  jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(null);
+  jest.mocked(saveCachedBootstrapMetadata).mockResolvedValue(cachedBootstrapFixture());
 });
 
 describe("HomeScreen", () => {
@@ -82,6 +108,94 @@ describe("HomeScreen", () => {
     expect(close).toHaveBeenCalledTimes(1);
     load.resolve(initialListFixture());
   });
+
+  it("reopens cached local List data without a cached DB auth token when bootstrap fails", async () => {
+    const initialList = initialListFixture();
+    const cached = cachedBootstrapFixture();
+    jest.mocked(bootstrapWithClerk).mockRejectedValue(new Error("offline"));
+    jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue(noopAdapter(initialList));
+    clerkMocks.getToken.mockResolvedValue("session-token");
+    setMockAuthState({ isSignedIn: true });
+
+    render(<HomeScreen />);
+
+    await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+    expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
+      household: cached.activeHousehold,
+      activeMember: cached.activeMember,
+      list: cached.activeList,
+      currentUser: cached.user,
+      members: cached.members,
+      database: cached.householdDatabase,
+    });
+    expect(Object.prototype.hasOwnProperty.call(cached.householdDatabase, "authToken")).toBe(false);
+    expect(saveCachedBootstrapMetadata).not.toHaveBeenCalled();
+  });
+
+  it("discards stale cached Household metadata before opening fresh authorized data", async () => {
+    const initialList = initialListFixture();
+    const bootstrap = bootstrapFixture({ householdId: "hh_new", householdName: "New" });
+    jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrap);
+    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue(noopAdapter(initialList));
+    clerkMocks.getToken.mockResolvedValue("session-token");
+    setMockAuthState({ isSignedIn: true });
+
+    render(<HomeScreen />);
+
+    await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+    expect(discardCachedBootstrapMetadataIfUnauthorized).toHaveBeenCalledWith(bootstrap);
+    expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
+      household: bootstrap.activeHousehold,
+      activeMember: bootstrap.activeMember,
+      list: bootstrap.activeList,
+      currentUser: bootstrap.user,
+      members: bootstrap.members,
+      database: bootstrap.householdDatabase,
+    });
+    expect(saveCachedBootstrapMetadata).toHaveBeenCalledWith(bootstrap);
+  });
+
+  it("tracks, resets, clears local Household data, then signs out through Clerk", async () => {
+    const calls: string[] = [];
+    const initialList = initialListFixture();
+    const close = jest.fn(async () => {
+      calls.push("close-adapter");
+    });
+    jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
+    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue({
+      ...noopAdapter(initialList),
+      close,
+    });
+    jest.mocked(track).mockImplementation(() => {
+      calls.push("track");
+    });
+    jest.mocked(reset).mockImplementation(() => {
+      calls.push("reset");
+    });
+    jest.mocked(clearCachedHouseholdSession).mockImplementation(async () => {
+      calls.push("clear-local-household-data");
+    });
+    clerkMocks.signOut.mockImplementation(async () => {
+      calls.push("clerk-sign-out");
+    });
+    clerkMocks.getToken.mockResolvedValue("session-token");
+    setMockAuthState({ isSignedIn: true });
+
+    render(<HomeScreen />);
+
+    await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+    fireEvent.press(screen.getByText("Sign out"));
+
+    await waitFor(() => expect(clerkMocks.signOut).toHaveBeenCalledTimes(1));
+    expect(calls).toEqual([
+      "track",
+      "reset",
+      "close-adapter",
+      "clear-local-household-data",
+      "clerk-sign-out",
+    ]);
+  });
 });
 
 describe("HomeScreenView", () => {
@@ -127,14 +241,16 @@ describe("HomeScreenView", () => {
   });
 });
 
-function bootstrapFixture() {
+function bootstrapFixture(
+  overrides: { householdId?: string; householdName?: string } = {},
+) {
   return {
     user: {
       id: "usr_avery",
       email: "avery@example.com",
       displayName: "Avery Chen",
     },
-    activeHousehold: { id: "hh_avery", name: "Avery" },
+    activeHousehold: { id: overrides.householdId ?? "hh_avery", name: overrides.householdName ?? "Avery" },
     activeMember: {
       id: "mbr_avery",
       userId: "usr_avery",
@@ -155,6 +271,19 @@ function bootstrapFixture() {
       authToken: "token",
       expiresAt: 1,
     },
+  };
+}
+
+function cachedBootstrapFixture(): CachedBootstrapMetadata {
+  const { householdDatabase: _householdDatabase, ...bootstrap } = bootstrapFixture();
+
+  return {
+    ...bootstrap,
+    householdDatabase: {
+      url: "libsql://example.turso.io",
+      expiresAt: 1,
+    },
+    initializedAt: 1_700_000_000_000,
   };
 }
 

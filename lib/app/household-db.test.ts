@@ -1,4 +1,5 @@
 import {
+  deleteLocalHouseholdDbData,
   householdDbFilename,
   openHouseholdDb,
   type TursoHouseholdDbRuntime,
@@ -38,6 +39,27 @@ describe("openHouseholdDb", () => {
     expect(nativeDb.connect).toHaveBeenCalledTimes(1);
     expect(db.path).toBe("/documents/household-hh_avery.db");
     expect(db.syncAuthorized).toBe(true);
+  });
+
+  it("opens cached local DB data without remote sync credentials", async () => {
+    const db = await openHouseholdDb(
+      {
+        householdId: "hh_avery",
+        database: {
+          url: "libsql://remote-household.turso.io",
+          expiresAt: 1_700_000_000_000,
+        },
+      },
+      { runtime, fileSystem },
+    );
+    const nativeDb = onlyInstance(instances);
+
+    expect(nativeDb.options).toEqual({
+      path: "/documents/household-hh_avery.db",
+      clientName: "dont-forget-household-db",
+      bootstrapIfEmpty: false,
+    });
+    expect(db.syncAuthorized).toBe(false);
   });
 
   it("adapts query and write results into the app SQL result shape", async () => {
@@ -84,6 +106,13 @@ describe("openHouseholdDb", () => {
     await db.close();
 
     expect(nativeDb.close).toHaveBeenCalledTimes(1);
+    expect(fileSystem.deleteFilesWithPrefix).toHaveBeenCalledWith("/documents/household-hh_avery.db");
+  });
+
+  it("deletes local DB files by app-owned Household ID", async () => {
+    await deleteLocalHouseholdDbData("hh_avery", { runtime, fileSystem });
+
+    expect(runtime.getDbPath).toHaveBeenCalledWith("household-hh_avery.db");
     expect(fileSystem.deleteFilesWithPrefix).toHaveBeenCalledWith("/documents/household-hh_avery.db");
   });
 

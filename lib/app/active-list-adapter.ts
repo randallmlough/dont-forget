@@ -6,7 +6,12 @@ import type {
   ActiveListItem,
   ActiveListSyncResult,
 } from "@/components/active-list";
-import { openHouseholdDb, type HouseholdDb, type OpenHouseholdDbConfig } from "@/lib/app/household-db";
+import {
+  openHouseholdDb,
+  type HouseholdDatabaseConfig,
+  type HouseholdDb,
+  type OpenHouseholdDbConfig,
+} from "@/lib/app/household-db";
 import type { BootstrapResponse } from "@/lib/bootstrap";
 import { createAppId, type RandomUuid } from "@/lib/ids";
 
@@ -24,7 +29,7 @@ export type HouseholdActiveListAdapterConfig = {
   list: BootstrapResponse["activeList"];
   currentUser: BootstrapResponse["user"];
   members: BootstrapResponse["members"];
-  database: BootstrapResponse["householdDatabase"];
+  database: HouseholdDatabaseConfig;
 };
 
 type AdapterOptions = {

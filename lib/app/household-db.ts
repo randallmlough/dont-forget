@@ -1,5 +1,3 @@
-import type { BootstrapResponse } from "@/lib/bootstrap";
-
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
 
 export type HouseholdSqlStatement =
@@ -30,9 +28,15 @@ export type HouseholdDb = {
   deleteLocalData: () => Promise<void>;
 };
 
+export type HouseholdDatabaseConfig = {
+  url?: string | null;
+  authToken?: string | null;
+  expiresAt?: number | null;
+};
+
 export type OpenHouseholdDbConfig = {
   householdId: string;
-  database: BootstrapResponse["householdDatabase"];
+  database: HouseholdDatabaseConfig;
 };
 
 type TursoDatabaseOptions = {
@@ -80,10 +84,14 @@ export async function openHouseholdDb(
   const syncAuthorized = Boolean(config.database.url && config.database.authToken);
   const database = new runtime.Database({
     path,
-    url: config.database.url,
-    authToken: config.database.authToken,
     clientName: HOUSEHOLD_DB_CLIENT_NAME,
-    bootstrapIfEmpty: true,
+    bootstrapIfEmpty: syncAuthorized,
+    ...(syncAuthorized
+      ? {
+          url: config.database.url ?? undefined,
+          authToken: config.database.authToken ?? undefined,
+        }
+      : {}),
   });
   let closed = false;
 
@@ -121,9 +129,20 @@ export async function openHouseholdDb(
     close,
     async deleteLocalData() {
       await close();
-      await fileSystem.deleteFilesWithPrefix(path);
+      await deleteLocalHouseholdDbData(config.householdId, { runtime, fileSystem });
     },
   };
+}
+
+export async function deleteLocalHouseholdDbData(
+  householdId: string,
+  options: OpenHouseholdDbOptions = {},
+): Promise<void> {
+  const runtime = options.runtime ?? (await loadTursoRuntime());
+  const fileSystem = options.fileSystem ?? defaultHouseholdDbFileSystem;
+  const path = runtime.getDbPath(householdDbFilename(householdId));
+
+  await fileSystem.deleteFilesWithPrefix(path);
 }
 
 export function householdDbFilename(householdId: string): string {

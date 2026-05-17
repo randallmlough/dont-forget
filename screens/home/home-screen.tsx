@@ -8,6 +8,14 @@ import { ActiveList, type ActiveListDataAdapter, type ActiveListInitialState } f
 import { reset, track } from "@/lib/analytics";
 import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
 import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
+import {
+  clearCachedHouseholdSession,
+  discardCachedBootstrapMetadataIfUnauthorized,
+  readCachedBootstrapMetadata,
+  saveCachedBootstrapMetadata,
+  type CachedBootstrapMetadata,
+} from "@/lib/app/offline-bootstrap-cache";
+import type { BootstrapResponse } from "@/lib/bootstrap";
 
 type HomeContentState =
   | { status: "loading" }
@@ -18,6 +26,8 @@ type HomeContentState =
       initialList: ActiveListInitialState;
       adapter: ActiveListDataAdapter;
     };
+
+type HomeBootstrap = BootstrapResponse | CachedBootstrapMetadata;
 
 export type HomeScreenViewProps = {
   currentMemberName: string;
@@ -32,6 +42,7 @@ export default function HomeScreen() {
   const [content, setContent] = useState<HomeContentState>({ status: "loading" });
   const [loadAttempt, setLoadAttempt] = useState(0);
   const getTokenRef = useRef(getToken);
+  const signingOutRef = useRef(false);
 
   useEffect(() => {
     getTokenRef.current = getToken;
@@ -54,31 +65,62 @@ export default function HomeScreen() {
 
     setContent({ status: "loading" });
 
+    async function openHome(bootstrap: HomeBootstrap, afterLoad?: () => Promise<void>) {
+      adapter = createAdapterFromBootstrap(bootstrap);
+      const initialList = await adapter.load();
+
+      if (cancelled || signingOutRef.current) {
+        await closeUnclaimedAdapter();
+        return;
+      }
+
+      if (afterLoad) {
+        await afterLoad();
+      }
+
+      if (cancelled || signingOutRef.current) {
+        await closeUnclaimedAdapter();
+        return;
+      }
+
+      handedOffAdapter = true;
+      setContent({
+        status: "ready",
+        activeMemberName: activeMemberNameFromBootstrap(bootstrap),
+        initialList,
+        adapter,
+      });
+    }
+
     async function loadHome() {
+      let freshBootstrapLoaded = false;
+
       try {
         const bootstrap = await bootstrapWithClerk(() => getTokenRef.current());
-        if (cancelled) return;
+        freshBootstrapLoaded = true;
+        if (cancelled || signingOutRef.current) return;
 
-        adapter = createHouseholdActiveListAdapter({
-          household: bootstrap.activeHousehold,
-          activeMember: bootstrap.activeMember,
-          list: bootstrap.activeList,
-          currentUser: bootstrap.user,
-          members: bootstrap.members,
-          database: bootstrap.householdDatabase,
+        await discardCachedBootstrapMetadataIfUnauthorized(bootstrap);
+        if (cancelled || signingOutRef.current) return;
+
+        await openHome(bootstrap, async () => {
+          // Offline reopen is best-effort; online Home should still render if storage rejects.
+          await saveCachedBootstrapMetadata(bootstrap).catch(() => undefined);
         });
-        const initialList = await adapter.load();
-
-        if (cancelled) {
-          await closeUnclaimedAdapter();
-          return;
-        }
-
-        const activeMemberName = bootstrap.activeMember.displayName ?? bootstrap.user.email ?? "Member";
-        handedOffAdapter = true;
-        setContent({ status: "ready", activeMemberName, initialList, adapter });
       } catch {
         await closeUnclaimedAdapter().catch(() => undefined);
+        if (cancelled || signingOutRef.current) return;
+
+        const cached = freshBootstrapLoaded ? null : await readCachedBootstrapMetadata().catch(() => null);
+        if (cached) {
+          try {
+            await openHome(cached);
+            return;
+          } catch {
+            await closeUnclaimedAdapter().catch(() => undefined);
+          }
+        }
+
         if (!cancelled) {
           setContent({
             status: "error",
@@ -102,10 +144,17 @@ export default function HomeScreen() {
     setLoadAttempt((attempt) => attempt + 1);
   }, []);
 
-  function onSignOut() {
+  async function onSignOut() {
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+
     track("user_signed_out", {});
     reset();
-    void signOut();
+    if (content.status === "ready") {
+      await content.adapter.close();
+    }
+    await clearCachedHouseholdSession();
+    await signOut();
   }
 
   return (
@@ -116,6 +165,21 @@ export default function HomeScreen() {
       onSignOut={onSignOut}
     />
   );
+}
+
+function createAdapterFromBootstrap(bootstrap: HomeBootstrap): ActiveListDataAdapter {
+  return createHouseholdActiveListAdapter({
+    household: bootstrap.activeHousehold,
+    activeMember: bootstrap.activeMember,
+    list: bootstrap.activeList,
+    currentUser: bootstrap.user,
+    members: bootstrap.members,
+    database: bootstrap.householdDatabase,
+  });
+}
+
+function activeMemberNameFromBootstrap(bootstrap: HomeBootstrap): string {
+  return bootstrap.activeMember.displayName ?? bootstrap.user.email ?? "Member";
 }
 
 export function HomeScreenView({ currentMemberName, content, onRetry, onSignOut }: HomeScreenViewProps) {
