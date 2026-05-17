@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import { type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
@@ -107,6 +107,44 @@ describe("HomeScreen", () => {
 
     expect(close).toHaveBeenCalledTimes(1);
     load.resolve(initialListFixture());
+  });
+
+  it("renders cached local List data while bootstrap is still pending", async () => {
+    const bootstrap = deferred<ReturnType<typeof bootstrapFixture>>();
+    const cached = cachedBootstrapFixture();
+    const cachedList = initialListFixture({ itemName: "Cached Milk" });
+    const freshList = initialListFixture({ itemName: "Fresh Eggs" });
+    jest.mocked(bootstrapWithClerk).mockReturnValue(bootstrap.promise);
+    jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+    jest.mocked(createHouseholdActiveListAdapter).mockImplementation((config) => {
+      return config.database.authToken
+        ? noopAdapter(freshList)
+        : noopAdapter(cachedList, { syncAuthorized: false });
+    });
+    clerkMocks.getToken.mockResolvedValue("session-token");
+    setMockAuthState({ isSignedIn: true });
+
+    render(<HomeScreen />);
+
+    await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+    expect(screen.queryByText("Preparing your Household")).toBeNull();
+    expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
+    expect(bootstrapWithClerk).toHaveBeenCalledTimes(1);
+    expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
+      household: cached.activeHousehold,
+      activeMember: cached.activeMember,
+      list: cached.activeList,
+      currentUser: cached.user,
+      members: cached.members,
+      database: cached.householdDatabase,
+    });
+
+    await act(async () => {
+      bootstrap.resolve(bootstrapFixture());
+    });
+
+    await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+    expect(saveCachedBootstrapMetadata).toHaveBeenCalledWith(bootstrapFixture());
   });
 
   it("reopens cached local List data without a cached DB auth token when bootstrap fails", async () => {
@@ -287,15 +325,18 @@ function cachedBootstrapFixture(): CachedBootstrapMetadata {
   };
 }
 
-function initialListFixture(): ActiveListInitialState {
+function initialListFixture(overrides: { itemName?: string } = {}): ActiveListInitialState {
   return {
     householdName: "Avery",
     listName: "Groceries",
-    items: [{ id: "itm_milk", name: "Milk", checked: true, checkedByMemberName: "Avery Chen" }],
+    items: [{ id: "itm_milk", name: overrides.itemName ?? "Milk", checked: true, checkedByMemberName: "Avery Chen" }],
   };
 }
 
-function noopAdapter(initialList: ActiveListInitialState): ActiveListDataAdapter {
+function noopAdapter(
+  initialList: ActiveListInitialState,
+  overrides: Partial<ActiveListDataAdapter> = {},
+): ActiveListDataAdapter {
   return {
     syncAuthorized: true,
     async load() {
@@ -312,6 +353,7 @@ function noopAdapter(initialList: ActiveListInitialState): ActiveListDataAdapter
       return { changed: false };
     },
     async close() {},
+    ...overrides,
   };
 }
 

@@ -29,6 +29,12 @@ type HomeContentState =
 
 type HomeBootstrap = BootstrapResponse | CachedBootstrapMetadata;
 
+type OpenedHome = {
+  bootstrap: HomeBootstrap;
+  initialList: ActiveListInitialState;
+  adapter: ActiveListDataAdapter;
+};
+
 export type HomeScreenViewProps = {
   currentMemberName: string;
   content: HomeContentState;
@@ -52,89 +58,112 @@ export default function HomeScreen() {
     if (!isLoaded || !isSignedIn) return;
 
     let cancelled = false;
-    let handedOffAdapter = false;
-    let adapter: ActiveListDataAdapter | null = null;
-
-    async function closeUnclaimedAdapter() {
-      if (handedOffAdapter || !adapter) return;
-
-      const current = adapter;
-      adapter = null;
-      await current.close();
-    }
+    let cachedRendered = false;
+    let cachedInvalidated = false;
+    let freshRendered = false;
+    const pendingAdapters = new Set<ActiveListDataAdapter>();
+    const closedAdapters = new Set<ActiveListDataAdapter>();
 
     setContent({ status: "loading" });
 
-    async function openHome(bootstrap: HomeBootstrap, afterLoad?: () => Promise<void>) {
-      adapter = createAdapterFromBootstrap(bootstrap);
-      const initialList = await adapter.load();
+    async function closeAdapter(adapter: ActiveListDataAdapter) {
+      if (closedAdapters.has(adapter)) return;
 
-      if (cancelled || signingOutRef.current) {
-        await closeUnclaimedAdapter();
+      closedAdapters.add(adapter);
+      pendingAdapters.delete(adapter);
+      await adapter.close();
+    }
+
+    async function openHome(bootstrap: HomeBootstrap, afterLoad?: () => Promise<void>): Promise<OpenedHome> {
+      const adapter = createAdapterFromBootstrap(bootstrap);
+      pendingAdapters.add(adapter);
+
+      try {
+        const initialList = await adapter.load();
+        if (afterLoad) {
+          await afterLoad();
+        }
+
+        pendingAdapters.delete(adapter);
+        return { bootstrap, initialList, adapter };
+      } catch (error) {
+        await closeAdapter(adapter).catch(() => undefined);
+        throw error;
+      }
+    }
+
+    async function renderOpenedHome(opened: OpenedHome, source: "cached" | "fresh") {
+      if (cancelled || signingOutRef.current || (source === "cached" && (freshRendered || cachedInvalidated))) {
+        await closeAdapter(opened.adapter).catch(() => undefined);
         return;
       }
 
-      if (afterLoad) {
-        await afterLoad();
+      if (source === "cached") {
+        cachedRendered = true;
+      } else {
+        freshRendered = true;
       }
 
-      if (cancelled || signingOutRef.current) {
-        await closeUnclaimedAdapter();
-        return;
-      }
-
-      handedOffAdapter = true;
       setContent({
         status: "ready",
-        activeMemberName: activeMemberNameFromBootstrap(bootstrap),
-        initialList,
-        adapter,
+        activeMemberName: activeMemberNameFromBootstrap(opened.bootstrap),
+        initialList: opened.initialList,
+        adapter: opened.adapter,
       });
     }
 
-    async function loadHome() {
-      let freshBootstrapLoaded = false;
-
-      try {
-        const bootstrap = await bootstrapWithClerk(() => getTokenRef.current());
-        freshBootstrapLoaded = true;
-        if (cancelled || signingOutRef.current) return;
-
-        await discardCachedBootstrapMetadataIfUnauthorized(bootstrap);
-        if (cancelled || signingOutRef.current) return;
-
-        await openHome(bootstrap, async () => {
-          // Offline reopen is best-effort; online Home should still render if storage rejects.
-          await saveCachedBootstrapMetadata(bootstrap).catch(() => undefined);
+    async function showErrorIfNoListRendered(cachedAttempt: Promise<void>) {
+      await cachedAttempt.catch(() => undefined);
+      if (!cancelled && !signingOutRef.current && !cachedRendered && !freshRendered) {
+        setContent({
+          status: "error",
+          message: "Unable to prepare your Household. Please try again.",
         });
-      } catch {
-        await closeUnclaimedAdapter().catch(() => undefined);
-        if (cancelled || signingOutRef.current) return;
-
-        const cached = freshBootstrapLoaded ? null : await readCachedBootstrapMetadata().catch(() => null);
-        if (cached) {
-          try {
-            await openHome(cached);
-            return;
-          } catch {
-            await closeUnclaimedAdapter().catch(() => undefined);
-          }
-        }
-
-        if (!cancelled) {
-          setContent({
-            status: "error",
-            message: "Unable to prepare your Household. Please try again.",
-          });
-        }
       }
     }
 
-    void loadHome();
+    async function loadCachedHome() {
+      const cached = await readCachedBootstrapMetadata().catch(() => null);
+      if (!cached || cancelled || signingOutRef.current) return;
+
+      try {
+        const opened = await openHome(cached);
+        await renderOpenedHome(opened, "cached");
+      } catch {
+        // Cached metadata is best-effort; fresh bootstrap decides the final state.
+      }
+    }
+
+    async function loadFreshHome(cachedAttempt: Promise<void>) {
+      try {
+        const bootstrap = await bootstrapWithClerk(() => getTokenRef.current());
+        if (cancelled || signingOutRef.current) return;
+
+        const discarded = await discardCachedBootstrapMetadataIfUnauthorized(bootstrap);
+        if (cancelled || signingOutRef.current) return;
+
+        if (discarded) {
+          cachedInvalidated = true;
+          cachedRendered = false;
+          setContent({ status: "loading" });
+        }
+
+        const opened = await openHome(bootstrap, async () => {
+          // Offline reopen is best-effort; online Home should still render if storage rejects.
+          await saveCachedBootstrapMetadata(bootstrap).catch(() => undefined);
+        });
+        await renderOpenedHome(opened, "fresh");
+      } catch {
+        await showErrorIfNoListRendered(cachedAttempt);
+      }
+    }
+
+    const cachedAttempt = loadCachedHome();
+    void loadFreshHome(cachedAttempt);
 
     return () => {
       cancelled = true;
-      void closeUnclaimedAdapter().catch(() => undefined);
+      void Promise.all([...pendingAdapters].map((adapter) => closeAdapter(adapter))).catch(() => undefined);
     };
   }, [isLoaded, isSignedIn, loadAttempt]);
 
