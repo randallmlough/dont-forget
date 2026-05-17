@@ -4,9 +4,11 @@ import type { ActiveListDataAdapter, ActiveListInitialState, ActiveListItem } fr
 import { openHouseholdDb, type HouseholdDb, type OpenHouseholdDbConfig } from "@/lib/app/household-db";
 import type { BootstrapResponse } from "@/lib/bootstrap";
 import { createAppId, type RandomUuid } from "@/lib/ids";
+import { logger, type Logger } from "@/lib/logger";
 
 type ActiveListDb = {
   execute: (statement: Parameters<HouseholdDb["execute"]>[0]) => Promise<{ rows: Array<Record<string, unknown>> }>;
+  push?: () => Promise<void>;
   close: () => void | Promise<void>;
 };
 
@@ -36,6 +38,7 @@ export function createHouseholdActiveListAdapter(
   const now = options.now ?? Date.now;
   const randomUuid = options.randomUuid ?? Crypto.randomUUID;
   const memberNames = new Map<string, string | null>();
+  const log = logger.with({ household_id: config.household.id, list_id: config.list.id });
   let closed = false;
 
   for (const member of config.members) {
@@ -99,6 +102,7 @@ export function createHouseholdActiveListAdapter(
         `,
         args: [id, config.list.id, name, position, config.currentUser.id, timestamp, timestamp],
       });
+      requestPush(db, log, { item_id: id });
 
       return { id, name, checked: false, checkedByMemberName: null };
     },
@@ -115,6 +119,7 @@ export function createHouseholdActiveListAdapter(
         `,
         args: [itemId, config.currentUser.id, checked ? timestamp : null, timestamp],
       });
+      requestPush(db, log, { item_id: itemId });
     },
     async close() {
       if (!ownsDb || closed) return;
@@ -123,6 +128,14 @@ export function createHouseholdActiveListAdapter(
       await db?.close();
     },
   };
+}
+
+function requestPush(db: ActiveListDb, log: Logger, attributes: { item_id: string }) {
+  if (!db.push) return;
+
+  void db.push().catch((error) => {
+    log.warn("household push failed", { ...attributes, error });
+  });
 }
 
 async function nextPosition(db: ActiveListDb, listId: string): Promise<number> {
