@@ -114,9 +114,30 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
 	});
 
-	it("pulls remote changes before refreshing the List view", async () => {
-		const adapter = memoryAdapter(emptyList);
+	it("pushes local changes before refreshing the List view", async () => {
+		let state = emptyList;
+		const adapter = memoryAdapter(emptyList, {
+			async load() {
+				return state;
+			},
+			async sync() {
+				state = {
+					...state,
+					items: [
+						...state.items,
+						{
+							id: "test-item-remote",
+							name: "Remote Apples",
+							checked: false,
+							checkedByMemberName: null,
+						},
+					],
+				};
+				return { changed: true };
+			},
+		});
 		const pull = jest.spyOn(adapter, "pull");
+		const sync = jest.spyOn(adapter, "sync");
 
 		renderActiveList(emptyList, adapter);
 
@@ -126,7 +147,8 @@ describe("ActiveList", () => {
 
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 		expect(await screen.findByText("Remote Apples")).toBeTruthy();
-		expect(pull).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(pull).not.toHaveBeenCalled();
 	});
 });
 

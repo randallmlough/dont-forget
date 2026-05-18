@@ -5,12 +5,24 @@ import {
 	type TursoHouseholdDbRuntime,
 } from "@/lib/app/household-db";
 
+const mockLoggerError = jest.fn();
+const mockLogger = {
+	error: mockLoggerError,
+};
+
+jest.mock("@/lib/logger", () => ({
+	logger: {
+		with: jest.fn(() => mockLogger),
+	},
+}));
+
 describe("openHouseholdDb", () => {
 	let instances: MockTursoDatabase[];
 	let runtime: TursoHouseholdDbRuntime;
 	let fileSystem: { deleteFilesWithPrefix: jest.Mock<Promise<void>, [string]> };
 
 	beforeEach(() => {
+		mockLoggerError.mockReset();
 		instances = [];
 		runtime = {
 			Database: class extends MockTursoDatabase {
@@ -111,11 +123,12 @@ describe("openHouseholdDb", () => {
 		await db.push();
 		await expect(db.pull()).resolves.toEqual({ changed: true });
 
-		nativeDb.pullResult = false;
-		await expect(db.sync()).resolves.toEqual({ changed: false });
+		nativeDb.pullResults = [true, false];
+		await expect(db.sync()).resolves.toEqual({ changed: true });
 
 		expect(nativeDb.push).toHaveBeenCalledTimes(2);
-		expect(nativeDb.pull).toHaveBeenCalledTimes(2);
+		expect(nativeDb.pull).toHaveBeenCalledTimes(3);
+		expect(nativeDb.calls.slice(-3)).toEqual(["pull", "push", "pull"]);
 
 		await db.deleteLocalData();
 		await db.close();
@@ -124,6 +137,19 @@ describe("openHouseholdDb", () => {
 		expect(fileSystem.deleteFilesWithPrefix).toHaveBeenCalledWith(
 			"/documents/household-hh_avery.db",
 		);
+	});
+
+	it("logs native sync failures before rethrowing", async () => {
+		const db = await openHouseholdDb(configFixture(), { runtime, fileSystem });
+		const nativeDb = onlyInstance(instances);
+		const error = new Error("checkpoint failed");
+		nativeDb.push.mockRejectedValueOnce(error);
+
+		await expect(db.sync()).rejects.toThrow(error);
+
+		expect(mockLoggerError).toHaveBeenCalledWith("household db sync failed", {
+			error,
+		});
 	});
 
 	it("deletes local DB files by app-owned Household ID", async () => {
@@ -147,12 +173,19 @@ class MockTursoDatabase {
 	allRows: Array<Record<string, unknown>> = [];
 	runResult = { changes: 0, lastInsertRowid: 0 };
 	pullResult = false;
+	pullResults: boolean[] = [];
+	calls: string[] = [];
 
 	connect = jest.fn(async () => undefined);
 	all = jest.fn(async () => this.allRows);
 	run = jest.fn(async () => this.runResult);
-	push = jest.fn(async () => undefined);
-	pull = jest.fn(async () => this.pullResult);
+	push = jest.fn(async () => {
+		this.calls.push("push");
+	});
+	pull = jest.fn(async () => {
+		this.calls.push("pull");
+		return this.pullResults.shift() ?? this.pullResult;
+	});
 	close = jest.fn(async () => undefined);
 
 	constructor(

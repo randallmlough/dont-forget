@@ -124,7 +124,7 @@ function ActiveListProvider({
 		transition({ type: "listLoaded", list: nextState });
 	}, [adapter, transition]);
 
-	const pullLatest = useCallback(async () => {
+	const syncLatest = useCallback(async () => {
 		if (!adapter.syncAuthorized) {
 			transition({ type: "syncUnavailable" });
 			await loadFromAdapter();
@@ -134,7 +134,7 @@ function ActiveListProvider({
 		transition({ type: "syncStarted" });
 
 		try {
-			await adapter.pull();
+			await adapter.sync();
 			await loadFromAdapter();
 			transition({ type: "syncSucceeded" });
 		} catch (error) {
@@ -167,12 +167,12 @@ function ActiveListProvider({
 		transition({ type: "refreshRequested" });
 
 		try {
-			await pullLatest();
+			await syncLatest();
 		} catch (error) {
 			logger.error("active list refresh failed", { error });
 			transition({ type: "refreshFailed" });
 		}
-	}, [logger, pullLatest, transition]);
+	}, [logger, syncLatest, transition]);
 
 	const addItem = useCallback(
 		async (rawName: string) => {

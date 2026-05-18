@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
 
 export type HouseholdSqlStatement =
@@ -90,6 +92,10 @@ export async function openHouseholdDb(
 	const syncAuthorized = Boolean(
 		config.database.url && config.database.authToken,
 	);
+	const log = logger.with({
+		household_id: config.householdId,
+		sync_authorized: syncAuthorized,
+	});
 	const database = new runtime.Database({
 		path,
 		clientName: HOUSEHOLD_DB_CLIENT_NAME,
@@ -103,12 +109,22 @@ export async function openHouseholdDb(
 	});
 	let closed = false;
 
-	await database.connect();
+	try {
+		await database.connect();
+	} catch (error) {
+		log.error("household db connect failed", { error: asError(error) });
+		throw error;
+	}
 
 	async function close() {
 		if (closed) return;
 		closed = true;
-		await database.close();
+		try {
+			await database.close();
+		} catch (error) {
+			log.error("household db close failed", { error: asError(error) });
+			throw error;
+		}
 	}
 
 	return {
@@ -117,34 +133,68 @@ export async function openHouseholdDb(
 		async execute(statement) {
 			const { sql, args } = normalizeStatement(statement);
 			if (isReadStatement(sql)) {
-				const rows = await database.all(sql, args);
-				return { rows, rowsAffected: 0, lastInsertRowId: null };
+				try {
+					const rows = await database.all(sql, args);
+					return { rows, rowsAffected: 0, lastInsertRowId: null };
+				} catch (error) {
+					log.error("household db query failed", { error: asError(error) });
+					throw error;
+				}
 			}
 
-			const result = await database.run(sql, args);
-			return {
-				rows: [],
-				rowsAffected: result.changes,
-				lastInsertRowId: result.lastInsertRowid,
-			};
+			try {
+				const result = await database.run(sql, args);
+				return {
+					rows: [],
+					rowsAffected: result.changes,
+					lastInsertRowId: result.lastInsertRowid,
+				};
+			} catch (error) {
+				log.error("household db write failed", { error: asError(error) });
+				throw error;
+			}
 		},
 		async push() {
-			await database.push();
+			try {
+				await database.push();
+			} catch (error) {
+				log.error("household db push failed", { error: asError(error) });
+				throw error;
+			}
 		},
 		async pull() {
-			return { changed: await database.pull() };
+			try {
+				return { changed: await database.pull() };
+			} catch (error) {
+				log.error("household db pull failed", { error: asError(error) });
+				throw error;
+			}
 		},
 		async sync() {
-			await database.push();
-			return { changed: await database.pull() };
+			try {
+				const changedBeforePush = await database.pull();
+				await database.push();
+				const changedAfterPush = await database.pull();
+				return { changed: changedBeforePush || changedAfterPush };
+			} catch (error) {
+				log.error("household db sync failed", { error: asError(error) });
+				throw error;
+			}
 		},
 		close,
 		async deleteLocalData() {
-			await close();
-			await deleteLocalHouseholdDbData(config.householdId, {
-				runtime,
-				fileSystem,
-			});
+			try {
+				await close();
+				await deleteLocalHouseholdDbData(config.householdId, {
+					runtime,
+					fileSystem,
+				});
+			} catch (error) {
+				log.error("household db local delete failed", {
+					error: asError(error),
+				});
+				throw error;
+			}
 		},
 	};
 }
@@ -158,6 +208,10 @@ export async function deleteLocalHouseholdDbData(
 	const path = runtime.getDbPath(householdDbFilename(householdId));
 
 	await fileSystem.deleteFilesWithPrefix(path);
+}
+
+function asError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
 }
 
 export function householdDbFilename(householdId: string): string {

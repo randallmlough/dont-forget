@@ -4,7 +4,25 @@ import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter"
 import type { HouseholdSqlStatement } from "@/lib/app/household-db";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 
+const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
+const mockLogger = {
+	error: mockLoggerError,
+	warn: mockLoggerWarn,
+};
+
+jest.mock("@/lib/logger", () => ({
+	logger: {
+		with: jest.fn(() => mockLogger),
+	},
+}));
+
 describe("createHouseholdActiveListAdapter", () => {
+	beforeEach(() => {
+		mockLoggerError.mockReset();
+		mockLoggerWarn.mockReset();
+	});
+
 	it("exposes explicit app-owned pull and sync operations", async () => {
 		const pull = jest.fn(async () => ({ changed: true }));
 		const sync = jest.fn(async () => ({ changed: false }));
@@ -23,6 +41,133 @@ describe("createHouseholdActiveListAdapter", () => {
 		await expect(adapter.sync()).resolves.toEqual({ changed: false });
 		expect(pull).toHaveBeenCalledTimes(1);
 		expect(sync).toHaveBeenCalledTimes(1);
+	});
+
+	it("falls back to remote LWW upserts when native sync cannot push", async () => {
+		const remoteExecute = jest.fn(async () => undefined);
+		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
+			const sql = statementSql(statement);
+			if (sql.includes("FROM lists")) {
+				return {
+					rows: [
+						{
+							id: DEFAULT_LIST_ID,
+							name: DEFAULT_LIST_NAME,
+							created_by_user_id: "usr_avery",
+							created_at: 1,
+							updated_at: 1,
+							deleted_at: null,
+						},
+					],
+				};
+			}
+			if (sql.includes("FROM items")) {
+				return {
+					rows: [
+						{
+							id: "itm_offline",
+							list_id: DEFAULT_LIST_ID,
+							name: "Offline Milk",
+							notes: null,
+							position: 0,
+							created_by_user_id: "usr_avery",
+							created_at: 2,
+							updated_at: 2,
+							deleted_at: null,
+						},
+					],
+				};
+			}
+			if (sql.includes("FROM item_checks")) {
+				return {
+					rows: [
+						{
+							item_id: "itm_offline",
+							user_id: "usr_avery",
+							checked_at: 3,
+							updated_at: 3,
+						},
+					],
+				};
+			}
+
+			return { rows: [] };
+		});
+		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
+			db: {
+				syncAuthorized: true,
+				execute,
+				sync: jest.fn(async () => {
+					throw new Error("native sync failed");
+				}),
+				pull: jest.fn(async () => ({ changed: false })),
+				close: jest.fn(async () => undefined),
+			},
+			openRemoteClient: () => ({ execute: remoteExecute }),
+		});
+
+		await expect(adapter.sync()).resolves.toEqual({ changed: false });
+
+		expect(remoteExecute).toHaveBeenCalledTimes(3);
+		expect(remoteExecute).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sql: expect.stringContaining("INSERT INTO items"),
+				args: [
+					"itm_offline",
+					DEFAULT_LIST_ID,
+					"Offline Milk",
+					null,
+					0,
+					"usr_avery",
+					2,
+					2,
+					null,
+				],
+			}),
+		);
+		expect(remoteExecute).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sql: expect.stringContaining(
+					"WHERE excluded.updated_at >= items.updated_at",
+				),
+			}),
+		);
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			"active list native sync failed",
+			{ error: expect.any(Error) },
+		);
+		expect(mockLoggerWarn).toHaveBeenCalledWith(
+			"active list sync fallback succeeded",
+		);
+	});
+
+	it("logs and rethrows when native sync and fallback both fail", async () => {
+		const fallbackError = new Error("remote unavailable");
+		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
+			db: {
+				syncAuthorized: true,
+				execute: jest.fn(async () => ({ rows: [] })),
+				sync: jest.fn(async () => {
+					throw new Error("native sync failed");
+				}),
+				pull: jest.fn(async () => ({ changed: false })),
+				close: jest.fn(async () => undefined),
+			},
+			openRemoteClient: () => {
+				throw fallbackError;
+			},
+		});
+
+		await expect(adapter.sync()).rejects.toThrow(fallbackError);
+
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			"active list native sync failed",
+			{ error: expect.any(Error) },
+		);
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			"active list sync fallback failed",
+			{ error: fallbackError },
+		);
 	});
 
 	it("uses monotonic app-generated timestamps for local Item writes", async () => {
