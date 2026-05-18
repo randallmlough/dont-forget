@@ -2,7 +2,7 @@ import { render, waitFor } from "@testing-library/react-native";
 
 import { readCachedBootstrapMetadata } from "@/lib/app/offline-bootstrap-cache";
 import { setMockAuthState } from "@/lib/test/mocks/clerk";
-import { AuthGate } from "@/screens/root/auth-gate";
+import { AuthGate } from "@/components/auth/auth-gate";
 
 const mockReplace = jest.fn();
 

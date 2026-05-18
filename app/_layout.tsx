@@ -8,7 +8,7 @@ import "react-native-reanimated";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { PostHogProvider } from "posthog-react-native";
 
-import { AuthGate } from "@/screens/root/auth-gate";
+import { AuthGate } from "@/components/auth/auth-gate";
 import { tokenCache } from "@/lib/token-cache";
 import { posthog } from "@/lib/posthog";
 import { screen } from "@/lib/analytics";
