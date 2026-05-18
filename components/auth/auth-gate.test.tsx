@@ -1,4 +1,5 @@
 import { render, waitFor } from "@testing-library/react-native";
+import type { ReactNode } from "react";
 
 import { readCachedBootstrapMetadata } from "@/lib/app/offline-bootstrap-cache";
 import { setMockAuthState } from "@/lib/test/mocks/clerk";
@@ -15,10 +16,10 @@ jest.mock("@/lib/app/offline-bootstrap-cache", () => ({
 }));
 
 jest.mock("expo-router", () => {
-  const React = require("react");
-  const { View } = require("react-native");
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } = jest.requireActual<typeof import("react-native")>("react-native");
 
-  function Stack({ children }: { children?: unknown }) {
+  function Stack({ children }: { children?: ReactNode }) {
     return React.createElement(View, null, children);
   }
 

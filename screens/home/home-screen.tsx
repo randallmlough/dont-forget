@@ -1,39 +1,13 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
-import { ActiveList, type ActiveListDataAdapter, type ActiveListInitialState } from "@/components/active-list";
+import { ActiveList } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
-import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
-import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
-import {
-  clearCachedHouseholdSession,
-  discardCachedBootstrapMetadataIfUnauthorized,
-  readCachedBootstrapMetadata,
-  saveCachedBootstrapMetadata,
-  type CachedBootstrapMetadata,
-} from "@/lib/app/offline-bootstrap-cache";
-import type { BootstrapResponse } from "@/lib/bootstrap";
-
-type HomeContentState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | {
-      status: "ready";
-      activeMemberName: string;
-      initialList: ActiveListInitialState;
-      adapter: ActiveListDataAdapter;
-    };
-
-type HomeBootstrap = BootstrapResponse | CachedBootstrapMetadata;
-
-type OpenedHome = {
-  bootstrap: HomeBootstrap;
-  initialList: ActiveListInitialState;
-  adapter: ActiveListDataAdapter;
-};
+import { clearCachedHouseholdSession } from "@/lib/app/offline-bootstrap-cache";
+import { useHomeContent, type HomeContentState } from "@/screens/home/use-home-content";
 
 export type HomeScreenViewProps = {
   currentMemberName: string;
@@ -45,135 +19,15 @@ export type HomeScreenViewProps = {
 export default function HomeScreen() {
   const { getToken, isLoaded, isSignedIn, signOut } = useAuth();
   const { user } = useUser();
-  const [content, setContent] = useState<HomeContentState>({ status: "loading" });
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  const getTokenRef = useRef(getToken);
   const signingOutRef = useRef(false);
-
-  useEffect(() => {
-    getTokenRef.current = getToken;
-  }, [getToken]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let cachedRendered = false;
-    let cachedInvalidated = false;
-    let freshRendered = false;
-    const pendingAdapters = new Set<ActiveListDataAdapter>();
-    const closedAdapters = new Set<ActiveListDataAdapter>();
-
-    setContent((current) => (current.status === "ready" ? current : { status: "loading" }));
-
-    async function closeAdapter(adapter: ActiveListDataAdapter) {
-      if (closedAdapters.has(adapter)) return;
-
-      closedAdapters.add(adapter);
-      pendingAdapters.delete(adapter);
-      await adapter.close();
-    }
-
-    async function openHome(bootstrap: HomeBootstrap, afterLoad?: () => Promise<void>): Promise<OpenedHome> {
-      const adapter = createAdapterFromBootstrap(bootstrap);
-      pendingAdapters.add(adapter);
-
-      try {
-        const initialList = await adapter.load();
-        if (afterLoad) {
-          await afterLoad();
-        }
-
-        pendingAdapters.delete(adapter);
-        return { bootstrap, initialList, adapter };
-      } catch (error) {
-        await closeAdapter(adapter).catch(() => undefined);
-        throw error;
-      }
-    }
-
-    async function renderOpenedHome(opened: OpenedHome, source: "cached" | "fresh") {
-      if (cancelled || signingOutRef.current || (source === "cached" && (freshRendered || cachedInvalidated))) {
-        await closeAdapter(opened.adapter).catch(() => undefined);
-        return;
-      }
-
-      if (source === "cached") {
-        cachedRendered = true;
-      } else {
-        freshRendered = true;
-      }
-
-      setContent({
-        status: "ready",
-        activeMemberName: activeMemberNameFromBootstrap(opened.bootstrap),
-        initialList: opened.initialList,
-        adapter: opened.adapter,
-      });
-    }
-
-    async function showErrorIfNoListRendered(cachedAttempt: Promise<void>) {
-      await cachedAttempt.catch(() => undefined);
-      if (!cancelled && !signingOutRef.current && !cachedRendered && !freshRendered) {
-        setContent({
-          status: "error",
-          message: "Unable to prepare your Household. Please try again.",
-        });
-      }
-    }
-
-    async function loadCachedHome() {
-      const cached = await readCachedBootstrapMetadata().catch(() => null);
-      if (!cached || cancelled || signingOutRef.current) return;
-
-      try {
-        const opened = await openHome(cached);
-        await renderOpenedHome(opened, "cached");
-      } catch {
-        // Cached metadata is best-effort; fresh bootstrap decides the final state.
-      }
-    }
-
-    async function loadFreshHome(cachedAttempt: Promise<void>) {
-      try {
-        const bootstrap = await bootstrapWithClerk(() => getTokenRef.current());
-        if (cancelled || signingOutRef.current) return;
-
-        const discarded = await discardCachedBootstrapMetadataIfUnauthorized(bootstrap);
-        if (cancelled || signingOutRef.current) return;
-
-        if (discarded) {
-          cachedInvalidated = true;
-          cachedRendered = false;
-          setContent({ status: "loading" });
-        }
-
-        const opened = await openHome(bootstrap, async () => {
-          // Offline reopen is best-effort; online Home should still render if storage rejects.
-          await saveCachedBootstrapMetadata(bootstrap).catch(() => undefined);
-        });
-        await renderOpenedHome(opened, "fresh");
-      } catch {
-        await showErrorIfNoListRendered(cachedAttempt);
-      }
-    }
-
-    const cachedAttempt = loadCachedHome();
-    if (isLoaded && isSignedIn) {
-      void loadFreshHome(cachedAttempt);
-    } else if (isLoaded) {
-      void showErrorIfNoListRendered(cachedAttempt);
-    }
-
-    return () => {
-      cancelled = true;
-      void Promise.all([...pendingAdapters].map((adapter) => closeAdapter(adapter))).catch(() => undefined);
-    };
-  }, [isLoaded, isSignedIn, loadAttempt]);
+  const { content, retry } = useHomeContent({
+    getToken,
+    isLoaded,
+    isSignedIn: Boolean(isSignedIn),
+    signingOutRef,
+  });
 
   const currentMemberName = memberName(content, user);
-
-  const retry = useCallback(() => {
-    setLoadAttempt((attempt) => attempt + 1);
-  }, []);
 
   async function onSignOut() {
     if (signingOutRef.current) return;
@@ -196,21 +50,6 @@ export default function HomeScreen() {
       onSignOut={onSignOut}
     />
   );
-}
-
-function createAdapterFromBootstrap(bootstrap: HomeBootstrap): ActiveListDataAdapter {
-  return createHouseholdActiveListAdapter({
-    household: bootstrap.activeHousehold,
-    activeMember: bootstrap.activeMember,
-    list: bootstrap.activeList,
-    currentUser: bootstrap.user,
-    members: bootstrap.members,
-    database: bootstrap.householdDatabase,
-  });
-}
-
-function activeMemberNameFromBootstrap(bootstrap: HomeBootstrap): string {
-  return bootstrap.activeMember.displayName ?? bootstrap.user.email ?? "Member";
 }
 
 export function HomeScreenView({ currentMemberName, content, onRetry, onSignOut }: HomeScreenViewProps) {
