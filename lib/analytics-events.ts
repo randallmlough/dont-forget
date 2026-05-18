@@ -9,10 +9,10 @@
  * dashboards — keep the old name firing until dashboards migrate, then drop.
  */
 export type EventMap = {
-  user_signed_in: { method: "email" | "apple" | "google" };
-  user_signed_up: { method: "email" | "apple" | "google" };
-  user_email_verified: Record<string, never>;
-  user_signed_out: Record<string, never>;
+	user_signed_in: { method: "email" | "apple" | "google" };
+	user_signed_up: { method: "email" | "apple" | "google" };
+	user_email_verified: Record<string, never>;
+	user_signed_out: Record<string, never>;
 };
 
 export type EventName = keyof EventMap;

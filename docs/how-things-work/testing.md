@@ -19,7 +19,7 @@ pnpm lint
 - `pnpm test` runs Jest in watch mode for local development.
 - `pnpm test:ci` runs Jest once with `--runInBand`; prefer this for verification because integration tests may create temp databases.
 - `pnpm test:coverage` reports coverage but does not enforce a threshold.
-- The standard proof for TS/TSX changes is `pnpm typecheck`, `pnpm lint`, and `pnpm test:ci` when practical.
+- The standard proof for TS/TSX changes is `make verify`, which runs typecheck, Biome, Expo lint, and Jest when practical.
 - Maestro flows run against an installed iOS build with the Maestro CLI or EAS Workflows. Add exact commands here when the first `.maestro/` flow and build profile are committed.
 
 ## Test Boundaries

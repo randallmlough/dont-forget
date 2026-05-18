@@ -1,9 +1,9 @@
 export const analyticsMocks = {
-  track: jest.fn(),
-  identify: jest.fn(),
-  reset: jest.fn(),
-  screen: jest.fn(),
-  useAnalyticsIdentity: jest.fn(),
+	track: jest.fn(),
+	identify: jest.fn(),
+	reset: jest.fn(),
+	screen: jest.fn(),
+	useAnalyticsIdentity: jest.fn(),
 };
 
 export const track = analyticsMocks.track;

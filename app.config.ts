@@ -3,96 +3,108 @@ import { resolve } from "node:path";
 
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
-import { readPublicExpoConfig, type AppEnv } from "./lib/env.ts";
+import { type AppEnv, readPublicExpoConfig } from "./lib/env.ts";
 import { loadEnvFile } from "./lib/load-env.ts";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  loadEnvFile();
-  const publicConfig = readPublicExpoConfig();
-  const baseBundleIdentifier = config.ios?.bundleIdentifier ?? "com.dont-forget.app";
-  const baseScheme = typeof config.scheme === "string" ? config.scheme : "dontforget";
+	loadEnvFile();
+	const publicConfig = readPublicExpoConfig();
+	const baseBundleIdentifier =
+		config.ios?.bundleIdentifier ?? "com.dont-forget.app";
+	const baseScheme =
+		typeof config.scheme === "string" ? config.scheme : "dontforget";
 
-  return {
-    ...config,
-    plugins: withLocalConfigPlugins(config.plugins),
-    name: process.env.EXPO_APP_NAME ?? appNameForEnv(config.name ?? "Don't Forget", publicConfig.appEnv),
-    slug: config.slug ?? "dont-forget",
-    scheme: process.env.EXPO_SCHEME ?? schemeForEnv(baseScheme, publicConfig.appEnv),
-    ios: {
-      ...config.ios,
-      bundleIdentifier:
-        process.env.IOS_BUNDLE_IDENTIFIER ??
-        bundleIdentifierForEnv(baseBundleIdentifier, publicConfig.appEnv),
-    },
-    extra: {
-      ...config.extra,
-      appEnv: publicConfig.appEnv,
-      apiBaseUrl: publicConfig.apiBaseUrl,
-      posthogProjectToken: publicConfig.posthogProjectToken,
-      posthogHost: publicConfig.posthogHost,
-    },
-  };
+	return {
+		...config,
+		plugins: withLocalConfigPlugins(config.plugins),
+		name:
+			process.env.EXPO_APP_NAME ??
+			appNameForEnv(config.name ?? "Don't Forget", publicConfig.appEnv),
+		slug: config.slug ?? "dont-forget",
+		scheme:
+			process.env.EXPO_SCHEME ?? schemeForEnv(baseScheme, publicConfig.appEnv),
+		ios: {
+			...config.ios,
+			bundleIdentifier:
+				process.env.IOS_BUNDLE_IDENTIFIER ??
+				bundleIdentifierForEnv(baseBundleIdentifier, publicConfig.appEnv),
+		},
+		extra: {
+			...config.extra,
+			appEnv: publicConfig.appEnv,
+			apiBaseUrl: publicConfig.apiBaseUrl,
+			posthogProjectToken: publicConfig.posthogProjectToken,
+			posthogHost: publicConfig.posthogHost,
+		},
+	};
 };
 
-function withLocalConfigPlugins(plugins: ExpoConfig["plugins"]): ExpoConfig["plugins"] {
-  const resolvedPlugins = [...(plugins ?? [])];
+function withLocalConfigPlugins(
+	plugins: ExpoConfig["plugins"],
+): ExpoConfig["plugins"] {
+	const resolvedPlugins = [...(plugins ?? [])];
 
-  if (process.env.EXPO_WITH_ROCKETSIM_CONNECT !== "1") {
-    return resolvedPlugins;
-  }
+	if (process.env.EXPO_WITH_ROCKETSIM_CONNECT !== "1") {
+		return resolvedPlugins;
+	}
 
-  const rocketSimPlugin = "./plugins/withRocketSimConnect.js";
-  if (!existsSync(resolve(process.cwd(), rocketSimPlugin))) {
-    console.warn(`Skipping RocketSim config plugin because ${rocketSimPlugin} does not exist.`);
-    return resolvedPlugins;
-  }
+	const rocketSimPlugin = "./plugins/withRocketSimConnect.js";
+	if (!existsSync(resolve(process.cwd(), rocketSimPlugin))) {
+		console.warn(
+			`Skipping RocketSim config plugin because ${rocketSimPlugin} does not exist.`,
+		);
+		return resolvedPlugins;
+	}
 
-  if (
-    !resolvedPlugins.some(
-      (plugin) =>
-        plugin === rocketSimPlugin ||
-        (Array.isArray(plugin) && plugin[0] === rocketSimPlugin)
-    )
-  ) {
-    resolvedPlugins.push(rocketSimPlugin);
-  }
+	if (
+		!resolvedPlugins.some(
+			(plugin) =>
+				plugin === rocketSimPlugin ||
+				(Array.isArray(plugin) && plugin[0] === rocketSimPlugin),
+		)
+	) {
+		resolvedPlugins.push(rocketSimPlugin);
+	}
 
-  return resolvedPlugins;
+	return resolvedPlugins;
 }
 
 function appNameForEnv(baseName: string, appEnv: AppEnv): string {
-  if (appEnv === "production") {
-    return baseName;
-  }
+	if (appEnv === "production") {
+		return baseName;
+	}
 
-  return `${baseName} ${labelForEnv(appEnv)}`;
+	return `${baseName} ${labelForEnv(appEnv)}`;
 }
 
 function schemeForEnv(baseScheme: string, appEnv: AppEnv): string {
-  if (appEnv === "production") {
-    return baseScheme;
-  }
+	if (appEnv === "production") {
+		return baseScheme;
+	}
 
-  return `${baseScheme}-${appEnv}`;
+	return `${baseScheme}-${appEnv}`;
 }
 
-function bundleIdentifierForEnv(baseBundleIdentifier: string, appEnv: AppEnv): string {
-  if (appEnv === "production") {
-    return baseBundleIdentifier;
-  }
+function bundleIdentifierForEnv(
+	baseBundleIdentifier: string,
+	appEnv: AppEnv,
+): string {
+	if (appEnv === "production") {
+		return baseBundleIdentifier;
+	}
 
-  return `${baseBundleIdentifier}.${appEnv}`;
+	return `${baseBundleIdentifier}.${appEnv}`;
 }
 
 function labelForEnv(appEnv: AppEnv): string {
-  switch (appEnv) {
-    case "local":
-      return "Local";
-    case "test":
-      return "Test";
-    case "staging":
-      return "Staging";
-    case "production":
-      return "Production";
-  }
+	switch (appEnv) {
+		case "local":
+			return "Local";
+		case "test":
+			return "Test";
+		case "staging":
+			return "Staging";
+		case "production":
+			return "Production";
+	}
 }
