@@ -1,41 +1,58 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
 import { Alert } from "react-native";
-
-import SignInScreen from "@/screens/auth/sign-in-screen";
-import { clerkMocks } from "@/lib/test/mocks/clerk";
 import { analyticsMocks } from "@/lib/test/mocks/analytics";
+import { clerkMocks } from "@/lib/test/mocks/clerk";
+import SignInScreen from "@/screens/auth/sign-in-screen";
 
 jest.mock("@/lib/analytics", () => require("@/lib/test/mocks/analytics"));
 
 jest.mock("expo-router", () => {
-  const React = require("react");
-  const { Text } = require("react-native");
+	const React = require("react");
+	const { Text } = require("react-native");
 
-  return {
-    Link: ({ children }: { children: unknown }) => React.createElement(Text, null, children),
-  };
+	return {
+		Link: ({ children }: { children: unknown }) =>
+			React.createElement(Text, null, children),
+	};
 });
 
 describe("SignInScreen", () => {
-  it("signs in with email, tracks the event, and activates the Clerk session", async () => {
-    jest.spyOn(Alert, "alert").mockImplementation(() => {});
-    clerkMocks.signInCreate.mockResolvedValue({ createdSessionId: "session_123" });
+	it("signs in with email, tracks the event, and activates the Clerk session", async () => {
+		jest.spyOn(Alert, "alert").mockImplementation(() => {});
+		clerkMocks.signInCreate.mockResolvedValue({
+			createdSessionId: "session_123",
+		});
 
-    render(<SignInScreen />);
+		render(<SignInScreen />);
 
-    fireEvent.changeText(screen.getByPlaceholderText("Email"), " member@example.com ");
-    fireEvent.changeText(screen.getByPlaceholderText("Password"), "correct horse battery staple");
-    fireEvent.press(screen.getByText("Sign in"));
+		fireEvent.changeText(
+			screen.getByPlaceholderText("Email"),
+			" member@example.com ",
+		);
+		fireEvent.changeText(
+			screen.getByPlaceholderText("Password"),
+			"correct horse battery staple",
+		);
+		fireEvent.press(screen.getByText("Sign in"));
 
-    await waitFor(() => {
-      expect(clerkMocks.signInCreate).toHaveBeenCalledWith({
-        identifier: "member@example.com",
-        password: "correct horse battery staple",
-      });
-    });
+		await waitFor(() => {
+			expect(clerkMocks.signInCreate).toHaveBeenCalledWith({
+				identifier: "member@example.com",
+				password: "correct horse battery staple",
+			});
+		});
 
-    expect(analyticsMocks.track).toHaveBeenCalledWith("user_signed_in", { method: "email" });
-    expect(clerkMocks.setActive).toHaveBeenCalledWith({ session: "session_123" });
-    expect(Alert.alert).not.toHaveBeenCalled();
-  });
+		expect(analyticsMocks.track).toHaveBeenCalledWith("user_signed_in", {
+			method: "email",
+		});
+		expect(clerkMocks.setActive).toHaveBeenCalledWith({
+			session: "session_123",
+		});
+		expect(Alert.alert).not.toHaveBeenCalled();
+	});
 });
