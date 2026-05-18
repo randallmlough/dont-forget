@@ -11,7 +11,7 @@ import {
   saveCachedBootstrapMetadata,
   type CachedBootstrapMetadata,
 } from "@/lib/app/offline-bootstrap-cache";
-import { clerkMocks, setMockAuthCallbacksUnstable, setMockAuthState, setMockUserState } from "@/lib/test/mocks/clerk";
+import { clerkMocks, setMockAuthState, setMockUserState } from "@/lib/test/mocks/clerk";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
 jest.mock("@/lib/analytics", () => ({
@@ -46,36 +46,6 @@ beforeEach(() => {
 });
 
 describe("HomeScreen", () => {
-  it("does not restart bootstrap when auth callbacks are not referentially stable", async () => {
-    const initialList = initialListFixture();
-    const bootstrap = bootstrapFixture();
-    jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrap);
-    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue(noopAdapter(initialList));
-    clerkMocks.getToken.mockResolvedValue("session-token");
-    setMockAuthState({ isSignedIn: true });
-    setMockAuthCallbacksUnstable(true);
-    setMockUserState({
-      user: {
-        fullName: "Avery Chen",
-        firstName: "Avery",
-        primaryEmailAddress: { emailAddress: "avery@example.com" },
-      },
-    });
-
-    render(<HomeScreen />);
-
-    await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-    expect(bootstrapWithClerk).toHaveBeenCalledTimes(1);
-    expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
-      household: bootstrap.activeHousehold,
-      activeMember: bootstrap.activeMember,
-      list: bootstrap.activeList,
-      currentUser: bootstrap.user,
-      members: bootstrap.members,
-      database: bootstrap.householdDatabase,
-    });
-  });
-
   it("closes an adapter that is still loading when Home unmounts", async () => {
     const load = deferred<ActiveListInitialState>();
     const close = jest.fn().mockResolvedValue(undefined);

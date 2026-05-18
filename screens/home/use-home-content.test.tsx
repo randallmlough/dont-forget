@@ -37,6 +37,26 @@ beforeEach(() => {
 });
 
 describe("useHomeContent", () => {
+  it("does not restart bootstrap when the getToken callback changes", async () => {
+    const bootstrap = bootstrapFixture();
+    const getToken = jest.fn(async () => "session-token");
+    const nextGetToken = jest.fn(async () => "next-session-token");
+    jest.mocked(bootstrapWithClerk).mockImplementation(async (loadToken) => {
+      await loadToken();
+      return bootstrap;
+    });
+    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue(noopAdapter(initialListFixture()));
+
+    const { rerender } = render(<UseHomeContentHarness getToken={getToken} isLoaded isSignedIn />);
+
+    await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+    rerender(<UseHomeContentHarness getToken={nextGetToken} isLoaded isSignedIn />);
+
+    expect(bootstrapWithClerk).toHaveBeenCalledTimes(1);
+    expect(getToken).toHaveBeenCalledTimes(1);
+    expect(nextGetToken).not.toHaveBeenCalled();
+  });
+
   it("opens cached local List data before Clerk finishes loading", async () => {
     const cached = cachedBootstrapFixture();
     jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
@@ -78,10 +98,18 @@ describe("useHomeContent", () => {
   });
 });
 
-function UseHomeContentHarness({ isLoaded, isSignedIn }: { isLoaded: boolean; isSignedIn: boolean }) {
+function UseHomeContentHarness({
+  getToken = async () => "session-token",
+  isLoaded,
+  isSignedIn,
+}: {
+  getToken?: () => Promise<string | null>;
+  isLoaded: boolean;
+  isSignedIn: boolean;
+}) {
   const signingOutRef = useRef(false);
   const { content } = useHomeContent({
-    getToken: async () => "session-token",
+    getToken,
     isLoaded,
     isSignedIn,
     signingOutRef,
