@@ -5,6 +5,15 @@ import { createRemoteActiveListAdapter } from "@/lib/app/active-list-adapter";
 import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
 import { useHomeBootstrap } from "@/screens/home/use-home-bootstrap";
 
+const mockLoggerError = jest.fn();
+const mockLogger = {
+	debug: jest.fn(),
+	info: jest.fn(),
+	warn: jest.fn(),
+	error: mockLoggerError,
+	with: jest.fn(),
+};
+
 jest.mock("@/lib/app/bootstrap-client", () => ({
 	bootstrapWithClerk: jest.fn(),
 }));
@@ -13,9 +22,14 @@ jest.mock("@/lib/app/active-list-adapter", () => ({
 	createRemoteActiveListAdapter: jest.fn(),
 }));
 
+jest.mock("@/lib/logger", () => ({
+	useLogger: () => mockLogger,
+}));
+
 beforeEach(() => {
 	jest.mocked(bootstrapWithClerk).mockReset();
 	jest.mocked(createRemoteActiveListAdapter).mockReset();
+	mockLoggerError.mockReset();
 });
 
 describe("useHomeBootstrap", () => {
@@ -50,6 +64,9 @@ describe("useHomeBootstrap", () => {
 		);
 
 		await waitFor(() => expect(result.current.state.status).toBe("error"));
+		expect(mockLoggerError).toHaveBeenCalledWith("home bootstrap failed", {
+			error: expect.any(Error),
+		});
 
 		act(() => {
 			result.current.actions.retry();

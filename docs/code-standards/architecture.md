@@ -27,8 +27,12 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 
 - **Must** not add duplicate Clerk or PostHog providers.
 - **Must** keep app-wide providers in `app/_layout.tsx` unless a documented architecture change moves them.
+- **Must** keep root layout effects limited to app-wide provider, navigation, analytics, auth, theme, and native SDK lifecycle synchronization.
+- **Must** keep feature-specific data loading and mutation lifecycle out of `app/_layout.tsx`.
 - **Must** call `setActive(...)` after successful Clerk auth attempts.
 - **Must** sign out in this order: track `user_signed_out`, reset analytics, clear local Household cache/DB files when that path exists, then call `signOut()`.
+- **Should** extract root effect logic into named hooks when it has branching, cleanup, or testable behavior.
+- **Avoid** using root layout as a catch-all initialization file for feature state.
 
 ## Data Boundaries
 
@@ -51,9 +55,18 @@ See also: [`docs/how-things-work/environments.md`](../how-things-work/environmen
 
 - **Must** send product analytics through `track`, `screen`, and `reset` from `lib/analytics.ts`.
 - **Must** add or change analytics events in `lib/analytics-events.ts` before calling them.
+- **Must** treat analytics events and property shapes as typed product contracts.
+- **Must** name analytics events by user or domain outcome, not UI implementation details.
+- **Must** track analytics from the event or action boundary that knows what happened, not from effects that infer it later.
 - **Must** send diagnostic logs through `useLogger()` in React and `logger` elsewhere.
 - **Must** pass raw `Error` instances as `{ error }` in log attributes.
 - **Must** log unexpected operational errors at the boundary where the app has enough context to explain what failed.
+- **Must** log unexpected async failures once at the boundary that has operation context.
+- **Must** avoid logging expected validation or user-correctable states as errors.
 - **Must** not call PostHog directly from feature code.
+- **Should** test analytics when an event represents an important product funnel, auth flow, Invitation flow, or destructive action.
+- **Avoid** tracking derived state changes in effects unless the product event is genuinely "screen became visible" or "identity changed."
+- **Should** include safe, non-sensitive domain context such as Household, List, or Item IDs when it helps diagnose the failure.
+- **Avoid** logging and rethrowing at multiple layers unless each layer adds meaningful context.
 
 See also: [`docs/how-things-work/analytics.md`](../how-things-work/analytics.md) and [`docs/how-things-work/logging.md`](../how-things-work/logging.md).

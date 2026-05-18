@@ -6,6 +6,7 @@ import type {
 } from "@/components/active-list";
 import { createRemoteActiveListAdapter } from "@/lib/app/active-list-adapter";
 import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
+import { useLogger } from "@/lib/logger";
 
 export type HomeContentState =
 	| { status: "loading" }
@@ -35,6 +36,7 @@ export function useHomeBootstrap({
 	isSignedIn,
 	getToken,
 }: UseHomeBootstrapParams): UseHomeBootstrapResult {
+	const logger = useLogger();
 	const [state, setState] = useState<HomeContentState>({ status: "loading" });
 	const [loadAttempt, setLoadAttempt] = useState(0);
 	const getSessionToken = useEffectEvent(() => getToken());
@@ -82,9 +84,10 @@ export function useHomeBootstrap({
 					"Member";
 				handedOffAdapter = true;
 				setState({ status: "ready", activeMemberName, initialList, adapter });
-			} catch {
+			} catch (error) {
 				await closeUnclaimedAdapter().catch(() => undefined);
 				if (!cancelled) {
+					logger.error("home bootstrap failed", { error });
 					setState({
 						status: "error",
 						message: "Unable to prepare your Household. Please try again.",
@@ -99,7 +102,7 @@ export function useHomeBootstrap({
 			cancelled = true;
 			void closeUnclaimedAdapter().catch(() => undefined);
 		};
-	}, [isAuthLoaded, isSignedIn, loadAttempt]);
+	}, [isAuthLoaded, isSignedIn, loadAttempt, logger]);
 
 	function retry() {
 		setLoadAttempt((attempt) => attempt + 1);

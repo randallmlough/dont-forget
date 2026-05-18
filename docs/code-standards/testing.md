@@ -12,12 +12,16 @@
 - **Must** cover success, failure, and ignored or no-op transitions where relevant.
 - **Must** test user actions through visible behavior and accessibility queries, not implementation state.
 - **Must** test Zod boundary failures for new schemas that protect runtime input.
+- **Must** test diagnostic logging when the log is part of an error-handling contract.
+- **Must** mock logging sinks in tests to avoid noisy expected error output.
 - **Should** prefer integration-style tests for Household, Member, Owner, Invitation, List, Item, auth, analytics/logging contract, and sync behavior.
 - **Should** use focused unit tests for pure helpers and narrow adapters.
 - **Should** test state machines through their discriminated variants rather than boolean combinations.
 - **Should** assert the resulting state shape rather than implementation details like action ordering.
+- **Should** assert diagnostic log messages and safe context shape, not implementation details of the logger adapter.
 - **Avoid** snapshot-only tests for components with meaningful behavior.
 - **Avoid** relying only on component tests for complex reducer behavior.
+- **Avoid** tests that make incidental debug or info logs brittle.
 
 See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 

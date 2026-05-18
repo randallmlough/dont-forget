@@ -39,6 +39,21 @@ For non-trivial changes:
 - Run `make format` before verification.
 - Run `make verify` as the standard final proof when practical.
 
+## AI Slop Review Checklist
+
+Use this checklist before accepting human- or AI-generated React, React Native, or TypeScript changes:
+
+- Are effects only synchronizing with external systems or lifecycle resources?
+- Could any state be derived during render instead?
+- Are async lifecycles behind route-owned hooks or containers and tested for failure, stale responses, and cleanup?
+- Are related state transitions modeled by a reducer or transition helper?
+- Are TypeScript boundaries parsed or narrowed instead of asserted?
+- Are component props explicit and domain-shaped?
+- Does React Native UI have accessibility role, state, labels, and real mobile behavior?
+- Are lists tested or storied with realistic data?
+- Are errors logged once at the right boundary and surfaced with recovery copy?
+- Are tests proving failure modes, not just happy paths?
+
 ## Standards
 
 - [Architecture](./architecture.md)

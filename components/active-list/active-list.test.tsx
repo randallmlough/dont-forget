@@ -11,6 +11,23 @@ import {
 	type ActiveListInitialState,
 } from "@/components/active-list";
 
+const mockLoggerError = jest.fn();
+const mockLogger = {
+	debug: jest.fn(),
+	info: jest.fn(),
+	warn: jest.fn(),
+	error: mockLoggerError,
+	with: jest.fn(),
+};
+
+jest.mock("@/lib/logger", () => ({
+	useLogger: () => mockLogger,
+}));
+
+beforeEach(() => {
+	mockLoggerError.mockReset();
+});
+
 const emptyList: ActiveListInitialState = {
 	householdName: "Avery",
 	listName: "Groceries",

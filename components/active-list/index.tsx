@@ -24,6 +24,7 @@ import {
 	activeListReducer,
 	initialActiveListModel,
 } from "@/components/active-list/active-list-state";
+import { useLogger } from "@/lib/logger";
 
 export type ActiveListItem = {
 	id: string;
@@ -79,6 +80,7 @@ function ActiveListProvider({
 	adapter,
 	children,
 }: ActiveListProviderProps) {
+	const logger = useLogger();
 	const [model, setModel] = useState(() =>
 		initialActiveListModel(initialState),
 	);
@@ -111,10 +113,11 @@ function ActiveListProvider({
 
 		try {
 			await loadFromAdapter();
-		} catch {
+		} catch (error) {
+			logger.error("active list refresh failed", { error });
 			transition({ type: "refreshFailed" });
 		}
-	}, [loadFromAdapter, transition]);
+	}, [loadFromAdapter, logger, transition]);
 
 	const addItem = useCallback(
 		async (rawName: string) => {
@@ -138,12 +141,13 @@ function ActiveListProvider({
 					pendingItemId: item.id,
 					item: persistedItem,
 				});
-			} catch {
+			} catch (error) {
+				logger.error("active list item add failed", { error });
 				transition({ type: "itemAddFailed" });
 				await loadFromAdapter().catch(() => undefined);
 			}
 		},
-		[adapter, loadFromAdapter, transition],
+		[adapter, loadFromAdapter, logger, transition],
 	);
 
 	const toggleItem = useCallback(
@@ -164,12 +168,13 @@ function ActiveListProvider({
 			try {
 				await adapter.setItemChecked(itemId, checked);
 				transition({ type: "itemTogglePersisted" });
-			} catch {
+			} catch (error) {
+				logger.error("active list item toggle failed", { error });
 				transition({ type: "itemToggleFailed" });
 				await loadFromAdapter().catch(() => undefined);
 			}
 		},
-		[adapter, currentMemberName, loadFromAdapter, transition],
+		[adapter, currentMemberName, loadFromAdapter, logger, transition],
 	);
 
 	const actions = useMemo<ActiveListActions>(
