@@ -1,27 +1,15 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
-import {
-	ActiveList,
-	type ActiveListDataAdapter,
-	type ActiveListInitialState,
-} from "@/components/active-list";
+import { ActiveList } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
-import { createRemoteActiveListAdapter } from "@/lib/app/active-list-adapter";
-import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
-
-type HomeContentState =
-	| { status: "loading" }
-	| { status: "error"; message: string }
-	| {
-			status: "ready";
-			activeMemberName: string;
-			initialList: ActiveListInitialState;
-			adapter: ActiveListDataAdapter;
-	  };
+import {
+	type HomeContentState,
+	useHomeBootstrap,
+} from "@/screens/home/use-home-bootstrap";
 
 export type HomeScreenViewProps = {
 	currentMemberName: string;
@@ -33,83 +21,12 @@ export type HomeScreenViewProps = {
 export default function HomeScreen() {
 	const { getToken, isLoaded, isSignedIn, signOut } = useAuth();
 	const { user } = useUser();
-	const [content, setContent] = useState<HomeContentState>({
-		status: "loading",
+	const homeBootstrap = useHomeBootstrap({
+		isAuthLoaded: isLoaded,
+		isSignedIn,
+		getToken: () => getToken(),
 	});
-	const [loadAttempt, setLoadAttempt] = useState(0);
-	const getTokenRef = useRef(getToken);
-
-	useEffect(() => {
-		getTokenRef.current = getToken;
-	}, [getToken]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: loadAttempt intentionally retriggers Home bootstrap on retry.
-	useEffect(() => {
-		if (!isLoaded || !isSignedIn) return;
-
-		let cancelled = false;
-		let handedOffAdapter = false;
-		let adapter: ActiveListDataAdapter | null = null;
-
-		async function closeUnclaimedAdapter() {
-			if (handedOffAdapter || !adapter) return;
-
-			const current = adapter;
-			adapter = null;
-			await current.close();
-		}
-
-		setContent({ status: "loading" });
-
-		async function loadHome() {
-			try {
-				const bootstrap = await bootstrapWithClerk(() => getTokenRef.current());
-				if (cancelled) return;
-
-				adapter = createRemoteActiveListAdapter({
-					household: bootstrap.activeHousehold,
-					list: bootstrap.activeList,
-					currentUser: bootstrap.user,
-					members: bootstrap.members,
-					database: bootstrap.householdDatabase,
-				});
-				const initialList = await adapter.load();
-
-				if (cancelled) {
-					await closeUnclaimedAdapter();
-					return;
-				}
-
-				const activeMemberName =
-					bootstrap.activeMember.displayName ??
-					bootstrap.user.email ??
-					"Member";
-				handedOffAdapter = true;
-				setContent({ status: "ready", activeMemberName, initialList, adapter });
-			} catch {
-				await closeUnclaimedAdapter().catch(() => undefined);
-				if (!cancelled) {
-					setContent({
-						status: "error",
-						message: "Unable to prepare your Household. Please try again.",
-					});
-				}
-			}
-		}
-
-		void loadHome();
-
-		return () => {
-			cancelled = true;
-			void closeUnclaimedAdapter().catch(() => undefined);
-		};
-	}, [isLoaded, isSignedIn, loadAttempt]);
-
-	const currentMemberName = memberName(content, user);
-
-	function retry() {
-		setLoadAttempt((attempt) => attempt + 1);
-	}
+	const currentMemberName = memberName(homeBootstrap.state, user);
 
 	function onSignOut() {
 		track("user_signed_out", {});
@@ -120,8 +37,8 @@ export default function HomeScreen() {
 	return (
 		<HomeScreenView
 			currentMemberName={currentMemberName}
-			content={content}
-			onRetry={retry}
+			content={homeBootstrap.state}
+			onRetry={homeBootstrap.actions.retry}
 			onSignOut={onSignOut}
 		/>
 	);

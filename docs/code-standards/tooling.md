@@ -25,5 +25,9 @@
 - **Must** use the `@/*` root alias for imports that cross top-level source folders such as `screens`, `components`, `lib`, `db`, and `app`.
 - **Should** use relative imports for files within the same local module or folder when that keeps the relationship clearer than a root alias.
 - **Avoid** deep relative imports that walk across top-level folders, such as `../../lib/...`; use `@/lib/...` instead.
-- **Must** limit `index.ts` and `index.tsx` entrypoints to cohesive feature surfaces or modules.
-- **Avoid** generic barrel files that re-export unrelated components, utilities, or heavy modules for convenience.
+- **Must** use `index.ts` and `index.tsx` only as curated public entrypoints for cohesive feature surfaces or modules.
+- **Must** keep feature entrypoints free of test-only, story-only, server-only, or internal implementation exports.
+- **Must** import internal files directly from within the same feature instead of routing through that feature's public entrypoint.
+- **Should** export only the types, components, and functions intended for other features to consume.
+- **Avoid** root-level or folder-level barrel files that re-export unrelated components, utilities, or heavy modules for convenience.
+- **Avoid** importing from a feature entrypoint inside that same feature because it obscures dependency direction.

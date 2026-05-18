@@ -10,10 +10,16 @@
 
 - **Must** keep Expo Router route files in `app/` thin when practical.
 - **Must** put route-owned UI and screen-local side effects in `screens/<surface>/`.
+- **Must** colocate route-owned hooks, reducers, state-machine helpers, and helper types under the owning `screens/<surface>/` directory.
 - **Must** put reusable app UI in `components/`.
+- **Must** keep reusable component-owned hooks inside that component's directory when they are not app-wide APIs.
 - **Must** use route groups consistently: `app/(app)` for authenticated app routes and `app/(auth)` for signed-out auth routes.
 - **Must** not add Android or Web compatibility paths unless the platform policy changes.
+- **Should** extract app-owned behavior shared across screens or features to `lib/app/`.
+- **Should** extract server or operator behavior to `lib/server/`.
 - **Should** use `.ios.tsx` files over runtime platform branching for substantial iOS-specific implementations.
+- **Avoid** generic root `hooks/`, `utils/`, `helpers/`, or `types/` folders unless there is a documented architecture reason.
+- **Avoid** exporting internal hooks or reducers from feature entrypoints unless another feature has a real dependency on them.
 
 See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-app-structure.md) and [`docs/how-things-work/routing.md`](../how-things-work/routing.md).
 
@@ -47,6 +53,7 @@ See also: [`docs/how-things-work/environments.md`](../how-things-work/environmen
 - **Must** add or change analytics events in `lib/analytics-events.ts` before calling them.
 - **Must** send diagnostic logs through `useLogger()` in React and `logger` elsewhere.
 - **Must** pass raw `Error` instances as `{ error }` in log attributes.
+- **Must** log unexpected operational errors at the boundary where the app has enough context to explain what failed.
 - **Must** not call PostHog directly from feature code.
 
 See also: [`docs/how-things-work/analytics.md`](../how-things-work/analytics.md) and [`docs/how-things-work/logging.md`](../how-things-work/logging.md).

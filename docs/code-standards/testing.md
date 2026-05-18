@@ -6,8 +6,14 @@
 - **Must** mock true external SDK and native boundaries such as Clerk hooks, native auth/browser/storage modules, PostHog sinks, and platform APIs.
 - **Must** not mock local product behavior that can run deterministically in tests.
 - **Must** use local isolated libSQL database helpers for database behavior instead of running migrations against configured environments.
+- **Must** test loading, ready, empty, error, and retry states for route-owned data hooks or containers.
+- **Must** test stale async responses, cancellation, or unmount cleanup when a hook or container owns async lifecycle.
+- **Must** test user actions through visible behavior and accessibility queries, not implementation state.
+- **Must** test Zod boundary failures for new schemas that protect runtime input.
 - **Should** prefer integration-style tests for Household, Member, Owner, Invitation, List, Item, auth, analytics/logging contract, and sync behavior.
 - **Should** use focused unit tests for pure helpers and narrow adapters.
+- **Should** test state machines through their discriminated variants rather than boolean combinations.
+- **Avoid** snapshot-only tests for components with meaningful behavior.
 
 See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 
