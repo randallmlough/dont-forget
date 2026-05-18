@@ -21,10 +21,13 @@
 - **Should** use `useMemo` only for measured or credible expensive pure derivation, list row boundaries, context values whose identity is part of the API, or third-party/native APIs that require stable references.
 - **Should** keep reducers pure and test them directly when they encode meaningful product behavior.
 - **Should** name state transition actions by domain or user intent, such as `itemAddedOptimistically`, `refreshFailed`, or `invitationAccepted`, not setter mechanics.
+- **Should** prefer past-tense reducer transition names for completed events or observed outcomes, such as `itemAddedOptimistically`, `refreshFailed`, or `invitationAccepted`.
+- **Should** use imperative names for command functions called by UI, such as `addItem`, `refresh`, or `acceptInvitation`.
 - **Avoid** mirroring props, derived booleans, counts, or filtered arrays into state unless there is a real persistence or interaction boundary.
 - **Avoid** `useState` plus `useEffect` pairs where the effect only recalculates a value from other React state.
 - **Avoid** scattered `setState` calls across async branches when they represent one logical transition.
 - **Avoid** reducers for simple independent booleans or text inputs.
+- **Avoid** reducer transitions like `setLoading`, `setError`, `updateData`, or `handleSuccess` when a domain outcome is known.
 
 ## Effects
 

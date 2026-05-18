@@ -19,6 +19,12 @@ import {
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
+import {
+	type ActiveListTransition,
+	activeListReducer,
+	initialActiveListModel,
+} from "@/components/active-list/active-list-state";
+
 export type ActiveListItem = {
 	id: string;
 	name: string;
@@ -73,28 +79,19 @@ function ActiveListProvider({
 	adapter,
 	children,
 }: ActiveListProviderProps) {
-	const [state, setState] = useState<ActiveListState>(initialState);
-	const [errorMessage, setErrorMessage] = useState<string | null>(null);
-	const [isRefreshing, setIsRefreshing] = useState(false);
+	const [model, setModel] = useState(() =>
+		initialActiveListModel(initialState),
+	);
 	const mounted = useRef(true);
 	const nextItemNumber = useRef(initialState.items.length + 1);
-	const stateRef = useRef(initialState);
+	const modelRef = useRef(model);
 
-	const replaceState = useCallback((nextState: ActiveListState) => {
+	const transition = useCallback((nextTransition: ActiveListTransition) => {
 		if (!mounted.current) return;
-		stateRef.current = nextState;
-		setState(nextState);
+		const nextModel = activeListReducer(modelRef.current, nextTransition);
+		modelRef.current = nextModel;
+		setModel(nextModel);
 	}, []);
-
-	const updateState = useCallback(
-		(updater: (previous: ActiveListState) => ActiveListState) => {
-			if (!mounted.current) return;
-			const nextState = updater(stateRef.current);
-			stateRef.current = nextState;
-			setState(nextState);
-		},
-		[],
-	);
 
 	useEffect(() => {
 		mounted.current = true;
@@ -106,25 +103,18 @@ function ActiveListProvider({
 
 	const loadFromAdapter = useCallback(async () => {
 		const nextState = await adapter.load();
-		replaceState(nextState);
-	}, [adapter, replaceState]);
+		transition({ type: "listLoaded", list: nextState });
+	}, [adapter, transition]);
 
 	const refresh = useCallback(async () => {
-		setIsRefreshing(true);
-		setErrorMessage(null);
+		transition({ type: "refreshRequested" });
 
 		try {
 			await loadFromAdapter();
 		} catch {
-			if (mounted.current) {
-				setErrorMessage("Unable to refresh this List. Please try again.");
-			}
-		} finally {
-			if (mounted.current) {
-				setIsRefreshing(false);
-			}
+			transition({ type: "refreshFailed" });
 		}
-	}, [loadFromAdapter]);
+	}, [loadFromAdapter, transition]);
 
 	const addItem = useCallback(
 		async (rawName: string) => {
@@ -139,65 +129,47 @@ function ActiveListProvider({
 			};
 			nextItemNumber.current += 1;
 
-			updateState((previous) => ({
-				...previous,
-				items: [...previous.items, item],
-			}));
+			transition({ type: "itemAddedOptimistically", item });
 
 			try {
 				const persistedItem = await adapter.addItem(name);
-				updateState((previous) => ({
-					...previous,
-					items: previous.items.map((existing) =>
-						existing.id === item.id ? persistedItem : existing,
-					),
-				}));
-				if (mounted.current) {
-					setErrorMessage(null);
-				}
+				transition({
+					type: "itemAddPersisted",
+					pendingItemId: item.id,
+					item: persistedItem,
+				});
 			} catch {
-				if (mounted.current) {
-					setErrorMessage("Unable to save that Item. The List was refreshed.");
-				}
+				transition({ type: "itemAddFailed" });
 				await loadFromAdapter().catch(() => undefined);
 			}
 		},
-		[adapter, loadFromAdapter, updateState],
+		[adapter, loadFromAdapter, transition],
 	);
 
 	const toggleItem = useCallback(
 		async (itemId: string) => {
-			const target = stateRef.current.items.find((item) => item.id === itemId);
+			const target = modelRef.current.list.items.find(
+				(item) => item.id === itemId,
+			);
 			if (!target) return;
 
 			const checked = !target.checked;
-			updateState((previous) => ({
-				...previous,
-				items: previous.items.map((item) => {
-					if (item.id !== itemId) return item;
-					return {
-						...item,
-						checked,
-						checkedByMemberName: checked ? currentMemberName : null,
-					};
-				}),
-			}));
+			transition({
+				type: "itemToggledOptimistically",
+				itemId,
+				checked,
+				checkedByMemberName: checked ? currentMemberName : null,
+			});
 
 			try {
 				await adapter.setItemChecked(itemId, checked);
-				if (mounted.current) {
-					setErrorMessage(null);
-				}
+				transition({ type: "itemTogglePersisted" });
 			} catch {
-				if (mounted.current) {
-					setErrorMessage(
-						"Unable to save that change. The List was refreshed.",
-					);
-				}
+				transition({ type: "itemToggleFailed" });
 				await loadFromAdapter().catch(() => undefined);
 			}
 		},
-		[adapter, currentMemberName, loadFromAdapter, updateState],
+		[adapter, currentMemberName, loadFromAdapter, transition],
 	);
 
 	const actions = useMemo<ActiveListActions>(
@@ -205,12 +177,16 @@ function ActiveListProvider({
 		[addItem, refresh, toggleItem],
 	);
 	const meta = useMemo<ActiveListMeta>(
-		() => ({ currentMemberName, errorMessage, isRefreshing }),
-		[currentMemberName, errorMessage, isRefreshing],
+		() => ({
+			currentMemberName,
+			errorMessage: model.errorMessage,
+			isRefreshing: model.isRefreshing,
+		}),
+		[currentMemberName, model.errorMessage, model.isRefreshing],
 	);
 	const value = useMemo<ActiveListContextValue>(
-		() => ({ state, actions, meta }),
-		[actions, meta, state],
+		() => ({ state: model.list, actions, meta }),
+		[actions, meta, model.list],
 	);
 
 	return (
