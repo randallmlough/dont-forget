@@ -1,15 +1,16 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
 import { ActiveList } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
+import { clearCachedHouseholdSession } from "@/lib/app/offline-bootstrap-cache";
 import {
 	type HomeContentState,
-	useHomeBootstrap,
-} from "@/screens/home/use-home-bootstrap";
+	useHomeContent,
+} from "@/screens/home/use-home-content";
 
 export type HomeScreenViewProps = {
 	currentMemberName: string;
@@ -21,24 +22,34 @@ export type HomeScreenViewProps = {
 export default function HomeScreen() {
 	const { getToken, isLoaded, isSignedIn, signOut } = useAuth();
 	const { user } = useUser();
-	const homeBootstrap = useHomeBootstrap({
-		isAuthLoaded: isLoaded,
-		isSignedIn,
-		getToken: () => getToken(),
+	const signingOutRef = useRef(false);
+	const { content, retry } = useHomeContent({
+		getToken,
+		isLoaded,
+		isSignedIn: Boolean(isSignedIn),
+		signingOutRef,
 	});
-	const currentMemberName = memberName(homeBootstrap.state, user);
 
-	function onSignOut() {
+	const currentMemberName = memberName(content, user);
+
+	async function onSignOut() {
+		if (signingOutRef.current) return;
+		signingOutRef.current = true;
+
 		track("user_signed_out", {});
 		reset();
-		void signOut();
+		if (content.status === "ready") {
+			await content.adapter.close();
+		}
+		await clearCachedHouseholdSession();
+		await signOut();
 	}
 
 	return (
 		<HomeScreenView
 			currentMemberName={currentMemberName}
-			content={homeBootstrap.state}
-			onRetry={homeBootstrap.actions.retry}
+			content={content}
+			onRetry={retry}
 			onSignOut={onSignOut}
 		/>
 	);

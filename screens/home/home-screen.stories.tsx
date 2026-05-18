@@ -107,6 +107,7 @@ function storyAdapter(
 	let nextItem = initialList.items.length + 1;
 
 	return {
+		syncAuthorized: true,
 		async load() {
 			return state;
 		},
@@ -134,6 +135,12 @@ function storyAdapter(
 						: item,
 				),
 			};
+		},
+		async pull() {
+			return { changed: false };
+		},
+		async sync() {
+			return { changed: false };
 		},
 		async close() {},
 	};

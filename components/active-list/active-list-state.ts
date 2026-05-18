@@ -1,13 +1,22 @@
-import type { ActiveListItem, ActiveListState } from "@/components/active-list";
+import type {
+	ActiveListItem,
+	ActiveListState,
+	ActiveListSyncState,
+} from "@/components/active-list";
 
 export type ActiveListModel = {
 	list: ActiveListState;
 	errorMessage: string | null;
 	isRefreshing: boolean;
+	syncState: ActiveListSyncState;
 };
 
 export type ActiveListTransition =
 	| { type: "listLoaded"; list: ActiveListState }
+	| { type: "syncUnavailable" }
+	| { type: "syncStarted" }
+	| { type: "syncSucceeded" }
+	| { type: "syncFailed" }
 	| { type: "refreshRequested" }
 	| { type: "refreshFailed" }
 	| { type: "itemAddedOptimistically"; item: ActiveListItem }
@@ -24,11 +33,13 @@ export type ActiveListTransition =
 
 export function initialActiveListModel(
 	initialList: ActiveListState,
+	syncState: ActiveListSyncState,
 ): ActiveListModel {
 	return {
 		list: initialList,
 		errorMessage: null,
 		isRefreshing: false,
+		syncState,
 	};
 }
 
@@ -39,6 +50,14 @@ export function activeListReducer(
 	switch (transition.type) {
 		case "listLoaded":
 			return { ...model, list: transition.list, isRefreshing: false };
+		case "syncUnavailable":
+			return { ...model, syncState: "offline" };
+		case "syncStarted":
+			return { ...model, syncState: "pending" };
+		case "syncSucceeded":
+			return { ...model, syncState: "synced" };
+		case "syncFailed":
+			return { ...model, syncState: "failed" };
 		case "refreshRequested":
 			return { ...model, errorMessage: null, isRefreshing: true };
 		case "refreshFailed":

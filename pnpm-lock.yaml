@@ -59,6 +59,9 @@ importers:
       '@storybook/react-native':
         specifier: ^10.4.1
         version: 10.4.1(f7a11e1b04aea8a3024d198c9cfd9706)
+      '@tursodatabase/sync-react-native':
+        specifier: ^0.6.0
+        version: 0.6.0(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)(utf-8-validate@6.0.6))(react@19.2.0)
       babel-loader:
         specifier: ^8.4.1
         version: 8.4.1(@babel/core@7.29.0)(webpack@5.106.2(esbuild@0.27.7))
@@ -83,6 +86,9 @@ importers:
       expo-crypto:
         specifier: ~55.0.15
         version: 55.0.15(expo@55.0.24)
+      expo-file-system:
+        specifier: ~55.0.20
+        version: 55.0.20(expo@55.0.24)(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)(utf-8-validate@6.0.6))
       expo-font:
         specifier: ~55.0.7
         version: 55.0.7(expo@55.0.24)(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)(utf-8-validate@6.0.6))(react@19.2.0)
@@ -2562,6 +2568,13 @@ packages:
   '@tootallnate/once@2.0.1':
     resolution: {integrity: sha512-HqmEUIGRJ5fSXchkVgR5F7qn48bDBzv0kWj/Kfu5e6uci4UlEeng4331LnBkWffb++Ei3FOVLxo8JJWMFBDMeQ==}
     engines: {node: '>= 10'}
+
+  '@tursodatabase/sync-react-native@0.6.0':
+    resolution: {integrity: sha512-yScUtS9l3gxwKWgUECrSRych+/0bwx9IJDhWJnbkIB/cw23fO8A3AUeTv+zNp3rwAverOHtY2ezqXZg9Lk7tEA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-native: '>=0.76.0'
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -9908,6 +9921,12 @@ snapshots:
       tmcp: 1.19.3(typescript@5.9.3)
 
   '@tootallnate/once@2.0.1': {}
+
+  '@tursodatabase/sync-react-native@0.6.0(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)(utf-8-validate@6.0.6))(react@19.2.0)':
+    dependencies:
+      '@babel/runtime': 7.29.2
+      react: 19.2.0
+      react-native: 0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)(utf-8-validate@6.0.6)
 
   '@tybys/wasm-util@0.10.1':
     dependencies:

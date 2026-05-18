@@ -1,0 +1,305 @@
+import { logger } from "@/lib/logger";
+
+export type HouseholdSqlValue = string | number | null | ArrayBuffer;
+
+export type HouseholdSqlStatement =
+	| string
+	| {
+			sql: string;
+			args?: HouseholdSqlValue[];
+	  };
+
+export type HouseholdSqlResult = {
+	rows: Array<Record<string, unknown>>;
+	rowsAffected: number;
+	lastInsertRowId: number | null;
+};
+
+export type HouseholdSyncResult = {
+	changed: boolean;
+};
+
+export type HouseholdDb = {
+	path: string;
+	syncAuthorized: boolean;
+	execute: (statement: HouseholdSqlStatement) => Promise<HouseholdSqlResult>;
+	push: () => Promise<void>;
+	pull: () => Promise<HouseholdSyncResult>;
+	sync: () => Promise<HouseholdSyncResult>;
+	close: () => Promise<void>;
+	deleteLocalData: () => Promise<void>;
+};
+
+export type HouseholdDatabaseConfig = {
+	url?: string | null;
+	authToken?: string | null;
+	expiresAt?: number | null;
+};
+
+export type OpenHouseholdDbConfig = {
+	householdId: string;
+	database: HouseholdDatabaseConfig;
+};
+
+type TursoDatabaseOptions = {
+	path: string;
+	url?: string;
+	authToken?: string;
+	clientName?: string;
+	bootstrapIfEmpty?: boolean;
+};
+
+type TursoBindParam = HouseholdSqlValue | HouseholdSqlValue[];
+
+type TursoDatabase = {
+	connect: () => Promise<void>;
+	all: (
+		sql: string,
+		...params: TursoBindParam[]
+	) => Promise<Array<Record<string, unknown>>>;
+	run: (
+		sql: string,
+		...params: TursoBindParam[]
+	) => Promise<{ changes: number; lastInsertRowid: number }>;
+	push: () => Promise<void>;
+	pull: () => Promise<boolean>;
+	close: () => void | Promise<void>;
+};
+
+export type TursoHouseholdDbRuntime = {
+	Database: new (options: TursoDatabaseOptions) => TursoDatabase;
+	getDbPath: (filename: string) => string;
+};
+
+type HouseholdDbFileSystem = {
+	deleteFilesWithPrefix: (path: string) => Promise<void>;
+};
+
+type OpenHouseholdDbOptions = {
+	runtime?: TursoHouseholdDbRuntime;
+	fileSystem?: HouseholdDbFileSystem;
+};
+
+const HOUSEHOLD_DB_CLIENT_NAME = "dont-forget-household-db";
+
+export async function openHouseholdDb(
+	config: OpenHouseholdDbConfig,
+	options: OpenHouseholdDbOptions = {},
+): Promise<HouseholdDb> {
+	const runtime = options.runtime ?? (await loadTursoRuntime());
+	const fileSystem = options.fileSystem ?? defaultHouseholdDbFileSystem;
+	const path = runtime.getDbPath(householdDbFilename(config.householdId));
+	const syncAuthorized = Boolean(
+		config.database.url && config.database.authToken,
+	);
+	const log = logger.with({
+		household_id: config.householdId,
+		sync_authorized: syncAuthorized,
+	});
+	const database = new runtime.Database({
+		path,
+		clientName: HOUSEHOLD_DB_CLIENT_NAME,
+		bootstrapIfEmpty: syncAuthorized,
+		...(syncAuthorized
+			? {
+					url: config.database.url ?? undefined,
+					authToken: config.database.authToken ?? undefined,
+				}
+			: {}),
+	});
+	let closed = false;
+
+	try {
+		await database.connect();
+	} catch (error) {
+		log.error("household db connect failed", { error: asError(error) });
+		throw error;
+	}
+
+	async function close() {
+		if (closed) return;
+		closed = true;
+		try {
+			await database.close();
+		} catch (error) {
+			log.error("household db close failed", { error: asError(error) });
+			throw error;
+		}
+	}
+
+	return {
+		path,
+		syncAuthorized,
+		async execute(statement) {
+			const { sql, args } = normalizeStatement(statement);
+			if (isReadStatement(sql)) {
+				try {
+					const rows = await database.all(sql, args);
+					return { rows, rowsAffected: 0, lastInsertRowId: null };
+				} catch (error) {
+					log.error("household db query failed", { error: asError(error) });
+					throw error;
+				}
+			}
+
+			try {
+				const result = await database.run(sql, args);
+				return {
+					rows: [],
+					rowsAffected: result.changes,
+					lastInsertRowId: result.lastInsertRowid,
+				};
+			} catch (error) {
+				log.error("household db write failed", { error: asError(error) });
+				throw error;
+			}
+		},
+		async push() {
+			try {
+				await database.push();
+			} catch (error) {
+				log.error("household db push failed", { error: asError(error) });
+				throw error;
+			}
+		},
+		async pull() {
+			try {
+				return { changed: await database.pull() };
+			} catch (error) {
+				log.error("household db pull failed", { error: asError(error) });
+				throw error;
+			}
+		},
+		async sync() {
+			try {
+				const changedBeforePush = await database.pull();
+				await database.push();
+				const changedAfterPush = await database.pull();
+				return { changed: changedBeforePush || changedAfterPush };
+			} catch (error) {
+				log.error("household db sync failed", { error: asError(error) });
+				throw error;
+			}
+		},
+		close,
+		async deleteLocalData() {
+			try {
+				await close();
+				await deleteLocalHouseholdDbData(config.householdId, {
+					runtime,
+					fileSystem,
+				});
+			} catch (error) {
+				log.error("household db local delete failed", {
+					error: asError(error),
+				});
+				throw error;
+			}
+		},
+	};
+}
+
+export async function deleteLocalHouseholdDbData(
+	householdId: string,
+	options: OpenHouseholdDbOptions = {},
+): Promise<void> {
+	const runtime = options.runtime ?? (await loadTursoRuntime());
+	const fileSystem = options.fileSystem ?? defaultHouseholdDbFileSystem;
+	const path = runtime.getDbPath(householdDbFilename(householdId));
+
+	await fileSystem.deleteFilesWithPrefix(path);
+}
+
+function asError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
+}
+
+export function householdDbFilename(householdId: string): string {
+	if (!/^[A-Za-z0-9_-]+$/.test(householdId)) {
+		throw new Error("Household ID cannot be used as a local DB filename");
+	}
+
+	return `household-${householdId}.db`;
+}
+
+function normalizeStatement(statement: HouseholdSqlStatement): {
+	sql: string;
+	args: HouseholdSqlValue[];
+} {
+	if (typeof statement === "string") {
+		return { sql: statement, args: [] };
+	}
+
+	return { sql: statement.sql, args: statement.args ?? [] };
+}
+
+function isReadStatement(sql: string): boolean {
+	const normalized = sql.trimStart().toLowerCase();
+	return (
+		normalized.startsWith("select") ||
+		normalized.startsWith("with") ||
+		normalized.startsWith("pragma")
+	);
+}
+
+async function loadTursoRuntime(): Promise<TursoHouseholdDbRuntime> {
+	const turso = await import("@tursodatabase/sync-react-native");
+	return { Database: turso.Database, getDbPath: turso.getDbPath };
+}
+
+const defaultHouseholdDbFileSystem: HouseholdDbFileSystem = {
+	async deleteFilesWithPrefix(path) {
+		const fileSystem = await import("expo-file-system/legacy");
+		const directoryPath = nativeDirectoryPath(path);
+		const filename = nativeBasename(path);
+		const directoryUri = nativePathToFileUri(directoryPath);
+		const entries = await readDirectoryOrFallback(
+			fileSystem.readDirectoryAsync,
+			directoryUri,
+			filename,
+		);
+
+		await Promise.all(
+			entries
+				.filter(
+					(entry) => entry === filename || entry.startsWith(`${filename}-`),
+				)
+				.map((entry) =>
+					fileSystem.deleteAsync(
+						nativePathToFileUri(`${directoryPath}${entry}`),
+						{ idempotent: true },
+					),
+				),
+		);
+	},
+};
+
+async function readDirectoryOrFallback(
+	readDirectoryAsync: (uri: string) => Promise<string[]>,
+	directoryUri: string,
+	filename: string,
+): Promise<string[]> {
+	try {
+		return await readDirectoryAsync(directoryUri);
+	} catch {
+		return [filename, `${filename}-info`, `${filename}-wal`, `${filename}-shm`];
+	}
+}
+
+function nativeDirectoryPath(path: string): string {
+	const index = path.lastIndexOf("/");
+	if (index < 0) {
+		throw new Error("Household DB path must include a directory");
+	}
+
+	return path.slice(0, index + 1);
+}
+
+function nativeBasename(path: string): string {
+	const index = path.lastIndexOf("/");
+	return index < 0 ? path : path.slice(index + 1);
+}
+
+function nativePathToFileUri(path: string): string {
+	return path.startsWith("file://") ? path : `file://${path}`;
+}

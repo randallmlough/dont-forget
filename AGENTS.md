@@ -26,7 +26,7 @@ This is a single-context repo with one root `CONTEXT.md` and root `docs/adr/`. S
 - CI runs Node 22 and `pnpm@10.11.0`. Prefer `make` targets; if invoking package scripts directly, use `pnpm`, never the README's `npm` or `npx` examples.
 - Install: `pnpm install` locally; CI uses `pnpm install --frozen-lockfile`.
 - App dev: `make start`, `make ios`. Android and Web are unsupported targets; do not preserve Android/Web compatibility unless the platform policy changes.
-- Standard TS/TSX proof: `make verify` runs `typecheck -> biome-check -> lint -> test-ci`. Full CI parity: `make ci` adds Expo package check, public config resolution, and high-severity audit.
+- Standard TS/TSX proof: `make verify` runs `typecheck -> biome-check -> eslint-rules -> lint -> test-ci`. Full CI parity: `make ci` adds Expo package check, public config resolution, and high-severity audit.
 - Focused Jest proof: `pnpm exec jest --runInBand --runTestsByPath <test-file>`; add `-t "<test name>"` for one test. `pnpm test` is watch mode.
 - Storybook: `make storybook` starts the dev server for an installed native iOS build/dev client; `make storybook-ios` builds/runs Storybook with `expo run:ios`. Do not use Expo Go for Storybook. After adding, moving, or deleting stories, run `make storybook-generate`.
 - Database: `make db-generate` runs every Drizzle config in `db/drizzle`. Run `make db-migrate APP_ENV=staging` only when intentionally applying migrations to configured Turso databases; production also requires `CONFIRM_APP_ENV=production`. Run `make db-reset APP_ENV=<env> CONFIRM_DB_RESET=<env>` only when intentionally deleting app data from the directory DB and all known Household DBs; production also requires `CONFIRM_APP_ENV=production`.

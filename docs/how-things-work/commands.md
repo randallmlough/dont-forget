@@ -16,7 +16,7 @@ App and Storybook make targets default to `APP_ENV=local` unless you pass anothe
 | `make start` | Start the Expo development server for the app. |
 | `make ios` | Build and run the app on iOS. |
 | `make storybook` | Start Storybook for an installed native iOS build/dev client. |
-| `make verify` | Run typecheck, Biome, Expo lint, and tests. |
+| `make verify` | Run typecheck, Biome, local ESLint rule tests, Expo lint, and tests. |
 | `make ci` | Run the full CI contract locally. |
 
 ## App
@@ -39,7 +39,7 @@ App and Storybook make targets default to `APP_ENV=local` unless you pass anothe
 
 | Command | Description |
 | --- | --- |
-| `make verify` | Run typecheck, Biome, Expo lint, and tests. |
+| `make verify` | Run typecheck, Biome, local ESLint rule tests, Expo lint, and tests. |
 | `make ci` | Run typecheck, Biome, Expo lint, tests, Expo checks, and high-severity dependency audit. |
 | `make typecheck` | First pass for TypeScript and TSX changes. |
 | `make biome-check` | Check Biome formatting, import organization, and lint rules. |

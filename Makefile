@@ -25,7 +25,7 @@ storybook: ## Start Storybook for the native iOS build *common*
 	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) storybook:start
 
 .PHONY: verify
-verify: typecheck biome-check lint test-ci ## Run typecheck, Biome, lint, and tests *common*
+verify: typecheck biome-check eslint-rules lint test-ci ## Run typecheck, Biome, lint, and tests *common*
 
 .PHONY: ci
 ci: verify expo-check expo-config-check audit ## Run the full CI contract *common*
@@ -53,6 +53,10 @@ typecheck: ## Run TypeScript without emitting files *common*
 .PHONY: lint
 lint: ## Run Expo lint *common*
 	@$(PNPM) lint
+
+.PHONY: eslint-rules
+eslint-rules: ## Run local ESLint rule tests *common*
+	@$(PNPM) test:eslint-rules
 
 .PHONY: biome-check
 biome-check: ## Run Biome formatting, import, and lint checks *common*

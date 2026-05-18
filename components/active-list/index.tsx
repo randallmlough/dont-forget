@@ -41,6 +41,12 @@ export type ActiveListState = {
 
 export type ActiveListInitialState = ActiveListState;
 
+export type ActiveListSyncState = "synced" | "pending" | "offline" | "failed";
+
+export type ActiveListSyncResult = {
+	changed: boolean;
+};
+
 export type ActiveListActions = {
 	addItem: (name: string) => Promise<void>;
 	toggleItem: (itemId: string) => Promise<void>;
@@ -51,12 +57,16 @@ export type ActiveListMeta = {
 	currentMemberName: string;
 	errorMessage: string | null;
 	isRefreshing: boolean;
+	syncState: ActiveListSyncState;
 };
 
 export type ActiveListDataAdapter = {
+	syncAuthorized: boolean;
 	load: () => Promise<ActiveListInitialState>;
 	addItem: (name: string) => Promise<ActiveListItem>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
+	pull: () => Promise<ActiveListSyncResult>;
+	sync: () => Promise<ActiveListSyncResult>;
 	close: () => Promise<void>;
 };
 
@@ -82,7 +92,10 @@ function ActiveListProvider({
 }: ActiveListProviderProps) {
 	const logger = useLogger();
 	const [model, setModel] = useState(() =>
-		initialActiveListModel(initialState),
+		initialActiveListModel(
+			initialState,
+			adapter.syncAuthorized ? "synced" : "offline",
+		),
 	);
 	const mounted = useRef(true);
 	const nextItemNumber = useRef(initialState.items.length + 1);
@@ -97,27 +110,69 @@ function ActiveListProvider({
 
 	useEffect(() => {
 		mounted.current = true;
+		transition({
+			type: adapter.syncAuthorized ? "syncSucceeded" : "syncUnavailable",
+		});
 		return () => {
 			mounted.current = false;
 			void adapter.close();
 		};
-	}, [adapter]);
+	}, [adapter, transition]);
 
 	const loadFromAdapter = useCallback(async () => {
 		const nextState = await adapter.load();
 		transition({ type: "listLoaded", list: nextState });
 	}, [adapter, transition]);
 
+	const syncLatest = useCallback(async () => {
+		if (!adapter.syncAuthorized) {
+			transition({ type: "syncUnavailable" });
+			await loadFromAdapter();
+			return;
+		}
+
+		transition({ type: "syncStarted" });
+
+		try {
+			await adapter.sync();
+			await loadFromAdapter();
+			transition({ type: "syncSucceeded" });
+		} catch (error) {
+			transition({ type: "syncFailed" });
+			throw error;
+		}
+	}, [adapter, loadFromAdapter, transition]);
+
+	const syncAfterLocalWrite = useCallback(async () => {
+		if (!adapter.syncAuthorized) {
+			transition({ type: "syncUnavailable" });
+			return;
+		}
+
+		transition({ type: "syncStarted" });
+
+		try {
+			const result = await adapter.sync();
+			if (result.changed) {
+				await loadFromAdapter();
+			}
+			transition({ type: "syncSucceeded" });
+		} catch (error) {
+			logger.error("active list sync failed", { error });
+			transition({ type: "syncFailed" });
+		}
+	}, [adapter, loadFromAdapter, logger, transition]);
+
 	const refresh = useCallback(async () => {
 		transition({ type: "refreshRequested" });
 
 		try {
-			await loadFromAdapter();
+			await syncLatest();
 		} catch (error) {
 			logger.error("active list refresh failed", { error });
 			transition({ type: "refreshFailed" });
 		}
-	}, [loadFromAdapter, logger, transition]);
+	}, [logger, syncLatest, transition]);
 
 	const addItem = useCallback(
 		async (rawName: string) => {
@@ -141,13 +196,14 @@ function ActiveListProvider({
 					pendingItemId: item.id,
 					item: persistedItem,
 				});
+				void syncAfterLocalWrite();
 			} catch (error) {
 				logger.error("active list item add failed", { error });
 				transition({ type: "itemAddFailed" });
 				await loadFromAdapter().catch(() => undefined);
 			}
 		},
-		[adapter, loadFromAdapter, logger, transition],
+		[adapter, loadFromAdapter, logger, syncAfterLocalWrite, transition],
 	);
 
 	const toggleItem = useCallback(
@@ -168,13 +224,21 @@ function ActiveListProvider({
 			try {
 				await adapter.setItemChecked(itemId, checked);
 				transition({ type: "itemTogglePersisted" });
+				void syncAfterLocalWrite();
 			} catch (error) {
 				logger.error("active list item toggle failed", { error });
 				transition({ type: "itemToggleFailed" });
 				await loadFromAdapter().catch(() => undefined);
 			}
 		},
-		[adapter, currentMemberName, loadFromAdapter, logger, transition],
+		[
+			adapter,
+			currentMemberName,
+			loadFromAdapter,
+			logger,
+			syncAfterLocalWrite,
+			transition,
+		],
 	);
 
 	const actions = useMemo<ActiveListActions>(
@@ -186,8 +250,14 @@ function ActiveListProvider({
 			currentMemberName,
 			errorMessage: model.errorMessage,
 			isRefreshing: model.isRefreshing,
+			syncState: model.syncState,
 		}),
-		[currentMemberName, model.errorMessage, model.isRefreshing],
+		[
+			currentMemberName,
+			model.errorMessage,
+			model.isRefreshing,
+			model.syncState,
+		],
 	);
 	const value = useMemo<ActiveListContextValue>(
 		() => ({ state: model.list, actions, meta }),
@@ -242,11 +312,40 @@ function ActiveListHeader() {
 			</View>
 			<Text style={styles.listName}>{state.listName}</Text>
 			<Text style={styles.progressLabel}>{progressLabel}</Text>
+			<Text style={[styles.syncStatus, syncStatusStyle(meta.syncState)]}>
+				{syncStatusLabel(meta.syncState)}
+			</Text>
 			{meta.errorMessage ? (
 				<Text style={styles.errorMessage}>{meta.errorMessage}</Text>
 			) : null}
 		</View>
 	);
+}
+
+function syncStatusLabel(syncState: ActiveListSyncState): string {
+	switch (syncState) {
+		case "synced":
+			return "Synced";
+		case "pending":
+			return "Pending sync";
+		case "offline":
+			return "Offline - changes saved locally";
+		case "failed":
+			return "Sync failed - changes saved locally";
+	}
+}
+
+function syncStatusStyle(syncState: ActiveListSyncState) {
+	switch (syncState) {
+		case "synced":
+			return styles.syncStatusSynced;
+		case "pending":
+			return styles.syncStatusPending;
+		case "failed":
+			return styles.syncStatusFailed;
+		case "offline":
+			return undefined;
+	}
 }
 
 function ActiveListItems() {
@@ -435,6 +534,19 @@ const styles = StyleSheet.create((theme) => ({
 	progressLabel: {
 		...theme.typography.callout,
 		color: theme.colors.textMuted,
+	},
+	syncStatus: {
+		...theme.typography.captionStrong,
+		color: theme.colors.textMuted,
+	},
+	syncStatusSynced: {
+		color: theme.colors.primary,
+	},
+	syncStatusPending: {
+		color: theme.colors.link,
+	},
+	syncStatusFailed: {
+		color: theme.colors.destructive,
 	},
 	errorMessage: {
 		fontSize: theme.fontSizes.footnote,

@@ -4,7 +4,7 @@
 
 `app/api/bootstrap+api.ts` lazy-loads server-only modules inside `POST` to prevent native Expo Router route registration from evaluating database, auth, and bootstrap imports during iOS bundling.
 
-This is separate from the op-sqlite app-side Household sync effort. op-sqlite can replace native app Household DB access, but it does not change how Expo API Route modules are discovered or bundled.
+This is separate from the app-side native Household sync effort. The Turso React Native Household DB wrapper can replace native app Household DB access, but it does not change how Expo API Route modules are discovered or bundled.
 
 ## Why This Is Debt
 
@@ -12,7 +12,7 @@ The lazy import pattern makes the route harder to read and test. It also hides t
 
 ## Revisit When
 
-- App-side op-sqlite Household sync is proven separately.
+- App-side Turso React Native Household sync is proven separately.
 - Expo Router/API Route bundling behavior has been re-tested on the current SDK.
 - Server Drizzle/libSQL imports can use explicit server-safe entrypoints without Metro/Jest package-root remapping.
 

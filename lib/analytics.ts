@@ -55,7 +55,7 @@ export function screen(name: string, properties: ScreenProperties = {}): void {
 /**
  * Auto-syncs the canonical user identity (Clerk `user.id`) and traits to the
  * analytics provider whenever Clerk's user object changes. Call once from
- * `RootLayout`, inside `<ClerkLoaded>`. Replaces hand-rolled `identify(...)`
+ * `RootLayout` after `ClerkProvider` is mounted. Replaces hand-rolled `identify(...)`
  * calls scattered across auth screens.
  *
  * `$set` traits update on every change. `$set_once` only ever sets the field

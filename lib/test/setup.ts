@@ -50,6 +50,12 @@ jest.mock("expo-secure-store", () => ({
 	setItemAsync: jest.fn(),
 }));
 
+jest.mock("@react-native-async-storage/async-storage", () => ({
+	getItem: jest.fn(),
+	setItem: jest.fn(),
+	removeItem: jest.fn(),
+}));
+
 jest.mock("expo-web-browser", () => ({
 	maybeCompleteAuthSession: jest.fn(),
 	warmUpAsync: jest.fn(),
