@@ -2,6 +2,7 @@
 const { defineConfig } = require("eslint/config");
 const expoConfig = require("eslint-config-expo/flat");
 const reactNativeA11y = require("eslint-plugin-react-native-a11y");
+const dontForget = require("./tools/eslint-rules");
 
 module.exports = defineConfig([
 	expoConfig,
@@ -10,9 +11,11 @@ module.exports = defineConfig([
 	},
 	{
 		plugins: {
+			"dont-forget": dontForget,
 			"react-native-a11y": reactNativeA11y,
 		},
 		rules: {
+			"dont-forget/no-screen-use-effect": "error",
 			"react-hooks/exhaustive-deps": "error",
 			"@typescript-eslint/no-unused-vars": "error",
 			"@typescript-eslint/consistent-type-assertions": [

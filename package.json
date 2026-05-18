@@ -15,6 +15,7 @@
 		"lint": "expo lint",
 		"test": "jest --watch",
 		"test:ci": "jest --runInBand",
+		"test:eslint-rules": "node tools/eslint-rules/no-screen-use-effect.test.js",
 		"test:coverage": "jest --coverage --runInBand",
 		"typecheck": "tsc --noEmit",
 		"db:generate": "tsx db/generate.ts",
