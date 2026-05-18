@@ -171,6 +171,46 @@ describe("HomeScreen", () => {
     expect(saveCachedBootstrapMetadata).not.toHaveBeenCalled();
   });
 
+  it("reopens cached local List data when Clerk reports signed out during offline relaunch", async () => {
+    const initialList = initialListFixture();
+    const cached = cachedBootstrapFixture();
+    jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue(
+      noopAdapter(initialList, { syncAuthorized: false }),
+    );
+    setMockAuthState({ isSignedIn: false });
+
+    render(<HomeScreen />);
+
+    await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+    expect(bootstrapWithClerk).not.toHaveBeenCalled();
+    expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
+      household: cached.activeHousehold,
+      activeMember: cached.activeMember,
+      list: cached.activeList,
+      currentUser: cached.user,
+      members: cached.members,
+      database: cached.householdDatabase,
+    });
+    expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
+  });
+
+  it("reopens cached local List data before Clerk finishes loading during offline relaunch", async () => {
+    const initialList = initialListFixture();
+    const cached = cachedBootstrapFixture();
+    jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+    jest.mocked(createHouseholdActiveListAdapter).mockReturnValue(
+      noopAdapter(initialList, { syncAuthorized: false }),
+    );
+    setMockAuthState({ isLoaded: false, isSignedIn: false });
+
+    render(<HomeScreen />);
+
+    await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+    expect(bootstrapWithClerk).not.toHaveBeenCalled();
+    expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
+  });
+
   it("discards stale cached Household metadata before opening fresh authorized data", async () => {
     const initialList = initialListFixture();
     const bootstrap = bootstrapFixture({ householdId: "hh_new", householdName: "New" });

@@ -55,8 +55,6 @@ export default function HomeScreen() {
   }, [getToken]);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-
     let cancelled = false;
     let cachedRendered = false;
     let cachedInvalidated = false;
@@ -64,7 +62,7 @@ export default function HomeScreen() {
     const pendingAdapters = new Set<ActiveListDataAdapter>();
     const closedAdapters = new Set<ActiveListDataAdapter>();
 
-    setContent({ status: "loading" });
+    setContent((current) => (current.status === "ready" ? current : { status: "loading" }));
 
     async function closeAdapter(adapter: ActiveListDataAdapter) {
       if (closedAdapters.has(adapter)) return;
@@ -159,7 +157,11 @@ export default function HomeScreen() {
     }
 
     const cachedAttempt = loadCachedHome();
-    void loadFreshHome(cachedAttempt);
+    if (isLoaded && isSignedIn) {
+      void loadFreshHome(cachedAttempt);
+    } else if (isLoaded) {
+      void showErrorIfNoListRendered(cachedAttempt);
+    }
 
     return () => {
       cancelled = true;
