@@ -15,10 +15,15 @@
 - **Must** keep Expo ESLint in the verification path until we have evidence that removing it will not lose Expo or React Native-specific lint coverage.
 - **Must** treat Biome as additive to the current Expo lint stack during the first standards pass.
 - **Must** use Biome defaults for mechanical formatting unless a later standard documents a specific override.
+- **Must** treat React hook dependency correctness, explicit TypeScript safety, and React Native accessibility diagnostics as verification failures.
+- **Must** keep `react-hooks/exhaustive-deps`, `@typescript-eslint/no-unused-vars`, `@typescript-eslint/no-non-null-assertion`, `@typescript-eslint/no-explicit-any`, `@typescript-eslint/consistent-type-assertions`, and enabled `react-native-a11y/*` rules at error severity unless a later standards decision changes that policy.
+- **Must** prefer adding ESLint enforcement for mechanical, low-false-positive standards when humans or AI agents repeatedly miss the documented rule.
 - **Should** let Biome own mechanical formatting and import organization instead of hand-formatting imports or debating whitespace in reviews.
 - **Should** provide a formatting command that applies Biome's safe formatter and import-organization fixes.
 - **Should** exclude generated files from Biome when the generator owns their shape; update the source or generator instead of hand-maintaining generated output.
 - **Must** limit Biome to supported project source and config files; bundled agent skills and generated files are not app standards targets.
+- **Should** add community ESLint plugins before custom rules when a maintained plugin enforces the same standard with low noise.
+- **Avoid** broad preset adoption from community plugins without first checking the effective config and current lint noise.
 
 ## Import Paths
 

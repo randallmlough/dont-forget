@@ -283,6 +283,7 @@ function ActiveListAddItemForm() {
 	return (
 		<View style={styles.addForm}>
 			<TextInput
+				accessibilityLabel="Item name"
 				value={name}
 				onChangeText={setName}
 				placeholder="Add an Item"
