@@ -11,6 +11,8 @@
     <ul>
       <li>Issue #15 is implemented as a behavior-preserving hard cut from the legacy app-owned Household DB wrapper names to the domain-first HouseholdStore seam under <code>lib/services/household/</code>.</li>
       <li>The native Turso sync package remains lazy-loaded inside the HouseholdStore wrapper so Jest, non-native code, and app-facing callers do not import the native module directly.</li>
+      <li><code>OpenHouseholdStoreConfig</code> accepts an optional logger dependency so tests and non-app processes can capture or route HouseholdStore diagnostics without mocking the app logger module.</li>
+      <li>The reusable logger fixture lives in <code>lib/test/mocks/logger.ts</code> so future tests can inject a scoped logger without duplicating Jest mock shape.</li>
       <li>The app-safe Household service index exports the Store seam and SQL/config types needed by current callers, while keeping test-only runtime and filename helpers out of the domain index.</li>
       <li>The Turso <code>clientName</code> string remains <code>dont-forget-household-db</code> to avoid changing native sync identity or observability during a naming-only infrastructure migration.</li>
     </ul>

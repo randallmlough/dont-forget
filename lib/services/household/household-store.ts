@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger";
+import { logger as defaultLogger, type Logger } from "@/lib/logger";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
 
@@ -39,6 +39,7 @@ export type HouseholdDatabaseConfig = {
 export type OpenHouseholdStoreConfig = {
 	householdId: string;
 	database: HouseholdDatabaseConfig;
+	logger?: Logger;
 };
 
 type TursoDatabaseOptions = {
@@ -92,7 +93,7 @@ export async function openHouseholdStore(
 	const syncAuthorized = Boolean(
 		config.database.url && config.database.authToken,
 	);
-	const log = logger.with({
+	const log = (config.logger ?? defaultLogger).with({
 		household_id: config.householdId,
 		sync_authorized: syncAuthorized,
 	});

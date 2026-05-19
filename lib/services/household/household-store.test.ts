@@ -4,6 +4,7 @@ import {
 	openHouseholdStore,
 	type TursoHouseholdStoreRuntime,
 } from "@/lib/services/household/household-store";
+import { loggerFixture } from "@/lib/test/mocks/logger";
 
 const mockLoggerError = jest.fn();
 const mockLogger = {
@@ -165,6 +166,28 @@ describe("openHouseholdStore", () => {
 				error,
 			},
 		);
+	});
+
+	it("uses an injected logger when reporting store failures", async () => {
+		const injected = loggerFixture();
+		const store = await openHouseholdStore(
+			{ ...configFixture(), logger: injected.root },
+			{ runtime, fileSystem },
+		);
+		const nativeDb = onlyInstance(instances);
+		const error = new Error("checkpoint failed");
+		nativeDb.push.mockRejectedValueOnce(error);
+
+		await expect(store.sync()).rejects.toThrow(error);
+
+		expect(injected.with).toHaveBeenCalledWith({
+			household_id: "hh_avery",
+			sync_authorized: true,
+		});
+		expect(injected.error).toHaveBeenCalledWith("household store sync failed", {
+			error,
+		});
+		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
 	it("deletes local store files by app-owned Household ID", async () => {
