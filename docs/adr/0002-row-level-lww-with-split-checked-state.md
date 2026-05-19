@@ -1,17 +1,17 @@
-# Row-level last-write-wins with `checked` state split into its own table
+# App-owned ordering with `checked` state split into its own table
 
-Concurrent edits to the same Item row could lose data under naive row-level LWW (e.g., Bob checks "milk" while Alice renames it; one of the two writes is silently overwritten). We chose **row-level LWW** as the base merge strategy because it's what libSQL's replication gives us natively, and we **split the `checked` state into a separate `item_checks` table** keyed by `(item_id, member_id)` because checking off items is by far the highest-collision field. Offline writes use device-generated monotonic timestamps for LWW; cross-device clock skew is acceptable for Household List data. All replicated tables use **tombstone-based soft-delete** (`deleted_at`) so concurrent delete + edit resolves correctly under LWW.
+Concurrent edits to the same Item row can still lose data under Turso Sync's documented **last-push-wins** transport behavior (e.g., Bob checks "milk" while Alice renames it; the later push can determine what remote state wins for overlapping row changes). We split the `checked` state into a separate `item_checks` table keyed by `(item_id, user_id)` because checking off Items is by far the highest-collision field. App writes maintain app-owned `updated_at` timestamps for ordering, latest checked-state display, recovery upserts, and future migration paths; these timestamps are not Turso's merge clock. Cross-device clock skew is acceptable for Household List data. All replicated tables use **tombstone-based soft-delete** (`deleted_at`) so app delete paths can sync and be reasoned about without hard deletes.
 
 ## Considered alternatives
 
-- **Column-level LWW** (per-column `_updated_at`, custom merge layer). Rejected: libSQL doesn't support it natively; the merge layer is significant complexity for a collision rate that, outside `checked`, is vanishingly rare on shopping-list data.
+- **Column-level custom merge** (per-column `_updated_at`, custom merge layer). Rejected: Turso Sync does not provide this as the app's default conflict strategy; the merge layer is significant complexity for a collision rate that, outside `checked`, is vanishingly rare on shopping-list data.
 - **Append-only event log.** Rejected: heaviest design shift, would change every read path. Reconsider only if "edit history" or "undo" become first-class features.
 
 ## Consequences
 
 - The `items` table holds durable attributes only (`name`, `notes`, `position`, `deleted_at`). Two Members editing those simultaneously can lose one edit — acceptable in practice for shopping-list use.
-- The visible checked state is derived from the newest `item_checks.updated_at` row for the Item across Members. If that row has non-null `checked_at`, the Item is checked; if it has null `checked_at`, the Item is unchecked. Each Member only upserts their own `(item_id, user_id)` row.
-- App writes must use a monotonic app clock rather than raw `Date.now()` so one device's timestamps never go backwards during a session or after a local clock adjustment.
-- Per-Member check state enables a free "X added this to the cart" UX hint.
+- The visible checked state is derived from the newest `item_checks.updated_at` row for the Item across Users in the Household. If that row has non-null `checked_at`, the Item is checked; if it has null `checked_at`, the Item is unchecked. Each User only upserts their own `(item_id, user_id)` row.
+- App writes should use a service-owned timestamp source rather than scattering raw `Date.now()` calls so app-owned timestamps remain consistent for display and recovery behavior.
+- Per-User check state enables a free "X added this to the cart" UX hint.
 - Tombstoned rows must be GC'd server-side (cron, ≥30 days old, after replicas have caught up) to keep DBs from growing unbounded.
 - No hard deletes from the app — every delete path writes `deleted_at` instead.

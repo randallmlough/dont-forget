@@ -8,7 +8,7 @@ This is a postmortem for the libSQL issues we hit while wiring durable Household
 
 The fix is to make the runtime explicit:
 
-- Historical app-side direct Household DB access used `@libsql/client/web`; current app-side Household DB access goes through `lib/app/household-db.ts` and `@tursodatabase/sync-react-native`.
+- Historical app-side direct Household DB access used `@libsql/client/web`; current app-side Household DB access goes through the app-owned Household DB wrapper/`HouseholdStore` and `@tursodatabase/sync-react-native`.
 - Server/API Route and migration DB clients import `@libsql/client/http` in `db/client.ts`.
 - Metro and Jest map exact package-root imports from `@libsql/client` to `@libsql/client/http` because Drizzle's libsql adapter can resolve the package root internally.
 - Expo API Route modules avoid eager server imports at module scope; `app/api/bootstrap+api.ts` lazy-loads server-only modules inside `POST`.
@@ -61,7 +61,7 @@ The previous temporary app-side Household List reads/writes lived behind a remot
 import { createClient } from "@libsql/client/web";
 ```
 
-That kept direct remote Household DB access out of components, but it was not the final local-first shape. ADR-0009 now chooses `@tursodatabase/sync-react-native` behind `lib/app/household-db.ts` as the native replacement.
+That kept direct remote Household DB access out of components, but it was not the final local-first shape. ADR-0009 chooses `@tursodatabase/sync-react-native` behind an app-owned Household DB wrapper as the native replacement; ADR-0011 names that wrapper `HouseholdStore` under the domain-first service layer.
 
 Server-side DB clients live in `db/client.ts`:
 
@@ -86,9 +86,9 @@ Finally, `app/api/bootstrap+api.ts` lazy-loads server modules inside `POST`. Tha
 ## Rules Going Forward
 
 - Do not import `@libsql/client` from product code.
-- Do not add app-side `@libsql/client/web` usage. App-side Household DB access belongs behind `lib/app/household-db.ts`.
+- Do not add app-side `@libsql/client/web` usage. App-side Household DB access belongs behind `lib/services/household/household-store.ts` after ADR-0011 migration; until migrated, use the existing app-owned Household DB wrapper only as legacy code.
 - Use `@libsql/client/http` for server/API Route, migration, and Node verification code.
-- Keep direct Household SQL behind app-owned adapters such as `lib/app/active-list-adapter.ts` so true local replica sync can replace it later.
+- Keep direct Household SQL inside domain services that depend on `HouseholdStore`. Screens, hooks, and components must not issue Household SQL directly.
 - Keep API Route files thin and lazy-load server-only dependencies inside request handlers.
 - If removing the Metro/Jest mapping, first prove Drizzle no longer resolves the package root during native export and Jest runs.
 - If removing `bootstrap+api.ts` lazy imports, treat it as a separate Expo API Route bundling proof; the native Household DB package does not make that safe by itself.
@@ -107,8 +107,9 @@ The iOS export catches native bundle leaks. The web export catches API Route bun
 
 ## Relevant Files
 
-- `lib/app/active-list-adapter.ts`
-- `lib/app/household-db.ts`
+- `lib/services/household/household-store.ts` after ADR-0011 migration
+- `lib/services/list/list-service.ts` and `lib/services/item/item-service.ts` after ADR-0011 migration
+- legacy during migration: `lib/app/active-list-adapter.ts`, `lib/app/household-db.ts`
 - `db/client.ts`
 - `app/api/bootstrap+api.ts`
 - `metro.config.js`

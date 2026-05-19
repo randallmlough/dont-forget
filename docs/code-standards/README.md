@@ -32,6 +32,7 @@ For non-trivial changes:
 - Read the relevant standards in this directory before editing.
 - Use the domain language from `CONTEXT.md` in code, tests, events, logs, and copy.
 - Keep route files thin and put screen-owned behavior in `screens/<surface>/`.
+- Put product data access in domain-first services under `lib/services/<domain>/`.
 - Use Unistyles and theme tokens for app-owned styling.
 - Validate external boundaries with Zod.
 - Update meaningful tests and Storybook stories for changed behavior or UI states.
@@ -49,6 +50,7 @@ Use this checklist before accepting human- or AI-generated React, React Native, 
 - Are related state transitions modeled by a reducer or transition helper?
 - Are TypeScript boundaries parsed or narrowed instead of asserted?
 - Are component props explicit and domain-shaped?
+- Is SQL or product data access confined to domain services?
 - Does React Native UI have accessibility role, state, labels, and real mobile behavior?
 - Are lists tested or storied with realistic data?
 - Are errors logged once at the right boundary and surfaced with recovery copy?

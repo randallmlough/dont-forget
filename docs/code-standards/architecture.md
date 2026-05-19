@@ -2,7 +2,7 @@
 
 ## Domain Language
 
-- **Must** use the domain language from `CONTEXT.md`: Household, Member, Owner, User, List, Item, Invitation, and Home.
+- **Must** use the domain language from `CONTEXT.md`: Household, Member, Owner, User, List, Item, Invitation, Home, and Household Session.
 - **Must** not introduce replacement language such as group, team, account, todo, task, invite link, dashboard, or landing page unless the glossary changes first.
 - **Should** name components, props, events, logs, and tests with product language instead of generic placeholders.
 
@@ -15,13 +15,32 @@
 - **Must** keep reusable component-owned hooks inside that component's directory when they are not app-wide APIs.
 - **Must** use route groups consistently: `app/(app)` for authenticated app routes and `app/(auth)` for signed-out auth routes.
 - **Must** not add Android or Web compatibility paths unless the platform policy changes.
-- **Should** extract app-owned behavior shared across screens or features to `lib/app/`.
-- **Should** extract server or operator behavior to `lib/server/`.
+- **Must** put new product data access in the domain-first service layer under `lib/services/<domain>/`.
+- **Must** treat top-level `lib/app/` and `lib/server/` as legacy locations. Do not add new data-access modules there; migrate touched code into `lib/services/`.
 - **Should** use `.ios.tsx` files over runtime platform branching for substantial iOS-specific implementations.
 - **Avoid** generic root `hooks/`, `utils/`, `helpers/`, or `types/` folders unless there is a documented architecture reason.
 - **Avoid** exporting internal hooks or reducers from feature entrypoints unless another feature has a real dependency on them.
 
-See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-app-structure.md) and [`docs/how-things-work/routing.md`](../how-things-work/routing.md).
+See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-app-structure.md), [`docs/how-things-work/routing.md`](../how-things-work/routing.md), [`docs/how-things-work/services.md`](../how-things-work/services.md), and [ADR-0011](../adr/0011-domain-first-service-layer.md).
+
+## Service Layer
+
+- **Must** choose the service folder by domain first: `auth`, `household`, `invitation`, `item`, `list`, `member`, or `user`.
+- **Must** use factory-based service construction with explicit dependency types: `create<Domain>Service`, `<Domain>Service`, and `<Domain>ServiceDeps`.
+- **Must** keep server-only service code under `lib/services/<domain>/server/`.
+- **Must** not add a root `lib/services/index.ts` barrel.
+- **Must** not import or export `./server` from an app-safe `lib/services/<domain>/index.ts`.
+- **Must** keep `app/api/**` server-service imports dynamic inside request handlers until a better Expo API Route bundling solution is proven.
+- **Must** enforce server-service import boundaries with the repo ESLint rule.
+- **Must** keep SQL and DB-client access inside service implementations. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
+- **Must** keep reusable component contracts UI-facing. Compose services into component data sources in the owning screen or feature layer.
+- **Must** return domain-shaped records from services, not UI component types and not raw SQL rows.
+- **Must** generate IDs inside services for newly-created domain records. Service callers and normal tests must not inject or prescribe IDs.
+- **Must** let services own production timestamp generation. A service may accept an optional `clock` only when behavior depends on timestamp ordering; normal app code should not pass it.
+- **Should** start with one service file per domain and split only when independent seams appear.
+- **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. Do not name this `*-db-service`.
+- **Should** keep List and Item services separate even when Home composes them into one Active List experience.
+- **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to screen/application composition or a dedicated sync service.
 
 ## Providers And Auth
 
@@ -40,7 +59,7 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** not perform cross-Household SQL joins.
 - **Must** write tombstones (`deleted_at`) on app delete paths for replicated data instead of hard deletes.
 - **Must** preserve `item_checks` as separate checked-state data to avoid high-collision Item conflicts.
-- **Should** keep database access behind app-owned adapters or server helpers rather than importing database clients directly into presentational UI.
+- **Must** keep database access behind domain services rather than importing database clients directly into presentational UI.
 
 ## Server And Environment Safety
 
