@@ -33,6 +33,7 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** keep `app/api/**` server-service imports dynamic inside request handlers until a better Expo API Route bundling solution is proven.
 - **Must** enforce server-service import boundaries with the repo ESLint rule.
 - **Must** keep SQL and DB-client access inside service implementations. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
+- **Must** inject logger and analytics dependencies into services and stores that need observability instead of forcing those modules to mock global singletons in tests or non-app processes.
 - **Must** keep reusable component contracts UI-facing. Compose services into component data sources in the owning screen or feature layer.
 - **Must** return domain-shaped records from services, not UI component types and not raw SQL rows.
 - **Must** generate IDs inside services for newly-created domain records. Service callers and normal tests must not inject or prescribe IDs.
@@ -77,7 +78,8 @@ See also: [`docs/how-things-work/environments.md`](../how-things-work/environmen
 - **Must** treat analytics events and property shapes as typed product contracts.
 - **Must** name analytics events by user or domain outcome, not UI implementation details.
 - **Must** track analytics from the event or action boundary that knows what happened, not from effects that infer it later.
-- **Must** send diagnostic logs through `useLogger()` in React and `logger` elsewhere.
+- **Must** send diagnostic logs through `useLogger()` in React, injected `Logger` dependencies in services/stores, and `logger` elsewhere when no caller-owned dependency seam exists.
+- **Must** pass typed analytics dependencies into services/stores that own product outcomes instead of calling PostHog directly or depending on untyped event bags.
 - **Must** pass raw `Error` instances as `{ error }` in log attributes.
 - **Must** log unexpected operational errors at the boundary where the app has enough context to explain what failed.
 - **Must** log unexpected async failures once at the boundary that has operation context.

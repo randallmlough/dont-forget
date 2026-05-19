@@ -50,6 +50,7 @@ We will organize data access through a domain-first service layer under `lib/ser
 - Domain services commit local Household writes only. Sync timing is an application/runtime policy owned by Home composition for now, or by a future Household sync service if it grows.
 - Services generate IDs internally. Service callers and normal tests must not inject or prescribe IDs for newly-created domain records, except in rare migration/fixture utilities outside normal service APIs.
 - Services own production timestamp generation internally. A service may expose an optional `clock` dependency only when behavior depends on timestamp ordering; normal app code should not pass it.
+- Services and stores accept logger and analytics dependencies when they own diagnostics or product events. They may default to the app-owned logger/analytics helpers at the service/store boundary, but tests and non-app processes should be able to inject their own observability adapters.
 
 ## Naming
 

@@ -34,6 +34,35 @@ reset();
 
 You will rarely call `identify` directly. See "Identity" below.
 
+For services and stores, pass analytics as an explicit dependency when the module owns a product outcome:
+
+```ts
+import { track } from "@/lib/analytics";
+
+type ItemServiceAnalytics = {
+  track: typeof track;
+};
+
+export type ItemServiceDeps = {
+  analytics?: ItemServiceAnalytics;
+};
+
+export function createItemService(deps: ItemServiceDeps) {
+  const analytics = deps.analytics ?? { track };
+
+  return {
+    async addItem(input: AddItemInput) {
+      const item = await addItemLocally(input);
+      // After adding item_added to EventMap.
+      analytics.track("item_added", { household_id: input.householdId });
+      return item;
+    },
+  };
+}
+```
+
+Scope the dependency to the analytics operations the service/store actually needs. Most services that emit product events only need `track`; identity and sign-out flows may need `identify` or `reset`; screen tracking usually belongs in routing/screen composition. Most infrastructure stores should not emit analytics at all unless they own a user-visible product outcome.
+
 ## Adding a new event
 
 1. **Open `lib/analytics-events.ts`** and add the event to `EventMap`:
@@ -92,6 +121,7 @@ The typed event catalog is your first line of defense — if you don't add a `pa
 ## What not to do
 
 - **Don't call `posthog.capture/identify/reset/screen` directly.** Use the abstraction — that's why it exists.
+- **Don't force service/store tests to mock `@/lib/analytics` when the module can accept an injected analytics dependency.** Use the existing module mock for UI/screen tests that import the global helpers directly.
 - **Don't add events with loose `Record<string, unknown>` properties** to escape the type check. The whole point is the schema discipline. If you genuinely need a generic event, it's almost certainly a log instead.
 - **Don't call `track` for things only you'll read once.** That's `logger.info`. Events are forever (or at least until you migrate dashboards); logs are throwaway.
 - **Don't fire events from inside render functions.** Same as logs — use event handlers and effects.

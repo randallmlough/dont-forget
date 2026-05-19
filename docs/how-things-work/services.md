@@ -83,6 +83,13 @@ This preserves the current native bundle safety behavior until a better Expo API
 Use factory-based dependency injection:
 
 ```ts
+import { track } from "@/lib/analytics";
+import { logger as defaultLogger, type Logger } from "@/lib/logger";
+
+type ItemServiceAnalytics = {
+  track: typeof track;
+};
+
 export type ItemService = {
   addItem(input: AddItemInput): Promise<Item>;
   listItems(input: ListItemsInput): Promise<Item[]>;
@@ -92,10 +99,17 @@ export type ItemService = {
 export type ItemServiceDeps = {
   householdId: string;
   store: HouseholdStore;
+  logger?: Logger;
+  analytics?: ItemServiceAnalytics;
   clock?: TimestampSource;
 };
 
 export function createItemService(deps: ItemServiceDeps): ItemService {
+  const log = (deps.logger ?? defaultLogger).with({
+    household_id: deps.householdId,
+    service: "item",
+  });
+  const analytics = deps.analytics ?? { track };
   // ...
 }
 ```
@@ -111,23 +125,38 @@ Naming conventions:
 Production call sites should stay clean:
 
 ```ts
+import { track } from "@/lib/analytics";
+import { useLogger } from "@/lib/logger";
+
+const logger = useLogger();
+const analytics = { track };
+
 const store = await openHouseholdStore({
   householdId: session.activeHousehold.id,
   database: session.householdDatabase,
+  logger,
 });
 
 const listService = createListService({
   householdId: session.activeHousehold.id,
   store,
+  logger,
+  analytics,
 });
 
 const itemService = createItemService({
   householdId: session.activeHousehold.id,
   store,
+  logger,
+  analytics,
 });
 ```
 
 Use optional dependencies sparingly. Services own production ID generation and timestamp generation. A service may accept an optional `clock` only when tests or behavior need timestamp ordering control. Normal app code should not pass it.
+
+Logger and analytics dependencies are the observability exception to that rule. Services and stores that log diagnostics or track product outcomes should accept `logger` and/or `analytics` through their dependency object or open config, then default to the app-owned implementation at the service/store boundary. This keeps tests and non-app processes from mocking global modules, while preserving app-owned redaction and typed event contracts.
+
+Scope injected analytics to the operations a service actually needs. For example, prefer `{ track: typeof track }` for a service that only emits product events, rather than a broad dependency bag with unused `identify`, `reset`, or `screen` functions. Do not inject analytics into a service or store that does not own a product outcome.
 
 Do not inject generated IDs into normal services. New domain record IDs are generated inside the service. Tests should assert ID shape and consistency, not exact random values.
 
@@ -148,9 +177,15 @@ export type HouseholdStore = {
   close(): Promise<void>;
   deleteLocalData(): Promise<void>;
 };
+
+export type OpenHouseholdStoreConfig = {
+  householdId: string;
+  database: HouseholdDatabaseConfig;
+  logger?: Logger;
+};
 ```
 
-Open one shared `HouseholdStore` for a Household workflow and inject it into the services that need it. For Home, the same store should be shared by List and Item services and closed by the Home-owned data source.
+Open one shared `HouseholdStore` for a Household workflow and inject it into the services that need it. For Home, the same store should be shared by List and Item services and closed by the Home-owned data source. `HouseholdStore` is infrastructure, so it usually logs diagnostics but should not emit product analytics unless the store itself owns a user-visible product outcome; most product events belong in the service, screen, or data-source operation that understands user intent.
 
 Defer transaction helpers until a real service operation needs them.
 
