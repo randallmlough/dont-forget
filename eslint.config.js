@@ -15,7 +15,9 @@ module.exports = defineConfig([
 			"react-native-a11y": reactNativeA11y,
 		},
 		rules: {
+			"dont-forget/no-db-imports-outside-services": "error",
 			"dont-forget/no-screen-use-effect": "error",
+			"dont-forget/no-server-service-imports": "error",
 			"react-hooks/exhaustive-deps": "error",
 			"@typescript-eslint/no-unused-vars": "error",
 			"@typescript-eslint/consistent-type-assertions": [
