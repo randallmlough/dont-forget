@@ -19,7 +19,7 @@ export type HouseholdSyncResult = {
 	changed: boolean;
 };
 
-export type HouseholdDb = {
+export type HouseholdStore = {
 	path: string;
 	syncAuthorized: boolean;
 	execute: (statement: HouseholdSqlStatement) => Promise<HouseholdSqlResult>;
@@ -36,7 +36,7 @@ export type HouseholdDatabaseConfig = {
 	expiresAt?: number | null;
 };
 
-export type OpenHouseholdDbConfig = {
+export type OpenHouseholdStoreConfig = {
 	householdId: string;
 	database: HouseholdDatabaseConfig;
 };
@@ -66,29 +66,29 @@ type TursoDatabase = {
 	close: () => void | Promise<void>;
 };
 
-export type TursoHouseholdDbRuntime = {
+export type TursoHouseholdStoreRuntime = {
 	Database: new (options: TursoDatabaseOptions) => TursoDatabase;
 	getDbPath: (filename: string) => string;
 };
 
-type HouseholdDbFileSystem = {
+type HouseholdStoreFileSystem = {
 	deleteFilesWithPrefix: (path: string) => Promise<void>;
 };
 
-type OpenHouseholdDbOptions = {
-	runtime?: TursoHouseholdDbRuntime;
-	fileSystem?: HouseholdDbFileSystem;
+type OpenHouseholdStoreOptions = {
+	runtime?: TursoHouseholdStoreRuntime;
+	fileSystem?: HouseholdStoreFileSystem;
 };
 
-const HOUSEHOLD_DB_CLIENT_NAME = "dont-forget-household-db";
+const HOUSEHOLD_STORE_CLIENT_NAME = "dont-forget-household-db";
 
-export async function openHouseholdDb(
-	config: OpenHouseholdDbConfig,
-	options: OpenHouseholdDbOptions = {},
-): Promise<HouseholdDb> {
+export async function openHouseholdStore(
+	config: OpenHouseholdStoreConfig,
+	options: OpenHouseholdStoreOptions = {},
+): Promise<HouseholdStore> {
 	const runtime = options.runtime ?? (await loadTursoRuntime());
-	const fileSystem = options.fileSystem ?? defaultHouseholdDbFileSystem;
-	const path = runtime.getDbPath(householdDbFilename(config.householdId));
+	const fileSystem = options.fileSystem ?? defaultHouseholdStoreFileSystem;
+	const path = runtime.getDbPath(householdStoreFilename(config.householdId));
 	const syncAuthorized = Boolean(
 		config.database.url && config.database.authToken,
 	);
@@ -98,7 +98,7 @@ export async function openHouseholdDb(
 	});
 	const database = new runtime.Database({
 		path,
-		clientName: HOUSEHOLD_DB_CLIENT_NAME,
+		clientName: HOUSEHOLD_STORE_CLIENT_NAME,
 		bootstrapIfEmpty: syncAuthorized,
 		...(syncAuthorized
 			? {
@@ -112,7 +112,7 @@ export async function openHouseholdDb(
 	try {
 		await database.connect();
 	} catch (error) {
-		log.error("household db connect failed", { error: asError(error) });
+		log.error("household store connect failed", { error: asError(error) });
 		throw error;
 	}
 
@@ -122,7 +122,7 @@ export async function openHouseholdDb(
 		try {
 			await database.close();
 		} catch (error) {
-			log.error("household db close failed", { error: asError(error) });
+			log.error("household store close failed", { error: asError(error) });
 			throw error;
 		}
 	}
@@ -137,7 +137,7 @@ export async function openHouseholdDb(
 					const rows = await database.all(sql, args);
 					return { rows, rowsAffected: 0, lastInsertRowId: null };
 				} catch (error) {
-					log.error("household db query failed", { error: asError(error) });
+					log.error("household store query failed", { error: asError(error) });
 					throw error;
 				}
 			}
@@ -150,7 +150,7 @@ export async function openHouseholdDb(
 					lastInsertRowId: result.lastInsertRowid,
 				};
 			} catch (error) {
-				log.error("household db write failed", { error: asError(error) });
+				log.error("household store write failed", { error: asError(error) });
 				throw error;
 			}
 		},
@@ -158,7 +158,7 @@ export async function openHouseholdDb(
 			try {
 				await database.push();
 			} catch (error) {
-				log.error("household db push failed", { error: asError(error) });
+				log.error("household store push failed", { error: asError(error) });
 				throw error;
 			}
 		},
@@ -166,7 +166,7 @@ export async function openHouseholdDb(
 			try {
 				return { changed: await database.pull() };
 			} catch (error) {
-				log.error("household db pull failed", { error: asError(error) });
+				log.error("household store pull failed", { error: asError(error) });
 				throw error;
 			}
 		},
@@ -177,7 +177,7 @@ export async function openHouseholdDb(
 				const changedAfterPush = await database.pull();
 				return { changed: changedBeforePush || changedAfterPush };
 			} catch (error) {
-				log.error("household db sync failed", { error: asError(error) });
+				log.error("household store sync failed", { error: asError(error) });
 				throw error;
 			}
 		},
@@ -185,12 +185,12 @@ export async function openHouseholdDb(
 		async deleteLocalData() {
 			try {
 				await close();
-				await deleteLocalHouseholdDbData(config.householdId, {
+				await deleteLocalHouseholdStoreData(config.householdId, {
 					runtime,
 					fileSystem,
 				});
 			} catch (error) {
-				log.error("household db local delete failed", {
+				log.error("household store local delete failed", {
 					error: asError(error),
 				});
 				throw error;
@@ -199,13 +199,13 @@ export async function openHouseholdDb(
 	};
 }
 
-export async function deleteLocalHouseholdDbData(
+export async function deleteLocalHouseholdStoreData(
 	householdId: string,
-	options: OpenHouseholdDbOptions = {},
+	options: OpenHouseholdStoreOptions = {},
 ): Promise<void> {
 	const runtime = options.runtime ?? (await loadTursoRuntime());
-	const fileSystem = options.fileSystem ?? defaultHouseholdDbFileSystem;
-	const path = runtime.getDbPath(householdDbFilename(householdId));
+	const fileSystem = options.fileSystem ?? defaultHouseholdStoreFileSystem;
+	const path = runtime.getDbPath(householdStoreFilename(householdId));
 
 	await fileSystem.deleteFilesWithPrefix(path);
 }
@@ -214,9 +214,9 @@ function asError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error));
 }
 
-export function householdDbFilename(householdId: string): string {
+export function householdStoreFilename(householdId: string): string {
 	if (!/^[A-Za-z0-9_-]+$/.test(householdId)) {
-		throw new Error("Household ID cannot be used as a local DB filename");
+		throw new Error("Household ID cannot be used as a local store filename");
 	}
 
 	return `household-${householdId}.db`;
@@ -242,12 +242,12 @@ function isReadStatement(sql: string): boolean {
 	);
 }
 
-async function loadTursoRuntime(): Promise<TursoHouseholdDbRuntime> {
+async function loadTursoRuntime(): Promise<TursoHouseholdStoreRuntime> {
 	const turso = await import("@tursodatabase/sync-react-native");
 	return { Database: turso.Database, getDbPath: turso.getDbPath };
 }
 
-const defaultHouseholdDbFileSystem: HouseholdDbFileSystem = {
+const defaultHouseholdStoreFileSystem: HouseholdStoreFileSystem = {
 	async deleteFilesWithPrefix(path) {
 		const fileSystem = await import("expo-file-system/legacy");
 		const directoryPath = nativeDirectoryPath(path);
@@ -289,7 +289,7 @@ async function readDirectoryOrFallback(
 function nativeDirectoryPath(path: string): string {
 	const index = path.lastIndexOf("/");
 	if (index < 0) {
-		throw new Error("Household DB path must include a directory");
+		throw new Error("Household store path must include a directory");
 	}
 
 	return path.slice(0, index + 1);

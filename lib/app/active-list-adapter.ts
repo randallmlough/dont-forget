@@ -5,21 +5,21 @@ import type {
 	ActiveListItem,
 	ActiveListSyncResult,
 } from "@/components/active-list";
-import {
-	type HouseholdDatabaseConfig,
-	type HouseholdDb,
-	type HouseholdSqlValue,
-	type OpenHouseholdDbConfig,
-	openHouseholdDb,
-} from "@/lib/app/household-db";
 import type { BootstrapResponse } from "@/lib/bootstrap";
 import { createAppId, type RandomUuid } from "@/lib/ids";
 import { logger } from "@/lib/logger";
+import {
+	type HouseholdDatabaseConfig,
+	type HouseholdSqlValue,
+	type HouseholdStore,
+	type OpenHouseholdStoreConfig,
+	openHouseholdStore,
+} from "@/lib/services/household";
 
-type ActiveListDb = {
+type ActiveListStore = {
 	syncAuthorized?: boolean;
 	execute: (
-		statement: Parameters<HouseholdDb["execute"]>[0],
+		statement: Parameters<HouseholdStore["execute"]>[0],
 	) => Promise<{ rows: Array<Record<string, unknown>> }>;
 	pull?: () => Promise<ActiveListSyncResult>;
 	sync?: () => Promise<ActiveListSyncResult>;
@@ -44,8 +44,8 @@ export type HouseholdActiveListAdapterConfig = {
 };
 
 type AdapterOptions = {
-	db?: ActiveListDb;
-	openDb?: (config: OpenHouseholdDbConfig) => Promise<ActiveListDb>;
+	store?: ActiveListStore;
+	openStore?: (config: OpenHouseholdStoreConfig) => Promise<ActiveListStore>;
 	openRemoteClient?: (
 		database: RequiredRemoteDatabaseConfig,
 	) => RemoteSqlClient | Promise<RemoteSqlClient>;
@@ -64,13 +64,13 @@ export function createHouseholdActiveListAdapter(
 	config: HouseholdActiveListAdapterConfig,
 	options: AdapterOptions = {},
 ): ActiveListDataAdapter {
-	const dbPromise = options.db
-		? Promise.resolve(options.db)
-		: (options.openDb ?? openHouseholdDb)({
+	const storePromise = options.store
+		? Promise.resolve(options.store)
+		: (options.openStore ?? openHouseholdStore)({
 				householdId: config.household.id,
 				database: config.database,
 			});
-	const ownsDb = !options.db;
+	const ownsStore = !options.store;
 	const now = createTimestampSource(options.now);
 	const randomUuid = options.randomUuid ?? Crypto.randomUUID;
 	const memberNames = new Map<string, string | null>();
@@ -79,8 +79,12 @@ export function createHouseholdActiveListAdapter(
 		list_id: config.list.id,
 		feature: "active_list",
 	});
-	const syncAuthorized = options.db
-		? Boolean(options.db.syncAuthorized && options.db.pull && options.db.sync)
+	const syncAuthorized = options.store
+		? Boolean(
+				options.store.syncAuthorized &&
+					options.store.pull &&
+					options.store.sync,
+			)
 		: Boolean(config.database.url && config.database.authToken);
 	let closed = false;
 
@@ -96,13 +100,13 @@ export function createHouseholdActiveListAdapter(
 		syncAuthorized,
 		async load() {
 			try {
-				const db = await dbPromise;
-				const listResult = await db.execute({
+				const store = await storePromise;
+				const listResult = await store.execute({
 					sql: "SELECT name FROM lists WHERE id = ? AND deleted_at IS NULL LIMIT 1",
 					args: [config.list.id],
 				});
 				const listName = stringColumn(listResult.rows[0]?.name, "list name");
-				const result = await db.execute({
+				const result = await store.execute({
 					sql: `
           SELECT
             i.id,
@@ -135,17 +139,17 @@ export function createHouseholdActiveListAdapter(
 		},
 		async addItem(rawName) {
 			try {
-				const db = await dbPromise;
+				const store = await storePromise;
 				const name = rawName.trim();
 				if (!name) {
 					throw new Error("Item name is required");
 				}
 
-				const position = await nextPosition(db, config.list.id);
+				const position = await nextPosition(store, config.list.id);
 				const id = createAppId("itm", randomUuid);
 				const timestamp = now();
 
-				await db.execute({
+				await store.execute({
 					sql: `
           INSERT INTO items (
             id,
@@ -177,9 +181,9 @@ export function createHouseholdActiveListAdapter(
 		},
 		async setItemChecked(itemId, checked) {
 			try {
-				const db = await dbPromise;
+				const store = await storePromise;
 				const timestamp = now();
-				await db.execute({
+				await store.execute({
 					sql: `
           INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
           VALUES (?, ?, ?, ?)
@@ -206,8 +210,8 @@ export function createHouseholdActiveListAdapter(
 			if (!syncAuthorized) return { changed: false };
 
 			try {
-				const db = await dbPromise;
-				return db.pull ? await db.pull() : { changed: false };
+				const store = await storePromise;
+				return store.pull ? await store.pull() : { changed: false };
 			} catch (error) {
 				log.error("active list pull failed", { error: asError(error) });
 				throw error;
@@ -216,14 +220,14 @@ export function createHouseholdActiveListAdapter(
 		async sync() {
 			if (!syncAuthorized) return { changed: false };
 
-			const db = await dbPromise;
+			const store = await storePromise;
 			try {
-				return db.sync ? await db.sync() : { changed: false };
+				return store.sync ? await store.sync() : { changed: false };
 			} catch (error) {
 				log.error("active list native sync failed", { error: asError(error) });
 				try {
 					await pushLocalRowsToRemote(
-						db,
+						store,
 						config.database,
 						options.openRemoteClient,
 					);
@@ -238,13 +242,13 @@ export function createHouseholdActiveListAdapter(
 			}
 		},
 		async close() {
-			if (!ownsDb || closed) return;
+			if (!ownsStore || closed) return;
 			closed = true;
-			const db = await dbPromise.catch(() => null);
+			const store = await storePromise.catch(() => null);
 			try {
-				await db?.close();
+				await store?.close();
 			} catch (error) {
-				log.error("active list db close failed", { error: asError(error) });
+				log.error("active list store close failed", { error: asError(error) });
 				throw error;
 			}
 		},
@@ -256,7 +260,7 @@ function asError(error: unknown): Error {
 }
 
 async function pushLocalRowsToRemote(
-	db: ActiveListDb,
+	store: ActiveListStore,
 	database: HouseholdDatabaseConfig,
 	openRemoteClient: (
 		database: RequiredRemoteDatabaseConfig,
@@ -272,9 +276,9 @@ async function pushLocalRowsToRemote(
 	});
 
 	try {
-		await pushLocalLists(db, remote);
-		await pushLocalItems(db, remote);
-		await pushLocalItemChecks(db, remote);
+		await pushLocalLists(store, remote);
+		await pushLocalItems(store, remote);
+		await pushLocalItemChecks(store, remote);
 	} finally {
 		remote.close?.();
 	}
@@ -285,8 +289,8 @@ async function openLibsqlRemoteClient(database: RequiredRemoteDatabaseConfig) {
 	return createClient({ url: database.url, authToken: database.authToken });
 }
 
-async function pushLocalLists(db: ActiveListDb, remote: RemoteSqlClient) {
-	const result = await db.execute({
+async function pushLocalLists(store: ActiveListStore, remote: RemoteSqlClient) {
+	const result = await store.execute({
 		sql: "SELECT id, name, created_by_user_id, created_at, updated_at, deleted_at FROM lists",
 	});
 
@@ -315,8 +319,8 @@ async function pushLocalLists(db: ActiveListDb, remote: RemoteSqlClient) {
 	}
 }
 
-async function pushLocalItems(db: ActiveListDb, remote: RemoteSqlClient) {
-	const result = await db.execute({
+async function pushLocalItems(store: ActiveListStore, remote: RemoteSqlClient) {
+	const result = await store.execute({
 		sql: "SELECT id, list_id, name, notes, position, created_by_user_id, created_at, updated_at, deleted_at FROM items",
 	});
 
@@ -351,8 +355,11 @@ async function pushLocalItems(db: ActiveListDb, remote: RemoteSqlClient) {
 	}
 }
 
-async function pushLocalItemChecks(db: ActiveListDb, remote: RemoteSqlClient) {
-	const result = await db.execute({
+async function pushLocalItemChecks(
+	store: ActiveListStore,
+	remote: RemoteSqlClient,
+) {
+	const result = await store.execute({
 		sql: "SELECT item_id, user_id, checked_at, updated_at FROM item_checks",
 	});
 
@@ -422,8 +429,11 @@ function nextMonotonicTimestamp(
 		: previousTimestamp + 1;
 }
 
-async function nextPosition(db: ActiveListDb, listId: string): Promise<number> {
-	const result = await db.execute({
+async function nextPosition(
+	store: ActiveListStore,
+	listId: string,
+): Promise<number> {
+	const result = await store.execute({
 		sql: "SELECT COALESCE(MAX(position), -1) + 1 AS position FROM items WHERE list_id = ? AND deleted_at IS NULL",
 		args: [listId],
 	});

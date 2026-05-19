@@ -1,9 +1,9 @@
 import {
-	deleteLocalHouseholdDbData,
-	householdDbFilename,
-	openHouseholdDb,
-	type TursoHouseholdDbRuntime,
-} from "@/lib/app/household-db";
+	deleteLocalHouseholdStoreData,
+	householdStoreFilename,
+	openHouseholdStore,
+	type TursoHouseholdStoreRuntime,
+} from "@/lib/services/household/household-store";
 
 const mockLoggerError = jest.fn();
 const mockLogger = {
@@ -16,9 +16,9 @@ jest.mock("@/lib/logger", () => ({
 	},
 }));
 
-describe("openHouseholdDb", () => {
+describe("openHouseholdStore", () => {
 	let instances: MockTursoDatabase[];
-	let runtime: TursoHouseholdDbRuntime;
+	let runtime: TursoHouseholdStoreRuntime;
 	let fileSystem: { deleteFilesWithPrefix: jest.Mock<Promise<void>, [string]> };
 
 	beforeEach(() => {
@@ -28,7 +28,7 @@ describe("openHouseholdDb", () => {
 			Database: class extends MockTursoDatabase {
 				constructor(
 					options: ConstructorParameters<
-						TursoHouseholdDbRuntime["Database"]
+						TursoHouseholdStoreRuntime["Database"]
 					>[0],
 				) {
 					super(options);
@@ -44,8 +44,11 @@ describe("openHouseholdDb", () => {
 		};
 	});
 
-	it("opens a synced local DB path keyed by app-owned Household ID", async () => {
-		const db = await openHouseholdDb(configFixture(), { runtime, fileSystem });
+	it("opens a synced local store path keyed by app-owned Household ID", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
 		const nativeDb = onlyInstance(instances);
 
 		expect(runtime.getDbPath).toHaveBeenCalledWith("household-hh_avery.db");
@@ -57,12 +60,12 @@ describe("openHouseholdDb", () => {
 			bootstrapIfEmpty: true,
 		});
 		expect(nativeDb.connect).toHaveBeenCalledTimes(1);
-		expect(db.path).toBe("/documents/household-hh_avery.db");
-		expect(db.syncAuthorized).toBe(true);
+		expect(store.path).toBe("/documents/household-hh_avery.db");
+		expect(store.syncAuthorized).toBe(true);
 	});
 
-	it("opens cached local DB data without remote sync credentials", async () => {
-		const db = await openHouseholdDb(
+	it("opens cached local store data without remote sync credentials", async () => {
+		const store = await openHouseholdStore(
 			{
 				householdId: "hh_avery",
 				database: {
@@ -79,17 +82,20 @@ describe("openHouseholdDb", () => {
 			clientName: "dont-forget-household-db",
 			bootstrapIfEmpty: false,
 		});
-		expect(db.syncAuthorized).toBe(false);
+		expect(store.syncAuthorized).toBe(false);
 	});
 
 	it("adapts query and write results into the app SQL result shape", async () => {
-		const db = await openHouseholdDb(configFixture(), { runtime, fileSystem });
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
 		const nativeDb = onlyInstance(instances);
 		nativeDb.allRows = [{ id: "itm_milk", position: 1 }];
 		nativeDb.runResult = { changes: 2, lastInsertRowid: 42 };
 
 		await expect(
-			db.execute({
+			store.execute({
 				sql: "SELECT id, position FROM items WHERE list_id = ?",
 				args: ["lst_groceries"],
 			}),
@@ -104,7 +110,7 @@ describe("openHouseholdDb", () => {
 		);
 
 		await expect(
-			db.execute({
+			store.execute({
 				sql: "INSERT INTO items (id, name) VALUES (?, ?)",
 				args: ["itm_eggs", "Eggs"],
 			}),
@@ -116,22 +122,25 @@ describe("openHouseholdDb", () => {
 	});
 
 	it("wraps push, pull, sync, close, and local deletion", async () => {
-		const db = await openHouseholdDb(configFixture(), { runtime, fileSystem });
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
 		const nativeDb = onlyInstance(instances);
 
 		nativeDb.pullResult = true;
-		await db.push();
-		await expect(db.pull()).resolves.toEqual({ changed: true });
+		await store.push();
+		await expect(store.pull()).resolves.toEqual({ changed: true });
 
 		nativeDb.pullResults = [true, false];
-		await expect(db.sync()).resolves.toEqual({ changed: true });
+		await expect(store.sync()).resolves.toEqual({ changed: true });
 
 		expect(nativeDb.push).toHaveBeenCalledTimes(2);
 		expect(nativeDb.pull).toHaveBeenCalledTimes(3);
 		expect(nativeDb.calls.slice(-3)).toEqual(["pull", "push", "pull"]);
 
-		await db.deleteLocalData();
-		await db.close();
+		await store.deleteLocalData();
+		await store.close();
 
 		expect(nativeDb.close).toHaveBeenCalledTimes(1);
 		expect(fileSystem.deleteFilesWithPrefix).toHaveBeenCalledWith(
@@ -140,20 +149,26 @@ describe("openHouseholdDb", () => {
 	});
 
 	it("logs native sync failures before rethrowing", async () => {
-		const db = await openHouseholdDb(configFixture(), { runtime, fileSystem });
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
 		const nativeDb = onlyInstance(instances);
 		const error = new Error("checkpoint failed");
 		nativeDb.push.mockRejectedValueOnce(error);
 
-		await expect(db.sync()).rejects.toThrow(error);
+		await expect(store.sync()).rejects.toThrow(error);
 
-		expect(mockLoggerError).toHaveBeenCalledWith("household db sync failed", {
-			error,
-		});
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			"household store sync failed",
+			{
+				error,
+			},
+		);
 	});
 
-	it("deletes local DB files by app-owned Household ID", async () => {
-		await deleteLocalHouseholdDbData("hh_avery", { runtime, fileSystem });
+	it("deletes local store files by app-owned Household ID", async () => {
+		await deleteLocalHouseholdStoreData("hh_avery", { runtime, fileSystem });
 
 		expect(runtime.getDbPath).toHaveBeenCalledWith("household-hh_avery.db");
 		expect(fileSystem.deleteFilesWithPrefix).toHaveBeenCalledWith(
@@ -162,9 +177,9 @@ describe("openHouseholdDb", () => {
 	});
 
 	it("rejects Household IDs that cannot be used as local filenames", () => {
-		expect(householdDbFilename("hh_avery")).toBe("household-hh_avery.db");
-		expect(() => householdDbFilename("../remote-db-name")).toThrow(
-			"Household ID cannot be used as a local DB filename",
+		expect(householdStoreFilename("hh_avery")).toBe("household-hh_avery.db");
+		expect(() => householdStoreFilename("../remote-db-name")).toThrow(
+			"Household ID cannot be used as a local store filename",
 		);
 	});
 });
@@ -190,7 +205,7 @@ class MockTursoDatabase {
 
 	constructor(
 		public readonly options: ConstructorParameters<
-			TursoHouseholdDbRuntime["Database"]
+			TursoHouseholdStoreRuntime["Database"]
 		>[0],
 	) {}
 }

@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-import { deleteLocalHouseholdDbData } from "@/lib/app/household-db";
 import type { BootstrapResponse } from "@/lib/bootstrap";
+import { deleteLocalHouseholdStoreData } from "@/lib/services/household";
 
 export const OFFLINE_BOOTSTRAP_CACHE_KEY = "dont-forget:offline-bootstrap:v1";
 
@@ -145,5 +144,5 @@ function storageFrom(options: CacheOptions): OfflineBootstrapStorage {
 function deleteHouseholdDataFrom(
 	options: CleanupCacheOptions,
 ): (householdId: string) => Promise<void> {
-	return options.deleteHouseholdData ?? deleteLocalHouseholdDbData;
+	return options.deleteHouseholdData ?? deleteLocalHouseholdStoreData;
 }

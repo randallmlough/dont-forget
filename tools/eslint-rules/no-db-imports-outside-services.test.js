@@ -12,7 +12,7 @@ ruleTester.run("no-db-imports-outside-services", rule, {
 	valid: [
 		{
 			filename: "/repo/lib/services/item/item-service.ts",
-			code: `import { createHouseholdStore } from "@/lib/services/household";`,
+			code: `import { openHouseholdStore } from "@/lib/services/household";`,
 		},
 		{
 			filename: "/repo/lib/services/household/household-store.ts",

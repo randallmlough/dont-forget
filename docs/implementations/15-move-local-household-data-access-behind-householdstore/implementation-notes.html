@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Move Local Household Data Access Behind HouseholdStore</title>
+</head>
+<body>
+  <h1>Implementation Notes: Move Local Household Data Access Behind HouseholdStore</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li>Issue #15 is implemented as a behavior-preserving hard cut from the legacy app-owned Household DB wrapper names to the domain-first HouseholdStore seam under <code>lib/services/household/</code>.</li>
+      <li>The native Turso sync package remains lazy-loaded inside the HouseholdStore wrapper so Jest, non-native code, and app-facing callers do not import the native module directly.</li>
+      <li>The app-safe Household service index exports the Store seam and SQL/config types needed by current callers, while keeping test-only runtime and filename helpers out of the domain index.</li>
+      <li>The Turso <code>clientName</code> string remains <code>dont-forget-household-db</code> to avoid changing native sync identity or observability during a naming-only infrastructure migration.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li>Kept this slice limited to the HouseholdStore wrapper and import migration rather than introducing ListService, ItemService, or ActiveListDataSource, because Issue #15 targets the shared infrastructure seam and explicitly asks to preserve existing Home and Active List behavior.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+</body>
+</html>

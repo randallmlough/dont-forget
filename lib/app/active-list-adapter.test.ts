@@ -1,8 +1,8 @@
 import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
-import type { HouseholdSqlStatement } from "@/lib/app/household-db";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
+import type { HouseholdSqlStatement } from "@/lib/services/household";
 
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
@@ -27,7 +27,7 @@ describe("createHouseholdActiveListAdapter", () => {
 		const pull = jest.fn(async () => ({ changed: true }));
 		const sync = jest.fn(async () => ({ changed: false }));
 		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
-			db: {
+			store: {
 				syncAuthorized: true,
 				execute: jest.fn(async () => ({ rows: [] })),
 				pull,
@@ -94,7 +94,7 @@ describe("createHouseholdActiveListAdapter", () => {
 			return { rows: [] };
 		});
 		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
-			db: {
+			store: {
 				syncAuthorized: true,
 				execute,
 				sync: jest.fn(async () => {
@@ -144,7 +144,7 @@ describe("createHouseholdActiveListAdapter", () => {
 	it("logs and rethrows when native sync and fallback both fail", async () => {
 		const fallbackError = new Error("remote unavailable");
 		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
-			db: {
+			store: {
 				syncAuthorized: true,
 				execute: jest.fn(async () => ({ rows: [] })),
 				sync: jest.fn(async () => {
@@ -182,7 +182,7 @@ describe("createHouseholdActiveListAdapter", () => {
 				: { rows: [] };
 		});
 		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
-			db: {
+			store: {
 				execute,
 				close: jest.fn(async () => undefined),
 			},
@@ -267,7 +267,7 @@ describe("createHouseholdActiveListAdapter", () => {
 					},
 				},
 				{
-					db: {
+					store: {
 						execute: household.client.execute.bind(household.client),
 						close: jest.fn(async () => undefined),
 					},
