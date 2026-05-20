@@ -101,7 +101,6 @@ export type ItemServiceDeps = {
   store: HouseholdStore;
   logger?: Logger;
   analytics?: ItemServiceAnalytics;
-  clock?: TimestampSource;
 };
 
 export function createItemService(deps: ItemServiceDeps): ItemService {
@@ -152,7 +151,7 @@ const itemService = createItemService({
 });
 ```
 
-Use optional dependencies sparingly. Services own production ID generation and timestamp generation. A service may accept an optional `clock` only when tests or behavior need timestamp ordering control. Normal app code should not pass it.
+Use optional dependencies sparingly. Services own ID generation and timestamp generation directly; do not add clock/time-provider dependencies to services. Tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary instead of introducing service dependency shape that production callers could cargo-cult.
 
 Logger and analytics dependencies are the observability exception to that rule. Services and stores that log diagnostics or track product outcomes should accept `logger` and/or `analytics` through their dependency object or open config, then default to the app-owned implementation at the service/store boundary. This keeps tests and non-app processes from mocking global modules, while preserving app-owned redaction and typed event contracts.
 
@@ -161,6 +160,8 @@ Service methods should emit informative product tracking after successful operat
 Scope injected analytics to the operations a service actually needs. For example, prefer `{ track: typeof track }` for a service that only emits product events, rather than a broad dependency bag with unused `identify`, `reset`, or `screen` functions. Do not inject analytics into a service or store that does not own a product outcome.
 
 Do not inject generated IDs into normal services. New domain record IDs are generated inside the service. Tests should assert ID shape and consistency, not exact random values.
+
+Do not inject clocks into services. If a service writes app-owned timestamps, generate them inside the service and keep any monotonicity guard local to that service.
 
 ## HouseholdStore
 

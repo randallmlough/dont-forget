@@ -59,7 +59,6 @@ export type HouseholdSessionServiceDeps = {
 	fetch?: HouseholdSessionFetch;
 	apiBaseUrl?: () => string;
 	analytics?: HouseholdSessionServiceAnalytics;
-	now?: () => number;
 };
 
 export function createHouseholdSessionService(
@@ -69,7 +68,6 @@ export function createHouseholdSessionService(
 	const fetcher = deps.fetch ?? globalThis.fetch;
 	const apiBaseUrl = deps.apiBaseUrl ?? readApiBaseUrl;
 	const analytics = deps.analytics ?? { track };
-	const now = deps.now ?? Date.now;
 
 	async function readCachedHouseholdSession(): Promise<CachedHouseholdSession | null> {
 		const raw = await storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY);
@@ -118,7 +116,7 @@ export function createHouseholdSessionService(
 		},
 
 		async saveCachedHouseholdSession(session) {
-			const cached = cachedHouseholdSessionFromSession(session, now);
+			const cached = cachedHouseholdSessionFromSession(session);
 			await storage.setItem(
 				HOUSEHOLD_SESSION_CACHE_KEY,
 				JSON.stringify(cached),
@@ -206,7 +204,6 @@ function cachedHouseholdSessionIsStillAuthorized(
 
 function cachedHouseholdSessionFromSession(
 	session: HouseholdSession,
-	now: () => number,
 ): CachedHouseholdSession {
 	const { householdDatabase: _householdDatabase, ...metadata } = session;
 
@@ -216,7 +213,7 @@ function cachedHouseholdSessionFromSession(
 			url: session.householdDatabase.url,
 			expiresAt: session.householdDatabase.expiresAt,
 		},
-		initializedAt: now(),
+		initializedAt: Date.now(),
 	});
 }
 

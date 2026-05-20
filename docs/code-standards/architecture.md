@@ -37,7 +37,7 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** keep reusable component contracts UI-facing. Compose services into component data sources in the owning screen or feature layer.
 - **Must** return domain-shaped records from services, not UI component types and not raw SQL rows.
 - **Must** generate IDs inside services for newly-created domain records. Service callers and normal tests must not inject or prescribe IDs.
-- **Must** let services own production timestamp generation. A service may accept an optional `clock` only when behavior depends on timestamp ordering; normal app code should not pass it.
+- **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
 - **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. Do not name this `*-db-service`.
 - **Should** keep List and Item services separate even when Home composes them into one Active List experience.

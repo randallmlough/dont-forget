@@ -11,7 +11,7 @@ Concurrent edits to the same Item row can still lose data under Turso Sync's doc
 
 - The `items` table holds durable attributes only (`name`, `notes`, `position`, `deleted_at`). Two Members editing those simultaneously can lose one edit — acceptable in practice for shopping-list use.
 - The visible checked state is derived from the newest `item_checks.updated_at` row for the Item across Users in the Household. If that row has non-null `checked_at`, the Item is checked; if it has null `checked_at`, the Item is unchecked. Each User only upserts their own `(item_id, user_id)` row.
-- App writes should use a service-owned timestamp source rather than scattering raw `Date.now()` calls so app-owned timestamps remain consistent for display and recovery behavior.
+- App writes should use service-owned timestamp generation rather than scattering timestamp calls through screens or components, so app-owned timestamps remain consistent for display and recovery behavior.
 - Per-User check state enables a free "X added this to the cart" UX hint.
 - Tombstoned rows must be GC'd server-side (cron, ≥30 days old, after replicas have caught up) to keep DBs from growing unbounded.
 - No hard deletes from the app — every delete path writes `deleted_at` instead.

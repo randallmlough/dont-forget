@@ -11,7 +11,7 @@
     <ul>
       <li>Issue #16 is implemented as a behavior-preserving hard cut from app-facing bootstrap/cache module names to the Household Session service under <code>lib/services/household/</code>.</li>
       <li>The Household Session service owns both fresh online session loading and cached non-secret Household Session metadata, while the existing server bootstrap response schema remains the HTTP trust-boundary parser for this slice.</li>
-      <li><code>createHouseholdSessionService</code> provides injectable seams for external boundaries such as storage, fetch, base URL, and clock; local Household data deletion stays on the production HouseholdStore path instead of being dependency-injected only for tests.</li>
+      <li><code>createHouseholdSessionService</code> provides injectable seams for external boundaries such as storage, fetch, and base URL; local Household data deletion stays on the production HouseholdStore path instead of being dependency-injected only for tests.</li>
       <li>Cached Household Session reads now parse persisted JSON with Zod and strip unexpected Household DB auth token fields before returning metadata to callers.</li>
       <li><code>HouseholdSessionService</code> accepts an optional <code>analytics</code> dependency scoped to <code>track</code> and emits typed product events for successful online session loading, cache saving, and unauthorized cache invalidation.</li>
       <li><code>clearCachedHouseholdSession</code> intentionally does not emit analytics because Home calls it after <code>reset()</code> in the required sign-out sequence; the existing <code>user_signed_out</code> event remains the sign-out tracking boundary.</li>

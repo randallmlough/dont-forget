@@ -17,6 +17,7 @@ const mockDeleteLocalHouseholdStoreData = jest.mocked(
 
 describe("createHouseholdSessionService", () => {
 	beforeEach(() => {
+		jest.restoreAllMocks();
 		mockDeleteLocalHouseholdStoreData.mockReset();
 		mockDeleteLocalHouseholdStoreData.mockResolvedValue(undefined);
 	});
@@ -59,10 +60,10 @@ describe("createHouseholdSessionService", () => {
 	it("stores cached Household Session metadata without Household DB auth tokens", async () => {
 		const storage = memoryStorage();
 		const analytics = analyticsFixture();
+		jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_100);
 		const service = createHouseholdSessionService({
 			storage,
 			analytics,
-			now: () => 1_700_000_000_100,
 		});
 
 		const metadata = await service.saveCachedHouseholdSession(
