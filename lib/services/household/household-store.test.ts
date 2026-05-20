@@ -149,6 +149,34 @@ describe("openHouseholdStore", () => {
 		);
 	});
 
+	it("serializes native database operations on one store handle", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const nativeDb = onlyInstance(instances);
+		const push = deferred<void>();
+		nativeDb.push.mockImplementationOnce(async () => {
+			nativeDb.calls.push("push");
+			return push.promise;
+		});
+
+		const sync = store.sync();
+		await Promise.resolve();
+		const write = store.execute({
+			sql: "INSERT INTO items (id, name) VALUES (?, ?)",
+			args: ["itm_eggs", "Eggs"],
+		});
+		await Promise.resolve();
+
+		expect(nativeDb.run).not.toHaveBeenCalled();
+
+		push.resolve();
+		await Promise.all([sync, write]);
+
+		expect(nativeDb.calls).toEqual(["pull", "push", "pull", "run"]);
+	});
+
 	it("logs native sync failures before rethrowing", async () => {
 		const store = await openHouseholdStore(configFixture(), {
 			runtime,
@@ -166,6 +194,20 @@ describe("openHouseholdStore", () => {
 				error,
 			},
 		);
+	});
+
+	it("does not error-log sync failures caused by offline networking", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const nativeDb = onlyInstance(instances);
+		const error = new TypeError("Network request failed");
+		nativeDb.push.mockRejectedValueOnce(error);
+
+		await expect(store.sync()).rejects.toThrow(error);
+
+		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
 	it("uses an injected logger when reporting store failures", async () => {
@@ -215,8 +257,14 @@ class MockTursoDatabase {
 	calls: string[] = [];
 
 	connect = jest.fn(async () => undefined);
-	all = jest.fn(async () => this.allRows);
-	run = jest.fn(async () => this.runResult);
+	all = jest.fn(async () => {
+		this.calls.push("all");
+		return this.allRows;
+	});
+	run = jest.fn(async () => {
+		this.calls.push("run");
+		return this.runResult;
+	});
 	push = jest.fn(async () => {
 		this.calls.push("push");
 	});
@@ -251,4 +299,16 @@ function onlyInstance(instances: MockTursoDatabase[]): MockTursoDatabase {
 	}
 
 	return instance;
+}
+
+function deferred<T>() {
+	let resolve: ((value: T) => void) | undefined;
+	const promise = new Promise<T>((nextResolve) => {
+		resolve = nextResolve;
+	});
+	if (!resolve) {
+		throw new Error("Unable to create deferred promise");
+	}
+
+	return { promise, resolve };
 }

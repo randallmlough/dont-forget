@@ -91,6 +91,49 @@ describe("useHomeContent", () => {
 		});
 	});
 
+	it("closes rendered cached List data before opening fresh authorized data", async () => {
+		const calls: string[] = [];
+		const freshSession = deferred<HouseholdSession>();
+		const cached = cachedHouseholdSessionFixture();
+		const cachedList = initialListFixture({ itemName: "Cached Milk" });
+		const freshList = initialListFixture({ itemName: "Fresh Eggs" });
+		const cachedDataSource = noopDataSource(cachedList, {
+			syncAuthorized: false,
+			async load() {
+				calls.push("cached-load");
+				return cachedList;
+			},
+			async close() {
+				calls.push("cached-close");
+			},
+		});
+		const freshDataSource = noopDataSource(freshList, {
+			async load() {
+				calls.push("fresh-load");
+				return freshList;
+			},
+		});
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
+		jest
+			.mocked(createHouseholdActiveListDataSource)
+			.mockImplementation((config) =>
+				config.database.authToken ? freshDataSource : cachedDataSource,
+			);
+
+		render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+
+		freshSession.resolve(householdSessionFixture());
+
+		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+		expect(calls.indexOf("cached-close")).toBeGreaterThanOrEqual(0);
+		expect(calls.indexOf("cached-close")).toBeLessThan(
+			calls.indexOf("fresh-load"),
+		);
+	});
+
 	it("closes a pending data source when the loading run is cancelled", async () => {
 		const load = deferred<ActiveListInitialState>();
 		const close = jest.fn().mockResolvedValue(undefined);
@@ -189,14 +232,16 @@ function cachedHouseholdSessionFixture(): CachedHouseholdSession {
 	};
 }
 
-function initialListFixture(): ActiveListInitialState {
+function initialListFixture(
+	overrides: { itemName?: string } = {},
+): ActiveListInitialState {
 	return {
 		householdName: "Avery",
 		listName: "Groceries",
 		items: [
 			{
 				id: "itm_milk",
-				name: "Milk",
+				name: overrides.itemName ?? "Milk",
 				checked: true,
 				checkedByMemberName: "Avery Chen",
 			},

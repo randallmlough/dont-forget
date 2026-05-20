@@ -1,4 +1,4 @@
-import { asError } from "@/lib/errors";
+import { asError, isNetworkUnavailableError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
@@ -110,6 +110,7 @@ export async function openHouseholdStore(
 			: {}),
 	});
 	let closed = false;
+	let operationQueue = Promise.resolve();
 
 	try {
 		await database.connect();
@@ -118,15 +119,28 @@ export async function openHouseholdStore(
 		throw error;
 	}
 
+	function enqueueDatabaseOperation<T>(
+		operation: () => Promise<T>,
+	): Promise<T> {
+		const run = operationQueue.then(operation, operation);
+		operationQueue = run.then(
+			() => undefined,
+			() => undefined,
+		);
+		return run;
+	}
+
 	async function close() {
 		if (closed) return;
 		closed = true;
-		try {
-			await database.close();
-		} catch (error) {
-			log.error("household store close failed", { error: asError(error) });
-			throw error;
-		}
+		return enqueueDatabaseOperation(async () => {
+			try {
+				await database.close();
+			} catch (error) {
+				log.error("household store close failed", { error: asError(error) });
+				throw error;
+			}
+		});
 	}
 
 	return {
@@ -135,53 +149,65 @@ export async function openHouseholdStore(
 		async execute(statement) {
 			const { sql, args } = normalizeStatement(statement);
 			if (isReadStatement(sql)) {
-				try {
-					const rows = await database.all(sql, args);
-					return { rows, rowsAffected: 0, lastInsertRowId: null };
-				} catch (error) {
-					log.error("household store query failed", { error: asError(error) });
-					throw error;
-				}
+				return enqueueDatabaseOperation(async () => {
+					try {
+						const rows = await database.all(sql, args);
+						return { rows, rowsAffected: 0, lastInsertRowId: null };
+					} catch (error) {
+						log.error("household store query failed", {
+							error: asError(error),
+						});
+						throw error;
+					}
+				});
 			}
 
-			try {
-				const result = await database.run(sql, args);
-				return {
-					rows: [],
-					rowsAffected: result.changes,
-					lastInsertRowId: result.lastInsertRowid,
-				};
-			} catch (error) {
-				log.error("household store write failed", { error: asError(error) });
-				throw error;
-			}
+			return enqueueDatabaseOperation(async () => {
+				try {
+					const result = await database.run(sql, args);
+					return {
+						rows: [],
+						rowsAffected: result.changes,
+						lastInsertRowId: result.lastInsertRowid,
+					};
+				} catch (error) {
+					log.error("household store write failed", { error: asError(error) });
+					throw error;
+				}
+			});
 		},
 		async push() {
-			try {
-				await database.push();
-			} catch (error) {
-				log.error("household store push failed", { error: asError(error) });
-				throw error;
-			}
+			return enqueueDatabaseOperation(async () => {
+				try {
+					await database.push();
+				} catch (error) {
+					logUnexpectedStoreFailure(log, "household store push failed", error);
+					throw error;
+				}
+			});
 		},
 		async pull() {
-			try {
-				return { changed: await database.pull() };
-			} catch (error) {
-				log.error("household store pull failed", { error: asError(error) });
-				throw error;
-			}
+			return enqueueDatabaseOperation(async () => {
+				try {
+					return { changed: await database.pull() };
+				} catch (error) {
+					logUnexpectedStoreFailure(log, "household store pull failed", error);
+					throw error;
+				}
+			});
 		},
 		async sync() {
-			try {
-				const changedBeforePush = await database.pull();
-				await database.push();
-				const changedAfterPush = await database.pull();
-				return { changed: changedBeforePush || changedAfterPush };
-			} catch (error) {
-				log.error("household store sync failed", { error: asError(error) });
-				throw error;
-			}
+			return enqueueDatabaseOperation(async () => {
+				try {
+					const changedBeforePush = await database.pull();
+					await database.push();
+					const changedAfterPush = await database.pull();
+					return { changed: changedBeforePush || changedAfterPush };
+				} catch (error) {
+					logUnexpectedStoreFailure(log, "household store sync failed", error);
+					throw error;
+				}
+			});
 		},
 		close,
 		async deleteLocalData() {
@@ -238,6 +264,16 @@ function isReadStatement(sql: string): boolean {
 		normalized.startsWith("with") ||
 		normalized.startsWith("pragma")
 	);
+}
+
+function logUnexpectedStoreFailure(
+	log: Logger,
+	message: string,
+	error: unknown,
+) {
+	if (isNetworkUnavailableError(error)) return;
+
+	log.error(message, { error: asError(error) });
 }
 
 async function loadTursoRuntime(): Promise<TursoHouseholdStoreRuntime> {

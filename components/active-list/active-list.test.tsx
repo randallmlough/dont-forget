@@ -76,7 +76,7 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
 
-	it("shows pending and failed sync without discarding local Item changes", async () => {
+	it("shows pending and offline sync without discarding local Item changes", async () => {
 		const sync = deferred<{ changed: boolean }>();
 		renderActiveList(
 			emptyList,
@@ -91,18 +91,47 @@ describe("ActiveList", () => {
 		await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
 
 		await act(async () => {
-			sync.reject(new Error("offline"));
+			sync.reject(new TypeError("Network request failed"));
 		});
 
 		await waitFor(() =>
-			expect(
-				screen.getByText("Sync failed - changes saved locally"),
-			).toBeTruthy(),
+			expect(screen.getByText("Offline - changes saved locally")).toBeTruthy(),
 		);
 		expect(screen.getByRole("checkbox", { name: "Milk" })).toBeTruthy();
-		expect(mockLoggerError).toHaveBeenCalledWith("active list sync failed", {
-			error: expect.any(Error),
-		});
+		expect(mockLoggerError).not.toHaveBeenCalled();
+	});
+
+	it("retries offline sync while the List remains open", async () => {
+		jest.useFakeTimers();
+		const sync = jest
+			.fn<Promise<{ changed: boolean }>, []>()
+			.mockRejectedValueOnce(new TypeError("Network request failed"))
+			.mockResolvedValue({ changed: false });
+
+		try {
+			renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
+
+			fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+			await act(async () => {
+				fireEvent.press(screen.getByText("Add"));
+			});
+			await waitFor(() =>
+				expect(
+					screen.getByText("Offline - changes saved locally"),
+				).toBeTruthy(),
+			);
+
+			await act(async () => {
+				jest.advanceTimersByTime(1000);
+				await Promise.resolve();
+			});
+
+			await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+			expect(sync).toHaveBeenCalledTimes(2);
+			expect(mockLoggerError).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	it("shows offline sync state when sync is not authorized", () => {

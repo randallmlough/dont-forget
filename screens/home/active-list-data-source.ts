@@ -4,7 +4,7 @@ import type {
 	ActiveListSyncResult,
 } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
-import { asError } from "@/lib/errors";
+import { asError, isNetworkUnavailableError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
@@ -159,24 +159,37 @@ export function createHouseholdActiveListDataSource(
 			if (!syncAuthorized) return { changed: false };
 
 			const store = await storePromise;
+			let nativeResult: ActiveListSyncResult = { changed: false };
+			let nativeError: unknown = null;
+
 			try {
-				return store.sync ? await store.sync() : { changed: false };
+				nativeResult = store.sync ? await store.sync() : { changed: false };
 			} catch (error) {
-				log.error("active list native sync failed", { error: asError(error) });
-				try {
-					await pushLocalHouseholdRowsToRemote(
-						store,
-						config.database,
-						options.openRemoteClient,
-					);
+				nativeError = error;
+				logUnexpectedSyncFailure(log, "active list native sync failed", error);
+			}
+
+			try {
+				await pushLocalHouseholdRowsToRemote(
+					store,
+					config.database,
+					options.openRemoteClient,
+				);
+				if (nativeError) {
 					log.warn("active list sync fallback succeeded");
-				} catch (fallbackError) {
-					log.error("active list sync fallback failed", {
-						error: asError(fallbackError),
-					});
+					return { changed: false };
+				}
+				return nativeResult;
+			} catch (fallbackError) {
+				logUnexpectedSyncFailure(
+					log,
+					"active list sync fallback failed",
+					fallbackError,
+				);
+				if (nativeError) {
 					throw fallbackError;
 				}
-				return { changed: false };
+				throw fallbackError;
 			}
 		},
 		async close() {
@@ -240,8 +253,20 @@ function requestSyncAfterLocalWrite(
 	if (!syncAuthorized || !store.sync) return;
 
 	void store.sync().catch((error) => {
+		if (isNetworkUnavailableError(error)) return;
+
 		log.warn("active list sync after local item write failed", {
 			error: asError(error),
 		});
 	});
+}
+
+function logUnexpectedSyncFailure(
+	log: ReturnType<typeof logger.with>,
+	message: string,
+	error: unknown,
+) {
+	if (isNetworkUnavailableError(error)) return;
+
+	log.error(message, { error: asError(error) });
 }

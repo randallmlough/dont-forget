@@ -58,6 +58,7 @@ type HomeLoadRun = {
 	cachedRendered: boolean;
 	cachedInvalidated: boolean;
 	freshRendered: boolean;
+	renderedDataSource: ActiveListDataSource | null;
 	pendingDataSources: Set<ActiveListDataSource>;
 	closedDataSources: Set<ActiveListDataSource>;
 };
@@ -108,6 +109,7 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 		cachedRendered: false,
 		cachedInvalidated: false,
 		freshRendered: false,
+		renderedDataSource: null,
 		pendingDataSources: new Set<ActiveListDataSource>(),
 		closedDataSources: new Set<ActiveListDataSource>(),
 	};
@@ -160,6 +162,9 @@ async function loadFreshHome(run: HomeLoadRun, cachedAttempt: Promise<void>) {
 			run.setContent({ status: "loading" });
 		}
 
+		await closeRenderedHomeBeforeFreshOpen(run);
+		if (run.cancelled || run.signingOutRef.current) return;
+
 		const opened = await openHome(run, session, async () => {
 			// Offline reopen is best-effort; online Home should still render if storage rejects.
 			await saveCachedHouseholdSession(session).catch(() => undefined);
@@ -211,6 +216,7 @@ async function renderOpenedHome(
 	} else {
 		run.freshRendered = true;
 	}
+	run.renderedDataSource = opened.dataSource;
 
 	run.setContent({
 		status: "ready",
@@ -218,6 +224,16 @@ async function renderOpenedHome(
 		initialList: opened.initialList,
 		dataSource: opened.dataSource,
 	});
+}
+
+async function closeRenderedHomeBeforeFreshOpen(run: HomeLoadRun) {
+	const renderedDataSource = run.renderedDataSource;
+	if (!renderedDataSource) return;
+
+	run.renderedDataSource = null;
+	run.cachedRendered = false;
+	run.setContent({ status: "loading" });
+	await closeDataSource(run, renderedDataSource).catch(() => undefined);
 }
 
 async function showErrorIfNoListRendered(

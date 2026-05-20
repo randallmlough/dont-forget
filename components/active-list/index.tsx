@@ -10,6 +10,7 @@ import {
 	useState,
 } from "react";
 import {
+	AppState,
 	FlatList,
 	type ListRenderItemInfo,
 	Pressable,
@@ -24,6 +25,7 @@ import {
 	activeListReducer,
 	initialActiveListModel,
 } from "@/components/active-list/active-list-state";
+import { isNetworkUnavailableError } from "@/lib/errors";
 import { useLogger } from "@/lib/logger";
 
 export type ActiveListItem = {
@@ -100,6 +102,7 @@ function ActiveListProvider({
 	const mounted = useRef(true);
 	const nextItemNumber = useRef(initialState.items.length + 1);
 	const modelRef = useRef(model);
+	const syncInFlight = useRef(false);
 
 	const transition = useCallback((nextTransition: ActiveListTransition) => {
 		if (!mounted.current) return;
@@ -132,14 +135,21 @@ function ActiveListProvider({
 		}
 
 		transition({ type: "syncStarted" });
+		syncInFlight.current = true;
 
 		try {
 			await dataSource.sync();
 			await loadFromDataSource();
 			transition({ type: "syncSucceeded" });
 		} catch (error) {
+			if (isNetworkUnavailableError(error)) {
+				transition({ type: "syncUnavailable" });
+				return;
+			}
 			transition({ type: "syncFailed" });
 			throw error;
+		} finally {
+			syncInFlight.current = false;
 		}
 	}, [dataSource, loadFromDataSource, transition]);
 
@@ -150,6 +160,7 @@ function ActiveListProvider({
 		}
 
 		transition({ type: "syncStarted" });
+		syncInFlight.current = true;
 
 		try {
 			const result = await dataSource.sync();
@@ -158,10 +169,59 @@ function ActiveListProvider({
 			}
 			transition({ type: "syncSucceeded" });
 		} catch (error) {
+			if (isNetworkUnavailableError(error)) {
+				transition({ type: "syncUnavailable" });
+				return;
+			}
+
 			logger.error("active list sync failed", { error });
 			transition({ type: "syncFailed" });
+		} finally {
+			syncInFlight.current = false;
 		}
 	}, [dataSource, loadFromDataSource, logger, transition]);
+
+	useEffect(() => {
+		if (!dataSource.syncAuthorized) return;
+
+		let stopped = false;
+
+		async function retrySyncWhenForegrounded() {
+			if (
+				stopped ||
+				syncInFlight.current ||
+				modelRef.current.syncState === "synced" ||
+				AppState.currentState === "background" ||
+				AppState.currentState === "inactive"
+			) {
+				return;
+			}
+
+			syncInFlight.current = true;
+			try {
+				await syncLatest();
+			} catch (error) {
+				logger.error("active list periodic sync failed", { error });
+			} finally {
+				syncInFlight.current = false;
+			}
+		}
+
+		const interval = setInterval(() => {
+			void retrySyncWhenForegrounded();
+		}, 1000);
+		const subscription = AppState.addEventListener("change", (state) => {
+			if (state === "active") {
+				void retrySyncWhenForegrounded();
+			}
+		});
+
+		return () => {
+			stopped = true;
+			clearInterval(interval);
+			subscription.remove();
+		};
+	}, [dataSource.syncAuthorized, logger, syncLatest]);
 
 	const refresh = useCallback(async () => {
 		transition({ type: "refreshRequested" });
