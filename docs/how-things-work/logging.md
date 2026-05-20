@@ -20,7 +20,12 @@ import { useLogger } from "@/lib/logger";
 const log = useLogger();
 log.info("list synced", { item_count: 42 });
 
-// Non-React (utilities, services)
+// Services/stores — receive the logger from deps or open config
+import { logger as defaultLogger, type Logger } from "@/lib/logger";
+type ItemServiceDeps = { logger?: Logger };
+const serviceLog = (deps.logger ?? defaultLogger).with({ service: "item" });
+
+// Other non-React utilities without a caller-owned seam
 import { logger } from "@/lib/logger";
 logger.warn("token cache read failed", { key, error });
 
@@ -94,10 +99,32 @@ This is best-effort, not airtight. Still:
 - **Staging/production**: PostHog only. Records buffer up to 10s before flushing, on app foreground/background, on buffer fill, or via `posthog.flushLogs()`.
 - **PostHog Logs UI**: project dashboard → Logs. Service name `dont-forget`; environment tagged from `APP_ENV`; version from `app.json`.
 
+## Services and stores
+
+Services and stores should accept a `Logger` dependency when they log diagnostics. The app composition layer can pass `useLogger()` or the app `logger`; tests and operator processes can pass their own logger without mocking `@/lib/logger`.
+
+```ts
+import { logger as defaultLogger, type Logger } from "@/lib/logger";
+
+export type OpenHouseholdStoreConfig = {
+  householdId: string;
+  logger?: Logger;
+};
+
+export function openHouseholdStore(config: OpenHouseholdStoreConfig) {
+  const log = (config.logger ?? defaultLogger).with({
+    household_id: config.householdId,
+  });
+}
+```
+
+Bind domain context with `.with(...)` inside the service or store so every subsequent diagnostic log carries the same safe identifiers. Keep the default logger at the service/store boundary only; deeper helpers should receive the scoped logger when they need to log.
+
 ## What not to do
 
 - **Don't call `posthog.logger.*` directly.** Go through `lib/logger.ts` so the swap-out path stays clean and redaction is enforced.
 - **Don't import `logger` from `lib/posthog.ts`.** The PostHog client must finish constructing before the logger module loads. The boostrap warn in `posthog.ts` stays on `console.warn` for that reason.
+- **Don't require service/store tests to mock `@/lib/logger` when a dependency can be injected.** Use `lib/test/mocks/logger.ts` for reusable logger fixtures.
 - **Don't use the logger from `db/migrate.ts`** or other Node CLIs. Those are operator-facing tools; their stdout *is* the UX. They keep `console.*`.
 - **Don't add new levels.** If you find yourself wanting `trace` or `fatal`, write `debug` or `error` instead. Adding levels touches the interface, the adapter, and every adapter you'd ever swap to.
 

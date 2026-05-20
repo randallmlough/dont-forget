@@ -9,18 +9,19 @@ import {
 } from "react";
 
 import type {
-	ActiveListDataAdapter,
+	ActiveListDataSource,
 	ActiveListInitialState,
 } from "@/components/active-list";
-import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
-import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
 import {
-	type CachedBootstrapMetadata,
-	discardCachedBootstrapMetadataIfUnauthorized,
-	readCachedBootstrapMetadata,
-	saveCachedBootstrapMetadata,
-} from "@/lib/app/offline-bootstrap-cache";
-import type { BootstrapResponse } from "@/lib/bootstrap";
+	type CachedHouseholdSession,
+	discardCachedHouseholdSessionIfUnauthorized,
+	getHouseholdSession,
+	type HouseholdSession,
+	readCachedHouseholdSession,
+	saveCachedHouseholdSession,
+} from "@/lib/services/household";
+
+import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 
 export type HomeContentState =
 	| { status: "loading" }
@@ -29,15 +30,15 @@ export type HomeContentState =
 			status: "ready";
 			activeMemberName: string;
 			initialList: ActiveListInitialState;
-			adapter: ActiveListDataAdapter;
+			dataSource: ActiveListDataSource;
 	  };
 
-type HomeBootstrap = BootstrapResponse | CachedBootstrapMetadata;
+type HomeHouseholdSession = HouseholdSession | CachedHouseholdSession;
 
 type OpenedHome = {
-	bootstrap: HomeBootstrap;
+	session: HomeHouseholdSession;
 	initialList: ActiveListInitialState;
-	adapter: ActiveListDataAdapter;
+	dataSource: ActiveListDataSource;
 };
 
 type UseHomeContentOptions = {
@@ -57,8 +58,9 @@ type HomeLoadRun = {
 	cachedRendered: boolean;
 	cachedInvalidated: boolean;
 	freshRendered: boolean;
-	pendingAdapters: Set<ActiveListDataAdapter>;
-	closedAdapters: Set<ActiveListDataAdapter>;
+	renderedDataSource: ActiveListDataSource | null;
+	pendingDataSources: Set<ActiveListDataSource>;
+	closedDataSources: Set<ActiveListDataSource>;
 };
 
 type HomeLoadOptions = Pick<
@@ -107,8 +109,9 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 		cachedRendered: false,
 		cachedInvalidated: false,
 		freshRendered: false,
-		pendingAdapters: new Set<ActiveListDataAdapter>(),
-		closedAdapters: new Set<ActiveListDataAdapter>(),
+		renderedDataSource: null,
+		pendingDataSources: new Set<ActiveListDataSource>(),
+		closedDataSources: new Set<ActiveListDataSource>(),
 	};
 
 	run.setContent((current) =>
@@ -125,30 +128,32 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 	return () => {
 		run.cancelled = true;
 		void Promise.all(
-			[...run.pendingAdapters].map((adapter) => closeAdapter(run, adapter)),
+			[...run.pendingDataSources].map((dataSource) =>
+				closeDataSource(run, dataSource),
+			),
 		).catch(() => undefined);
 	};
 }
 
 async function loadCachedHome(run: HomeLoadRun) {
-	const cached = await readCachedBootstrapMetadata().catch(() => null);
+	const cached = await readCachedHouseholdSession().catch(() => null);
 	if (!cached || run.cancelled || run.signingOutRef.current) return;
 
 	try {
 		const opened = await openHome(run, cached);
 		await renderOpenedHome(run, opened, "cached");
 	} catch {
-		// Cached metadata is best-effort; fresh bootstrap decides the final state.
+		// Cached metadata is best-effort; a fresh Household Session decides the final state.
 	}
 }
 
 async function loadFreshHome(run: HomeLoadRun, cachedAttempt: Promise<void>) {
 	try {
-		const bootstrap = await bootstrapWithClerk(() => run.getToken());
+		const session = await getHouseholdSession(() => run.getToken());
 		if (run.cancelled || run.signingOutRef.current) return;
 
 		const discarded =
-			await discardCachedBootstrapMetadataIfUnauthorized(bootstrap);
+			await discardCachedHouseholdSessionIfUnauthorized(session);
 		if (run.cancelled || run.signingOutRef.current) return;
 
 		if (discarded) {
@@ -157,9 +162,12 @@ async function loadFreshHome(run: HomeLoadRun, cachedAttempt: Promise<void>) {
 			run.setContent({ status: "loading" });
 		}
 
-		const opened = await openHome(run, bootstrap, async () => {
+		await closeRenderedHomeBeforeFreshOpen(run);
+		if (run.cancelled || run.signingOutRef.current) return;
+
+		const opened = await openHome(run, session, async () => {
 			// Offline reopen is best-effort; online Home should still render if storage rejects.
-			await saveCachedBootstrapMetadata(bootstrap).catch(() => undefined);
+			await saveCachedHouseholdSession(session).catch(() => undefined);
 		});
 		await renderOpenedHome(run, opened, "fresh");
 	} catch {
@@ -169,22 +177,22 @@ async function loadFreshHome(run: HomeLoadRun, cachedAttempt: Promise<void>) {
 
 async function openHome(
 	run: HomeLoadRun,
-	bootstrap: HomeBootstrap,
+	session: HomeHouseholdSession,
 	afterLoad?: () => Promise<void>,
 ): Promise<OpenedHome> {
-	const adapter = createAdapterFromBootstrap(bootstrap);
-	run.pendingAdapters.add(adapter);
+	const dataSource = createDataSourceFromSession(session);
+	run.pendingDataSources.add(dataSource);
 
 	try {
-		const initialList = await adapter.load();
+		const initialList = await dataSource.load();
 		if (afterLoad) {
 			await afterLoad();
 		}
 
-		run.pendingAdapters.delete(adapter);
-		return { bootstrap, initialList, adapter };
+		run.pendingDataSources.delete(dataSource);
+		return { session, initialList, dataSource };
 	} catch (error) {
-		await closeAdapter(run, adapter).catch(() => undefined);
+		await closeDataSource(run, dataSource).catch(() => undefined);
 		throw error;
 	}
 }
@@ -199,7 +207,7 @@ async function renderOpenedHome(
 		run.signingOutRef.current ||
 		(source === "cached" && (run.freshRendered || run.cachedInvalidated))
 	) {
-		await closeAdapter(run, opened.adapter).catch(() => undefined);
+		await closeDataSource(run, opened.dataSource).catch(() => undefined);
 		return;
 	}
 
@@ -208,13 +216,24 @@ async function renderOpenedHome(
 	} else {
 		run.freshRendered = true;
 	}
+	run.renderedDataSource = opened.dataSource;
 
 	run.setContent({
 		status: "ready",
-		activeMemberName: activeMemberNameFromBootstrap(opened.bootstrap),
+		activeMemberName: activeMemberNameFromSession(opened.session),
 		initialList: opened.initialList,
-		adapter: opened.adapter,
+		dataSource: opened.dataSource,
 	});
+}
+
+async function closeRenderedHomeBeforeFreshOpen(run: HomeLoadRun) {
+	const renderedDataSource = run.renderedDataSource;
+	if (!renderedDataSource) return;
+
+	run.renderedDataSource = null;
+	run.cachedRendered = false;
+	run.setContent({ status: "loading" });
+	await closeDataSource(run, renderedDataSource).catch(() => undefined);
 }
 
 async function showErrorIfNoListRendered(
@@ -235,27 +254,30 @@ async function showErrorIfNoListRendered(
 	}
 }
 
-async function closeAdapter(run: HomeLoadRun, adapter: ActiveListDataAdapter) {
-	if (run.closedAdapters.has(adapter)) return;
+async function closeDataSource(
+	run: HomeLoadRun,
+	dataSource: ActiveListDataSource,
+) {
+	if (run.closedDataSources.has(dataSource)) return;
 
-	run.closedAdapters.add(adapter);
-	run.pendingAdapters.delete(adapter);
-	await adapter.close();
+	run.closedDataSources.add(dataSource);
+	run.pendingDataSources.delete(dataSource);
+	await dataSource.close();
 }
 
-function createAdapterFromBootstrap(
-	bootstrap: HomeBootstrap,
-): ActiveListDataAdapter {
-	return createHouseholdActiveListAdapter({
-		household: bootstrap.activeHousehold,
-		activeMember: bootstrap.activeMember,
-		list: bootstrap.activeList,
-		currentUser: bootstrap.user,
-		members: bootstrap.members,
-		database: bootstrap.householdDatabase,
+function createDataSourceFromSession(
+	session: HomeHouseholdSession,
+): ActiveListDataSource {
+	return createHouseholdActiveListDataSource({
+		household: session.activeHousehold,
+		activeMember: session.activeMember,
+		list: session.activeList,
+		currentUser: session.user,
+		members: session.members,
+		database: session.householdDatabase,
 	});
 }
 
-function activeMemberNameFromBootstrap(bootstrap: HomeBootstrap): string {
-	return bootstrap.activeMember.displayName ?? bootstrap.user.email ?? "Member";
+function activeMemberNameFromSession(session: HomeHouseholdSession): string {
+	return session.activeMember.displayName ?? session.user.email ?? "Member";
 }

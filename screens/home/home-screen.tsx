@@ -6,7 +6,7 @@ import { StyleSheet } from "react-native-unistyles";
 
 import { ActiveList } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
-import { clearCachedHouseholdSession } from "@/lib/app/offline-bootstrap-cache";
+import { clearCachedHouseholdSession } from "@/lib/services/household";
 import {
 	type HomeContentState,
 	useHomeContent,
@@ -39,7 +39,7 @@ export default function HomeScreen() {
 		track("user_signed_out", {});
 		reset();
 		if (content.status === "ready") {
-			await content.adapter.close();
+			await content.dataSource.close();
 		}
 		await clearCachedHouseholdSession();
 		await signOut();
@@ -91,7 +91,7 @@ export function HomeScreenView({
 				<ActiveList.Provider
 					initialState={content.initialList}
 					currentMemberName={displayMemberName}
-					adapter={content.adapter}
+					dataSource={content.dataSource}
 				>
 					<ActiveList.Screen>
 						<ActiveList.Header />

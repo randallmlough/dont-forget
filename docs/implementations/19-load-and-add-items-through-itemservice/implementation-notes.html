@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Load and Add Items through ItemService</title>
+</head>
+<body>
+  <h1>Implementation Notes: Load and Add Items through ItemService</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li><code>ItemService</code> will own Item listing and creation SQL through the injected <code>HouseholdStore</code> executable seam, binding Household ID at construction and receiving List/User/name operation inputs.</li>
+      <li>Home's Active List data source will move to <code>screens/home/active-list-data-source.ts</code> now that List and Item read/create SQL can be service-owned.</li>
+      <li>Item creation remains local-first: <code>ItemService.addItem</code> resolves after the local insert, while the Home data source requests sync separately after the service returns.</li>
+      <li><code>ItemService.addItem</code> emits the typed <code>item_added</code> analytics event after local write success with Household, List, Item, and User IDs, intentionally excluding the Item name.</li>
+      <li><code>ItemService.setItemChecked</code> emits the typed <code>item_checked_state_changed</code> analytics event after local write success with Household, Item, User, and checked-state values.</li>
+      <li><code>ItemService</code> owns timestamp generation with <code>Date.now()</code> and a monotonic guard; tests that need exact timestamp behavior spy on <code>Date.now</code> rather than injecting a clock dependency.</li>
+      <li>Checked-state mutation moved into <code>ItemService</code> as a small boundary cleanup so <code>screens/home/active-list-data-source.ts</code> can compose services without issuing direct Household SQL.</li>
+      <li>The temporary remote sync fallback moved under the Household service layer so the screen-owned data source does not import database clients directly.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li>Although issue #19 only names Item listing and creation, moving checked-state SQL at the same time avoids leaving a screen-level SQL exception immediately beside the new ItemService.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+</body>
+</html>

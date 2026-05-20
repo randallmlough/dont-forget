@@ -9,6 +9,36 @@
  * dashboards — keep the old name firing until dashboards migrate, then drop.
  */
 export type EventMap = {
+	household_session_loaded: {
+		household_id: string;
+		list_id: string;
+		member_role: "owner" | "member";
+		member_count: number;
+		source: "online" | "cached";
+	};
+	household_session_cached: {
+		household_id: string;
+		list_id: string;
+		member_role: "owner" | "member";
+		member_count: number;
+	};
+	household_session_cache_invalidated: {
+		household_id: string;
+		fresh_household_id: string;
+		reason: "unauthorized";
+	};
+	item_added: {
+		household_id: string;
+		list_id: string;
+		item_id: string;
+		user_id: string;
+	};
+	item_checked_state_changed: {
+		household_id: string;
+		item_id: string;
+		user_id: string;
+		checked: boolean;
+	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };
 	user_email_verified: Record<string, never>;

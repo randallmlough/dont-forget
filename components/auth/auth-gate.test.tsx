@@ -1,7 +1,7 @@
 import { render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { AuthGate } from "@/components/auth/auth-gate";
-import { readCachedBootstrapMetadata } from "@/lib/app/offline-bootstrap-cache";
+import { readCachedHouseholdSession } from "@/lib/services/household";
 import { setMockAuthState } from "@/lib/test/mocks/clerk";
 
 const mockReplace = jest.fn();
@@ -10,8 +10,8 @@ jest.mock("@/lib/analytics", () => ({
 	useAnalyticsIdentity: jest.fn(),
 }));
 
-jest.mock("@/lib/app/offline-bootstrap-cache", () => ({
-	readCachedBootstrapMetadata: jest.fn(),
+jest.mock("@/lib/services/household", () => ({
+	readCachedHouseholdSession: jest.fn(),
 }));
 
 jest.mock("expo-router", () => {
@@ -37,20 +37,20 @@ jest.mock("expo-router", () => {
 
 beforeEach(() => {
 	mockReplace.mockReset();
-	jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(null);
+	jest.mocked(readCachedHouseholdSession).mockResolvedValue(null);
 });
 
 describe("AuthGate", () => {
 	it("keeps Home mounted when Clerk reports signed out but a cached Household session exists", async () => {
 		jest
-			.mocked(readCachedBootstrapMetadata)
-			.mockResolvedValue(cachedBootstrapFixture());
+			.mocked(readCachedHouseholdSession)
+			.mockResolvedValue(cachedHouseholdSessionFixture());
 		setMockAuthState({ isSignedIn: false });
 
 		render(<AuthGate pathname="/" />);
 
 		await waitFor(() =>
-			expect(readCachedBootstrapMetadata).toHaveBeenCalledTimes(1),
+			expect(readCachedHouseholdSession).toHaveBeenCalledTimes(1),
 		);
 		expect(mockReplace).not.toHaveBeenCalledWith("/sign-in");
 	});
@@ -64,7 +64,7 @@ describe("AuthGate", () => {
 	});
 });
 
-function cachedBootstrapFixture() {
+function cachedHouseholdSessionFixture() {
 	return {
 		user: {
 			id: "usr_avery",

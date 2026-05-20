@@ -14,6 +14,7 @@
 - **Must** test Zod boundary failures for new schemas that protect runtime input.
 - **Must** test diagnostic logging when the log is part of an error-handling contract.
 - **Must** mock logging sinks in tests to avoid noisy expected error output.
+- **Must** prefer injected logger fixtures or narrow analytics test doubles for services and stores over module-mocking app-wide observability singletons.
 - **Should** prefer integration-style tests for Household, Member, Owner, Invitation, List, Item, auth, analytics/logging contract, and sync behavior.
 - **Should** use focused unit tests for pure helpers and narrow adapters.
 - **Should** test state machines through their discriminated variants rather than boolean combinations.

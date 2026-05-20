@@ -1,6 +1,6 @@
 # Turso React Native sync for native Household DB access
 
-The iOS app needs true local Household DB access: Home should reopen offline after a prior bootstrap, accept local Item/List writes, and sync when connectivity returns. We will use `@tursodatabase/sync-react-native` behind `lib/app/household-db.ts` for the native app Household DB path. Server/API route, migration, reset, and Node test code will keep explicit `@libsql/client` server-safe entrypoints unless a separate server-driver proof replaces them later.
+The iOS app needs true local Household DB access: Home should reopen offline after a prior bootstrap, accept local Item/List writes, and sync when connectivity returns. We will use `@tursodatabase/sync-react-native` behind an app-owned Household DB wrapper for the native app Household DB path. ADR-0011 later names that wrapper `HouseholdStore` under `lib/services/household/household-store.ts`; this ADR originally referred to `lib/app/household-db.ts`. Server/API route, migration, reset, and Node test code will keep explicit `@libsql/client` server-safe entrypoints unless a separate server-driver proof replaces them later.
 
 This revises the earlier op-sqlite candidate after the Issue #6 spike found Turso's official React Native sync package can be installed, wrapped behind an app-owned interface, exercised in Jest through mocks, and bundled for iOS.
 
@@ -13,12 +13,12 @@ This revises the earlier op-sqlite candidate after the Issue #6 spike found Turs
 
 ## Consequences
 
-- App-side Household SQL must go through `lib/app/household-db.ts` or feature adapters that depend on its app-owned interface. Feature components must not import `@tursodatabase/sync-react-native` directly. If native sync cannot checkpoint and push a local replica, the Active List adapter may use the bootstrap Household DB token for a narrow remote LWW upsert recovery path so offline Item changes are not stranded locally.
+- App-side Household SQL must go through the app-owned Household DB wrapper/`HouseholdStore` or domain services that depend on its app-owned interface. Feature components must not import `@tursodatabase/sync-react-native` directly. If native sync cannot checkpoint and push a local replica, the Active List data source may use the Household Session DB token for a narrow remote upsert recovery path so offline Item changes are not stranded locally.
 - Local DB filenames are keyed by app-owned Household IDs, not Turso database names, so future Household switching can add more local DBs without changing the domain model.
 - The wrapper adapts Turso's `all()` and `run()` result shapes into the app's `execute()` result shape. The wrapper implements `sync()` as `push()` then `pull()` because package `0.6.0` exposes `push()` and `pull()` but not the README-documented `sync()` method.
 - Household schema migrations remain server-owned. The app does not run bundled migrations against synced Household DB files.
 - Cached bootstrap metadata must not include Household DB auth tokens. Opening a synced DB for push/pull still requires a fresh bootstrap token; offline reopen without authorization is a separate Home startup slice.
-- Turso Sync's package-level conflict behavior is still documented as last-push-wins. App writes must continue using row-level LWW timestamps, `item_checks`, and tombstones so the replicated rows remain semantically mergeable even though transport ordering is push-based.
+- Turso Sync's package-level conflict behavior is documented as last-push-wins. App writes must continue using app-owned `updated_at` timestamps, `item_checks`, and tombstones so the replicated rows remain predictable for display, recovery upserts, and future migration paths even though transport ordering is push-based.
 - The package requires native linking and its JS entrypoint installs JSI bindings at module load. Keep the app-owned wrapper's import lazy so Jest and non-native code can test against mocks without loading the native module.
 - `app/api/bootstrap+api.ts` lazy imports are not solved by the native Household DB package. Removing them is tracked separately in `docs/tech-debt/bootstrap-api-lazy-imports.md`.
 

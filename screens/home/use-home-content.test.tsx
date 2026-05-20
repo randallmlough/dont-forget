@@ -3,58 +3,56 @@ import { useRef } from "react";
 import { Text } from "react-native";
 
 import type {
-	ActiveListDataAdapter,
+	ActiveListDataSource,
 	ActiveListInitialState,
 } from "@/components/active-list";
-import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
-import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
 import {
-	type CachedBootstrapMetadata,
-	discardCachedBootstrapMetadataIfUnauthorized,
-	readCachedBootstrapMetadata,
-	saveCachedBootstrapMetadata,
-} from "@/lib/app/offline-bootstrap-cache";
-import type { BootstrapResponse } from "@/lib/bootstrap";
+	type CachedHouseholdSession,
+	discardCachedHouseholdSessionIfUnauthorized,
+	getHouseholdSession,
+	type HouseholdSession,
+	readCachedHouseholdSession,
+	saveCachedHouseholdSession,
+} from "@/lib/services/household";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
-jest.mock("@/lib/app/bootstrap-client", () => ({
-	bootstrapWithClerk: jest.fn(),
+import { createHouseholdActiveListDataSource } from "./active-list-data-source";
+
+jest.mock("./active-list-data-source", () => ({
+	createHouseholdActiveListDataSource: jest.fn(),
 }));
 
-jest.mock("@/lib/app/active-list-adapter", () => ({
-	createHouseholdActiveListAdapter: jest.fn(),
-}));
-
-jest.mock("@/lib/app/offline-bootstrap-cache", () => ({
-	discardCachedBootstrapMetadataIfUnauthorized: jest.fn(),
-	readCachedBootstrapMetadata: jest.fn(),
-	saveCachedBootstrapMetadata: jest.fn(),
+jest.mock("@/lib/services/household", () => ({
+	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
+	getHouseholdSession: jest.fn(),
+	readCachedHouseholdSession: jest.fn(),
+	saveCachedHouseholdSession: jest.fn(),
 }));
 
 beforeEach(() => {
-	jest.mocked(bootstrapWithClerk).mockReset();
-	jest.mocked(createHouseholdActiveListAdapter).mockReset();
+	jest.mocked(getHouseholdSession).mockReset();
+	jest.mocked(createHouseholdActiveListDataSource).mockReset();
 	jest
-		.mocked(discardCachedBootstrapMetadataIfUnauthorized)
+		.mocked(discardCachedHouseholdSessionIfUnauthorized)
 		.mockResolvedValue(null);
-	jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(null);
+	jest.mocked(readCachedHouseholdSession).mockResolvedValue(null);
 	jest
-		.mocked(saveCachedBootstrapMetadata)
-		.mockResolvedValue(cachedBootstrapFixture());
+		.mocked(saveCachedHouseholdSession)
+		.mockResolvedValue(cachedHouseholdSessionFixture());
 });
 
 describe("useHomeContent", () => {
-	it("does not restart bootstrap when the getToken callback changes", async () => {
-		const bootstrap = bootstrapFixture();
+	it("does not restart Household Session loading when the getToken callback changes", async () => {
+		const session = householdSessionFixture();
 		const getToken = jest.fn(async () => "session-token");
 		const nextGetToken = jest.fn(async () => "next-session-token");
-		jest.mocked(bootstrapWithClerk).mockImplementation(async (loadToken) => {
+		jest.mocked(getHouseholdSession).mockImplementation(async (loadToken) => {
 			await loadToken();
-			return bootstrap;
+			return session;
 		});
 		jest
-			.mocked(createHouseholdActiveListAdapter)
-			.mockReturnValue(noopAdapter(initialListFixture()));
+			.mocked(createHouseholdActiveListDataSource)
+			.mockReturnValue(noopDataSource(initialListFixture()));
 
 		const { rerender } = render(
 			<UseHomeContentHarness getToken={getToken} isLoaded isSignedIn />,
@@ -65,25 +63,25 @@ describe("useHomeContent", () => {
 			<UseHomeContentHarness getToken={nextGetToken} isLoaded isSignedIn />,
 		);
 
-		expect(bootstrapWithClerk).toHaveBeenCalledTimes(1);
+		expect(getHouseholdSession).toHaveBeenCalledTimes(1);
 		expect(getToken).toHaveBeenCalledTimes(1);
 		expect(nextGetToken).not.toHaveBeenCalled();
 	});
 
 	it("opens cached local List data before Clerk finishes loading", async () => {
-		const cached = cachedBootstrapFixture();
-		jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+		const cached = cachedHouseholdSessionFixture();
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
-			.mocked(createHouseholdActiveListAdapter)
+			.mocked(createHouseholdActiveListDataSource)
 			.mockReturnValue(
-				noopAdapter(initialListFixture(), { syncAuthorized: false }),
+				noopDataSource(initialListFixture(), { syncAuthorized: false }),
 			);
 
 		render(<UseHomeContentHarness isLoaded={false} isSignedIn={false} />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(bootstrapWithClerk).not.toHaveBeenCalled();
-		expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
+		expect(getHouseholdSession).not.toHaveBeenCalled();
+		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
 			household: cached.activeHousehold,
 			activeMember: cached.activeMember,
 			list: cached.activeList,
@@ -93,12 +91,57 @@ describe("useHomeContent", () => {
 		});
 	});
 
-	it("closes a pending adapter when the loading run is cancelled", async () => {
+	it("closes rendered cached List data before opening fresh authorized data", async () => {
+		const calls: string[] = [];
+		const freshSession = deferred<HouseholdSession>();
+		const cached = cachedHouseholdSessionFixture();
+		const cachedList = initialListFixture({ itemName: "Cached Milk" });
+		const freshList = initialListFixture({ itemName: "Fresh Eggs" });
+		const cachedDataSource = noopDataSource(cachedList, {
+			syncAuthorized: false,
+			async load() {
+				calls.push("cached-load");
+				return cachedList;
+			},
+			async close() {
+				calls.push("cached-close");
+			},
+		});
+		const freshDataSource = noopDataSource(freshList, {
+			async load() {
+				calls.push("fresh-load");
+				return freshList;
+			},
+		});
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
+		jest
+			.mocked(createHouseholdActiveListDataSource)
+			.mockImplementation((config) =>
+				config.database.authToken ? freshDataSource : cachedDataSource,
+			);
+
+		render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+
+		freshSession.resolve(householdSessionFixture());
+
+		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+		expect(calls.indexOf("cached-close")).toBeGreaterThanOrEqual(0);
+		expect(calls.indexOf("cached-close")).toBeLessThan(
+			calls.indexOf("fresh-load"),
+		);
+	});
+
+	it("closes a pending data source when the loading run is cancelled", async () => {
 		const load = deferred<ActiveListInitialState>();
 		const close = jest.fn().mockResolvedValue(undefined);
-		jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
-		jest.mocked(createHouseholdActiveListAdapter).mockReturnValue({
-			...noopAdapter(initialListFixture()),
+		jest
+			.mocked(getHouseholdSession)
+			.mockResolvedValue(householdSessionFixture());
+		jest.mocked(createHouseholdActiveListDataSource).mockReturnValue({
+			...noopDataSource(initialListFixture()),
 			load: () => load.promise,
 			close,
 		});
@@ -106,7 +149,7 @@ describe("useHomeContent", () => {
 		const { unmount } = render(<UseHomeContentHarness isLoaded isSignedIn />);
 
 		await waitFor(() =>
-			expect(createHouseholdActiveListAdapter).toHaveBeenCalledTimes(1),
+			expect(createHouseholdActiveListDataSource).toHaveBeenCalledTimes(1),
 		);
 		unmount();
 
@@ -139,9 +182,9 @@ function UseHomeContentHarness({
 	return <Text>{content.status}</Text>;
 }
 
-function bootstrapFixture(
+function householdSessionFixture(
 	overrides: { householdId?: string; householdName?: string } = {},
-): BootstrapResponse {
+): HouseholdSession {
 	return {
 		user: {
 			id: "usr_avery",
@@ -175,12 +218,12 @@ function bootstrapFixture(
 	};
 }
 
-function cachedBootstrapFixture(): CachedBootstrapMetadata {
-	const { householdDatabase: _householdDatabase, ...bootstrap } =
-		bootstrapFixture();
+function cachedHouseholdSessionFixture(): CachedHouseholdSession {
+	const { householdDatabase: _householdDatabase, ...sessionMetadata } =
+		householdSessionFixture();
 
 	return {
-		...bootstrap,
+		...sessionMetadata,
 		householdDatabase: {
 			url: "libsql://example.turso.io",
 			expiresAt: 1,
@@ -189,14 +232,16 @@ function cachedBootstrapFixture(): CachedBootstrapMetadata {
 	};
 }
 
-function initialListFixture(): ActiveListInitialState {
+function initialListFixture(
+	overrides: { itemName?: string } = {},
+): ActiveListInitialState {
 	return {
 		householdName: "Avery",
 		listName: "Groceries",
 		items: [
 			{
 				id: "itm_milk",
-				name: "Milk",
+				name: overrides.itemName ?? "Milk",
 				checked: true,
 				checkedByMemberName: "Avery Chen",
 			},
@@ -204,10 +249,10 @@ function initialListFixture(): ActiveListInitialState {
 	};
 }
 
-function noopAdapter(
+function noopDataSource(
 	initialList: ActiveListInitialState,
-	overrides: Partial<ActiveListDataAdapter> = {},
-): ActiveListDataAdapter {
+	overrides: Partial<ActiveListDataSource> = {},
+): ActiveListDataSource {
 	return {
 		syncAuthorized: true,
 		async load() {

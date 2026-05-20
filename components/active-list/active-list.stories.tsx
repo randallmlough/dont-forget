@@ -5,7 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 
 import {
 	ActiveList,
-	type ActiveListDataAdapter,
+	type ActiveListDataSource,
 	type ActiveListInitialState,
 } from "@/components/active-list";
 
@@ -57,14 +57,17 @@ function ActiveListStory({
 }: {
 	initialState: ActiveListInitialState;
 }) {
-	const adapter = useMemo(() => storyAdapter(initialState), [initialState]);
+	const dataSource = useMemo(
+		() => storyDataSource(initialState),
+		[initialState],
+	);
 
 	return (
 		<View style={styles.canvas}>
 			<ActiveList.Provider
 				initialState={initialState}
 				currentMemberName="Avery Chen"
-				adapter={adapter}
+				dataSource={dataSource}
 			>
 				<ActiveList.Screen>
 					<ActiveList.Header />
@@ -76,9 +79,9 @@ function ActiveListStory({
 	);
 }
 
-function storyAdapter(
+function storyDataSource(
 	initialState: ActiveListInitialState,
-): ActiveListDataAdapter {
+): ActiveListDataSource {
 	let state = initialState;
 	let nextItem = initialState.items.length + 1;
 

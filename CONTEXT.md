@@ -25,7 +25,7 @@ A named collection of Items, owned by a Household. Every Member of the Household
 _Avoid_: shopping list, board
 
 **Item**:
-A line on a List — typically something to buy. Has a name, a checked/unchecked state, and an order within the List.
+A line on a List — typically something to buy. Has a name, a checked/unchecked state, and an order within the List. Checked state is recorded per User within the Item's Household.
 _Avoid_: entry, todo, task
 
 **Invitation**:
@@ -36,6 +36,10 @@ _Avoid_: invite link, share, request
 The authenticated app surface showing the current List for the active Household.
 _Avoid_: dashboard, landing page
 
+**Household Session**:
+The app's active Household context for a signed-in User: the active Household, active Member, active List, current Members, and short-lived Household DB connection metadata needed to open Home. A cached Household Session may omit secrets and allow offline Home startup.
+_Avoid_: auth session, bootstrap payload, account session
+
 ## Relationships
 
 - A **User** is a **Member** of zero or more **Households**
@@ -43,18 +47,19 @@ _Avoid_: dashboard, landing page
 - A **Household** owns zero or more **Lists**
 - A **List** contains zero or more **Items**
 - **Home** shows one **List** from the active **Household**
+- A **Household Session** opens **Home** for one active **Household**, one active **Member**, and one active **List**
 
 ## Decisions in flight
 
-- **Sync semantics**: eventual, seconds-scale latency, last-write-wins acceptable. Item/List writes must commit locally while offline and sync when connectivity returns. Not sub-second collaborative (no Google-Docs-style live presence). _Decided 2026-04-29; offline write requirement clarified 2026-05-16._
+- **Sync semantics**: eventual, seconds-scale latency. The native Household DB path uses Turso Sync's local-first model: all List/Item reads and writes happen against the local Household DB, and explicit `push()`/`pull()` calls propagate changes when connectivity and authorization are available. Turso's transport conflict behavior is **last push wins**; Don't Forget's replicated rows still carry app-owned timestamps, split checked state, and tombstones so application-level List/Item semantics remain predictable. Item/List writes must commit locally while offline and sync when connectivity returns. Not sub-second collaborative (no Google-Docs-style live presence). _Decided 2026-04-29; offline write requirement clarified 2026-05-16; Turso Sync transport semantics clarified 2026-05-18._
 - **Membership cardinality**: a **User** can be a **Member** of many **Households** (many-to-many). _Decided 2026-04-29._
 - **Stack**: Clerk for auth (Apple, Google, and email/password sign-in), Expo API Routes on EAS Hosting for the server, Turso for the database, Resend for invitation emails. _Decided 2026-04-29; auth methods clarified 2026-05-16._
 - **Data partitioning**: one Turso DB per Household (replicated to Member devices) + one server-only "directory" DB for Users/Households/Memberships/Invitations. Clerk owns authentication identity; the directory DB owns app User records linked to Clerk by `clerk_user_id`, and product relationships use app-owned `user_id`. _Decided 2026-04-29; User storage revised 2026-05-13._
-- **Native Household DB client**: the iOS app uses `@tursodatabase/sync-react-native` behind an app-owned Household DB wrapper for local synced Household DB access; `@libsql/client` remains limited to server, migration, reset, and Node test seams. _Revised 2026-05-16; see ADR-0009._
+- **Native Household DB client**: the iOS app uses `@tursodatabase/sync-react-native` behind the app-owned `HouseholdStore` wrapper for local synced Household data access; `@libsql/client` remains limited to server, migration, reset, and Node test seams. _Revised 2026-05-16; HouseholdStore naming applied 2026-05-19; see ADR-0009 and ADR-0011._
 - **Roles**: two-tier (Owner, Member). Only Owners can remove Members, change roles, or delete the Household. _Decided 2026-04-29._
 - **Owner rules**: multiple Owners allowed; any Member can invite; if the last Owner leaves, the longest-tenured remaining Member is auto-promoted to Owner. _Decided 2026-04-29._
 - **Invitations**: token-based (not email-based) due to Apple Hide-My-Email; single-use; 7-day expiration; both email (Resend) and shareable-link delivery; revocable by inviter. _Decided 2026-04-29._
-- **Conflict resolution**: row-level last-write-wins on `items` and `lists` using device-generated monotonic timestamps; the `checked` state lives in a separate `item_checks` table (per-Member, per-Item) so the highest-collision field can't conflict. Cross-device clock skew is acceptable for Household List use. _Decided 2026-04-29; timestamp source clarified 2026-05-16._
+- **Conflict resolution**: Turso Sync pushes logical local changes and resolves concurrent pushes by **last push wins**. Don't Forget uses app-owned `updated_at` timestamps on `items`, `lists`, and `item_checks` for application-level ordering, recovery upserts, display derivation, and future migration paths; they are not Turso's built-in merge clock. The `checked` state lives in a separate `item_checks` table (per-User within a Household, per-Item) so the highest-collision field is isolated from Item attribute edits. Cross-device clock skew is acceptable for Household List use. _Decided 2026-04-29; timestamp source clarified 2026-05-16; checked-state owner and Turso last-push-wins transport clarified 2026-05-18._
 - **Soft-delete**: tombstones (`deleted_at`) on every replicated table; no hard deletes from the app; server-side GC after replicas catch up. _Decided 2026-04-29._
 - **First-run flow**: on first sign-in, server auto-creates a Household named after the User's first name (or "Untitled" if Apple didn't return one). The new Household starts with one empty List named "Groceries"; the User can rename it or invite Members later. Invitation links route through a separate accept flow. _Decided 2026-04-29; List name clarified 2026-05-13._
 - **First-run onboarding**: optional onboarding happens after server bootstrap creates or loads the User's Household, Membership, Household DB, and initial List. The server determines first-run status from directory membership state, not from which sign-in/sign-up/SSO client path fired. _Decided 2026-05-13._

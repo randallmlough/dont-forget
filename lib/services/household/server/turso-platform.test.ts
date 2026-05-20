@@ -2,7 +2,7 @@ import type { TursoOperatorConfig } from "@/lib/env";
 import {
 	createTursoPlatformClient,
 	type TursoPlatformError,
-} from "@/lib/server/turso-platform";
+} from "./turso-platform";
 
 describe("createTursoPlatformClient", () => {
 	it("creates or reuses a database and normalizes its URL", async () => {

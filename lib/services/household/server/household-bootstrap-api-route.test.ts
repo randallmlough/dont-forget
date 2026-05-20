@@ -6,8 +6,10 @@ jest.mock("@/lib/server/auth", () => {
 	throw new Error("server auth imported during route registration");
 });
 
-jest.mock("@/lib/server/bootstrap", () => {
-	throw new Error("server bootstrap imported during route registration");
+jest.mock("@/lib/services/household/server", () => {
+	throw new Error(
+		"household server service imported during route registration",
+	);
 });
 
 import { POST } from "@/app/api/bootstrap+api";

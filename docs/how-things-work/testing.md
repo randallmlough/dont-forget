@@ -64,7 +64,7 @@ Do not use `pnpm db:migrate` in tests. That command is for intentionally applyin
 ## File Layout
 
 - `lib/test/setup.ts` configures global Jest setup and native/SDK mocks.
-- `lib/test/mocks/` contains reusable mock modules.
+- `lib/test/mocks/` contains reusable mock modules and fixtures, including observability helpers such as analytics module mocks and logger injection fixtures.
 - `db/test.ts` owns local temp DB helpers.
 - Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `db/test.ts` for test suites.
 - Screen flow tests live next to the screen they exercise, e.g. `screens/auth/sign-in-screen.test.tsx`.
@@ -82,6 +82,8 @@ Prefer integration-style tests for product behavior:
 - sync/conflict-resolution behavior
 - database migrations and repository/service logic
 - analytics/logging calls when they are part of the feature contract
+
+Prefer injected logger fixtures or narrow analytics test doubles for services and stores that accept observability dependencies. Reserve module mocks such as `@/lib/analytics` for UI and screen tests that import app-wide helpers directly.
 
 Use focused unit tests for pure logic and narrow adapters:
 

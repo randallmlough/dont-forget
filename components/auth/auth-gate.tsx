@@ -3,7 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import { useAnalyticsIdentity } from "@/lib/analytics";
-import { readCachedBootstrapMetadata } from "@/lib/app/offline-bootstrap-cache";
+import { readCachedHouseholdSession } from "@/lib/services/household";
 
 const AUTH_PATHS = new Set(["/sign-in", "/sign-up"]);
 
@@ -25,7 +25,7 @@ export function AuthGate({ pathname }: { pathname: string }) {
 		let cancelled = false;
 		setCachedSessionStatus("checking");
 
-		void readCachedBootstrapMetadata()
+		void readCachedHouseholdSession()
 			.then((cached) => {
 				if (!cancelled) {
 					setCachedSessionStatus(cached ? "available" : "unavailable");
