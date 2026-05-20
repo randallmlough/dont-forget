@@ -14,8 +14,6 @@ type ItemServiceStore = {
 	) => Promise<{ rows: Array<Record<string, unknown>> }>;
 };
 
-type TimestampSource = () => number;
-
 type ItemServiceAnalytics = {
 	track: typeof track;
 };
@@ -60,7 +58,6 @@ export type ItemServiceDeps = {
 	store: ItemServiceStore;
 	logger?: Logger;
 	analytics?: ItemServiceAnalytics;
-	clock?: TimestampSource;
 };
 
 const itemRowSchema = z.object({
@@ -83,7 +80,6 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		service: "item",
 	});
 	const analytics = deps.analytics ?? { track };
-	const timestamp = createTimestampSource(deps.clock);
 
 	return {
 		async listItems(input) {
@@ -131,7 +127,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 
 			try {
 				const position = await nextPosition(deps.store, input.listId);
-				const now = timestamp();
+				const now = nextItemServiceTimestamp();
 				const id = createAppId("itm", randomUuid);
 
 				await deps.store.execute({
@@ -180,7 +176,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		},
 		async setItemChecked(input) {
 			try {
-				const now = timestamp();
+				const now = nextItemServiceTimestamp();
 				await deps.store.execute({
 					sql: `
             INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
@@ -236,17 +232,6 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 		createdByUserId: parsed.created_by_user_id,
 		createdAt: parsed.created_at,
 		updatedAt: parsed.updated_at,
-	};
-}
-
-function createTimestampSource(clock?: TimestampSource): TimestampSource {
-	if (!clock) return nextItemServiceTimestamp;
-
-	let lastTimestamp: number | null = null;
-
-	return () => {
-		lastTimestamp = nextMonotonicTimestamp(clock(), lastTimestamp);
-		return lastTimestamp;
 	};
 }
 

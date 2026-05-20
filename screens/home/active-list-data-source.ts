@@ -42,7 +42,6 @@ type DataSourceOptions = {
 	store?: ActiveListStore;
 	openStore?: (config: OpenHouseholdStoreConfig) => Promise<ActiveListStore>;
 	openRemoteClient?: OpenHouseholdRemoteClient;
-	now?: () => number;
 };
 
 type ActiveListServices = {
@@ -54,7 +53,6 @@ type ActiveListServices = {
 type CreateActiveListServicesInput = {
 	storePromise: Promise<ActiveListStore>;
 	householdId: string;
-	itemServiceClock?: () => number;
 };
 
 export function createHouseholdActiveListDataSource(
@@ -68,9 +66,6 @@ export function createHouseholdActiveListDataSource(
 				database: config.database,
 			});
 	const ownsStore = !options.store;
-	const itemServiceClock = options.now
-		? createTimestampSource(options.now)
-		: undefined;
 	const memberNames = new Map<string, string | null>();
 	const log = logger.with({
 		household_id: config.household.id,
@@ -96,7 +91,6 @@ export function createHouseholdActiveListDataSource(
 	const getServices = createActiveListServicesGetter({
 		storePromise,
 		householdId: config.household.id,
-		itemServiceClock,
 	});
 
 	return {
@@ -202,7 +196,6 @@ export function createHouseholdActiveListDataSource(
 function createActiveListServicesGetter({
 	storePromise,
 	householdId,
-	itemServiceClock,
 }: CreateActiveListServicesInput): () => Promise<ActiveListServices> {
 	let servicesPromise: Promise<ActiveListServices> | null = null;
 
@@ -218,34 +211,10 @@ function createActiveListServicesGetter({
 				householdId,
 				store,
 				logger,
-				clock: itemServiceClock,
 			}),
 		}));
 		return servicesPromise;
 	};
-}
-
-function createTimestampSource(now: () => number): () => number {
-	let lastTimestamp: number | null = null;
-
-	return () => {
-		lastTimestamp = nextMonotonicTimestamp(now(), lastTimestamp);
-		return lastTimestamp;
-	};
-}
-
-function nextMonotonicTimestamp(
-	rawTimestamp: number,
-	previousTimestamp: number | null,
-): number {
-	const timestamp = Math.trunc(rawTimestamp);
-	if (!Number.isFinite(timestamp)) {
-		throw new Error("Timestamp source must return a finite number");
-	}
-
-	return previousTimestamp === null || timestamp > previousTimestamp
-		? timestamp
-		: previousTimestamp + 1;
 }
 
 function activeListItemFromItem(

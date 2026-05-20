@@ -13,6 +13,8 @@
       <li>Home's Active List data source will move to <code>screens/home/active-list-data-source.ts</code> now that List and Item read/create SQL can be service-owned.</li>
       <li>Item creation remains local-first: <code>ItemService.addItem</code> resolves after the local insert, while the Home data source requests sync separately after the service returns.</li>
       <li><code>ItemService.addItem</code> emits the typed <code>item_added</code> analytics event after local write success with Household, List, Item, and User IDs, intentionally excluding the Item name.</li>
+      <li><code>ItemService.setItemChecked</code> emits the typed <code>item_checked_state_changed</code> analytics event after local write success with Household, Item, User, and checked-state values.</li>
+      <li><code>ItemService</code> owns timestamp generation with <code>Date.now()</code> and a monotonic guard; tests that need exact timestamp behavior spy on <code>Date.now</code> rather than injecting a clock dependency.</li>
       <li>Checked-state mutation moved into <code>ItemService</code> as a small boundary cleanup so <code>screens/home/active-list-data-source.ts</code> can compose services without issuing direct Household SQL.</li>
       <li>The temporary remote sync fallback moved under the Household service layer so the screen-owned data source does not import database clients directly.</li>
     </ul>

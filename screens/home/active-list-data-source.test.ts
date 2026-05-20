@@ -220,7 +220,6 @@ describe("createHouseholdActiveListDataSource", () => {
 
 	it("loads, appends, and persists latest-check-wins Item state", async () => {
 		const household = await createTestHouseholdDb();
-		let now = 1_700_000_000_000;
 
 		try {
 			await household.db.insert(lists).values({
@@ -261,7 +260,7 @@ describe("createHouseholdActiveListDataSource", () => {
 					database: {
 						url: `file:${household.path}`,
 						authToken: "unused",
-						expiresAt: now + 1,
+						expiresAt: 1_700_000_000_001,
 					},
 				},
 				{
@@ -269,7 +268,6 @@ describe("createHouseholdActiveListDataSource", () => {
 						execute: household.client.execute.bind(household.client),
 						close: jest.fn(async () => undefined),
 					},
-					now: () => now++,
 				},
 			);
 
@@ -307,7 +305,7 @@ describe("createHouseholdActiveListDataSource", () => {
 				itemId: milk.id,
 				userId: "usr_blake",
 				checkedAt: null,
-				updatedAt: now + 100,
+				updatedAt: Number.MAX_SAFE_INTEGER,
 			});
 
 			expect((await dataSource.load()).items[0]).toEqual({

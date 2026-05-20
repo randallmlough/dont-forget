@@ -30,6 +30,7 @@ const testLogger = {
 testLogger.with.mockImplementation(() => testLogger);
 
 beforeEach(() => {
+	jest.restoreAllMocks();
 	testLogger.debug.mockReset();
 	testLogger.info.mockReset();
 	testLogger.warn.mockReset();
@@ -147,7 +148,7 @@ describe("createItemService", () => {
 	it("adds a trimmed Item with generated ID and controlled timestamps", async () => {
 		const household = await createTestHouseholdDb();
 		const analytics = analyticsFixture();
-		let now = 1_700_000_000_000;
+		jest.spyOn(Date, "now").mockReturnValue(8_000_000_000_000);
 
 		try {
 			await household.db.insert(lists).values({
@@ -160,7 +161,6 @@ describe("createItemService", () => {
 				store: { execute: household.client.execute.bind(household.client) },
 				logger: testLogger,
 				analytics,
-				clock: () => now++,
 			});
 
 			const item = await service.addItem({
@@ -182,8 +182,8 @@ describe("createItemService", () => {
 				checkedByUserId: null,
 				position: 0,
 				createdByUserId: "usr_avery",
-				createdAt: 1_700_000_000_000,
-				updatedAt: 1_700_000_000_000,
+				createdAt: 8_000_000_000_000,
+				updatedAt: 8_000_000_000_000,
 			});
 			expect(row).toMatchObject({
 				id: item.id,
@@ -191,8 +191,8 @@ describe("createItemService", () => {
 				name: "Milk",
 				position: 0,
 				createdByUserId: "usr_avery",
-				createdAt: 1_700_000_000_000,
-				updatedAt: 1_700_000_000_000,
+				createdAt: 8_000_000_000_000,
+				updatedAt: 8_000_000_000_000,
 			});
 			expect(analytics.track).toHaveBeenCalledWith("item_added", {
 				household_id: "hh_avery",
@@ -235,7 +235,6 @@ describe("createItemService", () => {
 				householdId: "hh_avery",
 				store: { execute: household.client.execute.bind(household.client) },
 				logger: testLogger,
-				clock: () => 1_700_000_000_000,
 			});
 
 			await expect(
@@ -275,8 +274,11 @@ describe("createItemService", () => {
 		const household = await createTestHouseholdDb();
 		const analytics = analyticsFixture();
 		const rawTimestamps = [
-			1_700_000_000_000, 1_699_999_999_999, 1_699_999_999_999,
+			9_000_000_000_000, 8_999_999_999_999, 8_999_999_999_999,
 		];
+		jest
+			.spyOn(Date, "now")
+			.mockImplementation(() => rawTimestamps.shift() ?? 8_999_999_999_999);
 
 		try {
 			await household.db.insert(lists).values({
@@ -289,7 +291,6 @@ describe("createItemService", () => {
 				store: { execute: household.client.execute.bind(household.client) },
 				logger: testLogger,
 				analytics,
-				clock: () => rawTimestamps.shift() ?? 1_699_999_999_999,
 			});
 
 			const milk = await service.addItem({
@@ -318,19 +319,19 @@ describe("createItemService", () => {
 
 			expect(milkRow).toMatchObject({
 				id: milk.id,
-				createdAt: 1_700_000_000_000,
-				updatedAt: 1_700_000_000_000,
+				createdAt: 9_000_000_000_000,
+				updatedAt: 9_000_000_000_000,
 			});
 			expect(eggsRow).toMatchObject({
 				id: eggs.id,
-				createdAt: 1_700_000_000_001,
-				updatedAt: 1_700_000_000_001,
+				createdAt: 9_000_000_000_001,
+				updatedAt: 9_000_000_000_001,
 			});
 			expect(checkRow).toMatchObject({
 				itemId: milk.id,
 				userId: "usr_avery",
-				checkedAt: 1_700_000_000_002,
-				updatedAt: 1_700_000_000_002,
+				checkedAt: 9_000_000_000_002,
+				updatedAt: 9_000_000_000_002,
 			});
 			expect(analytics.track).toHaveBeenCalledWith(
 				"item_checked_state_changed",
