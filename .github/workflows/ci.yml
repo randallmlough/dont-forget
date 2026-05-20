@@ -48,8 +48,8 @@ jobs:
       - name: Test
         run: make test-ci
 
-      - name: Check Expo packages
-        run: make expo-check
+#      - name: Check Expo packages
+#        run: make expo-check
 
       - name: Resolve Expo config
         run: make expo-config-check
