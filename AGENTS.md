@@ -11,7 +11,7 @@
 
 ### Issue tracker
 
-Issues and PRDs live in GitHub Issues for `randallmlough/dont-forget`. See `docs/agents/issue-tracker.md`.
+PRDs live in GitHub Discussions for `randallmlough/dont-forget`; implementation issues live in GitHub Issues. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
