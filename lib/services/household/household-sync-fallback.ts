@@ -1,14 +1,8 @@
 import type {
 	HouseholdDatabaseConfig,
 	HouseholdSqlValue,
-	HouseholdStore,
+	HouseholdStoreExecutor,
 } from "./household-store";
-
-type HouseholdSyncFallbackStore = {
-	execute: (
-		statement: Parameters<HouseholdStore["execute"]>[0],
-	) => Promise<{ rows: Record<string, unknown>[] }>;
-};
 
 type RemoteSqlClient = {
 	execute: (statement: {
@@ -28,7 +22,7 @@ export type OpenHouseholdRemoteClient = (
 ) => RemoteSqlClient | Promise<RemoteSqlClient>;
 
 export async function pushLocalHouseholdRowsToRemote(
-	store: HouseholdSyncFallbackStore,
+	store: HouseholdStoreExecutor,
 	database: HouseholdDatabaseConfig,
 	openRemoteClient: OpenHouseholdRemoteClient = openLibsqlRemoteClient,
 ) {
@@ -56,7 +50,7 @@ async function openLibsqlRemoteClient(database: RequiredRemoteDatabaseConfig) {
 }
 
 async function pushLocalLists(
-	store: HouseholdSyncFallbackStore,
+	store: HouseholdStoreExecutor,
 	remote: RemoteSqlClient,
 ) {
 	const result = await store.execute({
@@ -89,7 +83,7 @@ async function pushLocalLists(
 }
 
 async function pushLocalItems(
-	store: HouseholdSyncFallbackStore,
+	store: HouseholdStoreExecutor,
 	remote: RemoteSqlClient,
 ) {
 	const result = await store.execute({
@@ -128,7 +122,7 @@ async function pushLocalItems(
 }
 
 async function pushLocalItemChecks(
-	store: HouseholdSyncFallbackStore,
+	store: HouseholdStoreExecutor,
 	remote: RemoteSqlClient,
 ) {
 	const result = await store.execute({

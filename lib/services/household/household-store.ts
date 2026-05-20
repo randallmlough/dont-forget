@@ -32,6 +32,12 @@ export type HouseholdStore = {
 	deleteLocalData: () => Promise<void>;
 };
 
+export type HouseholdStoreExecutor = {
+	execute: (
+		statement: HouseholdSqlStatement,
+	) => Promise<{ rows: Array<Record<string, unknown>> }>;
+};
+
 export type HouseholdDatabaseConfig = {
 	url?: string | null;
 	authToken?: string | null;

@@ -68,5 +68,15 @@ ruleTester.run("no-server-service-imports", rule, {
 			code: `import { createHouseholdBootstrapService } from "./server/household-bootstrap-service";`,
 			errors: [{ messageId: "appSafeIndex" }],
 		},
+		{
+			filename: "/repo/lib/services/household/index.ts",
+			code: `export { createUserService } from "../user/server";`,
+			errors: [{ messageId: "appSafeIndex" }],
+		},
+		{
+			filename: "/repo/screens/home/use-home-content.ts",
+			code: `import { createUserService } from "../../lib/services/user/server";`,
+			errors: [{ messageId: "appFacing" }],
+		},
 	],
 });

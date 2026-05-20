@@ -77,11 +77,16 @@ describe("ActiveList", () => {
 	});
 
 	it("shows pending and offline sync without discarding local Item changes", async () => {
-		const sync = deferred<{ changed: boolean }>();
-		renderActiveList(
-			emptyList,
-			memoryDataSource(emptyList, { sync: () => sync.promise }),
-		);
+		const syncAfterWrite = deferred<{ changed: boolean }>();
+		const sync = jest
+			.fn<
+				Promise<{ changed: boolean }>,
+				Parameters<ActiveListDataSource["sync"]>
+			>()
+			.mockResolvedValueOnce({ changed: false })
+			.mockReturnValueOnce(syncAfterWrite.promise);
+		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
+		await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
 
 		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
 		await act(async () => {
@@ -91,7 +96,7 @@ describe("ActiveList", () => {
 		await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
 
 		await act(async () => {
-			sync.reject(new TypeError("Network request failed"));
+			syncAfterWrite.reject(new TypeError("Network request failed"));
 		});
 
 		await waitFor(() =>
@@ -108,11 +113,13 @@ describe("ActiveList", () => {
 				Promise<{ changed: boolean }>,
 				Parameters<ActiveListDataSource["sync"]>
 			>()
+			.mockResolvedValueOnce({ changed: false })
 			.mockRejectedValueOnce(new TypeError("Network request failed"))
 			.mockResolvedValue({ changed: false });
 
 		try {
 			renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
+			await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
 
 			fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
 			await act(async () => {
@@ -130,7 +137,7 @@ describe("ActiveList", () => {
 			});
 
 			await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
-			expect(sync).toHaveBeenCalledTimes(2);
+			expect(sync).toHaveBeenCalledTimes(3);
 			expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
 			expect(mockLoggerError).not.toHaveBeenCalled();
 		} finally {
@@ -145,10 +152,12 @@ describe("ActiveList", () => {
 				Promise<{ changed: boolean }>,
 				Parameters<ActiveListDataSource["sync"]>
 			>()
+			.mockResolvedValueOnce({ changed: false })
 			.mockRejectedValue(new TypeError("Network request failed"));
 
 		try {
 			renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
+			await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
 
 			fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
 			await act(async () => {
@@ -159,17 +168,28 @@ describe("ActiveList", () => {
 					screen.getByText("Offline - changes saved locally"),
 				).toBeTruthy(),
 			);
-			expect(sync).toHaveBeenCalledTimes(1);
+			expect(sync).toHaveBeenCalledTimes(2);
 
 			await act(async () => {
 				jest.advanceTimersByTime(1000);
 				await Promise.resolve();
 			});
 
-			expect(sync).toHaveBeenCalledTimes(1);
+			expect(sync).toHaveBeenCalledTimes(2);
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	it("pushes local-only sync when an authorized data source opens", async () => {
+		const sync = jest.fn(async () => ({ changed: false }));
+
+		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
+
+		await waitFor(() =>
+			expect(sync).toHaveBeenCalledWith({ mode: "pushLocalOnly" }),
+		);
+		expect(screen.getByText("Synced")).toBeTruthy();
 	});
 
 	it("shows offline sync state when sync is not authorized", () => {
@@ -183,30 +203,33 @@ describe("ActiveList", () => {
 
 	it("pushes local changes before refreshing the List view", async () => {
 		let state = emptyList;
+		const sync = jest.fn(async () => ({ changed: false }));
 		const dataSource = memoryDataSource(emptyList, {
 			async load() {
 				return state;
 			},
-			async sync() {
-				state = {
-					...state,
-					items: [
-						...state.items,
-						{
-							id: "test-item-remote",
-							name: "Remote Apples",
-							checked: false,
-							checkedByMemberName: null,
-						},
-					],
-				};
-				return { changed: true };
-			},
+			sync,
 		});
 		const pull = jest.spyOn(dataSource, "pull");
-		const sync = jest.spyOn(dataSource, "sync");
 
 		renderActiveList(emptyList, dataSource);
+		await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+		sync.mockImplementationOnce(async () => {
+			state = {
+				...state,
+				items: [
+					...state.items,
+					{
+						id: "test-item-remote",
+						name: "Remote Apples",
+						checked: false,
+						checkedByMemberName: null,
+					},
+				],
+			};
+			return { changed: true };
+		});
+		sync.mockClear();
 
 		await act(async () => {
 			fireEvent.press(screen.getByText("Refresh"));

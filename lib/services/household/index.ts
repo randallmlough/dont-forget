@@ -21,6 +21,7 @@ export {
 	type HouseholdSqlStatement,
 	type HouseholdSqlValue,
 	type HouseholdStore,
+	type HouseholdStoreExecutor,
 	type HouseholdSyncResult,
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,

@@ -110,7 +110,7 @@ describe("HomeScreen", () => {
 			.mocked(createHouseholdActiveListDataSource)
 			.mockImplementation((config) => {
 				return config.database.authToken
-					? noopDataSource(freshList)
+					? noopDataSource(freshList, { syncAuthorized: true })
 					: noopDataSource(cachedList, { syncAuthorized: false });
 			});
 		clerkMocks.getToken.mockResolvedValue("session-token");
@@ -402,7 +402,7 @@ function noopDataSource(
 	overrides: Partial<ActiveListDataSource> = {},
 ): ActiveListDataSource {
 	return {
-		syncAuthorized: true,
+		syncAuthorized: false,
 		async load() {
 			return initialList;
 		},

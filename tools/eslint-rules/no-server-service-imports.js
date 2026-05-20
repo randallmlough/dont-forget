@@ -4,7 +4,9 @@ const {
 	importSource,
 	isAppApiFile,
 	isTestFile,
+	normalizePath,
 } = require("./path-utils");
+const path = require("node:path");
 
 module.exports = {
 	meta: {
@@ -28,7 +30,7 @@ module.exports = {
 
 		function checkStaticImport(node) {
 			const source = importSource(node);
-			if (!source || !isServerServiceImport(source)) return;
+			if (!source || !isServerServiceImport(source, filename)) return;
 			if (canUseServerServiceImport(filename, { dynamic: false })) return;
 			reportServerImport(context, filename, node);
 		}
@@ -39,7 +41,7 @@ module.exports = {
 			ExportNamedDeclaration: checkStaticImport,
 			ImportExpression(node) {
 				const source = dynamicImportSource(node);
-				if (!source || !isServerServiceImport(source)) return;
+				if (!source || !isServerServiceImport(source, filename)) return;
 				if (canUseServerServiceImport(filename, { dynamic: true })) return;
 				reportServerImport(context, filename, node);
 			},
@@ -67,11 +69,16 @@ function canUseServerServiceImport(filename, { dynamic }) {
 	return dynamic && isAppApiFile(filename);
 }
 
-function isServerServiceImport(source) {
-	return (
-		/^@\/lib\/services\/[^/]+\/server(?:\/.*)?$/.test(source) ||
-		/^\.\.?\/server(?:\/.*)?$/.test(source)
+function isServerServiceImport(source, filename) {
+	if (/^@\/lib\/services\/[^/]+\/server(?:\/.*)?$/.test(source)) {
+		return true;
+	}
+	if (!source.startsWith(".")) return false;
+
+	const resolved = normalizePath(
+		path.posix.normalize(path.posix.join(path.posix.dirname(filename), source)),
 	);
+	return /\/lib\/services\/[^/]+\/server(?:\/|$)/.test(resolved);
 }
 
 function isServerServiceFile(filename) {

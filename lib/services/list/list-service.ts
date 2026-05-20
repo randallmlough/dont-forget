@@ -3,13 +3,7 @@ import { z } from "zod";
 import { sqlNumberSchema } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import type { HouseholdSqlStatement } from "@/lib/services/household";
-
-type ListServiceStore = {
-	execute: (
-		statement: HouseholdSqlStatement,
-	) => Promise<{ rows: Array<Record<string, unknown>> }>;
-};
+import type { HouseholdStoreExecutor } from "@/lib/services/household";
 
 export type List = {
 	id: string;
@@ -30,7 +24,7 @@ export type ListService = {
 
 export type ListServiceDeps = {
 	householdId: string;
-	store: ListServiceStore;
+	store: HouseholdStoreExecutor;
 	logger?: Logger;
 };
 

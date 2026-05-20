@@ -9,7 +9,7 @@ import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
-	type HouseholdStore,
+	type HouseholdStoreExecutor,
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
 } from "@/lib/services/household/household-store";
@@ -20,11 +20,8 @@ import {
 import { createItemService, type Item } from "@/lib/services/item";
 import { createListService } from "@/lib/services/list";
 
-type ActiveListStore = {
+type ActiveListStore = HouseholdStoreExecutor & {
 	syncAuthorized?: boolean;
-	execute: (
-		statement: Parameters<HouseholdStore["execute"]>[0],
-	) => Promise<{ rows: Record<string, unknown>[] }>;
 	pull?: () => Promise<ActiveListSyncResult>;
 	sync?: () => Promise<ActiveListSyncResult>;
 	close: () => void | Promise<void>;
@@ -113,35 +110,22 @@ export function createHouseholdActiveListDataSource(
 			}
 		},
 		async addItem(rawName) {
-			try {
-				const { itemService } = await getServices();
-				const item = await itemService.addItem({
-					listId: config.list.id,
-					userId: config.activeMember.userId,
-					name: rawName,
-				});
+			const { itemService } = await getServices();
+			const item = await itemService.addItem({
+				listId: config.list.id,
+				userId: config.activeMember.userId,
+				name: rawName,
+			});
 
-				return activeListItemFromItem(item, memberNames);
-			} catch (error) {
-				log.error("active list item add failed", { error: asError(error) });
-				throw error;
-			}
+			return activeListItemFromItem(item, memberNames);
 		},
 		async setItemChecked(itemId, checked) {
-			try {
-				const { itemService } = await getServices();
-				await itemService.setItemChecked({
-					itemId,
-					userId: config.activeMember.userId,
-					checked,
-				});
-			} catch (error) {
-				log.error("active list item check failed", {
-					error: asError(error),
-					item_id: itemId,
-				});
-				throw error;
-			}
+			const { itemService } = await getServices();
+			await itemService.setItemChecked({
+				itemId,
+				userId: config.activeMember.userId,
+				checked,
+			});
 		},
 		async pull() {
 			if (!syncAuthorized) return { changed: false };

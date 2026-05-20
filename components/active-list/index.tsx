@@ -118,14 +118,11 @@ function ActiveListProvider({
 
 	useEffect(() => {
 		mounted.current = true;
-		transition({
-			type: dataSource.syncAuthorized ? "syncSucceeded" : "syncUnavailable",
-		});
 		return () => {
 			mounted.current = false;
 			void dataSource.close();
 		};
-	}, [dataSource, transition]);
+	}, [dataSource]);
 
 	const loadFromDataSource = useCallback(async () => {
 		const nextState = await dataSource.load();
@@ -188,6 +185,17 @@ function ActiveListProvider({
 			syncInFlight.current = false;
 		}
 	}, [dataSource, loadFromDataSource, logger, transition]);
+
+	useEffect(() => {
+		if (!dataSource.syncAuthorized) {
+			transition({ type: "syncUnavailable" });
+			return;
+		}
+
+		void syncLatest({ mode: "pushLocalOnly" }).catch((error) => {
+			logger.error("active list initial sync failed", { error });
+		});
+	}, [dataSource.syncAuthorized, logger, syncLatest, transition]);
 
 	useEffect(() => {
 		if (!dataSource.syncAuthorized) return;
@@ -262,13 +270,12 @@ function ActiveListProvider({
 					item: persistedItem,
 				});
 				void syncAfterLocalWrite();
-			} catch (error) {
-				logger.error("active list item add failed", { error });
+			} catch {
 				transition({ type: "itemAddFailed" });
 				await loadFromDataSource().catch(() => undefined);
 			}
 		},
-		[dataSource, loadFromDataSource, logger, syncAfterLocalWrite, transition],
+		[dataSource, loadFromDataSource, syncAfterLocalWrite, transition],
 	);
 
 	const toggleItem = useCallback(
@@ -290,8 +297,7 @@ function ActiveListProvider({
 				await dataSource.setItemChecked(itemId, checked);
 				transition({ type: "itemTogglePersisted" });
 				void syncAfterLocalWrite();
-			} catch (error) {
-				logger.error("active list item toggle failed", { error });
+			} catch {
 				transition({ type: "itemToggleFailed" });
 				await loadFromDataSource().catch(() => undefined);
 			}
@@ -300,7 +306,6 @@ function ActiveListProvider({
 			dataSource,
 			currentMemberName,
 			loadFromDataSource,
-			logger,
 			syncAfterLocalWrite,
 			transition,
 		],

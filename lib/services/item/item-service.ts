@@ -6,13 +6,7 @@ import { track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import type { HouseholdSqlStatement } from "@/lib/services/household";
-
-type ItemServiceStore = {
-	execute: (
-		statement: HouseholdSqlStatement,
-	) => Promise<{ rows: Array<Record<string, unknown>> }>;
-};
+import type { HouseholdStoreExecutor } from "@/lib/services/household";
 
 type ItemServiceAnalytics = {
 	track: typeof track;
@@ -55,7 +49,7 @@ export type ItemService = {
 
 export type ItemServiceDeps = {
 	householdId: string;
-	store: ItemServiceStore;
+	store: HouseholdStoreExecutor;
 	logger?: Logger;
 	analytics?: ItemServiceAnalytics;
 };
@@ -205,7 +199,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 }
 
 async function nextPosition(
-	store: ItemServiceStore,
+	store: HouseholdStoreExecutor,
 	listId: string,
 ): Promise<number> {
 	const result = await store.execute({
