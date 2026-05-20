@@ -218,6 +218,60 @@ describe("createHouseholdActiveListDataSource", () => {
 		);
 	});
 
+	it("resolves checked-state updates after local commit and requests sync separately", async () => {
+		const household = await createTestHouseholdDb();
+		const syncError = new Error("sync unavailable");
+		const sync = jest.fn(async () => {
+			throw syncError;
+		});
+
+		try {
+			await household.db.insert(lists).values({
+				id: DEFAULT_LIST_ID,
+				name: "Weekend Groceries",
+				createdByUserId: "usr_avery",
+			});
+			const dataSource = createHouseholdActiveListDataSource(
+				dataSourceConfigFixture(),
+				{
+					store: {
+						syncAuthorized: true,
+						execute: household.client.execute.bind(household.client),
+						pull: jest.fn(async () => ({ changed: false })),
+						sync,
+						close: jest.fn(async () => undefined),
+					},
+				},
+			);
+			const milk = await dataSource.addItem("Milk");
+			await Promise.resolve();
+			sync.mockClear();
+			mockLoggerWarn.mockClear();
+
+			await expect(dataSource.setItemChecked(milk.id, true)).resolves.toBe(
+				undefined,
+			);
+			await Promise.resolve();
+
+			const checkRow = await household.db.query.itemChecks.findFirst({
+				where: (table, { eq }) => eq(table.itemId, milk.id),
+			});
+			expect(checkRow).toMatchObject({
+				itemId: milk.id,
+				userId: "usr_avery",
+				checkedAt: expect.any(Number),
+				updatedAt: expect.any(Number),
+			});
+			expect(sync).toHaveBeenCalledTimes(1);
+			expect(mockLoggerWarn).toHaveBeenCalledWith(
+				"active list sync after local item write failed",
+				{ error: syncError },
+			);
+		} finally {
+			await household.close();
+		}
+	});
+
 	it("loads, appends, and persists latest-check-wins Item state", async () => {
 		const household = await createTestHouseholdDb();
 

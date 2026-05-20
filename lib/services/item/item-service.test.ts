@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe("createItemService", () => {
-	it("lists Items in stable order with latest checked state", async () => {
+	it("lists Items in stable order with latest per-User checked state", async () => {
 		const household = await createTestHouseholdDb();
 
 		try {
@@ -340,6 +340,77 @@ describe("createItemService", () => {
 					item_id: milk.id,
 					user_id: "usr_avery",
 					checked: true,
+				},
+			);
+		} finally {
+			await household.close();
+		}
+	});
+
+	it("unchecks an Item for the active User and derives the unchecked state", async () => {
+		const household = await createTestHouseholdDb();
+		const analytics = analyticsFixture();
+		const rawTimestamps = [
+			10_000_000_000_000, 10_000_000_000_001, 10_000_000_000_002,
+		];
+		jest
+			.spyOn(Date, "now")
+			.mockImplementation(() => rawTimestamps.shift() ?? 10_000_000_000_002);
+
+		try {
+			await household.db.insert(lists).values({
+				id: "lst_weekend",
+				name: "Weekend Groceries",
+				createdByUserId: "usr_avery",
+			});
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics,
+			});
+			const milk = await service.addItem({
+				listId: "lst_weekend",
+				userId: "usr_avery",
+				name: "Milk",
+			});
+
+			await service.setItemChecked({
+				itemId: milk.id,
+				userId: "usr_avery",
+				checked: true,
+			});
+			await service.setItemChecked({
+				itemId: milk.id,
+				userId: "usr_avery",
+				checked: false,
+			});
+
+			const checkRow = await household.db.query.itemChecks.findFirst({
+				where: (table, { eq }) => eq(table.itemId, milk.id),
+			});
+			await expect(
+				service.listItems({ listId: "lst_weekend" }),
+			).resolves.toEqual([
+				expect.objectContaining({
+					id: milk.id,
+					checked: false,
+					checkedByUserId: null,
+				}),
+			]);
+			expect(checkRow).toMatchObject({
+				itemId: milk.id,
+				userId: "usr_avery",
+				checkedAt: null,
+				updatedAt: 10_000_000_000_002,
+			});
+			expect(analytics.track).toHaveBeenCalledWith(
+				"item_checked_state_changed",
+				{
+					household_id: "hh_avery",
+					item_id: milk.id,
+					user_id: "usr_avery",
+					checked: false,
 				},
 			);
 		} finally {
