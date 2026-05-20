@@ -156,6 +156,8 @@ Use optional dependencies sparingly. Services own production ID generation and t
 
 Logger and analytics dependencies are the observability exception to that rule. Services and stores that log diagnostics or track product outcomes should accept `logger` and/or `analytics` through their dependency object or open config, then default to the app-owned implementation at the service/store boundary. This keeps tests and non-app processes from mocking global modules, while preserving app-owned redaction and typed event contracts.
 
+Service methods should emit informative product tracking after successful operations when the method owns a user-visible or domain outcome, such as loading an online Household Session, saving an offline-capable cache, creating an Item, or sending an Invitation. Do not track exploratory diagnostics, expected validation failures, or reads that do not represent a meaningful product outcome.
+
 Scope injected analytics to the operations a service actually needs. For example, prefer `{ track: typeof track }` for a service that only emits product events, rather than a broad dependency bag with unused `identify`, `reset`, or `screen` functions. Do not inject analytics into a service or store that does not own a product outcome.
 
 Do not inject generated IDs into normal services. New domain record IDs are generated inside the service. Tests should assert ID shape and consistency, not exact random values.

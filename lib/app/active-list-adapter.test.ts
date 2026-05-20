@@ -2,7 +2,7 @@ import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
-import type { HouseholdSqlStatement } from "@/lib/services/household";
+import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();

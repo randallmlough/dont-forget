@@ -77,7 +77,7 @@ export const Loading: Story = {
 	},
 };
 
-export const BootstrapError: Story = {
+export const HouseholdSessionError: Story = {
 	args: {
 		currentMemberName: "Avery Chen",
 		content: {

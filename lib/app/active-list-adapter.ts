@@ -14,7 +14,7 @@ import {
 	type HouseholdStore,
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
-} from "@/lib/services/household";
+} from "@/lib/services/household/household-store";
 
 type ActiveListStore = {
 	syncAuthorized?: boolean;

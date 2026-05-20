@@ -12,14 +12,14 @@ import type {
 } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
 import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
-import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
 import {
-	type CachedBootstrapMetadata,
+	type CachedHouseholdSession,
 	clearCachedHouseholdSession,
-	discardCachedBootstrapMetadataIfUnauthorized,
-	readCachedBootstrapMetadata,
-	saveCachedBootstrapMetadata,
-} from "@/lib/app/offline-bootstrap-cache";
+	discardCachedHouseholdSessionIfUnauthorized,
+	getHouseholdSession,
+	readCachedHouseholdSession,
+	saveCachedHouseholdSession,
+} from "@/lib/services/household";
 import { clerkMocks, setMockAuthState } from "@/lib/test/mocks/clerk";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
@@ -28,41 +28,40 @@ jest.mock("@/lib/analytics", () => ({
 	track: jest.fn(),
 }));
 
-jest.mock("@/lib/app/bootstrap-client", () => ({
-	bootstrapWithClerk: jest.fn(),
-}));
-
 jest.mock("@/lib/app/active-list-adapter", () => ({
 	createHouseholdActiveListAdapter: jest.fn(),
 }));
 
-jest.mock("@/lib/app/offline-bootstrap-cache", () => ({
+jest.mock("@/lib/services/household", () => ({
 	clearCachedHouseholdSession: jest.fn(),
-	discardCachedBootstrapMetadataIfUnauthorized: jest.fn(),
-	readCachedBootstrapMetadata: jest.fn(),
-	saveCachedBootstrapMetadata: jest.fn(),
+	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
+	getHouseholdSession: jest.fn(),
+	readCachedHouseholdSession: jest.fn(),
+	saveCachedHouseholdSession: jest.fn(),
 }));
 
 beforeEach(() => {
 	jest.mocked(track).mockReset();
 	jest.mocked(reset).mockReset();
-	jest.mocked(bootstrapWithClerk).mockReset();
+	jest.mocked(getHouseholdSession).mockReset();
 	jest.mocked(createHouseholdActiveListAdapter).mockReset();
 	jest.mocked(clearCachedHouseholdSession).mockResolvedValue(undefined);
 	jest
-		.mocked(discardCachedBootstrapMetadataIfUnauthorized)
+		.mocked(discardCachedHouseholdSessionIfUnauthorized)
 		.mockResolvedValue(null);
-	jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(null);
+	jest.mocked(readCachedHouseholdSession).mockResolvedValue(null);
 	jest
-		.mocked(saveCachedBootstrapMetadata)
-		.mockResolvedValue(cachedBootstrapFixture());
+		.mocked(saveCachedHouseholdSession)
+		.mockResolvedValue(cachedHouseholdSessionFixture());
 });
 
 describe("HomeScreen", () => {
 	it("closes an adapter that is still loading when Home unmounts", async () => {
 		const load = deferred<ActiveListInitialState>();
 		const close = jest.fn().mockResolvedValue(undefined);
-		jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
+		jest
+			.mocked(getHouseholdSession)
+			.mockResolvedValue(householdSessionFixture());
 		jest.mocked(createHouseholdActiveListAdapter).mockReturnValue({
 			syncAuthorized: true,
 			async load() {
@@ -99,13 +98,13 @@ describe("HomeScreen", () => {
 		load.resolve(initialListFixture());
 	});
 
-	it("renders cached local List data while bootstrap is still pending", async () => {
-		const bootstrap = deferred<ReturnType<typeof bootstrapFixture>>();
-		const cached = cachedBootstrapFixture();
+	it("renders cached local List data while a fresh Household Session is still pending", async () => {
+		const freshSession = deferred<ReturnType<typeof householdSessionFixture>>();
+		const cached = cachedHouseholdSessionFixture();
 		const cachedList = initialListFixture({ itemName: "Cached Milk" });
 		const freshList = initialListFixture({ itemName: "Fresh Eggs" });
-		jest.mocked(bootstrapWithClerk).mockReturnValue(bootstrap.promise);
-		jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
 			.mocked(createHouseholdActiveListAdapter)
 			.mockImplementation((config) => {
@@ -121,7 +120,7 @@ describe("HomeScreen", () => {
 		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
 		expect(screen.queryByText("Preparing your Household")).toBeNull();
 		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
-		expect(bootstrapWithClerk).toHaveBeenCalledTimes(1);
+		expect(getHouseholdSession).toHaveBeenCalledTimes(1);
 		expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
 			household: cached.activeHousehold,
 			activeMember: cached.activeMember,
@@ -132,20 +131,20 @@ describe("HomeScreen", () => {
 		});
 
 		await act(async () => {
-			bootstrap.resolve(bootstrapFixture());
+			freshSession.resolve(householdSessionFixture());
 		});
 
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
-		expect(saveCachedBootstrapMetadata).toHaveBeenCalledWith(
-			bootstrapFixture(),
+		expect(saveCachedHouseholdSession).toHaveBeenCalledWith(
+			householdSessionFixture(),
 		);
 	});
 
-	it("reopens cached local List data without a cached DB auth token when bootstrap fails", async () => {
+	it("reopens cached local List data without a cached DB auth token when fresh Household Session loading fails", async () => {
 		const initialList = initialListFixture();
-		const cached = cachedBootstrapFixture();
-		jest.mocked(bootstrapWithClerk).mockRejectedValue(new Error("offline"));
-		jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+		const cached = cachedHouseholdSessionFixture();
+		jest.mocked(getHouseholdSession).mockRejectedValue(new Error("offline"));
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
 			.mocked(createHouseholdActiveListAdapter)
 			.mockReturnValue(noopAdapter(initialList));
@@ -164,13 +163,13 @@ describe("HomeScreen", () => {
 			database: cached.householdDatabase,
 		});
 		expect(Object.hasOwn(cached.householdDatabase, "authToken")).toBe(false);
-		expect(saveCachedBootstrapMetadata).not.toHaveBeenCalled();
+		expect(saveCachedHouseholdSession).not.toHaveBeenCalled();
 	});
 
 	it("reopens cached local List data when Clerk reports signed out during offline relaunch", async () => {
 		const initialList = initialListFixture();
-		const cached = cachedBootstrapFixture();
-		jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+		const cached = cachedHouseholdSessionFixture();
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
 			.mocked(createHouseholdActiveListAdapter)
 			.mockReturnValue(noopAdapter(initialList, { syncAuthorized: false }));
@@ -179,7 +178,7 @@ describe("HomeScreen", () => {
 		render(<HomeScreen />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(bootstrapWithClerk).not.toHaveBeenCalled();
+		expect(getHouseholdSession).not.toHaveBeenCalled();
 		expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
 			household: cached.activeHousehold,
 			activeMember: cached.activeMember,
@@ -193,8 +192,8 @@ describe("HomeScreen", () => {
 
 	it("reopens cached local List data before Clerk finishes loading during offline relaunch", async () => {
 		const initialList = initialListFixture();
-		const cached = cachedBootstrapFixture();
-		jest.mocked(readCachedBootstrapMetadata).mockResolvedValue(cached);
+		const cached = cachedHouseholdSessionFixture();
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
 			.mocked(createHouseholdActiveListAdapter)
 			.mockReturnValue(noopAdapter(initialList, { syncAuthorized: false }));
@@ -203,17 +202,17 @@ describe("HomeScreen", () => {
 		render(<HomeScreen />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(bootstrapWithClerk).not.toHaveBeenCalled();
+		expect(getHouseholdSession).not.toHaveBeenCalled();
 		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
 	});
 
 	it("discards stale cached Household metadata before opening fresh authorized data", async () => {
 		const initialList = initialListFixture();
-		const bootstrap = bootstrapFixture({
+		const session = householdSessionFixture({
 			householdId: "hh_new",
 			householdName: "New",
 		});
-		jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrap);
+		jest.mocked(getHouseholdSession).mockResolvedValue(session);
 		jest
 			.mocked(createHouseholdActiveListAdapter)
 			.mockReturnValue(noopAdapter(initialList));
@@ -223,18 +222,18 @@ describe("HomeScreen", () => {
 		render(<HomeScreen />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(discardCachedBootstrapMetadataIfUnauthorized).toHaveBeenCalledWith(
-			bootstrap,
+		expect(discardCachedHouseholdSessionIfUnauthorized).toHaveBeenCalledWith(
+			session,
 		);
 		expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
-			household: bootstrap.activeHousehold,
-			activeMember: bootstrap.activeMember,
-			list: bootstrap.activeList,
-			currentUser: bootstrap.user,
-			members: bootstrap.members,
-			database: bootstrap.householdDatabase,
+			household: session.activeHousehold,
+			activeMember: session.activeMember,
+			list: session.activeList,
+			currentUser: session.user,
+			members: session.members,
+			database: session.householdDatabase,
 		});
-		expect(saveCachedBootstrapMetadata).toHaveBeenCalledWith(bootstrap);
+		expect(saveCachedHouseholdSession).toHaveBeenCalledWith(session);
 	});
 
 	it("tracks, resets, clears local Household data, then signs out through Clerk", async () => {
@@ -243,7 +242,9 @@ describe("HomeScreen", () => {
 		const close = jest.fn(async () => {
 			calls.push("close-adapter");
 		});
-		jest.mocked(bootstrapWithClerk).mockResolvedValue(bootstrapFixture());
+		jest
+			.mocked(getHouseholdSession)
+			.mockResolvedValue(householdSessionFixture());
 		jest.mocked(createHouseholdActiveListAdapter).mockReturnValue({
 			...noopAdapter(initialList),
 			close,
@@ -280,7 +281,7 @@ describe("HomeScreen", () => {
 });
 
 describe("HomeScreenView", () => {
-	it("shows bootstrap loading and retryable error states", () => {
+	it("shows Household Session loading and retryable error states", () => {
 		const retry = jest.fn();
 
 		const { rerender } = render(
@@ -306,7 +307,7 @@ describe("HomeScreenView", () => {
 		expect(retry).toHaveBeenCalledTimes(1);
 	});
 
-	it("renders Active List data after bootstrap succeeds", () => {
+	it("renders Active List data after Household Session loading succeeds", () => {
 		const initialList = initialListFixture();
 
 		render(
@@ -328,7 +329,7 @@ describe("HomeScreenView", () => {
 	});
 });
 
-function bootstrapFixture(
+function householdSessionFixture(
 	overrides: { householdId?: string; householdName?: string } = {},
 ) {
 	return {
@@ -364,12 +365,12 @@ function bootstrapFixture(
 	};
 }
 
-function cachedBootstrapFixture(): CachedBootstrapMetadata {
-	const { householdDatabase: _householdDatabase, ...bootstrap } =
-		bootstrapFixture();
+function cachedHouseholdSessionFixture(): CachedHouseholdSession {
+	const { householdDatabase: _householdDatabase, ...sessionMetadata } =
+		householdSessionFixture();
 
 	return {
-		...bootstrap,
+		...sessionMetadata,
 		householdDatabase: {
 			url: "libsql://example.turso.io",
 			expiresAt: 1,

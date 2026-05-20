@@ -34,7 +34,7 @@ reset();
 
 You will rarely call `identify` directly. See "Identity" below.
 
-For services and stores, pass analytics as an explicit dependency when the module owns a product outcome:
+For services and stores, pass analytics as an explicit dependency when the module owns a product outcome. Service methods should track after the operation succeeds, not before persistence, network validation, or local side effects complete:
 
 ```ts
 import { track } from "@/lib/analytics";

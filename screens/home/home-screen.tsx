@@ -6,7 +6,7 @@ import { StyleSheet } from "react-native-unistyles";
 
 import { ActiveList } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
-import { clearCachedHouseholdSession } from "@/lib/app/offline-bootstrap-cache";
+import { clearCachedHouseholdSession } from "@/lib/services/household";
 import {
 	type HomeContentState,
 	useHomeContent,

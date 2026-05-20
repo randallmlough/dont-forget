@@ -13,14 +13,14 @@ import type {
 	ActiveListInitialState,
 } from "@/components/active-list";
 import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
-import { bootstrapWithClerk } from "@/lib/app/bootstrap-client";
 import {
-	type CachedBootstrapMetadata,
-	discardCachedBootstrapMetadataIfUnauthorized,
-	readCachedBootstrapMetadata,
-	saveCachedBootstrapMetadata,
-} from "@/lib/app/offline-bootstrap-cache";
-import type { BootstrapResponse } from "@/lib/bootstrap";
+	type CachedHouseholdSession,
+	discardCachedHouseholdSessionIfUnauthorized,
+	getHouseholdSession,
+	type HouseholdSession,
+	readCachedHouseholdSession,
+	saveCachedHouseholdSession,
+} from "@/lib/services/household";
 
 export type HomeContentState =
 	| { status: "loading" }
@@ -32,10 +32,10 @@ export type HomeContentState =
 			adapter: ActiveListDataAdapter;
 	  };
 
-type HomeBootstrap = BootstrapResponse | CachedBootstrapMetadata;
+type HomeHouseholdSession = HouseholdSession | CachedHouseholdSession;
 
 type OpenedHome = {
-	bootstrap: HomeBootstrap;
+	session: HomeHouseholdSession;
 	initialList: ActiveListInitialState;
 	adapter: ActiveListDataAdapter;
 };
@@ -131,24 +131,24 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 }
 
 async function loadCachedHome(run: HomeLoadRun) {
-	const cached = await readCachedBootstrapMetadata().catch(() => null);
+	const cached = await readCachedHouseholdSession().catch(() => null);
 	if (!cached || run.cancelled || run.signingOutRef.current) return;
 
 	try {
 		const opened = await openHome(run, cached);
 		await renderOpenedHome(run, opened, "cached");
 	} catch {
-		// Cached metadata is best-effort; fresh bootstrap decides the final state.
+		// Cached metadata is best-effort; a fresh Household Session decides the final state.
 	}
 }
 
 async function loadFreshHome(run: HomeLoadRun, cachedAttempt: Promise<void>) {
 	try {
-		const bootstrap = await bootstrapWithClerk(() => run.getToken());
+		const session = await getHouseholdSession(() => run.getToken());
 		if (run.cancelled || run.signingOutRef.current) return;
 
 		const discarded =
-			await discardCachedBootstrapMetadataIfUnauthorized(bootstrap);
+			await discardCachedHouseholdSessionIfUnauthorized(session);
 		if (run.cancelled || run.signingOutRef.current) return;
 
 		if (discarded) {
@@ -157,9 +157,9 @@ async function loadFreshHome(run: HomeLoadRun, cachedAttempt: Promise<void>) {
 			run.setContent({ status: "loading" });
 		}
 
-		const opened = await openHome(run, bootstrap, async () => {
+		const opened = await openHome(run, session, async () => {
 			// Offline reopen is best-effort; online Home should still render if storage rejects.
-			await saveCachedBootstrapMetadata(bootstrap).catch(() => undefined);
+			await saveCachedHouseholdSession(session).catch(() => undefined);
 		});
 		await renderOpenedHome(run, opened, "fresh");
 	} catch {
@@ -169,10 +169,10 @@ async function loadFreshHome(run: HomeLoadRun, cachedAttempt: Promise<void>) {
 
 async function openHome(
 	run: HomeLoadRun,
-	bootstrap: HomeBootstrap,
+	session: HomeHouseholdSession,
 	afterLoad?: () => Promise<void>,
 ): Promise<OpenedHome> {
-	const adapter = createAdapterFromBootstrap(bootstrap);
+	const adapter = createAdapterFromSession(session);
 	run.pendingAdapters.add(adapter);
 
 	try {
@@ -182,7 +182,7 @@ async function openHome(
 		}
 
 		run.pendingAdapters.delete(adapter);
-		return { bootstrap, initialList, adapter };
+		return { session, initialList, adapter };
 	} catch (error) {
 		await closeAdapter(run, adapter).catch(() => undefined);
 		throw error;
@@ -211,7 +211,7 @@ async function renderOpenedHome(
 
 	run.setContent({
 		status: "ready",
-		activeMemberName: activeMemberNameFromBootstrap(opened.bootstrap),
+		activeMemberName: activeMemberNameFromSession(opened.session),
 		initialList: opened.initialList,
 		adapter: opened.adapter,
 	});
@@ -243,19 +243,19 @@ async function closeAdapter(run: HomeLoadRun, adapter: ActiveListDataAdapter) {
 	await adapter.close();
 }
 
-function createAdapterFromBootstrap(
-	bootstrap: HomeBootstrap,
+function createAdapterFromSession(
+	session: HomeHouseholdSession,
 ): ActiveListDataAdapter {
 	return createHouseholdActiveListAdapter({
-		household: bootstrap.activeHousehold,
-		activeMember: bootstrap.activeMember,
-		list: bootstrap.activeList,
-		currentUser: bootstrap.user,
-		members: bootstrap.members,
-		database: bootstrap.householdDatabase,
+		household: session.activeHousehold,
+		activeMember: session.activeMember,
+		list: session.activeList,
+		currentUser: session.user,
+		members: session.members,
+		database: session.householdDatabase,
 	});
 }
 
-function activeMemberNameFromBootstrap(bootstrap: HomeBootstrap): string {
-	return bootstrap.activeMember.displayName ?? bootstrap.user.email ?? "Member";
+function activeMemberNameFromSession(session: HomeHouseholdSession): string {
+	return session.activeMember.displayName ?? session.user.email ?? "Member";
 }

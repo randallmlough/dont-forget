@@ -1,4 +1,20 @@
 export {
+	type CachedHouseholdSession,
+	clearCachedHouseholdSession,
+	createHouseholdSessionService,
+	discardCachedHouseholdSessionIfUnauthorized,
+	type GetHouseholdSessionToken,
+	getHouseholdSession,
+	HOUSEHOLD_SESSION_CACHE_KEY,
+	type HouseholdSession,
+	type HouseholdSessionService,
+	type HouseholdSessionServiceDeps,
+	type HouseholdSessionStorage,
+	readCachedHouseholdSession,
+	saveCachedHouseholdSession,
+} from "./household-session-service";
+
+export {
 	deleteLocalHouseholdStoreData,
 	type HouseholdDatabaseConfig,
 	type HouseholdSqlResult,

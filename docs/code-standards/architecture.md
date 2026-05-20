@@ -80,6 +80,7 @@ See also: [`docs/how-things-work/environments.md`](../how-things-work/environmen
 - **Must** track analytics from the event or action boundary that knows what happened, not from effects that infer it later.
 - **Must** send diagnostic logs through `useLogger()` in React, injected `Logger` dependencies in services/stores, and `logger` elsewhere when no caller-owned dependency seam exists.
 - **Must** pass typed analytics dependencies into services/stores that own product outcomes instead of calling PostHog directly or depending on untyped event bags.
+- **Should** emit service analytics from service methods after successful user-visible or domain outcomes, not from exploratory diagnostics or error paths.
 - **Must** pass raw `Error` instances as `{ error }` in log attributes.
 - **Must** log unexpected operational errors at the boundary where the app has enough context to explain what failed.
 - **Must** log unexpected async failures once at the boundary that has operation context.
