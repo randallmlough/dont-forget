@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Migrate Server Bootstrap Into Domain Server Services</title>
+</head>
+<body>
+  <h1>Implementation Notes: Migrate Server Bootstrap Into Domain Server Services</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li>Issue #22 is implemented as a decomposition of the existing Household bootstrap coordinator. The API route remains a thin lazy-loading request handler, while User, Member, Household, and provisioning responsibilities move behind domain server services.</li>
+      <li>The bootstrap coordinator remains under <code>lib/services/household/server/</code> because it returns a Household Session shaped response and composes multiple domain services for Home startup.</li>
+      <li>User, Member, and Household server services own their directory SQL directly. Household provisioning owns Turso Platform/database migration/default List infrastructure so the coordinator no longer mixes those concerns with session response assembly.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li>Kept the existing public <code>bootstrapUser</code> export for the API route and tests instead of renaming the external entrypoint, so the route-level behavior stays stable while the internals move to domain service factories.</li>
+      <li>Generated IDs and timestamps now live inside the domain services and provisioning service rather than being injected through bootstrap dependencies. Tests assert observable ID shape and persisted behavior instead of exact generated IDs.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+</body>
+</html>

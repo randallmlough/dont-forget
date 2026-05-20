@@ -22,6 +22,8 @@ lib/services/
     server/
       index.ts
       household-bootstrap-service.ts
+      household-provisioning-service.ts
+      household-service.ts
       turso-platform.ts
   invitation/
   item/
@@ -200,6 +202,7 @@ Allowed:
 
 - app-safe List/Item services executing SQL through `HouseholdStore`
 - server User/Member/Household services using Drizzle/directory DB infrastructure
+- server Household provisioning services using Turso Platform and Household DB migration infrastructure
 - service tests injecting fake or local SQL stores
 
 Not allowed:

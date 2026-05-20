@@ -7,13 +7,13 @@ import {
 	type TestHouseholdDb,
 } from "@/db/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
-import type { AppIdPrefix } from "@/lib/ids";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import {
 	type BootstrapServiceDeps,
 	bootstrapUser,
 	householdDatabaseName,
 } from "./household-bootstrap-service";
+import { createHouseholdProvisioningService } from "./household-provisioning-service";
 
 describe("bootstrapUser", () => {
 	it("generates Turso-safe Household database names", () => {
@@ -34,13 +34,16 @@ describe("bootstrapUser", () => {
 			const response = await bootstrapUser(averyProfile, harness.deps);
 
 			expect(response.user).toMatchObject({
-				id: "usr_1",
+				id: expect.stringMatching(/^usr_/),
 				displayName: "Avery Chen",
 			});
-			expect(response.activeHousehold).toEqual({ id: "hh_1", name: "Avery" });
+			expect(response.activeHousehold).toEqual({
+				id: expect.stringMatching(/^hh_/),
+				name: "Avery",
+			});
 			expect(response.activeMember).toMatchObject({
-				id: "mbr_1",
-				userId: "usr_1",
+				id: expect.stringMatching(/^mbr_/),
+				userId: response.user.id,
 				role: "owner",
 			});
 			expect(response.activeList).toEqual({
@@ -48,7 +51,7 @@ describe("bootstrapUser", () => {
 				name: DEFAULT_LIST_NAME,
 			});
 			expect(response.householdDatabase.authToken).toBe(
-				`token-${householdDatabaseName("test", "hh_1")}`,
+				`token-${householdDatabaseName("test", response.activeHousehold.id)}`,
 			);
 
 			const directoryUsers = await harness.directory.db.select().from(users);
@@ -59,27 +62,32 @@ describe("bootstrapUser", () => {
 				.select()
 				.from(memberships);
 			const householdDb = harness.householdDbFor(
-				householdDatabaseName("test", "hh_1"),
+				householdDatabaseName("test", response.activeHousehold.id),
 			);
 			const householdLists = await householdDb.db.select().from(lists);
 
 			expect(directoryUsers).toHaveLength(1);
 			expect(directoryHouseholds).toMatchObject([
 				{
-					id: "hh_1",
+					id: response.activeHousehold.id,
 					name: "Avery",
-					createdByUserId: "usr_1",
+					createdByUserId: response.user.id,
 					provisioningCompletedAt: expect.any(Number),
 				},
 			]);
 			expect(directoryMemberships).toMatchObject([
-				{ id: "mbr_1", householdId: "hh_1", userId: "usr_1", role: "owner" },
+				{
+					id: response.activeMember.id,
+					householdId: response.activeHousehold.id,
+					userId: response.user.id,
+					role: "owner",
+				},
 			]);
 			expect(householdLists).toMatchObject([
 				{
 					id: DEFAULT_LIST_ID,
 					name: DEFAULT_LIST_NAME,
-					createdByUserId: "usr_1",
+					createdByUserId: response.user.id,
 				},
 			]);
 		} finally {
@@ -91,7 +99,7 @@ describe("bootstrapUser", () => {
 		const harness = await createBootstrapHarness();
 
 		try {
-			await bootstrapUser(averyProfile, harness.deps);
+			const response = await bootstrapUser(averyProfile, harness.deps);
 			await bootstrapUser(averyProfile, harness.deps);
 
 			expect(await harness.directory.db.select().from(users)).toHaveLength(1);
@@ -103,11 +111,11 @@ describe("bootstrapUser", () => {
 			).toHaveLength(1);
 
 			const householdDb = harness.householdDbFor(
-				householdDatabaseName("test", "hh_1"),
+				householdDatabaseName("test", response.activeHousehold.id),
 			);
 			expect(await householdDb.db.select().from(lists)).toHaveLength(1);
 			expect(harness.createdDatabases).toEqual([
-				householdDatabaseName("test", "hh_1"),
+				householdDatabaseName("test", response.activeHousehold.id),
 			]);
 		} finally {
 			await harness.close();
@@ -230,47 +238,41 @@ async function createBootstrapHarness() {
 	const directory = await createTestDirectoryDb();
 	const householdDbs = new Map<string, TestHouseholdDb>();
 	const createdDatabases: string[] = [];
-	const counters = new Map<AppIdPrefix, number>();
-	let now = 1_700_000_000_000;
 
 	const deps: BootstrapServiceDeps = {
 		appEnv: "test",
 		directory: directory.db,
-		now: () => now++,
-		createId: (prefix) => {
-			const next = (counters.get(prefix) ?? 0) + 1;
-			counters.set(prefix, next);
-			return `${prefix}_${next}`;
-		},
-		async provisionHouseholdDatabase({
-			tursoDbName,
-			createdByUserId,
-			now: listNow,
-		}) {
-			if (!householdDbs.has(tursoDbName)) {
-				householdDbs.set(tursoDbName, await createTestHouseholdDb());
-				createdDatabases.push(tursoDbName);
-			}
-			const household = householdDbs.get(tursoDbName);
-			if (!household) throw new Error(`Missing Household DB ${tursoDbName}`);
-			await household.db
-				.insert(lists)
-				.values({
-					id: DEFAULT_LIST_ID,
-					name: DEFAULT_LIST_NAME,
-					createdByUserId,
-					createdAt: listNow,
-					updatedAt: listNow,
-				})
-				.onConflictDoNothing({ target: lists.id });
-			return { url: `file:${household.path}` };
-		},
-		async createHouseholdDatabaseToken(tursoDbName) {
-			return `token-${tursoDbName}`;
-		},
-		householdDatabaseUrl(tursoDbName) {
-			return `file:${householdDbs.get(tursoDbName)?.path ?? tursoDbName}`;
-		},
+		provisioning: createHouseholdProvisioningService({
+			async provisionHouseholdDatabase({
+				tursoDbName,
+				createdByUserId,
+				now: listNow,
+			}) {
+				if (!householdDbs.has(tursoDbName)) {
+					householdDbs.set(tursoDbName, await createTestHouseholdDb());
+					createdDatabases.push(tursoDbName);
+				}
+				const household = householdDbs.get(tursoDbName);
+				if (!household) throw new Error(`Missing Household DB ${tursoDbName}`);
+				await household.db
+					.insert(lists)
+					.values({
+						id: DEFAULT_LIST_ID,
+						name: DEFAULT_LIST_NAME,
+						createdByUserId,
+						createdAt: listNow,
+						updatedAt: listNow,
+					})
+					.onConflictDoNothing({ target: lists.id });
+				return { url: `file:${household.path}` };
+			},
+			async createHouseholdDatabaseToken(tursoDbName) {
+				return `token-${tursoDbName}`;
+			},
+			householdDatabaseUrl(tursoDbName) {
+				return `file:${householdDbs.get(tursoDbName)?.path ?? tursoDbName}`;
+			},
+		}),
 	};
 
 	return {
