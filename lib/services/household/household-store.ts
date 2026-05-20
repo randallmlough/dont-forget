@@ -1,3 +1,4 @@
+import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
@@ -209,10 +210,6 @@ export async function deleteLocalHouseholdStoreData(
 	const path = runtime.getDbPath(householdStoreFilename(householdId));
 
 	await fileSystem.deleteFilesWithPrefix(path);
-}
-
-function asError(error: unknown): Error {
-	return error instanceof Error ? error : new Error(String(error));
 }
 
 export function householdStoreFilename(householdId: string): string {

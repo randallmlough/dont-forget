@@ -6,6 +6,7 @@ import type {
 	ActiveListSyncResult,
 } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
+import { asError } from "@/lib/errors";
 import { createAppId, type RandomUuid } from "@/lib/ids";
 import { logger } from "@/lib/logger";
 import {
@@ -15,12 +16,13 @@ import {
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
 } from "@/lib/services/household/household-store";
+import { createListService } from "@/lib/services/list";
 
 type ActiveListStore = {
 	syncAuthorized?: boolean;
 	execute: (
 		statement: Parameters<HouseholdStore["execute"]>[0],
-	) => Promise<{ rows: Array<Record<string, unknown>> }>;
+	) => Promise<{ rows: Record<string, unknown>[] }>;
 	pull?: () => Promise<ActiveListSyncResult>;
 	sync?: () => Promise<ActiveListSyncResult>;
 	close: () => void | Promise<void>;
@@ -101,11 +103,12 @@ export function createHouseholdActiveListDataSource(
 		async load() {
 			try {
 				const store = await storePromise;
-				const listResult = await store.execute({
-					sql: "SELECT name FROM lists WHERE id = ? AND deleted_at IS NULL LIMIT 1",
-					args: [config.list.id],
+				const listService = createListService({
+					householdId: config.household.id,
+					store,
+					logger,
 				});
-				const listName = stringColumn(listResult.rows[0]?.name, "list name");
+				const list = await listService.getList({ listId: config.list.id });
 				const result = await store.execute({
 					sql: `
           SELECT
@@ -129,7 +132,7 @@ export function createHouseholdActiveListDataSource(
 
 				return {
 					householdName: config.household.name,
-					listName,
+					listName: list.name,
 					items: result.rows.map((row) => itemFromRow(row, memberNames)),
 				};
 			} catch (error) {
@@ -253,10 +256,6 @@ export function createHouseholdActiveListDataSource(
 			}
 		},
 	};
-}
-
-function asError(error: unknown): Error {
-	return error instanceof Error ? error : new Error(String(error));
 }
 
 async function pushLocalRowsToRemote(
