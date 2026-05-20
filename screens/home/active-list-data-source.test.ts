@@ -215,12 +215,71 @@ describe("createHouseholdActiveListDataSource", () => {
 				),
 			}),
 		);
-		expect(mockLoggerError).toHaveBeenCalledWith(
-			"active list native sync failed",
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).toHaveBeenCalledWith(
+			"active list native sync recovered by fallback",
 			{ error: expect.any(Error) },
 		);
-		expect(mockLoggerWarn).toHaveBeenCalledWith(
-			"active list sync fallback succeeded",
+	});
+
+	it("pushes local rows without native sync for automatic retry paths", async () => {
+		const remoteExecute = jest.fn(async () => undefined);
+		const nativeSync = jest.fn(async () => ({ changed: false }));
+		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
+			const sql = statementSql(statement);
+			if (sql.includes("FROM items")) {
+				return {
+					rows: [
+						{
+							id: "itm_retry",
+							list_id: DEFAULT_LIST_ID,
+							name: "Retry Milk",
+							notes: null,
+							position: 0,
+							created_by_user_id: "usr_avery",
+							created_at: 2,
+							updated_at: 2,
+							deleted_at: null,
+						},
+					],
+				};
+			}
+			return { rows: [] };
+		});
+		const dataSource = createHouseholdActiveListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute,
+					sync: nativeSync,
+					pull: jest.fn(async () => ({ changed: false })),
+					close: jest.fn(async () => undefined),
+				},
+				openRemoteClient: () => ({ execute: remoteExecute }),
+			},
+		);
+
+		await expect(dataSource.sync({ mode: "pushLocalOnly" })).resolves.toEqual({
+			changed: false,
+		});
+
+		expect(nativeSync).not.toHaveBeenCalled();
+		expect(remoteExecute).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sql: expect.stringContaining("INSERT INTO items"),
+				args: [
+					"itm_retry",
+					DEFAULT_LIST_ID,
+					"Retry Milk",
+					null,
+					0,
+					"usr_avery",
+					2,
+					2,
+					null,
+				],
+			}),
 		);
 	});
 
@@ -284,17 +343,14 @@ describe("createHouseholdActiveListDataSource", () => {
 		);
 	});
 
-	it("resolves Item creation after local commit and requests sync separately", async () => {
-		const syncError = new Error("sync unavailable");
+	it("resolves Item creation after local commit without starting sync", async () => {
 		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
 			const sql = statementSql(statement);
 			return sql.includes("MAX(position)")
 				? { rows: [{ position: 0 }] }
 				: { rows: [] };
 		});
-		const sync = jest.fn(async () => {
-			throw syncError;
-		});
+		const sync = jest.fn(async () => ({ changed: false }));
 		const dataSource = createHouseholdActiveListDataSource(
 			dataSourceConfigFixture(),
 			{
@@ -315,52 +371,14 @@ describe("createHouseholdActiveListDataSource", () => {
 		});
 		await Promise.resolve();
 
-		expect(sync).toHaveBeenCalledTimes(1);
-		expect(mockLoggerWarn).toHaveBeenCalledWith(
-			"active list sync after local item write failed",
-			{ error: syncError },
-		);
-	});
-
-	it("keeps Item creation quiet when the follow-up sync is offline", async () => {
-		const syncError = new TypeError("Network request failed");
-		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = statementSql(statement);
-			return sql.includes("MAX(position)")
-				? { rows: [{ position: 0 }] }
-				: { rows: [] };
-		});
-		const dataSource = createHouseholdActiveListDataSource(
-			dataSourceConfigFixture(),
-			{
-				store: {
-					syncAuthorized: true,
-					execute,
-					pull: jest.fn(async () => ({ changed: false })),
-					sync: jest.fn(async () => {
-						throw syncError;
-					}),
-					close: jest.fn(async () => undefined),
-				},
-			},
-		);
-
-		await expect(dataSource.addItem("Milk")).resolves.toMatchObject({
-			name: "Milk",
-			checked: false,
-		});
-		await Promise.resolve();
-
+		expect(sync).not.toHaveBeenCalled();
 		expect(mockLoggerWarn).not.toHaveBeenCalled();
 		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
-	it("resolves checked-state updates after local commit and requests sync separately", async () => {
+	it("resolves checked-state updates after local commit without starting sync", async () => {
 		const household = await createTestHouseholdDb();
-		const syncError = new Error("sync unavailable");
-		const sync = jest.fn(async () => {
-			throw syncError;
-		});
+		const sync = jest.fn(async () => ({ changed: false }));
 
 		try {
 			await household.db.insert(lists).values({
@@ -399,11 +417,8 @@ describe("createHouseholdActiveListDataSource", () => {
 				checkedAt: expect.any(Number),
 				updatedAt: expect.any(Number),
 			});
-			expect(sync).toHaveBeenCalledTimes(1);
-			expect(mockLoggerWarn).toHaveBeenCalledWith(
-				"active list sync after local item write failed",
-				{ error: syncError },
-			);
+			expect(sync).not.toHaveBeenCalled();
+			expect(mockLoggerWarn).not.toHaveBeenCalled();
 		} finally {
 			await household.close();
 		}

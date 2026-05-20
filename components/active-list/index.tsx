@@ -49,6 +49,10 @@ export type ActiveListSyncResult = {
 	changed: boolean;
 };
 
+export type ActiveListSyncOptions = {
+	mode?: "full" | "pushLocalOnly";
+};
+
 export type ActiveListActions = {
 	addItem: (name: string) => Promise<void>;
 	toggleItem: (itemId: string) => Promise<void>;
@@ -68,7 +72,7 @@ export type ActiveListDataSource = {
 	addItem: (name: string) => Promise<ActiveListItem>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	pull: () => Promise<ActiveListSyncResult>;
-	sync: () => Promise<ActiveListSyncResult>;
+	sync: (options?: ActiveListSyncOptions) => Promise<ActiveListSyncResult>;
 	close: () => Promise<void>;
 };
 
@@ -85,6 +89,7 @@ type ActiveListProviderProps = PropsWithChildren<{
 }>;
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
+const OFFLINE_SYNC_RETRY_MS = 30_000;
 
 function ActiveListProvider({
 	initialState,
@@ -127,31 +132,34 @@ function ActiveListProvider({
 		transition({ type: "listLoaded", list: nextState });
 	}, [dataSource, transition]);
 
-	const syncLatest = useCallback(async () => {
-		if (!dataSource.syncAuthorized) {
-			transition({ type: "syncUnavailable" });
-			await loadFromDataSource();
-			return;
-		}
-
-		transition({ type: "syncStarted" });
-		syncInFlight.current = true;
-
-		try {
-			await dataSource.sync();
-			await loadFromDataSource();
-			transition({ type: "syncSucceeded" });
-		} catch (error) {
-			if (isNetworkUnavailableError(error)) {
+	const syncLatest = useCallback(
+		async (options?: ActiveListSyncOptions) => {
+			if (!dataSource.syncAuthorized) {
 				transition({ type: "syncUnavailable" });
+				await loadFromDataSource();
 				return;
 			}
-			transition({ type: "syncFailed" });
-			throw error;
-		} finally {
-			syncInFlight.current = false;
-		}
-	}, [dataSource, loadFromDataSource, transition]);
+
+			transition({ type: "syncStarted" });
+			syncInFlight.current = true;
+
+			try {
+				await dataSource.sync(options);
+				await loadFromDataSource();
+				transition({ type: "syncSucceeded" });
+			} catch (error) {
+				if (isNetworkUnavailableError(error)) {
+					transition({ type: "syncUnavailable" });
+					return;
+				}
+				transition({ type: "syncFailed" });
+				throw error;
+			} finally {
+				syncInFlight.current = false;
+			}
+		},
+		[dataSource, loadFromDataSource, transition],
+	);
 
 	const syncAfterLocalWrite = useCallback(async () => {
 		if (!dataSource.syncAuthorized) {
@@ -163,7 +171,7 @@ function ActiveListProvider({
 		syncInFlight.current = true;
 
 		try {
-			const result = await dataSource.sync();
+			const result = await dataSource.sync({ mode: "pushLocalOnly" });
 			if (result.changed) {
 				await loadFromDataSource();
 			}
@@ -197,19 +205,16 @@ function ActiveListProvider({
 				return;
 			}
 
-			syncInFlight.current = true;
 			try {
-				await syncLatest();
+				await syncLatest({ mode: "pushLocalOnly" });
 			} catch (error) {
 				logger.error("active list periodic sync failed", { error });
-			} finally {
-				syncInFlight.current = false;
 			}
 		}
 
 		const interval = setInterval(() => {
 			void retrySyncWhenForegrounded();
-		}, 1000);
+		}, OFFLINE_SYNC_RETRY_MS);
 		const subscription = AppState.addEventListener("change", (state) => {
 			if (state === "active") {
 				void retrySyncWhenForegrounded();

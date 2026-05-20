@@ -210,6 +210,22 @@ describe("openHouseholdStore", () => {
 		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
+	it("does not error-log recoverable sync engine checkpoint failures", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const nativeDb = onlyInstance(instances);
+		const error = new Error(
+			"sync engine operation failed: database sync engine error: unable to checkpoint synced portion of WAL",
+		);
+		nativeDb.push.mockRejectedValueOnce(error);
+
+		await expect(store.sync()).rejects.toThrow(error);
+
+		expect(mockLoggerError).not.toHaveBeenCalled();
+	});
+
 	it("uses an injected logger when reporting store failures", async () => {
 		const injected = loggerFixture();
 		const store = await openHouseholdStore(

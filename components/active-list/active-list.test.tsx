@@ -104,7 +104,10 @@ describe("ActiveList", () => {
 	it("retries offline sync while the List remains open", async () => {
 		jest.useFakeTimers();
 		const sync = jest
-			.fn<Promise<{ changed: boolean }>, []>()
+			.fn<
+				Promise<{ changed: boolean }>,
+				Parameters<ActiveListDataSource["sync"]>
+			>()
 			.mockRejectedValueOnce(new TypeError("Network request failed"))
 			.mockResolvedValue({ changed: false });
 
@@ -122,13 +125,48 @@ describe("ActiveList", () => {
 			);
 
 			await act(async () => {
-				jest.advanceTimersByTime(1000);
+				jest.advanceTimersByTime(30_000);
 				await Promise.resolve();
 			});
 
 			await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 			expect(sync).toHaveBeenCalledTimes(2);
+			expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
 			expect(mockLoggerError).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("does not retry offline sync once per second", async () => {
+		jest.useFakeTimers();
+		const sync = jest
+			.fn<
+				Promise<{ changed: boolean }>,
+				Parameters<ActiveListDataSource["sync"]>
+			>()
+			.mockRejectedValue(new TypeError("Network request failed"));
+
+		try {
+			renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
+
+			fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+			await act(async () => {
+				fireEvent.press(screen.getByText("Add"));
+			});
+			await waitFor(() =>
+				expect(
+					screen.getByText("Offline - changes saved locally"),
+				).toBeTruthy(),
+			);
+			expect(sync).toHaveBeenCalledTimes(1);
+
+			await act(async () => {
+				jest.advanceTimersByTime(1000);
+				await Promise.resolve();
+			});
+
+			expect(sync).toHaveBeenCalledTimes(1);
 		} finally {
 			jest.useRealTimers();
 		}
@@ -177,6 +215,7 @@ describe("ActiveList", () => {
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 		expect(await screen.findByText("Remote Apples")).toBeTruthy();
 		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledWith(undefined);
 		expect(pull).not.toHaveBeenCalled();
 	});
 });

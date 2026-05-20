@@ -1,10 +1,11 @@
 import type {
 	ActiveListDataSource,
 	ActiveListItem,
+	ActiveListSyncOptions,
 	ActiveListSyncResult,
 } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
-import { asError, isNetworkUnavailableError } from "@/lib/errors";
+import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
@@ -113,14 +114,13 @@ export function createHouseholdActiveListDataSource(
 		},
 		async addItem(rawName) {
 			try {
-				const { store, itemService } = await getServices();
+				const { itemService } = await getServices();
 				const item = await itemService.addItem({
 					listId: config.list.id,
 					userId: config.activeMember.userId,
 					name: rawName,
 				});
 
-				requestSyncAfterLocalWrite(store, syncAuthorized, log);
 				return activeListItemFromItem(item, memberNames);
 			} catch (error) {
 				log.error("active list item add failed", { error: asError(error) });
@@ -129,13 +129,12 @@ export function createHouseholdActiveListDataSource(
 		},
 		async setItemChecked(itemId, checked) {
 			try {
-				const { store, itemService } = await getServices();
+				const { itemService } = await getServices();
 				await itemService.setItemChecked({
 					itemId,
 					userId: config.activeMember.userId,
 					checked,
 				});
-				requestSyncAfterLocalWrite(store, syncAuthorized, log);
 			} catch (error) {
 				log.error("active list item check failed", {
 					error: asError(error),
@@ -155,10 +154,19 @@ export function createHouseholdActiveListDataSource(
 				throw error;
 			}
 		},
-		async sync() {
+		async sync(syncOptions?: ActiveListSyncOptions) {
 			if (!syncAuthorized) return { changed: false };
 
 			const store = await storePromise;
+			if (syncOptions?.mode === "pushLocalOnly") {
+				await pushLocalHouseholdRowsToRemote(
+					store,
+					config.database,
+					options.openRemoteClient,
+				);
+				return { changed: false };
+			}
+
 			let nativeResult: ActiveListSyncResult = { changed: false };
 			let nativeError: unknown = null;
 
@@ -166,7 +174,6 @@ export function createHouseholdActiveListDataSource(
 				nativeResult = store.sync ? await store.sync() : { changed: false };
 			} catch (error) {
 				nativeError = error;
-				logUnexpectedSyncFailure(log, "active list native sync failed", error);
 			}
 
 			try {
@@ -176,11 +183,18 @@ export function createHouseholdActiveListDataSource(
 					options.openRemoteClient,
 				);
 				if (nativeError) {
-					log.warn("active list sync fallback succeeded");
+					logRecoveredNativeSyncFailure(log, nativeError);
 					return { changed: false };
 				}
 				return nativeResult;
 			} catch (fallbackError) {
+				if (nativeError) {
+					logUnexpectedSyncFailure(
+						log,
+						"active list native sync failed",
+						nativeError,
+					);
+				}
 				logUnexpectedSyncFailure(
 					log,
 					"active list sync fallback failed",
@@ -245,28 +259,23 @@ function activeListItemFromItem(
 	};
 }
 
-function requestSyncAfterLocalWrite(
-	store: ActiveListStore,
-	syncAuthorized: boolean,
-	log: ReturnType<typeof logger.with>,
-) {
-	if (!syncAuthorized || !store.sync) return;
-
-	void store.sync().catch((error) => {
-		if (isNetworkUnavailableError(error)) return;
-
-		log.warn("active list sync after local item write failed", {
-			error: asError(error),
-		});
-	});
-}
-
 function logUnexpectedSyncFailure(
 	log: ReturnType<typeof logger.with>,
 	message: string,
 	error: unknown,
 ) {
-	if (isNetworkUnavailableError(error)) return;
+	if (isExpectedSyncInterruptionError(error)) return;
 
 	log.error(message, { error: asError(error) });
+}
+
+function logRecoveredNativeSyncFailure(
+	log: ReturnType<typeof logger.with>,
+	error: unknown,
+) {
+	if (isExpectedSyncInterruptionError(error)) return;
+
+	log.warn("active list native sync recovered by fallback", {
+		error: asError(error),
+	});
 }

@@ -1,4 +1,4 @@
-import { asError, isNetworkUnavailableError } from "@/lib/errors";
+import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
@@ -271,7 +271,7 @@ function logUnexpectedStoreFailure(
 	message: string,
 	error: unknown,
 ) {
-	if (isNetworkUnavailableError(error)) return;
+	if (isExpectedSyncInterruptionError(error)) return;
 
 	log.error(message, { error: asError(error) });
 }
