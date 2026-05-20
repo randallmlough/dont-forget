@@ -1,3 +1,4 @@
+import { createDatabaseOperationQueue } from "@/db/utils";
 import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 
@@ -110,24 +111,13 @@ export async function openHouseholdStore(
 			: {}),
 	});
 	let closed = false;
-	let operationQueue = Promise.resolve();
+	const enqueueDatabaseOperation = createDatabaseOperationQueue();
 
 	try {
 		await database.connect();
 	} catch (error) {
 		log.error("household store connect failed", { error: asError(error) });
 		throw error;
-	}
-
-	function enqueueDatabaseOperation<T>(
-		operation: () => Promise<T>,
-	): Promise<T> {
-		const run = operationQueue.then(operation, operation);
-		operationQueue = run.then(
-			() => undefined,
-			() => undefined,
-		);
-		return run;
 	}
 
 	async function close() {

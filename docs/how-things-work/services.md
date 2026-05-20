@@ -192,6 +192,8 @@ export type OpenHouseholdStoreConfig = {
 
 Open one shared `HouseholdStore` for a Household workflow and inject it into the services that need it. For Home, the same store should be shared by List and Item services and closed by the Home-owned data source. `HouseholdStore` is infrastructure, so it usually logs diagnostics but should not emit product analytics unless the store itself owns a user-visible product outcome; most product events belong in the service, screen, or data-source operation that understands user intent.
 
+Any app-owned store or DB wrapper that shares one native/local database handle must serialize operations through `createDatabaseOperationQueue()` from `db/utils.ts`. This includes reads, writes, sync operations, and close/delete paths. The queue is per store instance, not global. This prevents local writes and sync operations from racing on one handle, and it keeps later operations running even after one operation rejects. See the [offline Item sync post-mortem](../post-mortem/2026-05-20-offline-item-sync.md) for the original failure mode.
+
 Defer transaction helpers until a real service operation needs them.
 
 ## SQL Ownership

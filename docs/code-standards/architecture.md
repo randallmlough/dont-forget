@@ -61,6 +61,7 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** write tombstones (`deleted_at`) on app delete paths for replicated data instead of hard deletes.
 - **Must** preserve `item_checks` as separate checked-state data to avoid high-collision Item conflicts.
 - **Must** keep database access behind domain services rather than importing database clients directly into presentational UI.
+- **Must** serialize operations inside any app-owned store or DB wrapper that shares one native/local database handle across reads, writes, sync, and close. Use `createDatabaseOperationQueue()` from `db/utils.ts` so failed operations do not break the queue and later operations still run. See the [offline Item sync post-mortem](../post-mortem/2026-05-20-offline-item-sync.md) for the failure mode that led to this rule.
 
 ## Server And Environment Safety
 
