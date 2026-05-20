@@ -86,7 +86,7 @@ Finally, `app/api/bootstrap+api.ts` lazy-loads server modules inside `POST`. Tha
 ## Rules Going Forward
 
 - Do not import `@libsql/client` from product code.
-- Do not add app-side `@libsql/client/web` usage. App-side Household DB access belongs behind `lib/services/household/household-store.ts` after ADR-0011 migration; until migrated, use the existing app-owned Household DB wrapper only as legacy code.
+- Do not add app-side `@libsql/client/web` usage for normal Home/List/Item data access. App-side Household DB access belongs behind `lib/services/household/household-store.ts`; the temporary remote sync fallback is the only current app-side `@libsql/client/web` exception.
 - Use `@libsql/client/http` for server/API Route, migration, and Node verification code.
 - Keep direct Household SQL inside domain services that depend on `HouseholdStore`. Screens, hooks, and components must not issue Household SQL directly.
 - Keep API Route files thin and lazy-load server-only dependencies inside request handlers.
@@ -115,6 +115,6 @@ The iOS export catches native bundle leaks. The web export catches API Route bun
 - `metro.config.js`
 - `jest.config.js`
 - `db/client.test.ts`
-- `lib/server/bootstrap-api-route.test.ts`
+- `lib/services/household/server/household-bootstrap-api-route.test.ts`
 - `docs/adr/0009-turso-react-native-for-native-household-sync.md`
 - `docs/tech-debt/bootstrap-api-lazy-imports.md`

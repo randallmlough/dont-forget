@@ -25,7 +25,7 @@
   <section>
     <h2>Tradeoffs Considered</h2>
     <ul>
-      <li>The Home Active List data source remains in <code>lib/app/active-list-data-source.ts</code> for this slice because moving it to <code>screens/home/</code> now would move direct Item SQL and the temporary remote sync fallback into the screen layer before ItemService exists.</li>
+      <li>The Home Active List data source remained in <code>lib/app/active-list-data-source.ts</code> for this slice because moving it to <code>screens/home/</code> then would have moved direct Item SQL and the temporary remote sync fallback into the screen layer before ItemService existed. Issue #21 later removed the legacy app data-access module and kept the data source under <code>screens/home/</code>.</li>
       <li>The service depends on the executable subset of <code>HouseholdStore</code> because List metadata loading needs only SQL execution; the production Home path still passes the shared HouseholdStore instance opened by the Active List data source.</li>
       <li>A shared <code>asError</code> helper was added under <code>lib/errors.ts</code> to avoid repeating local error normalization functions across logging boundaries.</li>
     </ul>

@@ -12,7 +12,7 @@
       <li>Issue #17 is implemented as a behavior-preserving hard cut from Active List adapter terminology to data source terminology, with no old type, prop, factory, or module aliases kept in touched code.</li>
       <li>The reusable Active List component continues to own the UI-facing data source contract and does not import HouseholdStore, Household Session, or domain service factories.</li>
       <li>The Home startup path continues to compose a Household Session into the Active List data source before rendering <code>ActiveList.Provider</code>.</li>
-      <li>The renamed legacy data source factory remains under <code>lib/app/active-list-data-source.ts</code> for this slice because issues #18 through #21 separately migrate ListService/ItemService CRUD and remove legacy Home/List/Item app data-access modules.</li>
+      <li>The renamed legacy data source factory remained under <code>lib/app/active-list-data-source.ts</code> for this slice because issues #18 through #21 separately migrated ListService/ItemService CRUD and removed legacy Home/List/Item app data-access modules. Issue #21 later moved the final data source to <code>screens/home/active-list-data-source.ts</code>.</li>
     </ul>
   </section>
   <section>
@@ -24,7 +24,7 @@
   <section>
     <h2>Tradeoffs Considered</h2>
     <ul>
-      <li>Moving the factory to <code>screens/home/active-list-data-source.ts</code> now would match the final service-backed folder shape, but it would move direct SQL and HouseholdStore access into the screen layer before ListService and ItemService exist.</li>
+      <li>Moving the factory to <code>screens/home/active-list-data-source.ts</code> during this slice would have matched the final service-backed folder shape, but it would have moved direct SQL and HouseholdStore access into the screen layer before ListService and ItemService existed.</li>
       <li>Keeping a compatibility wrapper for <code>createHouseholdActiveListAdapter</code> would reduce call-site churn, but issue #17 explicitly calls for no compatibility alias in touched code.</li>
     </ul>
   </section>

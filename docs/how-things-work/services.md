@@ -22,7 +22,7 @@ lib/services/
     server/
       index.ts
       household-bootstrap-service.ts
-      household-provisioning-service.ts
+      turso-platform.ts
   invitation/
   item/
     index.ts

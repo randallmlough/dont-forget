@@ -13,7 +13,7 @@ import {
 	type BootstrapServiceDeps,
 	bootstrapUser,
 	householdDatabaseName,
-} from "@/lib/server/bootstrap";
+} from "./household-bootstrap-service";
 
 describe("bootstrapUser", () => {
 	it("generates Turso-safe Household database names", () => {

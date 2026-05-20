@@ -24,7 +24,7 @@ import {
 } from "@/lib/bootstrap";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { type AppIdPrefix, createAppId } from "@/lib/ids";
-import type { ServerUserProfile } from "./auth";
+import type { ServerUserProfile } from "@/lib/server/auth";
 import { createTursoPlatformClient } from "./turso-platform";
 
 type ActiveMembershipRow = {

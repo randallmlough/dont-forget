@@ -9,7 +9,7 @@ import {
 } from "@/lib/bootstrap";
 import { deleteLocalHouseholdStoreData } from "./household-store";
 
-export const HOUSEHOLD_SESSION_CACHE_KEY = "dont-forget:offline-bootstrap:v1";
+export const HOUSEHOLD_SESSION_CACHE_KEY = "dont-forget:household-session:v1";
 
 export type HouseholdSession = BootstrapResponse;
 

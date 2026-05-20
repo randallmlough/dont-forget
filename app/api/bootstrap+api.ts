@@ -6,7 +6,7 @@ export async function POST(request: Request): Promise<Response> {
 	try {
 		const [db, bootstrap, auth] = await Promise.all([
 			import("@/db/client"),
-			import("@/lib/server/bootstrap"),
+			import("@/lib/services/household/server"),
 			import("@/lib/server/auth"),
 		]);
 		UnauthorizedError = auth.UnauthorizedError;
