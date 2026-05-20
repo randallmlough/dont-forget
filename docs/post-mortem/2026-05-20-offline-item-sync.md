@@ -150,6 +150,18 @@ passed with 24 suites and 97 tests.
 
 ## Follow-up Work
 
+### Audit current data layers for shared-handle queues
+
+Completed 2026-05-20. The current production data paths were reviewed after extracting `createDatabaseOperationQueue()`:
+
+- `HouseholdStore` owns one long-lived native/local Turso sync handle and now uses the shared queue.
+- List and Item services receive a store and do not own a DB handle, so they inherit the store's serialization.
+- Active List remote upsert fallback opens a short-lived HTTP client and performs sequential statements; it does not share a native/local handle.
+- Server directory and Household clients in API routes, provisioning, migrations, and reset scripts are request- or command-scoped HTTP clients, so they do not need the native/local handle queue pattern.
+- Test DB helpers create local file clients for isolated Jest fixtures, but they are not app-owned production stores. Add the queue there only if a test helper begins to model a long-lived concurrent store.
+
+Future app-owned stores or DB wrappers should adopt `createDatabaseOperationQueue()` before exposing shared read/write/sync/close methods.
+
 ### Add a first-class Household sync coordinator
 
 Home currently owns sync policy through Active List composition. That was enough to repair this failure, but the policy is now important enough to deserve a small app-owned coordinator under the Household domain.
