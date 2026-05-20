@@ -11,7 +11,6 @@ import type {
 	ActiveListInitialState,
 } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
-import { createHouseholdActiveListDataSource } from "@/lib/app/active-list-data-source";
 import {
 	type CachedHouseholdSession,
 	clearCachedHouseholdSession,
@@ -23,12 +22,14 @@ import {
 import { clerkMocks, setMockAuthState } from "@/lib/test/mocks/clerk";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
+import { createHouseholdActiveListDataSource } from "./active-list-data-source";
+
 jest.mock("@/lib/analytics", () => ({
 	reset: jest.fn(),
 	track: jest.fn(),
 }));
 
-jest.mock("@/lib/app/active-list-data-source", () => ({
+jest.mock("./active-list-data-source", () => ({
 	createHouseholdActiveListDataSource: jest.fn(),
 }));
 

@@ -108,8 +108,8 @@ The iOS export catches native bundle leaks. The web export catches API Route bun
 ## Relevant Files
 
 - `lib/services/household/household-store.ts` after ADR-0011 migration
-- `lib/services/list/list-service.ts` and `lib/services/item/item-service.ts` after ADR-0011 migration
-- legacy during migration: `lib/app/active-list-data-source.ts`, `lib/app/household-db.ts`
+- `lib/services/list/list-service.ts` and `lib/services/item/item-service.ts`
+- `lib/services/household/household-sync-fallback.ts` for the temporary remote sync fallback
 - `db/client.ts`
 - `app/api/bootstrap+api.ts`
 - `metro.config.js`

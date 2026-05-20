@@ -6,7 +6,6 @@ import type {
 	ActiveListDataSource,
 	ActiveListInitialState,
 } from "@/components/active-list";
-import { createHouseholdActiveListDataSource } from "@/lib/app/active-list-data-source";
 import {
 	type CachedHouseholdSession,
 	discardCachedHouseholdSessionIfUnauthorized,
@@ -17,7 +16,9 @@ import {
 } from "@/lib/services/household";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
-jest.mock("@/lib/app/active-list-data-source", () => ({
+import { createHouseholdActiveListDataSource } from "./active-list-data-source";
+
+jest.mock("./active-list-data-source", () => ({
 	createHouseholdActiveListDataSource: jest.fn(),
 }));
 

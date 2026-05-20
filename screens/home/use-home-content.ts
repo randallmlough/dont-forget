@@ -12,7 +12,6 @@ import type {
 	ActiveListDataSource,
 	ActiveListInitialState,
 } from "@/components/active-list";
-import { createHouseholdActiveListDataSource } from "@/lib/app/active-list-data-source";
 import {
 	type CachedHouseholdSession,
 	discardCachedHouseholdSessionIfUnauthorized,
@@ -21,6 +20,8 @@ import {
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
+
+import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 
 export type HomeContentState =
 	| { status: "loading" }

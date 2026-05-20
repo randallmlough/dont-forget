@@ -1,8 +1,9 @@
 import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
-import { createHouseholdActiveListDataSource } from "@/lib/app/active-list-data-source";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+
+import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
@@ -179,61 +180,46 @@ describe("createHouseholdActiveListDataSource", () => {
 		);
 	});
 
-	it("uses monotonic app-generated timestamps for local Item writes", async () => {
-		let uuid = 0;
-		const rawTimestamps = [
-			1_700_000_000_000, 1_699_999_999_999, 1_699_999_999_999,
-		];
+	it("resolves Item creation after local commit and requests sync separately", async () => {
+		const syncError = new Error("sync unavailable");
 		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
 			const sql = statementSql(statement);
 			return sql.includes("MAX(position)")
 				? { rows: [{ position: 0 }] }
 				: { rows: [] };
 		});
+		const sync = jest.fn(async () => {
+			throw syncError;
+		});
 		const dataSource = createHouseholdActiveListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
+					syncAuthorized: true,
 					execute,
+					pull: jest.fn(async () => ({ changed: false })),
+					sync,
 					close: jest.fn(async () => undefined),
 				},
-				now: () => rawTimestamps.shift() ?? 1_699_999_999_999,
-				randomUuid: () => `uuid-${++uuid}`,
 			},
 		);
 
-		const milk = await dataSource.addItem("Milk");
-		await dataSource.addItem("Eggs");
-		await dataSource.setItemChecked(milk.id, true);
+		await expect(dataSource.addItem("Milk")).resolves.toMatchObject({
+			name: "Milk",
+			checked: false,
+			checkedByMemberName: null,
+		});
+		await Promise.resolve();
 
-		const itemWrites = execute.mock.calls
-			.map(([statement]) => statement)
-			.filter((statement) =>
-				statementSql(statement).includes("INSERT INTO items"),
-			);
-		const checkWrite = execute.mock.calls
-			.map(([statement]) => statement)
-			.find((statement) =>
-				statementSql(statement).includes("INSERT INTO item_checks"),
-			);
-
-		expect(statementArgs(itemWrites[0]).slice(-2)).toEqual([
-			1_700_000_000_000, 1_700_000_000_000,
-		]);
-		expect(statementArgs(itemWrites[1]).slice(-2)).toEqual([
-			1_700_000_000_001, 1_700_000_000_001,
-		]);
-		expect(statementArgs(checkWrite)).toEqual([
-			milk.id,
-			"usr_avery",
-			1_700_000_000_002,
-			1_700_000_000_002,
-		]);
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(mockLoggerWarn).toHaveBeenCalledWith(
+			"active list sync after local item write failed",
+			{ error: syncError },
+		);
 	});
 
 	it("loads, appends, and persists latest-check-wins Item state", async () => {
 		const household = await createTestHouseholdDb();
-		let uuid = 0;
 		let now = 1_700_000_000_000;
 
 		try {
@@ -284,7 +270,6 @@ describe("createHouseholdActiveListDataSource", () => {
 						close: jest.fn(async () => undefined),
 					},
 					now: () => now++,
-					randomUuid: () => `uuid-${++uuid}`,
 				},
 			);
 
@@ -371,9 +356,4 @@ function dataSourceConfigFixture() {
 function statementSql(statement: HouseholdSqlStatement | undefined): string {
 	if (!statement) return "";
 	return typeof statement === "string" ? statement : statement.sql;
-}
-
-function statementArgs(statement: HouseholdSqlStatement | undefined) {
-	if (!statement || typeof statement === "string") return [];
-	return statement.args ?? [];
 }
