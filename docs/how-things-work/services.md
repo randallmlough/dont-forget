@@ -249,7 +249,7 @@ return {
 };
 ```
 
-`ActiveListDataAdapter` should be renamed to `ActiveListDataSource` when the Home/List/Item slice is migrated.
+The reusable component contract is named `ActiveListDataSource`; do not reintroduce adapter aliases at the UI boundary.
 
 ## Offline-First Sync Semantics
 
@@ -294,7 +294,7 @@ For the Home/List/Item vertical slice:
 3. Create `lib/services/list/list-service.ts` for List metadata operations.
 4. Create `lib/services/item/item-service.ts` for Item operations.
 5. Create `screens/home/active-list-data-source.ts` to compose Household Session, HouseholdStore, ListService, and ItemService.
-6. Rename `ActiveListDataAdapter` to `ActiveListDataSource`.
+6. Keep the Active List UI boundary on `ActiveListDataSource` naming.
 7. Hard-cut imports away from touched `lib/app/*` files; do not add compatibility wrappers.
 8. Add the custom ESLint service-boundary rule.
 9. Run focused tests for Home, Active List, and migrated services, then `make verify` when practical.

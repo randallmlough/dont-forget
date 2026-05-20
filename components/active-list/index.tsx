@@ -60,7 +60,7 @@ export type ActiveListMeta = {
 	syncState: ActiveListSyncState;
 };
 
-export type ActiveListDataAdapter = {
+export type ActiveListDataSource = {
 	syncAuthorized: boolean;
 	load: () => Promise<ActiveListInitialState>;
 	addItem: (name: string) => Promise<ActiveListItem>;
@@ -79,7 +79,7 @@ type ActiveListContextValue = {
 type ActiveListProviderProps = PropsWithChildren<{
 	initialState: ActiveListInitialState;
 	currentMemberName: string;
-	adapter: ActiveListDataAdapter;
+	dataSource: ActiveListDataSource;
 }>;
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
@@ -87,14 +87,14 @@ const ActiveListContext = createContext<ActiveListContextValue | null>(null);
 function ActiveListProvider({
 	initialState,
 	currentMemberName,
-	adapter,
+	dataSource,
 	children,
 }: ActiveListProviderProps) {
 	const logger = useLogger();
 	const [model, setModel] = useState(() =>
 		initialActiveListModel(
 			initialState,
-			adapter.syncAuthorized ? "synced" : "offline",
+			dataSource.syncAuthorized ? "synced" : "offline",
 		),
 	);
 	const mounted = useRef(true);
@@ -111,40 +111,40 @@ function ActiveListProvider({
 	useEffect(() => {
 		mounted.current = true;
 		transition({
-			type: adapter.syncAuthorized ? "syncSucceeded" : "syncUnavailable",
+			type: dataSource.syncAuthorized ? "syncSucceeded" : "syncUnavailable",
 		});
 		return () => {
 			mounted.current = false;
-			void adapter.close();
+			void dataSource.close();
 		};
-	}, [adapter, transition]);
+	}, [dataSource, transition]);
 
-	const loadFromAdapter = useCallback(async () => {
-		const nextState = await adapter.load();
+	const loadFromDataSource = useCallback(async () => {
+		const nextState = await dataSource.load();
 		transition({ type: "listLoaded", list: nextState });
-	}, [adapter, transition]);
+	}, [dataSource, transition]);
 
 	const syncLatest = useCallback(async () => {
-		if (!adapter.syncAuthorized) {
+		if (!dataSource.syncAuthorized) {
 			transition({ type: "syncUnavailable" });
-			await loadFromAdapter();
+			await loadFromDataSource();
 			return;
 		}
 
 		transition({ type: "syncStarted" });
 
 		try {
-			await adapter.sync();
-			await loadFromAdapter();
+			await dataSource.sync();
+			await loadFromDataSource();
 			transition({ type: "syncSucceeded" });
 		} catch (error) {
 			transition({ type: "syncFailed" });
 			throw error;
 		}
-	}, [adapter, loadFromAdapter, transition]);
+	}, [dataSource, loadFromDataSource, transition]);
 
 	const syncAfterLocalWrite = useCallback(async () => {
-		if (!adapter.syncAuthorized) {
+		if (!dataSource.syncAuthorized) {
 			transition({ type: "syncUnavailable" });
 			return;
 		}
@@ -152,16 +152,16 @@ function ActiveListProvider({
 		transition({ type: "syncStarted" });
 
 		try {
-			const result = await adapter.sync();
+			const result = await dataSource.sync();
 			if (result.changed) {
-				await loadFromAdapter();
+				await loadFromDataSource();
 			}
 			transition({ type: "syncSucceeded" });
 		} catch (error) {
 			logger.error("active list sync failed", { error });
 			transition({ type: "syncFailed" });
 		}
-	}, [adapter, loadFromAdapter, logger, transition]);
+	}, [dataSource, loadFromDataSource, logger, transition]);
 
 	const refresh = useCallback(async () => {
 		transition({ type: "refreshRequested" });
@@ -190,7 +190,7 @@ function ActiveListProvider({
 			transition({ type: "itemAddedOptimistically", item });
 
 			try {
-				const persistedItem = await adapter.addItem(name);
+				const persistedItem = await dataSource.addItem(name);
 				transition({
 					type: "itemAddPersisted",
 					pendingItemId: item.id,
@@ -200,10 +200,10 @@ function ActiveListProvider({
 			} catch (error) {
 				logger.error("active list item add failed", { error });
 				transition({ type: "itemAddFailed" });
-				await loadFromAdapter().catch(() => undefined);
+				await loadFromDataSource().catch(() => undefined);
 			}
 		},
-		[adapter, loadFromAdapter, logger, syncAfterLocalWrite, transition],
+		[dataSource, loadFromDataSource, logger, syncAfterLocalWrite, transition],
 	);
 
 	const toggleItem = useCallback(
@@ -222,19 +222,19 @@ function ActiveListProvider({
 			});
 
 			try {
-				await adapter.setItemChecked(itemId, checked);
+				await dataSource.setItemChecked(itemId, checked);
 				transition({ type: "itemTogglePersisted" });
 				void syncAfterLocalWrite();
 			} catch (error) {
 				logger.error("active list item toggle failed", { error });
 				transition({ type: "itemToggleFailed" });
-				await loadFromAdapter().catch(() => undefined);
+				await loadFromDataSource().catch(() => undefined);
 			}
 		},
 		[
-			adapter,
+			dataSource,
 			currentMemberName,
-			loadFromAdapter,
+			loadFromDataSource,
 			logger,
 			syncAfterLocalWrite,
 			transition,

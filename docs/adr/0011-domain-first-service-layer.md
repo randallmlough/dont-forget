@@ -74,8 +74,8 @@ screens/home/active-list-data-source.ts
 
 As part of that slice:
 
-- Rename `ActiveListDataAdapter` to `ActiveListDataSource`.
-- Remove `createHouseholdActiveListAdapter` rather than keeping a compatibility wrapper.
+- Use `ActiveListDataSource` naming for the reusable UI boundary instead of adapter naming.
+- Remove old Active List factory call sites rather than keeping compatibility wrappers.
 - Move `bootstrapWithClerk` and offline Household Session cache behavior into Household Session service naming.
 - Open one shared `HouseholdStore` for Home and inject it into List and Item services.
 - Keep Home-specific composition under `screens/home/`.

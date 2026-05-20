@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import type {
-	ActiveListDataAdapter,
+	ActiveListDataSource,
 	ActiveListInitialState,
 } from "@/components/active-list";
 import { HomeScreenView } from "@/screens/home/home-screen";
@@ -96,13 +96,13 @@ function readyContent(initialList: ActiveListInitialState) {
 		status: "ready" as const,
 		activeMemberName: "Avery Chen",
 		initialList,
-		adapter: storyAdapter(initialList),
+		dataSource: storyDataSource(initialList),
 	};
 }
 
-function storyAdapter(
+function storyDataSource(
 	initialList: ActiveListInitialState,
-): ActiveListDataAdapter {
+): ActiveListDataSource {
 	let state = initialList;
 	let nextItem = initialList.items.length + 1;
 

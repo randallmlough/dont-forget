@@ -3,10 +3,10 @@ import { useRef } from "react";
 import { Text } from "react-native";
 
 import type {
-	ActiveListDataAdapter,
+	ActiveListDataSource,
 	ActiveListInitialState,
 } from "@/components/active-list";
-import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
+import { createHouseholdActiveListDataSource } from "@/lib/app/active-list-data-source";
 import {
 	type CachedHouseholdSession,
 	discardCachedHouseholdSessionIfUnauthorized,
@@ -17,8 +17,8 @@ import {
 } from "@/lib/services/household";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
-jest.mock("@/lib/app/active-list-adapter", () => ({
-	createHouseholdActiveListAdapter: jest.fn(),
+jest.mock("@/lib/app/active-list-data-source", () => ({
+	createHouseholdActiveListDataSource: jest.fn(),
 }));
 
 jest.mock("@/lib/services/household", () => ({
@@ -30,7 +30,7 @@ jest.mock("@/lib/services/household", () => ({
 
 beforeEach(() => {
 	jest.mocked(getHouseholdSession).mockReset();
-	jest.mocked(createHouseholdActiveListAdapter).mockReset();
+	jest.mocked(createHouseholdActiveListDataSource).mockReset();
 	jest
 		.mocked(discardCachedHouseholdSessionIfUnauthorized)
 		.mockResolvedValue(null);
@@ -50,8 +50,8 @@ describe("useHomeContent", () => {
 			return session;
 		});
 		jest
-			.mocked(createHouseholdActiveListAdapter)
-			.mockReturnValue(noopAdapter(initialListFixture()));
+			.mocked(createHouseholdActiveListDataSource)
+			.mockReturnValue(noopDataSource(initialListFixture()));
 
 		const { rerender } = render(
 			<UseHomeContentHarness getToken={getToken} isLoaded isSignedIn />,
@@ -71,16 +71,16 @@ describe("useHomeContent", () => {
 		const cached = cachedHouseholdSessionFixture();
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
-			.mocked(createHouseholdActiveListAdapter)
+			.mocked(createHouseholdActiveListDataSource)
 			.mockReturnValue(
-				noopAdapter(initialListFixture(), { syncAuthorized: false }),
+				noopDataSource(initialListFixture(), { syncAuthorized: false }),
 			);
 
 		render(<UseHomeContentHarness isLoaded={false} isSignedIn={false} />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
 		expect(getHouseholdSession).not.toHaveBeenCalled();
-		expect(createHouseholdActiveListAdapter).toHaveBeenCalledWith({
+		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
 			household: cached.activeHousehold,
 			activeMember: cached.activeMember,
 			list: cached.activeList,
@@ -90,14 +90,14 @@ describe("useHomeContent", () => {
 		});
 	});
 
-	it("closes a pending adapter when the loading run is cancelled", async () => {
+	it("closes a pending data source when the loading run is cancelled", async () => {
 		const load = deferred<ActiveListInitialState>();
 		const close = jest.fn().mockResolvedValue(undefined);
 		jest
 			.mocked(getHouseholdSession)
 			.mockResolvedValue(householdSessionFixture());
-		jest.mocked(createHouseholdActiveListAdapter).mockReturnValue({
-			...noopAdapter(initialListFixture()),
+		jest.mocked(createHouseholdActiveListDataSource).mockReturnValue({
+			...noopDataSource(initialListFixture()),
 			load: () => load.promise,
 			close,
 		});
@@ -105,7 +105,7 @@ describe("useHomeContent", () => {
 		const { unmount } = render(<UseHomeContentHarness isLoaded isSignedIn />);
 
 		await waitFor(() =>
-			expect(createHouseholdActiveListAdapter).toHaveBeenCalledTimes(1),
+			expect(createHouseholdActiveListDataSource).toHaveBeenCalledTimes(1),
 		);
 		unmount();
 
@@ -203,10 +203,10 @@ function initialListFixture(): ActiveListInitialState {
 	};
 }
 
-function noopAdapter(
+function noopDataSource(
 	initialList: ActiveListInitialState,
-	overrides: Partial<ActiveListDataAdapter> = {},
-): ActiveListDataAdapter {
+	overrides: Partial<ActiveListDataSource> = {},
+): ActiveListDataSource {
 	return {
 		syncAuthorized: true,
 		async load() {

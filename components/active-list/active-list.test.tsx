@@ -8,7 +8,7 @@ import {
 
 import {
 	ActiveList,
-	type ActiveListDataAdapter,
+	type ActiveListDataSource,
 	type ActiveListInitialState,
 } from "@/components/active-list";
 
@@ -80,7 +80,7 @@ describe("ActiveList", () => {
 		const sync = deferred<{ changed: boolean }>();
 		renderActiveList(
 			emptyList,
-			memoryAdapter(emptyList, { sync: () => sync.promise }),
+			memoryDataSource(emptyList, { sync: () => sync.promise }),
 		);
 
 		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
@@ -108,7 +108,7 @@ describe("ActiveList", () => {
 	it("shows offline sync state when sync is not authorized", () => {
 		renderActiveList(
 			emptyList,
-			memoryAdapter(emptyList, { syncAuthorized: false }),
+			memoryDataSource(emptyList, { syncAuthorized: false }),
 		);
 
 		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
@@ -116,7 +116,7 @@ describe("ActiveList", () => {
 
 	it("pushes local changes before refreshing the List view", async () => {
 		let state = emptyList;
-		const adapter = memoryAdapter(emptyList, {
+		const dataSource = memoryDataSource(emptyList, {
 			async load() {
 				return state;
 			},
@@ -136,10 +136,10 @@ describe("ActiveList", () => {
 				return { changed: true };
 			},
 		});
-		const pull = jest.spyOn(adapter, "pull");
-		const sync = jest.spyOn(adapter, "sync");
+		const pull = jest.spyOn(dataSource, "pull");
+		const sync = jest.spyOn(dataSource, "sync");
 
-		renderActiveList(emptyList, adapter);
+		renderActiveList(emptyList, dataSource);
 
 		await act(async () => {
 			fireEvent.press(screen.getByText("Refresh"));
@@ -154,13 +154,13 @@ describe("ActiveList", () => {
 
 function renderActiveList(
 	initialState: ActiveListInitialState,
-	adapter = memoryAdapter(initialState),
+	dataSource = memoryDataSource(initialState),
 ) {
 	return render(
 		<ActiveList.Provider
 			initialState={initialState}
 			currentMemberName="Avery Chen"
-			adapter={adapter}
+			dataSource={dataSource}
 		>
 			<ActiveList.Screen>
 				<ActiveList.Header />
@@ -171,10 +171,10 @@ function renderActiveList(
 	);
 }
 
-function memoryAdapter(
+function memoryDataSource(
 	initialState: ActiveListInitialState,
-	overrides: Partial<ActiveListDataAdapter> = {},
-): ActiveListDataAdapter {
+	overrides: Partial<ActiveListDataSource> = {},
+): ActiveListDataSource {
 	let state = initialState;
 	let nextItem = initialState.items.length + 1;
 

@@ -1,6 +1,6 @@
 import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
-import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
+import { createHouseholdActiveListDataSource } from "@/lib/app/active-list-data-source";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 
@@ -17,7 +17,7 @@ jest.mock("@/lib/logger", () => ({
 	},
 }));
 
-describe("createHouseholdActiveListAdapter", () => {
+describe("createHouseholdActiveListDataSource", () => {
 	beforeEach(() => {
 		mockLoggerError.mockReset();
 		mockLoggerWarn.mockReset();
@@ -26,19 +26,22 @@ describe("createHouseholdActiveListAdapter", () => {
 	it("exposes explicit app-owned pull and sync operations", async () => {
 		const pull = jest.fn(async () => ({ changed: true }));
 		const sync = jest.fn(async () => ({ changed: false }));
-		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
-			store: {
-				syncAuthorized: true,
-				execute: jest.fn(async () => ({ rows: [] })),
-				pull,
-				sync,
-				close: jest.fn(async () => undefined),
+		const dataSource = createHouseholdActiveListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute: jest.fn(async () => ({ rows: [] })),
+					pull,
+					sync,
+					close: jest.fn(async () => undefined),
+				},
 			},
-		});
+		);
 
-		expect(adapter.syncAuthorized).toBe(true);
-		await expect(adapter.pull()).resolves.toEqual({ changed: true });
-		await expect(adapter.sync()).resolves.toEqual({ changed: false });
+		expect(dataSource.syncAuthorized).toBe(true);
+		await expect(dataSource.pull()).resolves.toEqual({ changed: true });
+		await expect(dataSource.sync()).resolves.toEqual({ changed: false });
 		expect(pull).toHaveBeenCalledTimes(1);
 		expect(sync).toHaveBeenCalledTimes(1);
 	});
@@ -93,20 +96,23 @@ describe("createHouseholdActiveListAdapter", () => {
 
 			return { rows: [] };
 		});
-		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
-			store: {
-				syncAuthorized: true,
-				execute,
-				sync: jest.fn(async () => {
-					throw new Error("native sync failed");
-				}),
-				pull: jest.fn(async () => ({ changed: false })),
-				close: jest.fn(async () => undefined),
+		const dataSource = createHouseholdActiveListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute,
+					sync: jest.fn(async () => {
+						throw new Error("native sync failed");
+					}),
+					pull: jest.fn(async () => ({ changed: false })),
+					close: jest.fn(async () => undefined),
+				},
+				openRemoteClient: () => ({ execute: remoteExecute }),
 			},
-			openRemoteClient: () => ({ execute: remoteExecute }),
-		});
+		);
 
-		await expect(adapter.sync()).resolves.toEqual({ changed: false });
+		await expect(dataSource.sync()).resolves.toEqual({ changed: false });
 
 		expect(remoteExecute).toHaveBeenCalledTimes(3);
 		expect(remoteExecute).toHaveBeenCalledWith(
@@ -143,22 +149,25 @@ describe("createHouseholdActiveListAdapter", () => {
 
 	it("logs and rethrows when native sync and fallback both fail", async () => {
 		const fallbackError = new Error("remote unavailable");
-		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
-			store: {
-				syncAuthorized: true,
-				execute: jest.fn(async () => ({ rows: [] })),
-				sync: jest.fn(async () => {
-					throw new Error("native sync failed");
-				}),
-				pull: jest.fn(async () => ({ changed: false })),
-				close: jest.fn(async () => undefined),
+		const dataSource = createHouseholdActiveListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute: jest.fn(async () => ({ rows: [] })),
+					sync: jest.fn(async () => {
+						throw new Error("native sync failed");
+					}),
+					pull: jest.fn(async () => ({ changed: false })),
+					close: jest.fn(async () => undefined),
+				},
+				openRemoteClient: () => {
+					throw fallbackError;
+				},
 			},
-			openRemoteClient: () => {
-				throw fallbackError;
-			},
-		});
+		);
 
-		await expect(adapter.sync()).rejects.toThrow(fallbackError);
+		await expect(dataSource.sync()).rejects.toThrow(fallbackError);
 
 		expect(mockLoggerError).toHaveBeenCalledWith(
 			"active list native sync failed",
@@ -181,18 +190,21 @@ describe("createHouseholdActiveListAdapter", () => {
 				? { rows: [{ position: 0 }] }
 				: { rows: [] };
 		});
-		const adapter = createHouseholdActiveListAdapter(adapterConfigFixture(), {
-			store: {
-				execute,
-				close: jest.fn(async () => undefined),
+		const dataSource = createHouseholdActiveListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					execute,
+					close: jest.fn(async () => undefined),
+				},
+				now: () => rawTimestamps.shift() ?? 1_699_999_999_999,
+				randomUuid: () => `uuid-${++uuid}`,
 			},
-			now: () => rawTimestamps.shift() ?? 1_699_999_999_999,
-			randomUuid: () => `uuid-${++uuid}`,
-		});
+		);
 
-		const milk = await adapter.addItem("Milk");
-		await adapter.addItem("Eggs");
-		await adapter.setItemChecked(milk.id, true);
+		const milk = await dataSource.addItem("Milk");
+		await dataSource.addItem("Eggs");
+		await dataSource.setItemChecked(milk.id, true);
 
 		const itemWrites = execute.mock.calls
 			.map(([statement]) => statement)
@@ -231,7 +243,7 @@ describe("createHouseholdActiveListAdapter", () => {
 				createdByUserId: "usr_avery",
 			});
 
-			const adapter = createHouseholdActiveListAdapter(
+			const dataSource = createHouseholdActiveListDataSource(
 				{
 					household: { id: "hh_avery", name: "Avery" },
 					activeMember: {
@@ -276,10 +288,10 @@ describe("createHouseholdActiveListAdapter", () => {
 				},
 			);
 
-			const milk = await adapter.addItem("Milk");
-			const eggs = await adapter.addItem("Eggs");
+			const milk = await dataSource.addItem("Milk");
+			const eggs = await dataSource.addItem("Eggs");
 
-			expect(await adapter.load()).toEqual({
+			expect(await dataSource.load()).toEqual({
 				householdName: "Avery",
 				listName: "Weekend Groceries",
 				items: [
@@ -298,8 +310,8 @@ describe("createHouseholdActiveListAdapter", () => {
 				],
 			});
 
-			await adapter.setItemChecked(milk.id, true);
-			expect((await adapter.load()).items[0]).toEqual({
+			await dataSource.setItemChecked(milk.id, true);
+			expect((await dataSource.load()).items[0]).toEqual({
 				id: milk.id,
 				name: "Milk",
 				checked: true,
@@ -313,7 +325,7 @@ describe("createHouseholdActiveListAdapter", () => {
 				updatedAt: now + 100,
 			});
 
-			expect((await adapter.load()).items[0]).toEqual({
+			expect((await dataSource.load()).items[0]).toEqual({
 				id: milk.id,
 				name: "Milk",
 				checked: false,
@@ -325,7 +337,7 @@ describe("createHouseholdActiveListAdapter", () => {
 	});
 });
 
-function adapterConfigFixture() {
+function dataSourceConfigFixture() {
 	return {
 		household: { id: "hh_avery", name: "Avery" },
 		activeMember: {

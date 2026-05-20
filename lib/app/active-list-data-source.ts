@@ -1,7 +1,7 @@
 import * as Crypto from "expo-crypto";
 
 import type {
-	ActiveListDataAdapter,
+	ActiveListDataSource,
 	ActiveListItem,
 	ActiveListSyncResult,
 } from "@/components/active-list";
@@ -34,7 +34,7 @@ type RemoteSqlClient = {
 	close?: () => void;
 };
 
-export type HouseholdActiveListAdapterConfig = {
+export type HouseholdActiveListDataSourceConfig = {
 	household: BootstrapResponse["activeHousehold"];
 	activeMember: BootstrapResponse["activeMember"];
 	list: BootstrapResponse["activeList"];
@@ -43,7 +43,7 @@ export type HouseholdActiveListAdapterConfig = {
 	database: HouseholdDatabaseConfig;
 };
 
-type AdapterOptions = {
+type DataSourceOptions = {
 	store?: ActiveListStore;
 	openStore?: (config: OpenHouseholdStoreConfig) => Promise<ActiveListStore>;
 	openRemoteClient?: (
@@ -60,10 +60,10 @@ type RequiredRemoteDatabaseConfig = {
 
 let lastAppTimestamp: number | null = null;
 
-export function createHouseholdActiveListAdapter(
-	config: HouseholdActiveListAdapterConfig,
-	options: AdapterOptions = {},
-): ActiveListDataAdapter {
+export function createHouseholdActiveListDataSource(
+	config: HouseholdActiveListDataSourceConfig,
+	options: DataSourceOptions = {},
+): ActiveListDataSource {
 	const storePromise = options.store
 		? Promise.resolve(options.store)
 		: (options.openStore ?? openHouseholdStore)({

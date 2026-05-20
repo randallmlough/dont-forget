@@ -9,10 +9,10 @@ import {
 } from "react";
 
 import type {
-	ActiveListDataAdapter,
+	ActiveListDataSource,
 	ActiveListInitialState,
 } from "@/components/active-list";
-import { createHouseholdActiveListAdapter } from "@/lib/app/active-list-adapter";
+import { createHouseholdActiveListDataSource } from "@/lib/app/active-list-data-source";
 import {
 	type CachedHouseholdSession,
 	discardCachedHouseholdSessionIfUnauthorized,
@@ -29,7 +29,7 @@ export type HomeContentState =
 			status: "ready";
 			activeMemberName: string;
 			initialList: ActiveListInitialState;
-			adapter: ActiveListDataAdapter;
+			dataSource: ActiveListDataSource;
 	  };
 
 type HomeHouseholdSession = HouseholdSession | CachedHouseholdSession;
@@ -37,7 +37,7 @@ type HomeHouseholdSession = HouseholdSession | CachedHouseholdSession;
 type OpenedHome = {
 	session: HomeHouseholdSession;
 	initialList: ActiveListInitialState;
-	adapter: ActiveListDataAdapter;
+	dataSource: ActiveListDataSource;
 };
 
 type UseHomeContentOptions = {
@@ -57,8 +57,8 @@ type HomeLoadRun = {
 	cachedRendered: boolean;
 	cachedInvalidated: boolean;
 	freshRendered: boolean;
-	pendingAdapters: Set<ActiveListDataAdapter>;
-	closedAdapters: Set<ActiveListDataAdapter>;
+	pendingDataSources: Set<ActiveListDataSource>;
+	closedDataSources: Set<ActiveListDataSource>;
 };
 
 type HomeLoadOptions = Pick<
@@ -107,8 +107,8 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 		cachedRendered: false,
 		cachedInvalidated: false,
 		freshRendered: false,
-		pendingAdapters: new Set<ActiveListDataAdapter>(),
-		closedAdapters: new Set<ActiveListDataAdapter>(),
+		pendingDataSources: new Set<ActiveListDataSource>(),
+		closedDataSources: new Set<ActiveListDataSource>(),
 	};
 
 	run.setContent((current) =>
@@ -125,7 +125,9 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 	return () => {
 		run.cancelled = true;
 		void Promise.all(
-			[...run.pendingAdapters].map((adapter) => closeAdapter(run, adapter)),
+			[...run.pendingDataSources].map((dataSource) =>
+				closeDataSource(run, dataSource),
+			),
 		).catch(() => undefined);
 	};
 }
@@ -172,19 +174,19 @@ async function openHome(
 	session: HomeHouseholdSession,
 	afterLoad?: () => Promise<void>,
 ): Promise<OpenedHome> {
-	const adapter = createAdapterFromSession(session);
-	run.pendingAdapters.add(adapter);
+	const dataSource = createDataSourceFromSession(session);
+	run.pendingDataSources.add(dataSource);
 
 	try {
-		const initialList = await adapter.load();
+		const initialList = await dataSource.load();
 		if (afterLoad) {
 			await afterLoad();
 		}
 
-		run.pendingAdapters.delete(adapter);
-		return { session, initialList, adapter };
+		run.pendingDataSources.delete(dataSource);
+		return { session, initialList, dataSource };
 	} catch (error) {
-		await closeAdapter(run, adapter).catch(() => undefined);
+		await closeDataSource(run, dataSource).catch(() => undefined);
 		throw error;
 	}
 }
@@ -199,7 +201,7 @@ async function renderOpenedHome(
 		run.signingOutRef.current ||
 		(source === "cached" && (run.freshRendered || run.cachedInvalidated))
 	) {
-		await closeAdapter(run, opened.adapter).catch(() => undefined);
+		await closeDataSource(run, opened.dataSource).catch(() => undefined);
 		return;
 	}
 
@@ -213,7 +215,7 @@ async function renderOpenedHome(
 		status: "ready",
 		activeMemberName: activeMemberNameFromSession(opened.session),
 		initialList: opened.initialList,
-		adapter: opened.adapter,
+		dataSource: opened.dataSource,
 	});
 }
 
@@ -235,18 +237,21 @@ async function showErrorIfNoListRendered(
 	}
 }
 
-async function closeAdapter(run: HomeLoadRun, adapter: ActiveListDataAdapter) {
-	if (run.closedAdapters.has(adapter)) return;
+async function closeDataSource(
+	run: HomeLoadRun,
+	dataSource: ActiveListDataSource,
+) {
+	if (run.closedDataSources.has(dataSource)) return;
 
-	run.closedAdapters.add(adapter);
-	run.pendingAdapters.delete(adapter);
-	await adapter.close();
+	run.closedDataSources.add(dataSource);
+	run.pendingDataSources.delete(dataSource);
+	await dataSource.close();
 }
 
-function createAdapterFromSession(
+function createDataSourceFromSession(
 	session: HomeHouseholdSession,
-): ActiveListDataAdapter {
-	return createHouseholdActiveListAdapter({
+): ActiveListDataSource {
+	return createHouseholdActiveListDataSource({
 		household: session.activeHousehold,
 		activeMember: session.activeMember,
 		list: session.activeList,
