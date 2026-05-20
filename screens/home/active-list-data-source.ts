@@ -45,6 +45,18 @@ type DataSourceOptions = {
 	now?: () => number;
 };
 
+type ActiveListServices = {
+	store: ActiveListStore;
+	listService: ReturnType<typeof createListService>;
+	itemService: ReturnType<typeof createItemService>;
+};
+
+type CreateActiveListServicesInput = {
+	storePromise: Promise<ActiveListStore>;
+	householdId: string;
+	itemServiceClock?: () => number;
+};
+
 export function createHouseholdActiveListDataSource(
 	config: HouseholdActiveListDataSourceConfig,
 	options: DataSourceOptions = {},
@@ -81,23 +93,17 @@ export function createHouseholdActiveListDataSource(
 		config.activeMember.userId,
 		config.activeMember.displayName ?? config.currentUser.displayName,
 	);
+	const getServices = createActiveListServicesGetter({
+		storePromise,
+		householdId: config.household.id,
+		itemServiceClock,
+	});
 
 	return {
 		syncAuthorized,
 		async load() {
 			try {
-				const store = await storePromise;
-				const listService = createListService({
-					householdId: config.household.id,
-					store,
-					logger,
-				});
-				const itemService = createItemService({
-					householdId: config.household.id,
-					store,
-					logger,
-					clock: itemServiceClock,
-				});
+				const { listService, itemService } = await getServices();
 				const list = await listService.getList({ listId: config.list.id });
 				const items = await itemService.listItems({ listId: config.list.id });
 
@@ -113,13 +119,7 @@ export function createHouseholdActiveListDataSource(
 		},
 		async addItem(rawName) {
 			try {
-				const store = await storePromise;
-				const itemService = createItemService({
-					householdId: config.household.id,
-					store,
-					logger,
-					clock: itemServiceClock,
-				});
+				const { store, itemService } = await getServices();
 				const item = await itemService.addItem({
 					listId: config.list.id,
 					userId: config.activeMember.userId,
@@ -135,13 +135,7 @@ export function createHouseholdActiveListDataSource(
 		},
 		async setItemChecked(itemId, checked) {
 			try {
-				const store = await storePromise;
-				const itemService = createItemService({
-					householdId: config.household.id,
-					store,
-					logger,
-					clock: itemServiceClock,
-				});
+				const { store, itemService } = await getServices();
 				await itemService.setItemChecked({
 					itemId,
 					userId: config.activeMember.userId,
@@ -202,6 +196,32 @@ export function createHouseholdActiveListDataSource(
 				throw error;
 			}
 		},
+	};
+}
+
+function createActiveListServicesGetter({
+	storePromise,
+	householdId,
+	itemServiceClock,
+}: CreateActiveListServicesInput): () => Promise<ActiveListServices> {
+	let servicesPromise: Promise<ActiveListServices> | null = null;
+
+	return () => {
+		servicesPromise ??= storePromise.then((store) => ({
+			store,
+			listService: createListService({
+				householdId,
+				store,
+				logger,
+			}),
+			itemService: createItemService({
+				householdId,
+				store,
+				logger,
+				clock: itemServiceClock,
+			}),
+		}));
+		return servicesPromise;
 	};
 }
 
