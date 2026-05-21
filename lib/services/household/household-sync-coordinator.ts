@@ -137,7 +137,7 @@ export function createHouseholdSyncCoordinator({
 		try {
 			result = await sync(syncOptionsForReason(reason));
 		} catch (error) {
-			return handleSyncFailure(error, reason);
+			return runQueuedFollowUpAfterAttempt(handleSyncFailure(error, reason));
 		}
 		handleRecoveredNativeSyncFailure(result, reason);
 
@@ -155,9 +155,17 @@ export function createHouseholdSyncCoordinator({
 			return result;
 		}
 
+		return runQueuedFollowUpAfterAttempt(result);
+	}
+
+	function runQueuedFollowUpAfterAttempt(
+		previousResult: HouseholdSyncResult | null,
+	): Promise<HouseholdSyncResult | null> | HouseholdSyncResult | null {
 		const followUpReason = queuedFollowUpReason;
+		if (!followUpReason) return previousResult;
+
 		queuedFollowUpReason = null;
-		if (stopped || shouldSkipForOffline()) return result;
+		if (stopped || shouldSkipForOffline()) return previousResult;
 		return runSync(followUpReason);
 	}
 
