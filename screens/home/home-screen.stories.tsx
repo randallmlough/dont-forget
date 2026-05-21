@@ -5,6 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import type {
 	ActiveListDataSource,
 	ActiveListInitialState,
+	ActiveListSyncCoordinator,
 } from "@/components/active-list";
 import { HomeScreenView } from "@/screens/home/home-screen";
 
@@ -97,6 +98,7 @@ function readyContent(initialList: ActiveListInitialState) {
 		activeMemberName: "Avery Chen",
 		initialList,
 		dataSource: storyDataSource(initialList),
+		syncCoordinator: storySyncCoordinator(),
 	};
 }
 
@@ -143,6 +145,18 @@ function storyDataSource(
 			return { changed: false };
 		},
 		async close() {},
+	};
+}
+
+function storySyncCoordinator(): ActiveListSyncCoordinator {
+	return {
+		getStatus: () => "synced",
+		subscribe: () => ({ remove() {} }),
+		start() {},
+		async stop() {},
+		async requestSync() {
+			return { changed: false };
+		},
 	};
 }
 

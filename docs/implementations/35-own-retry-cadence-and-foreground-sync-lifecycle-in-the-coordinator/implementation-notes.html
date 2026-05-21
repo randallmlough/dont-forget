@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Own Retry Cadence and Foreground Sync Lifecycle in the Coordinator</title>
+</head>
+<body>
+  <h1>Implementation Notes: Own Retry Cadence and Foreground Sync Lifecycle in the Coordinator</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li>Keep retry cadence inside the Household sync coordinator and keep Active List responsible only for starting and stopping the coordinator while Home is mounted.</li>
+      <li>Use push-local-only sync for retry and local-write requests so automatic work avoids native pull loops while still attempting to propagate locally committed Household rows.</li>
+      <li>Treat app foreground transitions as a lifecycle request to the coordinator, with existing request serialization and coalescing deciding whether another sync attempt should actually run.</li>
+      <li>Drain a queued follow-up sync before rethrowing an unexpected manual refresh failure so local-write propagation is not stranded behind failed explicit refresh work.</li>
+      <li>Keep future network-awareness behind app-owned coordinator adapter boundaries instead of importing a network package into UI or data-source code.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li>Keep a timer-based foreground retry cadence for this slice rather than adding a network dependency now. The PRD calls for a future network seam, but the acceptance criteria only require controlled retries and foreground lifecycle behavior.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+</body>
+</html>

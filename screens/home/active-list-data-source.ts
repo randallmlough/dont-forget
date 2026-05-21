@@ -5,7 +5,7 @@ import type {
 	ActiveListSyncResult,
 } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
-import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
+import { asError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
@@ -166,29 +166,19 @@ export function createHouseholdActiveListDataSource(
 					config.database,
 					options.openRemoteClient,
 				);
-				if (nativeError) {
-					logRecoveredNativeSyncFailure(log, nativeError);
-					return { changed: false };
-				}
-				return nativeResult;
 			} catch (fallbackError) {
 				if (nativeError) {
-					logUnexpectedSyncFailure(
-						log,
-						"active list native sync failed",
-						nativeError,
-					);
-				}
-				logUnexpectedSyncFailure(
-					log,
-					"active list sync fallback failed",
-					fallbackError,
-				);
-				if (nativeError) {
-					throw fallbackError;
+					throw attachNativeSyncError(fallbackError, nativeError);
 				}
 				throw fallbackError;
 			}
+			if (nativeError) {
+				return {
+					changed: false,
+					recoveredNativeSyncError: asError(nativeError),
+				};
+			}
+			return nativeResult;
 		},
 		async close() {
 			if (!ownsStore || closed) return;
@@ -202,6 +192,15 @@ export function createHouseholdActiveListDataSource(
 			}
 		},
 	};
+}
+
+function attachNativeSyncError(
+	fallbackError: unknown,
+	nativeError: unknown,
+): Error & { nativeSyncError: Error } {
+	return Object.assign(asError(fallbackError), {
+		nativeSyncError: asError(nativeError),
+	});
 }
 
 function createActiveListServicesGetter({
@@ -241,25 +240,4 @@ function activeListItemFromItem(
 				? (memberNames.get(item.checkedByUserId) ?? null)
 				: null,
 	};
-}
-
-function logUnexpectedSyncFailure(
-	log: ReturnType<typeof logger.with>,
-	message: string,
-	error: unknown,
-) {
-	if (isExpectedSyncInterruptionError(error)) return;
-
-	log.error(message, { error: asError(error) });
-}
-
-function logRecoveredNativeSyncFailure(
-	log: ReturnType<typeof logger.with>,
-	error: unknown,
-) {
-	if (isExpectedSyncInterruptionError(error)) return;
-
-	log.warn("active list native sync recovered by fallback", {
-		error: asError(error),
-	});
 }

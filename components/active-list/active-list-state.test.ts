@@ -5,6 +5,17 @@ import {
 } from "@/components/active-list/active-list-state";
 
 describe("activeListReducer", () => {
+	it("accepts coordinator-owned sync status changes", () => {
+		const model = initialActiveListModel(listFixture(), "synced");
+
+		expect(
+			activeListReducer(model, {
+				type: "syncStatusChanged",
+				syncState: "pending",
+			}),
+		).toMatchObject({ syncState: "pending" });
+	});
+
 	it("tracks refresh request, success, and failure", () => {
 		const model = initialActiveListModel(listFixture(), "synced");
 		const refreshing = activeListReducer(model, { type: "refreshRequested" });

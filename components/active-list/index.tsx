@@ -10,7 +10,6 @@ import {
 	useState,
 } from "react";
 import {
-	AppState,
 	FlatList,
 	type ListRenderItemInfo,
 	Pressable,
@@ -25,8 +24,13 @@ import {
 	activeListReducer,
 	initialActiveListModel,
 } from "@/components/active-list/active-list-state";
-import { isNetworkUnavailableError } from "@/lib/errors";
 import { useLogger } from "@/lib/logger";
+import type {
+	SyncCoordinator,
+	SyncOptions,
+	SyncResult,
+	SyncStatus,
+} from "@/lib/services/sync";
 
 export type ActiveListItem = {
 	id: string;
@@ -43,15 +47,13 @@ export type ActiveListState = {
 
 export type ActiveListInitialState = ActiveListState;
 
-export type ActiveListSyncState = "synced" | "pending" | "offline" | "failed";
+export type ActiveListSyncState = SyncStatus;
 
-export type ActiveListSyncResult = {
-	changed: boolean;
-};
+export type ActiveListSyncResult = SyncResult;
 
-export type ActiveListSyncOptions = {
-	mode?: "full" | "pushLocalOnly";
-};
+export type ActiveListSyncOptions = SyncOptions;
+
+export type ActiveListSyncCoordinator = SyncCoordinator;
 
 export type ActiveListActions = {
 	addItem: (name: string) => Promise<void>;
@@ -86,28 +88,29 @@ type ActiveListProviderProps = PropsWithChildren<{
 	initialState: ActiveListInitialState;
 	currentMemberName: string;
 	dataSource: ActiveListDataSource;
+	syncCoordinator: ActiveListSyncCoordinator;
+	closeDataSourceOnUnmount?: boolean;
+	manageSyncCoordinatorLifecycle?: boolean;
 }>;
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
-const OFFLINE_SYNC_RETRY_MS = 30_000;
 
 function ActiveListProvider({
 	initialState,
 	currentMemberName,
 	dataSource,
+	syncCoordinator,
+	closeDataSourceOnUnmount = true,
+	manageSyncCoordinatorLifecycle = true,
 	children,
 }: ActiveListProviderProps) {
 	const logger = useLogger();
 	const [model, setModel] = useState(() =>
-		initialActiveListModel(
-			initialState,
-			dataSource.syncAuthorized ? "synced" : "offline",
-		),
+		initialActiveListModel(initialState, syncCoordinator.getStatus()),
 	);
 	const mounted = useRef(true);
 	const nextItemNumber = useRef(initialState.items.length + 1);
 	const modelRef = useRef(model);
-	const syncInFlight = useRef(false);
 
 	const transition = useCallback((nextTransition: ActiveListTransition) => {
 		if (!mounted.current) return;
@@ -120,132 +123,80 @@ function ActiveListProvider({
 		mounted.current = true;
 		return () => {
 			mounted.current = false;
-			void dataSource.close();
 		};
-	}, [dataSource]);
+	}, []);
 
 	const loadFromDataSource = useCallback(async () => {
 		const nextState = await dataSource.load();
 		transition({ type: "listLoaded", list: nextState });
 	}, [dataSource, transition]);
 
-	const syncLatest = useCallback(
-		async (options?: ActiveListSyncOptions) => {
-			if (!dataSource.syncAuthorized) {
-				transition({ type: "syncUnavailable" });
-				await loadFromDataSource();
-				return;
-			}
-
-			transition({ type: "syncStarted" });
-			syncInFlight.current = true;
-
-			try {
-				await dataSource.sync(options);
-				await loadFromDataSource();
-				transition({ type: "syncSucceeded" });
-			} catch (error) {
-				if (isNetworkUnavailableError(error)) {
-					transition({ type: "syncUnavailable" });
-					return;
-				}
-				transition({ type: "syncFailed" });
-				throw error;
-			} finally {
-				syncInFlight.current = false;
-			}
-		},
-		[dataSource, loadFromDataSource, transition],
-	);
-
-	const syncAfterLocalWrite = useCallback(async () => {
-		if (!dataSource.syncAuthorized) {
-			transition({ type: "syncUnavailable" });
-			return;
-		}
-
-		transition({ type: "syncStarted" });
-		syncInFlight.current = true;
-
-		try {
-			const result = await dataSource.sync({ mode: "pushLocalOnly" });
-			if (result.changed) {
-				await loadFromDataSource();
-			}
-			transition({ type: "syncSucceeded" });
-		} catch (error) {
-			if (isNetworkUnavailableError(error)) {
-				transition({ type: "syncUnavailable" });
-				return;
-			}
-
-			logger.error("active list sync failed", { error });
-			transition({ type: "syncFailed" });
-		} finally {
-			syncInFlight.current = false;
-		}
-	}, [dataSource, loadFromDataSource, logger, transition]);
-
 	useEffect(() => {
-		if (!dataSource.syncAuthorized) {
-			transition({ type: "syncUnavailable" });
-			return;
-		}
-
-		void syncLatest({ mode: "pushLocalOnly" }).catch((error) => {
-			logger.error("active list initial sync failed", { error });
-		});
-	}, [dataSource.syncAuthorized, logger, syncLatest, transition]);
-
-	useEffect(() => {
-		if (!dataSource.syncAuthorized) return;
-
-		let stopped = false;
-
-		async function retrySyncWhenForegrounded() {
+		const subscription = syncCoordinator.subscribe((syncState) => {
+			const previousSyncState = modelRef.current.syncState;
+			const isManualRefresh = modelRef.current.isRefreshing;
+			transition({ type: "syncStatusChanged", syncState });
 			if (
-				stopped ||
-				syncInFlight.current ||
-				modelRef.current.syncState === "synced" ||
-				AppState.currentState === "background" ||
-				AppState.currentState === "inactive"
+				previousSyncState === "pending" &&
+				syncState === "synced" &&
+				!isManualRefresh
 			) {
-				return;
-			}
-
-			try {
-				await syncLatest({ mode: "pushLocalOnly" });
-			} catch (error) {
-				logger.error("active list periodic sync failed", { error });
-			}
-		}
-
-		const interval = setInterval(() => {
-			void retrySyncWhenForegrounded();
-		}, OFFLINE_SYNC_RETRY_MS);
-		const subscription = AppState.addEventListener("change", (state) => {
-			if (state === "active") {
-				void retrySyncWhenForegrounded();
+				void loadFromDataSource().catch((error) => {
+					logger.error("active list reload after sync failed", { error });
+				});
 			}
 		});
+		transition({
+			type: "syncStatusChanged",
+			syncState: syncCoordinator.getStatus(),
+		});
+		if (manageSyncCoordinatorLifecycle) {
+			syncCoordinator.start();
+		}
 
 		return () => {
-			stopped = true;
-			clearInterval(interval);
 			subscription.remove();
+			void (async () => {
+				if (manageSyncCoordinatorLifecycle) {
+					await syncCoordinator.stop();
+				}
+				if (closeDataSourceOnUnmount) {
+					await dataSource.close();
+				}
+			})();
 		};
-	}, [dataSource.syncAuthorized, logger, syncLatest]);
+	}, [
+		closeDataSourceOnUnmount,
+		dataSource,
+		loadFromDataSource,
+		logger,
+		manageSyncCoordinatorLifecycle,
+		syncCoordinator,
+		transition,
+	]);
+
+	const requestLocalWriteSync = useCallback(() => {
+		void syncCoordinator
+			.requestSync({ reason: "localWrite" })
+			.then(async (result) => {
+				if (mounted.current && result?.changed) await loadFromDataSource();
+			})
+			.catch(() => undefined);
+	}, [loadFromDataSource, syncCoordinator]);
 
 	const refresh = useCallback(async () => {
 		transition({ type: "refreshRequested" });
 
 		try {
-			await syncLatest();
+			await syncCoordinator.requestSync({ reason: "manualRefresh" });
+			await loadFromDataSource();
 		} catch (error) {
-			logger.error("active list refresh failed", { error });
+			if (syncCoordinator.getStatus() !== "failed") {
+				logger.error("active list refresh failed", { error });
+			}
 			transition({ type: "refreshFailed" });
 		}
-	}, [logger, syncLatest, transition]);
+	}, [loadFromDataSource, logger, syncCoordinator, transition]);
 
 	const addItem = useCallback(
 		async (rawName: string) => {
@@ -269,13 +220,13 @@ function ActiveListProvider({
 					pendingItemId: item.id,
 					item: persistedItem,
 				});
-				void syncAfterLocalWrite();
+				requestLocalWriteSync();
 			} catch {
 				transition({ type: "itemAddFailed" });
 				await loadFromDataSource().catch(() => undefined);
 			}
 		},
-		[dataSource, loadFromDataSource, syncAfterLocalWrite, transition],
+		[dataSource, loadFromDataSource, requestLocalWriteSync, transition],
 	);
 
 	const toggleItem = useCallback(
@@ -296,7 +247,7 @@ function ActiveListProvider({
 			try {
 				await dataSource.setItemChecked(itemId, checked);
 				transition({ type: "itemTogglePersisted" });
-				void syncAfterLocalWrite();
+				requestLocalWriteSync();
 			} catch {
 				transition({ type: "itemToggleFailed" });
 				await loadFromDataSource().catch(() => undefined);
@@ -306,7 +257,7 @@ function ActiveListProvider({
 			dataSource,
 			currentMemberName,
 			loadFromDataSource,
-			syncAfterLocalWrite,
+			requestLocalWriteSync,
 			transition,
 		],
 	);

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Document Household Sync Coordinator Policy as a Deep Module</title>
+</head>
+<body>
+  <h1>Implementation Notes: Document Household Sync Coordinator Policy as a Deep Module</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li>Document the Household sync coordinator in <code>docs/how-things-work/</code> because the issue asks for active Household sync policy rather than a source-code API reference.</li>
+      <li>Use the coordinator's focused Jest coverage as the behavioral regression suite, with this document recording the resulting policy boundary for future implementation work.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li>Updating only the existing services documentation would keep the change smaller, but a dedicated Household sync coordinator page better preserves the coordinator as a deep module with a small public interface and substantial policy behind it.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+</body>
+</html>

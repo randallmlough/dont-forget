@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Move Offline and Recoverable Sync Failure Handling to the Coordinator</title>
+</head>
+<body>
+  <h1>Implementation Notes: Move Offline and Recoverable Sync Failure Handling to the Coordinator</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li>Keep the Household sync coordinator as the only boundary that classifies thrown sync failures into offline, failed, or quiet recovery behavior for Home-visible sync status.</li>
+      <li>Remove sync-operation error logging from the Active List data source and HouseholdStore so unexpected sync failures are logged once by the coordinator with the sync request reason.</li>
+      <li>Represent successful fallback recovery of a native sync failure as sync result metadata so the coordinator can keep recoverable checkpoint interruptions quiet and warn only for unexpected native failures that fallback recovered.</li>
+      <li>Keep HouseholdStore query and write error logging in place because those failures affect local data safety and should not be hidden as expected sync interruptions.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li>Instead of moving the remote upsert fallback out of the data source in this slice, keep fallback execution there and move only classification/logging policy to the coordinator. This preserves the existing Active List data-source contract while addressing the noisy boundary.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+</body>
+</html>

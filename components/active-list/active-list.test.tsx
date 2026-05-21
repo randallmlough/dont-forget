@@ -10,6 +10,7 @@ import {
 	ActiveList,
 	type ActiveListDataSource,
 	type ActiveListInitialState,
+	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
 
 const mockLoggerError = jest.fn();
@@ -33,6 +34,11 @@ const emptyList: ActiveListInitialState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [],
+};
+
+type TestSyncCoordinator = Omit<ActiveListSyncCoordinator, "requestSync"> & {
+	requestSync: jest.MockedFunction<ActiveListSyncCoordinator["requestSync"]>;
+	emit: (status: ReturnType<ActiveListSyncCoordinator["getStatus"]>) => void;
 };
 
 describe("ActiveList", () => {
@@ -78,15 +84,15 @@ describe("ActiveList", () => {
 
 	it("shows pending and offline sync without discarding local Item changes", async () => {
 		const syncAfterWrite = deferred<{ changed: boolean }>();
-		const sync = jest
-			.fn<
-				Promise<{ changed: boolean }>,
-				Parameters<ActiveListDataSource["sync"]>
-			>()
-			.mockResolvedValueOnce({ changed: false })
-			.mockReturnValueOnce(syncAfterWrite.promise);
-		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
-		await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+		const coordinator = controllableSyncCoordinator("synced");
+		coordinator.requestSync.mockImplementationOnce(async () => {
+			coordinator.emit("pending");
+			await syncAfterWrite.promise.catch(() => undefined);
+			coordinator.emit("offline");
+			return null;
+		});
+
+		renderActiveList(emptyList, memoryDataSource(emptyList), coordinator);
 
 		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
 		await act(async () => {
@@ -106,115 +112,28 @@ describe("ActiveList", () => {
 		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
-	it("retries offline sync while the List remains open", async () => {
-		jest.useFakeTimers();
-		const sync = jest
-			.fn<
-				Promise<{ changed: boolean }>,
-				Parameters<ActiveListDataSource["sync"]>
-			>()
-			.mockResolvedValueOnce({ changed: false })
-			.mockRejectedValueOnce(new TypeError("Network request failed"))
-			.mockResolvedValue({ changed: false });
-
-		try {
-			renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
-			await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
-
-			fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
-			await act(async () => {
-				fireEvent.press(screen.getByText("Add"));
-			});
-			await waitFor(() =>
-				expect(
-					screen.getByText("Offline - changes saved locally"),
-				).toBeTruthy(),
-			);
-
-			await act(async () => {
-				jest.advanceTimersByTime(30_000);
-				await Promise.resolve();
-			});
-
-			await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
-			expect(sync).toHaveBeenCalledTimes(3);
-			expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
-			expect(mockLoggerError).not.toHaveBeenCalled();
-		} finally {
-			jest.useRealTimers();
-		}
-	});
-
-	it("does not retry offline sync once per second", async () => {
-		jest.useFakeTimers();
-		const sync = jest
-			.fn<
-				Promise<{ changed: boolean }>,
-				Parameters<ActiveListDataSource["sync"]>
-			>()
-			.mockResolvedValueOnce({ changed: false })
-			.mockRejectedValue(new TypeError("Network request failed"));
-
-		try {
-			renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
-			await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
-
-			fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
-			await act(async () => {
-				fireEvent.press(screen.getByText("Add"));
-			});
-			await waitFor(() =>
-				expect(
-					screen.getByText("Offline - changes saved locally"),
-				).toBeTruthy(),
-			);
-			expect(sync).toHaveBeenCalledTimes(2);
-
-			await act(async () => {
-				jest.advanceTimersByTime(1000);
-				await Promise.resolve();
-			});
-
-			expect(sync).toHaveBeenCalledTimes(2);
-		} finally {
-			jest.useRealTimers();
-		}
-	});
-
-	it("pushes local-only sync when an authorized data source opens", async () => {
-		const sync = jest.fn(async () => ({ changed: false }));
-
-		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
-
-		await waitFor(() =>
-			expect(sync).toHaveBeenCalledWith({ mode: "pushLocalOnly" }),
-		);
-		expect(screen.getByText("Synced")).toBeTruthy();
-	});
-
 	it("shows offline sync state when sync is not authorized", () => {
 		renderActiveList(
 			emptyList,
 			memoryDataSource(emptyList, { syncAuthorized: false }),
+			passiveSyncCoordinator("offline"),
 		);
 
 		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
 	});
 
-	it("pushes local changes before refreshing the List view", async () => {
+	it("requests manual sync before refreshing the List view", async () => {
 		let state = emptyList;
-		const sync = jest.fn(async () => ({ changed: false }));
+		const coordinator = controllableSyncCoordinator("synced");
 		const dataSource = memoryDataSource(emptyList, {
 			async load() {
 				return state;
 			},
-			sync,
 		});
 		const pull = jest.spyOn(dataSource, "pull");
 
-		renderActiveList(emptyList, dataSource);
-		await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
-		sync.mockImplementationOnce(async () => {
+		coordinator.requestSync.mockImplementationOnce(async () => {
+			coordinator.emit("pending");
 			state = {
 				...state,
 				items: [
@@ -227,9 +146,11 @@ describe("ActiveList", () => {
 					},
 				],
 			};
+			coordinator.emit("synced");
 			return { changed: true };
 		});
-		sync.mockClear();
+
+		renderActiveList(emptyList, dataSource, coordinator);
 
 		await act(async () => {
 			fireEvent.press(screen.getByText("Refresh"));
@@ -237,21 +158,173 @@ describe("ActiveList", () => {
 
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 		expect(await screen.findByText("Remote Apples")).toBeTruthy();
-		expect(sync).toHaveBeenCalledTimes(1);
-		expect(sync).toHaveBeenCalledWith(undefined);
+		expect(coordinator.requestSync).toHaveBeenCalledWith({
+			reason: "manualRefresh",
+		});
 		expect(pull).not.toHaveBeenCalled();
+	});
+
+	it("reloads visible List rows after coordinator-owned sync completes", async () => {
+		let state = emptyList;
+		const coordinator = controllableSyncCoordinator("synced");
+		const load = jest.fn(async () => state);
+		const dataSource = memoryDataSource(emptyList, { load });
+
+		renderActiveList(emptyList, dataSource, coordinator);
+		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+
+		state = {
+			...emptyList,
+			items: [
+				{
+					id: "test-item-remote",
+					name: "Remote Apples",
+					checked: false,
+					checkedByMemberName: null,
+				},
+			],
+		};
+
+		await act(async () => {
+			coordinator.emit("pending");
+			coordinator.emit("synced");
+			await Promise.resolve();
+		});
+
+		expect(await screen.findByText("Remote Apples")).toBeTruthy();
+	});
+
+	it("reports manual refresh failure when the visible List cannot reload", async () => {
+		const refreshSync = deferred<{ changed: boolean }>();
+		const load = jest
+			.fn<Promise<ActiveListInitialState>, []>()
+			.mockRejectedValueOnce(new Error("load failed"));
+		const dataSource = memoryDataSource(emptyList, {
+			load,
+		});
+		const coordinator = controllableSyncCoordinator("synced");
+		coordinator.requestSync.mockImplementationOnce(async () => {
+			coordinator.emit("pending");
+			await refreshSync.promise;
+			coordinator.emit("synced");
+			return { changed: true };
+		});
+
+		renderActiveList(emptyList, dataSource, coordinator);
+		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+
+		await act(async () => {
+			fireEvent.press(screen.getByText("Refresh"));
+		});
+		expect(screen.getByText("Refreshing")).toBeTruthy();
+
+		await act(async () => {
+			refreshSync.resolve({ changed: true });
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to refresh this List. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(screen.getByText("Refresh")).toBeTruthy();
+		expect(mockLoggerError).toHaveBeenCalledWith("active list refresh failed", {
+			error: expect.any(Error),
+		});
+	});
+
+	it("reports manual refresh failure when sync fails unexpectedly", async () => {
+		const syncError = new Error("remote unavailable");
+		const coordinator = controllableSyncCoordinator("synced");
+		coordinator.requestSync.mockImplementationOnce(async () => {
+			coordinator.emit("pending");
+			coordinator.emit("failed");
+			throw syncError;
+		});
+
+		renderActiveList(emptyList, memoryDataSource(emptyList), coordinator);
+		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+
+		await act(async () => {
+			fireEvent.press(screen.getByText("Refresh"));
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to refresh this List. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(
+			screen.getByText("Sync failed - changes saved locally"),
+		).toBeTruthy();
+		expect(mockLoggerError).not.toHaveBeenCalled();
+	});
+
+	it("does not reload List data when a sync completes after unmount", async () => {
+		const syncAfterWrite = deferred<{ changed: boolean }>();
+		const load = jest.fn(async () => emptyList);
+		const coordinator = controllableSyncCoordinator("synced");
+		coordinator.requestSync.mockImplementationOnce(async () => {
+			await syncAfterWrite.promise;
+			return { changed: true };
+		});
+		const { unmount } = renderActiveList(
+			emptyList,
+			memoryDataSource(emptyList, { load }),
+			coordinator,
+		);
+
+		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		await act(async () => {
+			fireEvent.press(screen.getByText("Add"));
+		});
+		await waitFor(() =>
+			expect(coordinator.requestSync).toHaveBeenCalledTimes(1),
+		);
+
+		unmount();
+		await act(async () => {
+			syncAfterWrite.resolve({ changed: true });
+			await Promise.resolve();
+		});
+
+		expect(load).not.toHaveBeenCalled();
+	});
+
+	it("waits for sync coordinator stop before closing an owned data source", async () => {
+		const stopSync = deferred<void>();
+		const close = jest.fn(async () => undefined);
+		const coordinator = passiveSyncCoordinator();
+		jest
+			.mocked(coordinator.stop)
+			.mockImplementationOnce(() => stopSync.promise);
+
+		const { unmount } = renderActiveList(
+			emptyList,
+			memoryDataSource(emptyList, { close }),
+			coordinator,
+		);
+
+		unmount();
+
+		await waitFor(() => expect(coordinator.stop).toHaveBeenCalledTimes(1));
+		expect(close).not.toHaveBeenCalled();
+		stopSync.resolve(undefined);
+		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 	});
 });
 
 function renderActiveList(
 	initialState: ActiveListInitialState,
 	dataSource = memoryDataSource(initialState),
+	syncCoordinator = passiveSyncCoordinator(),
 ) {
 	return render(
 		<ActiveList.Provider
 			initialState={initialState}
 			currentMemberName="Avery Chen"
 			dataSource={dataSource}
+			syncCoordinator={syncCoordinator}
 		>
 			<ActiveList.Screen>
 				<ActiveList.Header />
@@ -260,6 +333,54 @@ function renderActiveList(
 			</ActiveList.Screen>
 		</ActiveList.Provider>,
 	);
+}
+
+function passiveSyncCoordinator(
+	status: ReturnType<ActiveListSyncCoordinator["getStatus"]> = "synced",
+): ActiveListSyncCoordinator {
+	return {
+		getStatus: () => status,
+		subscribe: jest.fn(() => ({ remove() {} })),
+		start: jest.fn(),
+		stop: jest.fn(async () => undefined),
+		requestSync: jest.fn<
+			ReturnType<ActiveListSyncCoordinator["requestSync"]>,
+			Parameters<ActiveListSyncCoordinator["requestSync"]>
+		>(async () => ({ changed: false })),
+	};
+}
+
+function controllableSyncCoordinator(
+	initialStatus: ReturnType<ActiveListSyncCoordinator["getStatus"]>,
+): TestSyncCoordinator {
+	let status = initialStatus;
+	const listeners = new Set<
+		(status: ReturnType<ActiveListSyncCoordinator["getStatus"]>) => void
+	>();
+
+	return {
+		getStatus: () => status,
+		subscribe(listener) {
+			listeners.add(listener);
+			return {
+				remove() {
+					listeners.delete(listener);
+				},
+			};
+		},
+		start: jest.fn(),
+		stop: jest.fn(async () => undefined),
+		requestSync: jest.fn<
+			ReturnType<ActiveListSyncCoordinator["requestSync"]>,
+			Parameters<ActiveListSyncCoordinator["requestSync"]>
+		>(async () => ({ changed: false })),
+		emit(nextStatus) {
+			status = nextStatus;
+			for (const listener of listeners) {
+				listener(status);
+			}
+		},
+	};
 }
 
 function memoryDataSource(

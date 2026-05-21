@@ -1,17 +1,22 @@
 import {
 	type Dispatch,
+	type MutableRefObject,
 	type RefObject,
 	type SetStateAction,
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
+import { AppState } from "react-native";
 
 import type {
 	ActiveListDataSource,
 	ActiveListInitialState,
+	ActiveListSyncCoordinator,
 } from "@/components/active-list";
+import { type Logger, useLogger } from "@/lib/logger";
 import {
 	type CachedHouseholdSession,
 	discardCachedHouseholdSessionIfUnauthorized,
@@ -20,6 +25,10 @@ import {
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
+import {
+	createSyncCoordinator,
+	type SyncAppStateAdapter,
+} from "@/lib/services/sync";
 
 import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 
@@ -31,6 +40,7 @@ export type HomeContentState =
 			activeMemberName: string;
 			initialList: ActiveListInitialState;
 			dataSource: ActiveListDataSource;
+			syncCoordinator: ActiveListSyncCoordinator;
 	  };
 
 type HomeHouseholdSession = HouseholdSession | CachedHouseholdSession;
@@ -39,7 +49,10 @@ type OpenedHome = {
 	session: HomeHouseholdSession;
 	initialList: ActiveListInitialState;
 	dataSource: ActiveListDataSource;
+	syncCoordinator: ActiveListSyncCoordinator;
 };
+
+type OpenedHomeResource = Pick<OpenedHome, "dataSource" | "syncCoordinator">;
 
 type UseHomeContentOptions = {
 	getToken: () => Promise<string | null>;
@@ -53,19 +66,29 @@ type HomeLoadRun = {
 	isLoaded: boolean;
 	isSignedIn: boolean;
 	signingOutRef: RefObject<boolean>;
+	appState: SyncAppStateAdapter;
+	logger: Logger;
 	setContent: Dispatch<SetStateAction<HomeContentState>>;
+	renderedHomeRef: MutableRefObject<OpenedHome | null>;
+	closedDataSources: Set<ActiveListDataSource>;
 	cancelled: boolean;
 	cachedRendered: boolean;
 	cachedInvalidated: boolean;
 	freshRendered: boolean;
-	renderedDataSource: ActiveListDataSource | null;
-	pendingDataSources: Set<ActiveListDataSource>;
-	closedDataSources: Set<ActiveListDataSource>;
+	pendingHomes: Set<OpenedHomeResource>;
 };
 
 type HomeLoadOptions = Pick<
 	HomeLoadRun,
-	"getToken" | "isLoaded" | "isSignedIn" | "signingOutRef" | "setContent"
+	| "getToken"
+	| "isLoaded"
+	| "isSignedIn"
+	| "signingOutRef"
+	| "appState"
+	| "logger"
+	| "setContent"
+	| "renderedHomeRef"
+	| "closedDataSources"
 >;
 
 export function useHomeContent({
@@ -73,33 +96,84 @@ export function useHomeContent({
 	isLoaded,
 	isSignedIn,
 	signingOutRef,
-}: UseHomeContentOptions): { content: HomeContentState; retry: () => void } {
+}: UseHomeContentOptions): {
+	closeCurrentHome: () => Promise<void>;
+	content: HomeContentState;
+	retry: () => void;
+} {
+	const logger = useLogger();
+	const appState = useMemo<SyncAppStateAdapter>(
+		() => ({
+			getCurrentState: () => AppState.currentState,
+			subscribe(listener) {
+				return AppState.addEventListener("change", (state) => {
+					listener(state);
+				});
+			},
+		}),
+		[],
+	);
 	const [content, setContent] = useState<HomeContentState>({
 		status: "loading",
 	});
 	const [loadAttempt, setLoadAttempt] = useState(0);
 	const getTokenRef = useRef(getToken);
+	const loggerRef = useRef(logger);
+	const renderedHomeRef = useRef<OpenedHome | null>(null);
+	const closedDataSourcesRef = useRef(new Set<ActiveListDataSource>());
 
 	useEffect(() => {
 		getTokenRef.current = getToken;
 	}, [getToken]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: loadAttempt intentionally retriggers Home content loading on retry; getToken freshness is owned by getTokenRef.
+	useEffect(() => {
+		loggerRef.current = logger;
+	}, [logger]);
+
+	useEffect(() => {
+		return () => {
+			const renderedHome = renderedHomeRef.current;
+			renderedHomeRef.current = null;
+			if (renderedHome) {
+				void closeOpenedHome({
+					closedDataSources: closedDataSourcesRef.current,
+					home: renderedHome,
+				}).catch(() => undefined);
+			}
+		};
+	}, []);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: loadAttempt intentionally retriggers Home content loading on retry; getToken and logger freshness are owned by refs.
 	useEffect(() => {
 		return startHomeLoad({
 			getToken: () => getTokenRef.current(),
 			isLoaded,
 			isSignedIn,
+			appState,
+			logger: loggerRef.current,
+			renderedHomeRef,
+			closedDataSources: closedDataSourcesRef.current,
 			setContent,
 			signingOutRef,
 		});
-	}, [isLoaded, isSignedIn, loadAttempt, signingOutRef]);
+	}, [appState, isLoaded, isSignedIn, loadAttempt, signingOutRef]);
 
 	const retry = useCallback(() => {
 		setLoadAttempt((attempt) => attempt + 1);
 	}, []);
 
-	return { content, retry };
+	const closeCurrentHome = useCallback(async () => {
+		const renderedHome = renderedHomeRef.current;
+		renderedHomeRef.current = null;
+		if (renderedHome) {
+			await closeOpenedHome({
+				closedDataSources: closedDataSourcesRef.current,
+				home: renderedHome,
+			});
+		}
+	}, []);
+
+	return { closeCurrentHome, content, retry };
 }
 
 function startHomeLoad(options: HomeLoadOptions): () => void {
@@ -109,9 +183,7 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 		cachedRendered: false,
 		cachedInvalidated: false,
 		freshRendered: false,
-		renderedDataSource: null,
-		pendingDataSources: new Set<ActiveListDataSource>(),
-		closedDataSources: new Set<ActiveListDataSource>(),
+		pendingHomes: new Set<OpenedHomeResource>(),
 	};
 
 	run.setContent((current) =>
@@ -128,8 +200,12 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 	return () => {
 		run.cancelled = true;
 		void Promise.all(
-			[...run.pendingDataSources].map((dataSource) =>
-				closeDataSource(run, dataSource),
+			[...run.pendingHomes].map((home) =>
+				closeOpenedHome({
+					closedDataSources: run.closedDataSources,
+					home,
+					pendingHomes: run.pendingHomes,
+				}),
 			),
 		).catch(() => undefined);
 	};
@@ -181,7 +257,14 @@ async function openHome(
 	afterLoad?: () => Promise<void>,
 ): Promise<OpenedHome> {
 	const dataSource = createDataSourceFromSession(session);
-	run.pendingDataSources.add(dataSource);
+	const syncCoordinator = createSyncCoordinator({
+		syncAuthorized: dataSource.syncAuthorized,
+		sync: dataSource.sync,
+		appState: run.appState,
+		logger: run.logger.with({ household_id: session.activeHousehold.id }),
+	});
+	const home = { dataSource, syncCoordinator };
+	run.pendingHomes.add(home);
 
 	try {
 		const initialList = await dataSource.load();
@@ -189,10 +272,14 @@ async function openHome(
 			await afterLoad();
 		}
 
-		run.pendingDataSources.delete(dataSource);
-		return { session, initialList, dataSource };
+		run.pendingHomes.delete(home);
+		return { session, initialList, dataSource, syncCoordinator };
 	} catch (error) {
-		await closeDataSource(run, dataSource).catch(() => undefined);
+		await closeOpenedHome({
+			closedDataSources: run.closedDataSources,
+			home,
+			pendingHomes: run.pendingHomes,
+		}).catch(() => undefined);
 		throw error;
 	}
 }
@@ -207,7 +294,10 @@ async function renderOpenedHome(
 		run.signingOutRef.current ||
 		(source === "cached" && (run.freshRendered || run.cachedInvalidated))
 	) {
-		await closeDataSource(run, opened.dataSource).catch(() => undefined);
+		await closeOpenedHome({
+			closedDataSources: run.closedDataSources,
+			home: opened,
+		}).catch(() => undefined);
 		return;
 	}
 
@@ -216,24 +306,39 @@ async function renderOpenedHome(
 	} else {
 		run.freshRendered = true;
 	}
-	run.renderedDataSource = opened.dataSource;
+	const previousRenderedHome = run.renderedHomeRef.current;
+	if (previousRenderedHome && previousRenderedHome !== opened) {
+		await closeOpenedHome({
+			closedDataSources: run.closedDataSources,
+			home: previousRenderedHome,
+		}).catch(() => undefined);
+	}
+	run.renderedHomeRef.current = opened;
 
 	run.setContent({
 		status: "ready",
 		activeMemberName: activeMemberNameFromSession(opened.session),
 		initialList: opened.initialList,
 		dataSource: opened.dataSource,
+		syncCoordinator: opened.syncCoordinator,
 	});
+
+	if (source === "fresh") {
+		opened.syncCoordinator.start();
+	}
 }
 
 async function closeRenderedHomeBeforeFreshOpen(run: HomeLoadRun) {
-	const renderedDataSource = run.renderedDataSource;
-	if (!renderedDataSource) return;
+	const renderedHome = run.renderedHomeRef.current;
+	if (!renderedHome) return;
 
-	run.renderedDataSource = null;
+	run.renderedHomeRef.current = null;
 	run.cachedRendered = false;
 	run.setContent({ status: "loading" });
-	await closeDataSource(run, renderedDataSource).catch(() => undefined);
+	await closeOpenedHome({
+		closedDataSources: run.closedDataSources,
+		home: renderedHome,
+	}).catch(() => undefined);
 }
 
 async function showErrorIfNoListRendered(
@@ -254,14 +359,21 @@ async function showErrorIfNoListRendered(
 	}
 }
 
-async function closeDataSource(
-	run: HomeLoadRun,
-	dataSource: ActiveListDataSource,
-) {
-	if (run.closedDataSources.has(dataSource)) return;
+async function closeOpenedHome({
+	closedDataSources,
+	home,
+	pendingHomes,
+}: {
+	closedDataSources: Set<ActiveListDataSource>;
+	home: OpenedHomeResource;
+	pendingHomes?: Set<OpenedHomeResource>;
+}) {
+	const { dataSource, syncCoordinator } = home;
+	if (closedDataSources.has(dataSource)) return;
 
-	run.closedDataSources.add(dataSource);
-	run.pendingDataSources.delete(dataSource);
+	closedDataSources.add(dataSource);
+	pendingHomes?.delete(home);
+	await syncCoordinator.stop();
 	await dataSource.close();
 }
 

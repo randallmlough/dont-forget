@@ -22,11 +22,9 @@ export {
 	type HouseholdSqlValue,
 	type HouseholdStore,
 	type HouseholdStoreExecutor,
-	type HouseholdSyncResult,
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
 } from "./household-store";
-
 export {
 	type OpenHouseholdRemoteClient,
 	pushLocalHouseholdRowsToRemote,

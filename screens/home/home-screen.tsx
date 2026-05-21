@@ -23,7 +23,7 @@ export default function HomeScreen() {
 	const { getToken, isLoaded, isSignedIn, signOut } = useAuth();
 	const { user } = useUser();
 	const signingOutRef = useRef(false);
-	const { content, retry } = useHomeContent({
+	const { closeCurrentHome, content, retry } = useHomeContent({
 		getToken,
 		isLoaded,
 		isSignedIn: Boolean(isSignedIn),
@@ -38,9 +38,7 @@ export default function HomeScreen() {
 
 		track("user_signed_out", {});
 		reset();
-		if (content.status === "ready") {
-			await content.dataSource.close();
-		}
+		await closeCurrentHome();
 		await clearCachedHouseholdSession();
 		await signOut();
 	}
@@ -92,6 +90,9 @@ export function HomeScreenView({
 					initialState={content.initialList}
 					currentMemberName={displayMemberName}
 					dataSource={content.dataSource}
+					syncCoordinator={content.syncCoordinator}
+					closeDataSourceOnUnmount={false}
+					manageSyncCoordinatorLifecycle={false}
 				>
 					<ActiveList.Screen>
 						<ActiveList.Header />
