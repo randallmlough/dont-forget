@@ -14,6 +14,7 @@ import { reset, track } from "@/lib/analytics";
 import {
 	type CachedHouseholdSession,
 	clearCachedHouseholdSession,
+	createHouseholdSyncCoordinator,
 	discardCachedHouseholdSessionIfUnauthorized,
 	getHouseholdSession,
 	readCachedHouseholdSession,
@@ -33,6 +34,14 @@ jest.mock("./active-list-data-source", () => ({
 	createHouseholdActiveListDataSource: jest.fn(),
 }));
 
+const mockCreatedSyncCoordinators: Array<{
+	getStatus: () => "synced" | "offline";
+	subscribe: jest.Mock;
+	start: jest.Mock;
+	stop: jest.Mock;
+	requestSync: jest.Mock;
+}> = [];
+
 jest.mock("@/lib/services/household", () => ({
 	clearCachedHouseholdSession: jest.fn(),
 	createHouseholdSyncCoordinator: jest.fn(
@@ -41,18 +50,24 @@ jest.mock("@/lib/services/household", () => ({
 			sync: (options?: { mode?: "full" | "pushLocalOnly" }) => Promise<{
 				changed: boolean;
 			}>;
-		}) => ({
-			getStatus: () => (deps.syncAuthorized ? "synced" : "offline"),
-			subscribe: jest.fn(() => ({ remove() {} })),
-			start: jest.fn(),
-			stop: jest.fn(),
-			requestSync: jest.fn(async ({ reason }: { reason: string }) => {
-				if (!deps.syncAuthorized) return null;
-				return deps.sync(
-					reason === "manualRefresh" ? undefined : { mode: "pushLocalOnly" },
-				);
-			}),
-		}),
+		}) => {
+			const coordinator = {
+				getStatus: () => (deps.syncAuthorized ? "synced" : "offline"),
+				subscribe: jest.fn(() => ({ remove() {} })),
+				start: jest.fn(),
+				stop: jest.fn(),
+				requestSync: jest.fn(async ({ reason }: { reason: string }) => {
+					if (!deps.syncAuthorized) return null;
+					return deps.sync(
+						reason === "manualRefresh"
+							? { mode: "full" }
+							: { mode: "pushLocalOnly" },
+					);
+				}),
+			};
+			mockCreatedSyncCoordinators.push(coordinator);
+			return coordinator;
+		},
 	),
 	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
 	getHouseholdSession: jest.fn(),
@@ -64,7 +79,9 @@ beforeEach(() => {
 	jest.mocked(track).mockReset();
 	jest.mocked(reset).mockReset();
 	jest.mocked(getHouseholdSession).mockReset();
+	jest.mocked(createHouseholdSyncCoordinator).mockClear();
 	jest.mocked(createHouseholdActiveListDataSource).mockReset();
+	mockCreatedSyncCoordinators.length = 0;
 	jest.mocked(clearCachedHouseholdSession).mockResolvedValue(undefined);
 	jest
 		.mocked(discardCachedHouseholdSessionIfUnauthorized)
@@ -287,12 +304,16 @@ describe("HomeScreen", () => {
 		render(<HomeScreen />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		mockCreatedSyncCoordinators[0]?.stop.mockImplementation(() => {
+			calls.push("stop-sync");
+		});
 		fireEvent.press(screen.getByText("Sign out"));
 
 		await waitFor(() => expect(clerkMocks.signOut).toHaveBeenCalledTimes(1));
 		expect(calls).toEqual([
 			"track",
 			"reset",
+			"stop-sync",
 			"close-data-source",
 			"clear-local-household-data",
 			"clerk-sign-out",
@@ -338,6 +359,7 @@ describe("HomeScreenView", () => {
 					activeMemberName: "Avery Chen",
 					initialList,
 					dataSource: noopDataSource(initialList),
+					syncCoordinator: syncCoordinatorFixture(),
 				}}
 			/>,
 		);
@@ -437,6 +459,16 @@ function noopDataSource(
 		},
 		async close() {},
 		...overrides,
+	};
+}
+
+function syncCoordinatorFixture() {
+	return {
+		getStatus: () => "synced" as const,
+		subscribe: jest.fn(() => ({ remove() {} })),
+		start: jest.fn(),
+		stop: jest.fn(),
+		requestSync: jest.fn(async () => ({ changed: false })),
 	};
 }
 

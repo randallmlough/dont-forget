@@ -454,6 +454,27 @@ describe("createHouseholdSyncCoordinator", () => {
 
 		expect(statuses).toEqual(["pending", "synced"]);
 	});
+
+	it("ignores an in-flight sync completion after stop", async () => {
+		const syncAttempt = deferred<HouseholdSyncResult>();
+		const sync = jest.fn(() => syncAttempt.promise);
+		const coordinator = createCoordinator({ sync });
+		const statuses: HouseholdSyncStatus[] = [];
+		const subscription = coordinator.subscribe((status) =>
+			statuses.push(status),
+		);
+
+		const request = coordinator.requestSync({ reason: "manualRefresh" });
+		await actTicks();
+
+		coordinator.stop();
+		syncAttempt.resolve({ changed: true });
+
+		await expect(request).resolves.toBeNull();
+		subscription.remove();
+
+		expect(statuses).toEqual(["pending"]);
+	});
 });
 
 function createCoordinator(

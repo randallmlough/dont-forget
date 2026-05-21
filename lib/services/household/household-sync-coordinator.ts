@@ -71,6 +71,7 @@ export function createHouseholdSyncCoordinator({
 	let retryInterval: ReturnType<typeof setInterval> | null = null;
 
 	function setStatus(nextStatus: HouseholdSyncStatus) {
+		if (stopped) return;
 		if (status === nextStatus) return;
 		status = nextStatus;
 		for (const listener of listeners) {
@@ -92,6 +93,8 @@ export function createHouseholdSyncCoordinator({
 	}: {
 		reason: HouseholdSyncRequestReason;
 	}): Promise<HouseholdSyncResult | null> {
+		if (stopped) return Promise.resolve(null);
+
 		if (reason === "localWrite") {
 			pendingLocalChangeVersion += 1;
 		}
@@ -137,6 +140,8 @@ export function createHouseholdSyncCoordinator({
 		try {
 			result = await sync(syncOptionsForReason(reason));
 		} catch (error) {
+			if (stopped) return null;
+
 			const syncError = handleSyncFailure(error, reason);
 			const shouldRethrow = shouldRethrowSyncFailure(error, reason);
 
@@ -158,6 +163,8 @@ export function createHouseholdSyncCoordinator({
 
 			return followUpResult;
 		}
+		if (stopped) return null;
+
 		handleRecoveredNativeSyncFailure(result, reason);
 
 		if (pendingLocalChangeVersion === syncStartedAtChangeVersion) {

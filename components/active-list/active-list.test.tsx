@@ -312,6 +312,37 @@ describe("ActiveList", () => {
 			reason: "manualRefresh",
 		});
 	});
+
+	it("does not reload List data when a sync completes after unmount", async () => {
+		const syncAfterWrite = deferred<{ changed: boolean }>();
+		const load = jest.fn(async () => emptyList);
+		const sync = jest
+			.fn<
+				Promise<{ changed: boolean }>,
+				Parameters<ActiveListDataSource["sync"]>
+			>()
+			.mockResolvedValueOnce({ changed: false })
+			.mockReturnValueOnce(syncAfterWrite.promise);
+		const { unmount } = renderActiveList(
+			emptyList,
+			memoryDataSource(emptyList, { load, sync }),
+		);
+		await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+
+		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		await act(async () => {
+			fireEvent.press(screen.getByText("Add"));
+		});
+		await waitFor(() => expect(sync).toHaveBeenCalledTimes(2));
+
+		unmount();
+		await act(async () => {
+			syncAfterWrite.resolve({ changed: true });
+			await Promise.resolve();
+		});
+
+		expect(load).not.toHaveBeenCalled();
+	});
 });
 
 function renderActiveList(

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Stop Household Sync Workflow Cleanly</title>
+</head>
+<body>
+  <h1>Implementation Notes: Stop Household Sync Workflow Cleanly</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li>Home owns an explicit Household sync coordinator handle for each rendered Household data source so Home cleanup and sign-out can stop sync before closing local Household data.</li>
+      <li>Active List remains the UI surface that subscribes to coordinator status and starts foreground lifecycle work while it is mounted.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li>Keeping the coordinator entirely inside Active List was rejected because Home sign-out and cached-to-fresh replacement can close Household data before Active List effect cleanup runs.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+</body>
+</html>

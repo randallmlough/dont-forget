@@ -29,6 +29,7 @@ import { useLogger } from "@/lib/logger";
 import {
 	createHouseholdSyncCoordinator,
 	type HouseholdSyncAppStateAdapter,
+	type HouseholdSyncCoordinator,
 	type HouseholdSyncOptions,
 	type HouseholdSyncResult,
 	type HouseholdSyncStatus,
@@ -54,6 +55,8 @@ export type ActiveListSyncState = HouseholdSyncStatus;
 export type ActiveListSyncResult = HouseholdSyncResult;
 
 export type ActiveListSyncOptions = HouseholdSyncOptions;
+
+export type ActiveListSyncCoordinator = HouseholdSyncCoordinator;
 
 export type ActiveListActions = {
 	addItem: (name: string) => Promise<void>;
@@ -88,6 +91,8 @@ type ActiveListProviderProps = PropsWithChildren<{
 	initialState: ActiveListInitialState;
 	currentMemberName: string;
 	dataSource: ActiveListDataSource;
+	syncCoordinator?: ActiveListSyncCoordinator;
+	closeDataSourceOnUnmount?: boolean;
 }>;
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
@@ -96,6 +101,8 @@ function ActiveListProvider({
 	initialState,
 	currentMemberName,
 	dataSource,
+	syncCoordinator,
+	closeDataSourceOnUnmount = true,
 	children,
 }: ActiveListProviderProps) {
 	const logger = useLogger();
@@ -110,18 +117,19 @@ function ActiveListProvider({
 		}),
 		[],
 	);
-	const syncCoordinator = useMemo(
+	const ownedSyncCoordinator = useMemo(
 		() =>
+			syncCoordinator ??
 			createHouseholdSyncCoordinator({
 				syncAuthorized: dataSource.syncAuthorized,
 				sync: dataSource.sync,
 				appState,
 				logger,
 			}),
-		[dataSource, appState, logger],
+		[dataSource, appState, logger, syncCoordinator],
 	);
 	const [model, setModel] = useState(() =>
-		initialActiveListModel(initialState, syncCoordinator.getStatus()),
+		initialActiveListModel(initialState, ownedSyncCoordinator.getStatus()),
 	);
 	const mounted = useRef(true);
 	const nextItemNumber = useRef(initialState.items.length + 1);
@@ -138,9 +146,8 @@ function ActiveListProvider({
 		mounted.current = true;
 		return () => {
 			mounted.current = false;
-			void dataSource.close();
 		};
-	}, [dataSource]);
+	}, []);
 
 	const loadFromDataSource = useCallback(async () => {
 		const nextState = await dataSource.load();
@@ -148,43 +155,46 @@ function ActiveListProvider({
 	}, [dataSource, transition]);
 
 	useEffect(() => {
-		const subscription = syncCoordinator.subscribe((syncState) => {
+		const subscription = ownedSyncCoordinator.subscribe((syncState) => {
 			transition({ type: "syncStatusChanged", syncState });
 		});
 		transition({
 			type: "syncStatusChanged",
-			syncState: syncCoordinator.getStatus(),
+			syncState: ownedSyncCoordinator.getStatus(),
 		});
-		syncCoordinator.start();
+		ownedSyncCoordinator.start();
 
 		return () => {
 			subscription.remove();
-			syncCoordinator.stop();
+			ownedSyncCoordinator.stop();
+			if (closeDataSourceOnUnmount) {
+				void dataSource.close();
+			}
 		};
-	}, [syncCoordinator, transition]);
+	}, [closeDataSourceOnUnmount, dataSource, ownedSyncCoordinator, transition]);
 
 	const requestLocalWriteSync = useCallback(() => {
-		void syncCoordinator
+		void ownedSyncCoordinator
 			.requestSync({ reason: "localWrite" })
 			.then(async (result) => {
 				if (result?.changed) await loadFromDataSource();
 			})
 			.catch(() => undefined);
-	}, [loadFromDataSource, syncCoordinator]);
+	}, [loadFromDataSource, ownedSyncCoordinator]);
 
 	const refresh = useCallback(async () => {
 		transition({ type: "refreshRequested" });
 
 		try {
-			await syncCoordinator.requestSync({ reason: "manualRefresh" });
+			await ownedSyncCoordinator.requestSync({ reason: "manualRefresh" });
 			await loadFromDataSource();
 		} catch (error) {
-			if (syncCoordinator.getStatus() !== "failed") {
+			if (ownedSyncCoordinator.getStatus() !== "failed") {
 				logger.error("active list refresh failed", { error });
 			}
 			transition({ type: "refreshFailed" });
 		}
-	}, [loadFromDataSource, logger, syncCoordinator, transition]);
+	}, [loadFromDataSource, logger, ownedSyncCoordinator, transition]);
 
 	const addItem = useCallback(
 		async (rawName: string) => {

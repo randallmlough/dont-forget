@@ -8,6 +8,7 @@ import type {
 } from "@/components/active-list";
 import {
 	type CachedHouseholdSession,
+	createHouseholdSyncCoordinator,
 	discardCachedHouseholdSessionIfUnauthorized,
 	getHouseholdSession,
 	type HouseholdSession,
@@ -22,7 +23,40 @@ jest.mock("./active-list-data-source", () => ({
 	createHouseholdActiveListDataSource: jest.fn(),
 }));
 
+const mockCreatedSyncCoordinators: Array<{
+	getStatus: () => "synced" | "offline";
+	subscribe: jest.Mock;
+	start: jest.Mock;
+	stop: jest.Mock;
+	requestSync: jest.Mock;
+}> = [];
+
 jest.mock("@/lib/services/household", () => ({
+	createHouseholdSyncCoordinator: jest.fn(
+		(deps: {
+			syncAuthorized: boolean;
+			sync: (options?: { mode?: "full" | "pushLocalOnly" }) => Promise<{
+				changed: boolean;
+			}>;
+		}) => {
+			const coordinator = {
+				getStatus: () => (deps.syncAuthorized ? "synced" : "offline"),
+				subscribe: jest.fn(() => ({ remove() {} })),
+				start: jest.fn(),
+				stop: jest.fn(),
+				requestSync: jest.fn(async ({ reason }: { reason: string }) => {
+					if (!deps.syncAuthorized) return null;
+					return deps.sync(
+						reason === "manualRefresh"
+							? { mode: "full" }
+							: { mode: "pushLocalOnly" },
+					);
+				}),
+			};
+			mockCreatedSyncCoordinators.push(coordinator);
+			return coordinator;
+		},
+	),
 	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
 	getHouseholdSession: jest.fn(),
 	readCachedHouseholdSession: jest.fn(),
@@ -31,7 +65,9 @@ jest.mock("@/lib/services/household", () => ({
 
 beforeEach(() => {
 	jest.mocked(getHouseholdSession).mockReset();
+	jest.mocked(createHouseholdSyncCoordinator).mockClear();
 	jest.mocked(createHouseholdActiveListDataSource).mockReset();
+	mockCreatedSyncCoordinators.length = 0;
 	jest
 		.mocked(discardCachedHouseholdSessionIfUnauthorized)
 		.mockResolvedValue(null);
@@ -124,10 +160,17 @@ describe("useHomeContent", () => {
 		render(<UseHomeContentHarness isLoaded isSignedIn />);
 
 		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+		mockCreatedSyncCoordinators[0]?.stop.mockImplementation(() => {
+			calls.push("cached-stop");
+		});
 
 		freshSession.resolve(householdSessionFixture());
 
 		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+		expect(calls.indexOf("cached-stop")).toBeGreaterThanOrEqual(0);
+		expect(calls.indexOf("cached-stop")).toBeLessThan(
+			calls.indexOf("cached-close"),
+		);
 		expect(calls.indexOf("cached-close")).toBeGreaterThanOrEqual(0);
 		expect(calls.indexOf("cached-close")).toBeLessThan(
 			calls.indexOf("fresh-load"),

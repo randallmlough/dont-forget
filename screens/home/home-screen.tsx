@@ -39,6 +39,7 @@ export default function HomeScreen() {
 		track("user_signed_out", {});
 		reset();
 		if (content.status === "ready") {
+			content.syncCoordinator.stop();
 			await content.dataSource.close();
 		}
 		await clearCachedHouseholdSession();
@@ -92,6 +93,8 @@ export function HomeScreenView({
 					initialState={content.initialList}
 					currentMemberName={displayMemberName}
 					dataSource={content.dataSource}
+					syncCoordinator={content.syncCoordinator}
+					closeDataSourceOnUnmount={false}
 				>
 					<ActiveList.Screen>
 						<ActiveList.Header />
