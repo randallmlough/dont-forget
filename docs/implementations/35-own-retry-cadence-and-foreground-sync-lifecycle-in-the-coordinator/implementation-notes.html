@@ -12,6 +12,7 @@
       <li>Keep retry cadence inside the Household sync coordinator and keep Active List responsible only for starting and stopping the coordinator while Home is mounted.</li>
       <li>Use push-local-only sync for retry and local-write requests so automatic work avoids native pull loops while still attempting to propagate locally committed Household rows.</li>
       <li>Treat app foreground transitions as a lifecycle request to the coordinator, with existing request serialization and coalescing deciding whether another sync attempt should actually run.</li>
+      <li>Drain a queued follow-up sync before rethrowing an unexpected manual refresh failure so local-write propagation is not stranded behind failed explicit refresh work.</li>
       <li>Keep future network-awareness behind app-owned coordinator adapter boundaries instead of importing a network package into UI or data-source code.</li>
     </ul>
   </section>

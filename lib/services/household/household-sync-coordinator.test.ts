@@ -236,6 +236,51 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(coordinator.getStatus()).toBe("synced");
 	});
 
+	it("runs a queued local write follow-up before rethrowing a manual refresh failure", async () => {
+		const logger = loggerFixture();
+		const refreshSync = deferred<HouseholdSyncResult>();
+		const refreshError = new Error("refresh failed");
+		const sync = jest
+			.fn<
+				Promise<HouseholdSyncResult>,
+				[{ mode?: "full" | "pushLocalOnly" }?]
+			>()
+			.mockReturnValueOnce(refreshSync.promise)
+			.mockResolvedValue({ changed: false });
+		const coordinator = createCoordinator({ logger, sync });
+
+		const refreshRequest = coordinator.requestSync({ reason: "manualRefresh" });
+		const writeRequest = coordinator.requestSync({ reason: "localWrite" });
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
+
+		refreshSync.reject(refreshError);
+
+		await expect(
+			Promise.allSettled([refreshRequest, writeRequest]),
+		).resolves.toEqual([
+			{ reason: refreshError, status: "rejected" },
+			{ reason: refreshError, status: "rejected" },
+		]);
+
+		expect(sync).toHaveBeenCalledTimes(2);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
+		expect(coordinator.getStatus()).toBe("failed");
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
+			error: refreshError,
+			reason: "manualRefresh",
+		});
+
+		sync.mockClear();
+		await coordinator.requestSync({ reason: "manualRefresh" });
+
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
+	});
+
 	it("transitions network-unavailable failures to offline without error logging", async () => {
 		const logger = loggerFixture();
 		const coordinator = createCoordinator({

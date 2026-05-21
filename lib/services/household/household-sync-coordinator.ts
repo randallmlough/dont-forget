@@ -137,7 +137,26 @@ export function createHouseholdSyncCoordinator({
 		try {
 			result = await sync(syncOptionsForReason(reason));
 		} catch (error) {
-			return runQueuedFollowUpAfterAttempt(handleSyncFailure(error, reason));
+			const syncError = handleSyncFailure(error, reason);
+			const shouldRethrow = shouldRethrowSyncFailure(error, reason);
+
+			let followUpResult: HouseholdSyncResult | null;
+			try {
+				followUpResult = await runQueuedFollowUpAfterAttempt(syncError.result);
+			} catch (followUpError) {
+				if (shouldRethrow) {
+					setStatus("failed");
+					throw syncError.error;
+				}
+				throw followUpError;
+			}
+
+			if (shouldRethrow) {
+				setStatus("failed");
+				throw syncError.error;
+			}
+
+			return followUpResult;
 		}
 		handleRecoveredNativeSyncFailure(result, reason);
 
@@ -172,22 +191,22 @@ export function createHouseholdSyncCoordinator({
 	function handleSyncFailure(
 		error: unknown,
 		reason: HouseholdSyncRequestReason,
-	): HouseholdSyncResult | null {
+	): {
+		error: Error;
+		result: HouseholdSyncResult | null;
+	} {
+		const syncError = asError(error);
 		if (isExpectedSyncInterruptionError(error)) {
 			setStatus("offline");
-			return null;
+			return { error: syncError, result: null };
 		}
 
-		const syncError = asError(error);
 		logger.error("household sync failed", {
 			error: syncError,
 			reason,
 		});
 		setStatus("failed");
-		if (reason === "manualRefresh") {
-			throw syncError;
-		}
-		return null;
+		return { error: syncError, result: null };
 	}
 
 	function handleRecoveredNativeSyncFailure(
@@ -281,6 +300,13 @@ export function createHouseholdSyncCoordinator({
 
 function isActiveAppState(state: string): boolean {
 	return state !== "background" && state !== "inactive";
+}
+
+function shouldRethrowSyncFailure(
+	error: unknown,
+	reason: HouseholdSyncRequestReason,
+): boolean {
+	return reason === "manualRefresh" && !isExpectedSyncInterruptionError(error);
 }
 
 function syncOptionsForReason(
