@@ -232,7 +232,7 @@ export function createHouseholdSyncCoordinator({
 function syncOptionsForReason(
 	reason: HouseholdSyncRequestReason,
 ): HouseholdSyncOptions | undefined {
-	if (reason === "manualRefresh") return undefined;
+	if (reason === "manualRefresh") return { mode: "full" };
 	return { mode: "pushLocalOnly" };
 }
 

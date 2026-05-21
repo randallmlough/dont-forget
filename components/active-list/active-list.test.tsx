@@ -238,8 +238,47 @@ describe("ActiveList", () => {
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 		expect(await screen.findByText("Remote Apples")).toBeTruthy();
 		expect(sync).toHaveBeenCalledTimes(1);
-		expect(sync).toHaveBeenCalledWith(undefined);
+		expect(sync).toHaveBeenCalledWith({ mode: "full" });
 		expect(pull).not.toHaveBeenCalled();
+	});
+
+	it("reports manual refresh failure when the visible List cannot reload", async () => {
+		const refreshSync = deferred<{ changed: boolean }>();
+		const load = jest
+			.fn<Promise<ActiveListInitialState>, []>()
+			.mockRejectedValueOnce(new Error("load failed"));
+		const dataSource = memoryDataSource(emptyList, {
+			load,
+			sync: jest
+				.fn<
+					Promise<{ changed: boolean }>,
+					Parameters<ActiveListDataSource["sync"]>
+				>()
+				.mockResolvedValueOnce({ changed: false })
+				.mockReturnValueOnce(refreshSync.promise),
+		});
+
+		renderActiveList(emptyList, dataSource);
+		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+
+		await act(async () => {
+			fireEvent.press(screen.getByText("Refresh"));
+		});
+		expect(screen.getByText("Refreshing")).toBeTruthy();
+
+		await act(async () => {
+			refreshSync.resolve({ changed: true });
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to refresh this List. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(screen.getByText("Refresh")).toBeTruthy();
+		expect(mockLoggerError).toHaveBeenCalledWith("active list refresh failed", {
+			error: expect.any(Error),
+		});
 	});
 });
 

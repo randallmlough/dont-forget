@@ -35,7 +35,18 @@ describe("createHouseholdSyncCoordinator", () => {
 			coordinator.requestSync({ reason: "manualRefresh" }),
 		).resolves.toEqual({ changed: true });
 
-		expect(sync).toHaveBeenCalledWith(undefined);
+		expect(sync).toHaveBeenCalledWith({ mode: "full" });
+	});
+
+	it("keeps local Item write requests push-local-only after manual refresh", async () => {
+		const sync = jest.fn(async () => ({ changed: false }));
+		const coordinator = createCoordinator({ sync });
+
+		await coordinator.requestSync({ reason: "manualRefresh" });
+		await coordinator.requestSync({ reason: "localWrite" });
+
+		expect(sync).toHaveBeenNthCalledWith(1, { mode: "full" });
+		expect(sync).toHaveBeenNthCalledWith(2, { mode: "pushLocalOnly" });
 	});
 
 	it("coalesces local write requests that arrive during an in-flight sync", async () => {
@@ -83,7 +94,7 @@ describe("createHouseholdSyncCoordinator", () => {
 		await Promise.all([firstRequest, refreshRequest]);
 
 		expect(sync).toHaveBeenCalledTimes(2);
-		expect(sync).toHaveBeenLastCalledWith(undefined);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
 	});
 
 	it("transitions network-unavailable failures to offline without error logging", async () => {
