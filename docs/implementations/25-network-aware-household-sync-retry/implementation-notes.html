@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Network-aware Household Sync Retry</title>
+</head>
+<body>
+  <h1>Implementation Notes: Network-aware Household Sync Retry</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li>Selected <code>@react-native-community/netinfo</code> behind an app-owned network status adapter. It provides connectivity subscriptions, is compatible with Expo SDK 55 through <code>expo install</code>, and had materially higher current npm usage than <code>expo-network</code> during research: roughly 2.1M weekly npm downloads versus roughly 656k for <code>expo-network</code>.</li>
+      <li>Modeled app connectivity as <code>online</code>, <code>offline</code>, and <code>unknown</code>. The adapter treats explicit disconnected or unreachable states as offline, strict internet reachability as online, and ambiguous platform states as unknown.</li>
+      <li>Kept sync orchestration inside the existing Active List provider because a first-class Household sync coordinator has not yet been introduced and the PRD marks building it as out of scope.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li><code>expo-network</code> was more tightly Expo-owned and recently published with SDK 55, but it has lower npm usage and does not fit the subscription-oriented reachability boundary as directly as NetInfo. NetInfo was last published in February 2026 and its repository was active in February 2026, which was maintained enough for this app boundary.</li>
+      <li>The sync retry timer remains installed while Home is open, but known-offline connectivity pauses remote attempts by gating retry execution. This keeps lifecycle cleanup simple while satisfying the no-known-offline-remote-attempt behavior.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None yet.</li>
+    </ul>
+  </section>
+</body>
+</html>

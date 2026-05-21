@@ -27,6 +27,11 @@ import {
 } from "@/components/active-list/active-list-state";
 import { isNetworkUnavailableError } from "@/lib/errors";
 import { useLogger } from "@/lib/logger";
+import {
+	type NetworkConnectivity,
+	type NetworkStatusAdapter,
+	networkStatusAdapter,
+} from "@/lib/network-status";
 
 export type ActiveListItem = {
 	id: string;
@@ -86,6 +91,7 @@ type ActiveListProviderProps = PropsWithChildren<{
 	initialState: ActiveListInitialState;
 	currentMemberName: string;
 	dataSource: ActiveListDataSource;
+	networkStatus?: NetworkStatusAdapter;
 }>;
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
@@ -95,6 +101,7 @@ function ActiveListProvider({
 	initialState,
 	currentMemberName,
 	dataSource,
+	networkStatus = networkStatusAdapter,
 	children,
 }: ActiveListProviderProps) {
 	const logger = useLogger();
@@ -108,6 +115,8 @@ function ActiveListProvider({
 	const nextItemNumber = useRef(initialState.items.length + 1);
 	const modelRef = useRef(model);
 	const syncInFlight = useRef(false);
+	const networkConnectivity = useRef<NetworkConnectivity>("unknown");
+	const pendingLocalChangeVersion = useRef(0);
 
 	const transition = useCallback((nextTransition: ActiveListTransition) => {
 		if (!mounted.current) return;
@@ -137,13 +146,25 @@ function ActiveListProvider({
 				return;
 			}
 
+			if (networkConnectivity.current === "offline") {
+				transition({ type: "syncUnavailable" });
+				await loadFromDataSource();
+				return;
+			}
+
 			transition({ type: "syncStarted" });
 			syncInFlight.current = true;
+			const syncStartedAtChangeVersion = pendingLocalChangeVersion.current;
 
 			try {
 				await dataSource.sync(options);
 				await loadFromDataSource();
-				transition({ type: "syncSucceeded" });
+				if (pendingLocalChangeVersion.current === syncStartedAtChangeVersion) {
+					pendingLocalChangeVersion.current = 0;
+					transition({ type: "syncSucceeded" });
+				} else {
+					transition({ type: "syncStarted" });
+				}
 			} catch (error) {
 				if (isNetworkUnavailableError(error)) {
 					transition({ type: "syncUnavailable" });
@@ -164,15 +185,28 @@ function ActiveListProvider({
 			return;
 		}
 
+		if (networkConnectivity.current === "offline") {
+			transition({ type: "syncUnavailable" });
+			return;
+		}
+
+		if (syncInFlight.current) return;
+
 		transition({ type: "syncStarted" });
 		syncInFlight.current = true;
+		const syncStartedAtChangeVersion = pendingLocalChangeVersion.current;
 
 		try {
 			const result = await dataSource.sync({ mode: "pushLocalOnly" });
 			if (result.changed) {
 				await loadFromDataSource();
 			}
-			transition({ type: "syncSucceeded" });
+			if (pendingLocalChangeVersion.current === syncStartedAtChangeVersion) {
+				pendingLocalChangeVersion.current = 0;
+				transition({ type: "syncSucceeded" });
+			} else {
+				transition({ type: "syncStarted" });
+			}
 		} catch (error) {
 			if (isNetworkUnavailableError(error)) {
 				transition({ type: "syncUnavailable" });
@@ -185,6 +219,53 @@ function ActiveListProvider({
 			syncInFlight.current = false;
 		}
 	}, [dataSource, loadFromDataSource, logger, transition]);
+
+	const handleNetworkStatusChange = useCallback(
+		(nextConnectivity: NetworkConnectivity) => {
+			const previousConnectivity = networkConnectivity.current;
+			networkConnectivity.current = nextConnectivity;
+
+			if (nextConnectivity === "offline") {
+				transition({ type: "syncUnavailable" });
+				return;
+			}
+
+			if (
+				nextConnectivity === "online" &&
+				previousConnectivity !== "online" &&
+				dataSource.syncAuthorized &&
+				pendingLocalChangeVersion.current > 0 &&
+				!syncInFlight.current
+			) {
+				void syncLatest({ mode: "pushLocalOnly" }).catch((error) => {
+					logger.error("active list reconnect sync failed", { error });
+				});
+			}
+		},
+		[dataSource.syncAuthorized, logger, syncLatest, transition],
+	);
+
+	useEffect(() => {
+		let stopped = false;
+
+		networkStatus
+			.getCurrentStatus()
+			.then((status) => {
+				if (!stopped) handleNetworkStatusChange(status.connectivity);
+			})
+			.catch((error) => {
+				logger.error("network status fetch failed", { error });
+			});
+
+		const subscription = networkStatus.subscribe((status) => {
+			if (!stopped) handleNetworkStatusChange(status.connectivity);
+		});
+
+		return () => {
+			stopped = true;
+			subscription.remove();
+		};
+	}, [handleNetworkStatusChange, logger, networkStatus]);
 
 	useEffect(() => {
 		if (!dataSource.syncAuthorized) {
@@ -206,6 +287,7 @@ function ActiveListProvider({
 			if (
 				stopped ||
 				syncInFlight.current ||
+				networkConnectivity.current === "offline" ||
 				modelRef.current.syncState === "synced" ||
 				AppState.currentState === "background" ||
 				AppState.currentState === "inactive"
@@ -269,6 +351,7 @@ function ActiveListProvider({
 					pendingItemId: item.id,
 					item: persistedItem,
 				});
+				pendingLocalChangeVersion.current += 1;
 				void syncAfterLocalWrite();
 			} catch {
 				transition({ type: "itemAddFailed" });
@@ -296,6 +379,7 @@ function ActiveListProvider({
 			try {
 				await dataSource.setItemChecked(itemId, checked);
 				transition({ type: "itemTogglePersisted" });
+				pendingLocalChangeVersion.current += 1;
 				void syncAfterLocalWrite();
 			} catch {
 				transition({ type: "itemToggleFailed" });

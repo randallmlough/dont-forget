@@ -56,6 +56,17 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
 	removeItem: jest.fn(),
 }));
 
+jest.mock("@react-native-community/netinfo", () => ({
+	__esModule: true,
+	default: {
+		fetch: jest.fn(async () => ({
+			isConnected: null,
+			isInternetReachable: null,
+		})),
+		addEventListener: jest.fn(() => jest.fn()),
+	},
+}));
+
 jest.mock("expo-web-browser", () => ({
 	maybeCompleteAuthSession: jest.fn(),
 	warmUpAsync: jest.fn(),

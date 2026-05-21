@@ -267,11 +267,11 @@ Domain services should resolve mutations on local commit:
 const item = await itemService.addItem({ listId, userId, name });
 ```
 
-They should not treat remote sync as part of mutation success. Sync timing is an application/runtime policy. Home's data source may request sync after local writes:
+They should not treat remote sync as part of mutation success. Sync timing is an application/runtime policy. Home's Active List provider tracks whether local changes need remote propagation, uses the app-owned network status adapter to skip known-offline remote attempts, and requests a push-local-only sync when connectivity returns.
 
 ```ts
 const item = await itemService.addItem(input);
-void store.sync();
+// UI/runtime policy requests sync outside the service mutation.
 return item;
 ```
 

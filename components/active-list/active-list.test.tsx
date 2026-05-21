@@ -11,6 +11,10 @@ import {
 	type ActiveListDataSource,
 	type ActiveListInitialState,
 } from "@/components/active-list";
+import type {
+	NetworkConnectivity,
+	NetworkStatusAdapter,
+} from "@/lib/network-status";
 
 const mockLoggerError = jest.fn();
 const mockLogger = {
@@ -181,6 +185,98 @@ describe("ActiveList", () => {
 		}
 	});
 
+	it("skips remote sync while known offline and refreshes local state without logging an error", async () => {
+		const sync = jest.fn(async () => ({ changed: false }));
+		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }), {
+			networkStatus: memoryNetworkStatus("offline", {
+				emitOnSubscribe: true,
+			}).adapter,
+		});
+
+		await waitFor(() =>
+			expect(screen.getByText("Offline - changes saved locally")).toBeTruthy(),
+		);
+		expect(sync).not.toHaveBeenCalled();
+
+		await act(async () => {
+			fireEvent.press(screen.getByText("Refresh"));
+		});
+
+		await waitFor(() => expect(screen.getByText("Refresh")).toBeTruthy());
+		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
+		expect(sync).not.toHaveBeenCalled();
+		expect(mockLoggerError).not.toHaveBeenCalled();
+	});
+
+	it("pushes pending local changes when connectivity returns online", async () => {
+		const sync = jest.fn(async () => ({ changed: false }));
+		const networkStatus = memoryNetworkStatus("offline", {
+			emitOnSubscribe: true,
+		});
+		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }), {
+			networkStatus: networkStatus.adapter,
+		});
+		await waitFor(() =>
+			expect(screen.getByText("Offline - changes saved locally")).toBeTruthy(),
+		);
+
+		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		await act(async () => {
+			fireEvent.press(screen.getByText("Add"));
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("checkbox", { name: "Milk" })).toBeTruthy(),
+		);
+		expect(sync).not.toHaveBeenCalled();
+
+		await act(async () => {
+			networkStatus.emit("online");
+			await Promise.resolve();
+		});
+
+		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledWith({ mode: "pushLocalOnly" });
+	});
+
+	it("does not start overlapping sync when connectivity flaps during an in-flight sync", async () => {
+		const syncAfterWrite = deferred<{ changed: boolean }>();
+		const sync = jest
+			.fn<
+				Promise<{ changed: boolean }>,
+				Parameters<ActiveListDataSource["sync"]>
+			>()
+			.mockResolvedValueOnce({ changed: false })
+			.mockReturnValueOnce(syncAfterWrite.promise);
+		const networkStatus = memoryNetworkStatus("online", {
+			emitOnSubscribe: true,
+		});
+		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }), {
+			networkStatus: networkStatus.adapter,
+		});
+		await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+
+		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		await act(async () => {
+			fireEvent.press(screen.getByText("Add"));
+		});
+		await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
+		expect(sync).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			networkStatus.emit("offline");
+			networkStatus.emit("online");
+			await Promise.resolve();
+		});
+
+		expect(sync).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			syncAfterWrite.resolve({ changed: false });
+		});
+		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+	});
+
 	it("pushes local-only sync when an authorized data source opens", async () => {
 		const sync = jest.fn(async () => ({ changed: false }));
 
@@ -246,12 +342,14 @@ describe("ActiveList", () => {
 function renderActiveList(
 	initialState: ActiveListInitialState,
 	dataSource = memoryDataSource(initialState),
+	options: { networkStatus?: NetworkStatusAdapter } = {},
 ) {
 	return render(
 		<ActiveList.Provider
 			initialState={initialState}
 			currentMemberName="Avery Chen"
 			dataSource={dataSource}
+			networkStatus={options.networkStatus}
 		>
 			<ActiveList.Screen>
 				<ActiveList.Header />
@@ -319,6 +417,42 @@ function memoryDataSource(
 		},
 		async close() {},
 		...overrides,
+	};
+}
+
+function memoryNetworkStatus(
+	initialConnectivity: NetworkConnectivity,
+	options: { emitOnSubscribe?: boolean } = {},
+) {
+	let connectivity = initialConnectivity;
+	const listeners = new Set<
+		(status: { connectivity: NetworkConnectivity }) => void
+	>();
+	const adapter: NetworkStatusAdapter = {
+		async getCurrentStatus() {
+			return { connectivity };
+		},
+		subscribe(listener) {
+			listeners.add(listener);
+			if (options.emitOnSubscribe) {
+				listener({ connectivity });
+			}
+			return {
+				remove() {
+					listeners.delete(listener);
+				},
+			};
+		},
+	};
+
+	return {
+		adapter,
+		emit(nextConnectivity: NetworkConnectivity) {
+			connectivity = nextConnectivity;
+			for (const listener of listeners) {
+				listener({ connectivity });
+			}
+		},
 	};
 }
 
