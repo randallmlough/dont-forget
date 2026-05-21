@@ -13,10 +13,7 @@ export type ActiveListModel = {
 
 export type ActiveListTransition =
 	| { type: "listLoaded"; list: ActiveListState }
-	| { type: "syncUnavailable" }
-	| { type: "syncStarted" }
-	| { type: "syncSucceeded" }
-	| { type: "syncFailed" }
+	| { type: "syncStatusChanged"; syncState: ActiveListSyncState }
 	| { type: "refreshRequested" }
 	| { type: "refreshFailed" }
 	| { type: "itemAddedOptimistically"; item: ActiveListItem }
@@ -50,14 +47,8 @@ export function activeListReducer(
 	switch (transition.type) {
 		case "listLoaded":
 			return { ...model, list: transition.list, isRefreshing: false };
-		case "syncUnavailable":
-			return { ...model, syncState: "offline" };
-		case "syncStarted":
-			return { ...model, syncState: "pending" };
-		case "syncSucceeded":
-			return { ...model, syncState: "synced" };
-		case "syncFailed":
-			return { ...model, syncState: "failed" };
+		case "syncStatusChanged":
+			return { ...model, syncState: transition.syncState };
 		case "refreshRequested":
 			return { ...model, errorMessage: null, isRefreshing: true };
 		case "refreshFailed":

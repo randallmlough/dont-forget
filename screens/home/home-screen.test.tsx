@@ -35,6 +35,25 @@ jest.mock("./active-list-data-source", () => ({
 
 jest.mock("@/lib/services/household", () => ({
 	clearCachedHouseholdSession: jest.fn(),
+	createHouseholdSyncCoordinator: jest.fn(
+		(deps: {
+			syncAuthorized: boolean;
+			sync: (options?: { mode?: "full" | "pushLocalOnly" }) => Promise<{
+				changed: boolean;
+			}>;
+		}) => ({
+			getStatus: () => (deps.syncAuthorized ? "synced" : "offline"),
+			subscribe: jest.fn(() => ({ remove() {} })),
+			start: jest.fn(),
+			stop: jest.fn(),
+			requestSync: jest.fn(async ({ reason }: { reason: string }) => {
+				if (!deps.syncAuthorized) return null;
+				return deps.sync(
+					reason === "manualRefresh" ? undefined : { mode: "pushLocalOnly" },
+				);
+			}),
+		}),
+	),
 	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
 	getHouseholdSession: jest.fn(),
 	readCachedHouseholdSession: jest.fn(),
