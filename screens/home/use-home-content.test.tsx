@@ -15,7 +15,10 @@ import {
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
-import { createSyncCoordinator } from "@/lib/services/sync";
+import {
+	createSyncCoordinator,
+	getDefaultSyncNetworkStatusAdapter,
+} from "@/lib/services/sync";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
 import { createHouseholdActiveListDataSource } from "./active-list-data-source";
@@ -31,6 +34,10 @@ const mockCreatedSyncCoordinators: Array<{
 	stop: jest.Mock;
 	requestSync: jest.Mock;
 }> = [];
+const mockSyncNetworkStatusAdapter = {
+	getCurrentStatus: jest.fn(() => "unknown"),
+	subscribe: jest.fn(() => ({ remove() {} })),
+};
 
 const mockHouseholdLogger = {
 	debug: jest.fn(),
@@ -87,11 +94,15 @@ jest.mock("@/lib/services/sync", () => ({
 			return coordinator;
 		},
 	),
+	getDefaultSyncNetworkStatusAdapter: jest.fn(
+		() => mockSyncNetworkStatusAdapter,
+	),
 }));
 
 beforeEach(() => {
 	jest.mocked(getHouseholdSession).mockReset();
 	jest.mocked(createSyncCoordinator).mockClear();
+	jest.mocked(getDefaultSyncNetworkStatusAdapter).mockClear();
 	jest.mocked(createHouseholdActiveListDataSource).mockReset();
 	mockCreatedSyncCoordinators.length = 0;
 	jest.mocked(useLogger).mockReturnValue(mockRootLogger);
@@ -169,6 +180,7 @@ describe("useHomeContent", () => {
 		expect(createSyncCoordinator).toHaveBeenCalledWith(
 			expect.objectContaining({
 				logger: mockHouseholdLogger,
+				networkStatus: mockSyncNetworkStatusAdapter,
 			}),
 		);
 	});

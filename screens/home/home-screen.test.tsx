@@ -19,7 +19,10 @@ import {
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
-import { createSyncCoordinator } from "@/lib/services/sync";
+import {
+	createSyncCoordinator,
+	getDefaultSyncNetworkStatusAdapter,
+} from "@/lib/services/sync";
 import { clerkMocks, setMockAuthState } from "@/lib/test/mocks/clerk";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
@@ -41,6 +44,10 @@ const mockCreatedSyncCoordinators: Array<{
 	stop: jest.Mock;
 	requestSync: jest.Mock;
 }> = [];
+const mockSyncNetworkStatusAdapter = {
+	getCurrentStatus: jest.fn(() => "unknown"),
+	subscribe: jest.fn(() => ({ remove() {} })),
+};
 
 jest.mock("@/lib/services/household", () => ({
 	clearCachedHouseholdSession: jest.fn(),
@@ -76,6 +83,9 @@ jest.mock("@/lib/services/sync", () => ({
 			return coordinator;
 		},
 	),
+	getDefaultSyncNetworkStatusAdapter: jest.fn(
+		() => mockSyncNetworkStatusAdapter,
+	),
 }));
 
 beforeEach(() => {
@@ -83,6 +93,7 @@ beforeEach(() => {
 	jest.mocked(reset).mockReset();
 	jest.mocked(getHouseholdSession).mockReset();
 	jest.mocked(createSyncCoordinator).mockClear();
+	jest.mocked(getDefaultSyncNetworkStatusAdapter).mockClear();
 	jest.mocked(createHouseholdActiveListDataSource).mockReset();
 	mockCreatedSyncCoordinators.length = 0;
 	jest.mocked(clearCachedHouseholdSession).mockResolvedValue(undefined);

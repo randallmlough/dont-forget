@@ -1,3 +1,4 @@
+import type { SyncNetworkStatusAdapter } from "./network-status";
 import type { SyncResult } from "./sync-coordinator";
 import {
 	createSyncCoordinator,
@@ -286,6 +287,201 @@ describe("createSyncCoordinator", () => {
 		expect(logger.error).not.toHaveBeenCalled();
 	});
 
+	it("does not call sync for local Item write requests while the network is known offline", async () => {
+		const sync = jest.fn(async () => ({ changed: false }));
+		const coordinator = createCoordinator({
+			networkStatus: memoryNetworkStatus("offline"),
+			sync,
+		});
+
+		await expect(
+			coordinator.requestSync({ reason: "localWrite" }),
+		).resolves.toBeNull();
+
+		expect(sync).not.toHaveBeenCalled();
+		expect(coordinator.getStatus()).toBe("offline");
+	});
+
+	it("does not call sync for retry or manual refresh requests while the network is known offline", async () => {
+		const sync = jest.fn(async () => ({ changed: false }));
+		const coordinator = createCoordinator({
+			networkStatus: memoryNetworkStatus("offline"),
+			sync,
+		});
+
+		await expect(
+			coordinator.requestSync({ reason: "retry" }),
+		).resolves.toBeNull();
+		await expect(
+			coordinator.requestSync({ reason: "manualRefresh" }),
+		).resolves.toBeNull();
+
+		expect(sync).not.toHaveBeenCalled();
+		expect(coordinator.getStatus()).toBe("offline");
+	});
+
+	it("transitions offline and stops retry attempts when the network becomes known offline", async () => {
+		jest.useFakeTimers();
+		const networkStatus = controllableNetworkStatus("unknown");
+		const sync = jest.fn(async () => ({ changed: false }));
+		const coordinator = createCoordinator({
+			networkStatus,
+			retryIntervalMs: 100,
+			sync,
+		});
+
+		try {
+			coordinator.start();
+			await actTicks();
+			expect(sync).toHaveBeenCalledTimes(1);
+
+			networkStatus.emit("offline");
+			expect(coordinator.getStatus()).toBe("offline");
+			await actTimer(100);
+
+			expect(sync).toHaveBeenCalledTimes(1);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("does not start retry sync work while the network is already known offline", async () => {
+		jest.useFakeTimers();
+		const sync = jest.fn(async () => ({ changed: false }));
+		const coordinator = createCoordinator({
+			networkStatus: memoryNetworkStatus("offline"),
+			retryIntervalMs: 100,
+			sync,
+		});
+
+		try {
+			coordinator.start();
+			await actTimer(100);
+
+			expect(sync).not.toHaveBeenCalled();
+			expect(coordinator.getStatus()).toBe("offline");
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("keeps offline status when in-flight sync succeeds after the network goes offline", async () => {
+		const networkStatus = controllableNetworkStatus("online");
+		const syncAttempt = deferred<SyncResult>();
+		const sync = jest.fn(() => syncAttempt.promise);
+		const coordinator = createCoordinator({
+			appState: memoryAppState("inactive"),
+			networkStatus,
+			sync,
+		});
+		coordinator.start();
+
+		const request = coordinator.requestSync({ reason: "manualRefresh" });
+		await actTicks();
+
+		expect(coordinator.getStatus()).toBe("pending");
+		networkStatus.emit("offline");
+		expect(coordinator.getStatus()).toBe("offline");
+
+		syncAttempt.resolve({ changed: false });
+		await expect(request).resolves.toEqual({ changed: false });
+
+		expect(coordinator.getStatus()).toBe("offline");
+	});
+
+	it("runs a full Household catch-up sync when network status becomes online", async () => {
+		const networkStatus = controllableNetworkStatus("unknown");
+		const sync = jest.fn(async () => ({ changed: true }));
+		const coordinator = createCoordinator({
+			appState: memoryAppState("inactive"),
+			networkStatus,
+			sync,
+		});
+		coordinator.start();
+
+		networkStatus.emit("online");
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledWith({ mode: "full" });
+		expect(coordinator.getStatus()).toBe("synced");
+	});
+
+	it("ignores repeated online network status while already online", async () => {
+		const networkStatus = controllableNetworkStatus("online");
+		const sync = jest.fn(async () => ({ changed: false }));
+		const coordinator = createCoordinator({
+			appState: memoryAppState("inactive"),
+			networkStatus,
+			sync,
+		});
+		coordinator.start();
+
+		networkStatus.emit("online");
+		await actTicks();
+
+		expect(sync).not.toHaveBeenCalled();
+		expect(coordinator.getStatus()).toBe("synced");
+	});
+
+	it("coalesces flapping online transitions without overlapping sync attempts", async () => {
+		const networkStatus = controllableNetworkStatus("unknown");
+		const firstSync = deferred<SyncResult>();
+		const sync = jest
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
+			.mockReturnValueOnce(firstSync.promise)
+			.mockResolvedValue({ changed: false });
+		const coordinator = createCoordinator({
+			appState: memoryAppState("inactive"),
+			networkStatus,
+			sync,
+		});
+		coordinator.start();
+
+		networkStatus.emit("online");
+		await actTicks();
+		networkStatus.emit("offline");
+		networkStatus.emit("online");
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(1);
+
+		firstSync.resolve({ changed: false });
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(2);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
+	});
+
+	it("prioritizes a queued network reconnect over a local Item write follow-up", async () => {
+		const networkStatus = controllableNetworkStatus("unknown");
+		const firstSync = deferred<SyncResult>();
+		const sync = jest
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
+			.mockReturnValueOnce(firstSync.promise)
+			.mockResolvedValue({ changed: false });
+		const coordinator = createCoordinator({
+			appState: memoryAppState("inactive"),
+			networkStatus,
+			sync,
+		});
+		coordinator.start();
+
+		const writeRequest = coordinator.requestSync({ reason: "localWrite" });
+		await actTicks();
+		networkStatus.emit("online");
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
+
+		firstSync.resolve({ changed: false });
+		await writeRequest;
+
+		expect(sync).toHaveBeenCalledTimes(2);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
+	});
+
 	it("logs unexpected native sync failure once when fallback then fails offline", async () => {
 		const logger = loggerFixture();
 		const nativeError = new Error("native sync failed");
@@ -540,6 +736,7 @@ function createCoordinator(
 		syncAuthorized: true,
 		sync: jest.fn(async () => ({ changed: false })),
 		appState: memoryAppState("active"),
+		networkStatus: memoryNetworkStatus("unknown"),
 		logger: loggerFixture(),
 		...overrides,
 	});
@@ -580,6 +777,52 @@ function controllableAppState(initialState: string): SyncAppStateAdapter & {
 			currentState = state;
 			for (const listener of listeners) {
 				listener(state);
+			}
+		},
+	};
+}
+
+function memoryNetworkStatus(
+	status: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
+): SyncNetworkStatusAdapter {
+	return {
+		getCurrentStatus() {
+			return status;
+		},
+		subscribe() {
+			return { remove() {} };
+		},
+	};
+}
+
+function controllableNetworkStatus(
+	initialStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
+): SyncNetworkStatusAdapter & {
+	emit: (
+		status: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
+	) => void;
+} {
+	let currentStatus = initialStatus;
+	const listeners = new Set<
+		(status: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>) => void
+	>();
+
+	return {
+		getCurrentStatus() {
+			return currentStatus;
+		},
+		subscribe(listener) {
+			listeners.add(listener);
+			return {
+				remove() {
+					listeners.delete(listener);
+				},
+			};
+		},
+		emit(status) {
+			currentStatus = status;
+			for (const listener of listeners) {
+				listener(status);
 			}
 		},
 	};

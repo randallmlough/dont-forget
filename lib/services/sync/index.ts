@@ -1,4 +1,9 @@
 export {
+	getDefaultSyncNetworkStatusAdapter,
+	type SyncNetworkStatus,
+	type SyncNetworkStatusAdapter,
+} from "./network-status";
+export {
 	createSyncCoordinator,
 	type SyncAppStateAdapter,
 	type SyncCoordinator,

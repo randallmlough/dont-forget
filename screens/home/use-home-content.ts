@@ -27,6 +27,7 @@ import {
 } from "@/lib/services/household";
 import {
 	createSyncCoordinator,
+	getDefaultSyncNetworkStatusAdapter,
 	type SyncAppStateAdapter,
 } from "@/lib/services/sync";
 
@@ -261,6 +262,7 @@ async function openHome(
 		syncAuthorized: dataSource.syncAuthorized,
 		sync: dataSource.sync,
 		appState: run.appState,
+		networkStatus: getDefaultSyncNetworkStatusAdapter(),
 		logger: run.logger.with({ household_id: session.activeHousehold.id }),
 	});
 	const home = { dataSource, syncCoordinator };

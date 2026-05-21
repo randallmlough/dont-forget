@@ -1,6 +1,8 @@
 import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 
+import type { SyncNetworkStatusAdapter } from "./network-status";
+
 export type SyncResult = {
 	changed: boolean;
 	recoveredNativeSyncError?: Error;
@@ -11,6 +13,7 @@ export type SyncStatus = "synced" | "pending" | "offline" | "failed";
 export type SyncRequestReason =
 	| "localWrite"
 	| "manualRefresh"
+	| "networkReconnect"
 	| "appForeground"
 	| "retry";
 
@@ -45,6 +48,7 @@ export type SyncCoordinatorDeps = {
 	syncAuthorized: boolean;
 	sync: SyncOperation;
 	appState: SyncAppStateAdapter;
+	networkStatus: SyncNetworkStatusAdapter;
 	logger: Logger;
 	retryIntervalMs?: number;
 };
@@ -55,11 +59,15 @@ export function createSyncCoordinator({
 	syncAuthorized,
 	sync,
 	appState,
+	networkStatus,
 	logger,
 	retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS,
 }: SyncCoordinatorDeps): SyncCoordinator {
 	const listeners = new Set<(status: SyncStatus) => void>();
-	let status: SyncStatus = syncAuthorized ? "synced" : "offline";
+	let status: SyncStatus =
+		syncAuthorized && networkStatus.getCurrentStatus() !== "offline"
+			? "synced"
+			: "offline";
 	let pendingLocalChangeVersion = 0;
 	let inFlight: Promise<SyncResult | null> | null = null;
 	let queuedFollowUpReason: SyncRequestReason | null = null;
@@ -67,6 +75,8 @@ export function createSyncCoordinator({
 	let started = false;
 	let stopped = false;
 	let appStateSubscription: SyncStatusSubscription | null = null;
+	let networkStatusSubscription: SyncStatusSubscription | null = null;
+	let currentNetworkStatus = networkStatus.getCurrentStatus();
 	let retryInterval: ReturnType<typeof setInterval> | null = null;
 
 	function setStatus(nextStatus: SyncStatus) {
@@ -80,6 +90,12 @@ export function createSyncCoordinator({
 
 	function shouldSkipForOffline() {
 		if (!syncAuthorized) {
+			setStatus("offline");
+			return true;
+		}
+
+		currentNetworkStatus = networkStatus.getCurrentStatus();
+		if (currentNetworkStatus === "offline") {
 			setStatus("offline");
 			return true;
 		}
@@ -103,6 +119,7 @@ export function createSyncCoordinator({
 		if (
 			reason !== "manualRefresh" &&
 			reason !== "localWrite" &&
+			reason !== "networkReconnect" &&
 			reason !== "appForeground" &&
 			pendingLocalChangeVersion === 0 &&
 			status === "synced"
@@ -184,6 +201,15 @@ export function createSyncCoordinator({
 			);
 		}
 
+		currentNetworkStatus = networkStatus.getCurrentStatus();
+		if (currentNetworkStatus === "offline") {
+			if (!queuedFollowUpReason) {
+				setStatus("offline");
+				return result;
+			}
+			return runQueuedFollowUpAfterAttempt(result);
+		}
+
 		if (!queuedFollowUpReason) {
 			setStatus("synced");
 			return result;
@@ -256,8 +282,33 @@ export function createSyncCoordinator({
 		void requestSync({ reason: "retry" });
 	}
 
+	function handleNetworkStatusChange(
+		nextNetworkStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
+	) {
+		const previousNetworkStatus = currentNetworkStatus;
+		currentNetworkStatus = nextNetworkStatus;
+
+		if (nextNetworkStatus === "offline") {
+			stopRetryTimer();
+			setStatus("offline");
+			return;
+		}
+
+		if (nextNetworkStatus === "online" && previousNetworkStatus !== "online") {
+			startRetryTimer();
+			void requestSync({ reason: "networkReconnect" });
+		}
+	}
+
 	function startRetryTimer() {
-		if (retryInterval || !isActiveAppState(appState.getCurrentState())) return;
+		currentNetworkStatus = networkStatus.getCurrentStatus();
+		if (
+			retryInterval ||
+			currentNetworkStatus === "offline" ||
+			!isActiveAppState(appState.getCurrentState())
+		) {
+			return;
+		}
 
 		retryInterval = setInterval(() => {
 			requestRetrySync();
@@ -292,9 +343,18 @@ export function createSyncCoordinator({
 				return;
 			}
 
+			networkStatusSubscription = networkStatus.subscribe(
+				handleNetworkStatusChange,
+			);
+
 			if (isActiveAppState(appState.getCurrentState())) {
-				startRetryTimer();
-				if (!inFlight) {
+				currentNetworkStatus = networkStatus.getCurrentStatus();
+				if (currentNetworkStatus === "offline") {
+					setStatus("offline");
+				} else {
+					startRetryTimer();
+				}
+				if (!inFlight && currentNetworkStatus !== "offline") {
 					void runSync("retry");
 				}
 			}
@@ -316,6 +376,8 @@ export function createSyncCoordinator({
 			queuedFollowUpReason = null;
 			appStateSubscription?.remove();
 			appStateSubscription = null;
+			networkStatusSubscription?.remove();
+			networkStatusSubscription = null;
 			stopRetryTimer();
 			await inFlight?.catch(() => undefined);
 		},
@@ -337,7 +399,11 @@ function shouldRethrowSyncFailure(
 function syncOptionsForReason(
 	reason: SyncRequestReason,
 ): SyncOptions | undefined {
-	if (reason === "manualRefresh" || reason === "appForeground") {
+	if (
+		reason === "manualRefresh" ||
+		reason === "appForeground" ||
+		reason === "networkReconnect"
+	) {
 		return { mode: "full" };
 	}
 	return { mode: "pushLocalOnly" };
@@ -349,6 +415,13 @@ function coalesceQueuedReason(
 ): SyncRequestReason {
 	if (currentReason === "manualRefresh" || nextReason === "manualRefresh") {
 		return "manualRefresh";
+	}
+
+	if (
+		currentReason === "networkReconnect" ||
+		nextReason === "networkReconnect"
+	) {
+		return "networkReconnect";
 	}
 
 	if (currentReason === "localWrite" || nextReason === "localWrite") {
