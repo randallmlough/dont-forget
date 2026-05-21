@@ -40,6 +40,7 @@ app-example
 # generated native folders
 /ios
 /android
+.codex/environments/
 .vscode
 .idea/
 /.pnpm-store/
