@@ -125,6 +125,7 @@ describe("createHouseholdActiveListDataSource", () => {
 
 	it("falls back to remote LWW upserts when native sync cannot push", async () => {
 		const remoteExecute = jest.fn(async () => undefined);
+		const nativeError = new Error("native sync failed");
 		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
 			const sql = statementSql(statement);
 			if (sql.includes("FROM lists")) {
@@ -180,7 +181,7 @@ describe("createHouseholdActiveListDataSource", () => {
 					syncAuthorized: true,
 					execute,
 					sync: jest.fn(async () => {
-						throw new Error("native sync failed");
+						throw nativeError;
 					}),
 					pull: jest.fn(async () => ({ changed: false })),
 					close: jest.fn(async () => undefined),
@@ -189,7 +190,10 @@ describe("createHouseholdActiveListDataSource", () => {
 			},
 		);
 
-		await expect(dataSource.sync()).resolves.toEqual({ changed: false });
+		await expect(dataSource.sync()).resolves.toEqual({
+			changed: false,
+			recoveredNativeSyncError: nativeError,
+		});
 
 		expect(remoteExecute).toHaveBeenCalledTimes(3);
 		expect(remoteExecute).toHaveBeenCalledWith(
@@ -216,10 +220,7 @@ describe("createHouseholdActiveListDataSource", () => {
 			}),
 		);
 		expect(mockLoggerError).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).toHaveBeenCalledWith(
-			"active list native sync recovered by fallback",
-			{ error: expect.any(Error) },
-		);
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
 	});
 
 	it("pushes local rows without native sync for automatic retry paths", async () => {
@@ -283,7 +284,7 @@ describe("createHouseholdActiveListDataSource", () => {
 		);
 	});
 
-	it("logs and rethrows when native sync and fallback both fail", async () => {
+	it("rethrows when native sync and fallback both fail without logging at the data-source boundary", async () => {
 		const fallbackError = new Error("remote unavailable");
 		const dataSource = createHouseholdActiveListDataSource(
 			dataSourceConfigFixture(),
@@ -305,14 +306,8 @@ describe("createHouseholdActiveListDataSource", () => {
 
 		await expect(dataSource.sync()).rejects.toThrow(fallbackError);
 
-		expect(mockLoggerError).toHaveBeenCalledWith(
-			"active list native sync failed",
-			{ error: expect.any(Error) },
-		);
-		expect(mockLoggerError).toHaveBeenCalledWith(
-			"active list sync fallback failed",
-			{ error: fallbackError },
-		);
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
 	});
 
 	it("does not error-log expected network failures while offline", async () => {

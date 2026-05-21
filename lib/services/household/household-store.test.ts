@@ -177,7 +177,7 @@ describe("openHouseholdStore", () => {
 		expect(nativeDb.calls).toEqual(["pull", "push", "pull", "run"]);
 	});
 
-	it("logs native sync failures before rethrowing", async () => {
+	it("rethrows native sync failures without logging at the store boundary", async () => {
 		const store = await openHouseholdStore(configFixture(), {
 			runtime,
 			fileSystem,
@@ -188,12 +188,7 @@ describe("openHouseholdStore", () => {
 
 		await expect(store.sync()).rejects.toThrow(error);
 
-		expect(mockLoggerError).toHaveBeenCalledWith(
-			"household store sync failed",
-			{
-				error,
-			},
-		);
+		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
 	it("does not error-log sync failures caused by offline networking", async () => {
@@ -226,7 +221,7 @@ describe("openHouseholdStore", () => {
 		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
-	it("uses an injected logger when reporting store failures", async () => {
+	it("does not use an injected logger for native sync failures", async () => {
 		const injected = loggerFixture();
 		const store = await openHouseholdStore(
 			{ ...configFixture(), logger: injected.root },
@@ -242,10 +237,32 @@ describe("openHouseholdStore", () => {
 			household_id: "hh_avery",
 			sync_authorized: true,
 		});
-		expect(injected.error).toHaveBeenCalledWith("household store sync failed", {
-			error,
-		});
+		expect(injected.error).not.toHaveBeenCalled();
 		expect(mockLoggerError).not.toHaveBeenCalled();
+	});
+
+	it("continues to log local write failures because they affect data safety", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const nativeDb = onlyInstance(instances);
+		const error = new Error("disk write failed");
+		nativeDb.run.mockRejectedValueOnce(error);
+
+		await expect(
+			store.execute({
+				sql: "INSERT INTO items (id, name) VALUES (?, ?)",
+				args: ["itm_eggs", "Eggs"],
+			}),
+		).rejects.toThrow(error);
+
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			"household store write failed",
+			{
+				error,
+			},
+		);
 	});
 
 	it("deletes local store files by app-owned Household ID", async () => {

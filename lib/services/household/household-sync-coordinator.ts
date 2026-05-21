@@ -139,6 +139,7 @@ export function createHouseholdSyncCoordinator({
 		} catch (error) {
 			return handleSyncFailure(error, reason);
 		}
+		handleRecoveredNativeSyncFailure(result, reason);
 
 		if (pendingLocalChangeVersion === syncStartedAtChangeVersion) {
 			pendingLocalChangeVersion = 0;
@@ -179,6 +180,21 @@ export function createHouseholdSyncCoordinator({
 			throw syncError;
 		}
 		return null;
+	}
+
+	function handleRecoveredNativeSyncFailure(
+		result: HouseholdSyncResult,
+		reason: HouseholdSyncRequestReason,
+	) {
+		if (!result.recoveredNativeSyncError) return;
+		if (isExpectedSyncInterruptionError(result.recoveredNativeSyncError)) {
+			return;
+		}
+
+		logger.warn("household sync recovered", {
+			error: result.recoveredNativeSyncError,
+			reason,
+		});
 	}
 
 	function requestForegroundSync() {

@@ -218,6 +218,47 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.error).not.toHaveBeenCalled();
 	});
 
+	it("keeps recovered native checkpoint interruptions quiet", async () => {
+		const logger = loggerFixture();
+		const coordinator = createCoordinator({
+			logger,
+			sync: jest.fn(async () => ({
+				changed: false,
+				recoveredNativeSyncError: new Error(
+					"sync engine operation failed: unable to checkpoint synced portion of WAL",
+				),
+			})),
+		});
+
+		await coordinator.requestSync({ reason: "manualRefresh" });
+
+		expect(coordinator.getStatus()).toBe("synced");
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
+	});
+
+	it("warns once at the coordinator boundary when fallback recovers an unexpected native failure", async () => {
+		const logger = loggerFixture();
+		const nativeError = new Error("native sync failed");
+		const coordinator = createCoordinator({
+			logger,
+			sync: jest.fn(async () => ({
+				changed: false,
+				recoveredNativeSyncError: nativeError,
+			})),
+		});
+
+		await coordinator.requestSync({ reason: "manualRefresh" });
+
+		expect(coordinator.getStatus()).toBe("synced");
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).toHaveBeenCalledTimes(1);
+		expect(logger.warn).toHaveBeenCalledWith("household sync recovered", {
+			error: nativeError,
+			reason: "manualRefresh",
+		});
+	});
+
 	it("logs and rethrows unexpected manual refresh failures", async () => {
 		const logger = loggerFixture();
 		const syncError = new Error("remote unavailable");
@@ -233,6 +274,7 @@ describe("createHouseholdSyncCoordinator", () => {
 		).rejects.toThrow(syncError);
 
 		expect(coordinator.getStatus()).toBe("failed");
+		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: syncError,
 			reason: "manualRefresh",

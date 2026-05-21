@@ -179,7 +179,9 @@ function ActiveListProvider({
 			await syncCoordinator.requestSync({ reason: "manualRefresh" });
 			await loadFromDataSource();
 		} catch (error) {
-			logger.error("active list refresh failed", { error });
+			if (syncCoordinator.getStatus() !== "failed") {
+				logger.error("active list refresh failed", { error });
+			}
 			transition({ type: "refreshFailed" });
 		}
 	}, [loadFromDataSource, logger, syncCoordinator, transition]);

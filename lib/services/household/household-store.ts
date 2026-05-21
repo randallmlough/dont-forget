@@ -1,5 +1,5 @@
 import { createDatabaseOperationQueue } from "@/db/utils";
-import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
+import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
@@ -19,6 +19,7 @@ export type HouseholdSqlResult = {
 
 export type HouseholdSyncResult = {
 	changed: boolean;
+	recoveredNativeSyncError?: Error;
 };
 
 export type HouseholdStore = {
@@ -174,35 +175,20 @@ export async function openHouseholdStore(
 		},
 		async push() {
 			return enqueueDatabaseOperation(async () => {
-				try {
-					await database.push();
-				} catch (error) {
-					logUnexpectedStoreFailure(log, "household store push failed", error);
-					throw error;
-				}
+				await database.push();
 			});
 		},
 		async pull() {
 			return enqueueDatabaseOperation(async () => {
-				try {
-					return { changed: await database.pull() };
-				} catch (error) {
-					logUnexpectedStoreFailure(log, "household store pull failed", error);
-					throw error;
-				}
+				return { changed: await database.pull() };
 			});
 		},
 		async sync() {
 			return enqueueDatabaseOperation(async () => {
-				try {
-					const changedBeforePush = await database.pull();
-					await database.push();
-					const changedAfterPush = await database.pull();
-					return { changed: changedBeforePush || changedAfterPush };
-				} catch (error) {
-					logUnexpectedStoreFailure(log, "household store sync failed", error);
-					throw error;
-				}
+				const changedBeforePush = await database.pull();
+				await database.push();
+				const changedAfterPush = await database.pull();
+				return { changed: changedBeforePush || changedAfterPush };
 			});
 		},
 		close,
@@ -260,16 +246,6 @@ function isReadStatement(sql: string): boolean {
 		normalized.startsWith("with") ||
 		normalized.startsWith("pragma")
 	);
-}
-
-function logUnexpectedStoreFailure(
-	log: Logger,
-	message: string,
-	error: unknown,
-) {
-	if (isExpectedSyncInterruptionError(error)) return;
-
-	log.error(message, { error: asError(error) });
 }
 
 async function loadTursoRuntime(): Promise<TursoHouseholdStoreRuntime> {

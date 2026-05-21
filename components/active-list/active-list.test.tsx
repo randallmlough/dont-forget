@@ -306,8 +306,10 @@ describe("ActiveList", () => {
 		expect(
 			screen.getByText("Sync failed - changes saved locally"),
 		).toBeTruthy();
-		expect(mockLoggerError).toHaveBeenCalledWith("active list refresh failed", {
+		expect(mockLoggerError).toHaveBeenCalledTimes(1);
+		expect(mockLoggerError).toHaveBeenCalledWith("household sync failed", {
 			error: syncError,
+			reason: "manualRefresh",
 		});
 	});
 });
