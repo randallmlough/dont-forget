@@ -1,14 +1,14 @@
-import type { HouseholdSyncResult } from "./household-store";
+import type { SyncResult } from "./sync-coordinator";
 import {
-	createHouseholdSyncCoordinator,
-	type HouseholdSyncAppStateAdapter,
-	type HouseholdSyncCoordinator,
-	type HouseholdSyncStatus,
-} from "./household-sync-coordinator";
+	createSyncCoordinator,
+	type SyncAppStateAdapter,
+	type SyncCoordinator,
+	type SyncStatus,
+} from "./sync-coordinator";
 
-const activeCoordinators: HouseholdSyncCoordinator[] = [];
+const activeCoordinators: SyncCoordinator[] = [];
 
-describe("createHouseholdSyncCoordinator", () => {
+describe("createSyncCoordinator", () => {
 	afterEach(() => {
 		for (const coordinator of activeCoordinators) {
 			coordinator.stop();
@@ -61,12 +61,9 @@ describe("createHouseholdSyncCoordinator", () => {
 	});
 
 	it("coalesces local write requests that arrive during an in-flight sync", async () => {
-		const firstSync = deferred<HouseholdSyncResult>();
+		const firstSync = deferred<SyncResult>();
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockReturnValueOnce(firstSync.promise)
 			.mockResolvedValue({ changed: false });
 		const coordinator = createCoordinator({ sync });
@@ -85,12 +82,9 @@ describe("createHouseholdSyncCoordinator", () => {
 	});
 
 	it("preserves a queued manual refresh as a full follow-up sync", async () => {
-		const firstSync = deferred<HouseholdSyncResult>();
+		const firstSync = deferred<SyncResult>();
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockReturnValueOnce(firstSync.promise)
 			.mockResolvedValue({ changed: false });
 		const coordinator = createCoordinator({ sync });
@@ -110,13 +104,10 @@ describe("createHouseholdSyncCoordinator", () => {
 
 	it("preserves a queued manual refresh when the in-flight local write sync fails", async () => {
 		const logger = loggerFixture();
-		const firstSync = deferred<HouseholdSyncResult>();
+		const firstSync = deferred<SyncResult>();
 		const syncError = new Error("push failed");
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockReturnValueOnce(firstSync.promise)
 			.mockResolvedValueOnce({ changed: true });
 		const coordinator = createCoordinator({ logger, sync });
@@ -143,13 +134,10 @@ describe("createHouseholdSyncCoordinator", () => {
 
 	it("rejects a queued manual refresh when the follow-up full sync fails", async () => {
 		const logger = loggerFixture();
-		const firstSync = deferred<HouseholdSyncResult>();
+		const firstSync = deferred<SyncResult>();
 		const syncError = new Error("remote unavailable");
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockReturnValueOnce(firstSync.promise)
 			.mockRejectedValueOnce(syncError);
 		const coordinator = createCoordinator({ logger, sync });
@@ -170,17 +158,14 @@ describe("createHouseholdSyncCoordinator", () => {
 	});
 
 	it("keeps status pending until a queued follow-up sync completes", async () => {
-		const firstSync = deferred<HouseholdSyncResult>();
-		const followUpSync = deferred<HouseholdSyncResult>();
+		const firstSync = deferred<SyncResult>();
+		const followUpSync = deferred<SyncResult>();
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockReturnValueOnce(firstSync.promise)
 			.mockReturnValueOnce(followUpSync.promise);
 		const coordinator = createCoordinator({ sync });
-		const statuses: HouseholdSyncStatus[] = [];
+		const statuses: SyncStatus[] = [];
 		const subscription = coordinator.subscribe((status) =>
 			statuses.push(status),
 		);
@@ -208,13 +193,10 @@ describe("createHouseholdSyncCoordinator", () => {
 	});
 
 	it("serializes requests that arrive during a queued follow-up sync", async () => {
-		const firstSync = deferred<HouseholdSyncResult>();
-		const followUpSync = deferred<HouseholdSyncResult>();
+		const firstSync = deferred<SyncResult>();
+		const followUpSync = deferred<SyncResult>();
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockReturnValueOnce(firstSync.promise)
 			.mockReturnValueOnce(followUpSync.promise)
 			.mockResolvedValue({ changed: false });
@@ -249,13 +231,10 @@ describe("createHouseholdSyncCoordinator", () => {
 
 	it("runs a queued local write follow-up before rethrowing a manual refresh failure", async () => {
 		const logger = loggerFixture();
-		const refreshSync = deferred<HouseholdSyncResult>();
+		const refreshSync = deferred<SyncResult>();
 		const refreshError = new Error("refresh failed");
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockReturnValueOnce(refreshSync.promise)
 			.mockResolvedValue({ changed: false });
 		const coordinator = createCoordinator({ logger, sync });
@@ -400,10 +379,7 @@ describe("createHouseholdSyncCoordinator", () => {
 	it("retries pending sync while foregrounded and stops retry work on stop", async () => {
 		jest.useFakeTimers();
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockRejectedValueOnce(new TypeError("Network request failed"))
 			.mockResolvedValue({ changed: false });
 		const coordinator = createCoordinator({ sync });
@@ -434,10 +410,7 @@ describe("createHouseholdSyncCoordinator", () => {
 		const foregroundError = new Error("foreground failed");
 		const retryError = new Error("retry failed");
 		const sync = jest
-			.fn<
-				Promise<HouseholdSyncResult>,
-				[{ mode?: "full" | "pushLocalOnly" }?]
-			>()
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
 			.mockRejectedValueOnce(new TypeError("Network request failed"))
 			.mockRejectedValueOnce(foregroundError)
 			.mockRejectedValueOnce(retryError);
@@ -480,7 +453,7 @@ describe("createHouseholdSyncCoordinator", () => {
 	});
 
 	it("notifies subscribers of coordinator-owned status changes", async () => {
-		const statuses: HouseholdSyncStatus[] = [];
+		const statuses: SyncStatus[] = [];
 		const sync = jest.fn(async () => ({ changed: false }));
 		const coordinator = createCoordinator({ sync });
 		const subscription = coordinator.subscribe((status) =>
@@ -494,10 +467,10 @@ describe("createHouseholdSyncCoordinator", () => {
 	});
 
 	it("ignores an in-flight sync completion after stop", async () => {
-		const syncAttempt = deferred<HouseholdSyncResult>();
+		const syncAttempt = deferred<SyncResult>();
 		const sync = jest.fn(() => syncAttempt.promise);
 		const coordinator = createCoordinator({ sync });
-		const statuses: HouseholdSyncStatus[] = [];
+		const statuses: SyncStatus[] = [];
 		const subscription = coordinator.subscribe((status) =>
 			statuses.push(status),
 		);
@@ -515,7 +488,7 @@ describe("createHouseholdSyncCoordinator", () => {
 	});
 
 	it("waits for in-flight sync work when stopping", async () => {
-		const syncAttempt = deferred<HouseholdSyncResult>();
+		const syncAttempt = deferred<SyncResult>();
 		const sync = jest.fn(() => syncAttempt.promise);
 		const coordinator = createCoordinator({ sync });
 
@@ -537,10 +510,10 @@ describe("createHouseholdSyncCoordinator", () => {
 	});
 
 	it("ignores stale sync completion after stop and restart", async () => {
-		const syncAttempt = deferred<HouseholdSyncResult>();
+		const syncAttempt = deferred<SyncResult>();
 		const sync = jest.fn(() => syncAttempt.promise);
 		const coordinator = createCoordinator({ sync });
-		const statuses: HouseholdSyncStatus[] = [];
+		const statuses: SyncStatus[] = [];
 		const subscription = coordinator.subscribe((status) =>
 			statuses.push(status),
 		);
@@ -561,9 +534,9 @@ describe("createHouseholdSyncCoordinator", () => {
 });
 
 function createCoordinator(
-	overrides: Partial<Parameters<typeof createHouseholdSyncCoordinator>[0]> = {},
+	overrides: Partial<Parameters<typeof createSyncCoordinator>[0]> = {},
 ) {
-	const coordinator = createHouseholdSyncCoordinator({
+	const coordinator = createSyncCoordinator({
 		syncAuthorized: true,
 		sync: jest.fn(async () => ({ changed: false })),
 		appState: memoryAppState("active"),
@@ -574,7 +547,7 @@ function createCoordinator(
 	return coordinator;
 }
 
-function memoryAppState(initialState: string): HouseholdSyncAppStateAdapter {
+function memoryAppState(initialState: string): SyncAppStateAdapter {
 	return {
 		getCurrentState() {
 			return initialState;
@@ -585,9 +558,7 @@ function memoryAppState(initialState: string): HouseholdSyncAppStateAdapter {
 	};
 }
 
-function controllableAppState(
-	initialState: string,
-): HouseholdSyncAppStateAdapter & {
+function controllableAppState(initialState: string): SyncAppStateAdapter & {
 	emit: (state: string) => void;
 } {
 	let currentState = initialState;

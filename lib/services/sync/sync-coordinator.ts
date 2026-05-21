@@ -1,77 +1,75 @@
 import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
-import type { HouseholdSyncResult } from "./household-store";
 
-export type HouseholdSyncStatus = "synced" | "pending" | "offline" | "failed";
+export type SyncResult = {
+	changed: boolean;
+	recoveredNativeSyncError?: Error;
+};
 
-export type HouseholdSyncRequestReason =
+export type SyncStatus = "synced" | "pending" | "offline" | "failed";
+
+export type SyncRequestReason =
 	| "localWrite"
 	| "manualRefresh"
 	| "appForeground"
 	| "retry";
 
-export type HouseholdSyncMode = "full" | "pushLocalOnly";
+export type SyncMode = "full" | "pushLocalOnly";
 
-export type HouseholdSyncOptions = {
-	mode?: HouseholdSyncMode;
+export type SyncOptions = {
+	mode?: SyncMode;
 };
 
-export type HouseholdSyncOperation = (
-	options?: HouseholdSyncOptions,
-) => Promise<HouseholdSyncResult>;
+export type SyncOperation = (options?: SyncOptions) => Promise<SyncResult>;
 
-export type HouseholdSyncStatusSubscription = {
+export type SyncStatusSubscription = {
 	remove: () => void;
 };
 
-export type HouseholdSyncAppStateAdapter = {
+export type SyncAppStateAdapter = {
 	getCurrentState: () => string;
-	subscribe: (
-		listener: (state: string) => void,
-	) => HouseholdSyncStatusSubscription;
+	subscribe: (listener: (state: string) => void) => SyncStatusSubscription;
 };
 
-export type HouseholdSyncCoordinator = {
-	getStatus: () => HouseholdSyncStatus;
-	subscribe: (
-		listener: (status: HouseholdSyncStatus) => void,
-	) => HouseholdSyncStatusSubscription;
+export type SyncCoordinator = {
+	getStatus: () => SyncStatus;
+	subscribe: (listener: (status: SyncStatus) => void) => SyncStatusSubscription;
 	start: () => void;
 	stop: () => Promise<void>;
 	requestSync: (request: {
-		reason: HouseholdSyncRequestReason;
-	}) => Promise<HouseholdSyncResult | null>;
+		reason: SyncRequestReason;
+	}) => Promise<SyncResult | null>;
 };
 
-export type HouseholdSyncCoordinatorDeps = {
+export type SyncCoordinatorDeps = {
 	syncAuthorized: boolean;
-	sync: HouseholdSyncOperation;
-	appState: HouseholdSyncAppStateAdapter;
+	sync: SyncOperation;
+	appState: SyncAppStateAdapter;
 	logger: Logger;
 	retryIntervalMs?: number;
 };
 
 const DEFAULT_RETRY_INTERVAL_MS = 30_000;
 
-export function createHouseholdSyncCoordinator({
+export function createSyncCoordinator({
 	syncAuthorized,
 	sync,
 	appState,
 	logger,
 	retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS,
-}: HouseholdSyncCoordinatorDeps): HouseholdSyncCoordinator {
-	const listeners = new Set<(status: HouseholdSyncStatus) => void>();
-	let status: HouseholdSyncStatus = syncAuthorized ? "synced" : "offline";
+}: SyncCoordinatorDeps): SyncCoordinator {
+	const listeners = new Set<(status: SyncStatus) => void>();
+	let status: SyncStatus = syncAuthorized ? "synced" : "offline";
 	let pendingLocalChangeVersion = 0;
-	let inFlight: Promise<HouseholdSyncResult | null> | null = null;
-	let queuedFollowUpReason: HouseholdSyncRequestReason | null = null;
+	let inFlight: Promise<SyncResult | null> | null = null;
+	let queuedFollowUpReason: SyncRequestReason | null = null;
 	let lifecycleGeneration = 0;
 	let started = false;
 	let stopped = false;
-	let appStateSubscription: HouseholdSyncStatusSubscription | null = null;
+	let appStateSubscription: SyncStatusSubscription | null = null;
 	let retryInterval: ReturnType<typeof setInterval> | null = null;
 
-	function setStatus(nextStatus: HouseholdSyncStatus) {
+	function setStatus(nextStatus: SyncStatus) {
 		if (stopped) return;
 		if (status === nextStatus) return;
 		status = nextStatus;
@@ -92,8 +90,8 @@ export function createHouseholdSyncCoordinator({
 	function requestSync({
 		reason,
 	}: {
-		reason: HouseholdSyncRequestReason;
-	}): Promise<HouseholdSyncResult | null> {
+		reason: SyncRequestReason;
+	}): Promise<SyncResult | null> {
 		if (stopped) return Promise.resolve(null);
 
 		if (reason === "localWrite") {
@@ -120,9 +118,7 @@ export function createHouseholdSyncCoordinator({
 		return runSync(reason);
 	}
 
-	function runSync(
-		reason: HouseholdSyncRequestReason,
-	): Promise<HouseholdSyncResult | null> {
+	function runSync(reason: SyncRequestReason): Promise<SyncResult | null> {
 		const syncStartedAtChangeVersion = pendingLocalChangeVersion;
 		const syncLifecycleGeneration = lifecycleGeneration;
 		setStatus("pending");
@@ -139,11 +135,11 @@ export function createHouseholdSyncCoordinator({
 	}
 
 	async function executeSync(
-		reason: HouseholdSyncRequestReason,
+		reason: SyncRequestReason,
 		syncStartedAtChangeVersion: number,
 		syncLifecycleGeneration: number,
-	): Promise<HouseholdSyncResult | null> {
-		let result: HouseholdSyncResult;
+	): Promise<SyncResult | null> {
+		let result: SyncResult;
 
 		try {
 			result = await sync(syncOptionsForReason(reason));
@@ -155,7 +151,7 @@ export function createHouseholdSyncCoordinator({
 			const syncError = handleSyncFailure(error, reason);
 			const shouldRethrow = shouldRethrowSyncFailure(error, reason);
 
-			let followUpResult: HouseholdSyncResult | null;
+			let followUpResult: SyncResult | null;
 			try {
 				followUpResult = await runQueuedFollowUpAfterAttempt(syncError.result);
 			} catch (followUpError) {
@@ -197,8 +193,8 @@ export function createHouseholdSyncCoordinator({
 	}
 
 	function runQueuedFollowUpAfterAttempt(
-		previousResult: HouseholdSyncResult | null,
-	): Promise<HouseholdSyncResult | null> | HouseholdSyncResult | null {
+		previousResult: SyncResult | null,
+	): Promise<SyncResult | null> | SyncResult | null {
 		const followUpReason = queuedFollowUpReason;
 		if (!followUpReason) return previousResult;
 
@@ -209,10 +205,10 @@ export function createHouseholdSyncCoordinator({
 
 	function handleSyncFailure(
 		error: unknown,
-		reason: HouseholdSyncRequestReason,
+		reason: SyncRequestReason,
 	): {
 		error: Error;
-		result: HouseholdSyncResult | null;
+		result: SyncResult | null;
 	} {
 		const syncError = asError(error);
 		const nativeSyncError = nativeSyncErrorFromFallbackFailure(error);
@@ -236,8 +232,8 @@ export function createHouseholdSyncCoordinator({
 	}
 
 	function handleRecoveredNativeSyncFailure(
-		result: HouseholdSyncResult,
-		reason: HouseholdSyncRequestReason,
+		result: SyncResult,
+		reason: SyncRequestReason,
 	) {
 		if (!result.recoveredNativeSyncError) return;
 		if (isExpectedSyncInterruptionError(result.recoveredNativeSyncError)) {
@@ -333,14 +329,14 @@ function isActiveAppState(state: string): boolean {
 
 function shouldRethrowSyncFailure(
 	error: unknown,
-	reason: HouseholdSyncRequestReason,
+	reason: SyncRequestReason,
 ): boolean {
 	return reason === "manualRefresh" && !isExpectedSyncInterruptionError(error);
 }
 
 function syncOptionsForReason(
-	reason: HouseholdSyncRequestReason,
-): HouseholdSyncOptions | undefined {
+	reason: SyncRequestReason,
+): SyncOptions | undefined {
 	if (reason === "manualRefresh" || reason === "appForeground") {
 		return { mode: "full" };
 	}
@@ -348,9 +344,9 @@ function syncOptionsForReason(
 }
 
 function coalesceQueuedReason(
-	currentReason: HouseholdSyncRequestReason | null,
-	nextReason: HouseholdSyncRequestReason,
-): HouseholdSyncRequestReason {
+	currentReason: SyncRequestReason | null,
+	nextReason: SyncRequestReason,
+): SyncRequestReason {
 	if (currentReason === "manualRefresh" || nextReason === "manualRefresh") {
 		return "manualRefresh";
 	}

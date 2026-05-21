@@ -177,8 +177,8 @@ export type HouseholdStore = {
   syncAuthorized: boolean;
   execute(statement: HouseholdSqlStatement): Promise<HouseholdSqlResult>;
   push(): Promise<void>;
-  pull(): Promise<HouseholdSyncResult>;
-  sync(): Promise<HouseholdSyncResult>;
+  pull(): Promise<SyncResult>;
+  sync(): Promise<SyncResult>;
   close(): Promise<void>;
   deleteLocalData(): Promise<void>;
 };
@@ -275,7 +275,7 @@ void syncCoordinator.requestSync({ reason: "localWrite" });
 return item;
 ```
 
-The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while Home is active, and receives app lifecycle events through app-owned adapter seams. Keep future network-awareness behind the same coordinator boundary rather than pushing sync calls into List or Item services, UI components, or native package call sites. See [Household Sync Coordinator](./household-sync-coordinator.md) for the active Household sync policy.
+The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while Home is active, and receives app lifecycle events through app-owned adapter seams. Keep future network-awareness behind the same coordinator boundary rather than pushing sync calls into List or Item services, UI components, or native package call sites. See [Sync Coordinator](./sync-coordinator.md) for the active Household sync policy.
 
 Turso's transport conflict behavior is last-push-wins. App-owned timestamps remain useful for `created_at`, `updated_at`, latest checked-state display, recovery upserts, and future migration paths, but they are not Turso's merge clock.
 

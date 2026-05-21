@@ -9,13 +9,13 @@ import type {
 import { useLogger } from "@/lib/logger";
 import {
 	type CachedHouseholdSession,
-	createHouseholdSyncCoordinator,
 	discardCachedHouseholdSessionIfUnauthorized,
 	getHouseholdSession,
 	type HouseholdSession,
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
+import { createSyncCoordinator } from "@/lib/services/sync";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
 import { createHouseholdActiveListDataSource } from "./active-list-data-source";
@@ -52,7 +52,14 @@ jest.mock("@/lib/logger", () => ({
 }));
 
 jest.mock("@/lib/services/household", () => ({
-	createHouseholdSyncCoordinator: jest.fn(
+	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
+	getHouseholdSession: jest.fn(),
+	readCachedHouseholdSession: jest.fn(),
+	saveCachedHouseholdSession: jest.fn(),
+}));
+
+jest.mock("@/lib/services/sync", () => ({
+	createSyncCoordinator: jest.fn(
 		(deps: {
 			syncAuthorized: boolean;
 			sync: (options?: { mode?: "full" | "pushLocalOnly" }) => Promise<{
@@ -80,15 +87,11 @@ jest.mock("@/lib/services/household", () => ({
 			return coordinator;
 		},
 	),
-	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
-	getHouseholdSession: jest.fn(),
-	readCachedHouseholdSession: jest.fn(),
-	saveCachedHouseholdSession: jest.fn(),
 }));
 
 beforeEach(() => {
 	jest.mocked(getHouseholdSession).mockReset();
-	jest.mocked(createHouseholdSyncCoordinator).mockClear();
+	jest.mocked(createSyncCoordinator).mockClear();
 	jest.mocked(createHouseholdActiveListDataSource).mockReset();
 	mockCreatedSyncCoordinators.length = 0;
 	jest.mocked(useLogger).mockReturnValue(mockRootLogger);
@@ -163,7 +166,7 @@ describe("useHomeContent", () => {
 		expect(mockRootLogger.with).toHaveBeenCalledWith({
 			household_id: "hh_new",
 		});
-		expect(createHouseholdSyncCoordinator).toHaveBeenCalledWith(
+		expect(createSyncCoordinator).toHaveBeenCalledWith(
 			expect.objectContaining({
 				logger: mockHouseholdLogger,
 			}),

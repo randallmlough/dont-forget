@@ -14,12 +14,12 @@ import { reset, track } from "@/lib/analytics";
 import {
 	type CachedHouseholdSession,
 	clearCachedHouseholdSession,
-	createHouseholdSyncCoordinator,
 	discardCachedHouseholdSessionIfUnauthorized,
 	getHouseholdSession,
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
+import { createSyncCoordinator } from "@/lib/services/sync";
 import { clerkMocks, setMockAuthState } from "@/lib/test/mocks/clerk";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
@@ -44,7 +44,14 @@ const mockCreatedSyncCoordinators: Array<{
 
 jest.mock("@/lib/services/household", () => ({
 	clearCachedHouseholdSession: jest.fn(),
-	createHouseholdSyncCoordinator: jest.fn(
+	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
+	getHouseholdSession: jest.fn(),
+	readCachedHouseholdSession: jest.fn(),
+	saveCachedHouseholdSession: jest.fn(),
+}));
+
+jest.mock("@/lib/services/sync", () => ({
+	createSyncCoordinator: jest.fn(
 		(deps: {
 			syncAuthorized: boolean;
 			sync: (options?: { mode?: "full" | "pushLocalOnly" }) => Promise<{
@@ -69,17 +76,13 @@ jest.mock("@/lib/services/household", () => ({
 			return coordinator;
 		},
 	),
-	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
-	getHouseholdSession: jest.fn(),
-	readCachedHouseholdSession: jest.fn(),
-	saveCachedHouseholdSession: jest.fn(),
 }));
 
 beforeEach(() => {
 	jest.mocked(track).mockReset();
 	jest.mocked(reset).mockReset();
 	jest.mocked(getHouseholdSession).mockReset();
-	jest.mocked(createHouseholdSyncCoordinator).mockClear();
+	jest.mocked(createSyncCoordinator).mockClear();
 	jest.mocked(createHouseholdActiveListDataSource).mockReset();
 	mockCreatedSyncCoordinators.length = 0;
 	jest.mocked(clearCachedHouseholdSession).mockResolvedValue(undefined);

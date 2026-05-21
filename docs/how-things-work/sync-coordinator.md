@@ -1,15 +1,15 @@
-# Household Sync Coordinator
+# Sync Coordinator
 
-For the active Household, the Household sync coordinator owns active Household sync orchestration. It is the app-owned policy boundary that decides when sync work starts, which sync mode to use, how sync status changes, how failures are classified, and when retry or lifecycle work should stop.
+The Sync Coordinator owns app-level sync orchestration for one rendered data surface at a time. It is the app-owned policy boundary that decides when sync work starts, which sync mode to use, how sync status changes, how failures are classified, and when retry or lifecycle work should stop.
 
-The coordinator is a deep module: callers see a small interface, while the retry, serialization, status, and failure policy stays inside `lib/services/household/household-sync-coordinator.ts`.
+The coordinator is a deep module: callers see a small interface, while the retry, serialization, status, and failure policy stays inside `lib/services/sync/sync-coordinator.ts`.
 
 ## Public Interface
 
-Create one coordinator for the rendered active Household:
+Create one coordinator for the rendered active Household and pass a logger already scoped to that Household:
 
 ```ts
-const syncCoordinator = createHouseholdSyncCoordinator({
+const syncCoordinator = createSyncCoordinator({
 	syncAuthorized: dataSource.syncAuthorized,
 	sync: dataSource.sync,
 	appState,
@@ -38,7 +38,7 @@ Only the coordinator should decide what these reasons mean. Domain services, Hou
 
 ## Sync Mode Selection
 
-The coordinator maps request reasons to `HouseholdSyncOptions`:
+The coordinator maps request reasons to `SyncOptions`:
 
 - `localWrite` and `retry` use `pushLocalOnly`.
 - `manualRefresh` and `appForeground` use `full`.

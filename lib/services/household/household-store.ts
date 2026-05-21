@@ -1,6 +1,7 @@
 import { createDatabaseOperationQueue } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
+import type { SyncResult } from "@/lib/services/sync";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
 
@@ -17,18 +18,13 @@ export type HouseholdSqlResult = {
 	lastInsertRowId: number | null;
 };
 
-export type HouseholdSyncResult = {
-	changed: boolean;
-	recoveredNativeSyncError?: Error;
-};
-
 export type HouseholdStore = {
 	path: string;
 	syncAuthorized: boolean;
 	execute: (statement: HouseholdSqlStatement) => Promise<HouseholdSqlResult>;
 	push: () => Promise<void>;
-	pull: () => Promise<HouseholdSyncResult>;
-	sync: () => Promise<HouseholdSyncResult>;
+	pull: () => Promise<SyncResult>;
+	sync: () => Promise<SyncResult>;
 	close: () => Promise<void>;
 	deleteLocalData: () => Promise<void>;
 };

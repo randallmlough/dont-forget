@@ -26,11 +26,11 @@ import {
 } from "@/components/active-list/active-list-state";
 import { useLogger } from "@/lib/logger";
 import type {
-	HouseholdSyncCoordinator,
-	HouseholdSyncOptions,
-	HouseholdSyncResult,
-	HouseholdSyncStatus,
-} from "@/lib/services/household";
+	SyncCoordinator,
+	SyncOptions,
+	SyncResult,
+	SyncStatus,
+} from "@/lib/services/sync";
 
 export type ActiveListItem = {
 	id: string;
@@ -47,13 +47,13 @@ export type ActiveListState = {
 
 export type ActiveListInitialState = ActiveListState;
 
-export type ActiveListSyncState = HouseholdSyncStatus;
+export type ActiveListSyncState = SyncStatus;
 
-export type ActiveListSyncResult = HouseholdSyncResult;
+export type ActiveListSyncResult = SyncResult;
 
-export type ActiveListSyncOptions = HouseholdSyncOptions;
+export type ActiveListSyncOptions = SyncOptions;
 
-export type ActiveListSyncCoordinator = HouseholdSyncCoordinator;
+export type ActiveListSyncCoordinator = SyncCoordinator;
 
 export type ActiveListActions = {
 	addItem: (name: string) => Promise<void>;

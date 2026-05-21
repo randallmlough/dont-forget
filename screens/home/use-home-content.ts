@@ -19,14 +19,16 @@ import type {
 import { type Logger, useLogger } from "@/lib/logger";
 import {
 	type CachedHouseholdSession,
-	createHouseholdSyncCoordinator,
 	discardCachedHouseholdSessionIfUnauthorized,
 	getHouseholdSession,
 	type HouseholdSession,
-	type HouseholdSyncAppStateAdapter,
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
+import {
+	createSyncCoordinator,
+	type SyncAppStateAdapter,
+} from "@/lib/services/sync";
 
 import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 
@@ -64,7 +66,7 @@ type HomeLoadRun = {
 	isLoaded: boolean;
 	isSignedIn: boolean;
 	signingOutRef: RefObject<boolean>;
-	appState: HouseholdSyncAppStateAdapter;
+	appState: SyncAppStateAdapter;
 	logger: Logger;
 	setContent: Dispatch<SetStateAction<HomeContentState>>;
 	renderedHomeRef: MutableRefObject<OpenedHome | null>;
@@ -100,7 +102,7 @@ export function useHomeContent({
 	retry: () => void;
 } {
 	const logger = useLogger();
-	const appState = useMemo<HouseholdSyncAppStateAdapter>(
+	const appState = useMemo<SyncAppStateAdapter>(
 		() => ({
 			getCurrentState: () => AppState.currentState,
 			subscribe(listener) {
@@ -255,7 +257,7 @@ async function openHome(
 	afterLoad?: () => Promise<void>,
 ): Promise<OpenedHome> {
 	const dataSource = createDataSourceFromSession(session);
-	const syncCoordinator = createHouseholdSyncCoordinator({
+	const syncCoordinator = createSyncCoordinator({
 		syncAuthorized: dataSource.syncAuthorized,
 		sync: dataSource.sync,
 		appState: run.appState,
