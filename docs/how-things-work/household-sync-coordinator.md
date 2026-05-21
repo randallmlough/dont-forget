@@ -10,11 +10,10 @@ Create one coordinator for the rendered active Household:
 
 ```ts
 const syncCoordinator = createHouseholdSyncCoordinator({
-	householdId: session.activeHousehold.id,
 	syncAuthorized: dataSource.syncAuthorized,
 	sync: dataSource.sync,
 	appState,
-	logger,
+	logger: logger.with({ household_id: session.activeHousehold.id }),
 });
 ```
 

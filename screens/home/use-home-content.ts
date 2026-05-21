@@ -256,11 +256,10 @@ async function openHome(
 ): Promise<OpenedHome> {
 	const dataSource = createDataSourceFromSession(session);
 	const syncCoordinator = createHouseholdSyncCoordinator({
-		householdId: session.activeHousehold.id,
 		syncAuthorized: dataSource.syncAuthorized,
 		sync: dataSource.sync,
 		appState: run.appState,
-		logger: run.logger,
+		logger: run.logger.with({ household_id: session.activeHousehold.id }),
 	});
 	const home = { dataSource, syncCoordinator };
 	run.pendingHomes.add(home);

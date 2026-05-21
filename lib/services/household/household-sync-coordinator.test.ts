@@ -137,7 +137,6 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: syncError,
-			household_id: "hh_avery",
 			reason: "localWrite",
 		});
 	});
@@ -166,7 +165,6 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(coordinator.getStatus()).toBe("failed");
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: syncError,
-			household_id: "hh_avery",
 			reason: "manualRefresh",
 		});
 	});
@@ -284,7 +282,6 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: refreshError,
-			household_id: "hh_avery",
 			reason: "manualRefresh",
 		});
 
@@ -332,7 +329,6 @@ describe("createHouseholdSyncCoordinator", () => {
 			"household native sync failed before fallback",
 			{
 				error: nativeError,
-				household_id: "hh_avery",
 				reason: "localWrite",
 			},
 		);
@@ -375,7 +371,6 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.warn).toHaveBeenCalledTimes(1);
 		expect(logger.warn).toHaveBeenCalledWith("household sync recovered", {
 			error: nativeError,
-			household_id: "hh_avery",
 			reason: "manualRefresh",
 		});
 	});
@@ -398,7 +393,6 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: syncError,
-			household_id: "hh_avery",
 			reason: "manualRefresh",
 		});
 	});
@@ -464,7 +458,6 @@ describe("createHouseholdSyncCoordinator", () => {
 			expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
 			expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 				error: foregroundError,
-				household_id: "hh_avery",
 				reason: "appForeground",
 			});
 
@@ -474,7 +467,6 @@ describe("createHouseholdSyncCoordinator", () => {
 			expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
 			expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 				error: retryError,
-				household_id: "hh_avery",
 				reason: "retry",
 			});
 
@@ -572,7 +564,6 @@ function createCoordinator(
 	overrides: Partial<Parameters<typeof createHouseholdSyncCoordinator>[0]> = {},
 ) {
 	const coordinator = createHouseholdSyncCoordinator({
-		householdId: "hh_avery",
 		syncAuthorized: true,
 		sync: jest.fn(async () => ({ changed: false })),
 		appState: memoryAppState("active"),

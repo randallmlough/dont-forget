@@ -44,7 +44,6 @@ export type HouseholdSyncCoordinator = {
 };
 
 export type HouseholdSyncCoordinatorDeps = {
-	householdId: string;
 	syncAuthorized: boolean;
 	sync: HouseholdSyncOperation;
 	appState: HouseholdSyncAppStateAdapter;
@@ -55,7 +54,6 @@ export type HouseholdSyncCoordinatorDeps = {
 const DEFAULT_RETRY_INTERVAL_MS = 30_000;
 
 export function createHouseholdSyncCoordinator({
-	householdId,
 	syncAuthorized,
 	sync,
 	appState,
@@ -221,7 +219,6 @@ export function createHouseholdSyncCoordinator({
 		if (nativeSyncError && !isExpectedSyncInterruptionError(nativeSyncError)) {
 			logger.error("household native sync failed before fallback", {
 				error: nativeSyncError,
-				household_id: householdId,
 				reason,
 			});
 		}
@@ -232,7 +229,6 @@ export function createHouseholdSyncCoordinator({
 
 		logger.error("household sync failed", {
 			error: syncError,
-			household_id: householdId,
 			reason,
 		});
 		setStatus("failed");
@@ -250,7 +246,6 @@ export function createHouseholdSyncCoordinator({
 
 		logger.warn("household sync recovered", {
 			error: result.recoveredNativeSyncError,
-			household_id: householdId,
 			reason,
 		});
 	}

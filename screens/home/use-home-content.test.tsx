@@ -6,6 +6,7 @@ import type {
 	ActiveListDataSource,
 	ActiveListInitialState,
 } from "@/components/active-list";
+import { useLogger } from "@/lib/logger";
 import {
 	type CachedHouseholdSession,
 	createHouseholdSyncCoordinator,
@@ -15,7 +16,6 @@ import {
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
-import { setMockUserState } from "@/lib/test/mocks/clerk";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
 import { createHouseholdActiveListDataSource } from "./active-list-data-source";
@@ -31,6 +31,25 @@ const mockCreatedSyncCoordinators: Array<{
 	stop: jest.Mock;
 	requestSync: jest.Mock;
 }> = [];
+
+const mockHouseholdLogger = {
+	debug: jest.fn(),
+	info: jest.fn(),
+	warn: jest.fn(),
+	error: jest.fn(),
+	with: jest.fn(),
+};
+const mockRootLogger = {
+	debug: jest.fn(),
+	info: jest.fn(),
+	warn: jest.fn(),
+	error: jest.fn(),
+	with: jest.fn(() => mockHouseholdLogger),
+};
+
+jest.mock("@/lib/logger", () => ({
+	useLogger: jest.fn(() => mockRootLogger),
+}));
 
 jest.mock("@/lib/services/household", () => ({
 	createHouseholdSyncCoordinator: jest.fn(
@@ -72,6 +91,9 @@ beforeEach(() => {
 	jest.mocked(createHouseholdSyncCoordinator).mockClear();
 	jest.mocked(createHouseholdActiveListDataSource).mockReset();
 	mockCreatedSyncCoordinators.length = 0;
+	jest.mocked(useLogger).mockReturnValue(mockRootLogger);
+	mockRootLogger.with.mockClear();
+	mockRootLogger.with.mockImplementation(() => mockHouseholdLogger);
 	jest
 		.mocked(discardCachedHouseholdSessionIfUnauthorized)
 		.mockResolvedValue(null);
@@ -118,10 +140,34 @@ describe("useHomeContent", () => {
 		const { rerender } = render(<UseHomeContentHarness isLoaded isSignedIn />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		setMockUserState({ user: { id: "usr_avery" } });
+		jest.mocked(useLogger).mockReturnValue({
+			...mockRootLogger,
+			with: jest.fn(() => mockHouseholdLogger),
+		});
 		rerender(<UseHomeContentHarness isLoaded isSignedIn />);
 
 		expect(getHouseholdSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("scopes the sync coordinator logger to the active Household", async () => {
+		const session = householdSessionFixture({ householdId: "hh_new" });
+		jest.mocked(getHouseholdSession).mockResolvedValue(session);
+		jest
+			.mocked(createHouseholdActiveListDataSource)
+			.mockReturnValue(noopDataSource(initialListFixture()));
+
+		render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+
+		expect(mockRootLogger.with).toHaveBeenCalledWith({
+			household_id: "hh_new",
+		});
+		expect(createHouseholdSyncCoordinator).toHaveBeenCalledWith(
+			expect.objectContaining({
+				logger: mockHouseholdLogger,
+			}),
+		);
 	});
 
 	it("opens cached local List data before Clerk finishes loading", async () => {
