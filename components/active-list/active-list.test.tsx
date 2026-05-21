@@ -239,6 +239,36 @@ describe("ActiveList", () => {
 		expect(sync).toHaveBeenCalledWith({ mode: "pushLocalOnly" });
 	});
 
+	it("runs an immediate follow-up sync when a local write lands during an in-flight sync", async () => {
+		const initialSync = deferred<{ changed: boolean }>();
+		const sync = jest
+			.fn<
+				Promise<{ changed: boolean }>,
+				Parameters<ActiveListDataSource["sync"]>
+			>()
+			.mockReturnValueOnce(initialSync.promise)
+			.mockResolvedValue({ changed: false });
+		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
+		await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+
+		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		await act(async () => {
+			fireEvent.press(screen.getByText("Add"));
+		});
+		await waitFor(() =>
+			expect(screen.getByRole("checkbox", { name: "Milk" })).toBeTruthy(),
+		);
+		expect(sync).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			initialSync.resolve({ changed: false });
+		});
+
+		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+		expect(sync).toHaveBeenCalledTimes(2);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
+	});
+
 	it("does not start overlapping sync when connectivity flaps during an in-flight sync", async () => {
 		const syncAfterWrite = deferred<{ changed: boolean }>();
 		const sync = jest

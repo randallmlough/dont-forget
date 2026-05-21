@@ -117,6 +117,9 @@ function ActiveListProvider({
 	const syncInFlight = useRef(false);
 	const networkConnectivity = useRef<NetworkConnectivity>("unknown");
 	const pendingLocalChangeVersion = useRef(0);
+	const requestPushLocalOnlySyncRef = useRef<(logMessage: string) => void>(
+		() => undefined,
+	);
 
 	const transition = useCallback((nextTransition: ActiveListTransition) => {
 		if (!mounted.current) return;
@@ -155,6 +158,7 @@ function ActiveListProvider({
 			transition({ type: "syncStarted" });
 			syncInFlight.current = true;
 			const syncStartedAtChangeVersion = pendingLocalChangeVersion.current;
+			let followUpSyncNeeded = false;
 
 			try {
 				await dataSource.sync(options);
@@ -164,6 +168,7 @@ function ActiveListProvider({
 					transition({ type: "syncSucceeded" });
 				} else {
 					transition({ type: "syncStarted" });
+					followUpSyncNeeded = true;
 				}
 			} catch (error) {
 				if (isNetworkUnavailableError(error)) {
@@ -174,6 +179,11 @@ function ActiveListProvider({
 				throw error;
 			} finally {
 				syncInFlight.current = false;
+				if (followUpSyncNeeded) {
+					requestPushLocalOnlySyncRef.current(
+						"active list follow-up sync failed",
+					);
+				}
 			}
 		},
 		[dataSource, loadFromDataSource, transition],
@@ -195,6 +205,7 @@ function ActiveListProvider({
 		transition({ type: "syncStarted" });
 		syncInFlight.current = true;
 		const syncStartedAtChangeVersion = pendingLocalChangeVersion.current;
+		let followUpSyncNeeded = false;
 
 		try {
 			const result = await dataSource.sync({ mode: "pushLocalOnly" });
@@ -206,6 +217,7 @@ function ActiveListProvider({
 				transition({ type: "syncSucceeded" });
 			} else {
 				transition({ type: "syncStarted" });
+				followUpSyncNeeded = true;
 			}
 		} catch (error) {
 			if (isNetworkUnavailableError(error)) {
@@ -217,8 +229,35 @@ function ActiveListProvider({
 			transition({ type: "syncFailed" });
 		} finally {
 			syncInFlight.current = false;
+			if (followUpSyncNeeded) {
+				requestPushLocalOnlySyncRef.current(
+					"active list follow-up sync failed",
+				);
+			}
 		}
 	}, [dataSource, loadFromDataSource, logger, transition]);
+
+	const requestPushLocalOnlySync = useCallback(
+		(logMessage: string) => {
+			if (
+				!dataSource.syncAuthorized ||
+				networkConnectivity.current === "offline" ||
+				pendingLocalChangeVersion.current === 0 ||
+				syncInFlight.current
+			) {
+				return;
+			}
+
+			void syncAfterLocalWrite().catch((error) => {
+				logger.error(logMessage, { error });
+			});
+		},
+		[dataSource.syncAuthorized, logger, syncAfterLocalWrite],
+	);
+
+	useEffect(() => {
+		requestPushLocalOnlySyncRef.current = requestPushLocalOnlySync;
+	}, [requestPushLocalOnlySync]);
 
 	const handleNetworkStatusChange = useCallback(
 		(nextConnectivity: NetworkConnectivity) => {
@@ -237,12 +276,10 @@ function ActiveListProvider({
 				pendingLocalChangeVersion.current > 0 &&
 				!syncInFlight.current
 			) {
-				void syncLatest({ mode: "pushLocalOnly" }).catch((error) => {
-					logger.error("active list reconnect sync failed", { error });
-				});
+				requestPushLocalOnlySync("active list reconnect sync failed");
 			}
 		},
-		[dataSource.syncAuthorized, logger, syncLatest, transition],
+		[dataSource.syncAuthorized, requestPushLocalOnlySync, transition],
 	);
 
 	useEffect(() => {
