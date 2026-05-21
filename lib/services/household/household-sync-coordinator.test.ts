@@ -97,6 +97,34 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
 	});
 
+	it("rejects a queued manual refresh when the follow-up full sync fails", async () => {
+		const logger = loggerFixture();
+		const firstSync = deferred<HouseholdSyncResult>();
+		const syncError = new Error("remote unavailable");
+		const sync = jest
+			.fn<
+				Promise<HouseholdSyncResult>,
+				[{ mode?: "full" | "pushLocalOnly" }?]
+			>()
+			.mockReturnValueOnce(firstSync.promise)
+			.mockRejectedValueOnce(syncError);
+		const coordinator = createCoordinator({ logger, sync });
+
+		const firstRequest = coordinator.requestSync({ reason: "localWrite" });
+		const refreshRequest = coordinator.requestSync({ reason: "manualRefresh" });
+		await actTicks();
+
+		firstSync.resolve({ changed: false });
+
+		await expect(refreshRequest).rejects.toThrow(syncError);
+		await expect(firstRequest).rejects.toThrow(syncError);
+		expect(coordinator.getStatus()).toBe("failed");
+		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
+			error: syncError,
+			reason: "manualRefresh",
+		});
+	});
+
 	it("keeps status pending until a queued follow-up sync completes", async () => {
 		const firstSync = deferred<HouseholdSyncResult>();
 		const followUpSync = deferred<HouseholdSyncResult>();

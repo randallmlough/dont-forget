@@ -132,44 +132,53 @@ export function createHouseholdSyncCoordinator({
 		reason: HouseholdSyncRequestReason,
 		syncStartedAtChangeVersion: number,
 	): Promise<HouseholdSyncResult | null> {
+		let result: HouseholdSyncResult;
+
 		try {
-			const result = await sync(syncOptionsForReason(reason));
-
-			if (pendingLocalChangeVersion === syncStartedAtChangeVersion) {
-				pendingLocalChangeVersion = 0;
-			} else {
-				queuedFollowUpReason = coalesceQueuedReason(
-					queuedFollowUpReason,
-					"retry",
-				);
-			}
-
-			if (!queuedFollowUpReason) {
-				setStatus("synced");
-				return result;
-			}
-
-			const followUpReason = queuedFollowUpReason;
-			queuedFollowUpReason = null;
-			if (stopped || shouldSkipForOffline()) return result;
-			return await runSync(followUpReason);
+			result = await sync(syncOptionsForReason(reason));
 		} catch (error) {
-			if (isExpectedSyncInterruptionError(error)) {
-				setStatus("offline");
-				return null;
-			}
+			return handleSyncFailure(error, reason);
+		}
 
-			const syncError = asError(error);
-			logger.error("household sync failed", {
-				error: syncError,
-				reason,
-			});
-			setStatus("failed");
-			if (reason === "manualRefresh") {
-				throw syncError;
-			}
+		if (pendingLocalChangeVersion === syncStartedAtChangeVersion) {
+			pendingLocalChangeVersion = 0;
+		} else {
+			queuedFollowUpReason = coalesceQueuedReason(
+				queuedFollowUpReason,
+				"retry",
+			);
+		}
+
+		if (!queuedFollowUpReason) {
+			setStatus("synced");
+			return result;
+		}
+
+		const followUpReason = queuedFollowUpReason;
+		queuedFollowUpReason = null;
+		if (stopped || shouldSkipForOffline()) return result;
+		return runSync(followUpReason);
+	}
+
+	function handleSyncFailure(
+		error: unknown,
+		reason: HouseholdSyncRequestReason,
+	): HouseholdSyncResult | null {
+		if (isExpectedSyncInterruptionError(error)) {
+			setStatus("offline");
 			return null;
 		}
+
+		const syncError = asError(error);
+		logger.error("household sync failed", {
+			error: syncError,
+			reason,
+		});
+		setStatus("failed");
+		if (reason === "manualRefresh") {
+			throw syncError;
+		}
+		return null;
 	}
 
 	function requestForegroundSync() {
