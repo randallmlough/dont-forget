@@ -344,6 +344,58 @@ describe("createHouseholdSyncCoordinator", () => {
 		}
 	});
 
+	it("pauses retry work while inactive and resumes through foreground lifecycle", async () => {
+		jest.useFakeTimers();
+		const appState = controllableAppState("inactive");
+		const logger = loggerFixture();
+		const foregroundError = new Error("foreground failed");
+		const retryError = new Error("retry failed");
+		const sync = jest
+			.fn<
+				Promise<HouseholdSyncResult>,
+				[{ mode?: "full" | "pushLocalOnly" }?]
+			>()
+			.mockRejectedValueOnce(new TypeError("Network request failed"))
+			.mockRejectedValueOnce(foregroundError)
+			.mockRejectedValueOnce(retryError);
+		const coordinator = createCoordinator({ appState, logger, sync });
+
+		try {
+			await coordinator.requestSync({ reason: "localWrite" });
+			expect(coordinator.getStatus()).toBe("offline");
+
+			coordinator.start();
+			await actTimer(30_000);
+			expect(sync).toHaveBeenCalledTimes(1);
+
+			appState.emit("active");
+			await actTicks();
+
+			expect(sync).toHaveBeenCalledTimes(2);
+			expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
+			expect(logger.error).toHaveBeenCalledWith("household sync failed", {
+				error: foregroundError,
+				reason: "appForeground",
+			});
+
+			await actTimer(30_000);
+
+			expect(sync).toHaveBeenCalledTimes(3);
+			expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
+			expect(logger.error).toHaveBeenCalledWith("household sync failed", {
+				error: retryError,
+				reason: "retry",
+			});
+
+			appState.emit("inactive");
+			await actTimer(30_000);
+
+			expect(sync).toHaveBeenCalledTimes(3);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	it("notifies subscribers of coordinator-owned status changes", async () => {
 		const statuses: HouseholdSyncStatus[] = [];
 		const sync = jest.fn(async () => ({ changed: false }));
@@ -380,6 +432,35 @@ function memoryAppState(initialState: string): HouseholdSyncAppStateAdapter {
 		},
 		subscribe() {
 			return { remove() {} };
+		},
+	};
+}
+
+function controllableAppState(
+	initialState: string,
+): HouseholdSyncAppStateAdapter & {
+	emit: (state: string) => void;
+} {
+	let currentState = initialState;
+	const listeners = new Set<(state: string) => void>();
+
+	return {
+		getCurrentState() {
+			return currentState;
+		},
+		subscribe(listener) {
+			listeners.add(listener);
+			return {
+				remove() {
+					listeners.delete(listener);
+				},
+			};
+		},
+		emit(state) {
+			currentState = state;
+			for (const listener of listeners) {
+				listener(state);
+			}
 		},
 	};
 }

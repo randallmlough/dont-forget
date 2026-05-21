@@ -206,16 +206,27 @@ export function createHouseholdSyncCoordinator({
 	}
 
 	function requestForegroundSync() {
-		if (
-			stopped ||
-			appState.getCurrentState() === "background" ||
-			appState.getCurrentState() === "inactive" ||
-			(pendingLocalChangeVersion === 0 && status === "synced")
-		) {
-			return;
-		}
-
+		if (stopped || !isActiveAppState(appState.getCurrentState())) return;
 		void requestSync({ reason: "appForeground" });
+	}
+
+	function requestRetrySync() {
+		if (stopped || !isActiveAppState(appState.getCurrentState())) return;
+		void requestSync({ reason: "retry" });
+	}
+
+	function startRetryTimer() {
+		if (retryInterval || !isActiveAppState(appState.getCurrentState())) return;
+
+		retryInterval = setInterval(() => {
+			requestRetrySync();
+		}, retryIntervalMs);
+	}
+
+	function stopRetryTimer() {
+		if (!retryInterval) return;
+		clearInterval(retryInterval);
+		retryInterval = null;
 	}
 
 	return {
@@ -240,30 +251,36 @@ export function createHouseholdSyncCoordinator({
 				return;
 			}
 
-			if (!inFlight) {
-				void runSync("retry");
+			if (isActiveAppState(appState.getCurrentState())) {
+				startRetryTimer();
+				if (!inFlight) {
+					void runSync("retry");
+				}
 			}
 
 			appStateSubscription = appState.subscribe((nextState) => {
-				if (nextState === "active") requestForegroundSync();
-			});
+				if (isActiveAppState(nextState)) {
+					startRetryTimer();
+					requestForegroundSync();
+					return;
+				}
 
-			retryInterval = setInterval(() => {
-				requestForegroundSync();
-			}, retryIntervalMs);
+				stopRetryTimer();
+			});
 		},
 		stop() {
 			started = false;
 			stopped = true;
 			appStateSubscription?.remove();
 			appStateSubscription = null;
-			if (retryInterval) {
-				clearInterval(retryInterval);
-				retryInterval = null;
-			}
+			stopRetryTimer();
 		},
 		requestSync,
 	};
+}
+
+function isActiveAppState(state: string): boolean {
+	return state !== "background" && state !== "inactive";
 }
 
 function syncOptionsForReason(

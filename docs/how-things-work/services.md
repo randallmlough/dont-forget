@@ -267,15 +267,15 @@ Domain services should resolve mutations on local commit:
 const item = await itemService.addItem({ listId, userId, name });
 ```
 
-They should not treat remote sync as part of mutation success. Sync timing is an application/runtime policy. Home's data source may request sync after local writes:
+They should not treat remote sync as part of mutation success. Sync timing is an application/runtime policy owned by the active Household sync coordinator:
 
 ```ts
 const item = await itemService.addItem(input);
-void store.sync();
+void syncCoordinator.requestSync({ reason: "localWrite" });
 return item;
 ```
 
-If sync grows beyond Home's needs, extract a Household sync service rather than pushing sync calls into List or Item services.
+The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while Home is active, and receives app lifecycle events through app-owned adapter seams. Keep future network-awareness behind the same coordinator boundary rather than pushing sync calls into List or Item services, UI components, or native package call sites.
 
 Turso's transport conflict behavior is last-push-wins. App-owned timestamps remain useful for `created_at`, `updated_at`, latest checked-state display, recovery upserts, and future migration paths, but they are not Turso's merge clock.
 
