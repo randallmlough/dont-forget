@@ -37,13 +37,14 @@ export type HouseholdSyncCoordinator = {
 		listener: (status: HouseholdSyncStatus) => void,
 	) => HouseholdSyncStatusSubscription;
 	start: () => void;
-	stop: () => void;
+	stop: () => Promise<void>;
 	requestSync: (request: {
 		reason: HouseholdSyncRequestReason;
 	}) => Promise<HouseholdSyncResult | null>;
 };
 
 export type HouseholdSyncCoordinatorDeps = {
+	householdId: string;
 	syncAuthorized: boolean;
 	sync: HouseholdSyncOperation;
 	appState: HouseholdSyncAppStateAdapter;
@@ -54,6 +55,7 @@ export type HouseholdSyncCoordinatorDeps = {
 const DEFAULT_RETRY_INTERVAL_MS = 30_000;
 
 export function createHouseholdSyncCoordinator({
+	householdId,
 	syncAuthorized,
 	sync,
 	appState,
@@ -65,6 +67,7 @@ export function createHouseholdSyncCoordinator({
 	let pendingLocalChangeVersion = 0;
 	let inFlight: Promise<HouseholdSyncResult | null> | null = null;
 	let queuedFollowUpReason: HouseholdSyncRequestReason | null = null;
+	let lifecycleGeneration = 0;
 	let started = false;
 	let stopped = false;
 	let appStateSubscription: HouseholdSyncStatusSubscription | null = null;
@@ -104,6 +107,7 @@ export function createHouseholdSyncCoordinator({
 		if (
 			reason !== "manualRefresh" &&
 			reason !== "localWrite" &&
+			reason !== "appForeground" &&
 			pendingLocalChangeVersion === 0 &&
 			status === "synced"
 		) {
@@ -122,9 +126,14 @@ export function createHouseholdSyncCoordinator({
 		reason: HouseholdSyncRequestReason,
 	): Promise<HouseholdSyncResult | null> {
 		const syncStartedAtChangeVersion = pendingLocalChangeVersion;
+		const syncLifecycleGeneration = lifecycleGeneration;
 		setStatus("pending");
 
-		inFlight = executeSync(reason, syncStartedAtChangeVersion).finally(() => {
+		inFlight = executeSync(
+			reason,
+			syncStartedAtChangeVersion,
+			syncLifecycleGeneration,
+		).finally(() => {
 			inFlight = null;
 		});
 
@@ -134,13 +143,16 @@ export function createHouseholdSyncCoordinator({
 	async function executeSync(
 		reason: HouseholdSyncRequestReason,
 		syncStartedAtChangeVersion: number,
+		syncLifecycleGeneration: number,
 	): Promise<HouseholdSyncResult | null> {
 		let result: HouseholdSyncResult;
 
 		try {
 			result = await sync(syncOptionsForReason(reason));
 		} catch (error) {
-			if (stopped) return null;
+			if (syncLifecycleGeneration !== lifecycleGeneration || stopped) {
+				return null;
+			}
 
 			const syncError = handleSyncFailure(error, reason);
 			const shouldRethrow = shouldRethrowSyncFailure(error, reason);
@@ -163,7 +175,9 @@ export function createHouseholdSyncCoordinator({
 
 			return followUpResult;
 		}
-		if (stopped) return null;
+		if (syncLifecycleGeneration !== lifecycleGeneration || stopped) {
+			return null;
+		}
 
 		handleRecoveredNativeSyncFailure(result, reason);
 
@@ -203,6 +217,14 @@ export function createHouseholdSyncCoordinator({
 		result: HouseholdSyncResult | null;
 	} {
 		const syncError = asError(error);
+		const nativeSyncError = nativeSyncErrorFromFallbackFailure(error);
+		if (nativeSyncError && !isExpectedSyncInterruptionError(nativeSyncError)) {
+			logger.error("household native sync failed before fallback", {
+				error: nativeSyncError,
+				household_id: householdId,
+				reason,
+			});
+		}
 		if (isExpectedSyncInterruptionError(error)) {
 			setStatus("offline");
 			return { error: syncError, result: null };
@@ -210,6 +232,7 @@ export function createHouseholdSyncCoordinator({
 
 		logger.error("household sync failed", {
 			error: syncError,
+			household_id: householdId,
 			reason,
 		});
 		setStatus("failed");
@@ -227,6 +250,7 @@ export function createHouseholdSyncCoordinator({
 
 		logger.warn("household sync recovered", {
 			error: result.recoveredNativeSyncError,
+			household_id: householdId,
 			reason,
 		});
 	}
@@ -294,12 +318,15 @@ export function createHouseholdSyncCoordinator({
 				stopRetryTimer();
 			});
 		},
-		stop() {
+		async stop() {
 			started = false;
 			stopped = true;
+			lifecycleGeneration += 1;
+			queuedFollowUpReason = null;
 			appStateSubscription?.remove();
 			appStateSubscription = null;
 			stopRetryTimer();
+			await inFlight?.catch(() => undefined);
 		},
 		requestSync,
 	};
@@ -319,7 +346,9 @@ function shouldRethrowSyncFailure(
 function syncOptionsForReason(
 	reason: HouseholdSyncRequestReason,
 ): HouseholdSyncOptions | undefined {
-	if (reason === "manualRefresh") return { mode: "full" };
+	if (reason === "manualRefresh" || reason === "appForeground") {
+		return { mode: "full" };
+	}
 	return { mode: "pushLocalOnly" };
 }
 
@@ -340,4 +369,11 @@ function coalesceQueuedReason(
 	}
 
 	return "retry";
+}
+
+function nativeSyncErrorFromFallbackFailure(error: unknown): Error | null {
+	if (!error || typeof error !== "object") return null;
+	const nativeSyncError = (error as { nativeSyncError?: unknown })
+		.nativeSyncError;
+	return nativeSyncError instanceof Error ? nativeSyncError : null;
 }

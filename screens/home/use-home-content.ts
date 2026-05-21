@@ -94,7 +94,11 @@ export function useHomeContent({
 	isLoaded,
 	isSignedIn,
 	signingOutRef,
-}: UseHomeContentOptions): { content: HomeContentState; retry: () => void } {
+}: UseHomeContentOptions): {
+	closeCurrentHome: () => Promise<void>;
+	content: HomeContentState;
+	retry: () => void;
+} {
 	const logger = useLogger();
 	const appState = useMemo<HouseholdSyncAppStateAdapter>(
 		() => ({
@@ -112,12 +116,17 @@ export function useHomeContent({
 	});
 	const [loadAttempt, setLoadAttempt] = useState(0);
 	const getTokenRef = useRef(getToken);
+	const loggerRef = useRef(logger);
 	const renderedHomeRef = useRef<OpenedHome | null>(null);
 	const closedDataSourcesRef = useRef(new Set<ActiveListDataSource>());
 
 	useEffect(() => {
 		getTokenRef.current = getToken;
 	}, [getToken]);
+
+	useEffect(() => {
+		loggerRef.current = logger;
+	}, [logger]);
 
 	useEffect(() => {
 		return () => {
@@ -132,26 +141,37 @@ export function useHomeContent({
 		};
 	}, []);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: loadAttempt intentionally retriggers Home content loading on retry; getToken freshness is owned by getTokenRef.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: loadAttempt intentionally retriggers Home content loading on retry; getToken and logger freshness are owned by refs.
 	useEffect(() => {
 		return startHomeLoad({
 			getToken: () => getTokenRef.current(),
 			isLoaded,
 			isSignedIn,
 			appState,
-			logger,
+			logger: loggerRef.current,
 			renderedHomeRef,
 			closedDataSources: closedDataSourcesRef.current,
 			setContent,
 			signingOutRef,
 		});
-	}, [appState, isLoaded, isSignedIn, loadAttempt, logger, signingOutRef]);
+	}, [appState, isLoaded, isSignedIn, loadAttempt, signingOutRef]);
 
 	const retry = useCallback(() => {
 		setLoadAttempt((attempt) => attempt + 1);
 	}, []);
 
-	return { content, retry };
+	const closeCurrentHome = useCallback(async () => {
+		const renderedHome = renderedHomeRef.current;
+		renderedHomeRef.current = null;
+		if (renderedHome) {
+			await closeOpenedHome({
+				closedDataSources: closedDataSourcesRef.current,
+				home: renderedHome,
+			});
+		}
+	}, []);
+
+	return { closeCurrentHome, content, retry };
 }
 
 function startHomeLoad(options: HomeLoadOptions): () => void {
@@ -236,6 +256,7 @@ async function openHome(
 ): Promise<OpenedHome> {
 	const dataSource = createDataSourceFromSession(session);
 	const syncCoordinator = createHouseholdSyncCoordinator({
+		householdId: session.activeHousehold.id,
 		syncAuthorized: dataSource.syncAuthorized,
 		sync: dataSource.sync,
 		appState: run.appState,
@@ -283,6 +304,13 @@ async function renderOpenedHome(
 		run.cachedRendered = true;
 	} else {
 		run.freshRendered = true;
+	}
+	const previousRenderedHome = run.renderedHomeRef.current;
+	if (previousRenderedHome && previousRenderedHome !== opened) {
+		await closeOpenedHome({
+			closedDataSources: run.closedDataSources,
+			home: previousRenderedHome,
+		}).catch(() => undefined);
 	}
 	run.renderedHomeRef.current = opened;
 
@@ -344,7 +372,7 @@ async function closeOpenedHome({
 
 	closedDataSources.add(dataSource);
 	pendingHomes?.delete(home);
-	syncCoordinator.stop();
+	await syncCoordinator.stop();
 	await dataSource.close();
 }
 

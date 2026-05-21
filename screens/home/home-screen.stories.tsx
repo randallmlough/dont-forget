@@ -153,7 +153,7 @@ function storySyncCoordinator(): ActiveListSyncCoordinator {
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),
 		start() {},
-		stop() {},
+		async stop() {},
 		async requestSync() {
 			return { changed: false };
 		},

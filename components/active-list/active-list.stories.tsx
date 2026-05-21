@@ -7,6 +7,7 @@ import {
 	ActiveList,
 	type ActiveListDataSource,
 	type ActiveListInitialState,
+	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
 
 const emptyList: ActiveListInitialState = {
@@ -61,6 +62,7 @@ function ActiveListStory({
 		() => storyDataSource(initialState),
 		[initialState],
 	);
+	const syncCoordinator = useMemo(() => storySyncCoordinator(), []);
 
 	return (
 		<View style={styles.canvas}>
@@ -68,6 +70,7 @@ function ActiveListStory({
 				initialState={initialState}
 				currentMemberName="Avery Chen"
 				dataSource={dataSource}
+				syncCoordinator={syncCoordinator}
 			>
 				<ActiveList.Screen>
 					<ActiveList.Header />
@@ -77,6 +80,18 @@ function ActiveListStory({
 			</ActiveList.Provider>
 		</View>
 	);
+}
+
+function storySyncCoordinator(): ActiveListSyncCoordinator {
+	return {
+		getStatus: () => "synced",
+		subscribe: () => ({ remove() {} }),
+		start() {},
+		async stop() {},
+		async requestSync() {
+			return { changed: false };
+		},
+	};
 }
 
 function storyDataSource(

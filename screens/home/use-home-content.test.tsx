@@ -15,6 +15,7 @@ import {
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
+import { setMockUserState } from "@/lib/test/mocks/clerk";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
 import { createHouseholdActiveListDataSource } from "./active-list-data-source";
@@ -107,6 +108,22 @@ describe("useHomeContent", () => {
 		expect(nextGetToken).not.toHaveBeenCalled();
 	});
 
+	it("does not restart Household Session loading when logger identity changes", async () => {
+		const session = householdSessionFixture();
+		jest.mocked(getHouseholdSession).mockResolvedValue(session);
+		jest
+			.mocked(createHouseholdActiveListDataSource)
+			.mockReturnValue(noopDataSource(initialListFixture()));
+
+		const { rerender } = render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		setMockUserState({ user: { id: "usr_avery" } });
+		rerender(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		expect(getHouseholdSession).toHaveBeenCalledTimes(1);
+	});
+
 	it("opens cached local List data before Clerk finishes loading", async () => {
 		const cached = cachedHouseholdSessionFixture();
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
@@ -178,6 +195,48 @@ describe("useHomeContent", () => {
 		expect(calls.indexOf("cached-close")).toBeLessThan(
 			calls.indexOf("fresh-load"),
 		);
+	});
+
+	it("closes rendered cached List data before replacing it with another cached render", async () => {
+		const cached = cachedHouseholdSessionFixture();
+		const calls: string[] = [];
+		const firstCachedDataSource = noopDataSource(
+			initialListFixture({ itemName: "Cached Milk" }),
+			{
+				async close() {
+					calls.push("first-cached-close");
+				},
+			},
+		);
+		const secondCachedDataSource = noopDataSource(
+			initialListFixture({ itemName: "Cached Eggs" }),
+			{
+				async close() {
+					calls.push("second-cached-close");
+				},
+			},
+		);
+		const freshSession = deferred<HouseholdSession>();
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
+		jest
+			.mocked(createHouseholdActiveListDataSource)
+			.mockReturnValueOnce(firstCachedDataSource)
+			.mockReturnValueOnce(secondCachedDataSource);
+
+		const { rerender } = render(
+			<UseHomeContentHarness isLoaded={false} isSignedIn={false} />,
+		);
+
+		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+		mockCreatedSyncCoordinators[0]?.stop.mockImplementation(async () => {
+			calls.push("first-cached-stop");
+		});
+
+		rerender(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() => expect(screen.getByText("Cached Eggs")).toBeTruthy());
+		expect(calls).toEqual(["first-cached-stop", "first-cached-close"]);
 	});
 
 	it("resumes authorized sync after replacing cached local Home data with a fresh Household Session", async () => {
@@ -282,7 +341,7 @@ describe("useHomeContent", () => {
 		);
 		unmount();
 
-		expect(close).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 		load.resolve(initialListFixture());
 	});
 });

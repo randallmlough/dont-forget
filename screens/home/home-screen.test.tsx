@@ -131,7 +131,7 @@ describe("HomeScreen", () => {
 		);
 		unmount();
 
-		expect(close).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 		load.resolve(initialListFixture());
 	});
 
@@ -301,15 +301,22 @@ describe("HomeScreen", () => {
 		clerkMocks.getToken.mockResolvedValue("session-token");
 		setMockAuthState({ isSignedIn: true });
 
-		render(<HomeScreen />);
+		const { unmount } = render(<HomeScreen />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		const stopSync = deferred<void>();
 		mockCreatedSyncCoordinators[0]?.stop.mockImplementation(() => {
 			calls.push("stop-sync");
+			return stopSync.promise;
 		});
 		fireEvent.press(screen.getByText("Sign out"));
 
+		await waitFor(() => expect(calls).toEqual(["track", "reset", "stop-sync"]));
+		expect(close).not.toHaveBeenCalled();
+		stopSync.resolve(undefined);
+
 		await waitFor(() => expect(clerkMocks.signOut).toHaveBeenCalledTimes(1));
+		unmount();
 		expect(calls).toEqual([
 			"track",
 			"reset",
@@ -318,6 +325,7 @@ describe("HomeScreen", () => {
 			"clear-local-household-data",
 			"clerk-sign-out",
 		]);
+		expect(close).toHaveBeenCalledTimes(1);
 	});
 });
 

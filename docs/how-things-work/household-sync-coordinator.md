@@ -10,6 +10,7 @@ Create one coordinator for the rendered active Household:
 
 ```ts
 const syncCoordinator = createHouseholdSyncCoordinator({
+	householdId: session.activeHousehold.id,
 	syncAuthorized: dataSource.syncAuthorized,
 	sync: dataSource.sync,
 	appState,
@@ -22,7 +23,7 @@ The public surface is intentionally small:
 - `getStatus()` returns `synced`, `pending`, `offline`, or `failed`.
 - `subscribe(listener)` lets Home or Active List observe coordinator-owned status changes.
 - `start()` begins foreground lifecycle handling and retry cadence for the active Household.
-- `stop()` removes lifecycle listeners, stops retry timers, and prevents stale status updates.
+- `stop()` removes lifecycle listeners, stops retry timers, drains active sync work, and prevents stale status updates.
 - `requestSync({ reason })` requests sync for an explicit reason.
 
 ## Request Reasons
@@ -40,14 +41,14 @@ Only the coordinator should decide what these reasons mean. Domain services, Hou
 
 The coordinator maps request reasons to `HouseholdSyncOptions`:
 
-- `localWrite`, `appForeground`, and `retry` use `pushLocalOnly`.
-- `manualRefresh` uses `full`.
+- `localWrite` and `retry` use `pushLocalOnly`.
+- `manualRefresh` and `appForeground` use `full`.
 
 `pushLocalOnly` runs the app-owned remote upsert fallback without native full sync. This keeps automatic local-write and retry paths from starting native pull loops while offline, while still trying to propagate locally committed Household rows.
 
-`full` is reserved for deliberate catch-up work. Manual refresh runs native sync first, then the app-owned remote upsert fallback, so the active Household can both push local rows and pull remote rows when connectivity and authorization allow it.
+`full` is reserved for deliberate catch-up work. Manual refresh and app foreground recovery run native sync first, then the app-owned remote upsert fallback, so the active Household can both push local rows and pull remote rows when connectivity and authorization allow it.
 
-If a passive `appForeground` or `retry` request arrives while there is no pending local change and the coordinator is already `synced`, the coordinator may no-op. If Home starts a fresh authorized coordinator after offline reopen, it starts retry lifecycle work so local rows saved while offline can be attempted again.
+If a passive `retry` request arrives while there is no pending local change and the coordinator is already `synced`, the coordinator may no-op. App foreground remains a catch-up request even when the coordinator is already `synced`, because other Members may have changed the Household while this device was backgrounded. If Home starts a fresh authorized coordinator after offline reopen, it starts retry lifecycle work so local rows saved while offline can be attempted again.
 
 ## Status Transitions
 

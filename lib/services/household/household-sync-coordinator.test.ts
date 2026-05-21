@@ -38,6 +38,17 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(sync).toHaveBeenCalledWith({ mode: "full" });
 	});
 
+	it("uses full sync behavior for app foreground catch-up requests", async () => {
+		const sync = jest.fn(async () => ({ changed: true }));
+		const coordinator = createCoordinator({ sync });
+
+		await expect(
+			coordinator.requestSync({ reason: "appForeground" }),
+		).resolves.toEqual({ changed: true });
+
+		expect(sync).toHaveBeenCalledWith({ mode: "full" });
+	});
+
 	it("keeps local Item write requests push-local-only after manual refresh", async () => {
 		const sync = jest.fn(async () => ({ changed: false }));
 		const coordinator = createCoordinator({ sync });
@@ -126,6 +137,7 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: syncError,
+			household_id: "hh_avery",
 			reason: "localWrite",
 		});
 	});
@@ -154,6 +166,7 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(coordinator.getStatus()).toBe("failed");
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: syncError,
+			household_id: "hh_avery",
 			reason: "manualRefresh",
 		});
 	});
@@ -271,6 +284,7 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: refreshError,
+			household_id: "hh_avery",
 			reason: "manualRefresh",
 		});
 
@@ -294,6 +308,34 @@ describe("createHouseholdSyncCoordinator", () => {
 
 		expect(coordinator.getStatus()).toBe("offline");
 		expect(logger.error).not.toHaveBeenCalled();
+	});
+
+	it("logs unexpected native sync failure once when fallback then fails offline", async () => {
+		const logger = loggerFixture();
+		const nativeError = new Error("native sync failed");
+		const fallbackError = Object.assign(
+			new TypeError("Network request failed"),
+			{ nativeSyncError: nativeError },
+		);
+		const coordinator = createCoordinator({
+			logger,
+			sync: jest.fn(async () => {
+				throw fallbackError;
+			}),
+		});
+
+		await coordinator.requestSync({ reason: "localWrite" });
+
+		expect(coordinator.getStatus()).toBe("offline");
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		expect(logger.error).toHaveBeenCalledWith(
+			"household native sync failed before fallback",
+			{
+				error: nativeError,
+				household_id: "hh_avery",
+				reason: "localWrite",
+			},
+		);
 	});
 
 	it("keeps recovered native checkpoint interruptions quiet", async () => {
@@ -333,6 +375,7 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.warn).toHaveBeenCalledTimes(1);
 		expect(logger.warn).toHaveBeenCalledWith("household sync recovered", {
 			error: nativeError,
+			household_id: "hh_avery",
 			reason: "manualRefresh",
 		});
 	});
@@ -355,6 +398,7 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 			error: syncError,
+			household_id: "hh_avery",
 			reason: "manualRefresh",
 		});
 	});
@@ -417,9 +461,10 @@ describe("createHouseholdSyncCoordinator", () => {
 			await actTicks();
 
 			expect(sync).toHaveBeenCalledTimes(2);
-			expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
+			expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
 			expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 				error: foregroundError,
+				household_id: "hh_avery",
 				reason: "appForeground",
 			});
 
@@ -429,6 +474,7 @@ describe("createHouseholdSyncCoordinator", () => {
 			expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
 			expect(logger.error).toHaveBeenCalledWith("household sync failed", {
 				error: retryError,
+				household_id: "hh_avery",
 				reason: "retry",
 			});
 
@@ -475,12 +521,58 @@ describe("createHouseholdSyncCoordinator", () => {
 
 		expect(statuses).toEqual(["pending"]);
 	});
+
+	it("waits for in-flight sync work when stopping", async () => {
+		const syncAttempt = deferred<HouseholdSyncResult>();
+		const sync = jest.fn(() => syncAttempt.promise);
+		const coordinator = createCoordinator({ sync });
+
+		const request = coordinator.requestSync({ reason: "localWrite" });
+		await actTicks();
+
+		let stopped = false;
+		const stopRequest = coordinator.stop().then(() => {
+			stopped = true;
+		});
+		await actTicks();
+
+		expect(stopped).toBe(false);
+
+		syncAttempt.resolve({ changed: false });
+		await expect(stopRequest).resolves.toBeUndefined();
+		await expect(request).resolves.toBeNull();
+		expect(stopped).toBe(true);
+	});
+
+	it("ignores stale sync completion after stop and restart", async () => {
+		const syncAttempt = deferred<HouseholdSyncResult>();
+		const sync = jest.fn(() => syncAttempt.promise);
+		const coordinator = createCoordinator({ sync });
+		const statuses: HouseholdSyncStatus[] = [];
+		const subscription = coordinator.subscribe((status) =>
+			statuses.push(status),
+		);
+
+		const request = coordinator.requestSync({ reason: "manualRefresh" });
+		await actTicks();
+
+		const stopRequest = coordinator.stop();
+		coordinator.start();
+		syncAttempt.resolve({ changed: true });
+
+		await expect(stopRequest).resolves.toBeUndefined();
+		await expect(request).resolves.toBeNull();
+		subscription.remove();
+
+		expect(statuses).toEqual(["pending"]);
+	});
 });
 
 function createCoordinator(
 	overrides: Partial<Parameters<typeof createHouseholdSyncCoordinator>[0]> = {},
 ) {
 	const coordinator = createHouseholdSyncCoordinator({
+		householdId: "hh_avery",
 		syncAuthorized: true,
 		sync: jest.fn(async () => ({ changed: false })),
 		appState: memoryAppState("active"),

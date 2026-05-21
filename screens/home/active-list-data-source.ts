@@ -160,11 +160,18 @@ export function createHouseholdActiveListDataSource(
 				nativeError = error;
 			}
 
-			await pushLocalHouseholdRowsToRemote(
-				store,
-				config.database,
-				options.openRemoteClient,
-			);
+			try {
+				await pushLocalHouseholdRowsToRemote(
+					store,
+					config.database,
+					options.openRemoteClient,
+				);
+			} catch (fallbackError) {
+				if (nativeError) {
+					throw attachNativeSyncError(fallbackError, nativeError);
+				}
+				throw fallbackError;
+			}
 			if (nativeError) {
 				return {
 					changed: false,
@@ -185,6 +192,15 @@ export function createHouseholdActiveListDataSource(
 			}
 		},
 	};
+}
+
+function attachNativeSyncError(
+	fallbackError: unknown,
+	nativeError: unknown,
+): Error & { nativeSyncError: Error } {
+	return Object.assign(asError(fallbackError), {
+		nativeSyncError: asError(nativeError),
+	});
 }
 
 function createActiveListServicesGetter({
