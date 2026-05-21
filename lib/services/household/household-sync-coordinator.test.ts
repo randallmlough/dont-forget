@@ -97,6 +97,84 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
 	});
 
+	it("keeps status pending until a queued follow-up sync completes", async () => {
+		const firstSync = deferred<HouseholdSyncResult>();
+		const followUpSync = deferred<HouseholdSyncResult>();
+		const sync = jest
+			.fn<
+				Promise<HouseholdSyncResult>,
+				[{ mode?: "full" | "pushLocalOnly" }?]
+			>()
+			.mockReturnValueOnce(firstSync.promise)
+			.mockReturnValueOnce(followUpSync.promise);
+		const coordinator = createCoordinator({ sync });
+		const statuses: HouseholdSyncStatus[] = [];
+		const subscription = coordinator.subscribe((status) =>
+			statuses.push(status),
+		);
+
+		const firstRequest = coordinator.requestSync({ reason: "localWrite" });
+		const queuedRequest = coordinator.requestSync({ reason: "localWrite" });
+		await actTicks();
+
+		expect(statuses).toEqual(["pending"]);
+		expect(sync).toHaveBeenCalledTimes(1);
+
+		firstSync.resolve({ changed: false });
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(2);
+		expect(coordinator.getStatus()).toBe("pending");
+		expect(statuses).toEqual(["pending"]);
+
+		followUpSync.resolve({ changed: false });
+		await Promise.all([firstRequest, queuedRequest]);
+		subscription.remove();
+
+		expect(coordinator.getStatus()).toBe("synced");
+		expect(statuses).toEqual(["pending", "synced"]);
+	});
+
+	it("serializes requests that arrive during a queued follow-up sync", async () => {
+		const firstSync = deferred<HouseholdSyncResult>();
+		const followUpSync = deferred<HouseholdSyncResult>();
+		const sync = jest
+			.fn<
+				Promise<HouseholdSyncResult>,
+				[{ mode?: "full" | "pushLocalOnly" }?]
+			>()
+			.mockReturnValueOnce(firstSync.promise)
+			.mockReturnValueOnce(followUpSync.promise)
+			.mockResolvedValue({ changed: false });
+		const coordinator = createCoordinator({ sync });
+
+		const firstRequest = coordinator.requestSync({ reason: "localWrite" });
+		const refreshRequest = coordinator.requestSync({ reason: "manualRefresh" });
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(1);
+
+		firstSync.resolve({ changed: false });
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(2);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
+
+		const writeDuringFollowUp = coordinator.requestSync({
+			reason: "localWrite",
+		});
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(2);
+
+		followUpSync.resolve({ changed: false });
+		await Promise.all([firstRequest, refreshRequest, writeDuringFollowUp]);
+
+		expect(sync).toHaveBeenCalledTimes(3);
+		expect(sync).toHaveBeenLastCalledWith({ mode: "pushLocalOnly" });
+		expect(coordinator.getStatus()).toBe("synced");
+	});
+
 	it("transitions network-unavailable failures to offline without error logging", async () => {
 		const logger = loggerFixture();
 		const coordinator = createCoordinator({
