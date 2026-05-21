@@ -39,14 +39,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: make typecheck
-
-      - name: Lint
-        run: make lint
-
-      - name: Test
-        run: make test-ci
+      - name: Verify
+        run: make verify
 
 #      - name: Check Expo packages
 #        run: make expo-check
