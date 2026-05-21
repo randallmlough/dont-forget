@@ -112,6 +112,27 @@ describe("createHouseholdSyncCoordinator", () => {
 		expect(logger.error).not.toHaveBeenCalled();
 	});
 
+	it("logs and rethrows unexpected manual refresh failures", async () => {
+		const logger = loggerFixture();
+		const syncError = new Error("remote unavailable");
+		const coordinator = createCoordinator({
+			logger,
+			sync: jest.fn(async () => {
+				throw syncError;
+			}),
+		});
+
+		await expect(
+			coordinator.requestSync({ reason: "manualRefresh" }),
+		).rejects.toThrow(syncError);
+
+		expect(coordinator.getStatus()).toBe("failed");
+		expect(logger.error).toHaveBeenCalledWith("household sync failed", {
+			error: syncError,
+			reason: "manualRefresh",
+		});
+	});
+
 	it("retries pending sync while foregrounded and stops retry work on stop", async () => {
 		jest.useFakeTimers();
 		const sync = jest

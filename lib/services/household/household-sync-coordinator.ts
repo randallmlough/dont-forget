@@ -159,11 +159,15 @@ export function createHouseholdSyncCoordinator({
 				return null;
 			}
 
+			const syncError = asError(error);
 			logger.error("household sync failed", {
-				error: asError(error),
+				error: syncError,
 				reason,
 			});
 			setStatus("failed");
+			if (reason === "manualRefresh") {
+				throw syncError;
+			}
 			return null;
 		}
 	}

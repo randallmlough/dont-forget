@@ -280,6 +280,36 @@ describe("ActiveList", () => {
 			error: expect.any(Error),
 		});
 	});
+
+	it("reports manual refresh failure when sync fails unexpectedly", async () => {
+		const syncError = new Error("remote unavailable");
+		const sync = jest
+			.fn<
+				Promise<{ changed: boolean }>,
+				Parameters<ActiveListDataSource["sync"]>
+			>()
+			.mockResolvedValueOnce({ changed: false })
+			.mockRejectedValueOnce(syncError);
+
+		renderActiveList(emptyList, memoryDataSource(emptyList, { sync }));
+		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
+
+		await act(async () => {
+			fireEvent.press(screen.getByText("Refresh"));
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to refresh this List. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(
+			screen.getByText("Sync failed - changes saved locally"),
+		).toBeTruthy();
+		expect(mockLoggerError).toHaveBeenCalledWith("active list refresh failed", {
+			error: syncError,
+		});
+	});
 });
 
 function renderActiveList(

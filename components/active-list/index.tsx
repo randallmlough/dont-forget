@@ -168,7 +168,8 @@ function ActiveListProvider({
 			.requestSync({ reason: "localWrite" })
 			.then(async (result) => {
 				if (result?.changed) await loadFromDataSource();
-			});
+			})
+			.catch(() => undefined);
 	}, [loadFromDataSource, syncCoordinator]);
 
 	const refresh = useCallback(async () => {
