@@ -293,6 +293,10 @@ async function renderOpenedHome(
 		dataSource: opened.dataSource,
 		syncCoordinator: opened.syncCoordinator,
 	});
+
+	if (source === "fresh") {
+		opened.syncCoordinator.start();
+	}
 }
 
 async function closeRenderedHomeBeforeFreshOpen(run: HomeLoadRun) {

@@ -53,6 +53,9 @@ jest.mock("@/lib/services/household", () => ({
 					);
 				}),
 			};
+			coordinator.start.mockImplementation(() => {
+				void coordinator.requestSync({ reason: "retry" });
+			});
 			mockCreatedSyncCoordinators.push(coordinator);
 			return coordinator;
 		},
@@ -175,6 +178,89 @@ describe("useHomeContent", () => {
 		expect(calls.indexOf("cached-close")).toBeLessThan(
 			calls.indexOf("fresh-load"),
 		);
+	});
+
+	it("resumes authorized sync after replacing cached local Home data with a fresh Household Session", async () => {
+		const freshSession = deferred<HouseholdSession>();
+		const cached = cachedHouseholdSessionFixture();
+		const cachedList = initialListFixture({ itemName: "Cached Milk" });
+		const freshList = initialListFixture({ itemName: "Fresh Eggs" });
+		const cachedSync = jest.fn(async () => ({ changed: false }));
+		const freshSync = jest.fn(async () => ({ changed: false }));
+		const cachedDataSource = noopDataSource(cachedList, {
+			syncAuthorized: false,
+			sync: cachedSync,
+		});
+		const freshDataSource = noopDataSource(freshList, {
+			syncAuthorized: true,
+			sync: freshSync,
+		});
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
+		jest
+			.mocked(createHouseholdActiveListDataSource)
+			.mockImplementation((config) =>
+				config.database.authToken ? freshDataSource : cachedDataSource,
+			);
+
+		render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+		expect(cachedSync).not.toHaveBeenCalled();
+
+		freshSession.resolve(householdSessionFixture());
+
+		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+		await waitFor(() =>
+			expect(freshSync).toHaveBeenCalledWith({ mode: "pushLocalOnly" }),
+		);
+		expect(cachedSync).not.toHaveBeenCalled();
+		expect(mockCreatedSyncCoordinators[0]?.start).not.toHaveBeenCalled();
+		expect(mockCreatedSyncCoordinators[1]?.start).toHaveBeenCalledTimes(1);
+	});
+
+	it("discards unauthorized cached Household data without starting cached sync", async () => {
+		const freshSession = deferred<HouseholdSession>();
+		const cached = cachedHouseholdSessionFixture();
+		const fresh = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+		const cachedList = initialListFixture({ itemName: "Cached Milk" });
+		const freshList = initialListFixture({ itemName: "Fresh Eggs" });
+		const cachedSync = jest.fn(async () => ({ changed: false }));
+		const freshSync = jest.fn(async () => ({ changed: false }));
+		const cachedDataSource = noopDataSource(cachedList, {
+			syncAuthorized: false,
+			sync: cachedSync,
+		});
+		const freshDataSource = noopDataSource(freshList, {
+			syncAuthorized: true,
+			sync: freshSync,
+		});
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
+		jest
+			.mocked(discardCachedHouseholdSessionIfUnauthorized)
+			.mockResolvedValue(cached);
+		jest
+			.mocked(createHouseholdActiveListDataSource)
+			.mockImplementation((config) =>
+				config.database.authToken ? freshDataSource : cachedDataSource,
+			);
+
+		render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+		freshSession.resolve(fresh);
+
+		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+		expect(discardCachedHouseholdSessionIfUnauthorized).toHaveBeenCalledWith(
+			fresh,
+		);
+		expect(cachedSync).not.toHaveBeenCalled();
+		expect(mockCreatedSyncCoordinators[0]?.start).not.toHaveBeenCalled();
+		expect(freshSync).toHaveBeenCalledWith({ mode: "pushLocalOnly" });
 	});
 
 	it("closes a pending data source when the loading run is cancelled", async () => {
