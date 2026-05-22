@@ -275,7 +275,7 @@ void syncCoordinator.requestSync({ reason: "localWrite" });
 return item;
 ```
 
-The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while Home is active, and receives app lifecycle events through app-owned adapter seams. Keep future network-awareness behind the same coordinator boundary rather than pushing sync calls into List or Item services, UI components, or native package call sites. See [Sync Coordinator](./sync-coordinator.md) for the active Household sync policy.
+The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while the app is active, and receives app lifecycle and connectivity events through app-owned adapter seams. The currently rendered active Household surface owns when a Household coordinator exists. Keep future platform awareness behind the same coordinator boundary rather than pushing sync calls into List or Item services, UI components, or native package call sites. See [Sync Coordinator](./sync-coordinator.md) for the active Household sync policy.
 
 Turso's transport conflict behavior is last-push-wins. App-owned timestamps remain useful for `created_at`, `updated_at`, latest checked-state display, recovery upserts, and future migration paths, but they are not Turso's merge clock.
 
@@ -289,7 +289,7 @@ Preferred naming:
 - `CachedHouseholdSession`, not `CachedBootstrapMetadata`
 - `household-session-service.ts`, not `offline-bootstrap-cache.ts`
 
-Cached Household Sessions must not store Household DB auth tokens. Offline Home startup may use cached non-secret metadata and the local Household DB file; push/pull authorization resumes only after a fresh online Household Session is obtained.
+Cached Household Sessions must not store Household DB auth tokens. Offline active Household startup may use cached non-secret metadata and the local Household DB file; push/pull authorization resumes only after a fresh online Household Session is obtained.
 
 ## Initial Migration Checklist
 

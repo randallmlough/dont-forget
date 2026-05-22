@@ -13,7 +13,7 @@ export type HouseholdSqlStatement =
 	  };
 
 export type HouseholdSqlResult = {
-	rows: Array<Record<string, unknown>>;
+	rows: Record<string, unknown>[];
 	rowsAffected: number;
 	lastInsertRowId: number | null;
 };
@@ -32,7 +32,7 @@ export type HouseholdStore = {
 export type HouseholdStoreExecutor = {
 	execute: (
 		statement: HouseholdSqlStatement,
-	) => Promise<{ rows: Array<Record<string, unknown>> }>;
+	) => Promise<{ rows: Record<string, unknown>[] }>;
 };
 
 export type HouseholdDatabaseConfig = {
@@ -62,7 +62,7 @@ type TursoDatabase = {
 	all: (
 		sql: string,
 		...params: TursoBindParam[]
-	) => Promise<Array<Record<string, unknown>>>;
+	) => Promise<Record<string, unknown>[]>;
 	run: (
 		sql: string,
 		...params: TursoBindParam[]

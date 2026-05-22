@@ -283,7 +283,7 @@ describe("openHouseholdStore", () => {
 });
 
 class MockTursoDatabase {
-	allRows: Array<Record<string, unknown>> = [];
+	allRows: Record<string, unknown>[] = [];
 	runResult = { changes: 0, lastInsertRowid: 0 };
 	pullResult = false;
 	pullResults: boolean[] = [];

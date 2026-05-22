@@ -12,8 +12,9 @@
 ## Biome And ESLint
 
 - **Must** use Biome as the preferred formatter, import organizer, and general TypeScript/React linter.
-- **Must** keep Expo ESLint in the verification path until we have evidence that removing it will not lose Expo or React Native-specific lint coverage.
-- **Must** treat Biome as additive to the current Expo lint stack during the first standards pass.
+- **Must** keep the Expo ESLint flat config in the verification path until we have evidence that removing it will not lose Expo or React Native-specific lint coverage.
+- **Must** run ESLint over the whole project, not Expo CLI's narrowed default directories, so `screens/`, `lib/`, `db/`, and tooling code are covered.
+- **Must** treat Biome as additive to the current ESLint stack during the first standards pass.
 - **Must** use Biome defaults for mechanical formatting unless a later standard documents a specific override.
 - **Must** treat React hook dependency correctness, explicit TypeScript safety, and React Native accessibility diagnostics as verification failures.
 - **Must** keep `react-hooks/exhaustive-deps`, `@typescript-eslint/no-unused-vars`, `@typescript-eslint/no-non-null-assertion`, `@typescript-eslint/no-explicit-any`, `@typescript-eslint/consistent-type-assertions`, and enabled `react-native-a11y/*` rules at error severity unless a later standards decision changes that policy.

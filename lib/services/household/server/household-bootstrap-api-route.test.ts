@@ -1,3 +1,5 @@
+import { POST } from "@/app/api/bootstrap+api";
+
 jest.mock("@/db/client", () => {
 	throw new Error("server DB client imported during route registration");
 });
@@ -11,8 +13,6 @@ jest.mock("@/lib/services/household/server", () => {
 		"household server service imported during route registration",
 	);
 });
-
-import { POST } from "@/app/api/bootstrap+api";
 
 describe("bootstrap API route", () => {
 	it("does not load server-only dependencies during route registration", () => {

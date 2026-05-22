@@ -12,7 +12,7 @@
 		"storybook:generate": "sb-rn-get-stories",
 		"biome:check": "biome ci .",
 		"format": "biome check --write .",
-		"lint": "expo lint",
+		"lint": "eslint .",
 		"test": "jest --watch",
 		"test:ci": "jest --runInBand",
 		"test:eslint-rules": "node tools/eslint-rules/no-screen-use-effect.test.js && node tools/eslint-rules/no-server-service-imports.test.js && node tools/eslint-rules/no-db-imports-outside-services.test.js",
@@ -32,6 +32,7 @@
 		"@libsql/client": "^0.17.3",
 		"@react-native-async-storage/async-storage": "^2.2.0",
 		"@react-native-community/datetimepicker": "^8.6.0",
+		"@react-native-community/netinfo": "^12.0.1",
 		"@react-native-community/slider": "^5.1.2",
 		"@react-native/normalize-colors": "0.83.6",
 		"@react-navigation/bottom-tabs": "^7.4.0",
@@ -82,6 +83,7 @@
 		"@testing-library/react-native": "^13.3.3",
 		"@types/jest": "29.5.14",
 		"@types/react": "~19.2.14",
+		"@typescript-eslint/eslint-plugin": "8.59.1",
 		"drizzle-kit": "^0.31.10",
 		"eslint": "^9.25.0",
 		"eslint-config-expo": "~55.0.1",
@@ -91,5 +93,10 @@
 		"tsx": "^4.21.0",
 		"typescript": "~5.9.2"
 	},
-	"private": true
+	"private": true,
+	"pnpm": {
+		"overrides": {
+			"js-cookie": "3.0.7"
+		}
+	}
 }

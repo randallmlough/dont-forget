@@ -1,6 +1,16 @@
 export {
-	createSyncCoordinator,
+	getDefaultSyncAppStateAdapter,
 	type SyncAppStateAdapter,
+} from "./app-state";
+export { createDefaultSyncCoordinator } from "./default-sync-coordinator";
+export {
+	getDefaultSyncNetworkStatusAdapter,
+	type SyncNetworkStatus,
+	type SyncNetworkStatusAdapter,
+} from "./network-status";
+export type { SyncStatusSubscription } from "./subscription";
+export {
+	createSyncCoordinator,
 	type SyncCoordinator,
 	type SyncCoordinatorDeps,
 	type SyncMode,
@@ -9,5 +19,4 @@ export {
 	type SyncRequestReason,
 	type SyncResult,
 	type SyncStatus,
-	type SyncStatusSubscription,
 } from "./sync-coordinator";

@@ -5,11 +5,9 @@ import {
 	type SetStateAction,
 	useCallback,
 	useEffect,
-	useMemo,
 	useRef,
 	useState,
 } from "react";
-import { AppState } from "react-native";
 
 import type {
 	ActiveListDataSource,
@@ -25,10 +23,7 @@ import {
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
-import {
-	createSyncCoordinator,
-	type SyncAppStateAdapter,
-} from "@/lib/services/sync";
+import { createDefaultSyncCoordinator } from "@/lib/services/sync";
 
 import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 
@@ -66,7 +61,6 @@ type HomeLoadRun = {
 	isLoaded: boolean;
 	isSignedIn: boolean;
 	signingOutRef: RefObject<boolean>;
-	appState: SyncAppStateAdapter;
 	logger: Logger;
 	setContent: Dispatch<SetStateAction<HomeContentState>>;
 	renderedHomeRef: MutableRefObject<OpenedHome | null>;
@@ -84,7 +78,6 @@ type HomeLoadOptions = Pick<
 	| "isLoaded"
 	| "isSignedIn"
 	| "signingOutRef"
-	| "appState"
 	| "logger"
 	| "setContent"
 	| "renderedHomeRef"
@@ -102,17 +95,6 @@ export function useHomeContent({
 	retry: () => void;
 } {
 	const logger = useLogger();
-	const appState = useMemo<SyncAppStateAdapter>(
-		() => ({
-			getCurrentState: () => AppState.currentState,
-			subscribe(listener) {
-				return AppState.addEventListener("change", (state) => {
-					listener(state);
-				});
-			},
-		}),
-		[],
-	);
 	const [content, setContent] = useState<HomeContentState>({
 		status: "loading",
 	});
@@ -131,12 +113,14 @@ export function useHomeContent({
 	}, [logger]);
 
 	useEffect(() => {
+		const closedDataSources = closedDataSourcesRef.current;
+
 		return () => {
 			const renderedHome = renderedHomeRef.current;
 			renderedHomeRef.current = null;
 			if (renderedHome) {
 				void closeOpenedHome({
-					closedDataSources: closedDataSourcesRef.current,
+					closedDataSources,
 					home: renderedHome,
 				}).catch(() => undefined);
 			}
@@ -149,14 +133,13 @@ export function useHomeContent({
 			getToken: () => getTokenRef.current(),
 			isLoaded,
 			isSignedIn,
-			appState,
 			logger: loggerRef.current,
 			renderedHomeRef,
 			closedDataSources: closedDataSourcesRef.current,
 			setContent,
 			signingOutRef,
 		});
-	}, [appState, isLoaded, isSignedIn, loadAttempt, signingOutRef]);
+	}, [isLoaded, isSignedIn, loadAttempt, signingOutRef]);
 
 	const retry = useCallback(() => {
 		setLoadAttempt((attempt) => attempt + 1);
@@ -257,10 +240,9 @@ async function openHome(
 	afterLoad?: () => Promise<void>,
 ): Promise<OpenedHome> {
 	const dataSource = createDataSourceFromSession(session);
-	const syncCoordinator = createSyncCoordinator({
+	const syncCoordinator = createDefaultSyncCoordinator({
 		syncAuthorized: dataSource.syncAuthorized,
 		sync: dataSource.sync,
-		appState: run.appState,
 		logger: run.logger.with({ household_id: session.activeHousehold.id }),
 	});
 	const home = { dataSource, syncCoordinator };

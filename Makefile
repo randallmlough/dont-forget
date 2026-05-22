@@ -51,7 +51,7 @@ typecheck: ## Run TypeScript without emitting files *common*
 	@$(PNPM) typecheck
 
 .PHONY: lint
-lint: ## Run Expo lint *common*
+lint: ## Run whole-project ESLint *common*
 	@$(PNPM) lint
 
 .PHONY: eslint-rules

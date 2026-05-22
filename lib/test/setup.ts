@@ -1,13 +1,16 @@
+import type { StyleProp, ViewStyle } from "react-native";
+
 import { resetClerkMocks } from "./mocks/clerk";
 
 process.env.APP_ENV ??= "test";
 process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ??= "pk_test_jest";
 
-jest.mock("@clerk/clerk-expo", () => require("./mocks/clerk"));
+jest.mock("@clerk/clerk-expo", () => jest.requireActual("./mocks/clerk"));
 
 jest.mock("expo-apple-authentication", () => {
-	const React = require("react");
-	const { Pressable, Text } = require("react-native");
+	const React = jest.requireActual<typeof import("react")>("react");
+	const { Pressable, Text } =
+		jest.requireActual<typeof import("react-native")>("react-native");
 
 	return {
 		AppleAuthenticationScope: {
@@ -25,7 +28,7 @@ jest.mock("expo-apple-authentication", () => {
 			style,
 		}: {
 			onPress?: () => void;
-			style?: unknown;
+			style?: StyleProp<ViewStyle>;
 		}) =>
 			React.createElement(
 				Pressable,

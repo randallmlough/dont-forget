@@ -15,22 +15,15 @@ import {
 	readCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
-import { createSyncCoordinator } from "@/lib/services/sync";
+import { createDefaultSyncCoordinator } from "@/lib/services/sync";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
 import { createHouseholdActiveListDataSource } from "./active-list-data-source";
+import { mockSyncCoordinatorFactory } from "./test-sync-coordinator";
 
 jest.mock("./active-list-data-source", () => ({
 	createHouseholdActiveListDataSource: jest.fn(),
 }));
-
-const mockCreatedSyncCoordinators: Array<{
-	getStatus: () => "synced" | "offline";
-	subscribe: jest.Mock;
-	start: jest.Mock;
-	stop: jest.Mock;
-	requestSync: jest.Mock;
-}> = [];
 
 const mockHouseholdLogger = {
 	debug: jest.fn(),
@@ -59,41 +52,17 @@ jest.mock("@/lib/services/household", () => ({
 }));
 
 jest.mock("@/lib/services/sync", () => ({
-	createSyncCoordinator: jest.fn(
-		(deps: {
-			syncAuthorized: boolean;
-			sync: (options?: { mode?: "full" | "pushLocalOnly" }) => Promise<{
-				changed: boolean;
-			}>;
-		}) => {
-			const coordinator = {
-				getStatus: () => (deps.syncAuthorized ? "synced" : "offline"),
-				subscribe: jest.fn(() => ({ remove() {} })),
-				start: jest.fn(),
-				stop: jest.fn(),
-				requestSync: jest.fn(async ({ reason }: { reason: string }) => {
-					if (!deps.syncAuthorized) return null;
-					return deps.sync(
-						reason === "manualRefresh"
-							? { mode: "full" }
-							: { mode: "pushLocalOnly" },
-					);
-				}),
-			};
-			coordinator.start.mockImplementation(() => {
-				void coordinator.requestSync({ reason: "retry" });
-			});
-			mockCreatedSyncCoordinators.push(coordinator);
-			return coordinator;
-		},
-	),
+	createDefaultSyncCoordinator: jest.requireActual<
+		typeof import("./test-sync-coordinator")
+	>("./test-sync-coordinator").mockSyncCoordinatorFactory
+		.createDefaultSyncCoordinator,
 }));
 
 beforeEach(() => {
 	jest.mocked(getHouseholdSession).mockReset();
-	jest.mocked(createSyncCoordinator).mockClear();
+	jest.mocked(createDefaultSyncCoordinator).mockClear();
 	jest.mocked(createHouseholdActiveListDataSource).mockReset();
-	mockCreatedSyncCoordinators.length = 0;
+	mockSyncCoordinatorFactory.created.length = 0;
 	jest.mocked(useLogger).mockReturnValue(mockRootLogger);
 	mockRootLogger.with.mockClear();
 	mockRootLogger.with.mockImplementation(() => mockHouseholdLogger);
@@ -166,7 +135,7 @@ describe("useHomeContent", () => {
 		expect(mockRootLogger.with).toHaveBeenCalledWith({
 			household_id: "hh_new",
 		});
-		expect(createSyncCoordinator).toHaveBeenCalledWith(
+		expect(createDefaultSyncCoordinator).toHaveBeenCalledWith(
 			expect.objectContaining({
 				logger: mockHouseholdLogger,
 			}),
@@ -229,8 +198,9 @@ describe("useHomeContent", () => {
 		render(<UseHomeContentHarness isLoaded isSignedIn />);
 
 		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
-		mockCreatedSyncCoordinators[0]?.stop.mockImplementation(() => {
+		mockSyncCoordinatorFactory.created[0]?.stop.mockImplementation(() => {
 			calls.push("cached-stop");
+			return Promise.resolve();
 		});
 
 		freshSession.resolve(householdSessionFixture());
@@ -278,7 +248,7 @@ describe("useHomeContent", () => {
 		);
 
 		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
-		mockCreatedSyncCoordinators[0]?.stop.mockImplementation(async () => {
+		mockSyncCoordinatorFactory.created[0]?.stop.mockImplementation(async () => {
 			calls.push("first-cached-stop");
 		});
 
@@ -319,12 +289,12 @@ describe("useHomeContent", () => {
 		freshSession.resolve(householdSessionFixture());
 
 		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
-		await waitFor(() =>
-			expect(freshSync).toHaveBeenCalledWith({ mode: "pushLocalOnly" }),
-		);
 		expect(cachedSync).not.toHaveBeenCalled();
-		expect(mockCreatedSyncCoordinators[0]?.start).not.toHaveBeenCalled();
-		expect(mockCreatedSyncCoordinators[1]?.start).toHaveBeenCalledTimes(1);
+		expect(freshSync).not.toHaveBeenCalled();
+		expect(mockSyncCoordinatorFactory.created[0]?.start).not.toHaveBeenCalled();
+		expect(mockSyncCoordinatorFactory.created[1]?.start).toHaveBeenCalledTimes(
+			1,
+		);
 	});
 
 	it("discards unauthorized cached Household data without starting cached sync", async () => {
@@ -367,8 +337,11 @@ describe("useHomeContent", () => {
 			fresh,
 		);
 		expect(cachedSync).not.toHaveBeenCalled();
-		expect(mockCreatedSyncCoordinators[0]?.start).not.toHaveBeenCalled();
-		expect(freshSync).toHaveBeenCalledWith({ mode: "pushLocalOnly" });
+		expect(mockSyncCoordinatorFactory.created[0]?.start).not.toHaveBeenCalled();
+		expect(freshSync).not.toHaveBeenCalled();
+		expect(mockSyncCoordinatorFactory.created[1]?.start).toHaveBeenCalledTimes(
+			1,
+		);
 	});
 
 	it("closes a pending data source when the loading run is cancelled", async () => {

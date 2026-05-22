@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Implementation Notes: Network-Aware Household Sync Retry</title>
+</head>
+<body>
+  <h1>Implementation Notes: Network-Aware Household Sync Retry</h1>
+  <section>
+    <h2>Design Decisions</h2>
+    <ul>
+      <li>Use the provided implementation plan and current sync coordinator documentation as the source of truth where they refine the older PRD, especially for running full Household catch-up sync on network reconnect.</li>
+      <li>Keep network awareness behind an app-owned sync adapter so active Household surfaces and tests do not depend on NetInfo directly.</li>
+      <li>Treat React Native AppState as an app-wide platform input to the default sync coordinator factory, not as a Home-owned dependency. Reconnect catch-up sync waits for active app state instead of running while the app is inactive or backgrounded.</li>
+      <li>Add @react-native-community/netinfo because the PRD, plan, and current sync coordinator documentation require it as the production connectivity source.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Deviations From Spec</h2>
+    <ul>
+      <li>None.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Tradeoffs Considered</h2>
+    <ul>
+      <li>Reconnect uses the full sync mode rather than push-local-only so the active Household catches up with other Members' changes as well as propagating local rows.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Open Questions</h2>
+    <ul>
+      <li>None.</li>
+    </ul>
+  </section>
+</body>
+</html>
