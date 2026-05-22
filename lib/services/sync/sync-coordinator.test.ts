@@ -353,6 +353,45 @@ describe("createSyncCoordinator", () => {
 		expect(coordinator.getStatus()).toBe("synced");
 	});
 
+	it("reuses in-flight sync work started by another request while stale offline status refresh is pending", async () => {
+		const firstRefresh = deferred<"online">();
+		const secondRefresh = deferred<"online">();
+		const networkStatus = queuedRefreshNetworkStatus("offline", [
+			firstRefresh.promise,
+			secondRefresh.promise,
+		]);
+		const syncAttempt = deferred<SyncResult>();
+		const sync = jest.fn(() => syncAttempt.promise);
+		const coordinator = createCoordinator({
+			networkStatus,
+			sync,
+		});
+
+		const retryRequest = coordinator.requestSync({ reason: "retry" });
+		await actTicks();
+
+		const writeRequest = coordinator.requestSync({ reason: "localWrite" });
+		await actTicks();
+
+		expect(sync).not.toHaveBeenCalled();
+
+		secondRefresh.resolve("online");
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledWith({ mode: "pushLocalOnly" });
+
+		firstRefresh.resolve("online");
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(1);
+
+		syncAttempt.resolve({ changed: false });
+		await expect(retryRequest).resolves.toEqual({ changed: false });
+		await expect(writeRequest).resolves.toEqual({ changed: false });
+		expect(coordinator.getStatus()).toBe("synced");
+	});
+
 	it("transitions offline and stops retry attempts when the network becomes known offline", async () => {
 		jest.useFakeTimers();
 		const networkStatus = controllableNetworkStatus("unknown");
@@ -890,6 +929,38 @@ function refreshableNetworkStatus(
 	let currentStatus = initialStatus;
 	const refreshCurrentStatus = jest.fn(async () => {
 		currentStatus = refreshedStatus;
+		return currentStatus;
+	});
+
+	return {
+		getCurrentStatus() {
+			return currentStatus;
+		},
+		refreshCurrentStatus,
+		subscribe() {
+			return { remove() {} };
+		},
+	};
+}
+
+function queuedRefreshNetworkStatus(
+	initialStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
+	refreshes: Array<
+		Promise<ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>>
+	>,
+): SyncNetworkStatusAdapter & {
+	refreshCurrentStatus: jest.Mock<
+		Promise<ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>>,
+		[]
+	>;
+} {
+	let currentStatus = initialStatus;
+	const refreshCurrentStatus = jest.fn(async () => {
+		const nextRefresh = refreshes.shift();
+		if (!nextRefresh) {
+			throw new Error("Missing queued refresh status");
+		}
+		currentStatus = await nextRefresh;
 		return currentStatus;
 	});
 
