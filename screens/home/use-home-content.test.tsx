@@ -344,7 +344,7 @@ describe("useHomeContent", () => {
 		);
 	});
 
-	it("closes a pending data source when the loading run is cancelled", async () => {
+	it("waits for a pending data source load to settle before closing after cancellation", async () => {
 		const load = deferred<ActiveListInitialState>();
 		const close = jest.fn().mockResolvedValue(undefined);
 		jest
@@ -361,10 +361,14 @@ describe("useHomeContent", () => {
 		await waitFor(() =>
 			expect(createHouseholdActiveListDataSource).toHaveBeenCalledTimes(1),
 		);
+		const coordinator = mockSyncCoordinatorFactory.created[0];
 		unmount();
 
-		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+		await settleMicrotasks();
+		expect(coordinator?.stop).not.toHaveBeenCalled();
+		expect(close).not.toHaveBeenCalled();
 		load.resolve(initialListFixture());
+		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 	});
 });
 
@@ -490,4 +494,9 @@ function deferred<T>() {
 	});
 
 	return { promise, resolve };
+}
+
+async function settleMicrotasks() {
+	await Promise.resolve();
+	await Promise.resolve();
 }
