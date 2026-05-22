@@ -190,10 +190,11 @@ function analyticsFixture() {
 }
 
 function responseFixture(payload: unknown): Response {
-	return {
+	const response: Pick<Response, "json" | "ok"> = {
 		ok: true,
 		json: async () => payload,
-	} as Response;
+	};
+	return response as Response;
 }
 
 function householdSessionFixture(

@@ -1,16 +1,18 @@
 // https://docs.expo.dev/guides/using-eslint/
 const { defineConfig } = require("eslint/config");
 const expoConfig = require("eslint-config-expo/flat");
+const typescriptEslint = require("@typescript-eslint/eslint-plugin");
 const reactNativeA11y = require("eslint-plugin-react-native-a11y");
 const dontForget = require("./tools/eslint-rules");
 
 module.exports = defineConfig([
 	expoConfig,
 	{
-		ignores: ["dist/*"],
+		ignores: [".agents/**", ".rnstorybook/storybook.requires.ts", "dist/**"],
 	},
 	{
 		plugins: {
+			"@typescript-eslint": typescriptEslint,
 			"dont-forget": dontForget,
 			"react-native-a11y": reactNativeA11y,
 		},

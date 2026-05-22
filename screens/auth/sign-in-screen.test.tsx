@@ -9,14 +9,17 @@ import { analyticsMocks } from "@/lib/test/mocks/analytics";
 import { clerkMocks } from "@/lib/test/mocks/clerk";
 import SignInScreen from "@/screens/auth/sign-in-screen";
 
-jest.mock("@/lib/analytics", () => require("@/lib/test/mocks/analytics"));
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
 jest.mock("expo-router", () => {
-	const React = require("react");
-	const { Text } = require("react-native");
+	const React = jest.requireActual<typeof import("react")>("react");
+	const { Text } =
+		jest.requireActual<typeof import("react-native")>("react-native");
 
 	return {
-		Link: ({ children }: { children: unknown }) =>
+		Link: ({ children }: { children: React.ReactNode }) =>
 			React.createElement(Text, null, children),
 	};
 });

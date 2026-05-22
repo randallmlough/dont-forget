@@ -1,9 +1,9 @@
 import type { SyncAppStateAdapter } from "./app-state";
 import type { SyncNetworkStatusAdapter } from "./network-status";
-import type { SyncResult } from "./sync-coordinator";
 import {
 	createSyncCoordinator,
 	type SyncCoordinator,
+	type SyncResult,
 	type SyncStatus,
 } from "./sync-coordinator";
 

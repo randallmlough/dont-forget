@@ -44,8 +44,10 @@ jest.mock("@/lib/services/household", () => ({
 }));
 
 jest.mock("@/lib/services/sync", () => ({
-	createDefaultSyncCoordinator: require("./test-sync-coordinator")
-		.mockSyncCoordinatorFactory.createDefaultSyncCoordinator,
+	createDefaultSyncCoordinator: jest.requireActual<
+		typeof import("./test-sync-coordinator")
+	>("./test-sync-coordinator").mockSyncCoordinatorFactory
+		.createDefaultSyncCoordinator,
 }));
 
 beforeEach(() => {

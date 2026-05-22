@@ -1,9 +1,9 @@
+import { bearerToken, UnauthorizedError } from "@/lib/server/auth";
+
 jest.mock("@clerk/backend", () => ({
 	createClerkClient: jest.fn(),
 	verifyToken: jest.fn(),
 }));
-
-import { bearerToken, UnauthorizedError } from "@/lib/server/auth";
 
 describe("bearerToken", () => {
 	it("extracts a valid bearer token", () => {
