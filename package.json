@@ -93,5 +93,10 @@
 		"tsx": "^4.21.0",
 		"typescript": "~5.9.2"
 	},
-	"private": true
+	"private": true,
+	"pnpm": {
+		"overrides": {
+			"js-cookie": "3.0.7"
+		}
+	}
 }
