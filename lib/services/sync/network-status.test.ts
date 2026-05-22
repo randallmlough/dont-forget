@@ -1,10 +1,12 @@
 const mockNetInfoRemove = jest.fn();
 const mockAddEventListener = jest.fn();
+const mockRefresh = jest.fn();
 
 jest.mock("@react-native-community/netinfo", () => ({
 	__esModule: true,
 	default: {
 		addEventListener: mockAddEventListener,
+		refresh: mockRefresh,
 	},
 }));
 
@@ -13,6 +15,7 @@ describe("getDefaultSyncNetworkStatusAdapter", () => {
 		jest.resetModules();
 		mockNetInfoRemove.mockClear();
 		mockAddEventListener.mockReset();
+		mockRefresh.mockReset();
 		mockAddEventListener.mockReturnValue(mockNetInfoRemove);
 	});
 
@@ -92,6 +95,20 @@ describe("getDefaultSyncNetworkStatusAdapter", () => {
 		expect(firstListener).toHaveBeenNthCalledWith(2, "offline");
 		expect(secondListener).toHaveBeenCalledTimes(1);
 		expect(secondListener).toHaveBeenCalledWith("online");
+	});
+
+	it("refreshes the cached network status through NetInfo", async () => {
+		const { getDefaultSyncNetworkStatusAdapter } = loadNetworkStatusModule();
+		const adapter = getDefaultSyncNetworkStatusAdapter();
+		mockRefresh.mockResolvedValue({
+			isConnected: true,
+			isInternetReachable: true,
+		});
+
+		await expect(adapter.refreshCurrentStatus()).resolves.toBe("online");
+
+		expect(mockRefresh).toHaveBeenCalledTimes(1);
+		expect(adapter.getCurrentStatus()).toBe("online");
 	});
 
 	it("creates a lazy singleton backed by one NetInfo subscription", () => {

@@ -6,6 +6,7 @@ export type SyncNetworkStatus = "online" | "offline" | "unknown";
 
 export type SyncNetworkStatusAdapter = {
 	getCurrentStatus: () => SyncNetworkStatus;
+	refreshCurrentStatus: () => Promise<SyncNetworkStatus>;
 	subscribe: (
 		listener: (status: SyncNetworkStatus) => void,
 	) => SyncStatusSubscription;
@@ -22,18 +23,26 @@ function createNetInfoSyncNetworkStatusAdapter(): SyncNetworkStatusAdapter {
 	const listeners = new Set<(status: SyncNetworkStatus) => void>();
 	let currentStatus: SyncNetworkStatus = "unknown";
 
-	NetInfo.addEventListener((state) => {
-		const nextStatus = syncNetworkStatusFromNetInfo(state);
+	function applyNetworkStatus(nextStatus: SyncNetworkStatus) {
 		if (nextStatus === currentStatus) return;
 
 		currentStatus = nextStatus;
 		for (const listener of listeners) {
 			listener(currentStatus);
 		}
+	}
+
+	NetInfo.addEventListener((state) => {
+		applyNetworkStatus(syncNetworkStatusFromNetInfo(state));
 	});
 
 	return {
 		getCurrentStatus() {
+			return currentStatus;
+		},
+		async refreshCurrentStatus() {
+			const state = await NetInfo.refresh();
+			applyNetworkStatus(syncNetworkStatusFromNetInfo(state));
 			return currentStatus;
 		},
 		subscribe(listener) {

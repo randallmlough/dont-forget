@@ -22,6 +22,7 @@ type DefaultSyncCoordinatorDeps = Omit<
 
 const unauthorizedNetworkStatusAdapter: SyncNetworkStatusAdapter = {
 	getCurrentStatus: () => "offline",
+	refreshCurrentStatus: async () => "offline",
 	subscribe: () => ({ remove() {} }),
 };
 

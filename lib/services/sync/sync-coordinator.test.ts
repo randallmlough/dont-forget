@@ -320,6 +320,39 @@ describe("createSyncCoordinator", () => {
 		expect(coordinator.getStatus()).toBe("offline");
 	});
 
+	it("refreshes stale offline network status before skipping foreground catch-up sync", async () => {
+		const sync = jest.fn(async () => ({ changed: true }));
+		const networkStatus = refreshableNetworkStatus("offline", "online");
+		const coordinator = createCoordinator({
+			networkStatus,
+			sync,
+		});
+
+		await expect(
+			coordinator.requestSync({ reason: "appForeground" }),
+		).resolves.toEqual({ changed: true });
+
+		expect(networkStatus.refreshCurrentStatus).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledWith({ mode: "full" });
+		expect(coordinator.getStatus()).toBe("synced");
+	});
+
+	it("refreshes stale offline network status before skipping startup retry sync", async () => {
+		const sync = jest.fn(async () => ({ changed: false }));
+		const networkStatus = refreshableNetworkStatus("offline", "online");
+		const coordinator = createCoordinator({
+			networkStatus,
+			sync,
+		});
+
+		coordinator.start();
+		await actTicks();
+
+		expect(networkStatus.refreshCurrentStatus).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledWith({ mode: "pushLocalOnly" });
+		expect(coordinator.getStatus()).toBe("synced");
+	});
+
 	it("transitions offline and stops retry attempts when the network becomes known offline", async () => {
 		jest.useFakeTimers();
 		const networkStatus = controllableNetworkStatus("unknown");
@@ -836,6 +869,35 @@ function memoryNetworkStatus(
 		getCurrentStatus() {
 			return status;
 		},
+		async refreshCurrentStatus() {
+			return status;
+		},
+		subscribe() {
+			return { remove() {} };
+		},
+	};
+}
+
+function refreshableNetworkStatus(
+	initialStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
+	refreshedStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
+): SyncNetworkStatusAdapter & {
+	refreshCurrentStatus: jest.Mock<
+		Promise<ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>>,
+		[]
+	>;
+} {
+	let currentStatus = initialStatus;
+	const refreshCurrentStatus = jest.fn(async () => {
+		currentStatus = refreshedStatus;
+		return currentStatus;
+	});
+
+	return {
+		getCurrentStatus() {
+			return currentStatus;
+		},
+		refreshCurrentStatus,
 		subscribe() {
 			return { remove() {} };
 		},
@@ -856,6 +918,9 @@ function controllableNetworkStatus(
 
 	return {
 		getCurrentStatus() {
+			return currentStatus;
+		},
+		async refreshCurrentStatus() {
 			return currentStatus;
 		},
 		subscribe(listener) {

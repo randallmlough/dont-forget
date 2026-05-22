@@ -27,6 +27,7 @@ describe("createDefaultSyncCoordinator", () => {
 		});
 		mockGetDefaultSyncNetworkStatusAdapter.mockReturnValue({
 			getCurrentStatus: () => "online",
+			refreshCurrentStatus: async () => "online",
 			subscribe: () => ({ remove() {} }),
 		});
 		mockCreateSyncCoordinator.mockReturnValue({
@@ -67,6 +68,7 @@ describe("createDefaultSyncCoordinator", () => {
 			appState: mockGetDefaultSyncAppStateAdapter.mock.results[0]?.value,
 			networkStatus: {
 				getCurrentStatus: expect.any(Function),
+				refreshCurrentStatus: expect.any(Function),
 				subscribe: expect.any(Function),
 			},
 		});

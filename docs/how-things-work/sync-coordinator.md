@@ -56,6 +56,8 @@ The adapter exposes three app-level states:
 
 The production adapter is backed by `@react-native-community/netinfo`, but tests should use fake adapters. The adapter starts as `unknown` and updates from platform events; active Household rendering does not wait for an async connectivity fetch.
 
+Before the coordinator skips a sync request because cached connectivity is `offline`, it asks the adapter to refresh the current platform state. This matters on iOS because network changes that happen while the app is backgrounded may not emit a fresh NetInfo event before the foreground catch-up path runs.
+
 Known-offline state pauses new automatic remote attempts and keeps or transitions coordinator status to `offline`. It does not cancel in-flight sync work. If in-flight work succeeds while the network is still known offline, offline status remains the current truth until the network becomes online again.
 
 Known-online transitions from either `offline` or `unknown` request `networkReconnect` only while the app is active. Repeated online events while already online are no-ops. Unknown connectivity keeps the existing foreground and retry fallback behavior.

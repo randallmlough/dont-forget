@@ -84,22 +84,30 @@ export function createSyncCoordinator({
 		}
 	}
 
-	function shouldSkipForOffline() {
+	async function shouldSkipForOffline(): Promise<{
+		refreshedOfflineStatus: boolean;
+		skip: boolean;
+	}> {
 		if (!syncAuthorized) {
 			setStatus("offline");
-			return true;
+			return { refreshedOfflineStatus: false, skip: true };
 		}
 
 		currentNetworkStatus = networkStatus.getCurrentStatus();
 		if (currentNetworkStatus === "offline") {
-			setStatus("offline");
-			return true;
+			currentNetworkStatus = await networkStatus.refreshCurrentStatus();
+			if (stopped) return { refreshedOfflineStatus: true, skip: true };
+			if (currentNetworkStatus === "offline") {
+				setStatus("offline");
+				return { refreshedOfflineStatus: true, skip: true };
+			}
+			return { refreshedOfflineStatus: true, skip: false };
 		}
 
-		return false;
+		return { refreshedOfflineStatus: false, skip: false };
 	}
 
-	function requestSync({
+	async function requestSync({
 		reason,
 	}: {
 		reason: SyncRequestReason;
@@ -110,7 +118,17 @@ export function createSyncCoordinator({
 			pendingLocalChangeVersion += 1;
 		}
 
-		if (shouldSkipForOffline()) return Promise.resolve(null);
+		const inFlightBeforeNetworkRefresh = inFlight;
+		const offlineDecision = await shouldSkipForOffline();
+		if (offlineDecision.skip) return null;
+		if (
+			offlineDecision.refreshedOfflineStatus &&
+			!inFlightBeforeNetworkRefresh &&
+			inFlight &&
+			reason !== "manualRefresh"
+		) {
+			return inFlight;
+		}
 
 		if (
 			reason !== "manualRefresh" &&
@@ -214,14 +232,16 @@ export function createSyncCoordinator({
 		return runQueuedFollowUpAfterAttempt(result);
 	}
 
-	function runQueuedFollowUpAfterAttempt(
+	async function runQueuedFollowUpAfterAttempt(
 		previousResult: SyncResult | null,
-	): Promise<SyncResult | null> | SyncResult | null {
+	): Promise<SyncResult | null> {
 		const followUpReason = queuedFollowUpReason;
 		if (!followUpReason) return previousResult;
 
 		queuedFollowUpReason = null;
-		if (stopped || shouldSkipForOffline()) return previousResult;
+		if (stopped) return previousResult;
+		const offlineDecision = await shouldSkipForOffline();
+		if (offlineDecision.skip) return previousResult;
 		return runSync(followUpReason);
 	}
 
@@ -349,7 +369,9 @@ export function createSyncCoordinator({
 				} else {
 					startRetryTimer();
 				}
-				if (!inFlight && currentNetworkStatus !== "offline") {
+				if (!inFlight && currentNetworkStatus === "offline") {
+					void requestSync({ reason: "retry" });
+				} else if (!inFlight) {
 					void runSync("retry");
 				}
 			}
