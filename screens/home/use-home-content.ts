@@ -113,12 +113,14 @@ export function useHomeContent({
 	}, [logger]);
 
 	useEffect(() => {
+		const closedDataSources = closedDataSourcesRef.current;
+
 		return () => {
 			const renderedHome = renderedHomeRef.current;
 			renderedHomeRef.current = null;
 			if (renderedHome) {
 				void closeOpenedHome({
-					closedDataSources: closedDataSourcesRef.current,
+					closedDataSources,
 					home: renderedHome,
 				}).catch(() => undefined);
 			}
