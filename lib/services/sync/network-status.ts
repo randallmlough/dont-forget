@@ -1,6 +1,6 @@
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 
-import type { SyncStatusSubscription } from "./sync-coordinator";
+import type { SyncStatusSubscription } from "./subscription";
 
 export type SyncNetworkStatus = "online" | "offline" | "unknown";
 

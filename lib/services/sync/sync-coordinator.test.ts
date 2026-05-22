@@ -1,8 +1,8 @@
+import type { SyncAppStateAdapter } from "./app-state";
 import type { SyncNetworkStatusAdapter } from "./network-status";
 import type { SyncResult } from "./sync-coordinator";
 import {
 	createSyncCoordinator,
-	type SyncAppStateAdapter,
 	type SyncCoordinator,
 	type SyncStatus,
 } from "./sync-coordinator";
@@ -390,10 +390,31 @@ describe("createSyncCoordinator", () => {
 	});
 
 	it("runs a full Household catch-up sync when network status becomes online", async () => {
+		const appState = mutableAppState("inactive");
 		const networkStatus = controllableNetworkStatus("unknown");
 		const sync = jest.fn(async () => ({ changed: true }));
 		const coordinator = createCoordinator({
-			appState: memoryAppState("inactive"),
+			appState,
+			networkStatus,
+			sync,
+		});
+		coordinator.start();
+
+		appState.setState("active");
+		networkStatus.emit("online");
+		await actTicks();
+
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledWith({ mode: "full" });
+		expect(coordinator.getStatus()).toBe("synced");
+	});
+
+	it("waits for active app state before running network reconnect catch-up sync", async () => {
+		const appState = controllableAppState("inactive");
+		const networkStatus = controllableNetworkStatus("unknown");
+		const sync = jest.fn(async () => ({ changed: true }));
+		const coordinator = createCoordinator({
+			appState,
 			networkStatus,
 			sync,
 		});
@@ -402,9 +423,13 @@ describe("createSyncCoordinator", () => {
 		networkStatus.emit("online");
 		await actTicks();
 
+		expect(sync).not.toHaveBeenCalled();
+
+		appState.emit("active");
+		await actTicks();
+
 		expect(sync).toHaveBeenCalledTimes(1);
 		expect(sync).toHaveBeenCalledWith({ mode: "full" });
-		expect(coordinator.getStatus()).toBe("synced");
 	});
 
 	it("ignores repeated online network status while already online", async () => {
@@ -425,6 +450,7 @@ describe("createSyncCoordinator", () => {
 	});
 
 	it("coalesces flapping online transitions without overlapping sync attempts", async () => {
+		const appState = mutableAppState("inactive");
 		const networkStatus = controllableNetworkStatus("unknown");
 		const firstSync = deferred<SyncResult>();
 		const sync = jest
@@ -432,12 +458,13 @@ describe("createSyncCoordinator", () => {
 			.mockReturnValueOnce(firstSync.promise)
 			.mockResolvedValue({ changed: false });
 		const coordinator = createCoordinator({
-			appState: memoryAppState("inactive"),
+			appState,
 			networkStatus,
 			sync,
 		});
 		coordinator.start();
 
+		appState.setState("active");
 		networkStatus.emit("online");
 		await actTicks();
 		networkStatus.emit("offline");
@@ -454,6 +481,7 @@ describe("createSyncCoordinator", () => {
 	});
 
 	it("prioritizes a queued network reconnect over a local Item write follow-up", async () => {
+		const appState = mutableAppState("inactive");
 		const networkStatus = controllableNetworkStatus("unknown");
 		const firstSync = deferred<SyncResult>();
 		const sync = jest
@@ -461,7 +489,7 @@ describe("createSyncCoordinator", () => {
 			.mockReturnValueOnce(firstSync.promise)
 			.mockResolvedValue({ changed: false });
 		const coordinator = createCoordinator({
-			appState: memoryAppState("inactive"),
+			appState,
 			networkStatus,
 			sync,
 		});
@@ -469,6 +497,7 @@ describe("createSyncCoordinator", () => {
 
 		const writeRequest = coordinator.requestSync({ reason: "localWrite" });
 		await actTicks();
+		appState.setState("active");
 		networkStatus.emit("online");
 		await actTicks();
 
@@ -778,6 +807,24 @@ function controllableAppState(initialState: string): SyncAppStateAdapter & {
 			for (const listener of listeners) {
 				listener(state);
 			}
+		},
+	};
+}
+
+function mutableAppState(initialState: string): SyncAppStateAdapter & {
+	setState: (state: string) => void;
+} {
+	let currentState = initialState;
+
+	return {
+		getCurrentState() {
+			return currentState;
+		},
+		subscribe() {
+			return { remove() {} };
+		},
+		setState(state) {
+			currentState = state;
 		},
 	};
 }

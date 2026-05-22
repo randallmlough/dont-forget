@@ -1,7 +1,12 @@
 import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 
-import type { SyncNetworkStatusAdapter } from "./network-status";
+import type { SyncAppStateAdapter } from "./app-state";
+import type {
+	SyncNetworkStatus,
+	SyncNetworkStatusAdapter,
+} from "./network-status";
+import type { SyncStatusSubscription } from "./subscription";
 
 export type SyncResult = {
 	changed: boolean;
@@ -24,15 +29,6 @@ export type SyncOptions = {
 };
 
 export type SyncOperation = (options?: SyncOptions) => Promise<SyncResult>;
-
-export type SyncStatusSubscription = {
-	remove: () => void;
-};
-
-export type SyncAppStateAdapter = {
-	getCurrentState: () => string;
-	subscribe: (listener: (state: string) => void) => SyncStatusSubscription;
-};
 
 export type SyncCoordinator = {
 	getStatus: () => SyncStatus;
@@ -282,9 +278,7 @@ export function createSyncCoordinator({
 		void requestSync({ reason: "retry" });
 	}
 
-	function handleNetworkStatusChange(
-		nextNetworkStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
-	) {
+	function handleNetworkStatusChange(nextNetworkStatus: SyncNetworkStatus) {
 		const previousNetworkStatus = currentNetworkStatus;
 		currentNetworkStatus = nextNetworkStatus;
 
@@ -296,6 +290,7 @@ export function createSyncCoordinator({
 
 		if (nextNetworkStatus === "online" && previousNetworkStatus !== "online") {
 			startRetryTimer();
+			if (!isActiveAppState(appState.getCurrentState())) return;
 			void requestSync({ reason: "networkReconnect" });
 		}
 	}

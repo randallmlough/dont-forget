@@ -6,22 +6,22 @@ The coordinator is a deep module: callers see a small interface, while the retry
 
 ## Public Interface
 
-Create one coordinator for the rendered active Household and pass a logger already scoped to that Household:
+Create one coordinator for the rendered active Household and pass a logger already scoped to that Household. Product callers normally use the default coordinator factory, which supplies app-wide platform lifecycle and network adapters:
 
 ```ts
-const syncCoordinator = createSyncCoordinator({
+const syncCoordinator = createDefaultSyncCoordinator({
 	syncAuthorized: dataSource.syncAuthorized,
 	sync: dataSource.sync,
-	appState,
-	networkStatus,
 	logger: logger.with({ household_id: session.activeHousehold.id }),
 });
 ```
 
+Tests and lower-level policy checks may call `createSyncCoordinator` directly with fake `appState` and `networkStatus` adapters.
+
 The public surface is intentionally small:
 
 - `getStatus()` returns `synced`, `pending`, `offline`, or `failed`.
-- `subscribe(listener)` lets Home or Active List observe coordinator-owned status changes.
+- `subscribe(listener)` lets the active Household surface or Active List observe coordinator-owned status changes.
 - `start()` begins foreground lifecycle handling and retry cadence for the active Household.
 - `stop()` removes lifecycle listeners, stops retry timers, drains active sync work, and prevents stale status updates.
 - `requestSync({ reason })` requests sync for an explicit reason.
@@ -36,7 +36,13 @@ The coordinator accepts these request reasons:
 - `networkReconnect`: The app learned the device moved from a non-online network state to a known-online network state. This is a Household catch-up request, not only a local upload request.
 - `retry`: The foreground retry cadence is attempting to propagate pending local Household rows after earlier offline or recoverable failures.
 
-Only the coordinator should decide what these reasons mean. Domain services, HouseholdStore, Home, and Active List should request sync by reason instead of choosing native Turso behavior directly.
+Only the coordinator should decide what these reasons mean. Domain services, HouseholdStore, active Household surfaces, and Active List should request sync by reason instead of choosing native Turso behavior directly.
+
+## App Lifecycle
+
+The coordinator receives foreground/background state through an app-owned adapter backed by React Native `AppState`. That adapter is an application platform input, not a Home concern. The currently rendered active Household surface decides when a coordinator exists and starts; the coordinator uses app lifecycle state to decide whether foreground sync work should run.
+
+Automatic retry and reconnect catch-up work only runs while the app is active. If the network becomes online while the app is inactive or backgrounded, the coordinator records the network state but waits for the normal foreground catch-up path before starting remote sync work.
 
 ## Network Status
 
@@ -48,11 +54,11 @@ The adapter exposes three app-level states:
 - `offline`: the device is disconnected or internet reachability is known to be false.
 - `unknown`: connectivity has not resolved yet or cannot be determined.
 
-The production adapter is backed by `@react-native-community/netinfo`, but tests should use fake adapters. The adapter starts as `unknown` and updates from platform events; Home startup does not wait for an async connectivity fetch.
+The production adapter is backed by `@react-native-community/netinfo`, but tests should use fake adapters. The adapter starts as `unknown` and updates from platform events; active Household rendering does not wait for an async connectivity fetch.
 
 Known-offline state pauses new automatic remote attempts and keeps or transitions coordinator status to `offline`. It does not cancel in-flight sync work. If in-flight work succeeds while the network is still known offline, offline status remains the current truth until the network becomes online again.
 
-Known-online transitions from either `offline` or `unknown` request `networkReconnect`. Repeated online events while already online are no-ops. Unknown connectivity keeps the existing foreground and retry fallback behavior.
+Known-online transitions from either `offline` or `unknown` request `networkReconnect` only while the app is active. Repeated online events while already online are no-ops. Unknown connectivity keeps the existing foreground and retry fallback behavior.
 
 ## Sync Mode Selection
 
@@ -65,11 +71,11 @@ The coordinator maps request reasons to `SyncOptions`:
 
 `full` is reserved for deliberate catch-up work. Manual refresh, app foreground recovery, and network reconnect run native sync first, then the app-owned remote upsert fallback, so the active Household can both push local rows and pull remote rows when connectivity and authorization allow it.
 
-If a passive `retry` request arrives while there is no pending local change and the coordinator is already `synced`, the coordinator may no-op. App foreground and network reconnect remain catch-up requests even when the coordinator is already `synced`, because other Members may have changed the Household while this device was backgrounded or offline. If Home starts a fresh authorized coordinator after offline reopen, it starts retry lifecycle work so local rows saved while offline can be attempted again.
+If a passive `retry` request arrives while there is no pending local change and the coordinator is already `synced`, the coordinator may no-op. App foreground and active-app network reconnect remain catch-up requests even when the coordinator is already `synced`, because other Members may have changed the Household while this device was backgrounded or offline. If the active Household surface starts a fresh authorized coordinator after offline reopen, it starts retry lifecycle work so local rows saved while offline can be attempted again.
 
 ## Status Transitions
 
-The coordinator owns these Home-visible status values:
+The coordinator owns these surface-visible status values:
 
 - `synced`: The active Household has no known pending sync work from the coordinator's perspective.
 - `pending`: A sync attempt is running or a queued follow-up is expected.
@@ -108,8 +114,8 @@ HouseholdStore owns local/native Household DB access, operation serialization, a
 
 List and Item services own local domain reads and writes. They commit local Household rows and should not start remote sync as part of mutation success.
 
-Home owns the active Household Session lifecycle. It creates the active data source and coordinator, closes rendered Household resources, stops sync before sign-out or replacement, and starts the fresh authorized coordinator after offline Home reopen.
+The active Household session/surface owner creates the active data source and coordinator, closes rendered Household resources, stops sync before sign-out or replacement, and starts the fresh authorized coordinator after offline reopen. Today that owner is the Home screen while the app has one built-out Household surface; future Household surfaces should keep the same boundary instead of moving sync policy into root layout.
 
 Active List owns visible List interaction and rendering. It subscribes to coordinator status, requests `localWrite` after successful local mutations, requests `manualRefresh` for explicit refresh, and reloads visible rows after sync reports remote changes.
 
-Future network-awareness belongs behind coordinator-owned adapter boundaries. It should feed the coordinator another reasoned request instead of adding sync policy to UI, domain services, HouseholdStore, or native package call sites.
+Future platform awareness belongs behind coordinator-owned adapter boundaries. It should feed the coordinator another reasoned request instead of adding sync policy to UI, domain services, HouseholdStore, or native package call sites.
