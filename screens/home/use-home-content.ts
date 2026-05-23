@@ -182,15 +182,6 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 
 	return () => {
 		run.cancelled = true;
-		void Promise.all(
-			[...run.pendingHomes].map((home) =>
-				closeOpenedHome({
-					closedDataSources: run.closedDataSources,
-					home,
-					pendingHomes: run.pendingHomes,
-				}),
-			),
-		).catch(() => undefined);
 	};
 }
 

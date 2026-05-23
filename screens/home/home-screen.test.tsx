@@ -68,7 +68,7 @@ beforeEach(() => {
 });
 
 describe("HomeScreen", () => {
-	it("closes a data source that is still loading when Home unmounts", async () => {
+	it("waits for a loading data source to settle before closing when Home unmounts", async () => {
 		const load = deferred<ActiveListInitialState>();
 		const close = jest.fn().mockResolvedValue(undefined);
 		jest
@@ -106,8 +106,10 @@ describe("HomeScreen", () => {
 		);
 		unmount();
 
-		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+		await settleMicrotasks();
+		expect(close).not.toHaveBeenCalled();
 		load.resolve(initialListFixture());
+		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 	});
 
 	it("renders cached local List data while a fresh Household Session is still pending", async () => {
@@ -465,4 +467,9 @@ function deferred<T>() {
 	}
 
 	return { promise, resolve };
+}
+
+async function settleMicrotasks() {
+	await Promise.resolve();
+	await Promise.resolve();
 }
