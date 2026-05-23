@@ -155,11 +155,18 @@ export function createHouseholdActiveListDataSource(
 					}
 				}
 
-				await pushLocalHouseholdRowsToRemote(
-					store,
-					config.database,
-					options.openRemoteClient,
-				);
+				try {
+					await pushLocalHouseholdRowsToRemote(
+						store,
+						config.database,
+						options.openRemoteClient,
+					);
+				} catch (fallbackError) {
+					if (nativeError) {
+						throw attachNativeSyncError(fallbackError, nativeError);
+					}
+					throw fallbackError;
+				}
 				if (nativeError) {
 					return {
 						changed: false,

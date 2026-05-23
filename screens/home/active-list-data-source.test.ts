@@ -343,6 +343,99 @@ describe("createHouseholdActiveListDataSource", () => {
 		);
 	});
 
+	it("pushes local rows through the remote upsert path when native push is unavailable", async () => {
+		const remoteExecute = jest.fn(async () => undefined);
+		const nativeSync = jest.fn(async () => ({ changed: false }));
+		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
+			const sql = statementSql(statement);
+			if (sql.includes("FROM items")) {
+				return {
+					rows: [
+						{
+							id: "itm_retry",
+							list_id: DEFAULT_LIST_ID,
+							name: "Retry Milk",
+							notes: null,
+							position: 0,
+							created_by_user_id: "usr_avery",
+							created_at: 2,
+							updated_at: 2,
+							deleted_at: null,
+						},
+					],
+				};
+			}
+			return { rows: [] };
+		});
+		const dataSource = createHouseholdActiveListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute,
+					sync: nativeSync,
+					pull: jest.fn(async () => ({ changed: false })),
+					close: jest.fn(async () => undefined),
+				},
+				openRemoteClient: () => ({ execute: remoteExecute }),
+			},
+		);
+
+		await expect(dataSource.sync({ mode: "pushLocalOnly" })).resolves.toEqual({
+			changed: false,
+		});
+
+		expect(nativeSync).not.toHaveBeenCalled();
+		expect(remoteExecute).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sql: expect.stringContaining("INSERT INTO items"),
+				args: [
+					"itm_retry",
+					DEFAULT_LIST_ID,
+					"Retry Milk",
+					null,
+					0,
+					"usr_avery",
+					2,
+					2,
+					null,
+				],
+			}),
+		);
+	});
+
+	it("rethrows push-local-only fallback failures with the native push error attached", async () => {
+		const nativeError = new Error("native push failed");
+		const fallbackError = new Error("remote unavailable");
+		const dataSource = createHouseholdActiveListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute: jest.fn(async () => ({ rows: [] })),
+					push: jest.fn(async () => {
+						throw nativeError;
+					}),
+					sync: jest.fn(async () => ({ changed: false })),
+					pull: jest.fn(async () => ({ changed: false })),
+					close: jest.fn(async () => undefined),
+				},
+				openRemoteClient: () => {
+					throw fallbackError;
+				},
+			},
+		);
+
+		const syncAttempt = dataSource.sync({ mode: "pushLocalOnly" });
+		await expect(syncAttempt).rejects.toThrow(fallbackError);
+		await expect(syncAttempt).rejects.toMatchObject({
+			nativeSyncError: nativeError,
+		});
+
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+	});
+
 	it("rethrows when native sync and fallback both fail without logging at the data-source boundary", async () => {
 		const nativeError = new Error("native sync failed");
 		const fallbackError = new Error("remote unavailable");
