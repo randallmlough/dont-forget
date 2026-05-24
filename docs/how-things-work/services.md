@@ -234,15 +234,17 @@ The owning screen maps domain records into UI contracts.
 
 Reusable components keep UI-facing contracts. They should not import domain services directly when that would couple them to Household Session, stores, or service factories.
 
-For Home, the screen owns the composition:
+For active Household UI, the active Household controller owns the composition of Household Session, HouseholdStore, List and Item services, sync fallback, and sync coordinator lifecycle. Screens consume the active Household controller through the authenticated app provider instead of opening or closing Household resources directly.
 
 ```txt
-screens/home/
-  active-list-data-source.ts
-  use-home-content.ts
+lib/services/household/
+  active-household-controller.ts
+
+components/active-household/
+  active-household-provider.tsx
 ```
 
-The data source adapts List and Item services into the `ActiveList` component contract:
+Controller-owned data sources may adapt List and Item services into reusable UI component contracts:
 
 ```ts
 const list = await listService.getList({ listId });
@@ -255,7 +257,9 @@ return {
 };
 ```
 
-The reusable component contract is named `ActiveListDataSource`; do not reintroduce adapter aliases at the UI boundary.
+The reusable current-List component contract is named `ActiveListDataSource`; do not reintroduce adapter aliases at the UI boundary. Treat the currently viewed List as controller-owned selection state inside the active Household, not as proof that a Household owns only one List.
+
+During cached-to-fresh replacement, keep the currently published Current List usable while the controller prepares fresh authorized resources when the cached Household is still plausibly authorized. Item/List writes against the published data source must continue to commit locally, and the controller must not close that data source until it has published a replacement and drained in-flight operations.
 
 ## Offline-First Sync Semantics
 
@@ -267,7 +271,7 @@ Domain services should resolve mutations on local commit:
 const item = await itemService.addItem({ listId, userId, name });
 ```
 
-They should not treat remote sync as part of mutation success. Sync timing is an application/runtime policy owned by the active Household sync coordinator:
+They should not treat remote sync as part of mutation success. Sync timing is an application/controller policy owned by the active Household controller and its sync coordinator:
 
 ```ts
 const item = await itemService.addItem(input);
@@ -275,13 +279,13 @@ void syncCoordinator.requestSync({ reason: "localWrite" });
 return item;
 ```
 
-The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while the app is active, and receives app lifecycle and connectivity events through app-owned adapter seams. The currently rendered active Household surface owns when a Household coordinator exists. Keep future platform awareness behind the same coordinator boundary rather than pushing sync calls into List or Item services, UI components, or native package call sites. See [Sync Coordinator](./sync-coordinator.md) for the active Household sync policy.
+The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while the app is active, and receives app lifecycle and connectivity events through app-owned adapter seams. The active Household controller owns when a Household coordinator exists. Keep future platform awareness behind the same coordinator boundary rather than pushing sync calls into List or Item services, UI components, or native package call sites. See [Sync Coordinator](./sync-coordinator.md) for the active Household sync policy.
 
 Turso's transport conflict behavior is last-push-wins. App-owned timestamps remain useful for `created_at`, `updated_at`, latest checked-state display, recovery upserts, and future migration paths, but they are not Turso's merge clock.
 
 ## Household Session
 
-Use **Household Session** for the app's active Household context: active Household, active Member, active List, Members, and short-lived Household DB connection metadata needed to open Home.
+Use **Household Session** for the app's active Household context: active Household, active Member, initial Current List, Members, and short-lived Household DB connection metadata needed to open active Household infrastructure.
 
 Preferred naming:
 
@@ -299,7 +303,7 @@ For the Home/List/Item vertical slice:
 2. Create `lib/services/household/household-session-service.ts` from bootstrap client and offline cache behavior.
 3. Create `lib/services/list/list-service.ts` for List metadata operations.
 4. Create `lib/services/item/item-service.ts` for Item operations.
-5. Create `screens/home/active-list-data-source.ts` to compose Household Session, HouseholdStore, ListService, and ItemService.
+5. Use `lib/services/household/current-list-data-source.ts` to compose Household Session, HouseholdStore, ListService, and ItemService for the Current List UI contract.
 6. Keep the Active List UI boundary on `ActiveListDataSource` naming.
 7. Hard-cut imports away from touched `lib/app/*` files; do not add compatibility wrappers.
 8. Add the custom ESLint service-boundary rule.

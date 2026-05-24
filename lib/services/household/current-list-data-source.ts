@@ -27,7 +27,7 @@ type ActiveListStore = HouseholdStoreExecutor & {
 	close: () => void | Promise<void>;
 };
 
-export type HouseholdActiveListDataSourceConfig = {
+export type HouseholdCurrentListDataSourceConfig = {
 	household: BootstrapResponse["activeHousehold"];
 	activeMember: BootstrapResponse["activeMember"];
 	list: BootstrapResponse["activeList"];
@@ -53,8 +53,8 @@ type CreateActiveListServicesInput = {
 	householdId: string;
 };
 
-export function createHouseholdActiveListDataSource(
-	config: HouseholdActiveListDataSourceConfig,
+export function createHouseholdCurrentListDataSource(
+	config: HouseholdCurrentListDataSourceConfig,
 	options: DataSourceOptions = {},
 ): ActiveListDataSource {
 	const storePromise = options.store

@@ -9,6 +9,7 @@ import type {
 import { useLogger } from "@/lib/logger";
 import {
 	type CachedHouseholdSession,
+	createHouseholdCurrentListDataSource,
 	discardCachedHouseholdSessionIfUnauthorized,
 	getHouseholdSession,
 	type HouseholdSession,
@@ -18,12 +19,7 @@ import {
 import { createDefaultSyncCoordinator } from "@/lib/services/sync";
 import { useHomeContent } from "@/screens/home/use-home-content";
 
-import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 import { mockSyncCoordinatorFactory } from "./test-sync-coordinator";
-
-jest.mock("./active-list-data-source", () => ({
-	createHouseholdActiveListDataSource: jest.fn(),
-}));
 
 const mockHouseholdLogger = {
 	debug: jest.fn(),
@@ -45,6 +41,7 @@ jest.mock("@/lib/logger", () => ({
 }));
 
 jest.mock("@/lib/services/household", () => ({
+	createHouseholdCurrentListDataSource: jest.fn(),
 	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
 	getHouseholdSession: jest.fn(),
 	readCachedHouseholdSession: jest.fn(),
@@ -61,7 +58,7 @@ jest.mock("@/lib/services/sync", () => ({
 beforeEach(() => {
 	jest.mocked(getHouseholdSession).mockReset();
 	jest.mocked(createDefaultSyncCoordinator).mockClear();
-	jest.mocked(createHouseholdActiveListDataSource).mockReset();
+	jest.mocked(createHouseholdCurrentListDataSource).mockReset();
 	mockSyncCoordinatorFactory.created.length = 0;
 	jest.mocked(useLogger).mockReturnValue(mockRootLogger);
 	mockRootLogger.with.mockClear();
@@ -85,7 +82,7 @@ describe("useHomeContent", () => {
 			return session;
 		});
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValue(noopDataSource(initialListFixture()));
 
 		const { rerender } = render(
@@ -106,7 +103,7 @@ describe("useHomeContent", () => {
 		const session = householdSessionFixture();
 		jest.mocked(getHouseholdSession).mockResolvedValue(session);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValue(noopDataSource(initialListFixture()));
 
 		const { rerender } = render(<UseHomeContentHarness isLoaded isSignedIn />);
@@ -125,7 +122,7 @@ describe("useHomeContent", () => {
 		const session = householdSessionFixture({ householdId: "hh_new" });
 		jest.mocked(getHouseholdSession).mockResolvedValue(session);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValue(noopDataSource(initialListFixture()));
 
 		render(<UseHomeContentHarness isLoaded isSignedIn />);
@@ -146,7 +143,7 @@ describe("useHomeContent", () => {
 		const cached = cachedHouseholdSessionFixture();
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValue(
 				noopDataSource(initialListFixture(), { syncAuthorized: false }),
 			);
@@ -155,7 +152,7 @@ describe("useHomeContent", () => {
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
 		expect(getHouseholdSession).not.toHaveBeenCalled();
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
+		expect(createHouseholdCurrentListDataSource).toHaveBeenCalledWith({
 			household: cached.activeHousehold,
 			activeMember: cached.activeMember,
 			list: cached.activeList,
@@ -190,7 +187,7 @@ describe("useHomeContent", () => {
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockImplementation((config) =>
 				config.database.authToken ? freshDataSource : cachedDataSource,
 			);
@@ -239,7 +236,7 @@ describe("useHomeContent", () => {
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValueOnce(firstCachedDataSource)
 			.mockReturnValueOnce(secondCachedDataSource);
 
@@ -276,7 +273,7 @@ describe("useHomeContent", () => {
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockImplementation((config) =>
 				config.database.authToken ? freshDataSource : cachedDataSource,
 			);
@@ -322,7 +319,7 @@ describe("useHomeContent", () => {
 			.mocked(discardCachedHouseholdSessionIfUnauthorized)
 			.mockResolvedValue(cached);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockImplementation((config) =>
 				config.database.authToken ? freshDataSource : cachedDataSource,
 			);
@@ -350,7 +347,7 @@ describe("useHomeContent", () => {
 		jest
 			.mocked(getHouseholdSession)
 			.mockResolvedValue(householdSessionFixture());
-		jest.mocked(createHouseholdActiveListDataSource).mockReturnValue({
+		jest.mocked(createHouseholdCurrentListDataSource).mockReturnValue({
 			...noopDataSource(initialListFixture()),
 			load: () => load.promise,
 			close,
@@ -359,7 +356,7 @@ describe("useHomeContent", () => {
 		const { unmount } = render(<UseHomeContentHarness isLoaded isSignedIn />);
 
 		await waitFor(() =>
-			expect(createHouseholdActiveListDataSource).toHaveBeenCalledTimes(1),
+			expect(createHouseholdCurrentListDataSource).toHaveBeenCalledTimes(1),
 		);
 		unmount();
 

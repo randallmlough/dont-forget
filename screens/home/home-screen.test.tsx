@@ -14,6 +14,7 @@ import { reset, track } from "@/lib/analytics";
 import {
 	type CachedHouseholdSession,
 	clearCachedHouseholdSession,
+	createHouseholdCurrentListDataSource,
 	discardCachedHouseholdSessionIfUnauthorized,
 	getHouseholdSession,
 	readCachedHouseholdSession,
@@ -23,7 +24,6 @@ import { createDefaultSyncCoordinator } from "@/lib/services/sync";
 import { clerkMocks, setMockAuthState } from "@/lib/test/mocks/clerk";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
-import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 import { mockSyncCoordinatorFactory } from "./test-sync-coordinator";
 
 jest.mock("@/lib/analytics", () => ({
@@ -31,12 +31,9 @@ jest.mock("@/lib/analytics", () => ({
 	track: jest.fn(),
 }));
 
-jest.mock("./active-list-data-source", () => ({
-	createHouseholdActiveListDataSource: jest.fn(),
-}));
-
 jest.mock("@/lib/services/household", () => ({
 	clearCachedHouseholdSession: jest.fn(),
+	createHouseholdCurrentListDataSource: jest.fn(),
 	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
 	getHouseholdSession: jest.fn(),
 	readCachedHouseholdSession: jest.fn(),
@@ -55,7 +52,7 @@ beforeEach(() => {
 	jest.mocked(reset).mockReset();
 	jest.mocked(getHouseholdSession).mockReset();
 	jest.mocked(createDefaultSyncCoordinator).mockClear();
-	jest.mocked(createHouseholdActiveListDataSource).mockReset();
+	jest.mocked(createHouseholdCurrentListDataSource).mockReset();
 	mockSyncCoordinatorFactory.created.length = 0;
 	jest.mocked(clearCachedHouseholdSession).mockResolvedValue(undefined);
 	jest
@@ -74,7 +71,7 @@ describe("HomeScreen", () => {
 		jest
 			.mocked(getHouseholdSession)
 			.mockResolvedValue(householdSessionFixture());
-		jest.mocked(createHouseholdActiveListDataSource).mockReturnValue({
+		jest.mocked(createHouseholdCurrentListDataSource).mockReturnValue({
 			syncAuthorized: true,
 			async load() {
 				return load.promise;
@@ -102,7 +99,7 @@ describe("HomeScreen", () => {
 		const { unmount } = render(<HomeScreen />);
 
 		await waitFor(() =>
-			expect(createHouseholdActiveListDataSource).toHaveBeenCalledTimes(1),
+			expect(createHouseholdCurrentListDataSource).toHaveBeenCalledTimes(1),
 		);
 		unmount();
 
@@ -118,7 +115,7 @@ describe("HomeScreen", () => {
 		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockImplementation((config) => {
 				return config.database.authToken
 					? noopDataSource(freshList, { syncAuthorized: true })
@@ -133,7 +130,7 @@ describe("HomeScreen", () => {
 		expect(screen.queryByText("Preparing your Household")).toBeNull();
 		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
 		expect(getHouseholdSession).toHaveBeenCalledTimes(1);
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
+		expect(createHouseholdCurrentListDataSource).toHaveBeenCalledWith({
 			household: cached.activeHousehold,
 			activeMember: cached.activeMember,
 			list: cached.activeList,
@@ -158,7 +155,7 @@ describe("HomeScreen", () => {
 		jest.mocked(getHouseholdSession).mockRejectedValue(new Error("offline"));
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValue(noopDataSource(initialList));
 		clerkMocks.getToken.mockResolvedValue("session-token");
 		setMockAuthState({ isSignedIn: true });
@@ -166,7 +163,7 @@ describe("HomeScreen", () => {
 		render(<HomeScreen />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
+		expect(createHouseholdCurrentListDataSource).toHaveBeenCalledWith({
 			household: cached.activeHousehold,
 			activeMember: cached.activeMember,
 			list: cached.activeList,
@@ -183,7 +180,7 @@ describe("HomeScreen", () => {
 		const cached = cachedHouseholdSessionFixture();
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValue(noopDataSource(initialList, { syncAuthorized: false }));
 		setMockAuthState({ isSignedIn: false });
 
@@ -191,7 +188,7 @@ describe("HomeScreen", () => {
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
 		expect(getHouseholdSession).not.toHaveBeenCalled();
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
+		expect(createHouseholdCurrentListDataSource).toHaveBeenCalledWith({
 			household: cached.activeHousehold,
 			activeMember: cached.activeMember,
 			list: cached.activeList,
@@ -207,7 +204,7 @@ describe("HomeScreen", () => {
 		const cached = cachedHouseholdSessionFixture();
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValue(noopDataSource(initialList, { syncAuthorized: false }));
 		setMockAuthState({ isLoaded: false, isSignedIn: false });
 
@@ -226,7 +223,7 @@ describe("HomeScreen", () => {
 		});
 		jest.mocked(getHouseholdSession).mockResolvedValue(session);
 		jest
-			.mocked(createHouseholdActiveListDataSource)
+			.mocked(createHouseholdCurrentListDataSource)
 			.mockReturnValue(noopDataSource(initialList));
 		clerkMocks.getToken.mockResolvedValue("session-token");
 		setMockAuthState({ isSignedIn: true });
@@ -237,7 +234,7 @@ describe("HomeScreen", () => {
 		expect(discardCachedHouseholdSessionIfUnauthorized).toHaveBeenCalledWith(
 			session,
 		);
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
+		expect(createHouseholdCurrentListDataSource).toHaveBeenCalledWith({
 			household: session.activeHousehold,
 			activeMember: session.activeMember,
 			list: session.activeList,
@@ -257,7 +254,7 @@ describe("HomeScreen", () => {
 		jest
 			.mocked(getHouseholdSession)
 			.mockResolvedValue(householdSessionFixture());
-		jest.mocked(createHouseholdActiveListDataSource).mockReturnValue({
+		jest.mocked(createHouseholdCurrentListDataSource).mockReturnValue({
 			...noopDataSource(initialList),
 			close,
 		});

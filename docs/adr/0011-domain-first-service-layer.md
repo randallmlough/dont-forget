@@ -43,11 +43,11 @@ We will organize data access through a domain-first service layer under `lib/ser
 - `HouseholdStore` is the app-owned infrastructure seam for the local synced Household data store. It is not a service and should not be named `*-db-service`.
 - Services own SQL directly for now. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
 - Server services may use Drizzle/directory DB infrastructure directly. App-safe services may use `HouseholdStore`; they must not import server/operator secrets, `@clerk/backend`, Turso Platform clients, or `@libsql/client` server entrypoints.
-- List and Item are separate service folders. Home may compose them into one Active List experience.
-- Reusable components keep UI-facing data-source contracts. The service layer owns CRUD; screen-level composition adapts services into component contracts.
+- List and Item are separate service folders. The active Household controller may compose them into one Current List experience for reusable UI.
+- Reusable components keep UI-facing data-source contracts. The service layer owns CRUD; active Household controller or feature-boundary composition adapts services into component contracts.
 - Services return domain-shaped records, not UI component types and not raw SQL rows.
 - One service file per domain is the starting point; split command/query/use-case files only when real pressure appears.
-- Domain services commit local Household writes only. Sync timing is an application/runtime policy owned by Home composition for now, or by a future Household sync service if it grows.
+- Domain services commit local Household writes only. Sync timing is an application/controller policy owned by active Household infrastructure, not by List or Item services.
 - Services generate IDs internally. Service callers and normal tests must not inject or prescribe IDs for newly-created domain records, except in rare migration/fixture utilities outside normal service APIs.
 - Services own timestamp generation internally. Do not expose clock or time-provider dependencies from normal services; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - Services and stores accept logger and analytics dependencies when they own diagnostics or product events. They may default to the app-owned logger/analytics helpers at the service/store boundary, but tests and non-app processes should be able to inject their own observability adapters.
@@ -62,14 +62,14 @@ We will organize data access through a domain-first service layer under `lib/ser
 
 ## Initial migration slice
 
-Start with the Home/List/Item vertical slice:
+The initial migration slice used the Home/List/Item vertical slice:
 
 ```txt
 lib/services/household/household-store.ts
 lib/services/household/household-session-service.ts
+lib/services/household/current-list-data-source.ts
 lib/services/list/list-service.ts
 lib/services/item/item-service.ts
-screens/home/active-list-data-source.ts
 ```
 
 As part of that slice:
@@ -77,10 +77,12 @@ As part of that slice:
 - Use `ActiveListDataSource` naming for the reusable UI boundary instead of adapter naming.
 - Remove old Active List factory call sites rather than keeping compatibility wrappers.
 - Move `bootstrapWithClerk` and offline Household Session cache behavior into Household Session service naming.
-- Open one shared `HouseholdStore` for Home and inject it into List and Item services.
-- Keep Home-specific composition under `screens/home/`.
+- Open one shared `HouseholdStore` for the first Home-rendered List and inject it into List and Item services.
+- Keep the production Current List data-source helper under `lib/services/household/`, with Home temporarily consuming it until the Active Household controller/provider slice takes over.
 
 Server bootstrap/user/member/provisioning services may migrate after this app-side slice proves the pattern.
+
+ADR-0012 supersedes the Home-owned active Household resource ownership from this initial slice. New active Household resource composition belongs to the Active Household controller under `lib/services/household/`, with screens borrowing controller-owned state and actions.
 
 ## Considered options
 

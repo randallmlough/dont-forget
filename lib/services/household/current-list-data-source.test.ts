@@ -3,7 +3,7 @@ import { createTestHouseholdDb } from "@/db/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 
-import { createHouseholdActiveListDataSource } from "./active-list-data-source";
+import { createHouseholdCurrentListDataSource } from "./current-list-data-source";
 
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
@@ -18,7 +18,7 @@ jest.mock("@/lib/logger", () => ({
 	},
 }));
 
-describe("createHouseholdActiveListDataSource", () => {
+describe("createHouseholdCurrentListDataSource", () => {
 	beforeEach(() => {
 		mockLoggerError.mockReset();
 		mockLoggerWarn.mockReset();
@@ -28,7 +28,7 @@ describe("createHouseholdActiveListDataSource", () => {
 		const pull = jest.fn(async () => ({ changed: true }));
 		const sync = jest.fn(async () => ({ changed: false }));
 		const remoteExecute = jest.fn(async () => undefined);
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -87,7 +87,7 @@ describe("createHouseholdActiveListDataSource", () => {
 			}
 			return { rows: [] };
 		});
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -179,7 +179,7 @@ describe("createHouseholdActiveListDataSource", () => {
 
 			return { rows: [] };
 		});
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -252,7 +252,7 @@ describe("createHouseholdActiveListDataSource", () => {
 			}
 			return { rows: [] };
 		});
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -292,7 +292,7 @@ describe("createHouseholdActiveListDataSource", () => {
 	it("rethrows when native sync and fallback both fail without logging at the data-source boundary", async () => {
 		const nativeError = new Error("native sync failed");
 		const fallbackError = new Error("remote unavailable");
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -322,7 +322,7 @@ describe("createHouseholdActiveListDataSource", () => {
 
 	it("does not error-log expected network failures while offline", async () => {
 		const networkError = new TypeError("Network request failed");
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -356,7 +356,7 @@ describe("createHouseholdActiveListDataSource", () => {
 				: { rows: [] };
 		});
 		const sync = jest.fn(async () => ({ changed: false }));
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -391,7 +391,7 @@ describe("createHouseholdActiveListDataSource", () => {
 				name: "Weekend Groceries",
 				createdByUserId: "usr_avery",
 			});
-			const dataSource = createHouseholdActiveListDataSource(
+			const dataSource = createHouseholdCurrentListDataSource(
 				dataSourceConfigFixture(),
 				{
 					store: {
@@ -439,7 +439,7 @@ describe("createHouseholdActiveListDataSource", () => {
 				createdByUserId: "usr_avery",
 			});
 
-			const dataSource = createHouseholdActiveListDataSource(
+			const dataSource = createHouseholdCurrentListDataSource(
 				{
 					household: { id: "hh_avery", name: "Avery" },
 					activeMember: {

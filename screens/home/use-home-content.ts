@@ -17,6 +17,7 @@ import type {
 import { type Logger, useLogger } from "@/lib/logger";
 import {
 	type CachedHouseholdSession,
+	createHouseholdCurrentListDataSource,
 	discardCachedHouseholdSessionIfUnauthorized,
 	getHouseholdSession,
 	type HouseholdSession,
@@ -24,8 +25,6 @@ import {
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
 import { createDefaultSyncCoordinator } from "@/lib/services/sync";
-
-import { createHouseholdActiveListDataSource } from "./active-list-data-source";
 
 export type HomeContentState =
 	| { status: "loading" }
@@ -362,7 +361,7 @@ async function closeOpenedHome({
 function createDataSourceFromSession(
 	session: HomeHouseholdSession,
 ): ActiveListDataSource {
-	return createHouseholdActiveListDataSource({
+	return createHouseholdCurrentListDataSource({
 		household: session.activeHousehold,
 		activeMember: session.activeMember,
 		list: session.activeList,
