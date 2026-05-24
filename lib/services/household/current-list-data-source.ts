@@ -43,7 +43,6 @@ type DataSourceOptions = {
 };
 
 type ActiveListServices = {
-	store: ActiveListStore;
 	listService: ReturnType<typeof createListService>;
 	itemService: ReturnType<typeof createItemService>;
 };
@@ -211,7 +210,6 @@ function createActiveListServicesGetter({
 
 	return () => {
 		servicesPromise ??= storePromise.then((store) => ({
-			store,
 			listService: createListService({
 				householdId,
 				store,

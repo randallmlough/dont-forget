@@ -12,6 +12,40 @@ const mockLogger = {
 	warn: mockLoggerWarn,
 };
 
+type ListSqlRow = {
+	id: string;
+	name: string;
+	created_by_user_id: string;
+	created_at: number;
+	updated_at: number;
+	deleted_at: number | null;
+};
+
+type ItemSqlRow = {
+	id: string;
+	list_id: string;
+	name: string;
+	notes: string | null;
+	position: number;
+	created_by_user_id: string;
+	created_at: number;
+	updated_at: number;
+	deleted_at: number | null;
+};
+
+type ItemCheckSqlRow = {
+	item_id: string;
+	user_id: string;
+	checked_at: number | null;
+	updated_at: number;
+};
+
+type HouseholdRowsFixture = {
+	itemChecks?: ItemCheckSqlRow[];
+	items?: ItemSqlRow[];
+	lists?: ListSqlRow[];
+};
+
 jest.mock("@/lib/logger", () => ({
 	logger: {
 		with: jest.fn(() => mockLogger),
@@ -52,40 +86,9 @@ describe("createHouseholdCurrentListDataSource", () => {
 	it("pushes local rows through the remote upsert path after native sync succeeds", async () => {
 		const remoteExecute = jest.fn(async () => undefined);
 		const nativeSync = jest.fn(async () => ({ changed: true }));
-		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = statementSql(statement);
-			if (sql.includes("FROM lists")) {
-				return {
-					rows: [
-						{
-							id: DEFAULT_LIST_ID,
-							name: DEFAULT_LIST_NAME,
-							created_by_user_id: "usr_avery",
-							created_at: 1,
-							updated_at: 1,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			if (sql.includes("FROM items")) {
-				return {
-					rows: [
-						{
-							id: "itm_local",
-							list_id: DEFAULT_LIST_ID,
-							name: "Local Milk",
-							notes: null,
-							position: 0,
-							created_by_user_id: "usr_avery",
-							created_at: 2,
-							updated_at: 2,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			return { rows: [] };
+		const execute = createHouseholdRowsExecutor({
+			lists: [listRowFixture()],
+			items: [itemRowFixture({ id: "itm_local", name: "Local Milk" })],
 		});
 		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
@@ -131,53 +134,10 @@ describe("createHouseholdCurrentListDataSource", () => {
 	it("falls back to remote LWW upserts when native sync cannot push", async () => {
 		const remoteExecute = jest.fn(async () => undefined);
 		const nativeError = new Error("native sync failed");
-		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = statementSql(statement);
-			if (sql.includes("FROM lists")) {
-				return {
-					rows: [
-						{
-							id: DEFAULT_LIST_ID,
-							name: DEFAULT_LIST_NAME,
-							created_by_user_id: "usr_avery",
-							created_at: 1,
-							updated_at: 1,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			if (sql.includes("FROM items")) {
-				return {
-					rows: [
-						{
-							id: "itm_offline",
-							list_id: DEFAULT_LIST_ID,
-							name: "Offline Milk",
-							notes: null,
-							position: 0,
-							created_by_user_id: "usr_avery",
-							created_at: 2,
-							updated_at: 2,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			if (sql.includes("FROM item_checks")) {
-				return {
-					rows: [
-						{
-							item_id: "itm_offline",
-							user_id: "usr_avery",
-							checked_at: 3,
-							updated_at: 3,
-						},
-					],
-				};
-			}
-
-			return { rows: [] };
+		const execute = createHouseholdRowsExecutor({
+			lists: [listRowFixture()],
+			items: [itemRowFixture({ id: "itm_offline", name: "Offline Milk" })],
+			itemChecks: [itemCheckRowFixture({ itemId: "itm_offline" })],
 		});
 		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
@@ -231,26 +191,8 @@ describe("createHouseholdCurrentListDataSource", () => {
 	it("pushes local rows without native sync for automatic retry paths", async () => {
 		const remoteExecute = jest.fn(async () => undefined);
 		const nativeSync = jest.fn(async () => ({ changed: false }));
-		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = statementSql(statement);
-			if (sql.includes("FROM items")) {
-				return {
-					rows: [
-						{
-							id: "itm_retry",
-							list_id: DEFAULT_LIST_ID,
-							name: "Retry Milk",
-							notes: null,
-							position: 0,
-							created_by_user_id: "usr_avery",
-							created_at: 2,
-							updated_at: 2,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			return { rows: [] };
+		const execute = createHouseholdRowsExecutor({
+			items: [itemRowFixture({ id: "itm_retry", name: "Retry Milk" })],
 		});
 		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
@@ -559,6 +501,57 @@ function dataSourceConfigFixture() {
 			authToken: "token",
 			expiresAt: 1,
 		},
+	};
+}
+
+function createHouseholdRowsExecutor(rows: HouseholdRowsFixture) {
+	return jest.fn(async (statement: HouseholdSqlStatement) => {
+		const sql = statementSql(statement);
+		if (sql.includes("FROM lists")) return { rows: rows.lists ?? [] };
+		if (sql.includes("FROM items")) return { rows: rows.items ?? [] };
+		if (sql.includes("FROM item_checks"))
+			return { rows: rows.itemChecks ?? [] };
+		return { rows: [] };
+	});
+}
+
+function listRowFixture(): ListSqlRow {
+	return {
+		id: DEFAULT_LIST_ID,
+		name: DEFAULT_LIST_NAME,
+		created_by_user_id: "usr_avery",
+		created_at: 1,
+		updated_at: 1,
+		deleted_at: null,
+	};
+}
+
+function itemRowFixture({
+	id,
+	name,
+}: {
+	id: string;
+	name: string;
+}): ItemSqlRow {
+	return {
+		id,
+		list_id: DEFAULT_LIST_ID,
+		name,
+		notes: null,
+		position: 0,
+		created_by_user_id: "usr_avery",
+		created_at: 2,
+		updated_at: 2,
+		deleted_at: null,
+	};
+}
+
+function itemCheckRowFixture({ itemId }: { itemId: string }): ItemCheckSqlRow {
+	return {
+		item_id: itemId,
+		user_id: "usr_avery",
+		checked_at: 3,
+		updated_at: 3,
 	};
 }
 
