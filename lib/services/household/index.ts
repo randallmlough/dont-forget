@@ -13,13 +13,6 @@ export {
 } from "./current-list-data-source";
 
 export {
-	type CurrentListResourceLease,
-	createCurrentListResourceLease,
-	isStaleCurrentListResourceError,
-	type StaleCurrentListResourceError,
-} from "./current-list-resource-lease";
-
-export {
 	type CachedHouseholdSession,
 	clearCachedHouseholdSessionMetadata,
 	clearSignedOutHouseholdSessionData,
