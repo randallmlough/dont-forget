@@ -1508,6 +1508,9 @@ describe("createActiveHouseholdController", () => {
 			sync: expect.any(Function),
 			logger: householdLogger,
 		});
+		const [{ sync }] = createSyncCoordinator.mock.calls[0];
+		await sync({ mode: "full" });
+		expect(dataSource.sync).toHaveBeenCalledWith({ mode: "full" });
 	});
 });
 

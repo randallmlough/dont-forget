@@ -122,6 +122,26 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
 	});
 
+	it("requests local-write sync after adding an Item", async () => {
+		const coordinator = controllableSyncCoordinator("synced");
+		const sync = jest.fn(async () => ({ changed: false }));
+		const dataSource = memoryDataSource(emptyList, { sync });
+
+		renderActiveList(emptyList, dataSource, coordinator);
+
+		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		await act(async () => {
+			fireEvent.press(screen.getByText("Add"));
+		});
+
+		await waitFor(() =>
+			expect(coordinator.requestSync).toHaveBeenCalledWith({
+				reason: "localWrite",
+			}),
+		);
+		expect(sync).not.toHaveBeenCalled();
+	});
+
 	it("requests manual sync before refreshing the List view", async () => {
 		let state = emptyList;
 		const coordinator = controllableSyncCoordinator("synced");
@@ -130,6 +150,7 @@ describe("ActiveList", () => {
 				return state;
 			},
 		});
+		const load = jest.spyOn(dataSource, "load");
 		const pull = jest.spyOn(dataSource, "pull");
 
 		coordinator.requestSync.mockImplementationOnce(async () => {
@@ -161,6 +182,7 @@ describe("ActiveList", () => {
 		expect(coordinator.requestSync).toHaveBeenCalledWith({
 			reason: "manualRefresh",
 		});
+		expect(load).toHaveBeenCalledTimes(1);
 		expect(pull).not.toHaveBeenCalled();
 	});
 
