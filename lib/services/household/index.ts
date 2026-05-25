@@ -5,9 +5,10 @@ export {
 
 export {
 	type CachedHouseholdSession,
-	clearCachedHouseholdSession,
+	clearCachedHouseholdSessionMetadata,
+	clearUnauthorizedCachedHouseholdSessionMetadata,
 	createHouseholdSessionService,
-	discardCachedHouseholdSessionIfUnauthorized,
+	deleteCachedHouseholdSessionLocalData,
 	type GetHouseholdSessionToken,
 	getHouseholdSession,
 	HOUSEHOLD_SESSION_CACHE_KEY,
@@ -16,6 +17,7 @@ export {
 	type HouseholdSessionServiceDeps,
 	type HouseholdSessionStorage,
 	readCachedHouseholdSession,
+	readUnauthorizedCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "./household-session-service";
 

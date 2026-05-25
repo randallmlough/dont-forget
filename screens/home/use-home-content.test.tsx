@@ -9,11 +9,13 @@ import type {
 import { useLogger } from "@/lib/logger";
 import {
 	type CachedHouseholdSession,
+	clearUnauthorizedCachedHouseholdSessionMetadata,
 	createHouseholdCurrentListDataSource,
-	discardCachedHouseholdSessionIfUnauthorized,
+	deleteCachedHouseholdSessionLocalData,
 	getHouseholdSession,
 	type HouseholdSession,
 	readCachedHouseholdSession,
+	readUnauthorizedCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
 import { createDefaultSyncCoordinator } from "@/lib/services/sync";
@@ -41,10 +43,12 @@ jest.mock("@/lib/logger", () => ({
 }));
 
 jest.mock("@/lib/services/household", () => ({
+	clearUnauthorizedCachedHouseholdSessionMetadata: jest.fn(),
 	createHouseholdCurrentListDataSource: jest.fn(),
-	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
+	deleteCachedHouseholdSessionLocalData: jest.fn(),
 	getHouseholdSession: jest.fn(),
 	readCachedHouseholdSession: jest.fn(),
+	readUnauthorizedCachedHouseholdSession: jest.fn(),
 	saveCachedHouseholdSession: jest.fn(),
 }));
 
@@ -64,8 +68,12 @@ beforeEach(() => {
 	mockRootLogger.with.mockClear();
 	mockRootLogger.with.mockImplementation(() => mockHouseholdLogger);
 	jest
-		.mocked(discardCachedHouseholdSessionIfUnauthorized)
-		.mockResolvedValue(null);
+		.mocked(clearUnauthorizedCachedHouseholdSessionMetadata)
+		.mockResolvedValue(undefined);
+	jest
+		.mocked(deleteCachedHouseholdSessionLocalData)
+		.mockResolvedValue(undefined);
+	jest.mocked(readUnauthorizedCachedHouseholdSession).mockResolvedValue(null);
 	jest.mocked(readCachedHouseholdSession).mockResolvedValue(null);
 	jest
 		.mocked(saveCachedHouseholdSession)
@@ -295,6 +303,7 @@ describe("useHomeContent", () => {
 	});
 
 	it("discards unauthorized cached Household data without starting cached sync", async () => {
+		const calls: string[] = [];
 		const freshSession = deferred<HouseholdSession>();
 		const cached = cachedHouseholdSessionFixture();
 		const fresh = householdSessionFixture({
@@ -308,6 +317,9 @@ describe("useHomeContent", () => {
 		const cachedDataSource = noopDataSource(cachedList, {
 			syncAuthorized: false,
 			sync: cachedSync,
+			async close() {
+				calls.push("cached-close");
+			},
 		});
 		const freshDataSource = noopDataSource(freshList, {
 			syncAuthorized: true,
@@ -316,7 +328,131 @@ describe("useHomeContent", () => {
 		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
 		jest
-			.mocked(discardCachedHouseholdSessionIfUnauthorized)
+			.mocked(readUnauthorizedCachedHouseholdSession)
+			.mockResolvedValue(cached);
+		jest
+			.mocked(clearUnauthorizedCachedHouseholdSessionMetadata)
+			.mockImplementation(async () => {
+				calls.push("clear-unauthorized-metadata");
+			});
+		jest
+			.mocked(deleteCachedHouseholdSessionLocalData)
+			.mockImplementation(async () => {
+				calls.push("delete-local-data");
+			});
+		jest
+			.mocked(createHouseholdCurrentListDataSource)
+			.mockImplementation((config) =>
+				config.database.authToken ? freshDataSource : cachedDataSource,
+			);
+
+		render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+		mockSyncCoordinatorFactory.created[0]?.stop.mockImplementation(async () => {
+			calls.push("cached-stop");
+		});
+		freshSession.resolve(fresh);
+
+		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+		expect(readUnauthorizedCachedHouseholdSession).toHaveBeenCalledWith(fresh);
+		expect(
+			clearUnauthorizedCachedHouseholdSessionMetadata,
+		).toHaveBeenCalledWith(cached, fresh);
+		expect(deleteCachedHouseholdSessionLocalData).toHaveBeenCalledWith(cached);
+		expect(calls).toEqual([
+			"cached-stop",
+			"cached-close",
+			"delete-local-data",
+			"clear-unauthorized-metadata",
+		]);
+		expect(cachedSync).not.toHaveBeenCalled();
+		expect(mockSyncCoordinatorFactory.created[0]?.start).not.toHaveBeenCalled();
+		expect(freshSync).not.toHaveBeenCalled();
+		expect(mockSyncCoordinatorFactory.created[1]?.start).toHaveBeenCalledTimes(
+			1,
+		);
+	});
+
+	it("closes pending unauthorized cached resources before clearing metadata or deleting local data", async () => {
+		const calls: string[] = [];
+		const cachedLoad = deferred<ActiveListInitialState>();
+		const freshSession = deferred<HouseholdSession>();
+		const cached = cachedHouseholdSessionFixture();
+		const fresh = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+		const freshList = initialListFixture({ itemName: "Fresh Eggs" });
+		const cachedDataSource = noopDataSource(initialListFixture(), {
+			syncAuthorized: false,
+			load: () => cachedLoad.promise,
+			async close() {
+				calls.push("pending-cached-close");
+			},
+		});
+		const freshDataSource = noopDataSource(freshList, {
+			syncAuthorized: true,
+		});
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
+		jest
+			.mocked(readUnauthorizedCachedHouseholdSession)
+			.mockResolvedValue(cached);
+		jest
+			.mocked(clearUnauthorizedCachedHouseholdSessionMetadata)
+			.mockImplementation(async () => {
+				calls.push("clear-unauthorized-metadata");
+			});
+		jest
+			.mocked(deleteCachedHouseholdSessionLocalData)
+			.mockImplementation(async () => {
+				calls.push("delete-local-data");
+			});
+		jest
+			.mocked(createHouseholdCurrentListDataSource)
+			.mockImplementation((config) =>
+				config.database.authToken ? freshDataSource : cachedDataSource,
+			);
+
+		render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() =>
+			expect(createHouseholdCurrentListDataSource).toHaveBeenCalledTimes(1),
+		);
+		mockSyncCoordinatorFactory.created[0]?.stop.mockImplementation(async () => {
+			calls.push("pending-cached-stop");
+		});
+		freshSession.resolve(fresh);
+
+		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+		expect(calls).toEqual([
+			"pending-cached-stop",
+			"pending-cached-close",
+			"delete-local-data",
+			"clear-unauthorized-metadata",
+		]);
+	});
+
+	it("does not delete unauthorized cached local data when cached resources fail to close", async () => {
+		const freshSession = deferred<HouseholdSession>();
+		const cached = cachedHouseholdSessionFixture();
+		const fresh = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+		const cachedDataSource = noopDataSource(
+			initialListFixture({ itemName: "Cached Milk" }),
+			{ syncAuthorized: false },
+		);
+		const freshDataSource = noopDataSource(
+			initialListFixture({ itemName: "Fresh Eggs" }),
+			{ syncAuthorized: true },
+		);
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
+		jest
+			.mocked(readUnauthorizedCachedHouseholdSession)
 			.mockResolvedValue(cached);
 		jest
 			.mocked(createHouseholdCurrentListDataSource)
@@ -327,18 +463,17 @@ describe("useHomeContent", () => {
 		render(<UseHomeContentHarness isLoaded isSignedIn />);
 
 		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+		mockSyncCoordinatorFactory.created[0]?.stop.mockRejectedValue(
+			new Error("stop failed"),
+		);
 		freshSession.resolve(fresh);
 
-		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
-		expect(discardCachedHouseholdSessionIfUnauthorized).toHaveBeenCalledWith(
-			fresh,
-		);
-		expect(cachedSync).not.toHaveBeenCalled();
-		expect(mockSyncCoordinatorFactory.created[0]?.start).not.toHaveBeenCalled();
-		expect(freshSync).not.toHaveBeenCalled();
-		expect(mockSyncCoordinatorFactory.created[1]?.start).toHaveBeenCalledTimes(
-			1,
-		);
+		await waitFor(() => expect(screen.getByText("error")).toBeTruthy());
+		expect(deleteCachedHouseholdSessionLocalData).not.toHaveBeenCalled();
+		expect(
+			clearUnauthorizedCachedHouseholdSessionMetadata,
+		).not.toHaveBeenCalled();
+		expect(screen.queryByText("Fresh Eggs")).toBeNull();
 	});
 
 	it("closes a pending data source when the loading run is cancelled", async () => {

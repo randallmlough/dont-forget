@@ -13,11 +13,13 @@ import type {
 import { reset, track } from "@/lib/analytics";
 import {
 	type CachedHouseholdSession,
-	clearCachedHouseholdSession,
+	clearCachedHouseholdSessionMetadata,
+	clearUnauthorizedCachedHouseholdSessionMetadata,
 	createHouseholdCurrentListDataSource,
-	discardCachedHouseholdSessionIfUnauthorized,
+	deleteCachedHouseholdSessionLocalData,
 	getHouseholdSession,
 	readCachedHouseholdSession,
+	readUnauthorizedCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
 import { createDefaultSyncCoordinator } from "@/lib/services/sync";
@@ -32,11 +34,13 @@ jest.mock("@/lib/analytics", () => ({
 }));
 
 jest.mock("@/lib/services/household", () => ({
-	clearCachedHouseholdSession: jest.fn(),
+	clearCachedHouseholdSessionMetadata: jest.fn(),
+	clearUnauthorizedCachedHouseholdSessionMetadata: jest.fn(),
 	createHouseholdCurrentListDataSource: jest.fn(),
-	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
+	deleteCachedHouseholdSessionLocalData: jest.fn(),
 	getHouseholdSession: jest.fn(),
 	readCachedHouseholdSession: jest.fn(),
+	readUnauthorizedCachedHouseholdSession: jest.fn(),
 	saveCachedHouseholdSession: jest.fn(),
 }));
 
@@ -54,10 +58,14 @@ beforeEach(() => {
 	jest.mocked(createDefaultSyncCoordinator).mockClear();
 	jest.mocked(createHouseholdCurrentListDataSource).mockReset();
 	mockSyncCoordinatorFactory.created.length = 0;
-	jest.mocked(clearCachedHouseholdSession).mockResolvedValue(undefined);
+	jest.mocked(clearCachedHouseholdSessionMetadata).mockResolvedValue(null);
 	jest
-		.mocked(discardCachedHouseholdSessionIfUnauthorized)
-		.mockResolvedValue(null);
+		.mocked(clearUnauthorizedCachedHouseholdSessionMetadata)
+		.mockResolvedValue(undefined);
+	jest
+		.mocked(deleteCachedHouseholdSessionLocalData)
+		.mockResolvedValue(undefined);
+	jest.mocked(readUnauthorizedCachedHouseholdSession).mockResolvedValue(null);
 	jest.mocked(readCachedHouseholdSession).mockResolvedValue(null);
 	jest
 		.mocked(saveCachedHouseholdSession)
@@ -217,10 +225,15 @@ describe("HomeScreen", () => {
 
 	it("discards stale cached Household metadata before opening fresh authorized data", async () => {
 		const initialList = initialListFixture();
+		const cached = cachedHouseholdSessionFixture();
 		const session = householdSessionFixture({
 			householdId: "hh_new",
 			householdName: "New",
 		});
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		jest
+			.mocked(readUnauthorizedCachedHouseholdSession)
+			.mockResolvedValue(cached);
 		jest.mocked(getHouseholdSession).mockResolvedValue(session);
 		jest
 			.mocked(createHouseholdCurrentListDataSource)
@@ -230,10 +243,16 @@ describe("HomeScreen", () => {
 
 		render(<HomeScreen />);
 
-		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(discardCachedHouseholdSessionIfUnauthorized).toHaveBeenCalledWith(
+		await waitFor(() =>
+			expect(saveCachedHouseholdSession).toHaveBeenCalledWith(session),
+		);
+		expect(readUnauthorizedCachedHouseholdSession).toHaveBeenCalledWith(
 			session,
 		);
+		expect(
+			clearUnauthorizedCachedHouseholdSessionMetadata,
+		).toHaveBeenCalledWith(cached, session);
+		expect(deleteCachedHouseholdSessionLocalData).toHaveBeenCalledWith(cached);
 		expect(createHouseholdCurrentListDataSource).toHaveBeenCalledWith({
 			household: session.activeHousehold,
 			activeMember: session.activeMember,
@@ -242,7 +261,6 @@ describe("HomeScreen", () => {
 			members: session.members,
 			database: session.householdDatabase,
 		});
-		expect(saveCachedHouseholdSession).toHaveBeenCalledWith(session);
 	});
 
 	it("tracks, resets, clears local Household data, then signs out through Clerk", async () => {
@@ -264,9 +282,18 @@ describe("HomeScreen", () => {
 		jest.mocked(reset).mockImplementation(() => {
 			calls.push("reset");
 		});
-		jest.mocked(clearCachedHouseholdSession).mockImplementation(async () => {
-			calls.push("clear-local-household-data");
-		});
+		const cached = cachedHouseholdSessionFixture();
+		jest
+			.mocked(clearCachedHouseholdSessionMetadata)
+			.mockImplementation(async () => {
+				calls.push("clear-cached-metadata");
+				return null;
+			});
+		jest
+			.mocked(deleteCachedHouseholdSessionLocalData)
+			.mockImplementation(async () => {
+				calls.push("delete-local-household-data");
+			});
 		clerkMocks.signOut.mockImplementation(async () => {
 			calls.push("clerk-sign-out");
 		});
@@ -276,6 +303,7 @@ describe("HomeScreen", () => {
 		const { unmount } = render(<HomeScreen />);
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
 		const stopSync = deferred<void>();
 		mockSyncCoordinatorFactory.created[0]?.stop.mockImplementation(() => {
 			calls.push("stop-sync");
@@ -294,10 +322,49 @@ describe("HomeScreen", () => {
 			"reset",
 			"stop-sync",
 			"close-data-source",
-			"clear-local-household-data",
+			"delete-local-household-data",
+			"clear-cached-metadata",
 			"clerk-sign-out",
 		]);
 		expect(close).toHaveBeenCalledTimes(1);
+		expect(deleteCachedHouseholdSessionLocalData).toHaveBeenCalledWith(cached);
+	});
+
+	it("does not clear cached metadata or sign out before sign-out local data deletion succeeds", async () => {
+		const initialList = initialListFixture();
+		const cached = cachedHouseholdSessionFixture();
+		const localDataDeleted = deferred<void>();
+		jest
+			.mocked(getHouseholdSession)
+			.mockResolvedValue(householdSessionFixture());
+		jest
+			.mocked(createHouseholdCurrentListDataSource)
+			.mockReturnValue(noopDataSource(initialList));
+		jest
+			.mocked(deleteCachedHouseholdSessionLocalData)
+			.mockReturnValue(localDataDeleted.promise);
+		clerkMocks.getToken.mockResolvedValue("session-token");
+		setMockAuthState({ isSignedIn: true });
+
+		render(<HomeScreen />);
+
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
+		fireEvent.press(screen.getByText("Sign out"));
+
+		await waitFor(() =>
+			expect(deleteCachedHouseholdSessionLocalData).toHaveBeenCalledWith(
+				cached,
+			),
+		);
+		expect(clearCachedHouseholdSessionMetadata).not.toHaveBeenCalled();
+		expect(clerkMocks.signOut).not.toHaveBeenCalled();
+
+		localDataDeleted.resolve(undefined);
+		await waitFor(() =>
+			expect(clearCachedHouseholdSessionMetadata).toHaveBeenCalledTimes(1),
+		);
+		expect(clerkMocks.signOut).toHaveBeenCalledTimes(1);
 	});
 });
 

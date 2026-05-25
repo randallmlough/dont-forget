@@ -55,9 +55,17 @@ The sign-out order must remain:
 track("user_signed_out", {});
 reset();
 await activeHouseholdController.dispose();
-await clearCachedHouseholdSession();
+const cached = await readCachedHouseholdSession();
+if (cached) {
+	await deleteCachedHouseholdSessionLocalData(cached);
+}
+await clearCachedHouseholdSessionMetadata();
 await signOut();
 ```
+
+Cached Household Session metadata clearing and local Household DB file deletion
+remain separate operations so active Household resources can be stopped and
+closed before destructive local cleanup.
 
 ## Adding Routes
 

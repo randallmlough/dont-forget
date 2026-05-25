@@ -6,7 +6,11 @@ import { StyleSheet } from "react-native-unistyles";
 
 import { ActiveList } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
-import { clearCachedHouseholdSession } from "@/lib/services/household";
+import {
+	clearCachedHouseholdSessionMetadata,
+	deleteCachedHouseholdSessionLocalData,
+	readCachedHouseholdSession,
+} from "@/lib/services/household";
 import {
 	type HomeContentState,
 	useHomeContent,
@@ -39,7 +43,11 @@ export default function HomeScreen() {
 		track("user_signed_out", {});
 		reset();
 		await closeCurrentHome();
-		await clearCachedHouseholdSession();
+		const cached = await readCachedHouseholdSession();
+		if (cached) {
+			await deleteCachedHouseholdSessionLocalData(cached);
+		}
+		await clearCachedHouseholdSessionMetadata();
 		await signOut();
 	}
 

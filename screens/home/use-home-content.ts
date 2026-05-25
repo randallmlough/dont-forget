@@ -17,11 +17,13 @@ import type {
 import { type Logger, useLogger } from "@/lib/logger";
 import {
 	type CachedHouseholdSession,
+	clearUnauthorizedCachedHouseholdSessionMetadata,
 	createHouseholdCurrentListDataSource,
-	discardCachedHouseholdSessionIfUnauthorized,
+	deleteCachedHouseholdSessionLocalData,
 	getHouseholdSession,
 	type HouseholdSession,
 	readCachedHouseholdSession,
+	readUnauthorizedCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "@/lib/services/household";
 import { createDefaultSyncCoordinator } from "@/lib/services/sync";
@@ -47,6 +49,10 @@ type OpenedHome = {
 };
 
 type OpenedHomeResource = Pick<OpenedHome, "dataSource" | "syncCoordinator">;
+type PendingHomeResource = Pick<
+	OpenedHome,
+	"dataSource" | "session" | "syncCoordinator"
+>;
 
 type UseHomeContentOptions = {
 	getToken: () => Promise<string | null>;
@@ -68,7 +74,7 @@ type HomeLoadRun = {
 	cachedRendered: boolean;
 	cachedInvalidated: boolean;
 	freshRendered: boolean;
-	pendingHomes: Set<OpenedHomeResource>;
+	pendingHomes: Set<PendingHomeResource>;
 };
 
 type HomeLoadOptions = Pick<
@@ -165,7 +171,7 @@ function startHomeLoad(options: HomeLoadOptions): () => void {
 		cachedRendered: false,
 		cachedInvalidated: false,
 		freshRendered: false,
-		pendingHomes: new Set<OpenedHomeResource>(),
+		pendingHomes: new Set<PendingHomeResource>(),
 	};
 
 	run.setContent((current) =>
@@ -210,14 +216,23 @@ async function loadFreshHome(run: HomeLoadRun, cachedAttempt: Promise<void>) {
 		const session = await getHouseholdSession(() => run.getToken());
 		if (run.cancelled || run.signingOutRef.current) return;
 
-		const discarded =
-			await discardCachedHouseholdSessionIfUnauthorized(session);
+		const unauthorizedCached =
+			await readUnauthorizedCachedHouseholdSession(session);
 		if (run.cancelled || run.signingOutRef.current) return;
 
-		if (discarded) {
+		if (unauthorizedCached) {
 			run.cachedInvalidated = true;
 			run.cachedRendered = false;
 			run.setContent({ status: "loading" });
+			await closeCachedHomeResources(run, unauthorizedCached);
+			if (run.cancelled || run.signingOutRef.current) return;
+
+			await deleteCachedHouseholdSessionLocalData(unauthorizedCached);
+			await clearUnauthorizedCachedHouseholdSessionMetadata(
+				unauthorizedCached,
+				session,
+			);
+			if (run.cancelled || run.signingOutRef.current) return;
 		}
 
 		await closeRenderedHomeBeforeFreshOpen(run);
@@ -244,7 +259,7 @@ async function openHome(
 		sync: dataSource.sync,
 		logger: run.logger.with({ household_id: session.activeHousehold.id }),
 	});
-	const home = { dataSource, syncCoordinator };
+	const home = { session, dataSource, syncCoordinator };
 	run.pendingHomes.add(home);
 
 	try {
@@ -322,6 +337,31 @@ async function closeRenderedHomeBeforeFreshOpen(run: HomeLoadRun) {
 	}).catch(() => undefined);
 }
 
+async function closeCachedHomeResources(
+	run: HomeLoadRun,
+	cached: CachedHouseholdSession,
+) {
+	const renderedHome = run.renderedHomeRef.current;
+	if (renderedHome && isHomeForCachedSession(renderedHome, cached)) {
+		await closeOpenedHome({
+			closedDataSources: run.closedDataSources,
+			home: renderedHome,
+		});
+		run.renderedHomeRef.current = null;
+	}
+
+	const pendingCachedHomes = [...run.pendingHomes].filter((home) =>
+		isHomeForCachedSession(home, cached),
+	);
+	for (const home of pendingCachedHomes) {
+		await closeOpenedHome({
+			closedDataSources: run.closedDataSources,
+			home,
+			pendingHomes: run.pendingHomes,
+		});
+	}
+}
+
 async function showErrorIfNoListRendered(
 	run: HomeLoadRun,
 	cachedAttempt: Promise<void>,
@@ -346,16 +386,33 @@ async function closeOpenedHome({
 	pendingHomes,
 }: {
 	closedDataSources: Set<ActiveListDataSource>;
-	home: OpenedHomeResource;
-	pendingHomes?: Set<OpenedHomeResource>;
+	home: OpenedHomeResource | PendingHomeResource;
+	pendingHomes?: Set<PendingHomeResource>;
 }) {
 	const { dataSource, syncCoordinator } = home;
-	if (closedDataSources.has(dataSource)) return;
+	if (closedDataSources.has(dataSource)) {
+		if (pendingHomes && "session" in home) {
+			pendingHomes.delete(home);
+		}
+		return;
+	}
 
-	closedDataSources.add(dataSource);
-	pendingHomes?.delete(home);
 	await syncCoordinator.stop();
 	await dataSource.close();
+	if (pendingHomes && "session" in home) {
+		pendingHomes.delete(home);
+	}
+	closedDataSources.add(dataSource);
+}
+
+function isHomeForCachedSession(
+	home: Pick<OpenedHome, "session">,
+	cached: CachedHouseholdSession,
+): boolean {
+	return (
+		home.session.activeHousehold.id === cached.activeHousehold.id &&
+		!("authToken" in home.session.householdDatabase)
+	);
 }
 
 function createDataSourceFromSession(
