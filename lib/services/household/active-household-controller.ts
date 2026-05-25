@@ -53,9 +53,7 @@ type ActiveHouseholdSession = HouseholdSession | CachedHouseholdSession;
 
 type ActiveHouseholdResource = {
 	dataSource: ActiveListDataSource;
-	drainDataSource: () => Promise<void>;
-	closeDataSource: () => Promise<void>;
-	retireDataSource: () => void;
+	close: () => Promise<void>;
 	syncCoordinator: ActiveListSyncCoordinator;
 };
 
@@ -138,29 +136,7 @@ export function createActiveHouseholdController(
 	}
 
 	async function closeResource(resource: ActiveHouseholdResource) {
-		resource.retireDataSource();
-		let stopError: unknown = null;
-		await resource.drainDataSource();
-		try {
-			await resource.syncCoordinator.stop();
-		} catch (error) {
-			stopError = error;
-		}
-
-		try {
-			await resource.closeDataSource();
-		} catch (closeError) {
-			if (stopError) {
-				throw Object.assign(asError(closeError), {
-					syncStopError: asError(stopError),
-				});
-			}
-			throw closeError;
-		}
-
-		if (stopError) {
-			throw stopError;
-		}
+		await resource.close();
 	}
 
 	function publishResource(
@@ -218,9 +194,7 @@ export function createActiveHouseholdController(
 			});
 			return {
 				dataSource,
-				drainDataSource: lease.waitForDrain,
-				closeDataSource: lease.close,
-				retireDataSource: lease.retire,
+				close: () => lease.retireAndClose({ stopSync: syncCoordinator.stop }),
 				syncCoordinator,
 			};
 		} catch (error) {
@@ -333,9 +307,9 @@ export function createActiveHouseholdController(
 		}
 
 		if (previousResource) {
-			previousResource.retireDataSource();
+			const closePreviousResource = closeResource(previousResource);
 			await Promise.resolve();
-			await closeResource(previousResource);
+			await closePreviousResource;
 		}
 		return true;
 	}

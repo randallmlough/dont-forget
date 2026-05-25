@@ -10,7 +10,7 @@ describe("createCurrentListResourceLease", () => {
 		const dataSource = activeListDataSourceFixture();
 		const lease = createCurrentListResourceLease(dataSource);
 
-		lease.retire();
+		const closing = lease.retireAndClose();
 
 		await expect(lease.dataSource.load()).rejects.toMatchObject({
 			code: "stale_current_list_resource",
@@ -26,6 +26,7 @@ describe("createCurrentListResourceLease", () => {
 		expect(dataSource.setItemChecked).not.toHaveBeenCalled();
 		expect(dataSource.pull).not.toHaveBeenCalled();
 		expect(dataSource.sync).not.toHaveBeenCalled();
+		await closing;
 	});
 
 	it("does not classify Item/List service errors as stale-resource errors", async () => {
@@ -58,8 +59,7 @@ describe("createCurrentListResourceLease", () => {
 		);
 
 		const acceptedWrite = lease.dataSource.addItem("Milk");
-		lease.retire();
-		const closing = lease.closeWhenDrained();
+		const closing = lease.retireAndClose();
 
 		await Promise.resolve();
 		expect(close).not.toHaveBeenCalled();
@@ -88,8 +88,7 @@ describe("createCurrentListResourceLease", () => {
 		);
 
 		const acceptedSync = lease.dataSource.sync();
-		lease.retire();
-		const closing = lease.closeWhenDrained();
+		const closing = lease.retireAndClose();
 
 		await Promise.resolve();
 		expect(close).not.toHaveBeenCalled();
@@ -97,6 +96,39 @@ describe("createCurrentListResourceLease", () => {
 		sync.resolve({ changed: false });
 		await acceptedSync;
 		await closing;
+
+		expect(close).toHaveBeenCalledTimes(1);
+	});
+	it("stops sync before closing the drained resource", async () => {
+		const events: string[] = [];
+		const lease = createCurrentListResourceLease(
+			activeListDataSourceFixture({
+				close: jest.fn(async () => {
+					events.push("close");
+				}),
+			}),
+		);
+		const stopSync = jest.fn(async () => {
+			events.push("stop");
+		});
+
+		await lease.retireAndClose({ stopSync });
+
+		expect(events).toEqual(["stop", "close"]);
+	});
+
+	it("still closes the resource when stopping sync fails", async () => {
+		const stopError = new Error("stop failed");
+		const close = jest.fn().mockResolvedValue(undefined);
+		const lease = createCurrentListResourceLease(
+			activeListDataSourceFixture({ close }),
+		);
+
+		await expect(
+			lease.retireAndClose({
+				stopSync: jest.fn().mockRejectedValue(stopError),
+			}),
+		).rejects.toBe(stopError);
 
 		expect(close).toHaveBeenCalledTimes(1);
 	});

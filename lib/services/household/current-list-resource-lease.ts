@@ -1,4 +1,5 @@
 import type { ActiveListDataSource } from "@/components/active-list";
+import { asError } from "@/lib/errors";
 
 export type StaleCurrentListResourceError = Error & {
 	code: "stale_current_list_resource";
@@ -6,10 +7,9 @@ export type StaleCurrentListResourceError = Error & {
 
 export type CurrentListResourceLease = {
 	dataSource: ActiveListDataSource;
-	retire: () => void;
-	waitForDrain: () => Promise<void>;
-	close: () => Promise<void>;
-	closeWhenDrained: () => Promise<void>;
+	retireAndClose: (options?: {
+		stopSync?: () => Promise<void>;
+	}) => Promise<void>;
 };
 
 export function createCurrentListResourceLease(
@@ -48,10 +48,33 @@ export function createCurrentListResourceLease(
 		});
 	}
 
-	async function closeWhenDrained() {
+	async function retireAndClose(
+		options: { stopSync?: () => Promise<void> } = {},
+	) {
 		retire();
+		let stopError: unknown = null;
 		await waitForDrain();
-		await dataSource.close();
+
+		try {
+			await options.stopSync?.();
+		} catch (error) {
+			stopError = error;
+		}
+
+		try {
+			await dataSource.close();
+		} catch (closeError) {
+			if (stopError) {
+				throw Object.assign(asError(closeError), {
+					syncStopError: asError(stopError),
+				});
+			}
+			throw closeError;
+		}
+
+		if (stopError) {
+			throw stopError;
+		}
 	}
 
 	return {
@@ -63,12 +86,9 @@ export function createCurrentListResourceLease(
 				run(() => dataSource.setItemChecked(itemId, checked)),
 			pull: () => run(() => dataSource.pull()),
 			sync: (options) => run(() => dataSource.sync(options)),
-			close: closeWhenDrained,
+			close: () => retireAndClose(),
 		},
-		retire,
-		waitForDrain,
-		close: () => dataSource.close(),
-		closeWhenDrained,
+		retireAndClose,
 	};
 }
 
