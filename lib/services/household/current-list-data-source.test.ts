@@ -305,8 +305,11 @@ describe("createHouseholdCurrentListDataSource", () => {
 		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
-	it("does not error-log expected network failures while offline", async () => {
+	it("skips remote fallback after native full sync fails offline", async () => {
 		const networkError = new TypeError("Network request failed");
+		const openRemoteClient = jest.fn(() => {
+			throw new Error("remote fallback should not start while offline");
+		});
 		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
@@ -319,14 +322,46 @@ describe("createHouseholdCurrentListDataSource", () => {
 					pull: jest.fn(async () => ({ changed: false })),
 					close: jest.fn(async () => undefined),
 				},
-				openRemoteClient: () => {
-					throw networkError;
-				},
+				openRemoteClient,
 			},
 		);
 
 		await expect(dataSource.sync()).rejects.toThrow(networkError);
 
+		expect(openRemoteClient).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalledWith(
+			"active list sync fallback succeeded",
+		);
+	});
+
+	it("skips remote fallback after native push fails offline", async () => {
+		const networkError = new TypeError("Network request failed");
+		const openRemoteClient = jest.fn(() => {
+			throw new Error("remote fallback should not start while offline");
+		});
+		const dataSource = createHouseholdCurrentListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute: jest.fn(async () => ({ rows: [] })),
+					push: jest.fn(async () => {
+						throw networkError;
+					}),
+					sync: jest.fn(async () => ({ changed: false })),
+					pull: jest.fn(async () => ({ changed: false })),
+					close: jest.fn(async () => undefined),
+				},
+				openRemoteClient,
+			},
+		);
+
+		await expect(dataSource.sync({ mode: "pushLocalOnly" })).rejects.toThrow(
+			networkError,
+		);
+
+		expect(openRemoteClient).not.toHaveBeenCalled();
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(logger.warn).not.toHaveBeenCalledWith(
 			"active list sync fallback succeeded",

@@ -5,7 +5,7 @@ import type {
 	ActiveListSyncResult,
 } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
-import { asError } from "@/lib/errors";
+import { asError, isNetworkUnavailableError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
@@ -155,6 +155,9 @@ export function createHouseholdCurrentListDataSource(
 						nativeError = error;
 					}
 				}
+				if (isNetworkUnavailableError(nativeError)) {
+					throw nativeError;
+				}
 
 				await pushLocalHouseholdRowsToRemote(
 					store,
@@ -177,6 +180,9 @@ export function createHouseholdCurrentListDataSource(
 				nativeResult = store.sync ? await store.sync() : { changed: false };
 			} catch (error) {
 				nativeError = error;
+			}
+			if (isNetworkUnavailableError(nativeError)) {
+				throw nativeError;
 			}
 
 			try {
