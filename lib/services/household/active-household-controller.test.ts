@@ -377,6 +377,384 @@ describe("createActiveHouseholdController", () => {
 		});
 	});
 
+	it("rejects new operations on an unauthorized cached resource after invalidation", async () => {
+		const cached = cachedHouseholdSessionFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const fresh = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+		const cachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Old" })),
+		});
+		const freshDataSource = activeListDataSourceFixture({
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "New" })),
+		});
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionServiceFixture({
+				readCachedHouseholdSession: jest
+					.fn()
+					.mockResolvedValueOnce(cached)
+					.mockResolvedValueOnce(null),
+				getHouseholdSession: jest.fn().mockResolvedValue(fresh),
+				readUnauthorizedCachedHouseholdSession: jest
+					.fn()
+					.mockResolvedValue(cached),
+			}),
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataSource)
+				.mockReturnValueOnce(freshDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => null,
+			authReady: true,
+			signedIn: false,
+		});
+		const cachedSnapshot = controller.getSnapshot();
+		if (cachedSnapshot.status !== "ready") {
+			throw new Error("Expected cached ready");
+		}
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		await expect(
+			cachedSnapshot.view.currentList.dataSource.addItem("Milk"),
+		).rejects.toMatchObject({ code: "stale_current_list_resource" });
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			view: { currentList: { initialState: { householdName: "New" } } },
+		});
+	});
+
+	it("rejects new unauthorized cached operations before local deletion starts", async () => {
+		const cached = cachedHouseholdSessionFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const fresh = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+		const deleteCached = deferred<void>();
+		const cachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Old" })),
+		});
+		const freshDataSource = activeListDataSourceFixture({
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "New" })),
+		});
+		const sessionService = sessionServiceFixture({
+			readCachedHouseholdSession: jest
+				.fn()
+				.mockResolvedValueOnce(cached)
+				.mockResolvedValueOnce(null),
+			getHouseholdSession: jest.fn().mockResolvedValue(fresh),
+			readUnauthorizedCachedHouseholdSession: jest
+				.fn()
+				.mockResolvedValue(cached),
+			deleteCachedHouseholdSessionLocalData: jest.fn(
+				() => deleteCached.promise,
+			),
+		});
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataSource)
+				.mockReturnValueOnce(freshDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => null,
+			authReady: true,
+			signedIn: false,
+		});
+		const cachedSnapshot = controller.getSnapshot();
+		if (cachedSnapshot.status !== "ready") {
+			throw new Error("Expected cached ready");
+		}
+
+		const activation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		await waitForAsync(() =>
+			expect(
+				sessionService.deleteCachedHouseholdSessionLocalData,
+			).toHaveBeenCalledWith(cached),
+		);
+
+		await expect(
+			cachedSnapshot.view.currentList.dataSource.addItem("Milk"),
+		).rejects.toMatchObject({ code: "stale_current_list_resource" });
+		expect(freshDataSource.load).not.toHaveBeenCalled();
+
+		deleteCached.resolve(undefined);
+		await activation;
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			view: { currentList: { initialState: { householdName: "New" } } },
+		});
+	});
+
+	it("cancels unauthorized cached deletion when a newer activation starts", async () => {
+		const cached = cachedHouseholdSessionFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const firstFresh = householdSessionFixture({
+			householdId: "hh_first",
+			householdName: "First",
+		});
+		const secondFresh = householdSessionFixture({
+			householdId: "hh_second",
+			householdName: "Second",
+		});
+		const closeCached = deferred<void>();
+		const cachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Old" })),
+			close: jest.fn(() => closeCached.promise),
+		});
+		const firstFreshDataSource = activeListDataSourceFixture({
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "First" })),
+		});
+		const secondFreshDataSource = activeListDataSourceFixture({
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Second" })),
+		});
+		const sessionService = sessionServiceFixture({
+			readCachedHouseholdSession: jest
+				.fn()
+				.mockResolvedValueOnce(cached)
+				.mockResolvedValue(null),
+			getHouseholdSession: jest
+				.fn()
+				.mockResolvedValueOnce(firstFresh)
+				.mockResolvedValueOnce(secondFresh),
+			readUnauthorizedCachedHouseholdSession: jest
+				.fn()
+				.mockResolvedValueOnce(cached)
+				.mockResolvedValueOnce(null),
+		});
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataSource)
+				.mockReturnValueOnce(secondFreshDataSource)
+				.mockReturnValueOnce(firstFreshDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => null,
+			authReady: true,
+			signedIn: false,
+		});
+		const staleActivation = controller.activate({
+			getToken: async () => "stale-token",
+			authReady: true,
+			signedIn: true,
+		});
+		await waitForAsync(() => expect(cachedDataSource.close).toHaveBeenCalled());
+
+		const freshActivation = controller.activate({
+			getToken: async () => "fresh-token",
+			authReady: true,
+			signedIn: true,
+		});
+		closeCached.resolve(undefined);
+		await Promise.all([staleActivation, freshActivation]);
+
+		expect(
+			sessionService.deleteCachedHouseholdSessionLocalData,
+		).not.toHaveBeenCalled();
+		expect(
+			sessionService.clearUnauthorizedCachedHouseholdSessionMetadata,
+		).not.toHaveBeenCalled();
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			view: { currentList: { initialState: { householdName: "Second" } } },
+		});
+	});
+
+	it("cancels unauthorized metadata clearing when a newer activation starts during deletion", async () => {
+		const cached = cachedHouseholdSessionFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const firstFresh = householdSessionFixture({
+			householdId: "hh_first",
+			householdName: "First",
+		});
+		const secondFresh = householdSessionFixture({
+			householdId: "hh_second",
+			householdName: "Second",
+		});
+		const deleteCached = deferred<void>();
+		const cachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Old" })),
+		});
+		const secondFreshDataSource = activeListDataSourceFixture({
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Second" })),
+		});
+		const sessionService = sessionServiceFixture({
+			readCachedHouseholdSession: jest
+				.fn()
+				.mockResolvedValueOnce(cached)
+				.mockResolvedValue(null),
+			getHouseholdSession: jest
+				.fn()
+				.mockResolvedValueOnce(firstFresh)
+				.mockResolvedValueOnce(secondFresh),
+			readUnauthorizedCachedHouseholdSession: jest
+				.fn()
+				.mockResolvedValueOnce(cached)
+				.mockResolvedValueOnce(null),
+			deleteCachedHouseholdSessionLocalData: jest.fn(
+				() => deleteCached.promise,
+			),
+		});
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataSource)
+				.mockReturnValueOnce(secondFreshDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => null,
+			authReady: true,
+			signedIn: false,
+		});
+		const staleActivation = controller.activate({
+			getToken: async () => "stale-token",
+			authReady: true,
+			signedIn: true,
+		});
+		await waitForAsync(() =>
+			expect(
+				sessionService.deleteCachedHouseholdSessionLocalData,
+			).toHaveBeenCalledWith(cached),
+		);
+
+		const freshActivation = controller.activate({
+			getToken: async () => "fresh-token",
+			authReady: true,
+			signedIn: true,
+		});
+		deleteCached.resolve(undefined);
+		await Promise.all([staleActivation, freshActivation]);
+
+		expect(
+			sessionService.clearUnauthorizedCachedHouseholdSessionMetadata,
+		).not.toHaveBeenCalled();
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			view: { currentList: { initialState: { householdName: "Second" } } },
+		});
+	});
+
+	it("does not resurrect unauthorized cached data when fresh opening fails", async () => {
+		const cached = cachedHouseholdSessionFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const fresh = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+		const cachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Old" })),
+		});
+		const freshDataSource = activeListDataSourceFixture({
+			load: jest.fn().mockRejectedValue(new Error("fresh open failed")),
+		});
+		const sessionService = sessionServiceFixture({
+			readCachedHouseholdSession: jest.fn().mockResolvedValue(cached),
+			getHouseholdSession: jest.fn().mockResolvedValue(fresh),
+			readUnauthorizedCachedHouseholdSession: jest
+				.fn()
+				.mockResolvedValue(cached),
+		});
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataSource)
+				.mockReturnValueOnce(freshDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		expect(controller.getSnapshot()).toEqual({
+			status: "error",
+			message: "Unable to prepare your Household. Please try again.",
+		});
+		expect(
+			sessionService.deleteCachedHouseholdSessionLocalData,
+		).toHaveBeenCalledWith(cached);
+		expect(
+			sessionService.clearUnauthorizedCachedHouseholdSessionMetadata,
+		).toHaveBeenCalledWith(cached, fresh);
+	});
+
 	it("publishes fresh state before retiring the previous cached resource", async () => {
 		const events: string[] = [];
 		const cachedDataSource = activeListDataSourceFixture({

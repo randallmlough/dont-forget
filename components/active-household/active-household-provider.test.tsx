@@ -93,6 +93,29 @@ describe("ActiveHouseholdProvider", () => {
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 	});
 
+	it("stops exposing ready content when loading no longer has a previous view", async () => {
+		const controller = activeHouseholdControllerFixture();
+		render(
+			<ActiveHouseholdProvider controller={controller} auth={authFixture()}>
+				<CurrentState />
+			</ActiveHouseholdProvider>,
+		);
+		act(() => {
+			controller.publish({
+				status: "ready",
+				view: activeHouseholdViewFixture(),
+			});
+		});
+		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+
+		act(() => {
+			controller.publish({ status: "loading" });
+		});
+
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+		expect(screen.queryByText("Groceries")).toBeNull();
+	});
+
 	it("exposes error state and retries with the latest auth inputs", async () => {
 		const auth = authFixture();
 		const controller = activeHouseholdControllerFixture({

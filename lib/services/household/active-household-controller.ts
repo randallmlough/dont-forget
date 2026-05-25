@@ -327,6 +327,7 @@ export function createActiveHouseholdController(
 
 			const invalidatedCachedHouseholds = new Set<string>();
 			let freshPublished = false;
+			let invalidatedUnauthorizedCached = false;
 			const cachedAttempt = (async (): Promise<boolean> => {
 				const cached = await householdSessionService
 					.readCachedHouseholdSession()
@@ -383,11 +384,14 @@ export function createActiveHouseholdController(
 					invalidatedCachedHouseholds.add(
 						unauthorizedCached.activeHousehold.id,
 					);
+					invalidatedUnauthorizedCached = true;
 					publish({ status: "loading" });
 					await closeUnauthorizedCachedResource(unauthorizedCached);
+					if (run !== activationRun) return;
 					await householdSessionService.deleteCachedHouseholdSessionLocalData(
 						unauthorizedCached,
 					);
+					if (run !== activationRun) return;
 					await householdSessionService.clearUnauthorizedCachedHouseholdSessionMetadata(
 						unauthorizedCached,
 						session,
@@ -424,10 +428,11 @@ export function createActiveHouseholdController(
 				});
 				const publishedCached = await cachedAttempt;
 				if (publishedCached && run === activationRun) {
-					const previousView =
-						snapshot.status === "loading" ? snapshot.previous : undefined;
-					if (previousView) {
+					const previousView = previousViewFromSnapshot(snapshot);
+					if (previousView && !invalidatedUnauthorizedCached) {
 						publish({ status: "ready", view: previousView });
+					} else {
+						publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
 					}
 				} else if (!publishedCached && run === activationRun) {
 					const previousView = previousViewFromSnapshot(snapshot);
