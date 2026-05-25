@@ -1,4 +1,13 @@
 export {
+	type ActiveHouseholdActivation,
+	type ActiveHouseholdController,
+	type ActiveHouseholdControllerDeps,
+	type ActiveHouseholdSnapshot,
+	type ActiveHouseholdView,
+	createActiveHouseholdController,
+} from "./active-household-controller";
+
+export {
 	createHouseholdCurrentListDataSource,
 	type HouseholdCurrentListDataSourceConfig,
 } from "./current-list-data-source";
