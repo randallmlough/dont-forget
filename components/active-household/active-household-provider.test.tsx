@@ -334,6 +334,7 @@ describe("ActiveHouseholdProvider", () => {
 
 	it("continues Clerk sign out when local Household cleanup fails", async () => {
 		const auth = authFixture();
+		const clearMetadata = jest.fn(async () => null);
 
 		render(
 			<ActiveHouseholdProvider
@@ -346,7 +347,37 @@ describe("ActiveHouseholdProvider", () => {
 				deleteCachedHouseholdSessionLocalData={jest.fn(async () => {
 					throw new Error("delete failed");
 				})}
-				clearCachedHouseholdSessionMetadata={jest.fn(async () => null)}
+				clearCachedHouseholdSessionMetadata={clearMetadata}
+			>
+				<SignOutButton />
+			</ActiveHouseholdProvider>,
+		);
+
+		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(clearMetadata).toHaveBeenCalledTimes(1);
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"active Household sign-out local cleanup failed",
+			{ error: expect.any(Error) },
+		);
+	});
+
+	it("continues Clerk sign out when cached Household metadata clearing fails", async () => {
+		const auth = authFixture();
+
+		render(
+			<ActiveHouseholdProvider
+				controller={activeHouseholdControllerFixture()}
+				auth={auth}
+				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				readCachedHouseholdSession={jest.fn(async () =>
+					cachedHouseholdSessionFixture(),
+				)}
+				deleteCachedHouseholdSessionLocalData={jest.fn(async () => undefined)}
+				clearCachedHouseholdSessionMetadata={jest.fn(async () => {
+					throw new Error("clear failed");
+				})}
 			>
 				<SignOutButton />
 			</ActiveHouseholdProvider>,

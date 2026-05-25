@@ -155,6 +155,13 @@ export function ActiveHouseholdProvider({
 			if (cached) {
 				await deleteCachedHouseholdSessionLocalDataProp(cached);
 			}
+		} catch (error) {
+			logger.error("active Household sign-out local cleanup failed", {
+				error: asError(error),
+			});
+		}
+
+		try {
 			await clearCachedHouseholdSessionMetadataProp();
 		} catch (error) {
 			logger.error("active Household sign-out local cleanup failed", {

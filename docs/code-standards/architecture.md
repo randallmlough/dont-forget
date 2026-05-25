@@ -51,7 +51,7 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** keep feature-specific data loading and mutation lifecycle out of `app/_layout.tsx`.
 - **Must** initialize signed-in active Household infrastructure from the authenticated route group (`app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
 - **Must** call `setActive(...)` after successful Clerk auth attempts.
-- **Must** sign out in this order: track `user_signed_out`, reset analytics, clear local Household cache/DB files when that path exists, then call `signOut()`.
+- **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose active Household resources, clear local Household cache/DB files when that path exists, then call `signOut()`.
 - **Should** extract root effect logic into named hooks when it has branching, cleanup, or testable behavior.
 - **Avoid** using root layout as a catch-all initialization file for feature state.
 
