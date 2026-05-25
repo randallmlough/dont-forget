@@ -1,16 +1,13 @@
 import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
+import type { Logger } from "@/lib/logger";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 
 import { createHouseholdCurrentListDataSource } from "./current-list-data-source";
 
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
-const mockLogger = {
-	error: mockLoggerError,
-	warn: mockLoggerWarn,
-};
 
 type ListSqlRow = {
 	id: string;
@@ -45,12 +42,6 @@ type HouseholdRowsFixture = {
 	items?: ItemSqlRow[];
 	lists?: ListSqlRow[];
 };
-
-jest.mock("@/lib/logger", () => ({
-	logger: {
-		with: jest.fn(() => mockLogger),
-	},
-}));
 
 describe("createHouseholdCurrentListDataSource", () => {
 	beforeEach(() => {
@@ -469,6 +460,7 @@ describe("createHouseholdCurrentListDataSource", () => {
 						authToken: "unused",
 						expiresAt: 1_700_000_000_001,
 					},
+					logger: loggerFixture(),
 				},
 				{
 					store: {
@@ -555,7 +547,20 @@ function dataSourceConfigFixture() {
 			authToken: "token",
 			expiresAt: 1,
 		},
+		logger: loggerFixture(),
 	};
+}
+
+function loggerFixture(): Logger {
+	const logger: Logger = {
+		debug: jest.fn(),
+		info: jest.fn(),
+		warn: mockLoggerWarn,
+		error: mockLoggerError,
+		with: jest.fn(),
+	};
+	jest.mocked(logger.with).mockReturnValue(logger);
+	return logger;
 }
 
 function createHouseholdRowsExecutor(rows: HouseholdRowsFixture) {

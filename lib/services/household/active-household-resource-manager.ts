@@ -116,6 +116,9 @@ export function createActiveHouseholdResourceManager(
 	): Promise<ActiveHouseholdResource> {
 		let rawDataSource: ActiveListDataSource | null = null;
 		try {
+			const householdLogger = logger.with({
+				household_id: session.activeHousehold.id,
+			});
 			rawDataSource = createCurrentListDataSource({
 				household: session.activeHousehold,
 				activeMember: session.activeMember,
@@ -123,13 +126,14 @@ export function createActiveHouseholdResourceManager(
 				currentUser: session.user,
 				members: session.members,
 				database: session.householdDatabase,
+				logger: householdLogger,
 			});
 			const lease = createCurrentListResourceLease(rawDataSource);
 			const dataSource = lease.dataSource;
 			const syncCoordinator = createSyncCoordinator({
 				syncAuthorized: dataSource.syncAuthorized,
 				sync: dataSource.sync,
-				logger: logger.with({ household_id: session.activeHousehold.id }),
+				logger: householdLogger,
 			});
 			return {
 				dataSource,

@@ -540,6 +540,7 @@ describe("createActiveHouseholdController resource lifecycle", () => {
 			currentUser: session.user,
 			members: session.members,
 			database: session.householdDatabase,
+			logger: householdLogger,
 		});
 		expect(logger.with).toHaveBeenCalledWith({ household_id: "hh_new" });
 		expect(createSyncCoordinator).toHaveBeenCalledWith({

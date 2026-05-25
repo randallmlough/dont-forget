@@ -6,7 +6,7 @@ import type {
 } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
 import { asError } from "@/lib/errors";
-import { logger } from "@/lib/logger";
+import type { Logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
 	type HouseholdStoreExecutor,
@@ -35,6 +35,7 @@ export type HouseholdCurrentListDataSourceConfig = {
 	currentUser: BootstrapResponse["user"];
 	members: BootstrapResponse["members"];
 	database: HouseholdDatabaseConfig;
+	logger: Logger;
 };
 
 type DataSourceOptions = {
@@ -51,6 +52,7 @@ type ActiveListServices = {
 type CreateActiveListServicesInput = {
 	storePromise: Promise<ActiveListStore>;
 	householdId: string;
+	logger: Logger;
 };
 
 export function createHouseholdCurrentListDataSource(
@@ -65,8 +67,7 @@ export function createHouseholdCurrentListDataSource(
 			});
 	const ownsStore = !options.store;
 	const memberNames = new Map<string, string | null>();
-	const log = logger.with({
-		household_id: config.household.id,
+	const log = config.logger.with({
 		list_id: config.list.id,
 		feature: "active_list",
 	});
@@ -89,6 +90,7 @@ export function createHouseholdCurrentListDataSource(
 	const getServices = createActiveListServicesGetter({
 		storePromise,
 		householdId: config.household.id,
+		logger: log,
 	});
 
 	return {
@@ -223,6 +225,7 @@ function attachNativeSyncError(
 function createActiveListServicesGetter({
 	storePromise,
 	householdId,
+	logger,
 }: CreateActiveListServicesInput): () => Promise<ActiveListServices> {
 	let servicesPromise: Promise<ActiveListServices> | null = null;
 
