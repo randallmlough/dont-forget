@@ -371,6 +371,34 @@ describe("ActiveHouseholdProvider", () => {
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
 	});
 
+	it("allows sign-out retry after cleanup fails and Clerk sign-out succeeds", async () => {
+		const auth = authFixture();
+
+		render(
+			<ActiveHouseholdProvider
+				controller={activeHouseholdControllerFixture()}
+				auth={auth}
+				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				readCachedHouseholdSession={jest.fn(async () =>
+					cachedHouseholdSessionFixture(),
+				)}
+				deleteCachedHouseholdSessionLocalData={jest.fn(async () => {
+					throw new Error("delete failed");
+				})}
+				clearCachedHouseholdSessionMetadata={jest.fn(async () => null)}
+			>
+				<SignOutButton />
+			</ActiveHouseholdProvider>,
+		);
+
+		const button = screen.getByRole("button", { name: "Sign out" });
+		fireEvent.press(button);
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+
+		fireEvent.press(button);
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
+	});
+
 	it("does not clean local Household data before controller disposal finishes", async () => {
 		const cached = cachedHouseholdSessionFixture();
 		const auth = authFixture();

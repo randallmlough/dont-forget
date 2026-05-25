@@ -177,9 +177,8 @@ export function ActiveHouseholdProvider({
 
 		try {
 			await signOutAction();
-		} catch (error) {
+		} finally {
 			signingOutRef.current = false;
-			throw error;
 		}
 	}, [
 		analytics,
