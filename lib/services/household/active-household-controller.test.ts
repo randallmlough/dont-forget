@@ -799,6 +799,54 @@ describe("createActiveHouseholdController", () => {
 		expect(dataSource.close).toHaveBeenCalledTimes(1);
 	});
 
+	it("waits for an accepted Current List write before closing during disposal", async () => {
+		const write = deferred<{
+			id: string;
+			name: string;
+			checked: boolean;
+			checkedByMemberName: null;
+		}>();
+		const dataSource = activeListDataSourceFixture({
+			addItem: jest.fn(() => write.promise),
+		});
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionServiceFixture(),
+			createCurrentListDataSource: jest.fn().mockReturnValue(dataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		const ready = controller.getSnapshot();
+		if (ready.status !== "ready") throw new Error("Expected ready snapshot");
+
+		const addItem = ready.view.currentList.dataSource.addItem("Milk");
+		const disposal = controller.dispose();
+
+		await Promise.resolve();
+		expect(dataSource.close).not.toHaveBeenCalled();
+		await expect(
+			ready.view.currentList.dataSource.addItem("Eggs"),
+		).rejects.toMatchObject({ code: "stale_current_list_resource" });
+
+		write.resolve({
+			id: "itm_new",
+			name: "Milk",
+			checked: false,
+			checkedByMemberName: null,
+		});
+		await addItem;
+		await disposal;
+
+		expect(dataSource.close).toHaveBeenCalledTimes(1);
+	});
+
 	it("still closes the data source when sync coordinator stop rejects during disposal", async () => {
 		const dataSource = activeListDataSourceFixture();
 		const syncCoordinator = syncCoordinatorFixture();

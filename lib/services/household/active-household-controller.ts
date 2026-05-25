@@ -12,6 +12,10 @@ import {
 	type HouseholdCurrentListDataSourceConfig,
 } from "./current-list-data-source";
 import {
+	createCurrentListResourceLease,
+	staleCurrentListResourceError,
+} from "./current-list-resource-lease";
+import {
 	type CachedHouseholdSession,
 	createHouseholdSessionService,
 	type GetHouseholdSessionToken,
@@ -55,17 +59,6 @@ type OpeningActiveHouseholdResource = {
 	session: ActiveHouseholdSession;
 	resource: ActiveHouseholdResource;
 	closePromise?: Promise<void>;
-};
-
-type CurrentListLease = {
-	dataSource: ActiveListDataSource;
-	retire: () => void;
-	waitForDrain: () => Promise<void>;
-	close: () => Promise<void>;
-};
-
-type StaleCurrentListResourceError = Error & {
-	code: "stale_current_list_resource";
 };
 
 type OpenedActiveHouseholdResource = {
@@ -198,7 +191,7 @@ export function createActiveHouseholdController(
 			members: session.members,
 			database: session.householdDatabase,
 		});
-		const lease = createCurrentListLease(rawDataSource);
+		const lease = createCurrentListResourceLease(rawDataSource);
 		const dataSource = lease.dataSource;
 		const syncCoordinator = createSyncCoordinator({
 			syncAuthorized: dataSource.syncAuthorized,
@@ -447,69 +440,6 @@ export function createActiveHouseholdController(
 			};
 		},
 	};
-}
-
-function createCurrentListLease(
-	dataSource: ActiveListDataSource,
-): CurrentListLease {
-	let retired = false;
-	let inFlight = 0;
-	let drained: (() => void) | null = null;
-
-	async function run<T>(operation: () => Promise<T>): Promise<T> {
-		if (retired) throw staleCurrentListResourceError();
-		inFlight += 1;
-		try {
-			return await operation();
-		} finally {
-			inFlight -= 1;
-			if (retired && inFlight === 0) {
-				drained?.();
-			}
-		}
-	}
-
-	function retire() {
-		retired = true;
-		if (inFlight === 0) {
-			drained?.();
-		}
-	}
-
-	async function waitForDrain() {
-		if (inFlight === 0) return;
-		await new Promise<void>((resolve) => {
-			drained = resolve;
-		});
-	}
-
-	return {
-		dataSource: {
-			syncAuthorized: dataSource.syncAuthorized,
-			load: () => run(() => dataSource.load()),
-			addItem: (name) => run(() => dataSource.addItem(name)),
-			setItemChecked: (itemId, checked) =>
-				run(() => dataSource.setItemChecked(itemId, checked)),
-			pull: () => run(() => dataSource.pull()),
-			sync: (options) => run(() => dataSource.sync(options)),
-			close: async () => {
-				retire();
-				await waitForDrain();
-				await dataSource.close();
-			},
-		},
-		retire,
-		waitForDrain,
-		close: async () => {
-			await dataSource.close();
-		},
-	};
-}
-
-function staleCurrentListResourceError(): StaleCurrentListResourceError {
-	return Object.assign(new Error("Current List resource is stale"), {
-		code: "stale_current_list_resource" as const,
-	});
 }
 
 function isUnauthorizedCachedSession(
