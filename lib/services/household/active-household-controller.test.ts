@@ -131,6 +131,35 @@ describe("createActiveHouseholdController", () => {
 		expect(syncCoordinator.start).not.toHaveBeenCalled();
 	});
 
+	it("publishes an error when cached Current List loading fails and fresh is unavailable", async () => {
+		const dataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest.fn().mockRejectedValue(new Error("cached load failed")),
+		});
+		const syncCoordinator = syncCoordinatorFixture();
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionServiceFixture({
+				readCachedHouseholdSession: jest
+					.fn()
+					.mockResolvedValue(cachedHouseholdSessionFixture()),
+				getHouseholdSession: jest.fn().mockRejectedValue(new Error("offline")),
+			}),
+			createCurrentListDataSource: jest.fn().mockReturnValue(dataSource),
+			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		expect(controller.getSnapshot()).toMatchObject({ status: "error" });
+		expect(syncCoordinator.start).not.toHaveBeenCalled();
+		expect(dataSource.close).toHaveBeenCalledTimes(1);
+	});
+
 	it("deletes unauthorized cached Household data before publishing fresh state", async () => {
 		const cached = cachedHouseholdSessionFixture({
 			householdId: "hh_old",
@@ -397,7 +426,15 @@ describe("createActiveHouseholdController", () => {
 	});
 
 	it("keeps cached Current List state when fresh loading fails", async () => {
-		const dataSource = activeListDataSourceFixture({ syncAuthorized: false });
+		const dataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			addItem: jest.fn().mockResolvedValue({
+				id: "itm_cached",
+				name: "Cached eggs",
+				checked: false,
+				checkedByMemberName: null,
+			}),
+		});
 		const syncCoordinator = syncCoordinatorFixture();
 		const controller = createActiveHouseholdController({
 			householdSessionService: sessionServiceFixture({
@@ -423,7 +460,14 @@ describe("createActiveHouseholdController", () => {
 				currentList: { initialState: { householdName: "Avery" } },
 			},
 		});
+		const snapshot = controller.getSnapshot();
+		if (snapshot.status !== "ready") throw new Error("Expected cached ready");
+		await expect(
+			snapshot.view.currentList.dataSource.addItem("Cached eggs"),
+		).resolves.toMatchObject({ name: "Cached eggs" });
 		expect(syncCoordinator.start).not.toHaveBeenCalled();
+		expect(syncCoordinator.stop).not.toHaveBeenCalled();
+		expect(dataSource.close).not.toHaveBeenCalled();
 	});
 
 	it("does not let a slow cached load replace a published fresh resource", async () => {
