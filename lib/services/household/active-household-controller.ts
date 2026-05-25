@@ -196,31 +196,45 @@ export function createActiveHouseholdController(
 		}
 	}
 
+	async function createSessionResource(
+		session: ActiveHouseholdSession,
+	): Promise<ActiveHouseholdResource> {
+		let rawDataSource: ActiveListDataSource | null = null;
+		try {
+			rawDataSource = createCurrentListDataSource({
+				household: session.activeHousehold,
+				activeMember: session.activeMember,
+				list: session.activeList,
+				currentUser: session.user,
+				members: session.members,
+				database: session.householdDatabase,
+			});
+			const lease = createCurrentListResourceLease(rawDataSource);
+			const dataSource = lease.dataSource;
+			const syncCoordinator = createSyncCoordinator({
+				syncAuthorized: dataSource.syncAuthorized,
+				sync: dataSource.sync,
+				logger: logger.with({ household_id: session.activeHousehold.id }),
+			});
+			return {
+				dataSource,
+				drainDataSource: lease.waitForDrain,
+				closeDataSource: lease.close,
+				retireDataSource: lease.retire,
+				syncCoordinator,
+			};
+		} catch (error) {
+			await rawDataSource?.close().catch(() => undefined);
+			throw error;
+		}
+	}
+
 	async function openSessionResource(
 		session: ActiveHouseholdSession,
 	): Promise<OpenedActiveHouseholdResource> {
-		const rawDataSource = createCurrentListDataSource({
-			household: session.activeHousehold,
-			activeMember: session.activeMember,
-			list: session.activeList,
-			currentUser: session.user,
-			members: session.members,
-			database: session.householdDatabase,
-		});
-		const lease = createCurrentListResourceLease(rawDataSource);
-		const dataSource = lease.dataSource;
-		const syncCoordinator = createSyncCoordinator({
-			syncAuthorized: dataSource.syncAuthorized,
-			sync: dataSource.sync,
-			logger: logger.with({ household_id: session.activeHousehold.id }),
-		});
-		const resource = {
-			dataSource,
-			drainDataSource: lease.waitForDrain,
-			closeDataSource: lease.close,
-			retireDataSource: lease.retire,
-			syncCoordinator,
-		};
+		const resource = await createSessionResource(session);
+		const dataSource = resource.dataSource;
+		const syncCoordinator = resource.syncCoordinator;
 		const opening: OpeningActiveHouseholdResource = { session, resource };
 		openingResources.add(opening);
 

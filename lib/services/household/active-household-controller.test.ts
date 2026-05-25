@@ -1547,6 +1547,28 @@ describe("createActiveHouseholdController", () => {
 		expect(dataSource.close).toHaveBeenCalledTimes(1);
 	});
 
+	it("closes the data source when sync coordinator construction fails", async () => {
+		const dataSource = activeListDataSourceFixture();
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionServiceFixture(),
+			createCurrentListDataSource: jest.fn().mockReturnValue(dataSource),
+			createSyncCoordinator: jest.fn(() => {
+				throw new Error("coordinator failed");
+			}),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		expect(controller.getSnapshot()).toMatchObject({ status: "error" });
+		expect(dataSource.load).not.toHaveBeenCalled();
+		expect(dataSource.close).toHaveBeenCalledTimes(1);
+	});
+
 	it("constructs the fresh Current List resource from the Household Session", async () => {
 		const session = householdSessionFixture({ householdId: "hh_new" });
 		const dataSource = activeListDataSourceFixture();
