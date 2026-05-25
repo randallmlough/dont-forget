@@ -40,11 +40,6 @@ type HouseholdSessionServiceAnalytics = {
 	track: typeof track;
 };
 
-export type DiscardUnauthorizedCachedHouseholdSessionOptions = {
-	beforeDeleteLocalData?: (cached: CachedHouseholdSession) => Promise<void>;
-	shouldContinue?: () => boolean;
-};
-
 export type HouseholdSessionService = {
 	getHouseholdSession: (
 		getToken: GetHouseholdSessionToken,
@@ -55,10 +50,6 @@ export type HouseholdSessionService = {
 	readCachedHouseholdSession: () => Promise<CachedHouseholdSession | null>;
 	readUnauthorizedCachedHouseholdSession: (
 		freshSession: HouseholdSession,
-	) => Promise<CachedHouseholdSession | null>;
-	discardUnauthorizedCachedHouseholdSession: (
-		freshSession: HouseholdSession,
-		options?: DiscardUnauthorizedCachedHouseholdSessionOptions,
 	) => Promise<CachedHouseholdSession | null>;
 	clearUnauthorizedCachedHouseholdSessionMetadata: (
 		cached: CachedHouseholdSession,
@@ -182,24 +173,6 @@ export function createHouseholdSessionService(
 
 		readUnauthorizedCachedHouseholdSession,
 
-		async discardUnauthorizedCachedHouseholdSession(
-			freshSession,
-			options = {},
-		) {
-			const cached = await readUnauthorizedCachedHouseholdSession(freshSession);
-			if (!cached || options.shouldContinue?.() === false) return null;
-
-			await options.beforeDeleteLocalData?.(cached);
-			if (options.shouldContinue?.() === false) return cached;
-			await deleteCachedHouseholdSessionLocalData(cached);
-			if (options.shouldContinue?.() === false) return cached;
-			await clearUnauthorizedCachedHouseholdSessionMetadata(
-				cached,
-				freshSession,
-			);
-			return cached;
-		},
-
 		clearUnauthorizedCachedHouseholdSessionMetadata,
 
 		async clearCachedHouseholdSessionMetadata() {
@@ -256,16 +229,6 @@ export function readUnauthorizedCachedHouseholdSession(
 ): Promise<CachedHouseholdSession | null> {
 	return defaultHouseholdSessionService.readUnauthorizedCachedHouseholdSession(
 		freshSession,
-	);
-}
-
-export function discardUnauthorizedCachedHouseholdSession(
-	freshSession: HouseholdSession,
-	options?: DiscardUnauthorizedCachedHouseholdSessionOptions,
-): Promise<CachedHouseholdSession | null> {
-	return defaultHouseholdSessionService.discardUnauthorizedCachedHouseholdSession(
-		freshSession,
-		options,
 	);
 }
 
