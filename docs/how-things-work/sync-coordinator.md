@@ -1,12 +1,12 @@
 # Sync Coordinator
 
-The Sync Coordinator owns app-level sync orchestration for the active Household controller. It is the app-owned policy boundary that decides when sync work starts, which sync mode to use, how sync status changes, how failures are classified, and when retry or lifecycle work should stop.
+The Sync Coordinator owns sync policy for one controller-owned Current List resource set. It is the app-owned policy boundary that decides when sync work starts, which sync mode to use, how sync status changes, how failures are classified, and when retry or lifecycle work should stop. The Active Household controller owns when a coordinator exists, starts, stops, and is replaced.
 
 The coordinator is a deep module: callers see a small interface, while the retry, serialization, status, and failure policy stays inside `lib/services/sync/sync-coordinator.ts`.
 
 ## Public Interface
 
-Create one coordinator for the active Household controller and pass a logger already scoped to that Household. Product callers normally use the default coordinator factory, which supplies app-wide platform lifecycle and network adapters:
+Create one coordinator for each controller-owned Current List resource set and pass a logger already scoped to that Household. Product callers normally use the default coordinator factory, which supplies app-wide platform lifecycle and network adapters:
 
 ```ts
 const syncCoordinator = createDefaultSyncCoordinator({
@@ -116,8 +116,10 @@ HouseholdStore owns local/native Household DB access, operation serialization, a
 
 List and Item services own local domain reads and writes. They commit local Household rows and should not start remote sync as part of mutation success.
 
-The active Household controller creates controller-owned data sources and the coordinator, closes Household resources, stops sync before sign-out or replacement, and starts the fresh authorized coordinator after offline reopen. The authenticated app provider activates and observes the controller; individual screens do not own Household DB open/close or coordinator lifecycle.
+The active Household controller creates controller-owned data sources and the coordinator, closes Household resources, stops sync before sign-out or replacement, and starts fresh authorized sync lifecycle work after offline reopen. The authenticated app provider activates and observes the controller; route surfaces borrow provider state/actions instead of owning Household DB or sync lifecycle.
 
 Current-List UI owns visible List interaction and rendering. It subscribes to coordinator status, requests `localWrite` after successful local mutations, requests `manualRefresh` for explicit refresh, and reloads visible rows after sync reports remote changes.
 
 Future platform awareness belongs behind coordinator-owned adapter boundaries. It should feed the coordinator another reasoned request instead of adding sync policy to UI, domain services, HouseholdStore, or native package call sites.
+
+See [Active Household Controller](./active-household-controller.md) for the controller/provider resource ownership boundary.

@@ -40,8 +40,8 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
 - **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. Do not name this `*-db-service`.
-- **Should** keep List and Item services separate even when Home composes them into one Active List experience.
-- **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to screen/application composition or a dedicated sync service.
+- **Should** keep List and Item services separate even when the Active Household controller composes them into one Current List experience for Home to render.
+- **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to the Active Household controller and sync coordinator.
 
 ## Providers And Auth
 
@@ -50,6 +50,7 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** keep root layout effects limited to app-wide provider, navigation, analytics, auth, theme, and native SDK lifecycle synchronization.
 - **Must** keep feature-specific data loading and mutation lifecycle out of `app/_layout.tsx`.
 - **Must** initialize signed-in active Household infrastructure from the authenticated route group (`app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
+- **Must** make screens and reusable components borrow controller-owned active Household resources and actions; they must not open or close HouseholdStore resources directly.
 - **Must** call `setActive(...)` after successful Clerk auth attempts.
 - **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose active Household resources, clear local Household cache/DB files when that path exists, then call `signOut()`.
 - **Should** extract root effect logic into named hooks when it has branching, cleanup, or testable behavior.

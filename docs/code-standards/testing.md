@@ -8,7 +8,7 @@
 - **Must** use local isolated libSQL database helpers for database behavior instead of running migrations against configured environments.
 - **Must** test loading, ready, empty, error, and retry states for route-owned data hooks or containers.
 - **Must** test stale async responses, cancellation, or unmount cleanup when a hook or container owns async lifecycle.
-- **Must** extensively test active Household controller replacement, especially writes that race cached-to-fresh Household resource swaps, so published data sources are not closed while visible UI can still write through them.
+- **Must** test active Household controller cached load, fresh load, safe cached-to-fresh replacement, unauthorized cached invalidation, stale run IDs, disposal, and write races through borrowed Current List resources.
 - **Must** test reducers and transition helpers directly when they encode product behavior or async UI recovery.
 - **Must** cover success, failure, and ignored or no-op transitions where relevant.
 - **Must** test user actions through visible behavior and accessibility queries, not implementation state.
