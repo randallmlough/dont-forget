@@ -69,7 +69,7 @@ The coordinator maps request reasons to `SyncOptions`:
 - `localWrite` and `retry` use `pushLocalOnly`.
 - `manualRefresh`, `appForeground`, and `networkReconnect` use `full`.
 
-`pushLocalOnly` runs the app-owned remote upsert fallback without native full sync. This keeps automatic local-write and retry paths from starting native pull loops while offline, while still trying to propagate locally committed Household rows.
+`pushLocalOnly` runs native `push()` without native pull work. If native push fails, it uses the app-owned remote upsert fallback. This keeps automatic local-write and retry paths from starting native pull loops while still avoiding full-row remote upserts on the normal online path.
 
 `full` is reserved for deliberate catch-up work. Manual refresh, app foreground recovery, and network reconnect run native sync first, then the app-owned remote upsert fallback, so the active Household can both push local rows and pull remote rows when connectivity and authorization allow it.
 

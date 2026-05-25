@@ -188,8 +188,9 @@ describe("createHouseholdCurrentListDataSource", () => {
 		expect(mockLoggerWarn).not.toHaveBeenCalled();
 	});
 
-	it("pushes local rows without native sync for automatic retry paths", async () => {
+	it("uses native push without row fallback for automatic local write sync", async () => {
 		const remoteExecute = jest.fn(async () => undefined);
+		const nativePush = jest.fn(async () => undefined);
 		const nativeSync = jest.fn(async () => ({ changed: false }));
 		const execute = createHouseholdRowsExecutor({
 			items: [itemRowFixture({ id: "itm_retry", name: "Retry Milk" })],
@@ -200,6 +201,7 @@ describe("createHouseholdCurrentListDataSource", () => {
 				store: {
 					syncAuthorized: true,
 					execute,
+					push: nativePush,
 					sync: nativeSync,
 					pull: jest.fn(async () => ({ changed: false })),
 					close: jest.fn(async () => undefined),
@@ -210,6 +212,58 @@ describe("createHouseholdCurrentListDataSource", () => {
 
 		await expect(dataSource.sync({ mode: "pushLocalOnly" })).resolves.toEqual({
 			changed: false,
+		});
+
+		expect(nativeSync).not.toHaveBeenCalled();
+		expect(nativePush).toHaveBeenCalledTimes(1);
+		expect(remoteExecute).not.toHaveBeenCalled();
+	});
+
+	it("falls back to remote row upserts when native push fails during automatic local write sync", async () => {
+		const remoteExecute = jest.fn(async () => undefined);
+		const nativeError = new Error("native push failed");
+		const nativeSync = jest.fn(async () => ({ changed: false }));
+		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
+			const sql = statementSql(statement);
+			if (sql.includes("FROM items")) {
+				return {
+					rows: [
+						{
+							id: "itm_retry",
+							list_id: DEFAULT_LIST_ID,
+							name: "Retry Milk",
+							notes: null,
+							position: 0,
+							created_by_user_id: "usr_avery",
+							created_at: 2,
+							updated_at: 2,
+							deleted_at: null,
+						},
+					],
+				};
+			}
+			return { rows: [] };
+		});
+		const dataSource = createHouseholdCurrentListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute,
+					push: jest.fn(async () => {
+						throw nativeError;
+					}),
+					sync: nativeSync,
+					pull: jest.fn(async () => ({ changed: false })),
+					close: jest.fn(async () => undefined),
+				},
+				openRemoteClient: () => ({ execute: remoteExecute }),
+			},
+		);
+
+		await expect(dataSource.sync({ mode: "pushLocalOnly" })).resolves.toEqual({
+			changed: false,
+			recoveredNativeSyncError: nativeError,
 		});
 
 		expect(nativeSync).not.toHaveBeenCalled();

@@ -22,6 +22,7 @@ import { createListService } from "@/lib/services/list";
 
 type ActiveListStore = HouseholdStoreExecutor & {
 	syncAuthorized?: boolean;
+	push?: () => Promise<void>;
 	pull?: () => Promise<ActiveListSyncResult>;
 	sync?: () => Promise<ActiveListSyncResult>;
 	close: () => void | Promise<void>;
@@ -142,11 +143,28 @@ export function createHouseholdCurrentListDataSource(
 
 			const store = await storePromise;
 			if (syncOptions?.mode === "pushLocalOnly") {
+				let nativeError: unknown = null;
+
+				if (store.push) {
+					try {
+						await store.push();
+						return { changed: false };
+					} catch (error) {
+						nativeError = error;
+					}
+				}
+
 				await pushLocalHouseholdRowsToRemote(
 					store,
 					config.database,
 					options.openRemoteClient,
 				);
+				if (nativeError) {
+					return {
+						changed: false,
+						recoveredNativeSyncError: asError(nativeError),
+					};
+				}
 				return { changed: false };
 			}
 
