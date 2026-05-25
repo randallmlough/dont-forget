@@ -4,6 +4,8 @@ const { withStorybook } = require("@storybook/react-native/withStorybook");
 const config = getDefaultConfig(__dirname);
 const defaultResolveRequest = config.resolver.resolveRequest;
 
+config.resolver.blockList = [...config.resolver.blockList, /[/\\]\.omx[/\\].*/];
+
 config.resolver.resolveRequest = (context, moduleName, platform) => {
 	if (moduleName === "@libsql/client") {
 		// Drizzle's libsql adapter resolves the package root; native bundles must use the HTTP entrypoint.
