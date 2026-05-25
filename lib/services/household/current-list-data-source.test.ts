@@ -1,13 +1,12 @@
 import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
-import type { Logger } from "@/lib/logger";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import { type LoggerFixture, loggerFixture } from "@/lib/test/mocks/logger";
 
 import { createHouseholdCurrentListDataSource } from "./current-list-data-source";
 
-const mockLoggerError = jest.fn();
-const mockLoggerWarn = jest.fn();
+let logger: LoggerFixture;
 
 type ListSqlRow = {
 	id: string;
@@ -45,8 +44,7 @@ type HouseholdRowsFixture = {
 
 describe("createHouseholdCurrentListDataSource", () => {
 	beforeEach(() => {
-		mockLoggerError.mockReset();
-		mockLoggerWarn.mockReset();
+		logger = loggerFixture();
 	});
 
 	it("exposes explicit app-owned pull and sync operations", async () => {
@@ -117,7 +115,7 @@ describe("createHouseholdCurrentListDataSource", () => {
 		expect(nativeSync.mock.invocationCallOrder[0]).toBeLessThan(
 			remoteExecute.mock.invocationCallOrder[0],
 		);
-		expect(mockLoggerWarn).not.toHaveBeenCalledWith(
+		expect(logger.warn).not.toHaveBeenCalledWith(
 			"active list sync fallback succeeded",
 		);
 	});
@@ -175,8 +173,8 @@ describe("createHouseholdCurrentListDataSource", () => {
 				),
 			}),
 		);
-		expect(mockLoggerError).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
 	it("uses native push without row fallback for automatic local write sync", async () => {
@@ -303,8 +301,8 @@ describe("createHouseholdCurrentListDataSource", () => {
 			nativeSyncError: nativeError,
 		});
 
-		expect(mockLoggerError).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
 	it("does not error-log expected network failures while offline", async () => {
@@ -329,8 +327,8 @@ describe("createHouseholdCurrentListDataSource", () => {
 
 		await expect(dataSource.sync()).rejects.toThrow(networkError);
 
-		expect(mockLoggerError).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).not.toHaveBeenCalledWith(
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalledWith(
 			"active list sync fallback succeeded",
 		);
 	});
@@ -364,8 +362,8 @@ describe("createHouseholdCurrentListDataSource", () => {
 		await Promise.resolve();
 
 		expect(sync).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).not.toHaveBeenCalled();
-		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
 	});
 
 	it("resolves checked-state updates after local commit without starting sync", async () => {
@@ -393,7 +391,7 @@ describe("createHouseholdCurrentListDataSource", () => {
 			const milk = await dataSource.addItem("Milk");
 			await Promise.resolve();
 			sync.mockClear();
-			mockLoggerWarn.mockClear();
+			logger.warn.mockClear();
 
 			await expect(dataSource.setItemChecked(milk.id, true)).resolves.toBe(
 				undefined,
@@ -410,7 +408,7 @@ describe("createHouseholdCurrentListDataSource", () => {
 				updatedAt: expect.any(Number),
 			});
 			expect(sync).not.toHaveBeenCalled();
-			expect(mockLoggerWarn).not.toHaveBeenCalled();
+			expect(logger.warn).not.toHaveBeenCalled();
 		} finally {
 			await household.close();
 		}
@@ -460,7 +458,7 @@ describe("createHouseholdCurrentListDataSource", () => {
 						authToken: "unused",
 						expiresAt: 1_700_000_000_001,
 					},
-					logger: loggerFixture(),
+					logger: logger.root,
 				},
 				{
 					store: {
@@ -547,20 +545,8 @@ function dataSourceConfigFixture() {
 			authToken: "token",
 			expiresAt: 1,
 		},
-		logger: loggerFixture(),
+		logger: logger.root,
 	};
-}
-
-function loggerFixture(): Logger {
-	const logger: Logger = {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: mockLoggerWarn,
-		error: mockLoggerError,
-		with: jest.fn(),
-	};
-	jest.mocked(logger.with).mockReturnValue(logger);
-	return logger;
 }
 
 function createHouseholdRowsExecutor(rows: HouseholdRowsFixture) {
