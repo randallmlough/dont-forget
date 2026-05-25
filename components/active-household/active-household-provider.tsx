@@ -158,13 +158,31 @@ export function ActiveHouseholdProvider({
 
 		try {
 			await signOutAction();
+		} catch (error) {
+			if (auth.authReady && auth.signedIn) {
+				await controller
+					.activate({
+						getToken,
+						authReady: auth.authReady,
+						signedIn: auth.signedIn,
+					})
+					.catch((activationError) => {
+						logger.error("active Household sign-out recovery failed", {
+							error: asError(activationError),
+						});
+					});
+			}
+			throw error;
 		} finally {
 			signingOutRef.current = false;
 		}
 	}, [
 		analytics,
+		auth.authReady,
+		auth.signedIn,
 		clearSignedOutHouseholdSessionDataProp,
 		controller,
+		getToken,
 		logger,
 		signOutAction,
 	]);

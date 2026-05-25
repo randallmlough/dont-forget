@@ -20,10 +20,13 @@ export function AuthGate({ pathname }: { pathname: string }) {
 
 	useAnalyticsIdentity();
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: isSignedIn intentionally retriggers cached Household session checks after auth state changes.
 	useEffect(() => {
 		let cancelled = false;
 		setCachedSessionStatus("checking");
+		if (isLoaded && !isSignedIn) {
+			setCachedSessionStatus("unavailable");
+			return;
+		}
 
 		void readCachedHouseholdSession()
 			.then((cached) => {
@@ -40,7 +43,7 @@ export function AuthGate({ pathname }: { pathname: string }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [isSignedIn]);
+	}, [isLoaded, isSignedIn]);
 
 	useEffect(() => {
 		if (isSignedIn) {

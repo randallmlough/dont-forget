@@ -49,6 +49,8 @@ export type ActiveHouseholdActivation = {
 	signedIn: boolean;
 };
 
+type ActiveHouseholdAuthState = "unknown" | "signedOut" | "signedIn";
+
 type ActiveHouseholdSession = HouseholdSession | CachedHouseholdSession;
 
 type ActiveHouseholdResource = {
@@ -388,19 +390,13 @@ export function createActiveHouseholdController(
 		};
 	}
 
-	async function handleSignedOutActivation(
-		run: ActivationRunGuard,
-		cachedAttempt: CachedActivationAttempt,
-	) {
-		const publishedCached = await cachedAttempt.promise;
-		if (!publishedCached && run.isCurrent()) {
-			await closeActiveResource().catch((error) => {
-				logger.error("active Household resource close failed", {
-					error: asError(error),
-				});
+	async function handleSignedOutActivation(run: ActivationRunGuard) {
+		await closeActiveResource().catch((error) => {
+			logger.error("active Household resource close failed", {
+				error: asError(error),
 			});
-			publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
-		}
+		});
+		if (run.isCurrent()) publish({ status: "idle" });
 	}
 
 	async function loadFreshSessionForRun(
@@ -513,16 +509,17 @@ export function createActiveHouseholdController(
 	return {
 		async activate(activation) {
 			const run = startActivationRun();
-			publishLoading(previousViewFromSnapshot(snapshot));
-
-			const cachedAttempt = startCachedActivationAttempt(run);
-			if (!activation.authReady) {
-				await cachedAttempt.promise;
+			const authState = activeHouseholdAuthStateFromActivation(activation);
+			if (authState === "signedOut") {
+				await handleSignedOutActivation(run);
 				return;
 			}
 
-			if (!activation.signedIn) {
-				await handleSignedOutActivation(run, cachedAttempt);
+			publishLoading(previousViewFromSnapshot(snapshot));
+
+			const cachedAttempt = startCachedActivationAttempt(run);
+			if (authState === "unknown") {
+				await cachedAttempt.promise;
 				return;
 			}
 
@@ -582,4 +579,11 @@ function previousViewFromSnapshot(
 
 function activeMemberNameFromSession(session: ActiveHouseholdSession): string {
 	return session.activeMember.displayName ?? session.user.email ?? "Member";
+}
+
+function activeHouseholdAuthStateFromActivation(
+	activation: ActiveHouseholdActivation,
+): ActiveHouseholdAuthState {
+	if (!activation.authReady) return "unknown";
+	return activation.signedIn ? "signedIn" : "signedOut";
 }

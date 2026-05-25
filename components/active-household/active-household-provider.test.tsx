@@ -326,10 +326,11 @@ describe("ActiveHouseholdProvider", () => {
 				.mockRejectedValueOnce(new Error("sign out failed"))
 				.mockResolvedValueOnce(undefined),
 		});
+		const controller = activeHouseholdControllerFixture();
 
 		render(
 			<ActiveHouseholdProvider
-				controller={activeHouseholdControllerFixture()}
+				controller={controller}
 				auth={auth}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
 				clearSignedOutHouseholdSessionData={jest.fn(async () => undefined)}
@@ -341,6 +342,7 @@ describe("ActiveHouseholdProvider", () => {
 		const button = screen.getByRole("button", { name: "Sign out" });
 		fireEvent.press(button);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
 
 		fireEvent.press(button);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));

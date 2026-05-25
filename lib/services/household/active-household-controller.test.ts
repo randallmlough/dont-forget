@@ -426,7 +426,7 @@ describe("createActiveHouseholdController", () => {
 
 		await controller.activate({
 			getToken: async () => null,
-			authReady: true,
+			authReady: false,
 			signedIn: false,
 		});
 		expect(controller.getSnapshot()).toMatchObject({
@@ -498,7 +498,7 @@ describe("createActiveHouseholdController", () => {
 
 		await controller.activate({
 			getToken: async () => null,
-			authReady: true,
+			authReady: false,
 			signedIn: false,
 		});
 		const cachedSnapshot = controller.getSnapshot();
@@ -569,7 +569,7 @@ describe("createActiveHouseholdController", () => {
 
 		await controller.activate({
 			getToken: async () => null,
-			authReady: true,
+			authReady: false,
 			signedIn: false,
 		});
 		const cachedSnapshot = controller.getSnapshot();
@@ -1182,11 +1182,25 @@ describe("createActiveHouseholdController", () => {
 		);
 	});
 
-	it("publishes an error when signed out and no cached Household Session is available", async () => {
+	it("does not read or publish cached Household data when signed out", async () => {
+		const dataSource = activeListDataSourceFixture();
+		const syncCoordinator = syncCoordinatorFixture();
+		const sessionService = sessionServiceFixture();
 		const controller = createActiveHouseholdController({
-			householdSessionService: sessionServiceFixture(),
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest.fn().mockReturnValue(dataSource),
+			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: loggerFixture(),
 		});
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		jest.mocked(sessionService.readCachedHouseholdSession).mockClear();
+		jest
+			.mocked(sessionService.readCachedHouseholdSession)
+			.mockResolvedValue(cachedHouseholdSessionFixture());
 
 		await controller.activate({
 			getToken: async () => null,
@@ -1194,7 +1208,10 @@ describe("createActiveHouseholdController", () => {
 			signedIn: false,
 		});
 
-		expect(controller.getSnapshot()).toMatchObject({ status: "error" });
+		expect(controller.getSnapshot()).toEqual({ status: "idle" });
+		expect(sessionService.readCachedHouseholdSession).not.toHaveBeenCalled();
+		expect(dataSource.close).toHaveBeenCalledTimes(1);
+		expect(syncCoordinator.stop).toHaveBeenCalledTimes(1);
 	});
 
 	it("ignores stale activation completion without closing the newer resource or saving stale cache", async () => {
