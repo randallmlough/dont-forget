@@ -72,6 +72,18 @@ type OpenedActiveHouseholdResource = {
 
 type ActiveHouseholdSubscriber = (snapshot: ActiveHouseholdSnapshot) => void;
 
+type ActivationRunGuard = {
+	id: number;
+	isCurrent: () => boolean;
+};
+
+type CachedActivationAttempt = {
+	promise: Promise<boolean>;
+	invalidateHousehold: (cached: CachedHouseholdSession) => void;
+	markFreshPublished: () => void;
+	throwDiscardCloseError: () => void;
+};
+
 type CreateCurrentListDataSource = (
 	config: HouseholdCurrentListDataSourceConfig,
 ) => ActiveListDataSource;
@@ -289,10 +301,13 @@ export function createActiveHouseholdController(
 			startSync: boolean;
 			shouldPublish?: () => boolean;
 			onPublished?: () => void;
+			onDiscardCloseError?: (error: unknown) => void;
 		},
 	): Promise<boolean> {
 		if (run !== activationRun || options.shouldPublish?.() === false) {
-			await closeResource(opened.resource).catch(() => undefined);
+			await closeResource(opened.resource).catch((error) => {
+				options.onDiscardCloseError?.(error);
+			});
 			return false;
 		}
 
@@ -311,139 +326,227 @@ export function createActiveHouseholdController(
 		return true;
 	}
 
-	return {
-		async activate(activation) {
-			const run = ++activationRun;
-			const previousView = previousViewFromSnapshot(snapshot);
-			publish(
-				previousView
-					? {
-							status: "loading",
-							previous: previousView,
-							refreshingSession: true,
-						}
-					: { status: "loading" },
-			);
+	function startActivationRun(): ActivationRunGuard {
+		const id = ++activationRun;
+		return {
+			id,
+			isCurrent: () => id === activationRun,
+		};
+	}
 
-			const invalidatedCachedHouseholds = new Set<string>();
-			let freshPublished = false;
-			let invalidatedUnauthorizedCached = false;
-			const cachedAttempt = (async (): Promise<boolean> => {
+	function publishLoading(previousView?: ActiveHouseholdView) {
+		publish(
+			previousView
+				? {
+						status: "loading",
+						previous: previousView,
+						refreshingSession: true,
+					}
+				: { status: "loading" },
+		);
+	}
+
+	function publishLoadingFromCurrentView() {
+		const previousView = previousViewFromSnapshot(snapshot);
+		if (previousView) {
+			publishLoading(previousView);
+		}
+	}
+
+	function startCachedActivationAttempt(
+		run: ActivationRunGuard,
+	): CachedActivationAttempt {
+		const invalidatedCachedHouseholds = new Set<string>();
+		let freshPublished = false;
+		let discardCloseError: unknown = null;
+
+		return {
+			promise: (async (): Promise<boolean> => {
 				const cached = await householdSessionService
 					.readCachedHouseholdSession()
 					.catch(() => null);
 				if (
 					!cached ||
-					run !== activationRun ||
+					!run.isCurrent() ||
 					invalidatedCachedHouseholds.has(cached.activeHousehold.id)
-				)
+				) {
 					return false;
+				}
 
 				try {
 					const opened = await openSessionResource(cached);
-					return await publishOpened(opened, cached, run, {
+					return await publishOpened(opened, cached, run.id, {
 						startSync: false,
 						shouldPublish: () =>
 							!freshPublished &&
 							!invalidatedCachedHouseholds.has(cached.activeHousehold.id),
+						onDiscardCloseError: (error) => {
+							discardCloseError = error;
+						},
 					});
 				} catch {
 					return false;
 				}
-			})();
+			})(),
+			invalidateHousehold(cached) {
+				invalidatedCachedHouseholds.add(cached.activeHousehold.id);
+			},
+			markFreshPublished() {
+				freshPublished = true;
+			},
+			throwDiscardCloseError() {
+				if (discardCloseError) throw discardCloseError;
+			},
+		};
+	}
 
+	async function handleSignedOutActivation(
+		run: ActivationRunGuard,
+		cachedAttempt: CachedActivationAttempt,
+	) {
+		const publishedCached = await cachedAttempt.promise;
+		if (!publishedCached && run.isCurrent()) {
+			await closeActiveResource().catch((error) => {
+				logger.error("active Household resource close failed", {
+					error: asError(error),
+				});
+			});
+			publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
+		}
+	}
+
+	async function loadFreshSessionForRun(
+		run: ActivationRunGuard,
+		getToken: GetHouseholdSessionToken,
+	): Promise<HouseholdSession | null> {
+		const session = await householdSessionService.getHouseholdSession(getToken);
+		return run.isCurrent() ? session : null;
+	}
+
+	async function invalidateUnauthorizedCachedSessionForFreshRun(
+		freshSession: HouseholdSession,
+		run: ActivationRunGuard,
+		cachedAttempt: CachedActivationAttempt,
+	): Promise<boolean> {
+		const unauthorizedCached =
+			await householdSessionService.readUnauthorizedCachedHouseholdSession(
+				freshSession,
+			);
+		if (!run.isCurrent() || !unauthorizedCached) {
+			return false;
+		}
+
+		cachedAttempt.invalidateHousehold(unauthorizedCached);
+		publish({ status: "loading" });
+		await closeUnauthorizedCachedResource(unauthorizedCached);
+		await cachedAttempt.promise;
+		cachedAttempt.throwDiscardCloseError();
+		if (!run.isCurrent()) return true;
+		await householdSessionService.deleteCachedHouseholdSessionLocalData(
+			unauthorizedCached,
+		);
+		if (!run.isCurrent()) return true;
+		await householdSessionService.clearUnauthorizedCachedHouseholdSessionMetadata(
+			unauthorizedCached,
+			freshSession,
+		);
+		return true;
+	}
+
+	async function publishFreshSessionForRun(
+		session: HouseholdSession,
+		run: ActivationRunGuard,
+		cachedAttempt: CachedActivationAttempt,
+	) {
+		publishLoadingFromCurrentView();
+		const opened = await openSessionResource(session);
+		if (!run.isCurrent()) {
+			await closeResource(opened.resource).catch(() => undefined);
+			return;
+		}
+
+		await saveFreshSessionIfCurrent(session, run.id);
+		if (!run.isCurrent()) {
+			await closeResource(opened.resource).catch(() => undefined);
+			return;
+		}
+
+		await publishOpened(opened, session, run.id, {
+			startSync: true,
+			onPublished: cachedAttempt.markFreshPublished,
+		});
+	}
+
+	async function handleSignedInActivation(
+		activation: ActiveHouseholdActivation,
+		run: ActivationRunGuard,
+		cachedAttempt: CachedActivationAttempt,
+	) {
+		let invalidatedUnauthorizedCached = false;
+		try {
+			const session = await loadFreshSessionForRun(run, activation.getToken);
+			if (!session) return;
+			invalidatedUnauthorizedCached =
+				await invalidateUnauthorizedCachedSessionForFreshRun(
+					session,
+					run,
+					cachedAttempt,
+				);
+			if (!run.isCurrent()) return;
+			await publishFreshSessionForRun(session, run, cachedAttempt);
+		} catch (error) {
+			await recoverActivationFailure(error, run, cachedAttempt, {
+				invalidatedUnauthorizedCached,
+			});
+		}
+	}
+
+	async function recoverActivationFailure(
+		error: unknown,
+		run: ActivationRunGuard,
+		cachedAttempt: CachedActivationAttempt,
+		options: { invalidatedUnauthorizedCached: boolean },
+	) {
+		logger.error("active Household activation failed", {
+			error: asError(error),
+		});
+
+		const publishedCached = await cachedAttempt.promise;
+		if (publishedCached && run.isCurrent()) {
+			const previousView = previousViewFromSnapshot(snapshot);
+			if (previousView && !options.invalidatedUnauthorizedCached) {
+				publish({ status: "ready", view: previousView });
+			} else {
+				publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
+			}
+		} else if (!publishedCached && run.isCurrent()) {
+			const previousView = previousViewFromSnapshot(snapshot);
+			if (previousView) {
+				publish({ status: "ready", view: previousView });
+				return;
+			}
+			await closeActiveResource().catch(() => undefined);
+			publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
+		}
+	}
+
+	return {
+		async activate(activation) {
+			const run = startActivationRun();
+			publishLoading(previousViewFromSnapshot(snapshot));
+
+			const cachedAttempt = startCachedActivationAttempt(run);
 			if (!activation.authReady) {
-				await cachedAttempt;
+				await cachedAttempt.promise;
 				return;
 			}
 
 			if (!activation.signedIn) {
-				const publishedCached = await cachedAttempt;
-				if (!publishedCached && run === activationRun) {
-					await closeActiveResource().catch((error) => {
-						logger.error("active Household resource close failed", {
-							error: asError(error),
-						});
-					});
-					publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
-				}
+				await handleSignedOutActivation(run, cachedAttempt);
 				return;
 			}
 
-			try {
-				const session = await householdSessionService.getHouseholdSession(
-					activation.getToken,
-				);
-				if (run !== activationRun) return;
-				const unauthorizedCached =
-					await householdSessionService.readUnauthorizedCachedHouseholdSession(
-						session,
-					);
-				if (run !== activationRun) return;
-				if (unauthorizedCached) {
-					invalidatedCachedHouseholds.add(
-						unauthorizedCached.activeHousehold.id,
-					);
-					invalidatedUnauthorizedCached = true;
-					publish({ status: "loading" });
-					await closeUnauthorizedCachedResource(unauthorizedCached);
-					if (run !== activationRun) return;
-					await householdSessionService.deleteCachedHouseholdSessionLocalData(
-						unauthorizedCached,
-					);
-					if (run !== activationRun) return;
-					await householdSessionService.clearUnauthorizedCachedHouseholdSessionMetadata(
-						unauthorizedCached,
-						session,
-					);
-				}
-				if (run !== activationRun) return;
-				const previousView = previousViewFromSnapshot(snapshot);
-				if (previousView) {
-					publish({
-						status: "loading",
-						previous: previousView,
-						refreshingSession: true,
-					});
-				}
-				const opened = await openSessionResource(session);
-				if (run !== activationRun) {
-					await closeResource(opened.resource).catch(() => undefined);
-					return;
-				}
-				await saveFreshSessionIfCurrent(session, run);
-				if (run !== activationRun) {
-					await closeResource(opened.resource).catch(() => undefined);
-					return;
-				}
-				await publishOpened(opened, session, run, {
-					startSync: true,
-					onPublished: () => {
-						freshPublished = true;
-					},
-				});
-			} catch (error) {
-				logger.error("active Household activation failed", {
-					error: asError(error),
-				});
-				const publishedCached = await cachedAttempt;
-				if (publishedCached && run === activationRun) {
-					const previousView = previousViewFromSnapshot(snapshot);
-					if (previousView && !invalidatedUnauthorizedCached) {
-						publish({ status: "ready", view: previousView });
-					} else {
-						publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
-					}
-				} else if (!publishedCached && run === activationRun) {
-					const previousView = previousViewFromSnapshot(snapshot);
-					if (previousView) {
-						publish({ status: "ready", view: previousView });
-						return;
-					}
-					await closeActiveResource().catch(() => undefined);
-					publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
-				}
-			}
+			await handleSignedInActivation(activation, run, cachedAttempt);
 		},
 
 		async dispose() {
