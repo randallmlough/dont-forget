@@ -22,10 +22,8 @@ import {
 	type ActiveHouseholdActivation,
 	type ActiveHouseholdController,
 	type ActiveHouseholdSnapshot,
-	clearCachedHouseholdSessionMetadata,
+	clearSignedOutHouseholdSessionData,
 	createActiveHouseholdController,
-	deleteCachedHouseholdSessionLocalData,
-	readCachedHouseholdSession,
 } from "@/lib/services/household";
 
 export type ActiveHouseholdContentState =
@@ -61,9 +59,7 @@ type ActiveHouseholdProviderProps = PropsWithChildren<{
 	auth?: ActiveHouseholdProviderAuth;
 	fallbackMemberName?: string;
 	analytics?: ActiveHouseholdProviderAnalytics;
-	readCachedHouseholdSession?: typeof readCachedHouseholdSession;
-	deleteCachedHouseholdSessionLocalData?: typeof deleteCachedHouseholdSessionLocalData;
-	clearCachedHouseholdSessionMetadata?: typeof clearCachedHouseholdSessionMetadata;
+	clearSignedOutHouseholdSessionData?: typeof clearSignedOutHouseholdSessionData;
 }>;
 
 const defaultAnalytics: ActiveHouseholdProviderAnalytics = { track, reset };
@@ -77,12 +73,8 @@ export function ActiveHouseholdProvider({
 	auth: authProp,
 	fallbackMemberName,
 	analytics = defaultAnalytics,
-	readCachedHouseholdSession:
-		readCachedHouseholdSessionProp = readCachedHouseholdSession,
-	deleteCachedHouseholdSessionLocalData:
-		deleteCachedHouseholdSessionLocalDataProp = deleteCachedHouseholdSessionLocalData,
-	clearCachedHouseholdSessionMetadata:
-		clearCachedHouseholdSessionMetadataProp = clearCachedHouseholdSessionMetadata,
+	clearSignedOutHouseholdSessionData:
+		clearSignedOutHouseholdSessionDataProp = clearSignedOutHouseholdSessionData,
 }: ActiveHouseholdProviderProps) {
 	const clerkAuth = useAuth();
 	const { user } = useUser();
@@ -157,18 +149,7 @@ export function ActiveHouseholdProvider({
 		});
 
 		try {
-			const cached = await readCachedHouseholdSessionProp();
-			if (cached) {
-				await deleteCachedHouseholdSessionLocalDataProp(cached);
-			}
-		} catch (error) {
-			logger.error("active Household sign-out local cleanup failed", {
-				error: asError(error),
-			});
-		}
-
-		try {
-			await clearCachedHouseholdSessionMetadataProp();
+			await clearSignedOutHouseholdSessionDataProp();
 		} catch (error) {
 			logger.error("active Household sign-out local cleanup failed", {
 				error: asError(error),
@@ -182,11 +163,9 @@ export function ActiveHouseholdProvider({
 		}
 	}, [
 		analytics,
-		clearCachedHouseholdSessionMetadataProp,
+		clearSignedOutHouseholdSessionDataProp,
 		controller,
-		deleteCachedHouseholdSessionLocalDataProp,
 		logger,
-		readCachedHouseholdSessionProp,
 		signOutAction,
 	]);
 

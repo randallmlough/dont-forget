@@ -219,6 +219,104 @@ describe("createHouseholdSessionService", () => {
 		).resolves.toBeNull();
 	});
 
+	it("discards unauthorized cached Household Session data in one use case", async () => {
+		const storage = memoryStorage();
+		const analytics = analyticsFixture();
+		const service = createHouseholdSessionService({ storage, analytics });
+		const oldSession = householdSessionFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const freshSession = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+		const events: string[] = [];
+		mockDeleteLocalHouseholdStoreData.mockImplementation(async () => {
+			events.push("delete");
+		});
+
+		await service.saveCachedHouseholdSession(oldSession);
+		analytics.track.mockClear();
+		const discarded = await service.discardUnauthorizedCachedHouseholdSession(
+			freshSession,
+			{
+				beforeDeleteLocalData: async () => {
+					events.push("before-delete");
+				},
+			},
+		);
+
+		expect(discarded).toMatchObject({ activeHousehold: { id: "hh_old" } });
+		expect(events).toEqual(["before-delete", "delete"]);
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		expect(analytics.track).toHaveBeenCalledWith(
+			"household_session_cache_invalidated",
+			{
+				household_id: "hh_old",
+				fresh_household_id: "hh_new",
+				reason: "unauthorized",
+			},
+		);
+		await expect(
+			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
+		).resolves.toBeNull();
+	});
+
+	it("does not discard unauthorized cached Household Session data when the caller cancels", async () => {
+		const storage = memoryStorage();
+		const service = createHouseholdSessionService({ storage });
+		await service.saveCachedHouseholdSession(
+			householdSessionFixture({ householdId: "hh_old" }),
+		);
+
+		await expect(
+			service.discardUnauthorizedCachedHouseholdSession(
+				householdSessionFixture({ householdId: "hh_new" }),
+				{ shouldContinue: () => false },
+			),
+		).resolves.toBeNull();
+
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
+		await expect(storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY)).resolves.toEqual(
+			expect.any(String),
+		);
+	});
+
+	it("clears signed-out Household Session data after deleting local data", async () => {
+		const storage = memoryStorage();
+		const service = createHouseholdSessionService({ storage });
+		await service.saveCachedHouseholdSession(
+			householdSessionFixture({ householdId: "hh_old" }),
+		);
+
+		await service.clearSignedOutHouseholdSessionData();
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		await expect(
+			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
+		).resolves.toBeNull();
+	});
+
+	it("still clears signed-out Household Session metadata when local data deletion fails", async () => {
+		const storage = memoryStorage();
+		const service = createHouseholdSessionService({ storage });
+		await service.saveCachedHouseholdSession(
+			householdSessionFixture({ householdId: "hh_old" }),
+		);
+		mockDeleteLocalHouseholdStoreData.mockRejectedValue(
+			new Error("delete failed"),
+		);
+
+		await expect(service.clearSignedOutHouseholdSessionData()).rejects.toThrow(
+			"delete failed",
+		);
+
+		await expect(
+			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
+		).resolves.toBeNull();
+	});
+
 	it("deletes local Household data only through the explicit local data API", async () => {
 		const service = createHouseholdSessionService();
 		const cached = cachedHouseholdSessionFixture({ householdId: "hh_old" });

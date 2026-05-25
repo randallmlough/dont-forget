@@ -22,9 +22,12 @@ export {
 export {
 	type CachedHouseholdSession,
 	clearCachedHouseholdSessionMetadata,
+	clearSignedOutHouseholdSessionData,
 	clearUnauthorizedCachedHouseholdSessionMetadata,
 	createHouseholdSessionService,
+	type DiscardUnauthorizedCachedHouseholdSessionOptions,
 	deleteCachedHouseholdSessionLocalData,
+	discardUnauthorizedCachedHouseholdSession,
 	type GetHouseholdSessionToken,
 	getHouseholdSession,
 	HOUSEHOLD_SESSION_CACHE_KEY,

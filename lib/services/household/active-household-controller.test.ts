@@ -1628,22 +1628,42 @@ function collectSnapshots(controller: {
 function sessionServiceFixture(
 	overrides: Partial<HouseholdSessionService> = {},
 ): HouseholdSessionService {
-	return {
+	const service: HouseholdSessionService = {
 		getHouseholdSession: jest.fn().mockResolvedValue(householdSessionFixture()),
 		saveCachedHouseholdSession: jest
 			.fn()
 			.mockResolvedValue(cachedHouseholdSessionFixture()),
 		readCachedHouseholdSession: jest.fn().mockResolvedValue(null),
 		readUnauthorizedCachedHouseholdSession: jest.fn().mockResolvedValue(null),
+		discardUnauthorizedCachedHouseholdSession: jest.fn(),
 		clearUnauthorizedCachedHouseholdSessionMetadata: jest
 			.fn()
 			.mockResolvedValue(undefined),
 		clearCachedHouseholdSessionMetadata: jest.fn().mockResolvedValue(null),
+		clearSignedOutHouseholdSessionData: jest.fn().mockResolvedValue(undefined),
 		deleteCachedHouseholdSessionLocalData: jest
 			.fn()
 			.mockResolvedValue(undefined),
 		...overrides,
 	};
+	jest
+		.mocked(service.discardUnauthorizedCachedHouseholdSession)
+		.mockImplementation(async (freshSession, options = {}) => {
+			const cached =
+				await service.readUnauthorizedCachedHouseholdSession(freshSession);
+			if (!cached || options.shouldContinue?.() === false) return null;
+			await options.beforeDeleteLocalData?.(cached);
+			if (options.shouldContinue?.() === false) return cached;
+			await service.deleteCachedHouseholdSessionLocalData(cached);
+			if (options.shouldContinue?.() === false) return cached;
+			await service.clearUnauthorizedCachedHouseholdSessionMetadata(
+				cached,
+				freshSession,
+			);
+			return cached;
+		});
+
+	return service;
 }
 
 function loggerFixture(): jest.Mocked<Logger> {

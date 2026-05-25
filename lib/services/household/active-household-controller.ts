@@ -442,29 +442,21 @@ export function createActiveHouseholdController(
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
 	): Promise<boolean> {
-		const unauthorizedCached =
-			await householdSessionService.readUnauthorizedCachedHouseholdSession(
+		const discardedCached =
+			await householdSessionService.discardUnauthorizedCachedHouseholdSession(
 				freshSession,
+				{
+					beforeDeleteLocalData: async (cached) => {
+						cachedAttempt.invalidateHousehold(cached);
+						publish({ status: "loading" });
+						await closeUnauthorizedCachedResource(cached);
+						await cachedAttempt.promise;
+						cachedAttempt.throwDiscardCloseError();
+					},
+					shouldContinue: run.isCurrent,
+				},
 			);
-		if (!run.isCurrent() || !unauthorizedCached) {
-			return false;
-		}
-
-		cachedAttempt.invalidateHousehold(unauthorizedCached);
-		publish({ status: "loading" });
-		await closeUnauthorizedCachedResource(unauthorizedCached);
-		await cachedAttempt.promise;
-		cachedAttempt.throwDiscardCloseError();
-		if (!run.isCurrent()) return true;
-		await householdSessionService.deleteCachedHouseholdSessionLocalData(
-			unauthorizedCached,
-		);
-		if (!run.isCurrent()) return true;
-		await householdSessionService.clearUnauthorizedCachedHouseholdSessionMetadata(
-			unauthorizedCached,
-			freshSession,
-		);
-		return true;
+		return Boolean(discardedCached);
 	}
 
 	async function publishFreshSessionForRun(
