@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { useActiveHousehold } from "@/components/active-household";
-import type {
-	ActiveListDataSource,
-	ActiveListInitialState,
-	ActiveListSyncCoordinator,
-} from "@/components/active-list";
+import {
+	activeListDataSourceFixture,
+	initialListFixture,
+	syncCoordinatorFixture,
+} from "@/db/fixtures/active-household";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
 jest.mock("@/components/active-household", () => ({
@@ -32,7 +32,7 @@ describe("HomeScreen", () => {
 				activeMemberName: "Avery Chen",
 				resourceKey: "current-list:1",
 				initialList: initialListFixture(),
-				dataSource: noopDataSource(initialListFixture()),
+				dataSource: activeListDataSourceFixture(),
 				syncCoordinator: syncCoordinatorFixture(),
 			},
 			currentMemberName: "Avery Chen",
@@ -79,7 +79,9 @@ it("remounts Active List when the Current List resource changes", () => {
 				activeMemberName: "Avery Chen",
 				resourceKey: "current-list:1",
 				initialList: cachedList,
-				dataSource: noopDataSource(cachedList),
+				dataSource: activeListDataSourceFixture({
+					load: jest.fn().mockResolvedValue(cachedList),
+				}),
 				syncCoordinator: syncCoordinatorFixture(),
 			}}
 		/>,
@@ -94,7 +96,9 @@ it("remounts Active List when the Current List resource changes", () => {
 				activeMemberName: "Avery Chen",
 				resourceKey: "current-list:2",
 				initialList: freshList,
-				dataSource: noopDataSource(freshList),
+				dataSource: activeListDataSourceFixture({
+					load: jest.fn().mockResolvedValue(freshList),
+				}),
 				syncCoordinator: syncCoordinatorFixture(),
 			}}
 		/>,
@@ -132,7 +136,10 @@ describe("HomeScreenView", () => {
 	});
 
 	it("renders Active List data after active Household loading succeeds", () => {
-		const initialList = initialListFixture();
+		const initialList = initialListFixture({
+			checked: true,
+			checkedByMemberName: "Avery Chen",
+		});
 
 		render(
 			<HomeScreenView
@@ -142,7 +149,9 @@ describe("HomeScreenView", () => {
 					activeMemberName: "Avery Chen",
 					resourceKey: "current-list:1",
 					initialList,
-					dataSource: noopDataSource(initialList),
+					dataSource: activeListDataSourceFixture({
+						load: jest.fn().mockResolvedValue(initialList),
+					}),
 					syncCoordinator: syncCoordinatorFixture(),
 				}}
 			/>,
@@ -154,46 +163,3 @@ describe("HomeScreenView", () => {
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
 });
-
-function initialListFixture(
-	overrides: { itemName?: string } = {},
-): ActiveListInitialState {
-	return {
-		householdName: "Avery",
-		listName: "Groceries",
-		items: [
-			{
-				id: "itm_milk",
-				name: overrides.itemName ?? "Milk",
-				checked: true,
-				checkedByMemberName: "Avery Chen",
-			},
-		],
-	};
-}
-
-function noopDataSource(
-	initialList: ActiveListInitialState,
-	overrides: Partial<ActiveListDataSource> = {},
-): ActiveListDataSource {
-	return {
-		syncAuthorized: false,
-		load: jest.fn().mockResolvedValue(initialList),
-		addItem: jest.fn(),
-		setItemChecked: jest.fn(),
-		pull: jest.fn().mockResolvedValue({ changed: false }),
-		sync: jest.fn().mockResolvedValue({ changed: false }),
-		close: jest.fn().mockResolvedValue(undefined),
-		...overrides,
-	};
-}
-
-function syncCoordinatorFixture(): ActiveListSyncCoordinator {
-	return {
-		getStatus: jest.fn(() => "synced"),
-		subscribe: jest.fn(() => ({ remove() {} })),
-		start: jest.fn(),
-		stop: jest.fn().mockResolvedValue(undefined),
-		requestSync: jest.fn().mockResolvedValue(null),
-	};
-}

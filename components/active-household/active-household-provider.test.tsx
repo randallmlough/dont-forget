@@ -6,16 +6,16 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
-import type {
-	ActiveListDataSource,
-	ActiveListInitialState,
-	ActiveListSyncCoordinator,
-} from "@/components/active-list";
+import {
+	activeListDataSourceFixture,
+	cachedHouseholdSessionFixture,
+	initialListFixture,
+	syncCoordinatorFixture,
+} from "@/db/fixtures/active-household";
 import type {
 	ActiveHouseholdActivation,
 	ActiveHouseholdController,
 	ActiveHouseholdSnapshot,
-	CachedHouseholdSession,
 } from "@/lib/services/household";
 import {
 	ActiveHouseholdProvider,
@@ -597,7 +597,7 @@ function authFixture(
 }
 
 function activeHouseholdControllerFixture({
-	snapshot = loadingSnapshotFixture(),
+	snapshot = { status: "loading" },
 }: {
 	snapshot?: ActiveHouseholdSnapshot;
 } = {}): jest.Mocked<ActiveHouseholdController> & {
@@ -637,68 +637,10 @@ function activeHouseholdViewFixture() {
 		activeMemberName: "Avery Chen",
 		currentList: {
 			resourceKey: "current-list:1",
-			initialState: initialListFixture(),
+			initialState: initialListFixture({ items: [] }),
 			dataSource: activeListDataSourceFixture(),
 			syncCoordinator: syncCoordinatorFixture(),
 		},
-	};
-}
-
-function initialListFixture(): ActiveListInitialState {
-	return { householdName: "Avery", listName: "Groceries", items: [] };
-}
-
-function activeListDataSourceFixture(): ActiveListDataSource {
-	return {
-		syncAuthorized: true,
-		load: jest.fn().mockResolvedValue(initialListFixture()),
-		addItem: jest.fn(),
-		setItemChecked: jest.fn(),
-		pull: jest.fn().mockResolvedValue({ changed: false }),
-		sync: jest.fn().mockResolvedValue({ changed: false }),
-		close: jest.fn().mockResolvedValue(undefined),
-	};
-}
-
-function syncCoordinatorFixture(): ActiveListSyncCoordinator {
-	return {
-		getStatus: jest.fn(() => "synced"),
-		subscribe: jest.fn(() => ({ remove() {} })),
-		start: jest.fn(),
-		stop: jest.fn().mockResolvedValue(undefined),
-		requestSync: jest.fn().mockResolvedValue(null),
-	};
-}
-
-function loadingSnapshotFixture(): ActiveHouseholdSnapshot {
-	return { status: "loading" };
-}
-
-function cachedHouseholdSessionFixture(): CachedHouseholdSession {
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-		},
-		activeHousehold: { id: "hh_avery", name: "Avery" },
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner",
-			displayName: "Avery Chen",
-		},
-		activeList: { id: "lst_default_groceries", name: "Groceries" },
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner",
-				displayName: "Avery Chen",
-			},
-		],
-		householdDatabase: { url: "libsql://example.turso.io", expiresAt: 1 },
-		initializedAt: 1_700_000_000_000,
 	};
 }
 

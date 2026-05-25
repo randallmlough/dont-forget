@@ -1,8 +1,11 @@
-import type {
-	ActiveListDataSource,
-	ActiveListInitialState,
-	ActiveListSyncCoordinator,
-} from "@/components/active-list";
+import type { ActiveListInitialState } from "@/components/active-list";
+import {
+	activeListDataSourceFixture,
+	cachedHouseholdSessionFixture,
+	householdSessionFixture,
+	initialListFixture,
+	syncCoordinatorFixture,
+} from "@/db/fixtures/active-household";
 import type { Logger } from "@/lib/logger";
 import {
 	type ActiveHouseholdSnapshot,
@@ -1618,100 +1621,6 @@ function sessionServiceFixture(
 			.fn()
 			.mockResolvedValue(undefined),
 		...overrides,
-	};
-}
-
-function householdSessionFixture(
-	overrides: { householdId?: string; householdName?: string } = {},
-): HouseholdSession {
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-		},
-		activeHousehold: {
-			id: overrides.householdId ?? "hh_avery",
-			name: overrides.householdName ?? "Avery",
-		},
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner",
-			displayName: "Avery Chen",
-		},
-		activeList: { id: "lst_default_groceries", name: "Groceries" },
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner",
-				displayName: "Avery Chen",
-			},
-		],
-		householdDatabase: {
-			url: "libsql://example.turso.io",
-			authToken: "token",
-			expiresAt: 1,
-		},
-	};
-}
-
-function cachedHouseholdSessionFixture(
-	overrides: { householdId?: string; householdName?: string } = {},
-): CachedHouseholdSession {
-	const { householdDatabase: _householdDatabase, ...sessionMetadata } =
-		householdSessionFixture(overrides);
-
-	return {
-		...sessionMetadata,
-		householdDatabase: {
-			url: "libsql://example.turso.io",
-			expiresAt: 1,
-		},
-		initializedAt: 1_700_000_000_000,
-	};
-}
-
-function initialListFixture(
-	overrides: { householdName?: string; itemName?: string } = {},
-): ActiveListInitialState {
-	return {
-		householdName: overrides.householdName ?? "Avery",
-		listName: "Groceries",
-		items: [
-			{
-				id: "itm_milk",
-				name: overrides.itemName ?? "Milk",
-				checked: false,
-				checkedByMemberName: null,
-			},
-		],
-	};
-}
-
-function activeListDataSourceFixture(
-	overrides: Partial<ActiveListDataSource> = {},
-): ActiveListDataSource {
-	return {
-		syncAuthorized: true,
-		load: jest.fn().mockResolvedValue(initialListFixture()),
-		addItem: jest.fn(),
-		setItemChecked: jest.fn(),
-		pull: jest.fn().mockResolvedValue({ changed: false }),
-		sync: jest.fn().mockResolvedValue({ changed: false }),
-		close: jest.fn().mockResolvedValue(undefined),
-		...overrides,
-	};
-}
-
-function syncCoordinatorFixture(): ActiveListSyncCoordinator {
-	return {
-		getStatus: jest.fn(() => "synced"),
-		subscribe: jest.fn(() => ({ remove() {} })),
-		start: jest.fn(),
-		stop: jest.fn().mockResolvedValue(undefined),
-		requestSync: jest.fn().mockResolvedValue(null),
 	};
 }
 

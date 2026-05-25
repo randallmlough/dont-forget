@@ -1,9 +1,11 @@
+import {
+	cachedHouseholdSessionFixture,
+	householdSessionFixture,
+} from "@/db/fixtures/active-household";
 import { BOOTSTRAP_API_PATH } from "@/lib/bootstrap";
 import {
-	type CachedHouseholdSession,
 	createHouseholdSessionService,
 	HOUSEHOLD_SESSION_CACHE_KEY,
-	type HouseholdSession,
 	type HouseholdSessionStorage,
 } from "@/lib/services/household/household-session-service";
 import { deleteLocalHouseholdStoreData } from "./household-store";
@@ -219,9 +221,7 @@ describe("createHouseholdSessionService", () => {
 
 	it("deletes local Household data only through the explicit local data API", async () => {
 		const service = createHouseholdSessionService();
-		const cached = cachedHouseholdSessionFromFixture(
-			householdSessionFixture({ householdId: "hh_old" }),
-		);
+		const cached = cachedHouseholdSessionFixture({ householdId: "hh_old" });
 
 		await service.deleteCachedHouseholdSessionLocalData(cached);
 
@@ -257,57 +257,4 @@ function responseFixture(payload: unknown): Response {
 		json: async () => payload,
 	};
 	return response as Response;
-}
-
-function householdSessionFixture(
-	overrides: { householdId?: string; householdName?: string } = {},
-): HouseholdSession {
-	const householdId = overrides.householdId ?? "hh_avery";
-
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-		},
-		activeHousehold: {
-			id: householdId,
-			name: overrides.householdName ?? "Avery",
-		},
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner",
-			displayName: "Avery Chen",
-		},
-		activeList: { id: "lst_default_groceries", name: "Groceries" },
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner",
-				displayName: "Avery Chen",
-			},
-		],
-		householdDatabase: {
-			url: "libsql://example.turso.io",
-			authToken: "secret-household-token",
-			expiresAt: 1_700_000_000_000,
-		},
-	};
-}
-
-function cachedHouseholdSessionFromFixture(
-	session: HouseholdSession,
-): CachedHouseholdSession {
-	const { householdDatabase: _householdDatabase, ...sessionMetadata } = session;
-
-	return {
-		...sessionMetadata,
-		householdDatabase: {
-			url: session.householdDatabase.url,
-			expiresAt: session.householdDatabase.expiresAt,
-		},
-		initializedAt: 1_700_000_000_100,
-	};
 }

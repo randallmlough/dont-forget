@@ -1,7 +1,5 @@
-import type {
-	ActiveListDataSource,
-	ActiveListItem,
-} from "@/components/active-list";
+import type { ActiveListItem } from "@/components/active-list";
+import { activeListDataSourceFixture } from "@/db/fixtures/active-household";
 import {
 	createCurrentListResourceLease,
 	isStaleCurrentListResourceError,
@@ -103,30 +101,6 @@ describe("createCurrentListResourceLease", () => {
 		expect(close).toHaveBeenCalledTimes(1);
 	});
 });
-
-function activeListDataSourceFixture(
-	overrides: Partial<ActiveListDataSource> = {},
-): ActiveListDataSource {
-	return {
-		syncAuthorized: true,
-		load: jest.fn().mockResolvedValue({
-			householdName: "Avery",
-			listName: "Groceries",
-			items: [],
-		}),
-		addItem: jest.fn().mockResolvedValue({
-			id: "itm_milk",
-			name: "Milk",
-			checked: false,
-			checkedByMemberName: null,
-		}),
-		setItemChecked: jest.fn().mockResolvedValue(undefined),
-		pull: jest.fn().mockResolvedValue({ changed: false }),
-		sync: jest.fn().mockResolvedValue({ changed: false }),
-		close: jest.fn().mockResolvedValue(undefined),
-		...overrides,
-	};
-}
 
 async function expectStaleResourceError(promise: Promise<unknown>) {
 	let thrown: unknown;
