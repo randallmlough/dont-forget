@@ -8,13 +8,13 @@ import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
 import { createDefaultSyncCoordinator } from "@/lib/services/sync";
 import {
-	createHouseholdCurrentListDataSource,
-	type HouseholdCurrentListDataSourceConfig,
-} from "./current-list-data-source";
-import {
-	createCurrentListResourceLease,
-	staleCurrentListResourceError,
-} from "./current-list-resource-lease";
+	type ActiveHouseholdSession,
+	type CreateCurrentListDataSource,
+	type CreateSyncCoordinator,
+	createActiveHouseholdResourceManager,
+	type OpenedActiveHouseholdResource,
+} from "./active-household-resource-manager";
+import { createHouseholdCurrentListDataSource } from "./current-list-data-source";
 import {
 	type CachedHouseholdSession,
 	createHouseholdSessionService,
@@ -51,25 +51,6 @@ export type ActiveHouseholdActivation = {
 
 type ActiveHouseholdAuthState = "unknown" | "signedOut" | "signedIn";
 
-type ActiveHouseholdSession = HouseholdSession | CachedHouseholdSession;
-
-type ActiveHouseholdResource = {
-	dataSource: ActiveListDataSource;
-	close: () => Promise<void>;
-	syncCoordinator: ActiveListSyncCoordinator;
-};
-
-type OpeningActiveHouseholdResource = {
-	session: ActiveHouseholdSession;
-	resource: ActiveHouseholdResource;
-	closePromise?: Promise<void>;
-};
-
-type OpenedActiveHouseholdResource = {
-	resource: ActiveHouseholdResource;
-	view: ActiveHouseholdView;
-};
-
 type ActiveHouseholdSubscriber = (snapshot: ActiveHouseholdSnapshot) => void;
 
 type ActivationRunGuard = {
@@ -83,16 +64,6 @@ type CachedActivationAttempt = {
 	markFreshPublished: () => void;
 	throwDiscardCloseError: () => void;
 };
-
-type CreateCurrentListDataSource = (
-	config: HouseholdCurrentListDataSourceConfig,
-) => ActiveListDataSource;
-
-type CreateSyncCoordinator = (config: {
-	syncAuthorized: boolean;
-	sync: ActiveListDataSource["sync"];
-	logger: Logger;
-}) => ActiveListSyncCoordinator;
 
 export type ActiveHouseholdController = {
 	activate: (activation: ActiveHouseholdActivation) => Promise<void>;
@@ -123,124 +94,18 @@ export function createActiveHouseholdController(
 	const logger = deps.logger ?? defaultLogger;
 	const subscribers = new Set<ActiveHouseholdSubscriber>();
 	let snapshot: ActiveHouseholdSnapshot = { status: "idle" };
-	let activeResource: ActiveHouseholdResource | null = null;
-	let activeResourceSession: ActiveHouseholdSession | null = null;
-	const openingResources = new Set<OpeningActiveHouseholdResource>();
 	let activationRun = 0;
 	let cacheWriteQueue: Promise<void> = Promise.resolve();
-	let nextResourceVersion = 1;
+	const resources = createActiveHouseholdResourceManager({
+		createCurrentListDataSource,
+		createSyncCoordinator,
+		logger,
+	});
 
 	function publish(nextSnapshot: ActiveHouseholdSnapshot) {
 		snapshot = nextSnapshot;
 		for (const subscriber of subscribers) {
 			subscriber(nextSnapshot);
-		}
-	}
-
-	async function closeResource(resource: ActiveHouseholdResource) {
-		await resource.close();
-	}
-
-	function publishResource(
-		resource: ActiveHouseholdResource,
-		session: ActiveHouseholdSession,
-	): ActiveHouseholdResource | null {
-		const previousResource = activeResource;
-		activeResource = resource;
-		activeResourceSession = session;
-		return previousResource && previousResource !== resource
-			? previousResource
-			: null;
-	}
-
-	async function closeActiveResource() {
-		const resource = activeResource;
-		activeResource = null;
-		activeResourceSession = null;
-		if (resource) {
-			await closeResource(resource);
-		}
-	}
-
-	async function closeOpeningResources() {
-		const results = await Promise.allSettled(
-			Array.from(openingResources, closeOpeningResource),
-		);
-		const rejected = results.find(
-			(result): result is PromiseRejectedResult => result.status === "rejected",
-		);
-		if (rejected) {
-			throw rejected.reason;
-		}
-	}
-
-	async function createSessionResource(
-		session: ActiveHouseholdSession,
-	): Promise<ActiveHouseholdResource> {
-		let rawDataSource: ActiveListDataSource | null = null;
-		try {
-			rawDataSource = createCurrentListDataSource({
-				household: session.activeHousehold,
-				activeMember: session.activeMember,
-				list: session.activeList,
-				currentUser: session.user,
-				members: session.members,
-				database: session.householdDatabase,
-			});
-			const lease = createCurrentListResourceLease(rawDataSource);
-			const dataSource = lease.dataSource;
-			const syncCoordinator = createSyncCoordinator({
-				syncAuthorized: dataSource.syncAuthorized,
-				sync: dataSource.sync,
-				logger: logger.with({ household_id: session.activeHousehold.id }),
-			});
-			return {
-				dataSource,
-				close: () => lease.retireAndClose({ stopSync: syncCoordinator.stop }),
-				syncCoordinator,
-			};
-		} catch (error) {
-			await rawDataSource?.close().catch(() => undefined);
-			throw error;
-		}
-	}
-
-	async function openSessionResource(
-		session: ActiveHouseholdSession,
-	): Promise<OpenedActiveHouseholdResource> {
-		const resource = await createSessionResource(session);
-		const dataSource = resource.dataSource;
-		const syncCoordinator = resource.syncCoordinator;
-		const opening: OpeningActiveHouseholdResource = { session, resource };
-		openingResources.add(opening);
-
-		try {
-			const initialState = await dataSource.load();
-			if (opening.closePromise) {
-				await opening.closePromise;
-				throw staleCurrentListResourceError();
-			}
-			const resourceKey = `current-list:${nextResourceVersion}`;
-			nextResourceVersion += 1;
-			return {
-				resource,
-				view: {
-					activeMemberName: activeMemberNameFromSession(session),
-					currentList: {
-						resourceKey,
-						initialState,
-						dataSource,
-						syncCoordinator,
-					},
-				},
-			};
-		} catch (error) {
-			if (!opening.closePromise) {
-				await closeResource(resource).catch(() => undefined);
-			}
-			throw error;
-		} finally {
-			openingResources.delete(opening);
 		}
 	}
 
@@ -260,29 +125,6 @@ export function createActiveHouseholdController(
 		await write;
 	}
 
-	async function closeUnauthorizedCachedResource(
-		cached: CachedHouseholdSession,
-	) {
-		for (const opening of openingResources) {
-			if (isUnauthorizedCachedSession(opening.session, cached)) {
-				await closeOpeningResource(opening);
-			}
-		}
-
-		const resource = activeResource;
-		const session = activeResourceSession;
-		if (resource && session && isUnauthorizedCachedSession(session, cached)) {
-			activeResource = null;
-			activeResourceSession = null;
-			await closeResource(resource);
-		}
-	}
-
-	function closeOpeningResource(opening: OpeningActiveHouseholdResource) {
-		opening.closePromise ??= closeResource(opening.resource);
-		return opening.closePromise;
-	}
-
 	async function publishOpened(
 		opened: OpenedActiveHouseholdResource,
 		session: ActiveHouseholdSession,
@@ -295,13 +137,16 @@ export function createActiveHouseholdController(
 		},
 	): Promise<boolean> {
 		if (run !== activationRun || options.shouldPublish?.() === false) {
-			await closeResource(opened.resource).catch((error) => {
+			await resources.closeResource(opened.resource).catch((error) => {
 				options.onDiscardCloseError?.(error);
 			});
 			return false;
 		}
 
-		const previousResource = publishResource(opened.resource, session);
+		const previousResource = resources.replaceActiveResource(
+			opened.resource,
+			session,
+		);
 		publish({ status: "ready", view: opened.view });
 		options.onPublished?.();
 		if (options.startSync) {
@@ -309,7 +154,7 @@ export function createActiveHouseholdController(
 		}
 
 		if (previousResource) {
-			const closePreviousResource = closeResource(previousResource);
+			const closePreviousResource = resources.closeResource(previousResource);
 			await Promise.resolve();
 			await closePreviousResource;
 		}
@@ -364,7 +209,7 @@ export function createActiveHouseholdController(
 				}
 
 				try {
-					const opened = await openSessionResource(cached);
+					const opened = await resources.openSessionResource(cached);
 					return await publishOpened(opened, cached, run.id, {
 						startSync: false,
 						shouldPublish: () =>
@@ -391,7 +236,7 @@ export function createActiveHouseholdController(
 	}
 
 	async function handleSignedOutActivation(run: ActivationRunGuard) {
-		await closeActiveResource().catch((error) => {
+		await resources.closeActiveResource().catch((error) => {
 			logger.error("active Household resource close failed", {
 				error: asError(error),
 			});
@@ -420,7 +265,7 @@ export function createActiveHouseholdController(
 
 		cachedAttempt.invalidateHousehold(cached);
 		publish({ status: "loading" });
-		await closeUnauthorizedCachedResource(cached);
+		await resources.closeUnauthorizedCachedResource(cached);
 		await cachedAttempt.promise;
 		cachedAttempt.throwDiscardCloseError();
 		if (!run.isCurrent()) return true;
@@ -441,15 +286,15 @@ export function createActiveHouseholdController(
 		cachedAttempt: CachedActivationAttempt,
 	) {
 		publishLoadingFromCurrentView();
-		const opened = await openSessionResource(session);
+		const opened = await resources.openSessionResource(session);
 		if (!run.isCurrent()) {
-			await closeResource(opened.resource).catch(() => undefined);
+			await resources.closeResource(opened.resource).catch(() => undefined);
 			return;
 		}
 
 		await saveFreshSessionIfCurrent(session, run.id);
 		if (!run.isCurrent()) {
-			await closeResource(opened.resource).catch(() => undefined);
+			await resources.closeResource(opened.resource).catch(() => undefined);
 			return;
 		}
 
@@ -507,7 +352,7 @@ export function createActiveHouseholdController(
 				publish({ status: "ready", view: previousView });
 				return;
 			}
-			await closeActiveResource().catch(() => undefined);
+			await resources.closeActiveResource().catch(() => undefined);
 			publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
 		}
 	}
@@ -536,8 +381,8 @@ export function createActiveHouseholdController(
 			activationRun += 1;
 			publish({ status: "idle" });
 			const results = await Promise.allSettled([
-				closeOpeningResources(),
-				closeActiveResource(),
+				resources.closeOpeningResources(),
+				resources.closeActiveResource(),
 			]);
 			const rejected = results.find(
 				(result): result is PromiseRejectedResult =>
@@ -563,16 +408,6 @@ export function createActiveHouseholdController(
 	};
 }
 
-function isUnauthorizedCachedSession(
-	session: ActiveHouseholdSession,
-	cached: CachedHouseholdSession,
-): boolean {
-	return (
-		session.activeHousehold.id === cached.activeHousehold.id &&
-		!("authToken" in session.householdDatabase)
-	);
-}
-
 function previousViewFromSnapshot(
 	snapshot: ActiveHouseholdSnapshot,
 ): ActiveHouseholdView | undefined {
@@ -581,10 +416,6 @@ function previousViewFromSnapshot(
 		return snapshot.previous;
 	}
 	return undefined;
-}
-
-function activeMemberNameFromSession(session: ActiveHouseholdSession): string {
-	return session.activeMember.displayName ?? session.user.email ?? "Member";
 }
 
 function activeHouseholdAuthStateFromActivation(
