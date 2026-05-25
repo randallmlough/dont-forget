@@ -370,6 +370,33 @@ describe("useHomeContent", () => {
 		load.resolve(initialListFixture());
 		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 	});
+
+	it("waits for a pending data source load to reject before closing after cancellation", async () => {
+		const load = deferred<ActiveListInitialState>();
+		const close = jest.fn().mockResolvedValue(undefined);
+		jest
+			.mocked(getHouseholdSession)
+			.mockResolvedValue(householdSessionFixture());
+		jest.mocked(createHouseholdActiveListDataSource).mockReturnValue({
+			...noopDataSource(initialListFixture()),
+			load: () => load.promise,
+			close,
+		});
+
+		const { unmount } = render(<UseHomeContentHarness isLoaded isSignedIn />);
+
+		await waitFor(() =>
+			expect(createHouseholdActiveListDataSource).toHaveBeenCalledTimes(1),
+		);
+		const coordinator = mockSyncCoordinatorFactory.created[0];
+		unmount();
+
+		await settleMicrotasks();
+		expect(coordinator?.stop).not.toHaveBeenCalled();
+		expect(close).not.toHaveBeenCalled();
+		load.reject(new Error("offline"));
+		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+	});
 });
 
 function UseHomeContentHarness({
@@ -489,11 +516,13 @@ function noopDataSource(
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((nextResolve) => {
+	let reject!: (error: unknown) => void;
+	const promise = new Promise<T>((nextResolve, nextReject) => {
 		resolve = nextResolve;
+		reject = nextReject;
 	});
 
-	return { promise, resolve };
+	return { promise, resolve, reject };
 }
 
 async function settleMicrotasks() {
