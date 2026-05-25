@@ -30,7 +30,7 @@ describe("HomeScreen", () => {
 			content: {
 				status: "ready",
 				activeMemberName: "Avery Chen",
-				resourceKey: "hh_avery:lst_default_groceries:1",
+				resourceKey: "current-list:1",
 				initialList: initialListFixture(),
 				dataSource: noopDataSource(initialListFixture()),
 				syncCoordinator: syncCoordinatorFixture(),
@@ -77,7 +77,7 @@ it("remounts Active List when the Current List resource changes", () => {
 			content={{
 				status: "ready",
 				activeMemberName: "Avery Chen",
-				resourceKey: "hh_avery:lst_default_groceries:1",
+				resourceKey: "current-list:1",
 				initialList: cachedList,
 				dataSource: noopDataSource(cachedList),
 				syncCoordinator: syncCoordinatorFixture(),
@@ -92,7 +92,7 @@ it("remounts Active List when the Current List resource changes", () => {
 			content={{
 				status: "ready",
 				activeMemberName: "Avery Chen",
-				resourceKey: "hh_avery:lst_default_groceries:2",
+				resourceKey: "current-list:2",
 				initialList: freshList,
 				dataSource: noopDataSource(freshList),
 				syncCoordinator: syncCoordinatorFixture(),
@@ -140,7 +140,7 @@ describe("HomeScreenView", () => {
 				content={{
 					status: "ready",
 					activeMemberName: "Avery Chen",
-					resourceKey: "hh_avery:lst_default_groceries:1",
+					resourceKey: "current-list:1",
 					initialList,
 					dataSource: noopDataSource(initialList),
 					syncCoordinator: syncCoordinatorFixture(),

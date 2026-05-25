@@ -25,8 +25,12 @@ import {
 
 export type ActiveHouseholdSnapshot =
 	| { status: "idle" }
-	| { status: "loading" }
-	| { status: "error"; message: string }
+	| {
+			status: "loading";
+			previous?: ActiveHouseholdView;
+			refreshingSession?: boolean;
+	  }
+	| { status: "error"; message: string; previous?: ActiveHouseholdView }
 	| { status: "ready"; view: ActiveHouseholdView };
 
 export type ActiveHouseholdView = {
@@ -214,9 +218,7 @@ export function createActiveHouseholdController(
 				await opening.closePromise;
 				throw staleCurrentListResourceError();
 			}
-			const resourceKey = `${session.activeHousehold.id}:${session.activeList.id}:${
-				nextResourceVersion
-			}`;
+			const resourceKey = `current-list:${nextResourceVersion}`;
 			nextResourceVersion += 1;
 			return {
 				resource,
@@ -312,7 +314,16 @@ export function createActiveHouseholdController(
 	return {
 		async activate(activation) {
 			const run = ++activationRun;
-			publish({ status: "loading" });
+			const previousView = previousViewFromSnapshot(snapshot);
+			publish(
+				previousView
+					? {
+							status: "loading",
+							previous: previousView,
+							refreshingSession: true,
+						}
+					: { status: "loading" },
+			);
 
 			const invalidatedCachedHouseholds = new Set<string>();
 			let freshPublished = false;
@@ -383,6 +394,14 @@ export function createActiveHouseholdController(
 					);
 				}
 				if (run !== activationRun) return;
+				const previousView = previousViewFromSnapshot(snapshot);
+				if (previousView) {
+					publish({
+						status: "loading",
+						previous: previousView,
+						refreshingSession: true,
+					});
+				}
 				const opened = await openSessionResource(session);
 				if (run !== activationRun) {
 					await closeResource(opened.resource).catch(() => undefined);
@@ -404,7 +423,18 @@ export function createActiveHouseholdController(
 					error: asError(error),
 				});
 				const publishedCached = await cachedAttempt;
-				if (!publishedCached && run === activationRun) {
+				if (publishedCached && run === activationRun) {
+					const previousView =
+						snapshot.status === "loading" ? snapshot.previous : undefined;
+					if (previousView) {
+						publish({ status: "ready", view: previousView });
+					}
+				} else if (!publishedCached && run === activationRun) {
+					const previousView = previousViewFromSnapshot(snapshot);
+					if (previousView) {
+						publish({ status: "ready", view: previousView });
+						return;
+					}
 					await closeActiveResource().catch(() => undefined);
 					publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
 				}
@@ -450,6 +480,16 @@ function isUnauthorizedCachedSession(
 		session.activeHousehold.id === cached.activeHousehold.id &&
 		!("authToken" in session.householdDatabase)
 	);
+}
+
+function previousViewFromSnapshot(
+	snapshot: ActiveHouseholdSnapshot,
+): ActiveHouseholdView | undefined {
+	if (snapshot.status === "ready") return snapshot.view;
+	if (snapshot.status === "loading" || snapshot.status === "error") {
+		return snapshot.previous;
+	}
+	return undefined;
 }
 
 function activeMemberNameFromSession(session: ActiveHouseholdSession): string {

@@ -73,6 +73,26 @@ describe("ActiveHouseholdProvider", () => {
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 	});
 
+	it("renders the previous ready state while a replacement is loading", async () => {
+		const controller = activeHouseholdControllerFixture();
+		render(
+			<ActiveHouseholdProvider controller={controller} auth={authFixture()}>
+				<CurrentState />
+			</ActiveHouseholdProvider>,
+		);
+
+		act(() => {
+			controller.publish({
+				status: "loading",
+				previous: activeHouseholdViewFixture(),
+				refreshingSession: true,
+			});
+		});
+
+		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+		expect(screen.getByText("Avery Chen")).toBeTruthy();
+	});
+
 	it("exposes error state and retries with the latest auth inputs", async () => {
 		const auth = authFixture();
 		const controller = activeHouseholdControllerFixture({
@@ -425,7 +445,7 @@ function activeHouseholdViewFixture() {
 	return {
 		activeMemberName: "Avery Chen",
 		currentList: {
-			resourceKey: "hh_avery:lst_default_groceries:1",
+			resourceKey: "current-list:1",
 			initialState: initialListFixture(),
 			dataSource: activeListDataSourceFixture(),
 			syncCoordinator: syncCoordinatorFixture(),

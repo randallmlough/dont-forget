@@ -211,14 +211,11 @@ function contentFromSnapshot(
 	snapshot: ActiveHouseholdSnapshot,
 ): ActiveHouseholdContentState {
 	if (snapshot.status === "ready") {
-		return {
-			status: "ready",
-			activeMemberName: snapshot.view.activeMemberName,
-			resourceKey: snapshot.view.currentList.resourceKey,
-			initialList: snapshot.view.currentList.initialState,
-			dataSource: snapshot.view.currentList.dataSource,
-			syncCoordinator: snapshot.view.currentList.syncCoordinator,
-		};
+		return contentFromView(snapshot.view);
+	}
+
+	if (snapshot.status === "loading" && snapshot.previous) {
+		return contentFromView(snapshot.previous);
 	}
 
 	if (snapshot.status === "error") {
@@ -226,4 +223,17 @@ function contentFromSnapshot(
 	}
 
 	return { status: "loading" };
+}
+
+function contentFromView(
+	view: Extract<ActiveHouseholdSnapshot, { status: "ready" }>["view"],
+): ActiveHouseholdContentState {
+	return {
+		status: "ready",
+		activeMemberName: view.activeMemberName,
+		resourceKey: view.currentList.resourceKey,
+		initialList: view.currentList.initialState,
+		dataSource: view.currentList.dataSource,
+		syncCoordinator: view.currentList.syncCoordinator,
+	};
 }

@@ -393,6 +393,8 @@ describe("createActiveHouseholdController", () => {
 				.fn()
 				.mockResolvedValue(initialListFixture({ householdName: "Fresh" })),
 		});
+		const cachedCoordinator = syncCoordinatorFixture();
+		const freshCoordinator = syncCoordinatorFixture();
 		const controller = createActiveHouseholdController({
 			householdSessionService: sessionServiceFixture({
 				readCachedHouseholdSession: jest
@@ -405,7 +407,8 @@ describe("createActiveHouseholdController", () => {
 				.mockReturnValueOnce(freshDataSource),
 			createSyncCoordinator: jest
 				.fn()
-				.mockReturnValue(syncCoordinatorFixture()),
+				.mockReturnValueOnce(cachedCoordinator)
+				.mockReturnValueOnce(freshCoordinator),
 			logger: loggerFixture(),
 		});
 		controller.subscribe((snapshot) => {
@@ -423,6 +426,199 @@ describe("createActiveHouseholdController", () => {
 		});
 
 		expect(events).toEqual(["publish:Cached", "publish:Fresh", "close:cached"]);
+	});
+
+	it("keeps the cached view published while fresh resources open", async () => {
+		const freshLoad = deferred<ActiveListInitialState>();
+		const cachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Cached" })),
+		});
+		const freshDataSource = activeListDataSourceFixture({
+			load: jest.fn(() => freshLoad.promise),
+		});
+		const freshSession = deferred<HouseholdSession>();
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionServiceFixture({
+				readCachedHouseholdSession: jest
+					.fn()
+					.mockResolvedValue(cachedHouseholdSessionFixture()),
+				getHouseholdSession: jest.fn(() => freshSession.promise),
+			}),
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataSource)
+				.mockReturnValueOnce(freshDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		const activation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		await waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "ready",
+				view: { currentList: { initialState: { householdName: "Cached" } } },
+			}),
+		);
+
+		freshSession.resolve(householdSessionFixture({ householdName: "Fresh" }));
+		await waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "loading",
+				refreshingSession: true,
+				previous: {
+					currentList: { initialState: { householdName: "Cached" } },
+				},
+			}),
+		);
+		const loading = controller.getSnapshot();
+		if (loading.status !== "loading" || !loading.previous) {
+			throw new Error("Expected loading snapshot with previous view");
+		}
+		await expect(
+			loading.previous.currentList.dataSource.addItem("Cached eggs"),
+		).resolves.toBeUndefined();
+
+		freshLoad.resolve(initialListFixture({ householdName: "Fresh" }));
+		await activation;
+
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			view: { currentList: { initialState: { householdName: "Fresh" } } },
+		});
+	});
+
+	it("keeps an existing cached view visible during a later signed-in replacement activation", async () => {
+		const freshSession = deferred<HouseholdSession>();
+		const cachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Cached" })),
+		});
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionServiceFixture({
+				readCachedHouseholdSession: jest
+					.fn()
+					.mockResolvedValueOnce(cachedHouseholdSessionFixture())
+					.mockResolvedValueOnce(null),
+				getHouseholdSession: jest.fn(() => freshSession.promise),
+			}),
+			createCurrentListDataSource: jest.fn().mockReturnValue(cachedDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => null,
+			authReady: false,
+			signedIn: false,
+		});
+		const cached = controller.getSnapshot();
+		if (cached.status !== "ready") throw new Error("Expected cached ready");
+
+		const replacement = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		await waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "loading",
+				refreshingSession: true,
+				previous: {
+					currentList: { initialState: { householdName: "Cached" } },
+				},
+			}),
+		);
+		const loading = controller.getSnapshot();
+		if (loading.status !== "loading" || !loading.previous) {
+			throw new Error("Expected loading snapshot with previous view");
+		}
+		await expect(
+			loading.previous.currentList.dataSource.addItem("Cached eggs"),
+		).resolves.toBeUndefined();
+
+		freshSession.reject(new Error("offline"));
+		await replacement;
+
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			view: { currentList: { initialState: { householdName: "Cached" } } },
+		});
+	});
+
+	it("publishes a new opaque Current List resource key when fresh resources replace cached resources", async () => {
+		const keys: string[] = [];
+		const cachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Cached" })),
+		});
+		const freshDataSource = activeListDataSourceFixture({
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Fresh" })),
+		});
+		const cachedCoordinator = syncCoordinatorFixture();
+		const freshCoordinator = syncCoordinatorFixture();
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionServiceFixture({
+				readCachedHouseholdSession: jest
+					.fn()
+					.mockResolvedValue(cachedHouseholdSessionFixture()),
+			}),
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataSource)
+				.mockReturnValueOnce(freshDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValueOnce(cachedCoordinator)
+				.mockReturnValueOnce(freshCoordinator),
+			logger: loggerFixture(),
+		});
+		controller.subscribe((snapshot) => {
+			if (snapshot.status === "ready") {
+				keys.push(snapshot.view.currentList.resourceKey);
+			}
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		expect(keys).toEqual(["current-list:1", "current-list:2"]);
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			view: {
+				currentList: {
+					resourceKey: "current-list:2",
+					initialState: { householdName: "Fresh" },
+				},
+			},
+		});
+		const final = controller.getSnapshot();
+		if (final.status !== "ready") throw new Error("Expected ready snapshot");
+		await final.view.currentList.dataSource.addItem("Fresh milk");
+		expect(freshDataSource.addItem).toHaveBeenCalledWith("Fresh milk");
+		expect(cachedDataSource.addItem).not.toHaveBeenCalled();
+		expect(final.view.currentList.syncCoordinator).toBe(freshCoordinator);
+		expect(cachedCoordinator.start).not.toHaveBeenCalled();
+		expect(freshCoordinator.start).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps cached Current List state when fresh loading fails", async () => {
@@ -1089,9 +1285,11 @@ async function waitForAsync(assertion: () => void) {
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((nextResolve) => {
+	let reject!: (error: unknown) => void;
+	const promise = new Promise<T>((nextResolve, nextReject) => {
 		resolve = nextResolve;
+		reject = nextReject;
 	});
 
-	return { promise, resolve };
+	return { promise, resolve, reject };
 }
