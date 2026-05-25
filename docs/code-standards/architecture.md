@@ -43,6 +43,15 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Should** keep List and Item services separate even when the Active Household controller composes them into one Current List experience for Home to render.
 - **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to the Active Household controller and sync coordinator.
 
+## Single-Responsibility Functions
+
+- **Must** keep functions focused on one clear responsibility.
+- **Should** break apart functions that coordinate several concepts at once, such as auth readiness, cached data, fresh data, stale-run guards, resource replacement, cache writes, cleanup, and error recovery.
+- **Should** extract named helpers for distinct phases so the top-level function reads as orchestration rather than implementation detail.
+- **Should** use small, intention-revealing helper names that describe the business or lifecycle step being performed.
+- **Avoid** dense multi-branch functions with mutable flag clusters that require readers to hold many invariants in their head.
+- **Avoid** mixing decision-making, side effects, resource cleanup, persistence, and error recovery in one function unless the function is only delegating to focused helpers.
+
 ## Providers And Auth
 
 - **Must** not add duplicate Clerk or PostHog providers.
