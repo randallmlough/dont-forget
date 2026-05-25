@@ -73,6 +73,32 @@ describe("ActiveHouseholdProvider", () => {
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 	});
 
+	it("does not reactivate when only the token callback identity changes", async () => {
+		const controller = activeHouseholdControllerFixture();
+		const firstAuth = authFixture();
+		const { rerender } = render(
+			<ActiveHouseholdProvider controller={controller} auth={firstAuth}>
+				<CurrentState />
+			</ActiveHouseholdProvider>,
+		);
+
+		expect(controller.activate).toHaveBeenCalledTimes(1);
+
+		rerender(
+			<ActiveHouseholdProvider
+				controller={controller}
+				auth={authFixture({
+					getToken: jest.fn(async () => "next-token"),
+				})}
+			>
+				<CurrentState />
+			</ActiveHouseholdProvider>,
+		);
+
+		await Promise.resolve();
+		expect(controller.activate).toHaveBeenCalledTimes(1);
+	});
+
 	it("renders the previous ready state while a replacement is loading", async () => {
 		const controller = activeHouseholdControllerFixture();
 		render(
@@ -138,11 +164,12 @@ describe("ActiveHouseholdProvider", () => {
 		fireEvent.press(screen.getByRole("button", { name: "Retry" }));
 
 		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
-		expect(controller.activate).toHaveBeenLastCalledWith({
-			getToken: auth.getToken,
+		const [activation] = controller.activate.mock.calls.at(-1) ?? [];
+		expect(activation).toMatchObject({
 			authReady: true,
 			signedIn: true,
 		});
+		await expect(activation?.getToken()).resolves.toBe("token");
 
 		act(() => {
 			controller.publish({
@@ -272,6 +299,76 @@ describe("ActiveHouseholdProvider", () => {
 		localDataDeleted.resolve(undefined);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		expect(clearMetadata).toHaveBeenCalledTimes(1);
+	});
+
+	it("skips activation runs while sign-out is in progress", async () => {
+		const signOutFinished = deferred<void>();
+		const controller = activeHouseholdControllerFixture();
+		const auth = authFixture({
+			signOut: jest.fn(() => signOutFinished.promise),
+		});
+		const { rerender } = render(
+			<ActiveHouseholdProvider
+				controller={controller}
+				auth={auth}
+				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				readCachedHouseholdSession={jest.fn(async () => null)}
+				deleteCachedHouseholdSessionLocalData={jest.fn()}
+				clearCachedHouseholdSessionMetadata={jest.fn(async () => null)}
+			>
+				<SignOutButton />
+			</ActiveHouseholdProvider>,
+		);
+
+		expect(controller.activate).toHaveBeenCalledTimes(1);
+		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+
+		rerender(
+			<ActiveHouseholdProvider
+				controller={controller}
+				auth={{ ...auth, signedIn: false }}
+				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				readCachedHouseholdSession={jest.fn(async () => null)}
+				deleteCachedHouseholdSessionLocalData={jest.fn()}
+				clearCachedHouseholdSessionMetadata={jest.fn(async () => null)}
+			>
+				<SignOutButton />
+			</ActiveHouseholdProvider>,
+		);
+
+		await Promise.resolve();
+		expect(controller.activate).toHaveBeenCalledTimes(1);
+		signOutFinished.resolve(undefined);
+	});
+
+	it("allows sign-out retry after Clerk sign-out fails", async () => {
+		const auth = authFixture({
+			signOut: jest
+				.fn()
+				.mockRejectedValueOnce(new Error("sign out failed"))
+				.mockResolvedValueOnce(undefined),
+		});
+
+		render(
+			<ActiveHouseholdProvider
+				controller={activeHouseholdControllerFixture()}
+				auth={auth}
+				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				readCachedHouseholdSession={jest.fn(async () => null)}
+				deleteCachedHouseholdSessionLocalData={jest.fn()}
+				clearCachedHouseholdSessionMetadata={jest.fn(async () => null)}
+			>
+				<CatchingSignOutButton />
+			</ActiveHouseholdProvider>,
+		);
+
+		const button = screen.getByRole("button", { name: "Sign out" });
+		fireEvent.press(button);
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+
+		fireEvent.press(button);
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
 	});
 
 	it("does not clean local Household data before controller disposal finishes", async () => {
@@ -422,6 +519,18 @@ function SignOutButton() {
 	const { signOut } = useActiveHousehold();
 	return (
 		<Pressable accessibilityRole="button" onPress={signOut}>
+			<Text>Sign out</Text>
+		</Pressable>
+	);
+}
+
+function CatchingSignOutButton() {
+	const { signOut } = useActiveHousehold();
+	return (
+		<Pressable
+			accessibilityRole="button"
+			onPress={() => void signOut().catch(() => undefined)}
+		>
 			<Text>Sign out</Text>
 		</Pressable>
 	);

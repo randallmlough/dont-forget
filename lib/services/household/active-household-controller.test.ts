@@ -377,6 +377,81 @@ describe("createActiveHouseholdController", () => {
 		});
 	});
 
+	it("publishes an error when unauthorized cached cleanup fails after cached state was published", async () => {
+		const cached = cachedHouseholdSessionFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const fresh = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+		const freshSession = deferred<HouseholdSession>();
+		const firstCachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Old" })),
+		});
+		const secondCachedDataSource = activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(initialListFixture({ householdName: "Old" })),
+		});
+		const sessionService = sessionServiceFixture({
+			readCachedHouseholdSession: jest.fn().mockResolvedValue(cached),
+			getHouseholdSession: jest.fn(() => freshSession.promise),
+			readUnauthorizedCachedHouseholdSession: jest
+				.fn()
+				.mockResolvedValue(cached),
+			deleteCachedHouseholdSessionLocalData: jest.fn(async () => {
+				throw new Error("delete failed");
+			}),
+		});
+		const controller = createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValueOnce(firstCachedDataSource)
+				.mockReturnValueOnce(secondCachedDataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(syncCoordinatorFixture()),
+			logger: loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => null,
+			authReady: true,
+			signedIn: false,
+		});
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			view: { currentList: { initialState: { householdName: "Old" } } },
+		});
+
+		const activation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		await waitForAsync(() =>
+			expect(secondCachedDataSource.load).toHaveBeenCalled(),
+		);
+
+		freshSession.resolve(fresh);
+		await activation;
+
+		expect(controller.getSnapshot()).toEqual({
+			status: "error",
+			message: "Unable to prepare your Household. Please try again.",
+		});
+		expect(
+			sessionService.clearUnauthorizedCachedHouseholdSessionMetadata,
+		).not.toHaveBeenCalled();
+	});
+
 	it("rejects new operations on an unauthorized cached resource after invalidation", async () => {
 		const cached = cachedHouseholdSessionFixture({
 			householdId: "hh_old",

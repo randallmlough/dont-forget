@@ -111,6 +111,11 @@ export function ActiveHouseholdProvider({
 	);
 	const [retryAttempt, setRetryAttempt] = useState(0);
 	const signingOutRef = useRef(false);
+	const getTokenRef = useRef(auth.getToken);
+	useEffect(() => {
+		getTokenRef.current = auth.getToken;
+	}, [auth.getToken]);
+	const getToken = useCallback(() => getTokenRef.current(), []);
 
 	useEffect(() => {
 		const subscription = controller.subscribe(setSnapshot);
@@ -120,12 +125,13 @@ export function ActiveHouseholdProvider({
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: retryAttempt intentionally retriggers active Household activation.
 	useEffect(() => {
+		if (signingOutRef.current) return;
 		void controller.activate({
-			getToken: auth.getToken,
+			getToken,
 			authReady: auth.authReady,
 			signedIn: auth.signedIn,
 		});
-	}, [auth.authReady, auth.getToken, auth.signedIn, controller, retryAttempt]);
+	}, [auth.authReady, auth.signedIn, controller, getToken, retryAttempt]);
 
 	useEffect(() => {
 		return () => {
@@ -169,7 +175,12 @@ export function ActiveHouseholdProvider({
 			});
 		}
 
-		await signOutAction();
+		try {
+			await signOutAction();
+		} catch (error) {
+			signingOutRef.current = false;
+			throw error;
+		}
 	}, [
 		analytics,
 		clearCachedHouseholdSessionMetadataProp,
