@@ -1,4 +1,11 @@
 import type { ActiveListInitialState } from "@/components/active-list";
+import {
+	cachedHouseholdSessionFixture,
+	householdSessionFixture,
+} from "@/db/fixtures/active-household";
+import type { Logger } from "@/lib/logger";
+import type { ActiveHouseholdSnapshot } from "./active-household-controller";
+import type { HouseholdSessionService } from "./household-session-service";
 
 export {
 	activeListDataSourceFixture,
@@ -8,12 +15,6 @@ export {
 	syncCoordinatorFixture,
 } from "@/db/fixtures/active-household";
 
-import {
-	cachedHouseholdSessionFixture,
-	householdSessionFixture,
-} from "@/db/fixtures/active-household";
-import type { Logger } from "@/lib/logger";
-
 export type { ActiveHouseholdSnapshot } from "./active-household-controller";
 export { createActiveHouseholdController } from "./active-household-controller";
 export type {
@@ -21,9 +22,6 @@ export type {
 	HouseholdSession,
 	HouseholdSessionService,
 } from "./household-session-service";
-
-import type { ActiveHouseholdSnapshot } from "./active-household-controller";
-import type { HouseholdSessionService } from "./household-session-service";
 
 export type { ActiveListInitialState };
 
