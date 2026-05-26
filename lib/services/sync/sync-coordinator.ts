@@ -118,6 +118,7 @@ export function createSyncCoordinator({
 
 		if (reason === "localWrite") {
 			pendingLocalChangeVersion += 1;
+			if (status === "offline") return null;
 		}
 
 		const inFlightBeforeNetworkRefresh = inFlight;
