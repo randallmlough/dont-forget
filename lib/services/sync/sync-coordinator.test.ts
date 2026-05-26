@@ -71,7 +71,7 @@ describe("createSyncCoordinator", () => {
 
 		const firstRequest = coordinator.requestSync({ reason: "localWrite" });
 		const secondRequest = coordinator.requestSync({ reason: "localWrite" });
-		await Promise.resolve();
+		await actTicks();
 
 		expect(sync).toHaveBeenCalledTimes(1);
 
@@ -92,7 +92,7 @@ describe("createSyncCoordinator", () => {
 
 		const firstRequest = coordinator.requestSync({ reason: "localWrite" });
 		const refreshRequest = coordinator.requestSync({ reason: "manualRefresh" });
-		await Promise.resolve();
+		await actTicks();
 
 		expect(sync).toHaveBeenCalledTimes(1);
 
@@ -298,6 +298,23 @@ describe("createSyncCoordinator", () => {
 			coordinator.requestSync({ reason: "localWrite" }),
 		).resolves.toBeNull();
 
+		expect(sync).not.toHaveBeenCalled();
+		expect(coordinator.getStatus()).toBe("offline");
+	});
+
+	it("refreshes stale online network status before starting sync work", async () => {
+		const sync = jest.fn(async () => ({ changed: false }));
+		const networkStatus = refreshableNetworkStatus("online", "offline");
+		const coordinator = createCoordinator({
+			networkStatus,
+			sync,
+		});
+
+		await expect(
+			coordinator.requestSync({ reason: "manualRefresh" }),
+		).resolves.toBeNull();
+
+		expect(networkStatus.refreshCurrentStatus).toHaveBeenCalledTimes(1);
 		expect(sync).not.toHaveBeenCalled();
 		expect(coordinator.getStatus()).toBe("offline");
 	});

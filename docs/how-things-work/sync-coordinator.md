@@ -56,7 +56,7 @@ The adapter exposes three app-level states:
 
 The production adapter is backed by `@react-native-community/netinfo`, but tests should use fake adapters. The adapter starts as `unknown` and updates from platform events; active Household controller activation does not wait for an async connectivity fetch.
 
-Before the coordinator skips a sync request because cached connectivity is `offline`, it asks the adapter to refresh the current platform state. This matters on iOS because network changes that happen while the app is backgrounded may not emit a fresh NetInfo event before the foreground catch-up path runs.
+Before the coordinator starts a sync request, it asks the adapter to refresh the current platform state and skips remote sync when the refreshed state is `offline`. This matters on iOS because cached connectivity can be stale in either direction; a stale `online` state can otherwise start a doomed native Turso request while the simulator or device has no internet connection.
 
 Known-offline state pauses new automatic remote attempts and keeps or transitions coordinator status to `offline`. It does not cancel in-flight sync work. If in-flight work succeeds while the network is still known offline, offline status remains the current truth until the network becomes online again.
 
@@ -104,7 +104,7 @@ This preserves the strongest needed sync mode without duplicating sync attempts.
 
 Expected sync interruption errors are treated as offline behavior. They transition the coordinator to `offline` and are not logged as application failures, because local List and Item writes already committed to the local Household DB.
 
-When network status is known offline, automatic sync requests short-circuit without calling remote sync. Manual refresh also short-circuits to offline state instead of forcing a doomed remote call. Unknown or online network states still allow the sync attempt, and expected network failures remain classified as offline because network status can be stale or imprecise.
+When refreshed network status is offline, automatic sync requests short-circuit without calling remote sync. Manual refresh also short-circuits to offline state instead of forcing a doomed remote call. Unknown or online network states still allow the sync attempt, and expected network failures remain classified as offline because network status can still be stale or imprecise.
 
 Recoverable native sync failures that are repaired by the remote upsert fallback stay quiet when they are expected interruptions. If fallback recovers an unexpected native failure, the coordinator logs a warning once with the sync reason and keeps the operation successful.
 

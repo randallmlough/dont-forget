@@ -85,26 +85,28 @@ export function createSyncCoordinator({
 	}
 
 	async function shouldSkipForOffline(): Promise<{
-		refreshedOfflineStatus: boolean;
+		refreshedNetworkStatus: boolean;
 		skip: boolean;
 	}> {
 		if (!syncAuthorized) {
 			setStatus("offline");
-			return { refreshedOfflineStatus: false, skip: true };
+			return { refreshedNetworkStatus: false, skip: true };
 		}
 
-		currentNetworkStatus = networkStatus.getCurrentStatus();
+		const previousNetworkStatus = networkStatus.getCurrentStatus();
+		currentNetworkStatus = previousNetworkStatus;
+		currentNetworkStatus = await networkStatus.refreshCurrentStatus();
+		const refreshedNetworkStatus =
+			currentNetworkStatus !== previousNetworkStatus;
+		if (stopped) return { refreshedNetworkStatus, skip: true };
+
 		if (currentNetworkStatus === "offline") {
-			currentNetworkStatus = await networkStatus.refreshCurrentStatus();
-			if (stopped) return { refreshedOfflineStatus: true, skip: true };
-			if (currentNetworkStatus === "offline") {
-				setStatus("offline");
-				return { refreshedOfflineStatus: true, skip: true };
-			}
-			return { refreshedOfflineStatus: true, skip: false };
+			stopRetryTimer();
+			setStatus("offline");
+			return { refreshedNetworkStatus, skip: true };
 		}
 
-		return { refreshedOfflineStatus: false, skip: false };
+		return { refreshedNetworkStatus, skip: false };
 	}
 
 	async function requestSync({
@@ -122,7 +124,7 @@ export function createSyncCoordinator({
 		const offlineDecision = await shouldSkipForOffline();
 		if (offlineDecision.skip) return null;
 		if (
-			offlineDecision.refreshedOfflineStatus &&
+			offlineDecision.refreshedNetworkStatus &&
 			!inFlightBeforeNetworkRefresh &&
 			inFlight &&
 			reason !== "manualRefresh"
@@ -330,6 +332,12 @@ export function createSyncCoordinator({
 		}, retryIntervalMs);
 	}
 
+	async function runStartupRetrySync() {
+		const offlineDecision = await shouldSkipForOffline();
+		if (offlineDecision.skip || inFlight || stopped) return;
+		void runSync("retry");
+	}
+
 	function stopRetryTimer() {
 		if (!retryInterval) return;
 		clearInterval(retryInterval);
@@ -372,7 +380,7 @@ export function createSyncCoordinator({
 				if (!inFlight && currentNetworkStatus === "offline") {
 					void requestSync({ reason: "retry" });
 				} else if (!inFlight) {
-					void runSync("retry");
+					void runStartupRetrySync();
 				}
 			}
 
