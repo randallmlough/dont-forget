@@ -121,6 +121,10 @@ export function createActiveHouseholdController(
 		cacheWriteQueue = write;
 	}
 
+	async function drainCacheWrites() {
+		await cacheWriteQueue.catch(() => undefined);
+	}
+
 	async function publishOpened(
 		opened: OpenedActiveHouseholdResource,
 		session: ActiveHouseholdSession,
@@ -380,6 +384,7 @@ export function createActiveHouseholdController(
 			activationRun += 1;
 			publish({ status: "idle" });
 			const results = await Promise.allSettled([
+				drainCacheWrites(),
 				resources.closeOpeningResources(),
 				resources.closeActiveResource(),
 			]);

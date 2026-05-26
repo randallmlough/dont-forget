@@ -234,7 +234,7 @@ describe("createHouseholdSessionService", () => {
 		).resolves.toBeNull();
 	});
 
-	it("still clears signed-out Household Session metadata when local data deletion fails", async () => {
+	it("keeps signed-out Household Session metadata when local data deletion fails", async () => {
 		const storage = memoryStorage();
 		const service = createHouseholdSessionService({ storage });
 		await service.saveCachedHouseholdSession(
@@ -248,9 +248,9 @@ describe("createHouseholdSessionService", () => {
 			"delete failed",
 		);
 
-		await expect(
-			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
-		).resolves.toBeNull();
+		await expect(storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY)).resolves.toEqual(
+			expect.any(String),
+		);
 	});
 
 	it("deletes local Household data only through the explicit local data API", async () => {

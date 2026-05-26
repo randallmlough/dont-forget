@@ -183,23 +183,12 @@ export function createHouseholdSessionService(
 
 		async clearSignedOutHouseholdSessionData() {
 			const cached = await readCachedHouseholdSession();
-			let cleanupError: unknown = null;
 
 			if (cached) {
-				try {
-					await deleteCachedHouseholdSessionLocalData(cached);
-				} catch (error) {
-					cleanupError = error;
-				}
+				await deleteCachedHouseholdSessionLocalData(cached);
 			}
 
-			try {
-				await clearCachedSessionMetadata();
-			} catch (error) {
-				cleanupError ??= error;
-			}
-
-			if (cleanupError) throw cleanupError;
+			await clearCachedSessionMetadata();
 		},
 
 		deleteCachedHouseholdSessionLocalData,

@@ -115,6 +115,43 @@ describe("createActiveHouseholdController resource lifecycle", () => {
 		await activation;
 	});
 
+	it("waits for in-flight cache persistence during dispose", async () => {
+		const cacheSave = h.deferred<h.CachedHouseholdSession>();
+		const sessionService = h.sessionServiceFixture();
+		sessionService.saveCachedHouseholdSession = jest.fn(
+			() => cacheSave.promise,
+		);
+		const controller = h.createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValue(h.activeListDataSourceFixture()),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		let disposed = false;
+		const dispose = controller.dispose().then(() => {
+			disposed = true;
+		});
+		await Promise.resolve();
+
+		expect(disposed).toBe(false);
+
+		cacheSave.resolve(h.cachedHouseholdSessionFixture());
+		await dispose;
+
+		expect(disposed).toBe(true);
+	});
+
 	it("keeps the cached view published while fresh resources open", async () => {
 		const freshLoad = h.deferred<h.ActiveListInitialState>();
 		const cachedDataSource = h.activeListDataSourceFixture({
