@@ -30,7 +30,7 @@ The public surface is intentionally small:
 
 The coordinator accepts these request reasons:
 
-- `localWrite`: A local List or Item mutation committed successfully and should be pushed when authorized. The mutation already succeeded locally; sync is propagation, not part of write success.
+- `localWrite`: A local List or Item mutation committed successfully and should be pushed when authorized. The mutation already succeeded locally; sync is propagation, not part of write success. If the coordinator already knows the active Household is `offline`, this automatic hint records pending local work and returns without refreshing network state or starting remote sync.
 - `manualRefresh`: A Member explicitly refreshed the active Household's current List and expects the app to catch up with remote Household changes as well as push local rows.
 - `appForeground`: The app returned to an active state and may need to catch up for the active Household.
 - `networkReconnect`: The app learned the device moved from a non-online network state to a known-online network state. This is a Household catch-up request, not only a local upload request.
@@ -56,11 +56,11 @@ The adapter exposes three app-level states:
 
 The production adapter is backed by `@react-native-community/netinfo`, but tests should use fake adapters. The adapter starts as `unknown` and updates from platform events; active Household controller activation does not wait for an async connectivity fetch.
 
-Before the coordinator starts a sync request, it asks the adapter to refresh the current platform state and skips remote sync when the refreshed state is `offline`. This matters on iOS because cached connectivity can be stale in either direction; a stale `online` state can otherwise start a doomed native Turso request while the simulator or device has no internet connection.
+Before the coordinator starts most sync requests, it asks the adapter to refresh the current platform state and skips remote sync when the refreshed state is `offline`. The exception is a known-offline `localWrite`: because that request is only an automatic propagation hint after a local List or Item write has already succeeded, the coordinator keeps pending local work and returns without refreshing network state or probing Turso. This matters on iOS because cached connectivity can be stale in either direction; a stale `online` state can otherwise start a doomed native Turso request while the simulator or device has no internet connection.
 
 Known-offline state pauses new automatic remote attempts and keeps or transitions coordinator status to `offline`. It does not cancel in-flight sync work. If in-flight work succeeds while the network is still known offline, offline status remains the current truth until the network becomes online again.
 
-Known-online transitions from either `offline` or `unknown` request `networkReconnect` only while the app is active. Repeated online events while already online are no-ops. Unknown connectivity keeps the existing foreground and retry fallback behavior.
+Known-online transitions from either `offline` or `unknown` request `networkReconnect` only while the app is active. Repeated online events while already online are no-ops. Unknown connectivity keeps the existing foreground and retry fallback behavior. `manualRefresh`, `networkReconnect`, `appForeground`, and eligible `retry` remain recovery or catch-up triggers that may refresh network state and attempt remote sync after an offline period.
 
 ## Sync Mode Selection
 
@@ -104,7 +104,7 @@ This preserves the strongest needed sync mode without duplicating sync attempts.
 
 Expected sync interruption errors are treated as offline behavior. They transition the coordinator to `offline` and are not logged as application failures, because local List and Item writes already committed to the local Household DB.
 
-When refreshed network status is offline, automatic sync requests short-circuit without calling remote sync. Manual refresh also short-circuits to offline state instead of forcing a doomed remote call. Unknown or online network states still allow the sync attempt, and expected network failures remain classified as offline because network status can still be stale or imprecise.
+Known-offline `localWrite` requests short-circuit before network refresh because they are local-first propagation hints, not connectivity probes. When refreshed network status is offline for other reasons, sync requests short-circuit without calling remote sync. Manual refresh also short-circuits to offline state instead of forcing a doomed remote call. Unknown or online network states still allow recovery and catch-up attempts, and expected network failures remain classified as offline because network status can still be stale or imprecise.
 
 Recoverable native sync failures that are repaired by the remote upsert fallback stay quiet when they are expected interruptions. If fallback recovers an unexpected native failure, the coordinator logs a warning once with the sync reason and keeps the operation successful.
 

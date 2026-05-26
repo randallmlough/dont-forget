@@ -302,6 +302,68 @@ describe("createSyncCoordinator", () => {
 		expect(coordinator.getStatus()).toBe("offline");
 	});
 
+	it("does not refresh or sync local Item write requests while coordinator status is already offline", async () => {
+		const logger = loggerFixture();
+		const networkStatus = refreshableNetworkStatus("online", "online");
+		const sync = jest
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
+			.mockRejectedValueOnce(new TypeError("Network request failed"))
+			.mockResolvedValue({ changed: false });
+		const coordinator = createCoordinator({
+			logger,
+			networkStatus,
+			sync,
+		});
+
+		await coordinator.requestSync({ reason: "localWrite" });
+		expect(coordinator.getStatus()).toBe("offline");
+
+		sync.mockClear();
+		networkStatus.refreshCurrentStatus.mockClear();
+		logger.error.mockClear();
+
+		await expect(
+			coordinator.requestSync({ reason: "localWrite" }),
+		).resolves.toBeNull();
+
+		expect(networkStatus.refreshCurrentStatus).not.toHaveBeenCalled();
+		expect(sync).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(coordinator.getStatus()).toBe("offline");
+	});
+
+	it("keeps skipped local Item write work eligible for later recovery sync", async () => {
+		const networkStatus = refreshableNetworkStatus("online", "online");
+		const sync = jest
+			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
+			.mockRejectedValueOnce(new TypeError("Network request failed"))
+			.mockResolvedValue({ changed: true });
+		const coordinator = createCoordinator({
+			networkStatus,
+			sync,
+		});
+
+		await coordinator.requestSync({ reason: "localWrite" });
+		expect(coordinator.getStatus()).toBe("offline");
+
+		sync.mockClear();
+		networkStatus.refreshCurrentStatus.mockClear();
+
+		await expect(
+			coordinator.requestSync({ reason: "localWrite" }),
+		).resolves.toBeNull();
+		expect(sync).not.toHaveBeenCalled();
+
+		await expect(
+			coordinator.requestSync({ reason: "networkReconnect" }),
+		).resolves.toEqual({ changed: true });
+
+		expect(networkStatus.refreshCurrentStatus).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledTimes(1);
+		expect(sync).toHaveBeenCalledWith({ mode: "full" });
+		expect(coordinator.getStatus()).toBe("synced");
+	});
+
 	it("refreshes stale online network status before starting sync work", async () => {
 		const sync = jest.fn(async () => ({ changed: false }));
 		const networkStatus = refreshableNetworkStatus("online", "offline");
