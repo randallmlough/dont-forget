@@ -16,7 +16,9 @@ describe("createActiveHouseholdController resource lifecycle", () => {
 			authReady: true,
 			signedIn: true,
 		});
-		await controller.dispose();
+		await expect(controller.dispose()).resolves.toEqual({
+			householdIdsForLocalDataDeletion: ["hh_avery"],
+		});
 
 		expect(controller.getSnapshot()).toEqual({ status: "idle" });
 		expect(syncCoordinator.stop).toHaveBeenCalledTimes(1);

@@ -184,6 +184,7 @@ describe("ActiveHouseholdProvider", () => {
 		const controller = activeHouseholdControllerFixture();
 		controller.dispose.mockImplementation(async () => {
 			order.push("dispose");
+			return { householdIdsForLocalDataDeletion: [] };
 		});
 		const auth = authFixture({
 			signOut: jest.fn(async () => {
@@ -222,7 +223,31 @@ describe("ActiveHouseholdProvider", () => {
 			"clerk",
 		]);
 		expect(analytics.track).toHaveBeenCalledWith("user_signed_out", {});
-		expect(clearSignedOutData).toHaveBeenCalledTimes(1);
+		expect(clearSignedOutData).toHaveBeenCalledWith([]);
+	});
+
+	it("passes disposed Household IDs to signed-out cleanup", async () => {
+		const controller = activeHouseholdControllerFixture();
+		controller.dispose.mockResolvedValue({
+			householdIdsForLocalDataDeletion: ["hh_active"],
+		});
+		const clearSignedOutData = jest.fn(async () => undefined);
+
+		render(
+			<ActiveHouseholdProvider
+				controller={controller}
+				auth={authFixture()}
+				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				clearSignedOutHouseholdSessionData={clearSignedOutData}
+			>
+				<SignOutButton />
+			</ActiveHouseholdProvider>,
+		);
+
+		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() =>
+			expect(clearSignedOutData).toHaveBeenCalledWith(["hh_active"]),
+		);
 	});
 
 	it("continues Clerk sign out when controller disposal fails", async () => {
@@ -375,7 +400,9 @@ describe("ActiveHouseholdProvider", () => {
 	it("does not clean local Household data before controller disposal finishes", async () => {
 		const auth = authFixture();
 		const controller = activeHouseholdControllerFixture();
-		const disposed = deferred<void>();
+		const disposed = deferred<{
+			householdIdsForLocalDataDeletion: string[];
+		}>();
 		controller.dispose.mockImplementation(() => disposed.promise);
 		const clearSignedOutData = jest.fn(async () => undefined);
 
@@ -395,7 +422,7 @@ describe("ActiveHouseholdProvider", () => {
 		await waitFor(() => expect(controller.dispose).toHaveBeenCalledTimes(1));
 		expect(clearSignedOutData).not.toHaveBeenCalled();
 		expect(auth.signOut).not.toHaveBeenCalled();
-		disposed.resolve(undefined);
+		disposed.resolve({ householdIdsForLocalDataDeletion: [] });
 		await waitFor(() => expect(clearSignedOutData).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 	});
@@ -570,7 +597,7 @@ function activeHouseholdControllerFixture({
 		dispose: jest.fn<
 			ReturnType<ActiveHouseholdController["dispose"]>,
 			Parameters<ActiveHouseholdController["dispose"]>
-		>(async () => undefined),
+		>(async () => ({ householdIdsForLocalDataDeletion: [] })),
 		getSnapshot: jest.fn<
 			ReturnType<ActiveHouseholdController["getSnapshot"]>,
 			Parameters<ActiveHouseholdController["getSnapshot"]>

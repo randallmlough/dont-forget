@@ -234,6 +234,18 @@ describe("createHouseholdSessionService", () => {
 		).resolves.toBeNull();
 	});
 
+	it("clears explicitly signed-out Household local data without cached metadata", async () => {
+		const storage = memoryStorage();
+		const service = createHouseholdSessionService({ storage });
+
+		await service.clearSignedOutHouseholdSessionData(["hh_active"]);
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_active");
+		await expect(
+			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
+		).resolves.toBeNull();
+	});
+
 	it("clears signed-out Household Session metadata and keeps a local data deletion retry when local deletion fails", async () => {
 		const storage = memoryStorage();
 		const service = createHouseholdSessionService({ storage });

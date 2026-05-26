@@ -2,6 +2,7 @@ export {
 	type ActiveHouseholdActivation,
 	type ActiveHouseholdController,
 	type ActiveHouseholdControllerDeps,
+	type ActiveHouseholdDisposal,
 	type ActiveHouseholdSnapshot,
 	type ActiveHouseholdView,
 	createActiveHouseholdController,

@@ -58,6 +58,7 @@ export type ActiveHouseholdResourceManager = {
 		resource: ActiveHouseholdResource,
 		session: ActiveHouseholdSession,
 	) => ActiveHouseholdResource | null;
+	getHouseholdIds: () => string[];
 };
 
 export type ActiveHouseholdResourceManagerDeps = {
@@ -92,6 +93,20 @@ export function createActiveHouseholdResourceManager(
 		return previousResource && previousResource !== resource
 			? previousResource
 			: null;
+	}
+
+	function getHouseholdIds(): string[] {
+		return Array.from(
+			new Set([
+				...(activeResourceSession
+					? [activeResourceSession.activeHousehold.id]
+					: []),
+				...Array.from(
+					openingResources,
+					(opening) => opening.session.activeHousehold.id,
+				),
+			]),
+		);
 	}
 
 	async function closeActiveResource() {
@@ -215,6 +230,7 @@ export function createActiveHouseholdResourceManager(
 		closeOpeningResources,
 		closeResource,
 		closeUnauthorizedCachedResource,
+		getHouseholdIds,
 		openSessionResource,
 		replaceActiveResource,
 	};

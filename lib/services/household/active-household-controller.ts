@@ -67,9 +67,13 @@ type CachedActivationAttempt = {
 
 export type ActiveHouseholdController = {
 	activate: (activation: ActiveHouseholdActivation) => Promise<void>;
-	dispose: () => Promise<void>;
+	dispose: () => Promise<ActiveHouseholdDisposal>;
 	getSnapshot: () => ActiveHouseholdSnapshot;
 	subscribe: (subscriber: ActiveHouseholdSubscriber) => { remove: () => void };
+};
+
+export type ActiveHouseholdDisposal = {
+	householdIdsForLocalDataDeletion: string[];
 };
 
 export type ActiveHouseholdControllerDeps = {
@@ -382,6 +386,9 @@ export function createActiveHouseholdController(
 		},
 
 		async dispose() {
+			const disposal = {
+				householdIdsForLocalDataDeletion: resources.getHouseholdIds(),
+			};
 			activationRun += 1;
 			publish({ status: "idle" });
 			const results = await Promise.allSettled([
@@ -396,6 +403,7 @@ export function createActiveHouseholdController(
 			if (rejected) {
 				throw rejected.reason;
 			}
+			return disposal;
 		},
 
 		getSnapshot() {

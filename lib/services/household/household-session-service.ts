@@ -58,7 +58,9 @@ export type HouseholdSessionService = {
 		freshSession: HouseholdSession,
 	) => Promise<void>;
 	clearCachedHouseholdSessionMetadata: () => Promise<CachedHouseholdSession | null>;
-	clearSignedOutHouseholdSessionData: () => Promise<void>;
+	clearSignedOutHouseholdSessionData: (
+		householdIds?: string[],
+	) => Promise<void>;
 	deleteCachedHouseholdSessionLocalData: (
 		cached: CachedHouseholdSession,
 	) => Promise<void>;
@@ -80,6 +82,7 @@ export function createHouseholdSessionService(
 	const analytics = deps.analytics ?? { track };
 
 	async function readCachedHouseholdSession(): Promise<CachedHouseholdSession | null> {
+		await drainPendingSignedOutHouseholdDeletions().catch(() => undefined);
 		const raw = await storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY);
 		if (!raw) return null;
 
@@ -118,6 +121,30 @@ export function createHouseholdSessionService(
 			SIGNED_OUT_HOUSEHOLD_DELETION_KEY,
 			JSON.stringify(uniqueHouseholdIds),
 		);
+	}
+
+	async function drainPendingSignedOutHouseholdDeletions(
+		householdIds: string[] = [],
+	): Promise<void> {
+		const pendingHouseholdIds = await readPendingSignedOutHouseholdDeletions();
+		if (pendingHouseholdIds.length === 0 && householdIds.length === 0) return;
+		const remainingHouseholdIds: string[] = [];
+		let cleanupError: unknown = null;
+
+		for (const householdId of new Set([
+			...pendingHouseholdIds,
+			...householdIds,
+		])) {
+			try {
+				await deleteLocalHouseholdStoreData(householdId);
+			} catch (error) {
+				remainingHouseholdIds.push(householdId);
+				cleanupError ??= error;
+			}
+		}
+
+		await savePendingSignedOutHouseholdDeletions(remainingHouseholdIds);
+		if (cleanupError) throw cleanupError;
 	}
 
 	async function deleteCachedHouseholdSessionLocalData(
@@ -209,26 +236,22 @@ export function createHouseholdSessionService(
 			return cached;
 		},
 
-		async clearSignedOutHouseholdSessionData() {
+		async clearSignedOutHouseholdSessionData(householdIds = []) {
 			const cached = await readCachedHouseholdSession();
-			const householdIds = await readPendingSignedOutHouseholdDeletions();
+			const signedOutHouseholdIds = [...householdIds];
 
 			if (cached) {
-				householdIds.push(cached.activeHousehold.id);
-				await savePendingSignedOutHouseholdDeletions(householdIds);
+				signedOutHouseholdIds.push(cached.activeHousehold.id);
 			}
 
 			let cleanupError: unknown = null;
-			for (const householdId of new Set(householdIds)) {
-				try {
-					await deleteLocalHouseholdStoreData(householdId);
-				} catch (error) {
-					cleanupError ??= error;
-				}
+			try {
+				await drainPendingSignedOutHouseholdDeletions(signedOutHouseholdIds);
+			} catch (error) {
+				cleanupError = error;
 			}
 			await clearCachedSessionMetadata();
 			if (cleanupError) throw cleanupError;
-			await savePendingSignedOutHouseholdDeletions([]);
 		},
 
 		deleteCachedHouseholdSessionLocalData,
@@ -275,8 +298,12 @@ export function clearCachedHouseholdSessionMetadata(): Promise<CachedHouseholdSe
 	return defaultHouseholdSessionService.clearCachedHouseholdSessionMetadata();
 }
 
-export function clearSignedOutHouseholdSessionData(): Promise<void> {
-	return defaultHouseholdSessionService.clearSignedOutHouseholdSessionData();
+export function clearSignedOutHouseholdSessionData(
+	householdIds?: string[],
+): Promise<void> {
+	return defaultHouseholdSessionService.clearSignedOutHouseholdSessionData(
+		householdIds,
+	);
 }
 
 export function deleteCachedHouseholdSessionLocalData(

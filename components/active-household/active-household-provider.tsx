@@ -21,6 +21,7 @@ import { useLogger } from "@/lib/logger";
 import {
 	type ActiveHouseholdActivation,
 	type ActiveHouseholdController,
+	type ActiveHouseholdDisposal,
 	type ActiveHouseholdSnapshot,
 	clearSignedOutHouseholdSessionData,
 	createActiveHouseholdController,
@@ -142,14 +143,24 @@ export function ActiveHouseholdProvider({
 
 		analytics.track("user_signed_out", {});
 		analytics.reset();
-		await controller.dispose().catch((error) => {
-			logger.error("active Household sign-out dispose failed", {
-				error: asError(error),
+		let disposal: ActiveHouseholdDisposal = {
+			householdIdsForLocalDataDeletion: [],
+		};
+		await controller
+			.dispose()
+			.then((nextDisposal) => {
+				disposal = nextDisposal;
+			})
+			.catch((error) => {
+				logger.error("active Household sign-out dispose failed", {
+					error: asError(error),
+				});
 			});
-		});
 
 		try {
-			await clearSignedOutHouseholdSessionDataProp();
+			await clearSignedOutHouseholdSessionDataProp(
+				disposal.householdIdsForLocalDataDeletion,
+			);
 		} catch (error) {
 			logger.error("active Household sign-out local cleanup failed", {
 				error: asError(error),
