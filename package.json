@@ -4,7 +4,7 @@
 	"version": "1.0.0",
 	"packageManager": "pnpm@10.11.0",
 	"scripts": {
-		"start": "expo start",
+		"start": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --localhost",
 		"reset-project": "node ./scripts/reset-project.js",
 		"ios": "expo run:ios",
 		"storybook:start": "STORYBOOK_ENABLED=true expo start --dev-client",
@@ -50,6 +50,7 @@
 		"expo-auth-session": "~55.0.16",
 		"expo-constants": "~55.0.16",
 		"expo-crypto": "~55.0.15",
+		"expo-dev-client": "~55.0.35",
 		"expo-file-system": "~55.0.20",
 		"expo-font": "~55.0.7",
 		"expo-haptics": "~55.0.14",

@@ -1,54 +1,30 @@
-import { useAuth, useUser } from "@clerk/clerk-expo";
-import { type ReactNode, useRef } from "react";
+import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
-import { ActiveList } from "@/components/active-list";
-import { reset, track } from "@/lib/analytics";
-import { clearCachedHouseholdSession } from "@/lib/services/household";
 import {
-	type HomeContentState,
-	useHomeContent,
-} from "@/screens/home/use-home-content";
+	type ActiveHouseholdContentState,
+	useActiveHousehold,
+} from "@/components/active-household";
+import { ActiveList } from "@/components/active-list";
 
 export type HomeScreenViewProps = {
 	currentMemberName: string;
-	content: HomeContentState;
+	content: ActiveHouseholdContentState;
 	onRetry?: () => void;
 	onSignOut?: () => void;
 };
 
 export default function HomeScreen() {
-	const { getToken, isLoaded, isSignedIn, signOut } = useAuth();
-	const { user } = useUser();
-	const signingOutRef = useRef(false);
-	const { closeCurrentHome, content, retry } = useHomeContent({
-		getToken,
-		isLoaded,
-		isSignedIn: Boolean(isSignedIn),
-		signingOutRef,
-	});
-
-	const currentMemberName = memberName(content, user);
-
-	async function onSignOut() {
-		if (signingOutRef.current) return;
-		signingOutRef.current = true;
-
-		track("user_signed_out", {});
-		reset();
-		await closeCurrentHome();
-		await clearCachedHouseholdSession();
-		await signOut();
-	}
+	const { content, currentMemberName, retry, signOut } = useActiveHousehold();
 
 	return (
 		<HomeScreenView
 			currentMemberName={currentMemberName}
 			content={content}
 			onRetry={retry}
-			onSignOut={onSignOut}
+			onSignOut={signOut}
 		/>
 	);
 }
@@ -87,6 +63,7 @@ export function HomeScreenView({
 
 			{content.status === "ready" ? (
 				<ActiveList.Provider
+					key={content.resourceKey}
 					initialState={content.initialList}
 					currentMemberName={displayMemberName}
 					dataSource={content.dataSource}
@@ -144,22 +121,6 @@ function HomeStatus({
 				{children}
 			</View>
 		</View>
-	);
-}
-
-function memberName(
-	content: HomeContentState,
-	user: ReturnType<typeof useUser>["user"],
-): string {
-	if (content.status === "ready") {
-		return content.activeMemberName;
-	}
-
-	return (
-		user?.fullName ??
-		user?.firstName ??
-		user?.primaryEmailAddress?.emailAddress ??
-		"Member"
 	);
 }
 

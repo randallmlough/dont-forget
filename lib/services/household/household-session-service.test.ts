@@ -1,8 +1,11 @@
+import {
+	cachedHouseholdSessionFixture,
+	householdSessionFixture,
+} from "@/db/fixtures/active-household";
 import { BOOTSTRAP_API_PATH } from "@/lib/bootstrap";
 import {
 	createHouseholdSessionService,
 	HOUSEHOLD_SESSION_CACHE_KEY,
-	type HouseholdSession,
 	type HouseholdSessionStorage,
 } from "@/lib/services/household/household-session-service";
 import { deleteLocalHouseholdStoreData } from "./household-store";
@@ -117,7 +120,27 @@ describe("createHouseholdSessionService", () => {
 		expect(analytics.track).not.toHaveBeenCalled();
 	});
 
-	it("discards cached Household Session metadata and local data when fresh session authorizes a different Household", async () => {
+	it("reports no unauthorized cached Household Session for matching fresh authorization without side effects", async () => {
+		const storage = memoryStorage();
+		const analytics = analyticsFixture();
+		const service = createHouseholdSessionService({ storage, analytics });
+
+		await service.saveCachedHouseholdSession(householdSessionFixture());
+		analytics.track.mockClear();
+		const removeItem = jest.spyOn(storage, "removeItem");
+
+		await expect(
+			service.readUnauthorizedCachedHouseholdSession(householdSessionFixture()),
+		).resolves.toBeNull();
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
+		expect(removeItem).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalled();
+		await expect(storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY)).resolves.toEqual(
+			expect.any(String),
+		);
+	});
+
+	it("reports unauthorized cached Household Session metadata without deleting local data or clearing metadata", async () => {
 		const storage = memoryStorage();
 		const analytics = analyticsFixture();
 		const service = createHouseholdSessionService({ storage, analytics });
@@ -132,11 +155,40 @@ describe("createHouseholdSessionService", () => {
 
 		await service.saveCachedHouseholdSession(oldSession);
 		analytics.track.mockClear();
+		const removeItem = jest.spyOn(storage, "removeItem");
 
 		await expect(
-			service.discardCachedHouseholdSessionIfUnauthorized(freshSession),
+			service.readUnauthorizedCachedHouseholdSession(freshSession),
 		).resolves.toMatchObject({ activeHousehold: { id: "hh_old" } });
-		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
+		expect(removeItem).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalled();
+		await expect(storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY)).resolves.toEqual(
+			expect.any(String),
+		);
+	});
+
+	it("clears unauthorized cached Household Session metadata and tracks invalidation", async () => {
+		const storage = memoryStorage();
+		const analytics = analyticsFixture();
+		const service = createHouseholdSessionService({ storage, analytics });
+		const oldSession = householdSessionFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const freshSession = householdSessionFixture({
+			householdId: "hh_new",
+			householdName: "New",
+		});
+
+		const cached = await service.saveCachedHouseholdSession(oldSession);
+		analytics.track.mockClear();
+		await service.clearUnauthorizedCachedHouseholdSessionMetadata(
+			cached,
+			freshSession,
+		);
+
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
 		expect(analytics.track).toHaveBeenCalledWith(
 			"household_session_cache_invalidated",
 			{
@@ -150,20 +202,86 @@ describe("createHouseholdSessionService", () => {
 		).resolves.toBeNull();
 	});
 
-	it("clears cached Household Session metadata and local Household data for sign-out cleanup", async () => {
+	it("clears cached Household Session metadata without deleting local Household data", async () => {
 		const storage = memoryStorage();
 		const analytics = analyticsFixture();
 		const service = createHouseholdSessionService({ storage, analytics });
 
 		await service.saveCachedHouseholdSession(householdSessionFixture());
 		analytics.track.mockClear();
-		await service.clearCachedHouseholdSession();
+		const removed = await service.clearCachedHouseholdSessionMetadata();
 
-		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_avery");
+		expect(removed).toMatchObject({ activeHousehold: { id: "hh_avery" } });
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
 		expect(analytics.track).not.toHaveBeenCalled();
 		await expect(
 			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
 		).resolves.toBeNull();
+	});
+
+	it("clears signed-out Household Session data after deleting local data", async () => {
+		const storage = memoryStorage();
+		const service = createHouseholdSessionService({ storage });
+		await service.saveCachedHouseholdSession(
+			householdSessionFixture({ householdId: "hh_old" }),
+		);
+
+		await service.clearSignedOutHouseholdSessionData();
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		await expect(
+			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
+		).resolves.toBeNull();
+	});
+
+	it("clears explicitly signed-out Household local data without cached metadata", async () => {
+		const storage = memoryStorage();
+		const service = createHouseholdSessionService({ storage });
+
+		await service.clearSignedOutHouseholdSessionData(["hh_active"]);
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_active");
+		await expect(
+			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
+		).resolves.toBeNull();
+	});
+
+	it("clears signed-out Household Session metadata and keeps a local data deletion retry when local deletion fails", async () => {
+		const storage = memoryStorage();
+		const service = createHouseholdSessionService({ storage });
+		await service.saveCachedHouseholdSession(
+			householdSessionFixture({ householdId: "hh_old" }),
+		);
+		mockDeleteLocalHouseholdStoreData
+			.mockRejectedValueOnce(new Error("delete failed"))
+			.mockResolvedValue(undefined);
+
+		await expect(service.clearSignedOutHouseholdSessionData()).rejects.toThrow(
+			"delete failed",
+		);
+
+		await expect(
+			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
+		).resolves.toBeNull();
+
+		mockDeleteLocalHouseholdStoreData.mockClear();
+		await service.clearSignedOutHouseholdSessionData();
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+
+		mockDeleteLocalHouseholdStoreData.mockClear();
+		await service.clearSignedOutHouseholdSessionData();
+
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
+	});
+
+	it("deletes local Household data only through the explicit local data API", async () => {
+		const service = createHouseholdSessionService();
+		const cached = cachedHouseholdSessionFixture({ householdId: "hh_old" });
+
+		await service.deleteCachedHouseholdSessionLocalData(cached);
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
 	});
 });
 
@@ -195,42 +313,4 @@ function responseFixture(payload: unknown): Response {
 		json: async () => payload,
 	};
 	return response as Response;
-}
-
-function householdSessionFixture(
-	overrides: { householdId?: string; householdName?: string } = {},
-): HouseholdSession {
-	const householdId = overrides.householdId ?? "hh_avery";
-
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-		},
-		activeHousehold: {
-			id: householdId,
-			name: overrides.householdName ?? "Avery",
-		},
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner",
-			displayName: "Avery Chen",
-		},
-		activeList: { id: "lst_default_groceries", name: "Groceries" },
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner",
-				displayName: "Avery Chen",
-			},
-		],
-		householdDatabase: {
-			url: "libsql://example.turso.io",
-			authToken: "secret-household-token",
-			expiresAt: 1_700_000_000_000,
-		},
-	};
 }

@@ -5,8 +5,8 @@ import type {
 	ActiveListSyncResult,
 } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
-import { asError } from "@/lib/errors";
-import { logger } from "@/lib/logger";
+import { asError, isNetworkUnavailableError } from "@/lib/errors";
+import type { Logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
 	type HouseholdStoreExecutor,
@@ -28,13 +28,14 @@ type ActiveListStore = HouseholdStoreExecutor & {
 	close: () => void | Promise<void>;
 };
 
-export type HouseholdActiveListDataSourceConfig = {
+export type HouseholdCurrentListDataSourceConfig = {
 	household: BootstrapResponse["activeHousehold"];
 	activeMember: BootstrapResponse["activeMember"];
 	list: BootstrapResponse["activeList"];
 	currentUser: BootstrapResponse["user"];
 	members: BootstrapResponse["members"];
 	database: HouseholdDatabaseConfig;
+	logger: Logger;
 };
 
 type DataSourceOptions = {
@@ -44,7 +45,6 @@ type DataSourceOptions = {
 };
 
 type ActiveListServices = {
-	store: ActiveListStore;
 	listService: ReturnType<typeof createListService>;
 	itemService: ReturnType<typeof createItemService>;
 };
@@ -52,10 +52,11 @@ type ActiveListServices = {
 type CreateActiveListServicesInput = {
 	storePromise: Promise<ActiveListStore>;
 	householdId: string;
+	logger: Logger;
 };
 
-export function createHouseholdActiveListDataSource(
-	config: HouseholdActiveListDataSourceConfig,
+export function createHouseholdCurrentListDataSource(
+	config: HouseholdCurrentListDataSourceConfig,
 	options: DataSourceOptions = {},
 ): ActiveListDataSource {
 	const storePromise = options.store
@@ -66,8 +67,7 @@ export function createHouseholdActiveListDataSource(
 			});
 	const ownsStore = !options.store;
 	const memberNames = new Map<string, string | null>();
-	const log = logger.with({
-		household_id: config.household.id,
+	const log = config.logger.with({
 		list_id: config.list.id,
 		feature: "active_list",
 	});
@@ -90,6 +90,7 @@ export function createHouseholdActiveListDataSource(
 	const getServices = createActiveListServicesGetter({
 		storePromise,
 		householdId: config.household.id,
+		logger: log,
 	});
 
 	return {
@@ -154,6 +155,9 @@ export function createHouseholdActiveListDataSource(
 						nativeError = error;
 					}
 				}
+				if (isNetworkUnavailableError(nativeError)) {
+					throw nativeError;
+				}
 
 				await pushLocalHouseholdRowsToRemote(
 					store,
@@ -176,6 +180,9 @@ export function createHouseholdActiveListDataSource(
 				nativeResult = store.sync ? await store.sync() : { changed: false };
 			} catch (error) {
 				nativeError = error;
+			}
+			if (isNetworkUnavailableError(nativeError)) {
+				throw nativeError;
 			}
 
 			try {
@@ -224,12 +231,12 @@ function attachNativeSyncError(
 function createActiveListServicesGetter({
 	storePromise,
 	householdId,
+	logger,
 }: CreateActiveListServicesInput): () => Promise<ActiveListServices> {
 	let servicesPromise: Promise<ActiveListServices> | null = null;
 
 	return () => {
 		servicesPromise ??= storePromise.then((store) => ({
-			store,
 			listService: createListService({
 				householdId,
 				store,

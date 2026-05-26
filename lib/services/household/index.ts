@@ -1,8 +1,25 @@
 export {
+	type ActiveHouseholdActivation,
+	type ActiveHouseholdController,
+	type ActiveHouseholdControllerDeps,
+	type ActiveHouseholdDisposal,
+	type ActiveHouseholdSnapshot,
+	type ActiveHouseholdView,
+	createActiveHouseholdController,
+} from "./active-household-controller";
+
+export {
+	createHouseholdCurrentListDataSource,
+	type HouseholdCurrentListDataSourceConfig,
+} from "./current-list-data-source";
+
+export {
 	type CachedHouseholdSession,
-	clearCachedHouseholdSession,
+	clearCachedHouseholdSessionMetadata,
+	clearSignedOutHouseholdSessionData,
+	clearUnauthorizedCachedHouseholdSessionMetadata,
 	createHouseholdSessionService,
-	discardCachedHouseholdSessionIfUnauthorized,
+	deleteCachedHouseholdSessionLocalData,
 	type GetHouseholdSessionToken,
 	getHouseholdSession,
 	HOUSEHOLD_SESSION_CACHE_KEY,
@@ -11,6 +28,7 @@ export {
 	type HouseholdSessionServiceDeps,
 	type HouseholdSessionStorage,
 	readCachedHouseholdSession,
+	readUnauthorizedCachedHouseholdSession,
 	saveCachedHouseholdSession,
 } from "./household-session-service";
 

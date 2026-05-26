@@ -41,11 +41,11 @@ beforeEach(() => {
 });
 
 describe("AuthGate", () => {
-	it("keeps Home mounted when Clerk reports signed out but a cached Household session exists", async () => {
+	it("keeps Home mounted while auth is unknown and a cached Household session exists", async () => {
 		jest
 			.mocked(readCachedHouseholdSession)
 			.mockResolvedValue(cachedHouseholdSessionFixture());
-		setMockAuthState({ isSignedIn: false });
+		setMockAuthState({ isLoaded: false, isSignedIn: false });
 
 		render(<AuthGate pathname="/" />);
 
@@ -53,6 +53,18 @@ describe("AuthGate", () => {
 			expect(readCachedHouseholdSession).toHaveBeenCalledTimes(1),
 		);
 		expect(mockReplace).not.toHaveBeenCalledWith("/sign-in");
+	});
+
+	it("redirects to sign-in when Clerk reports signed out even if a cached Household session exists", async () => {
+		jest
+			.mocked(readCachedHouseholdSession)
+			.mockResolvedValue(cachedHouseholdSessionFixture());
+		setMockAuthState({ isLoaded: true, isSignedIn: false });
+
+		render(<AuthGate pathname="/" />);
+
+		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/sign-in"));
+		expect(readCachedHouseholdSession).not.toHaveBeenCalled();
 	});
 
 	it("redirects to sign-in when there is no Clerk session or cached Household session", async () => {

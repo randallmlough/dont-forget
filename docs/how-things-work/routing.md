@@ -39,17 +39,36 @@ Current public routes:
 
 Do not add duplicate Clerk or PostHog providers inside route groups.
 
+## Authenticated Layout
+
+`app/(app)/_layout.tsx` owns signed-in product providers. It mounts the Active Household provider around signed-in routes, and that provider eagerly activates the app-owned Active Household controller and exposes controller state/actions to screens.
+
+Screens consume `useActiveHousehold()`. They should not open, replace, sync, close, or delete Household DB resources directly, and they should not own sync coordinator lifecycle.
+
+See [Active Household Controller](./active-household-controller.md) for the controller/provider boundary, snapshot model, replacement policy, and sign-out cleanup contract.
+
 ## Auth Gate
 
 `AuthGate` uses the current pathname to detect signed-out auth routes. Signed-out Users are redirected to `/sign-in`; signed-in Users are redirected away from auth routes to `/`.
 
-The sign-out order lives in `screens/home/home-screen.tsx` and must remain:
+The provider-owned sign-out action runs in this order:
 
 ```ts
 track("user_signed_out", {});
 reset();
-void signOut();
+await activeHouseholdController.dispose();
+const cached = await readCachedHouseholdSession();
+if (cached) {
+	await deleteCachedHouseholdSessionLocalData(cached);
+}
+await clearCachedHouseholdSessionMetadata();
+await signOut();
 ```
+
+Cached Household Session metadata clearing and local Household DB file deletion
+remain separate operations so active Household resources can be stopped and
+closed before destructive local cleanup. Controller disposal and local cleanup
+failures are logged and do not block Clerk sign-out.
 
 ## Adding Routes
 

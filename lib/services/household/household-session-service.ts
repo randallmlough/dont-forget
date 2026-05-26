@@ -10,6 +10,8 @@ import {
 import { deleteLocalHouseholdStoreData } from "./household-store";
 
 export const HOUSEHOLD_SESSION_CACHE_KEY = "dont-forget:household-session:v1";
+const SIGNED_OUT_HOUSEHOLD_DELETION_KEY =
+	"dont-forget:signed-out-household-deletions:v1";
 
 export type HouseholdSession = BootstrapResponse;
 
@@ -48,10 +50,20 @@ export type HouseholdSessionService = {
 		session: HouseholdSession,
 	) => Promise<CachedHouseholdSession>;
 	readCachedHouseholdSession: () => Promise<CachedHouseholdSession | null>;
-	discardCachedHouseholdSessionIfUnauthorized: (
+	readUnauthorizedCachedHouseholdSession: (
 		freshSession: HouseholdSession,
 	) => Promise<CachedHouseholdSession | null>;
-	clearCachedHouseholdSession: () => Promise<void>;
+	clearUnauthorizedCachedHouseholdSessionMetadata: (
+		cached: CachedHouseholdSession,
+		freshSession: HouseholdSession,
+	) => Promise<void>;
+	clearCachedHouseholdSessionMetadata: () => Promise<CachedHouseholdSession | null>;
+	clearSignedOutHouseholdSessionData: (
+		householdIds?: string[],
+	) => Promise<void>;
+	deleteCachedHouseholdSessionLocalData: (
+		cached: CachedHouseholdSession,
+	) => Promise<void>;
 };
 
 export type HouseholdSessionServiceDeps = {
@@ -70,6 +82,7 @@ export function createHouseholdSessionService(
 	const analytics = deps.analytics ?? { track };
 
 	async function readCachedHouseholdSession(): Promise<CachedHouseholdSession | null> {
+		await drainPendingSignedOutHouseholdDeletions().catch(() => undefined);
 		const raw = await storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY);
 		if (!raw) return null;
 
@@ -82,6 +95,88 @@ export function createHouseholdSessionService(
 
 	async function clearCachedSessionMetadata(): Promise<void> {
 		await storage.removeItem(HOUSEHOLD_SESSION_CACHE_KEY);
+	}
+
+	async function readPendingSignedOutHouseholdDeletions(): Promise<string[]> {
+		const raw = await storage.getItem(SIGNED_OUT_HOUSEHOLD_DELETION_KEY);
+		if (!raw) return [];
+
+		try {
+			return z.array(z.string()).parse(JSON.parse(raw));
+		} catch {
+			return [];
+		}
+	}
+
+	async function savePendingSignedOutHouseholdDeletions(
+		householdIds: string[],
+	): Promise<void> {
+		const uniqueHouseholdIds = Array.from(new Set(householdIds));
+		if (uniqueHouseholdIds.length === 0) {
+			await storage.removeItem(SIGNED_OUT_HOUSEHOLD_DELETION_KEY);
+			return;
+		}
+
+		await storage.setItem(
+			SIGNED_OUT_HOUSEHOLD_DELETION_KEY,
+			JSON.stringify(uniqueHouseholdIds),
+		);
+	}
+
+	async function drainPendingSignedOutHouseholdDeletions(
+		householdIds: string[] = [],
+	): Promise<void> {
+		const pendingHouseholdIds = await readPendingSignedOutHouseholdDeletions();
+		if (pendingHouseholdIds.length === 0 && householdIds.length === 0) return;
+		const remainingHouseholdIds: string[] = [];
+		let cleanupError: unknown = null;
+
+		for (const householdId of new Set([
+			...pendingHouseholdIds,
+			...householdIds,
+		])) {
+			try {
+				await deleteLocalHouseholdStoreData(householdId);
+			} catch (error) {
+				remainingHouseholdIds.push(householdId);
+				cleanupError ??= error;
+			}
+		}
+
+		await savePendingSignedOutHouseholdDeletions(remainingHouseholdIds);
+		if (cleanupError) throw cleanupError;
+	}
+
+	async function deleteCachedHouseholdSessionLocalData(
+		cached: CachedHouseholdSession,
+	): Promise<void> {
+		await deleteLocalHouseholdStoreData(cached.activeHousehold.id);
+	}
+
+	async function clearUnauthorizedCachedHouseholdSessionMetadata(
+		cached: CachedHouseholdSession,
+		freshSession: HouseholdSession,
+	): Promise<void> {
+		await clearCachedSessionMetadata();
+		analytics.track("household_session_cache_invalidated", {
+			household_id: cached.activeHousehold.id,
+			fresh_household_id: freshSession.activeHousehold.id,
+			reason: "unauthorized",
+		});
+	}
+
+	async function readUnauthorizedCachedHouseholdSession(
+		freshSession: HouseholdSession,
+	): Promise<CachedHouseholdSession | null> {
+		const cached = await readCachedHouseholdSession();
+		if (
+			!cached ||
+			cachedHouseholdSessionIsStillAuthorized(cached, freshSession)
+		) {
+			return null;
+		}
+
+		return cached;
 	}
 
 	return {
@@ -131,34 +226,35 @@ export function createHouseholdSessionService(
 
 		readCachedHouseholdSession,
 
-		async discardCachedHouseholdSessionIfUnauthorized(freshSession) {
+		readUnauthorizedCachedHouseholdSession,
+
+		clearUnauthorizedCachedHouseholdSessionMetadata,
+
+		async clearCachedHouseholdSessionMetadata() {
 			const cached = await readCachedHouseholdSession();
-			if (
-				!cached ||
-				cachedHouseholdSessionIsStillAuthorized(cached, freshSession)
-			) {
-				return null;
-			}
-
-			await deleteLocalHouseholdStoreData(cached.activeHousehold.id);
 			await clearCachedSessionMetadata();
-			analytics.track("household_session_cache_invalidated", {
-				household_id: cached.activeHousehold.id,
-				fresh_household_id: freshSession.activeHousehold.id,
-				reason: "unauthorized",
-			});
-
 			return cached;
 		},
 
-		async clearCachedHouseholdSession() {
+		async clearSignedOutHouseholdSessionData(householdIds = []) {
 			const cached = await readCachedHouseholdSession();
+			const signedOutHouseholdIds = [...householdIds];
+
 			if (cached) {
-				await deleteLocalHouseholdStoreData(cached.activeHousehold.id);
+				signedOutHouseholdIds.push(cached.activeHousehold.id);
 			}
 
+			let cleanupError: unknown = null;
+			try {
+				await drainPendingSignedOutHouseholdDeletions(signedOutHouseholdIds);
+			} catch (error) {
+				cleanupError = error;
+			}
 			await clearCachedSessionMetadata();
+			if (cleanupError) throw cleanupError;
 		},
+
+		deleteCachedHouseholdSessionLocalData,
 	};
 }
 
@@ -180,16 +276,42 @@ export function readCachedHouseholdSession(): Promise<CachedHouseholdSession | n
 	return defaultHouseholdSessionService.readCachedHouseholdSession();
 }
 
-export function discardCachedHouseholdSessionIfUnauthorized(
+export function readUnauthorizedCachedHouseholdSession(
 	freshSession: HouseholdSession,
 ): Promise<CachedHouseholdSession | null> {
-	return defaultHouseholdSessionService.discardCachedHouseholdSessionIfUnauthorized(
+	return defaultHouseholdSessionService.readUnauthorizedCachedHouseholdSession(
 		freshSession,
 	);
 }
 
-export function clearCachedHouseholdSession(): Promise<void> {
-	return defaultHouseholdSessionService.clearCachedHouseholdSession();
+export function clearUnauthorizedCachedHouseholdSessionMetadata(
+	cached: CachedHouseholdSession,
+	freshSession: HouseholdSession,
+): Promise<void> {
+	return defaultHouseholdSessionService.clearUnauthorizedCachedHouseholdSessionMetadata(
+		cached,
+		freshSession,
+	);
+}
+
+export function clearCachedHouseholdSessionMetadata(): Promise<CachedHouseholdSession | null> {
+	return defaultHouseholdSessionService.clearCachedHouseholdSessionMetadata();
+}
+
+export function clearSignedOutHouseholdSessionData(
+	householdIds?: string[],
+): Promise<void> {
+	return defaultHouseholdSessionService.clearSignedOutHouseholdSessionData(
+		householdIds,
+	);
+}
+
+export function deleteCachedHouseholdSessionLocalData(
+	cached: CachedHouseholdSession,
+): Promise<void> {
+	return defaultHouseholdSessionService.deleteCachedHouseholdSessionLocalData(
+		cached,
+	);
 }
 
 function cachedHouseholdSessionIsStillAuthorized(

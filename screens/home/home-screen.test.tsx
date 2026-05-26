@@ -1,309 +1,111 @@
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import { useActiveHousehold } from "@/components/active-household";
 import {
-	act,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react-native";
-
-import type {
-	ActiveListDataSource,
-	ActiveListInitialState,
-} from "@/components/active-list";
-import { reset, track } from "@/lib/analytics";
-import {
-	type CachedHouseholdSession,
-	clearCachedHouseholdSession,
-	discardCachedHouseholdSessionIfUnauthorized,
-	getHouseholdSession,
-	readCachedHouseholdSession,
-	saveCachedHouseholdSession,
-} from "@/lib/services/household";
-import { createDefaultSyncCoordinator } from "@/lib/services/sync";
-import { clerkMocks, setMockAuthState } from "@/lib/test/mocks/clerk";
+	activeListDataSourceFixture,
+	initialListFixture,
+	syncCoordinatorFixture,
+} from "@/db/fixtures/active-household";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
-import { createHouseholdActiveListDataSource } from "./active-list-data-source";
-import { mockSyncCoordinatorFactory } from "./test-sync-coordinator";
-
-jest.mock("@/lib/analytics", () => ({
-	reset: jest.fn(),
-	track: jest.fn(),
+jest.mock("@/components/active-household", () => ({
+	useActiveHousehold: jest.fn(),
 }));
-
-jest.mock("./active-list-data-source", () => ({
-	createHouseholdActiveListDataSource: jest.fn(),
-}));
-
-jest.mock("@/lib/services/household", () => ({
-	clearCachedHouseholdSession: jest.fn(),
-	discardCachedHouseholdSessionIfUnauthorized: jest.fn(),
-	getHouseholdSession: jest.fn(),
-	readCachedHouseholdSession: jest.fn(),
-	saveCachedHouseholdSession: jest.fn(),
-}));
-
-jest.mock("@/lib/services/sync", () => ({
-	createDefaultSyncCoordinator: jest.requireActual<
-		typeof import("./test-sync-coordinator")
-	>("./test-sync-coordinator").mockSyncCoordinatorFactory
-		.createDefaultSyncCoordinator,
-}));
-
-beforeEach(() => {
-	jest.mocked(track).mockReset();
-	jest.mocked(reset).mockReset();
-	jest.mocked(getHouseholdSession).mockReset();
-	jest.mocked(createDefaultSyncCoordinator).mockClear();
-	jest.mocked(createHouseholdActiveListDataSource).mockReset();
-	mockSyncCoordinatorFactory.created.length = 0;
-	jest.mocked(clearCachedHouseholdSession).mockResolvedValue(undefined);
-	jest
-		.mocked(discardCachedHouseholdSessionIfUnauthorized)
-		.mockResolvedValue(null);
-	jest.mocked(readCachedHouseholdSession).mockResolvedValue(null);
-	jest
-		.mocked(saveCachedHouseholdSession)
-		.mockResolvedValue(cachedHouseholdSessionFixture());
-});
 
 describe("HomeScreen", () => {
-	it("waits for a loading data source to settle before closing when Home unmounts", async () => {
-		const load = deferred<ActiveListInitialState>();
-		const close = jest.fn().mockResolvedValue(undefined);
-		jest
-			.mocked(getHouseholdSession)
-			.mockResolvedValue(householdSessionFixture());
-		jest.mocked(createHouseholdActiveListDataSource).mockReturnValue({
-			syncAuthorized: true,
-			async load() {
-				return load.promise;
+	it("renders provider-derived loading state", () => {
+		jest.mocked(useActiveHousehold).mockReturnValue({
+			content: { status: "loading" },
+			currentMemberName: "Avery Chen",
+			retry: jest.fn(),
+			signOut: jest.fn(),
+		});
+
+		render(<HomeScreen />);
+
+		expect(screen.getByText("Preparing your Household")).toBeTruthy();
+	});
+
+	it("renders provider-derived ready state", () => {
+		jest.mocked(useActiveHousehold).mockReturnValue({
+			content: {
+				status: "ready",
+				activeMemberName: "Avery Chen",
+				resourceKey: "current-list:1",
+				initialList: initialListFixture(),
+				dataSource: activeListDataSourceFixture(),
+				syncCoordinator: syncCoordinatorFixture(),
 			},
-			async addItem(name) {
-				return {
-					id: "itm_new",
-					name,
-					checked: false,
-					checkedByMemberName: null,
-				};
+			currentMemberName: "Avery Chen",
+			retry: jest.fn(),
+			signOut: jest.fn(),
+		});
+
+		render(<HomeScreen />);
+
+		expect(screen.getByText("Groceries")).toBeTruthy();
+		expect(screen.getByText("Milk")).toBeTruthy();
+	});
+
+	it("wires retry and sign out actions from the provider", () => {
+		const retry = jest.fn();
+		const signOut = jest.fn();
+		jest.mocked(useActiveHousehold).mockReturnValue({
+			content: {
+				status: "error",
+				message: "Unable to prepare your Household. Please try again.",
 			},
-			async setItemChecked() {},
-			async pull() {
-				return { changed: false };
-			},
-			async sync() {
-				return { changed: false };
-			},
-			close,
+			currentMemberName: "Avery Chen",
+			retry,
+			signOut,
 		});
-		clerkMocks.getToken.mockResolvedValue("session-token");
-		setMockAuthState({ isSignedIn: true });
-
-		const { unmount } = render(<HomeScreen />);
-
-		await waitFor(() =>
-			expect(createHouseholdActiveListDataSource).toHaveBeenCalledTimes(1),
-		);
-		unmount();
-
-		await settleMicrotasks();
-		expect(close).not.toHaveBeenCalled();
-		load.resolve(initialListFixture());
-		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
-	});
-
-	it("renders cached local List data while a fresh Household Session is still pending", async () => {
-		const freshSession = deferred<ReturnType<typeof householdSessionFixture>>();
-		const cached = cachedHouseholdSessionFixture();
-		const cachedList = initialListFixture({ itemName: "Cached Milk" });
-		const freshList = initialListFixture({ itemName: "Fresh Eggs" });
-		jest.mocked(getHouseholdSession).mockReturnValue(freshSession.promise);
-		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
-		jest
-			.mocked(createHouseholdActiveListDataSource)
-			.mockImplementation((config) => {
-				return config.database.authToken
-					? noopDataSource(freshList, { syncAuthorized: true })
-					: noopDataSource(cachedList, { syncAuthorized: false });
-			});
-		clerkMocks.getToken.mockResolvedValue("session-token");
-		setMockAuthState({ isSignedIn: true });
 
 		render(<HomeScreen />);
 
-		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
-		expect(screen.queryByText("Preparing your Household")).toBeNull();
-		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
-		expect(getHouseholdSession).toHaveBeenCalledTimes(1);
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
-			household: cached.activeHousehold,
-			activeMember: cached.activeMember,
-			list: cached.activeList,
-			currentUser: cached.user,
-			members: cached.members,
-			database: cached.householdDatabase,
-		});
-
-		await act(async () => {
-			freshSession.resolve(householdSessionFixture());
-		});
-
-		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
-		expect(saveCachedHouseholdSession).toHaveBeenCalledWith(
-			householdSessionFixture(),
-		);
-	});
-
-	it("reopens cached local List data without a cached DB auth token when fresh Household Session loading fails", async () => {
-		const initialList = initialListFixture();
-		const cached = cachedHouseholdSessionFixture();
-		jest.mocked(getHouseholdSession).mockRejectedValue(new Error("offline"));
-		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
-		jest
-			.mocked(createHouseholdActiveListDataSource)
-			.mockReturnValue(noopDataSource(initialList));
-		clerkMocks.getToken.mockResolvedValue("session-token");
-		setMockAuthState({ isSignedIn: true });
-
-		render(<HomeScreen />);
-
-		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
-			household: cached.activeHousehold,
-			activeMember: cached.activeMember,
-			list: cached.activeList,
-			currentUser: cached.user,
-			members: cached.members,
-			database: cached.householdDatabase,
-		});
-		expect(Object.hasOwn(cached.householdDatabase, "authToken")).toBe(false);
-		expect(saveCachedHouseholdSession).not.toHaveBeenCalled();
-	});
-
-	it("reopens cached local List data when Clerk reports signed out during offline relaunch", async () => {
-		const initialList = initialListFixture();
-		const cached = cachedHouseholdSessionFixture();
-		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
-		jest
-			.mocked(createHouseholdActiveListDataSource)
-			.mockReturnValue(noopDataSource(initialList, { syncAuthorized: false }));
-		setMockAuthState({ isSignedIn: false });
-
-		render(<HomeScreen />);
-
-		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(getHouseholdSession).not.toHaveBeenCalled();
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
-			household: cached.activeHousehold,
-			activeMember: cached.activeMember,
-			list: cached.activeList,
-			currentUser: cached.user,
-			members: cached.members,
-			database: cached.householdDatabase,
-		});
-		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
-	});
-
-	it("reopens cached local List data before Clerk finishes loading during offline relaunch", async () => {
-		const initialList = initialListFixture();
-		const cached = cachedHouseholdSessionFixture();
-		jest.mocked(readCachedHouseholdSession).mockResolvedValue(cached);
-		jest
-			.mocked(createHouseholdActiveListDataSource)
-			.mockReturnValue(noopDataSource(initialList, { syncAuthorized: false }));
-		setMockAuthState({ isLoaded: false, isSignedIn: false });
-
-		render(<HomeScreen />);
-
-		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(getHouseholdSession).not.toHaveBeenCalled();
-		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
-	});
-
-	it("discards stale cached Household metadata before opening fresh authorized data", async () => {
-		const initialList = initialListFixture();
-		const session = householdSessionFixture({
-			householdId: "hh_new",
-			householdName: "New",
-		});
-		jest.mocked(getHouseholdSession).mockResolvedValue(session);
-		jest
-			.mocked(createHouseholdActiveListDataSource)
-			.mockReturnValue(noopDataSource(initialList));
-		clerkMocks.getToken.mockResolvedValue("session-token");
-		setMockAuthState({ isSignedIn: true });
-
-		render(<HomeScreen />);
-
-		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(discardCachedHouseholdSessionIfUnauthorized).toHaveBeenCalledWith(
-			session,
-		);
-		expect(createHouseholdActiveListDataSource).toHaveBeenCalledWith({
-			household: session.activeHousehold,
-			activeMember: session.activeMember,
-			list: session.activeList,
-			currentUser: session.user,
-			members: session.members,
-			database: session.householdDatabase,
-		});
-		expect(saveCachedHouseholdSession).toHaveBeenCalledWith(session);
-	});
-
-	it("tracks, resets, clears local Household data, then signs out through Clerk", async () => {
-		const calls: string[] = [];
-		const initialList = initialListFixture();
-		const close = jest.fn(async () => {
-			calls.push("close-data-source");
-		});
-		jest
-			.mocked(getHouseholdSession)
-			.mockResolvedValue(householdSessionFixture());
-		jest.mocked(createHouseholdActiveListDataSource).mockReturnValue({
-			...noopDataSource(initialList),
-			close,
-		});
-		jest.mocked(track).mockImplementation(() => {
-			calls.push("track");
-		});
-		jest.mocked(reset).mockImplementation(() => {
-			calls.push("reset");
-		});
-		jest.mocked(clearCachedHouseholdSession).mockImplementation(async () => {
-			calls.push("clear-local-household-data");
-		});
-		clerkMocks.signOut.mockImplementation(async () => {
-			calls.push("clerk-sign-out");
-		});
-		clerkMocks.getToken.mockResolvedValue("session-token");
-		setMockAuthState({ isSignedIn: true });
-
-		const { unmount } = render(<HomeScreen />);
-
-		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		const stopSync = deferred<void>();
-		mockSyncCoordinatorFactory.created[0]?.stop.mockImplementation(() => {
-			calls.push("stop-sync");
-			return stopSync.promise;
-		});
+		fireEvent.press(screen.getByText("Try again"));
 		fireEvent.press(screen.getByText("Sign out"));
-
-		await waitFor(() => expect(calls).toEqual(["track", "reset", "stop-sync"]));
-		expect(close).not.toHaveBeenCalled();
-		stopSync.resolve(undefined);
-
-		await waitFor(() => expect(clerkMocks.signOut).toHaveBeenCalledTimes(1));
-		unmount();
-		expect(calls).toEqual([
-			"track",
-			"reset",
-			"stop-sync",
-			"close-data-source",
-			"clear-local-household-data",
-			"clerk-sign-out",
-		]);
-		expect(close).toHaveBeenCalledTimes(1);
+		expect(retry).toHaveBeenCalledTimes(1);
+		expect(signOut).toHaveBeenCalledTimes(1);
 	});
+});
+
+it("remounts Active List when the Current List resource changes", () => {
+	const cachedList = initialListFixture({ itemName: "Cached Milk" });
+	const freshList = initialListFixture({ itemName: "Fresh Eggs" });
+	const { rerender } = render(
+		<HomeScreenView
+			currentMemberName="Avery Chen"
+			content={{
+				status: "ready",
+				activeMemberName: "Avery Chen",
+				resourceKey: "current-list:1",
+				initialList: cachedList,
+				dataSource: activeListDataSourceFixture({
+					load: jest.fn().mockResolvedValue(cachedList),
+				}),
+				syncCoordinator: syncCoordinatorFixture(),
+			}}
+		/>,
+	);
+
+	expect(screen.getByText("Cached Milk")).toBeTruthy();
+	rerender(
+		<HomeScreenView
+			currentMemberName="Avery Chen"
+			content={{
+				status: "ready",
+				activeMemberName: "Avery Chen",
+				resourceKey: "current-list:2",
+				initialList: freshList,
+				dataSource: activeListDataSourceFixture({
+					load: jest.fn().mockResolvedValue(freshList),
+				}),
+				syncCoordinator: syncCoordinatorFixture(),
+			}}
+		/>,
+	);
+
+	expect(screen.getByText("Fresh Eggs")).toBeTruthy();
+	expect(screen.queryByText("Cached Milk")).toBeNull();
 });
 
 describe("HomeScreenView", () => {
@@ -333,8 +135,11 @@ describe("HomeScreenView", () => {
 		expect(retry).toHaveBeenCalledTimes(1);
 	});
 
-	it("renders Active List data after Household Session loading succeeds", () => {
-		const initialList = initialListFixture();
+	it("renders Active List data after active Household loading succeeds", () => {
+		const initialList = initialListFixture({
+			checked: true,
+			checkedByMemberName: "Avery Chen",
+		});
 
 		render(
 			<HomeScreenView
@@ -342,8 +147,11 @@ describe("HomeScreenView", () => {
 				content={{
 					status: "ready",
 					activeMemberName: "Avery Chen",
+					resourceKey: "current-list:1",
 					initialList,
-					dataSource: noopDataSource(initialList),
+					dataSource: activeListDataSourceFixture({
+						load: jest.fn().mockResolvedValue(initialList),
+					}),
 					syncCoordinator: syncCoordinatorFixture(),
 				}}
 			/>,
@@ -355,121 +163,3 @@ describe("HomeScreenView", () => {
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
 });
-
-function householdSessionFixture(
-	overrides: { householdId?: string; householdName?: string } = {},
-) {
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-		},
-		activeHousehold: {
-			id: overrides.householdId ?? "hh_avery",
-			name: overrides.householdName ?? "Avery",
-		},
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner" as const,
-			displayName: "Avery Chen",
-		},
-		activeList: { id: "lst_default_groceries", name: "Groceries" },
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner" as const,
-				displayName: "Avery Chen",
-			},
-		],
-		householdDatabase: {
-			url: "libsql://example.turso.io",
-			authToken: "token",
-			expiresAt: 1,
-		},
-	};
-}
-
-function cachedHouseholdSessionFixture(): CachedHouseholdSession {
-	const { householdDatabase: _householdDatabase, ...sessionMetadata } =
-		householdSessionFixture();
-
-	return {
-		...sessionMetadata,
-		householdDatabase: {
-			url: "libsql://example.turso.io",
-			expiresAt: 1,
-		},
-		initializedAt: 1_700_000_000_000,
-	};
-}
-
-function initialListFixture(
-	overrides: { itemName?: string } = {},
-): ActiveListInitialState {
-	return {
-		householdName: "Avery",
-		listName: "Groceries",
-		items: [
-			{
-				id: "itm_milk",
-				name: overrides.itemName ?? "Milk",
-				checked: true,
-				checkedByMemberName: "Avery Chen",
-			},
-		],
-	};
-}
-
-function noopDataSource(
-	initialList: ActiveListInitialState,
-	overrides: Partial<ActiveListDataSource> = {},
-): ActiveListDataSource {
-	return {
-		syncAuthorized: false,
-		async load() {
-			return initialList;
-		},
-		async addItem(name) {
-			return { id: "itm_new", name, checked: false, checkedByMemberName: null };
-		},
-		async setItemChecked() {},
-		async pull() {
-			return { changed: false };
-		},
-		async sync() {
-			return { changed: false };
-		},
-		async close() {},
-		...overrides,
-	};
-}
-
-function syncCoordinatorFixture() {
-	return {
-		getStatus: () => "synced" as const,
-		subscribe: jest.fn(() => ({ remove() {} })),
-		start: jest.fn(),
-		stop: jest.fn(),
-		requestSync: jest.fn(async () => ({ changed: false })),
-	};
-}
-
-function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	const promise = new Promise<T>((nextResolve) => {
-		resolve = nextResolve;
-	});
-	if (!resolve) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve };
-}
-
-async function settleMicrotasks() {
-	await Promise.resolve();
-	await Promise.resolve();
-}

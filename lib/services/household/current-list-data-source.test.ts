@@ -2,33 +2,56 @@ import { itemChecks, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import { type LoggerFixture, loggerFixture } from "@/lib/test/mocks/logger";
 
-import { createHouseholdActiveListDataSource } from "./active-list-data-source";
+import { createHouseholdCurrentListDataSource } from "./current-list-data-source";
 
-const mockLoggerError = jest.fn();
-const mockLoggerWarn = jest.fn();
-const mockLogger = {
-	error: mockLoggerError,
-	warn: mockLoggerWarn,
+let logger: LoggerFixture;
+
+type ListSqlRow = {
+	id: string;
+	name: string;
+	created_by_user_id: string;
+	created_at: number;
+	updated_at: number;
+	deleted_at: number | null;
 };
 
-jest.mock("@/lib/logger", () => ({
-	logger: {
-		with: jest.fn(() => mockLogger),
-	},
-}));
+type ItemSqlRow = {
+	id: string;
+	list_id: string;
+	name: string;
+	notes: string | null;
+	position: number;
+	created_by_user_id: string;
+	created_at: number;
+	updated_at: number;
+	deleted_at: number | null;
+};
 
-describe("createHouseholdActiveListDataSource", () => {
+type ItemCheckSqlRow = {
+	item_id: string;
+	user_id: string;
+	checked_at: number | null;
+	updated_at: number;
+};
+
+type HouseholdRowsFixture = {
+	itemChecks?: ItemCheckSqlRow[];
+	items?: ItemSqlRow[];
+	lists?: ListSqlRow[];
+};
+
+describe("createHouseholdCurrentListDataSource", () => {
 	beforeEach(() => {
-		mockLoggerError.mockReset();
-		mockLoggerWarn.mockReset();
+		logger = loggerFixture();
 	});
 
 	it("exposes explicit app-owned pull and sync operations", async () => {
 		const pull = jest.fn(async () => ({ changed: true }));
 		const sync = jest.fn(async () => ({ changed: false }));
 		const remoteExecute = jest.fn(async () => undefined);
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -52,42 +75,11 @@ describe("createHouseholdActiveListDataSource", () => {
 	it("pushes local rows through the remote upsert path after native sync succeeds", async () => {
 		const remoteExecute = jest.fn(async () => undefined);
 		const nativeSync = jest.fn(async () => ({ changed: true }));
-		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = statementSql(statement);
-			if (sql.includes("FROM lists")) {
-				return {
-					rows: [
-						{
-							id: DEFAULT_LIST_ID,
-							name: DEFAULT_LIST_NAME,
-							created_by_user_id: "usr_avery",
-							created_at: 1,
-							updated_at: 1,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			if (sql.includes("FROM items")) {
-				return {
-					rows: [
-						{
-							id: "itm_local",
-							list_id: DEFAULT_LIST_ID,
-							name: "Local Milk",
-							notes: null,
-							position: 0,
-							created_by_user_id: "usr_avery",
-							created_at: 2,
-							updated_at: 2,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			return { rows: [] };
+		const execute = createHouseholdRowsExecutor({
+			lists: [listRowFixture()],
+			items: [itemRowFixture({ id: "itm_local", name: "Local Milk" })],
 		});
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -123,7 +115,7 @@ describe("createHouseholdActiveListDataSource", () => {
 		expect(nativeSync.mock.invocationCallOrder[0]).toBeLessThan(
 			remoteExecute.mock.invocationCallOrder[0],
 		);
-		expect(mockLoggerWarn).not.toHaveBeenCalledWith(
+		expect(logger.warn).not.toHaveBeenCalledWith(
 			"active list sync fallback succeeded",
 		);
 	});
@@ -131,55 +123,12 @@ describe("createHouseholdActiveListDataSource", () => {
 	it("falls back to remote LWW upserts when native sync cannot push", async () => {
 		const remoteExecute = jest.fn(async () => undefined);
 		const nativeError = new Error("native sync failed");
-		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = statementSql(statement);
-			if (sql.includes("FROM lists")) {
-				return {
-					rows: [
-						{
-							id: DEFAULT_LIST_ID,
-							name: DEFAULT_LIST_NAME,
-							created_by_user_id: "usr_avery",
-							created_at: 1,
-							updated_at: 1,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			if (sql.includes("FROM items")) {
-				return {
-					rows: [
-						{
-							id: "itm_offline",
-							list_id: DEFAULT_LIST_ID,
-							name: "Offline Milk",
-							notes: null,
-							position: 0,
-							created_by_user_id: "usr_avery",
-							created_at: 2,
-							updated_at: 2,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			if (sql.includes("FROM item_checks")) {
-				return {
-					rows: [
-						{
-							item_id: "itm_offline",
-							user_id: "usr_avery",
-							checked_at: 3,
-							updated_at: 3,
-						},
-					],
-				};
-			}
-
-			return { rows: [] };
+		const execute = createHouseholdRowsExecutor({
+			lists: [listRowFixture()],
+			items: [itemRowFixture({ id: "itm_offline", name: "Offline Milk" })],
+			itemChecks: [itemCheckRowFixture({ itemId: "itm_offline" })],
 		});
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -224,36 +173,18 @@ describe("createHouseholdActiveListDataSource", () => {
 				),
 			}),
 		);
-		expect(mockLoggerError).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
 	it("uses native push without row fallback for automatic local write sync", async () => {
 		const remoteExecute = jest.fn(async () => undefined);
 		const nativePush = jest.fn(async () => undefined);
 		const nativeSync = jest.fn(async () => ({ changed: false }));
-		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = statementSql(statement);
-			if (sql.includes("FROM items")) {
-				return {
-					rows: [
-						{
-							id: "itm_retry",
-							list_id: DEFAULT_LIST_ID,
-							name: "Retry Milk",
-							notes: null,
-							position: 0,
-							created_by_user_id: "usr_avery",
-							created_at: 2,
-							updated_at: 2,
-							deleted_at: null,
-						},
-					],
-				};
-			}
-			return { rows: [] };
+		const execute = createHouseholdRowsExecutor({
+			items: [itemRowFixture({ id: "itm_retry", name: "Retry Milk" })],
 		});
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -302,7 +233,7 @@ describe("createHouseholdActiveListDataSource", () => {
 			}
 			return { rows: [] };
 		});
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -346,7 +277,7 @@ describe("createHouseholdActiveListDataSource", () => {
 	it("rethrows when native sync and fallback both fail without logging at the data-source boundary", async () => {
 		const nativeError = new Error("native sync failed");
 		const fallbackError = new Error("remote unavailable");
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -370,13 +301,16 @@ describe("createHouseholdActiveListDataSource", () => {
 			nativeSyncError: nativeError,
 		});
 
-		expect(mockLoggerError).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
-	it("does not error-log expected network failures while offline", async () => {
+	it("skips remote fallback after native full sync fails offline", async () => {
 		const networkError = new TypeError("Network request failed");
-		const dataSource = createHouseholdActiveListDataSource(
+		const openRemoteClient = jest.fn(() => {
+			throw new Error("remote fallback should not start while offline");
+		});
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -388,16 +322,48 @@ describe("createHouseholdActiveListDataSource", () => {
 					pull: jest.fn(async () => ({ changed: false })),
 					close: jest.fn(async () => undefined),
 				},
-				openRemoteClient: () => {
-					throw networkError;
-				},
+				openRemoteClient,
 			},
 		);
 
 		await expect(dataSource.sync()).rejects.toThrow(networkError);
 
-		expect(mockLoggerError).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).not.toHaveBeenCalledWith(
+		expect(openRemoteClient).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalledWith(
+			"active list sync fallback succeeded",
+		);
+	});
+
+	it("skips remote fallback after native push fails offline", async () => {
+		const networkError = new TypeError("Network request failed");
+		const openRemoteClient = jest.fn(() => {
+			throw new Error("remote fallback should not start while offline");
+		});
+		const dataSource = createHouseholdCurrentListDataSource(
+			dataSourceConfigFixture(),
+			{
+				store: {
+					syncAuthorized: true,
+					execute: jest.fn(async () => ({ rows: [] })),
+					push: jest.fn(async () => {
+						throw networkError;
+					}),
+					sync: jest.fn(async () => ({ changed: false })),
+					pull: jest.fn(async () => ({ changed: false })),
+					close: jest.fn(async () => undefined),
+				},
+				openRemoteClient,
+			},
+		);
+
+		await expect(dataSource.sync({ mode: "pushLocalOnly" })).rejects.toThrow(
+			networkError,
+		);
+
+		expect(openRemoteClient).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalledWith(
 			"active list sync fallback succeeded",
 		);
 	});
@@ -410,7 +376,7 @@ describe("createHouseholdActiveListDataSource", () => {
 				: { rows: [] };
 		});
 		const sync = jest.fn(async () => ({ changed: false }));
-		const dataSource = createHouseholdActiveListDataSource(
+		const dataSource = createHouseholdCurrentListDataSource(
 			dataSourceConfigFixture(),
 			{
 				store: {
@@ -431,8 +397,8 @@ describe("createHouseholdActiveListDataSource", () => {
 		await Promise.resolve();
 
 		expect(sync).not.toHaveBeenCalled();
-		expect(mockLoggerWarn).not.toHaveBeenCalled();
-		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
 	});
 
 	it("resolves checked-state updates after local commit without starting sync", async () => {
@@ -445,7 +411,7 @@ describe("createHouseholdActiveListDataSource", () => {
 				name: "Weekend Groceries",
 				createdByUserId: "usr_avery",
 			});
-			const dataSource = createHouseholdActiveListDataSource(
+			const dataSource = createHouseholdCurrentListDataSource(
 				dataSourceConfigFixture(),
 				{
 					store: {
@@ -460,7 +426,7 @@ describe("createHouseholdActiveListDataSource", () => {
 			const milk = await dataSource.addItem("Milk");
 			await Promise.resolve();
 			sync.mockClear();
-			mockLoggerWarn.mockClear();
+			logger.warn.mockClear();
 
 			await expect(dataSource.setItemChecked(milk.id, true)).resolves.toBe(
 				undefined,
@@ -477,7 +443,7 @@ describe("createHouseholdActiveListDataSource", () => {
 				updatedAt: expect.any(Number),
 			});
 			expect(sync).not.toHaveBeenCalled();
-			expect(mockLoggerWarn).not.toHaveBeenCalled();
+			expect(logger.warn).not.toHaveBeenCalled();
 		} finally {
 			await household.close();
 		}
@@ -493,7 +459,7 @@ describe("createHouseholdActiveListDataSource", () => {
 				createdByUserId: "usr_avery",
 			});
 
-			const dataSource = createHouseholdActiveListDataSource(
+			const dataSource = createHouseholdCurrentListDataSource(
 				{
 					household: { id: "hh_avery", name: "Avery" },
 					activeMember: {
@@ -527,6 +493,7 @@ describe("createHouseholdActiveListDataSource", () => {
 						authToken: "unused",
 						expiresAt: 1_700_000_000_001,
 					},
+					logger: logger.root,
 				},
 				{
 					store: {
@@ -613,6 +580,58 @@ function dataSourceConfigFixture() {
 			authToken: "token",
 			expiresAt: 1,
 		},
+		logger: logger.root,
+	};
+}
+
+function createHouseholdRowsExecutor(rows: HouseholdRowsFixture) {
+	return jest.fn(async (statement: HouseholdSqlStatement) => {
+		const sql = statementSql(statement);
+		if (sql.includes("FROM lists")) return { rows: rows.lists ?? [] };
+		if (sql.includes("FROM items")) return { rows: rows.items ?? [] };
+		if (sql.includes("FROM item_checks"))
+			return { rows: rows.itemChecks ?? [] };
+		return { rows: [] };
+	});
+}
+
+function listRowFixture(): ListSqlRow {
+	return {
+		id: DEFAULT_LIST_ID,
+		name: DEFAULT_LIST_NAME,
+		created_by_user_id: "usr_avery",
+		created_at: 1,
+		updated_at: 1,
+		deleted_at: null,
+	};
+}
+
+function itemRowFixture({
+	id,
+	name,
+}: {
+	id: string;
+	name: string;
+}): ItemSqlRow {
+	return {
+		id,
+		list_id: DEFAULT_LIST_ID,
+		name,
+		notes: null,
+		position: 0,
+		created_by_user_id: "usr_avery",
+		created_at: 2,
+		updated_at: 2,
+		deleted_at: null,
+	};
+}
+
+function itemCheckRowFixture({ itemId }: { itemId: string }): ItemCheckSqlRow {
+	return {
+		item_id: itemId,
+		user_id: "usr_avery",
+		checked_at: 3,
+		updated_at: 3,
 	};
 }
 

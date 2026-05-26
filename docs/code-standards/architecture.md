@@ -34,14 +34,23 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** enforce server-service import boundaries with the repo ESLint rule.
 - **Must** keep SQL and DB-client access inside service implementations. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
 - **Must** inject logger and analytics dependencies into services and stores that need observability instead of forcing those modules to mock global singletons in tests or non-app processes.
-- **Must** keep reusable component contracts UI-facing. Compose services into component data sources in the owning screen or feature layer.
+- **Must** keep reusable component contracts UI-facing. Compose services into component data sources at the owning controller or feature boundary; screens should consume those boundaries instead of opening Household data resources directly.
 - **Must** return domain-shaped records from services, not UI component types and not raw SQL rows.
 - **Must** generate IDs inside services for newly-created domain records. Service callers and normal tests must not inject or prescribe IDs.
 - **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
 - **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. Do not name this `*-db-service`.
-- **Should** keep List and Item services separate even when Home composes them into one Active List experience.
-- **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to screen/application composition or a dedicated sync service.
+- **Should** keep List and Item services separate even when the Active Household controller composes them into one Current List experience for Home to render.
+- **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to the Active Household controller and sync coordinator.
+
+## Single-Responsibility Functions
+
+- **Must** keep functions focused on one clear responsibility.
+- **Should** break apart functions that coordinate several concepts at once, such as auth readiness, cached data, fresh data, stale-run guards, resource replacement, cache writes, cleanup, and error recovery.
+- **Should** extract named helpers for distinct phases so the top-level function reads as orchestration rather than implementation detail.
+- **Should** use small, intention-revealing helper names that describe the business or lifecycle step being performed.
+- **Avoid** dense multi-branch functions with mutable flag clusters that require readers to hold many invariants in their head.
+- **Avoid** mixing decision-making, side effects, resource cleanup, persistence, and error recovery in one function unless the function is only delegating to focused helpers.
 
 ## Providers And Auth
 
@@ -49,8 +58,10 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** keep app-wide providers in `app/_layout.tsx` unless a documented architecture change moves them.
 - **Must** keep root layout effects limited to app-wide provider, navigation, analytics, auth, theme, and native SDK lifecycle synchronization.
 - **Must** keep feature-specific data loading and mutation lifecycle out of `app/_layout.tsx`.
+- **Must** initialize signed-in active Household infrastructure from the authenticated route group (`app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
+- **Must** make screens and reusable components borrow controller-owned active Household resources and actions; they must not open or close HouseholdStore resources directly.
 - **Must** call `setActive(...)` after successful Clerk auth attempts.
-- **Must** sign out in this order: track `user_signed_out`, reset analytics, clear local Household cache/DB files when that path exists, then call `signOut()`.
+- **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose active Household resources, clear local Household cache/DB files when that path exists, then call `signOut()`.
 - **Should** extract root effect logic into named hooks when it has branching, cleanup, or testable behavior.
 - **Avoid** using root layout as a catch-all initialization file for feature state.
 
