@@ -1,32 +1,21 @@
-import type { SyncAppStateAdapter } from "./app-state";
-import type { SyncNetworkStatusAdapter } from "./network-status";
+import type { SyncResult, SyncStatus } from "./sync-coordinator";
 import {
-	createSyncCoordinator,
-	type SyncCoordinator,
-	type SyncResult,
-	type SyncStatus,
-} from "./sync-coordinator";
-
-const activeCoordinators: SyncCoordinator[] = [];
+	actTicks,
+	actTimer,
+	controllableAppState,
+	controllableNetworkStatus,
+	createCoordinator,
+	deferred,
+	loggerFixture,
+	memoryAppState,
+	memoryNetworkStatus,
+	mutableAppState,
+	refreshableNetworkStatus,
+	stopActiveCoordinators,
+} from "./sync-coordinator.test-helpers";
 
 describe("createSyncCoordinator", () => {
-	afterEach(() => {
-		for (const coordinator of activeCoordinators) {
-			coordinator.stop();
-		}
-		activeCoordinators.length = 0;
-		jest.useRealTimers();
-	});
-
-	it("uses push-local-only sync for local Item write requests", async () => {
-		const sync = jest.fn(async () => ({ changed: false }));
-		const coordinator = createCoordinator({ sync });
-
-		await coordinator.requestSync({ reason: "localWrite" });
-
-		expect(sync).toHaveBeenCalledWith({ mode: "pushLocalOnly" });
-		expect(coordinator.getStatus()).toBe("synced");
-	});
+	afterEach(stopActiveCoordinators);
 
 	it("uses full sync behavior for manual refresh requests", async () => {
 		const sync = jest.fn(async () => ({ changed: true }));
@@ -48,17 +37,6 @@ describe("createSyncCoordinator", () => {
 		).resolves.toEqual({ changed: true });
 
 		expect(sync).toHaveBeenCalledWith({ mode: "full" });
-	});
-
-	it("keeps local Item write requests push-local-only after manual refresh", async () => {
-		const sync = jest.fn(async () => ({ changed: false }));
-		const coordinator = createCoordinator({ sync });
-
-		await coordinator.requestSync({ reason: "manualRefresh" });
-		await coordinator.requestSync({ reason: "localWrite" });
-
-		expect(sync).toHaveBeenNthCalledWith(1, { mode: "full" });
-		expect(sync).toHaveBeenNthCalledWith(2, { mode: "pushLocalOnly" });
 	});
 
 	it("coalesces local write requests that arrive during an in-flight sync", async () => {
@@ -285,83 +263,6 @@ describe("createSyncCoordinator", () => {
 
 		expect(coordinator.getStatus()).toBe("offline");
 		expect(logger.error).not.toHaveBeenCalled();
-	});
-
-	it("does not call sync for local Item write requests while the network is known offline", async () => {
-		const sync = jest.fn(async () => ({ changed: false }));
-		const coordinator = createCoordinator({
-			networkStatus: memoryNetworkStatus("offline"),
-			sync,
-		});
-
-		await expect(
-			coordinator.requestSync({ reason: "localWrite" }),
-		).resolves.toBeNull();
-
-		expect(sync).not.toHaveBeenCalled();
-		expect(coordinator.getStatus()).toBe("offline");
-	});
-
-	it("does not refresh or sync local Item write requests while coordinator status is already offline", async () => {
-		const logger = loggerFixture();
-		const networkStatus = refreshableNetworkStatus("online", "online");
-		const sync = jest
-			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
-			.mockRejectedValueOnce(new TypeError("Network request failed"))
-			.mockResolvedValue({ changed: false });
-		const coordinator = createCoordinator({
-			logger,
-			networkStatus,
-			sync,
-		});
-
-		await coordinator.requestSync({ reason: "localWrite" });
-		expect(coordinator.getStatus()).toBe("offline");
-
-		sync.mockClear();
-		networkStatus.refreshCurrentStatus.mockClear();
-		logger.error.mockClear();
-
-		await expect(
-			coordinator.requestSync({ reason: "localWrite" }),
-		).resolves.toBeNull();
-
-		expect(networkStatus.refreshCurrentStatus).not.toHaveBeenCalled();
-		expect(sync).not.toHaveBeenCalled();
-		expect(logger.error).not.toHaveBeenCalled();
-		expect(coordinator.getStatus()).toBe("offline");
-	});
-
-	it("keeps skipped local Item write work eligible for later recovery sync", async () => {
-		const networkStatus = refreshableNetworkStatus("online", "online");
-		const sync = jest
-			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
-			.mockRejectedValueOnce(new TypeError("Network request failed"))
-			.mockResolvedValue({ changed: true });
-		const coordinator = createCoordinator({
-			networkStatus,
-			sync,
-		});
-
-		await coordinator.requestSync({ reason: "localWrite" });
-		expect(coordinator.getStatus()).toBe("offline");
-
-		sync.mockClear();
-		networkStatus.refreshCurrentStatus.mockClear();
-
-		await expect(
-			coordinator.requestSync({ reason: "localWrite" }),
-		).resolves.toBeNull();
-		expect(sync).not.toHaveBeenCalled();
-
-		await expect(
-			coordinator.requestSync({ reason: "networkReconnect" }),
-		).resolves.toEqual({ changed: true });
-
-		expect(networkStatus.refreshCurrentStatus).toHaveBeenCalledTimes(1);
-		expect(sync).toHaveBeenCalledTimes(1);
-		expect(sync).toHaveBeenCalledWith({ mode: "full" });
-		expect(coordinator.getStatus()).toBe("synced");
 	});
 
 	it("refreshes stale online network status before starting sync work", async () => {
@@ -869,186 +770,3 @@ describe("createSyncCoordinator", () => {
 		expect(statuses).toEqual(["pending"]);
 	});
 });
-
-function createCoordinator(
-	overrides: Partial<Parameters<typeof createSyncCoordinator>[0]> = {},
-) {
-	const coordinator = createSyncCoordinator({
-		syncAuthorized: true,
-		sync: jest.fn(async () => ({ changed: false })),
-		appState: memoryAppState("active"),
-		networkStatus: memoryNetworkStatus("unknown"),
-		logger: loggerFixture(),
-		...overrides,
-	});
-	activeCoordinators.push(coordinator);
-	return coordinator;
-}
-
-function memoryAppState(initialState: string): SyncAppStateAdapter {
-	return {
-		getCurrentState() {
-			return initialState;
-		},
-		subscribe() {
-			return { remove() {} };
-		},
-	};
-}
-
-function controllableAppState(initialState: string): SyncAppStateAdapter & {
-	emit: (state: string) => void;
-} {
-	let currentState = initialState;
-	const listeners = new Set<(state: string) => void>();
-
-	return {
-		getCurrentState() {
-			return currentState;
-		},
-		subscribe(listener) {
-			listeners.add(listener);
-			return {
-				remove() {
-					listeners.delete(listener);
-				},
-			};
-		},
-		emit(state) {
-			currentState = state;
-			for (const listener of listeners) {
-				listener(state);
-			}
-		},
-	};
-}
-
-function mutableAppState(initialState: string): SyncAppStateAdapter & {
-	setState: (state: string) => void;
-} {
-	let currentState = initialState;
-
-	return {
-		getCurrentState() {
-			return currentState;
-		},
-		subscribe() {
-			return { remove() {} };
-		},
-		setState(state) {
-			currentState = state;
-		},
-	};
-}
-
-function memoryNetworkStatus(
-	status: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
-): SyncNetworkStatusAdapter {
-	return {
-		getCurrentStatus() {
-			return status;
-		},
-		async refreshCurrentStatus() {
-			return status;
-		},
-		subscribe() {
-			return { remove() {} };
-		},
-	};
-}
-
-function refreshableNetworkStatus(
-	initialStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
-	refreshedStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
-): SyncNetworkStatusAdapter & {
-	refreshCurrentStatus: jest.Mock<
-		Promise<ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>>,
-		[]
-	>;
-} {
-	let currentStatus = initialStatus;
-	const refreshCurrentStatus = jest.fn(async () => {
-		currentStatus = refreshedStatus;
-		return currentStatus;
-	});
-
-	return {
-		getCurrentStatus() {
-			return currentStatus;
-		},
-		refreshCurrentStatus,
-		subscribe() {
-			return { remove() {} };
-		},
-	};
-}
-
-function controllableNetworkStatus(
-	initialStatus: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
-): SyncNetworkStatusAdapter & {
-	emit: (
-		status: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>,
-	) => void;
-} {
-	let currentStatus = initialStatus;
-	const listeners = new Set<
-		(status: ReturnType<SyncNetworkStatusAdapter["getCurrentStatus"]>) => void
-	>();
-
-	return {
-		getCurrentStatus() {
-			return currentStatus;
-		},
-		async refreshCurrentStatus() {
-			return currentStatus;
-		},
-		subscribe(listener) {
-			listeners.add(listener);
-			return {
-				remove() {
-					listeners.delete(listener);
-				},
-			};
-		},
-		emit(status) {
-			currentStatus = status;
-			for (const listener of listeners) {
-				listener(status);
-			}
-		},
-	};
-}
-
-function loggerFixture() {
-	return {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-		with: jest.fn(),
-	};
-}
-
-function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	let reject: ((error: Error) => void) | undefined;
-	const promise = new Promise<T>((nextResolve, nextReject) => {
-		resolve = nextResolve;
-		reject = nextReject;
-	});
-	if (!resolve || !reject) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve, reject };
-}
-
-async function actTicks() {
-	await Promise.resolve();
-	await Promise.resolve();
-}
-
-async function actTimer(ms: number) {
-	jest.advanceTimersByTime(ms);
-	await actTicks();
-}
