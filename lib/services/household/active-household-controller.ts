@@ -109,11 +109,10 @@ export function createActiveHouseholdController(
 		}
 	}
 
-	function saveFreshSessionIfCurrent(session: HouseholdSession, run: number) {
+	function saveFreshSession(session: HouseholdSession) {
 		const write = cacheWriteQueue
 			.catch(() => undefined)
 			.then(async () => {
-				if (run !== activationRun) return;
 				await householdSessionService
 					.saveCachedHouseholdSession(session)
 					.catch(() => undefined);
@@ -300,11 +299,12 @@ export function createActiveHouseholdController(
 			return;
 		}
 
-		saveFreshSessionIfCurrent(session, run.id);
-
 		await publishOpened(opened, session, run.id, {
 			startSync: true,
-			onPublished: cachedAttempt.markFreshPublished,
+			onPublished: () => {
+				saveFreshSession(session);
+				cachedAttempt.markFreshPublished();
+			},
 		});
 	}
 

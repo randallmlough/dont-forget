@@ -10,6 +10,8 @@ import {
 import { deleteLocalHouseholdStoreData } from "./household-store";
 
 export const HOUSEHOLD_SESSION_CACHE_KEY = "dont-forget:household-session:v1";
+const SIGNED_OUT_HOUSEHOLD_DELETION_KEY =
+	"dont-forget:signed-out-household-deletions:v1";
 
 export type HouseholdSession = BootstrapResponse;
 
@@ -90,6 +92,32 @@ export function createHouseholdSessionService(
 
 	async function clearCachedSessionMetadata(): Promise<void> {
 		await storage.removeItem(HOUSEHOLD_SESSION_CACHE_KEY);
+	}
+
+	async function readPendingSignedOutHouseholdDeletions(): Promise<string[]> {
+		const raw = await storage.getItem(SIGNED_OUT_HOUSEHOLD_DELETION_KEY);
+		if (!raw) return [];
+
+		try {
+			return z.array(z.string()).parse(JSON.parse(raw));
+		} catch {
+			return [];
+		}
+	}
+
+	async function savePendingSignedOutHouseholdDeletions(
+		householdIds: string[],
+	): Promise<void> {
+		const uniqueHouseholdIds = Array.from(new Set(householdIds));
+		if (uniqueHouseholdIds.length === 0) {
+			await storage.removeItem(SIGNED_OUT_HOUSEHOLD_DELETION_KEY);
+			return;
+		}
+
+		await storage.setItem(
+			SIGNED_OUT_HOUSEHOLD_DELETION_KEY,
+			JSON.stringify(uniqueHouseholdIds),
+		);
 	}
 
 	async function deleteCachedHouseholdSessionLocalData(
@@ -183,12 +211,24 @@ export function createHouseholdSessionService(
 
 		async clearSignedOutHouseholdSessionData() {
 			const cached = await readCachedHouseholdSession();
+			const householdIds = await readPendingSignedOutHouseholdDeletions();
 
 			if (cached) {
-				await deleteCachedHouseholdSessionLocalData(cached);
+				householdIds.push(cached.activeHousehold.id);
+				await savePendingSignedOutHouseholdDeletions(householdIds);
 			}
 
+			let cleanupError: unknown = null;
+			for (const householdId of new Set(householdIds)) {
+				try {
+					await deleteLocalHouseholdStoreData(householdId);
+				} catch (error) {
+					cleanupError ??= error;
+				}
+			}
 			await clearCachedSessionMetadata();
+			if (cleanupError) throw cleanupError;
+			await savePendingSignedOutHouseholdDeletions([]);
 		},
 
 		deleteCachedHouseholdSessionLocalData,

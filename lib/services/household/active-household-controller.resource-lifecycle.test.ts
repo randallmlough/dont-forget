@@ -152,6 +152,62 @@ describe("createActiveHouseholdController resource lifecycle", () => {
 		expect(disposed).toBe(true);
 	});
 
+	it("persists published fresh Household Sessions before dispose finishes", async () => {
+		const firstCacheSave = h.deferred<h.CachedHouseholdSession>();
+		const firstSession = h.householdSessionFixture({
+			householdId: "hh_first",
+			householdName: "First",
+		});
+		const secondSession = h.householdSessionFixture({
+			householdId: "hh_second",
+			householdName: "Second",
+		});
+		const sessionService = h.sessionServiceFixture({
+			getHouseholdSession: jest
+				.fn()
+				.mockResolvedValueOnce(firstSession)
+				.mockResolvedValueOnce(secondSession),
+		});
+		sessionService.saveCachedHouseholdSession = jest
+			.fn()
+			.mockReturnValueOnce(firstCacheSave.promise)
+			.mockResolvedValue(h.cachedHouseholdSessionFixture());
+		const controller = h.createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValue(h.activeListDataSourceFixture()),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		const dispose = controller.dispose();
+		await Promise.resolve();
+
+		expect(sessionService.saveCachedHouseholdSession).toHaveBeenCalledTimes(1);
+
+		firstCacheSave.resolve(h.cachedHouseholdSessionFixture());
+		await dispose;
+
+		expect(sessionService.saveCachedHouseholdSession).toHaveBeenCalledTimes(2);
+		expect(sessionService.saveCachedHouseholdSession).toHaveBeenLastCalledWith(
+			secondSession,
+		);
+	});
+
 	it("keeps the cached view published while fresh resources open", async () => {
 		const freshLoad = h.deferred<h.ActiveListInitialState>();
 		const cachedDataSource = h.activeListDataSourceFixture({

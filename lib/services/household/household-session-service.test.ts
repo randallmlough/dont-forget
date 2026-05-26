@@ -234,23 +234,33 @@ describe("createHouseholdSessionService", () => {
 		).resolves.toBeNull();
 	});
 
-	it("keeps signed-out Household Session metadata when local data deletion fails", async () => {
+	it("clears signed-out Household Session metadata and keeps a local data deletion retry when local deletion fails", async () => {
 		const storage = memoryStorage();
 		const service = createHouseholdSessionService({ storage });
 		await service.saveCachedHouseholdSession(
 			householdSessionFixture({ householdId: "hh_old" }),
 		);
-		mockDeleteLocalHouseholdStoreData.mockRejectedValue(
-			new Error("delete failed"),
-		);
+		mockDeleteLocalHouseholdStoreData
+			.mockRejectedValueOnce(new Error("delete failed"))
+			.mockResolvedValue(undefined);
 
 		await expect(service.clearSignedOutHouseholdSessionData()).rejects.toThrow(
 			"delete failed",
 		);
 
-		await expect(storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY)).resolves.toEqual(
-			expect.any(String),
-		);
+		await expect(
+			storage.getItem(HOUSEHOLD_SESSION_CACHE_KEY),
+		).resolves.toBeNull();
+
+		mockDeleteLocalHouseholdStoreData.mockClear();
+		await service.clearSignedOutHouseholdSessionData();
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+
+		mockDeleteLocalHouseholdStoreData.mockClear();
+		await service.clearSignedOutHouseholdSessionData();
+
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
 	});
 
 	it("deletes local Household data only through the explicit local data API", async () => {
