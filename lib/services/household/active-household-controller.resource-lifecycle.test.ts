@@ -154,6 +154,49 @@ describe("createActiveHouseholdController resource lifecycle", () => {
 		expect(disposed).toBe(true);
 	});
 
+	it("waits for in-flight cache persistence before signed-out activation finishes", async () => {
+		const cacheSave = h.deferred<h.CachedHouseholdSession>();
+		const sessionService = h.sessionServiceFixture();
+		sessionService.saveCachedHouseholdSession = jest.fn(
+			() => cacheSave.promise,
+		);
+		const controller = h.createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValue(h.activeListDataSourceFixture()),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		let signedOutActivationFinished = false;
+		const signedOutActivation = controller
+			.activate({
+				getToken: async () => null,
+				authReady: true,
+				signedIn: false,
+			})
+			.then(() => {
+				signedOutActivationFinished = true;
+			});
+		await Promise.resolve();
+
+		expect(signedOutActivationFinished).toBe(false);
+
+		cacheSave.resolve(h.cachedHouseholdSessionFixture());
+		await signedOutActivation;
+
+		expect(signedOutActivationFinished).toBe(true);
+	});
+
 	it("persists published fresh Household Sessions before dispose finishes", async () => {
 		const firstCacheSave = h.deferred<h.CachedHouseholdSession>();
 		const firstSession = h.householdSessionFixture({

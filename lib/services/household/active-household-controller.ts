@@ -241,6 +241,7 @@ export function createActiveHouseholdController(
 
 	async function handleSignedOutActivation(run: ActivationRunGuard) {
 		await Promise.allSettled([
+			drainCacheWrites(),
 			resources.closeOpeningResources(),
 			resources.closeActiveResource(),
 		]).then((results) => {
