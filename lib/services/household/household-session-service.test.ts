@@ -275,6 +275,44 @@ describe("createHouseholdSessionService", () => {
 		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
 	});
 
+	it("retries pending signed-out Household deletions during cached reads without blocking cached metadata", async () => {
+		const storage = memoryStorage();
+		const service = createHouseholdSessionService({ storage });
+		mockDeleteLocalHouseholdStoreData.mockImplementation(async (householdId) => {
+			if (householdId === "hh_retry") {
+				throw new Error("delete failed");
+			}
+		});
+
+		await expect(
+			service.clearSignedOutHouseholdSessionData(["hh_retry"]),
+		).rejects.toThrow("delete failed");
+
+		await service.saveCachedHouseholdSession(
+			householdSessionFixture({ householdId: "hh_new" }),
+		);
+
+		await expect(service.readCachedHouseholdSession()).resolves.toMatchObject({
+			activeHousehold: { id: "hh_new" },
+		});
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenLastCalledWith(
+			"hh_retry",
+		);
+
+		mockDeleteLocalHouseholdStoreData.mockClear();
+		mockDeleteLocalHouseholdStoreData.mockResolvedValue(undefined);
+
+		await expect(service.readCachedHouseholdSession()).resolves.toMatchObject({
+			activeHousehold: { id: "hh_new" },
+		});
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_retry");
+
+		mockDeleteLocalHouseholdStoreData.mockClear();
+		await service.readCachedHouseholdSession();
+
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
+	});
+
 	it("deletes local Household data only through the explicit local data API", async () => {
 		const service = createHouseholdSessionService();
 		const cached = cachedHouseholdSessionFixture({ householdId: "hh_old" });
