@@ -147,10 +147,11 @@ export function createActiveHouseholdController(
 			opened.resource,
 			session,
 		);
-		publish({ status: "ready", view: opened.view });
+		const view = activeHouseholdViewFromOpened(opened, session);
+		publish({ status: "ready", view });
 		options.onPublished?.();
 		if (options.startSync) {
-			opened.view.currentList.syncCoordinator.start();
+			view.currentList.syncCoordinator.start();
 		}
 
 		if (previousResource) {
@@ -427,4 +428,23 @@ function activeHouseholdAuthStateFromActivation(
 ): ActiveHouseholdAuthState {
 	if (!activation.authReady) return "unknown";
 	return activation.signedIn ? "signedIn" : "signedOut";
+}
+
+function activeHouseholdViewFromOpened(
+	opened: OpenedActiveHouseholdResource,
+	session: ActiveHouseholdSession,
+): ActiveHouseholdView {
+	return {
+		activeMemberName: activeMemberNameFromSession(session),
+		currentList: {
+			resourceKey: opened.resourceKey,
+			initialState: opened.initialState,
+			dataSource: opened.resource.dataSource,
+			syncCoordinator: opened.resource.syncCoordinator,
+		},
+	};
+}
+
+function activeMemberNameFromSession(session: ActiveHouseholdSession): string {
+	return session.activeMember.displayName ?? session.user.email ?? "Member";
 }

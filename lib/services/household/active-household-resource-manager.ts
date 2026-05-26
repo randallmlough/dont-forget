@@ -1,9 +1,9 @@
 import type {
 	ActiveListDataSource,
+	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
 import type { Logger } from "@/lib/logger";
-import type { ActiveHouseholdView } from "./active-household-controller";
 import type { HouseholdCurrentListDataSourceConfig } from "./current-list-data-source";
 import {
 	createCurrentListResourceLease,
@@ -24,7 +24,8 @@ export type ActiveHouseholdResource = {
 
 export type OpenedActiveHouseholdResource = {
 	resource: ActiveHouseholdResource;
-	view: ActiveHouseholdView;
+	resourceKey: string;
+	initialState: ActiveListInitialState;
 };
 
 export type CreateCurrentListDataSource = (
@@ -158,7 +159,6 @@ export function createActiveHouseholdResourceManager(
 	): Promise<OpenedActiveHouseholdResource> {
 		const resource = await createSessionResource(session);
 		const dataSource = resource.dataSource;
-		const syncCoordinator = resource.syncCoordinator;
 		const opening: OpeningActiveHouseholdResource = { session, resource };
 		openingResources.add(opening);
 
@@ -172,15 +172,8 @@ export function createActiveHouseholdResourceManager(
 			nextResourceVersion += 1;
 			return {
 				resource,
-				view: {
-					activeMemberName: activeMemberNameFromSession(session),
-					currentList: {
-						resourceKey,
-						initialState,
-						dataSource,
-						syncCoordinator,
-					},
-				},
+				resourceKey,
+				initialState,
 			};
 		} catch (error) {
 			if (!opening.closePromise) {
@@ -235,8 +228,4 @@ function isUnauthorizedCachedSession(
 		session.activeHousehold.id === cached.activeHousehold.id &&
 		!("authToken" in session.householdDatabase)
 	);
-}
-
-function activeMemberNameFromSession(session: ActiveHouseholdSession): string {
-	return session.activeMember.displayName ?? session.user.email ?? "Member";
 }
