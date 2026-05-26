@@ -109,10 +109,7 @@ export function createActiveHouseholdController(
 		}
 	}
 
-	async function saveFreshSessionIfCurrent(
-		session: HouseholdSession,
-		run: number,
-	) {
+	function saveFreshSessionIfCurrent(session: HouseholdSession, run: number) {
 		const write = cacheWriteQueue
 			.catch(() => undefined)
 			.then(async () => {
@@ -122,7 +119,6 @@ export function createActiveHouseholdController(
 					.catch(() => undefined);
 			});
 		cacheWriteQueue = write;
-		await write;
 	}
 
 	async function publishOpened(
@@ -236,10 +232,17 @@ export function createActiveHouseholdController(
 	}
 
 	async function handleSignedOutActivation(run: ActivationRunGuard) {
-		await resources.closeActiveResource().catch((error) => {
-			logger.error("active Household resource close failed", {
-				error: asError(error),
-			});
+		await Promise.allSettled([
+			resources.closeOpeningResources(),
+			resources.closeActiveResource(),
+		]).then((results) => {
+			for (const result of results) {
+				if (result.status === "rejected") {
+					logger.error("active Household resource close failed", {
+						error: asError(result.reason),
+					});
+				}
+			}
 		});
 		if (run.isCurrent()) publish({ status: "idle" });
 	}
@@ -292,11 +295,7 @@ export function createActiveHouseholdController(
 			return;
 		}
 
-		await saveFreshSessionIfCurrent(session, run.id);
-		if (!run.isCurrent()) {
-			await resources.closeResource(opened.resource).catch(() => undefined);
-			return;
-		}
+		saveFreshSessionIfCurrent(session, run.id);
 
 		await publishOpened(opened, session, run.id, {
 			startSync: true,

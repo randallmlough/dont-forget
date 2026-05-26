@@ -18,7 +18,7 @@ export type ActiveHouseholdSession = HouseholdSession | CachedHouseholdSession;
 
 export type ActiveHouseholdResource = {
 	dataSource: ActiveListDataSource;
-	close: () => Promise<void>;
+	close: (options?: { waitForDrain?: boolean }) => Promise<void>;
 	syncCoordinator: ActiveListSyncCoordinator;
 };
 
@@ -74,8 +74,11 @@ export function createActiveHouseholdResourceManager(
 	const openingResources = new Set<OpeningActiveHouseholdResource>();
 	let nextResourceVersion = 1;
 
-	async function closeResource(resource: ActiveHouseholdResource) {
-		await resource.close();
+	async function closeResource(
+		resource: ActiveHouseholdResource,
+		options?: { waitForDrain?: boolean },
+	) {
+		await resource.close(options);
 	}
 
 	function replaceActiveResource(
@@ -137,7 +140,11 @@ export function createActiveHouseholdResourceManager(
 			});
 			return {
 				dataSource,
-				close: () => lease.retireAndClose({ stopSync: syncCoordinator.stop }),
+				close: (options) =>
+					lease.retireAndClose({
+						stopSync: syncCoordinator.stop,
+						waitForDrain: options?.waitForDrain,
+					}),
 				syncCoordinator,
 			};
 		} catch (error) {
@@ -204,7 +211,9 @@ export function createActiveHouseholdResourceManager(
 	}
 
 	function closeOpeningResource(opening: OpeningActiveHouseholdResource) {
-		opening.closePromise ??= closeResource(opening.resource);
+		opening.closePromise ??= closeResource(opening.resource, {
+			waitForDrain: false,
+		});
 		return opening.closePromise;
 	}
 

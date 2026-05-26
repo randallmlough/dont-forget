@@ -74,6 +74,47 @@ describe("createActiveHouseholdController resource lifecycle", () => {
 		expect(events).toEqual(["publish:Cached", "publish:Fresh", "close:cached"]);
 	});
 
+	it("publishes fresh state before waiting for cache persistence", async () => {
+		const cacheSave = h.deferred<h.CachedHouseholdSession>();
+		const sessionService = h.sessionServiceFixture();
+		sessionService.saveCachedHouseholdSession = jest.fn(
+			() => cacheSave.promise,
+		);
+		const controller = h.createActiveHouseholdController({
+			householdSessionService: sessionService,
+			createCurrentListDataSource: jest
+				.fn()
+				.mockReturnValue(h.activeListDataSourceFixture()),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		let activationFinished = false;
+		const activation = controller
+			.activate({
+				getToken: async () => "token",
+				authReady: true,
+				signedIn: true,
+			})
+			.then(() => {
+				activationFinished = true;
+			});
+
+		await h.waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "ready",
+				view: { currentList: { initialState: { householdName: "Avery" } } },
+			}),
+		);
+		await h.waitForAsync(() => expect(activationFinished).toBe(true));
+
+		expect(sessionService.saveCachedHouseholdSession).toHaveBeenCalledTimes(1);
+		cacheSave.resolve(h.cachedHouseholdSessionFixture());
+		await activation;
+	});
+
 	it("keeps the cached view published while fresh resources open", async () => {
 		const freshLoad = h.deferred<h.ActiveListInitialState>();
 		const cachedDataSource = h.activeListDataSourceFixture({
@@ -140,6 +181,41 @@ describe("createActiveHouseholdController resource lifecycle", () => {
 			status: "ready",
 			view: { currentList: { initialState: { householdName: "Fresh" } } },
 		});
+	});
+
+	it("closes opening resources when auth transitions to signed out", async () => {
+		const load = h.deferred<h.ActiveListInitialState>();
+		const dataSource = h.activeListDataSourceFixture({
+			load: jest.fn(() => load.promise),
+		});
+		const controller = h.createActiveHouseholdController({
+			householdSessionService: h.sessionServiceFixture(),
+			createCurrentListDataSource: jest.fn().mockReturnValue(dataSource),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		const signedInActivation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		await h.waitForAsync(() => expect(dataSource.load).toHaveBeenCalled());
+
+		await controller.activate({
+			getToken: async () => null,
+			authReady: true,
+			signedIn: false,
+		});
+
+		expect(controller.getSnapshot()).toEqual({ status: "idle" });
+		expect(dataSource.close).toHaveBeenCalledTimes(1);
+
+		load.resolve(h.initialListFixture());
+		await signedInActivation;
+		expect(dataSource.close).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps an existing cached view visible during a later signed-in replacement activation", async () => {

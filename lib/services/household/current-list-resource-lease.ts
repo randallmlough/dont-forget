@@ -9,6 +9,7 @@ export type CurrentListResourceLease = {
 	dataSource: ActiveListDataSource;
 	retireAndClose: (options?: {
 		stopSync?: () => Promise<void>;
+		waitForDrain?: boolean;
 	}) => Promise<void>;
 };
 
@@ -49,11 +50,13 @@ export function createCurrentListResourceLease(
 	}
 
 	async function retireAndClose(
-		options: { stopSync?: () => Promise<void> } = {},
+		options: { stopSync?: () => Promise<void>; waitForDrain?: boolean } = {},
 	) {
 		retire();
 		let stopError: unknown = null;
-		await waitForDrain();
+		if (options.waitForDrain !== false) {
+			await waitForDrain();
+		}
 
 		try {
 			await options.stopSync?.();
