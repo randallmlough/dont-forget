@@ -6,9 +6,9 @@
 	"scripts": {
 		"start": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --localhost",
 		"reset-project": "node ./scripts/reset-project.js",
-		"ios": "expo run:ios",
+		"ios": "node ./scripts/ensure-ios-software-keyboard.js && expo run:ios",
 		"storybook:start": "STORYBOOK_ENABLED=true expo start --dev-client",
-		"storybook:ios": "STORYBOOK_ENABLED=true expo run:ios",
+		"storybook:ios": "node ./scripts/ensure-ios-software-keyboard.js && STORYBOOK_ENABLED=true expo run:ios",
 		"storybook:generate": "sb-rn-get-stories",
 		"biome:check": "biome ci .",
 		"format": "biome check --write .",
