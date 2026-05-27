@@ -91,7 +91,7 @@
 - **Avoid** returning raw setters from reusable hooks unless the hook is a tiny local state primitive.
 - **Avoid** hiding unrelated responsibilities in one hook just to reduce component code.
 
-See also: [`docs/best-practices/react-composition-pattern.md`](../best-practices/react-composition-pattern.md).
+See also: [`docs/code-standards/react-composition.md`](./react-composition.md).
 
 ## Async Work
 

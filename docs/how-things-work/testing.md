@@ -6,6 +6,8 @@ There is no separate React DOM/jsdom track. Add one later only if the app grows 
 
 Native end-to-end coverage uses Maestro. Add Maestro flows when behavior depends on a real iOS app runtime, native modules, app relaunch, device state, or offline/online transitions that Jest cannot prove.
 
+For manual native QA, simulator debugging, and tool-specific guidance, see [QA and debugging workflow](../workflows/qa-and-debugging.md).
+
 ## Commands
 
 ```bash

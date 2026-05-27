@@ -21,7 +21,7 @@
 - **Avoid** generic root `hooks/`, `utils/`, `helpers/`, or `types/` folders unless there is a documented architecture reason.
 - **Avoid** exporting internal hooks or reducers from feature entrypoints unless another feature has a real dependency on them.
 
-See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-app-structure.md), [`docs/how-things-work/routing.md`](../how-things-work/routing.md), [`docs/how-things-work/services.md`](../how-things-work/services.md), and [ADR-0011](../adr/0011-domain-first-service-layer.md).
+See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-structure.md), [`docs/how-things-work/routing.md`](../how-things-work/routing.md), [`docs/how-things-work/services.md`](../how-things-work/services.md), and [ADR-0011](../adr/0011-domain-first-service-layer.md).
 
 ## Service Layer
 
