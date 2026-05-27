@@ -82,33 +82,33 @@ Start by reading the current screen or accessibility tree:
 
 ```bash
 rocketsim screen
-rocketsim elements --agent --agent-mode nav
-rocketsim elements --agent --agent-mode act > /tmp/rs-snap.json
+rocketsim elements --agent
+rocketsim elements > /tmp/rs-elements.json
 ```
 
-Use labels first and ids only when labels are ambiguous. Prefer `--screen latest` to guard against acting on stale snapshots:
+Use labels first and coordinates only when labels are unavailable. Keep commands aligned with the documented RocketSim CLI surface so another reviewer can copy them:
 
 ```bash
-rocketsim interact tap --label "Item name" --screen latest
-rocketsim interact type "Milk" --label "Item name" --screen latest
-rocketsim wait keyboard --state visible --timeout 2
+rocketsim interact tap --label "Item name"
+rocketsim screenshot > /tmp/item-name-focused.png
+rocketsim interact type "Milk"
 ```
 
-Batch known sequences with `rocketsim do`:
+Run known sequences as separate commands and keep the transcript with the QA evidence:
 
 ```bash
-rocketsim do \
-  --refresh-policy smart \
-  --step "interact tap --label 'Item name' --screen latest" \
-  --step "wait keyboard --state visible --timeout 2" \
-  --step "interact type 'Milk' --label 'Item name' --screen latest"
+rocketsim interact tap --label "Item name"
+rocketsim screenshot > /tmp/item-name-focused.png
+rocketsim interact type "Milk"
+rocketsim elements --agent > /tmp/home-after-type.txt
 ```
+
+Some installed RocketSim Agent Skill versions document additional flags or batching helpers. Use those only after confirming the local skill or `rocketsim` command supports them; do not make an unsupported flag the only verification path in PR notes.
 
 Capture visual evidence when the accessibility tree is not enough:
 
 ```bash
-rocketsim snapshot --agent-mode act > /tmp/current-list.png
-rocketsim screenshot > /tmp/simulator.png
+rocketsim screenshot > /tmp/current-list.png
 ```
 
 For bug reproduction, record:
@@ -145,12 +145,12 @@ Keep it narrow:
 Example for an input/keyboard issue:
 
 ```bash
-rocketsim elements --agent --agent-mode act > /tmp/home-before-focus.json
-rocketsim interact tap --label "Item name" --screen latest
-rocketsim wait keyboard --state visible --timeout 2
+rocketsim elements --agent > /tmp/home-before-focus.txt
+rocketsim interact tap --label "Item name"
+rocketsim screenshot > /tmp/home-after-focus.png
 ```
 
-If the wait fails, capture the visible state and logs before retrying so the failure is not lost.
+If the screenshot does not show the expected keyboard or focus state, capture the visible state and logs before retrying so the failure is not lost.
 
 ## Verification Loop
 
