@@ -2,10 +2,8 @@
 
 ## Start Here
 
-- This is **Don't Forget**, an iOS-only Expo/React Native shared shopping-list app. The root `README.md` is still create-expo-app scaffold and is not authoritative for commands, supported platforms, or product intent.
+- This is **Don't Forget**, an iOS-only Expo/React Native shared shopping-list app.
 - Before non-trivial work, search `CONTEXT.md` and `docs/`, then confirm behavior in source. `CONTEXT.md` owns domain language: `Household`, `Member`, `Owner`, `User`, `List`, `Item`, and `Invitation`; do not replace them with group/team/account/todo/invite link terminology.
-- `docs/code-standards/` is the canonical source for day-to-day coding standards; consult it before non-trivial implementation and keep generated human/AI code in conformance.
-- `docs/agents/` is the source for repo-specific rules for AI agents to abide by.
 
 ## Docs Directory Map
 
@@ -19,6 +17,12 @@
 - `docs/post-mortem/` captures incident or regression writeups, root causes, fixes, and follow-up lessons.
 - `docs/tech-debt/` tracks known design or implementation debt with enough context to address it later.
 - `docs/workflows/` contains cross-cutting playbooks for how to perform recurring work, such as planning, feature development, QA, debugging, and code review.
+
+## 0. Before You Start
+
+Assume every project is greenfield with no users. I strive for a single source of truth: 
+
+This means no fallbacks, no legacy code support, just one clean stream of information flow
 
 ## 1. Think Before Coding
 
