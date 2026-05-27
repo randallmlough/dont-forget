@@ -2,7 +2,7 @@
 
 This directory is the canonical source of truth for day-to-day coding standards in Don't Forget. It is written for both humans and AI agents generating or reviewing code in this repository.
 
-Project-specific background can stay in `docs/best-practices/` and `docs/how-things-work/`; this directory should link to those pages when they explain context or workflows. When a rule is meant to be enforced during normal implementation or review, capture it here.
+Project-specific background can stay in `docs/how-things-work/`; concrete repo recipes belong in `docs/guides/`; cross-cutting playbooks belong in `docs/workflows/`. This directory should link to those pages when they explain context, recipes, or workflows. When a rule is meant to be enforced during normal implementation or review, capture it here.
 
 ## Requirement Levels
 
@@ -61,6 +61,7 @@ Use this checklist before accepting human- or AI-generated React, React Native, 
 - [Architecture](./architecture.md)
 - [React](./react.md)
 - [React Native](./react-native.md)
+- [React Composition](./react-composition.md)
 - [Styling](./styling.md)
 - [Testing](./testing.md)
 - [Tooling](./tooling.md)
@@ -70,6 +71,7 @@ Use this checklist before accepting human- or AI-generated React, React Native, 
 
 - `AGENTS.md` for repository-wide agent instructions, commands, and architecture constraints.
 - `CONTEXT.md` for product language and domain boundaries.
-- `docs/best-practices/` for existing project-specific patterns.
-- `docs/how-things-work/` for operational workflows such as testing, analytics, logging, routing, and environments.
+- `docs/guides/` for concrete repo recipes such as creating services, stores, migrations, stories, or docs artifacts.
+- `docs/how-things-work/` for focused explanations of implemented systems such as analytics, logging, routing, and environments.
+- `docs/workflows/` for cross-cutting playbooks such as planning, feature development, QA, debugging, and code review.
 - React and React Native best-practice skills for performance-oriented defaults.

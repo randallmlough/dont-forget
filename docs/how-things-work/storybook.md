@@ -12,7 +12,7 @@ The generated `.rnstorybook/index.ts` must load `../lib/unistyles/unistyles` bef
 
 Stories should render presentational components with typed fixture data and callback props. Do not require live Clerk, PostHog, Turso, or Expo Router state for ordinary stories.
 
-For route screens, extract composed view components for Storybook and keep hooks, analytics, auth, database reads, and navigation side effects in the route container. Prefer the [React composition pattern](../best-practices/react-composition-pattern.md) for surfaces with shared state and actions, instead of passing a long list of callbacks through the top-level screen.
+For route screens, extract composed view components for Storybook and keep hooks, analytics, auth, database reads, and navigation side effects in the route container. Prefer the [React composition pattern](../code-standards/react-composition.md) for surfaces with shared state and actions, instead of passing a long list of callbacks through the top-level screen.
 
 If a Story renders an app route shell that already owns safe-area handling, set `parameters.noSafeArea = true` on that Story or meta. React Native Storybook's mobile UI adds safe-area padding by default, and route shells such as `HomeScreen` already apply their own safe area.
 

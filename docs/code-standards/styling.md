@@ -34,4 +34,4 @@ See also: [`docs/adr/0007-unistyles-styling-foundation.md`](../adr/0007-unistyle
 - **Must** style SwiftUI internals with Expo UI modifiers, not by assuming React Native styles inherit into SwiftUI controls.
 - **Should** use Unistyles for React Native wrappers, layout, and app-owned tokens around Expo UI controls.
 
-See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-app-structure.md).
+See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-structure.md).
