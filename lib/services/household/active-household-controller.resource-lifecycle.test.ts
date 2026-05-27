@@ -604,6 +604,74 @@ describe("createActiveHouseholdController resource lifecycle", () => {
 		expect(dataSource.close).toHaveBeenCalledTimes(1);
 	});
 
+	it("returns active and opening Household IDs when disposed during a replacement activation", async () => {
+		const freshLoad = h.deferred<h.ActiveListInitialState>();
+		const freshSession = h.deferred<h.HouseholdSession>();
+		const cachedDataSource = h.activeListDataSourceFixture({
+			syncAuthorized: false,
+			load: jest
+				.fn()
+				.mockResolvedValue(h.initialListFixture({ householdName: "Cached" })),
+		});
+		const freshDataSource = h.activeListDataSourceFixture({
+			load: jest.fn(() => freshLoad.promise),
+		});
+		const controller = h.createActiveHouseholdController({
+			householdSessionService: h.sessionServiceFixture({
+				readCachedHouseholdSession: jest
+					.fn()
+					.mockResolvedValue(h.cachedHouseholdSessionFixture()),
+				getHouseholdSession: jest.fn(() => freshSession.promise),
+			}),
+			createCurrentListDataSource: jest.fn((config) =>
+				config.database.authToken ? freshDataSource : cachedDataSource,
+			),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		const activation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		await h.waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "ready",
+				view: {
+					currentList: { initialState: { householdName: "Cached" } },
+				},
+			}),
+		);
+		freshSession.resolve(
+			h.householdSessionFixture({
+				householdId: "hh_fresh",
+				householdName: "Fresh",
+			}),
+		);
+		await h.waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "loading",
+				refreshingSession: true,
+				previous: {
+					currentList: { initialState: { householdName: "Cached" } },
+				},
+			}),
+		);
+
+		const disposal = controller.dispose();
+		freshLoad.resolve(h.initialListFixture({ householdName: "Fresh" }));
+
+		await expect(disposal).resolves.toEqual({
+			householdIdsForLocalDataDeletion: ["hh_avery", "hh_fresh"],
+		});
+		await activation;
+		expect(cachedDataSource.close).toHaveBeenCalledTimes(1);
+		expect(freshDataSource.close).toHaveBeenCalledTimes(1);
+	});
+
 	it("waits for an accepted Current List write before closing during disposal", async () => {
 		const write = h.deferred<{
 			id: string;
