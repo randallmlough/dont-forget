@@ -53,6 +53,7 @@ A useful plan has three to five steps. Each step should name the verification si
 Update docs only when the work changes or clarifies lasting knowledge:
 
 - `docs/adr/`: architectural decision and tradeoff.
+- `docs/guides/`: concrete repo recipe for creating or changing a specific artifact.
 - `docs/how-things-work/`: implemented system behavior or policy.
 - `docs/workflows/`: repeatable procedure or playbook.
 - `docs/code-standards/`: enforceable engineering rule.

@@ -13,11 +13,12 @@
 - `docs/agents/` captures repo-specific instructions for AI agents, issue tracking, triage labels, and domain language reminders.
 - `docs/code-standards/` defines enforceable day-to-day engineering standards for humans and agents.
 - `docs/discussions/` preserves long-form design discussions and grilling notes that explain how decisions were reached.
+- `docs/guides/` gives concrete repo recipes for creating or changing one specific artifact correctly.
 - `docs/how-things-work/` explains implemented systems and policies; keep these focused on how the system works, not step-by-step playbooks.
 - `docs/implementations/` stores implementation notes and proof from completed work.
 - `docs/post-mortem/` captures incident or regression writeups, root causes, fixes, and follow-up lessons.
 - `docs/tech-debt/` tracks known design or implementation debt with enough context to address it later.
-- `docs/workflows/` contains procedural playbooks for how to perform recurring work, such as planning, feature development, QA, debugging, and code review.
+- `docs/workflows/` contains cross-cutting playbooks for how to perform recurring work, such as planning, feature development, QA, debugging, and code review.
 
 ## 1. Think Before Coding
 

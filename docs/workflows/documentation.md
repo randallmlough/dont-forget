@@ -12,13 +12,14 @@ Put durable knowledge in the right place with minimal duplication and clear link
 - `docs/agents/`: repo-specific instructions for AI agents, issue tracking, triage labels, and domain reminders.
 - `docs/code-standards/`: enforceable engineering standards.
 - `docs/discussions/`: long-form design discussions and decision history.
+- `docs/guides/`: concrete repo recipes for creating or changing one specific kind of artifact correctly.
 - `docs/how-things-work/`: focused explanations of implemented systems and policies.
 - `docs/implementations/`: implementation notes and proof from completed work.
 - `docs/post-mortem/`: incident or regression analysis.
 - `docs/tech-debt/`: known gaps with enough context to fix later.
-- `docs/workflows/`: procedural playbooks for recurring work.
+- `docs/workflows/`: cross-cutting playbooks for recurring work.
 
-If a document mixes categories, split it or move the procedural part to a workflow.
+If a document mixes categories, split it. Move decision-making process to a workflow, artifact-specific recipe steps to a guide, and implemented-system explanation to how-things-work.
 
 ## Writing Rules
 
@@ -26,7 +27,8 @@ If a document mixes categories, split it or move the procedural part to a workfl
 - State current behavior, not speculative future behavior, unless the doc is explicitly planning or tech-debt.
 - Prefer links over copied explanations.
 - Keep rules in `docs/code-standards/`; keep rationale and mechanics in the related how-things-work doc.
-- Keep workflows action-oriented: steps, evidence, stop conditions.
+- Keep guides artifact-specific: files, names, patterns, tests, commands, and review checklist.
+- Keep workflows action-oriented: decision points, steps, evidence, and stop conditions.
 - Do not preserve stale docs for compatibility; update references when moving content.
 
 ## Moving Docs

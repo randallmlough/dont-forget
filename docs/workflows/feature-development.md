@@ -10,7 +10,7 @@ Ship the smallest vertical slice that satisfies the requested behavior, with tes
 
 1. Confirm the feature in product language from `CONTEXT.md`.
 2. Read the relevant `docs/code-standards/` files.
-3. Search `docs/adr/` and `docs/how-things-work/` for the owning system.
+3. Search `docs/adr/` and `docs/how-things-work/` for the owning system, and `docs/guides/` for artifact-specific recipes.
 4. Identify the owner boundary:
    - route wiring in `app/`;
    - screen-owned behavior in `screens/<surface>/`;
@@ -59,6 +59,7 @@ If `make verify` is impractical, record the reason and the strongest checks that
 
 Update docs when the feature changes lasting behavior or workflow:
 
+- `docs/guides/` for concrete recipes that future features should repeat.
 - `docs/how-things-work/` for implemented system behavior.
 - `docs/code-standards/` for new enforceable rules.
 - `docs/adr/` for architectural decisions.
