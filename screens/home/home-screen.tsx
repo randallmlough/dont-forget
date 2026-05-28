@@ -8,8 +8,8 @@ import {
 	useActiveHousehold,
 } from "@/components/active-household";
 import { ActiveList } from "@/components/active-list";
+import { useList } from "@/hooks/use-list";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
-import { useListLoad } from "./use-list-load";
 
 export type HomeScreenViewProps = {
 	currentMemberName: string;
@@ -103,7 +103,7 @@ function DefaultListContent({
 	content: Extract<ActiveHouseholdContentState, { status: "ready" }>;
 	currentMemberName: string;
 }) {
-	const list = useListLoad(content, DEFAULT_LIST_ID);
+	const list = useList(content, DEFAULT_LIST_ID);
 	const loadState = list.state;
 
 	if (loadState.status === "loading") {

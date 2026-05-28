@@ -11,29 +11,29 @@ type ReadyActiveHouseholdContent = Extract<
 	{ status: "ready" }
 >;
 
-export type ListLoadActions = {
+export type ListActions = {
 	loadList: () => Promise<ActiveListInitialState>;
 	addItem: (name: string) => Promise<ActiveListItem>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
-export type ListLoadState =
+export type ListState =
 	| { status: "loading"; retryAttempt: number }
 	| { status: "error"; message: string }
 	| {
 			status: "ready";
 			initialList: ActiveListInitialState;
-			actions: ListLoadActions;
+			actions: ListActions;
 	  };
 
-export function useListLoad(
+export function useList(
 	content: ReadyActiveHouseholdContent,
 	listId: string,
 ): {
-	state: ListLoadState;
+	state: ListState;
 	retry: () => void;
 } {
-	const [state, setState] = useState<ListLoadState>({
+	const [state, setState] = useState<ListState>({
 		status: "loading",
 		retryAttempt: 0,
 	});
@@ -93,7 +93,7 @@ export function useListLoad(
 		[content.activeMember.userId, content.itemService, listId],
 	);
 
-	const actions = useMemo<ListLoadActions>(
+	const actions = useMemo<ListActions>(
 		() => ({ addItem, loadList, setItemChecked }),
 		[addItem, loadList, setItemChecked],
 	);
