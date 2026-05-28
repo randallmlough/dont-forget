@@ -49,7 +49,6 @@ export function householdSessionFixture(
 			role: "owner",
 			displayName: "Avery Chen",
 		},
-		activeList: { id: "lst_default_groceries", name: "Groceries" },
 		members: [
 			{
 				membershipId: "mbr_avery",

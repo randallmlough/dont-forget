@@ -1,8 +1,6 @@
 import type { DirectoryDb } from "@/db/client";
 import {
 	type BootstrapResponse,
-	DEFAULT_LIST_ID,
-	DEFAULT_LIST_NAME,
 	HOUSEHOLD_TOKEN_TTL_MS,
 } from "@/lib/bootstrap";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
@@ -110,10 +108,6 @@ export async function bootstrapUser(
 			userId: user.id,
 			role: active.membershipRole,
 			displayName: user.displayName,
-		},
-		activeList: {
-			id: DEFAULT_LIST_ID,
-			name: DEFAULT_LIST_NAME,
 		},
 		members,
 		householdDatabase: {

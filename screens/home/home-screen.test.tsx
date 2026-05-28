@@ -1,4 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
 import { useActiveHousehold } from "@/components/active-household";
 import {
 	activeListDataSourceFixture,
@@ -25,13 +31,12 @@ describe("HomeScreen", () => {
 		expect(screen.getByText("Preparing your Household")).toBeTruthy();
 	});
 
-	it("renders provider-derived ready state", () => {
+	it("renders provider-derived ready state", async () => {
 		jest.mocked(useActiveHousehold).mockReturnValue({
 			content: {
 				status: "ready",
 				activeMemberName: "Avery Chen",
 				resourceKey: "current-list:1",
-				initialList: initialListFixture(),
 				dataSource: activeListDataSourceFixture(),
 				syncCoordinator: syncCoordinatorFixture(),
 			},
@@ -42,7 +47,7 @@ describe("HomeScreen", () => {
 
 		render(<HomeScreen />);
 
-		expect(screen.getByText("Groceries")).toBeTruthy();
+		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 		expect(screen.getByText("Milk")).toBeTruthy();
 	});
 
@@ -68,7 +73,7 @@ describe("HomeScreen", () => {
 	});
 });
 
-it("remounts Active List when the Current List resource changes", () => {
+it("remounts Active List when the Current List resource changes", async () => {
 	const cachedList = initialListFixture({ itemName: "Cached Milk" });
 	const freshList = initialListFixture({ itemName: "Fresh Eggs" });
 	const { rerender } = render(
@@ -78,7 +83,6 @@ it("remounts Active List when the Current List resource changes", () => {
 				status: "ready",
 				activeMemberName: "Avery Chen",
 				resourceKey: "current-list:1",
-				initialList: cachedList,
 				dataSource: activeListDataSourceFixture({
 					load: jest.fn().mockResolvedValue(cachedList),
 				}),
@@ -87,7 +91,7 @@ it("remounts Active List when the Current List resource changes", () => {
 		/>,
 	);
 
-	expect(screen.getByText("Cached Milk")).toBeTruthy();
+	await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
 	rerender(
 		<HomeScreenView
 			currentMemberName="Avery Chen"
@@ -95,7 +99,6 @@ it("remounts Active List when the Current List resource changes", () => {
 				status: "ready",
 				activeMemberName: "Avery Chen",
 				resourceKey: "current-list:2",
-				initialList: freshList,
 				dataSource: activeListDataSourceFixture({
 					load: jest.fn().mockResolvedValue(freshList),
 				}),
@@ -104,7 +107,7 @@ it("remounts Active List when the Current List resource changes", () => {
 		/>,
 	);
 
-	expect(screen.getByText("Fresh Eggs")).toBeTruthy();
+	await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
 	expect(screen.queryByText("Cached Milk")).toBeNull();
 });
 
@@ -135,7 +138,7 @@ describe("HomeScreenView", () => {
 		expect(retry).toHaveBeenCalledTimes(1);
 	});
 
-	it("renders Active List data after active Household loading succeeds", () => {
+	it("renders Active List data after active Household loading succeeds", async () => {
 		const initialList = initialListFixture({
 			checked: true,
 			checkedByMemberName: "Avery Chen",
@@ -148,7 +151,6 @@ describe("HomeScreenView", () => {
 					status: "ready",
 					activeMemberName: "Avery Chen",
 					resourceKey: "current-list:1",
-					initialList,
 					dataSource: activeListDataSourceFixture({
 						load: jest.fn().mockResolvedValue(initialList),
 					}),
@@ -157,9 +159,95 @@ describe("HomeScreenView", () => {
 			/>,
 		);
 
-		expect(screen.getByText("Avery")).toBeTruthy();
+		await waitFor(() => expect(screen.getByText("Avery")).toBeTruthy());
 		expect(screen.getByText("Groceries")).toBeTruthy();
 		expect(screen.getByText("Milk")).toBeTruthy();
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
+
+	it("shows a retryable Current List error when list loading fails", async () => {
+		const initialList = initialListFixture({ itemName: "Retry Milk" });
+		const load = jest
+			.fn()
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValueOnce(initialList);
+
+		render(
+			<HomeScreenView
+				currentMemberName="Avery Chen"
+				content={{
+					status: "ready",
+					activeMemberName: "Avery Chen",
+					resourceKey: "current-list:1",
+					dataSource: activeListDataSourceFixture({ load }),
+					syncCoordinator: syncCoordinatorFixture(),
+				}}
+			/>,
+		);
+
+		await waitFor(() =>
+			expect(screen.getByText("Current List unavailable")).toBeTruthy(),
+		);
+		fireEvent.press(screen.getByText("Try again"));
+
+		await waitFor(() => expect(screen.getByText("Retry Milk")).toBeTruthy());
+		expect(load).toHaveBeenCalledTimes(2);
+	});
+
+	it("ignores stale Current List loads after the resource changes", async () => {
+		const staleLoad = deferred<ReturnType<typeof initialListFixture>>();
+		const freshLoad = deferred<ReturnType<typeof initialListFixture>>();
+		const { rerender } = render(
+			<HomeScreenView
+				currentMemberName="Avery Chen"
+				content={{
+					status: "ready",
+					activeMemberName: "Avery Chen",
+					resourceKey: "current-list:1",
+					dataSource: activeListDataSourceFixture({
+						load: jest.fn(() => staleLoad.promise),
+					}),
+					syncCoordinator: syncCoordinatorFixture(),
+				}}
+			/>,
+		);
+
+		rerender(
+			<HomeScreenView
+				currentMemberName="Avery Chen"
+				content={{
+					status: "ready",
+					activeMemberName: "Avery Chen",
+					resourceKey: "current-list:2",
+					dataSource: activeListDataSourceFixture({
+						load: jest.fn(() => freshLoad.promise),
+					}),
+					syncCoordinator: syncCoordinatorFixture(),
+				}}
+			/>,
+		);
+
+		await act(async () => {
+			freshLoad.resolve(initialListFixture({ itemName: "Fresh Eggs" }));
+			await freshLoad.promise;
+		});
+		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+
+		await act(async () => {
+			staleLoad.resolve(initialListFixture({ itemName: "Stale Milk" }));
+			await staleLoad.promise;
+		});
+		expect(screen.queryByText("Stale Milk")).toBeNull();
+		expect(screen.getByText("Fresh Eggs")).toBeTruthy();
+	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (error: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}

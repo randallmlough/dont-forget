@@ -53,7 +53,6 @@ describe("createHouseholdSessionService", () => {
 		);
 		expect(analytics.track).toHaveBeenCalledWith("household_session_loaded", {
 			household_id: "hh_avery",
-			list_id: "lst_default_groceries",
 			member_role: "owner",
 			member_count: 1,
 			source: "online",
@@ -83,7 +82,6 @@ describe("createHouseholdSessionService", () => {
 		expect(Object.hasOwn(metadata.householdDatabase, "authToken")).toBe(false);
 		expect(analytics.track).toHaveBeenCalledWith("household_session_cached", {
 			household_id: "hh_avery",
-			list_id: "lst_default_groceries",
 			member_role: "owner",
 			member_count: 1,
 		});

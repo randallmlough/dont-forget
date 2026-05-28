@@ -234,7 +234,7 @@ The owning screen maps domain records into UI contracts.
 
 Reusable components keep UI-facing contracts. They should not import domain services directly when that would couple them to Household Session, stores, or service factories.
 
-For active Household UI, the Active Household controller owns the composition of Household Session loading, HouseholdStore, List and Item services, the Current List data source, sync fallback, and sync coordinator lifecycle. Screens consume the Active Household controller through the authenticated app provider instead of opening or closing Household resources directly.
+For active Household UI, the Active Household controller owns the composition of Household Session loading, HouseholdStore access, List and Item services behind the Current List data source, sync fallback, and sync coordinator lifecycle. Household activation does not load Lists or Items. Screens consume the Active Household controller through the authenticated app provider, then load Current List data through the borrowed `ActiveListDataSource` instead of opening or closing Household resources directly.
 
 ```txt
 lib/services/household/
@@ -289,7 +289,7 @@ Turso's transport conflict behavior is last-push-wins. App-owned timestamps rema
 
 ## Household Session
 
-Use **Household Session** for the app's active Household context: active Household, active Member, initial Current List, Members, and short-lived Household DB connection metadata needed to open active Household infrastructure.
+Use **Household Session** for the app's active Household context: active Household, active Member, Members, and short-lived Household DB connection metadata needed to open active Household infrastructure. Do not put Current List, List, or Item state in the Household Session; load those through Household data services after the active Household context exists.
 
 Preferred naming:
 
@@ -307,7 +307,7 @@ Historical initial Home/List/Item migration checklist:
 2. Create `lib/services/household/household-session-service.ts` from bootstrap client and offline cache behavior.
 3. Create `lib/services/list/list-service.ts` for List metadata operations.
 4. Create `lib/services/item/item-service.ts` for Item operations.
-5. Use `lib/services/household/current-list-data-source.ts` to compose Household Session, HouseholdStore, ListService, and ItemService for the Current List UI contract.
+5. Use `lib/services/household/current-list-data-source.ts` to compose Household Session shell data, HouseholdStore, ListService, and ItemService for the Current List UI contract after active Household context exists.
 6. Keep the Active List UI boundary on `ActiveListDataSource` naming.
 7. Hard-cut imports away from touched `lib/app/*` files; do not add compatibility wrappers.
 8. Add the custom ESLint service-boundary rule.

@@ -1,6 +1,5 @@
 import type {
 	ActiveListDataSource,
-	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
 import { asError } from "@/lib/errors";
@@ -37,7 +36,6 @@ export type ActiveHouseholdView = {
 	activeMemberName: string;
 	currentList: {
 		resourceKey: string;
-		initialState: ActiveListInitialState;
 		dataSource: ActiveListDataSource;
 		syncCoordinator: ActiveListSyncCoordinator;
 	};
@@ -447,7 +445,6 @@ function activeHouseholdViewFromOpened(
 		activeMemberName: activeMemberNameFromSession(session),
 		currentList: {
 			resourceKey: opened.resourceKey,
-			initialState: opened.initialState,
 			dataSource: opened.resource.dataSource,
 			syncCoordinator: opened.resource.syncCoordinator,
 		},

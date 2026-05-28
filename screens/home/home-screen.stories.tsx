@@ -97,7 +97,6 @@ function readyContent(initialList: ActiveListInitialState) {
 		status: "ready" as const,
 		activeMemberName: "Avery Chen",
 		resourceKey: `story:${initialList.householdName}:${initialList.listName}`,
-		initialList,
 		dataSource: storyDataSource(initialList),
 		syncCoordinator: storySyncCoordinator(),
 	};

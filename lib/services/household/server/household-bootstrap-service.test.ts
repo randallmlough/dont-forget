@@ -46,10 +46,6 @@ describe("bootstrapUser", () => {
 				userId: response.user.id,
 				role: "owner",
 			});
-			expect(response.activeList).toEqual({
-				id: DEFAULT_LIST_ID,
-				name: DEFAULT_LIST_NAME,
-			});
 			expect(response.householdDatabase.authToken).toBe(
 				`token-${householdDatabaseName("test", response.activeHousehold.id)}`,
 			);

@@ -11,7 +11,6 @@ import {
 } from "react";
 import type {
 	ActiveListDataSource,
-	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
@@ -34,7 +33,6 @@ export type ActiveHouseholdContentState =
 			status: "ready";
 			activeMemberName: string;
 			resourceKey: string;
-			initialList: ActiveListInitialState;
 			dataSource: ActiveListDataSource;
 			syncCoordinator: ActiveListSyncCoordinator;
 	  };
@@ -257,7 +255,6 @@ function contentFromView(
 		status: "ready",
 		activeMemberName: view.activeMemberName,
 		resourceKey: view.currentList.resourceKey,
-		initialList: view.currentList.initialState,
 		dataSource: view.currentList.dataSource,
 		syncCoordinator: view.currentList.syncCoordinator,
 	};

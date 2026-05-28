@@ -341,13 +341,11 @@ function cachedHouseholdSessionFromSession(
 
 function householdSessionAnalyticsProperties(session: HouseholdSession): {
 	household_id: string;
-	list_id: string;
 	member_role: "owner" | "member";
 	member_count: number;
 } {
 	return {
 		household_id: session.activeHousehold.id,
-		list_id: session.activeList.id,
 		member_role: session.activeMember.role,
 		member_count: session.members.length,
 	};

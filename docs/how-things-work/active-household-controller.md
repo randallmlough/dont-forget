@@ -19,13 +19,13 @@ The controller publishes these snapshots:
 - `ready`: a borrowed Active Household view is available.
 - `error`: activation failed. A previous view is kept only when it is still safe to render.
 
-The provider maps `ready` snapshots, and `loading` snapshots with a previous view, to reusable Active List content for screens.
+The provider maps `ready` snapshots, and `loading` snapshots with a previous view, to reusable Active Household content for screens. That content contains the borrowed Current List data source, but it does not contain preloaded List or Item state.
 
 ## Resource Ownership
 
-The controller owns Household Session loading, HouseholdStore, List and Item services, the Current List data source, and the sync coordinator. Consumers borrow handles and never close data sources, stop coordinators, or delete Household DB files directly.
+The controller owns Household Session loading and composes the signed-in Household dependencies in one place: HouseholdStore access, List and Item services behind the Current List data source, and the sync coordinator. Activation publishes those app-shell resources without loading the Current List, Lists, or Items. Consumers borrow handles and never close data sources, stop coordinators, or delete Household DB files directly.
 
-Reusable Current List UI receives an `ActiveListDataSource` and sync coordinator from the provider-owned active Household view. It may request `localWrite` or `manualRefresh` sync through the coordinator, but it does not call HouseholdStore or native sync APIs directly.
+Reusable Current List UI receives an `ActiveListDataSource` and sync coordinator from the provider-owned active Household view. Home calls `dataSource.load()` after the active Household view exists, then passes the loaded state to `ActiveList.Provider`. Active List may request `localWrite` or `manualRefresh` sync through the coordinator, but it does not call HouseholdStore or native sync APIs directly.
 
 ## Replacement Policy
 

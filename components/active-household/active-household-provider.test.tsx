@@ -8,7 +8,6 @@ import {
 import { Pressable, Text } from "react-native";
 import {
 	activeListDataSourceFixture,
-	initialListFixture,
 	syncCoordinatorFixture,
 } from "@/db/fixtures/active-household";
 import type {
@@ -68,7 +67,9 @@ describe("ActiveHouseholdProvider", () => {
 			});
 		});
 
-		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+		await waitFor(() =>
+			expect(screen.getByText("current-list:1")).toBeTruthy(),
+		);
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 	});
 
@@ -114,7 +115,9 @@ describe("ActiveHouseholdProvider", () => {
 			});
 		});
 
-		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+		await waitFor(() =>
+			expect(screen.getByText("current-list:1")).toBeTruthy(),
+		);
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 	});
 
@@ -131,14 +134,16 @@ describe("ActiveHouseholdProvider", () => {
 				view: activeHouseholdViewFixture(),
 			});
 		});
-		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+		await waitFor(() =>
+			expect(screen.getByText("current-list:1")).toBeTruthy(),
+		);
 
 		act(() => {
 			controller.publish({ status: "loading" });
 		});
 
 		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
-		expect(screen.queryByText("Groceries")).toBeNull();
+		expect(screen.queryByText("current-list:1")).toBeNull();
 	});
 
 	it("exposes error state and retries with the latest auth inputs", async () => {
@@ -176,7 +181,7 @@ describe("ActiveHouseholdProvider", () => {
 				view: activeHouseholdViewFixture(),
 			});
 		});
-		expect(screen.getByText("Groceries")).toBeTruthy();
+		expect(screen.getByText("current-list:1")).toBeTruthy();
 	});
 
 	it("signs out in analytics, controller, local cleanup, Clerk order", async () => {
@@ -522,7 +527,7 @@ function CurrentState() {
 	return (
 		<>
 			<Text>{content.activeMemberName}</Text>
-			<Text>{content.initialList.listName}</Text>
+			<Text>{content.resourceKey}</Text>
 		</>
 	);
 }
@@ -554,7 +559,7 @@ function RetryState() {
 		<>
 			<Text>
 				{content.status === "ready"
-					? content.initialList.listName
+					? content.resourceKey
 					: content.status === "error"
 						? content.message
 						: content.status}
@@ -621,7 +626,6 @@ function activeHouseholdViewFixture() {
 		activeMemberName: "Avery Chen",
 		currentList: {
 			resourceKey: "current-list:1",
-			initialState: initialListFixture({ items: [] }),
 			dataSource: activeListDataSourceFixture(),
 			syncCoordinator: syncCoordinatorFixture(),
 		},

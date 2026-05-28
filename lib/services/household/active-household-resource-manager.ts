@@ -1,6 +1,5 @@
 import type {
 	ActiveListDataSource,
-	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
 import type { Logger } from "@/lib/logger";
@@ -25,7 +24,6 @@ export type ActiveHouseholdResource = {
 export type OpenedActiveHouseholdResource = {
 	resource: ActiveHouseholdResource;
 	resourceKey: string;
-	initialState: ActiveListInitialState;
 };
 
 export type CreateCurrentListDataSource = (
@@ -141,7 +139,6 @@ export function createActiveHouseholdResourceManager(
 			rawDataSource = createCurrentListDataSource({
 				household: session.activeHousehold,
 				activeMember: session.activeMember,
-				list: session.activeList,
 				currentUser: session.user,
 				members: session.members,
 				database: session.householdDatabase,
@@ -173,12 +170,10 @@ export function createActiveHouseholdResourceManager(
 		session: ActiveHouseholdSession,
 	): Promise<OpenedActiveHouseholdResource> {
 		const resource = await createSessionResource(session);
-		const dataSource = resource.dataSource;
 		const opening: OpeningActiveHouseholdResource = { session, resource };
 		openingResources.add(opening);
 
 		try {
-			const initialState = await dataSource.load();
 			if (opening.closePromise) {
 				await opening.closePromise;
 				throw staleCurrentListResourceError();
@@ -188,7 +183,6 @@ export function createActiveHouseholdResourceManager(
 			return {
 				resource,
 				resourceKey,
-				initialState,
 			};
 		} catch (error) {
 			if (!opening.closePromise) {

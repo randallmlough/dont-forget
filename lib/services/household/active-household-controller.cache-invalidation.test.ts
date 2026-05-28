@@ -59,7 +59,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		await h.waitForAsync(() =>
 			expect(controller.getSnapshot()).toMatchObject({
 				status: "ready",
-				view: { currentList: { initialState: { householdName: "Old" } } },
+				view: { currentList: { resourceKey: "current-list:1" } },
 			}),
 		);
 
@@ -78,11 +78,11 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		).toHaveBeenCalledWith(cached, fresh);
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "New" } } },
+			view: { currentList: { resourceKey: "current-list:2" } },
 		});
 	});
 
-	it("closes a pending unauthorized cached resource before deleting local data", async () => {
+	it("closes an unauthorized cached resource before deleting local data", async () => {
 		const cached = h.cachedHouseholdSessionFixture({
 			householdId: "hh_old",
 			householdName: "Old",
@@ -91,12 +91,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdId: "hh_new",
 			householdName: "New",
 		});
-		const cachedLoad = h.deferred<h.ActiveListInitialState>();
 		const freshSession = h.deferred<h.HouseholdSession>();
 		const events: string[] = [];
 		const cachedDataSource = h.activeListDataSourceFixture({
 			syncAuthorized: false,
-			load: jest.fn(() => cachedLoad.promise),
 			close: jest.fn(async () => {
 				events.push("close:cached");
 			}),
@@ -142,7 +140,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(cachedDataSource.load).toHaveBeenCalled(),
+			expect(controller.getSnapshot()).toMatchObject({ status: "ready" }),
 		);
 
 		freshSession.resolve(fresh);
@@ -151,7 +149,6 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			sessionService.deleteCachedHouseholdSessionLocalData,
 		).not.toHaveBeenCalled();
 
-		cachedLoad.resolve(h.initialListFixture({ householdName: "Old" }));
 		await activation;
 
 		expect(cachedCoordinator.stop).toHaveBeenCalledTimes(1);
@@ -163,7 +160,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		]);
 	});
 
-	it("does not delete unauthorized cached data when closing a pending resource fails", async () => {
+	it("does not delete unauthorized cached data when closing the resource fails", async () => {
 		const cached = h.cachedHouseholdSessionFixture({
 			householdId: "hh_old",
 			householdName: "Old",
@@ -172,11 +169,9 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdId: "hh_new",
 			householdName: "New",
 		});
-		const cachedLoad = h.deferred<h.ActiveListInitialState>();
 		const freshSession = h.deferred<h.HouseholdSession>();
 		const cachedDataSource = h.activeListDataSourceFixture({
 			syncAuthorized: false,
-			load: jest.fn(() => cachedLoad.promise),
 			close: jest.fn(async () => {
 				throw new Error("close failed");
 			}),
@@ -203,11 +198,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(cachedDataSource.load).toHaveBeenCalled(),
+			expect(controller.getSnapshot()).toMatchObject({ status: "ready" }),
 		);
 
 		freshSession.resolve(fresh);
-		cachedLoad.resolve(h.initialListFixture({ householdName: "Old" }));
 		await activation;
 
 		expect(
@@ -273,7 +267,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "Old" } } },
+			view: { currentList: { resourceKey: "current-list:1" } },
 		});
 
 		const activation = controller.activate({
@@ -282,7 +276,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(secondCachedDataSource.load).toHaveBeenCalled(),
+			expect(controller.getSnapshot()).toMatchObject({ status: "ready" }),
 		);
 
 		freshSession.resolve(fresh);
@@ -359,7 +353,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		).rejects.toMatchObject({ code: "stale_current_list_resource" });
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "New" } } },
+			view: { currentList: { resourceKey: "current-list:2" } },
 		});
 	});
 
@@ -439,7 +433,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		await activation;
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "New" } } },
+			view: { currentList: { resourceKey: "current-list:2" } },
 		});
 	});
 
@@ -531,7 +525,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		).not.toHaveBeenCalled();
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "Second" } } },
+			view: { currentList: { resourceKey: expect.any(String) } },
 		});
 	});
 
@@ -618,7 +612,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		).not.toHaveBeenCalled();
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "Second" } } },
+			view: { currentList: { resourceKey: expect.any(String) } },
 		});
 	});
 
@@ -665,10 +659,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			signedIn: true,
 		});
 
-		expect(controller.getSnapshot()).toEqual({
-			status: "error",
-			message: "Unable to prepare your Household. Please try again.",
-		});
+		expect(controller.getSnapshot()).toMatchObject({ status: "ready" });
 		expect(
 			sessionService.deleteCachedHouseholdSessionLocalData,
 		).toHaveBeenCalledWith(cached);

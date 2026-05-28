@@ -90,7 +90,6 @@ function cachedHouseholdSessionFixture() {
 			role: "owner" as const,
 			displayName: "Avery Chen",
 		},
-		activeList: { id: "lst_default_groceries", name: "Groceries" },
 		members: [
 			{
 				membershipId: "mbr_avery",

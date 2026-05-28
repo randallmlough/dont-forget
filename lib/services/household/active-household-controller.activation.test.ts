@@ -28,15 +28,15 @@ describe("createActiveHouseholdController activation", () => {
 			view: {
 				activeMemberName: "Avery Chen",
 				currentList: {
-					initialState: {
-						householdName: "Avery",
-						listName: "Groceries",
-						items: [{ name: "Milk" }],
-					},
+					resourceKey: "current-list:1",
+					dataSource: expect.objectContaining({
+						load: expect.any(Function),
+					}),
 					syncCoordinator,
 				},
 			},
 		});
+		expect(dataSource.load).not.toHaveBeenCalled();
 		expect(syncCoordinator.start).toHaveBeenCalledTimes(1);
 	});
 
@@ -65,7 +65,7 @@ describe("createActiveHouseholdController activation", () => {
 		]);
 	});
 
-	it("publishes cached Current List state without starting authorized sync", async () => {
+	it("publishes cached Household shell state without loading the Current List or starting authorized sync", async () => {
 		const cached = h.cachedHouseholdSessionFixture();
 		const dataSource = h.activeListDataSourceFixture({ syncAuthorized: false });
 		const syncCoordinator = h.syncCoordinatorFixture();
@@ -88,43 +88,20 @@ describe("createActiveHouseholdController activation", () => {
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
 			view: {
-				currentList: { initialState: { householdName: "Avery" } },
+				currentList: {
+					resourceKey: "current-list:1",
+					dataSource: expect.objectContaining({
+						load: expect.any(Function),
+					}),
+				},
 			},
 		});
 		expect(sessionService.getHouseholdSession).not.toHaveBeenCalled();
+		expect(dataSource.load).not.toHaveBeenCalled();
 		expect(syncCoordinator.start).not.toHaveBeenCalled();
 	});
 
-	it("publishes an error when cached Current List loading fails and fresh is unavailable", async () => {
-		const dataSource = h.activeListDataSourceFixture({
-			syncAuthorized: false,
-			load: jest.fn().mockRejectedValue(new Error("cached load failed")),
-		});
-		const syncCoordinator = h.syncCoordinatorFixture();
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: h.sessionServiceFixture({
-				readCachedHouseholdSession: jest
-					.fn()
-					.mockResolvedValue(h.cachedHouseholdSessionFixture()),
-				getHouseholdSession: jest.fn().mockRejectedValue(new Error("offline")),
-			}),
-			createCurrentListDataSource: jest.fn().mockReturnValue(dataSource),
-			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
-			logger: h.loggerFixture(),
-		});
-
-		await controller.activate({
-			getToken: async () => "token",
-			authReady: true,
-			signedIn: true,
-		});
-
-		expect(controller.getSnapshot()).toMatchObject({ status: "error" });
-		expect(syncCoordinator.start).not.toHaveBeenCalled();
-		expect(dataSource.close).toHaveBeenCalledTimes(1);
-	});
-
-	it("keeps cached Current List state when fresh loading fails", async () => {
+	it("keeps cached Household shell state when fresh loading fails", async () => {
 		const dataSource = h.activeListDataSourceFixture({
 			syncAuthorized: false,
 			addItem: jest.fn().mockResolvedValue({
@@ -156,7 +133,12 @@ describe("createActiveHouseholdController activation", () => {
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
 			view: {
-				currentList: { initialState: { householdName: "Avery" } },
+				currentList: {
+					resourceKey: "current-list:1",
+					dataSource: expect.objectContaining({
+						addItem: expect.any(Function),
+					}),
+				},
 			},
 		});
 		const snapshot = controller.getSnapshot();
@@ -167,66 +149,6 @@ describe("createActiveHouseholdController activation", () => {
 		expect(syncCoordinator.start).not.toHaveBeenCalled();
 		expect(syncCoordinator.stop).not.toHaveBeenCalled();
 		expect(dataSource.close).not.toHaveBeenCalled();
-	});
-
-	it("does not let a slow cached load replace a published fresh resource", async () => {
-		const cachedLoad = h.deferred<h.ActiveListInitialState>();
-		const cachedDataSource = h.activeListDataSourceFixture({
-			syncAuthorized: false,
-			load: jest.fn(() => cachedLoad.promise),
-		});
-		const freshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Fresh" })),
-		});
-		const freshCoordinator = h.syncCoordinatorFixture();
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: h.sessionServiceFixture({
-				readCachedHouseholdSession: jest
-					.fn()
-					.mockResolvedValue(h.cachedHouseholdSessionFixture()),
-				getHouseholdSession: jest
-					.fn()
-					.mockResolvedValue(
-						h.householdSessionFixture({ householdName: "Fresh" }),
-					),
-			}),
-			createCurrentListDataSource: jest
-				.fn()
-				.mockReturnValueOnce(cachedDataSource)
-				.mockReturnValueOnce(freshDataSource),
-			createSyncCoordinator: jest
-				.fn()
-				.mockReturnValueOnce(h.syncCoordinatorFixture())
-				.mockReturnValueOnce(freshCoordinator),
-			logger: h.loggerFixture(),
-		});
-
-		const activation = controller.activate({
-			getToken: async () => "token",
-			authReady: true,
-			signedIn: true,
-		});
-		await h.waitForAsync(() =>
-			expect(controller.getSnapshot()).toMatchObject({
-				status: "ready",
-				view: { currentList: { initialState: { householdName: "Fresh" } } },
-			}),
-		);
-
-		cachedLoad.resolve(h.initialListFixture({ householdName: "Cached" }));
-		await activation;
-
-		expect(controller.getSnapshot()).toMatchObject({
-			status: "ready",
-			view: { currentList: { initialState: { householdName: "Fresh" } } },
-		});
-		expect(freshCoordinator.stop).not.toHaveBeenCalled();
-		expect(freshDataSource.close).not.toHaveBeenCalled();
-		await h.waitForAsync(() =>
-			expect(cachedDataSource.close).toHaveBeenCalledTimes(1),
-		);
 	});
 
 	it("does not read or publish cached Household data when signed out", async () => {
@@ -262,25 +184,15 @@ describe("createActiveHouseholdController activation", () => {
 	});
 
 	it("ignores stale activation completion without closing the newer resource or saving stale cache", async () => {
-		const staleLoad = h.deferred<h.ActiveListInitialState>();
-		const staleDataSource = h.activeListDataSourceFixture({
-			load: jest.fn(() => staleLoad.promise),
-		});
-		const freshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(
-					h.initialListFixture({ householdName: "Fresh", itemName: "Eggs" }),
-				),
-		});
+		const staleSession = h.deferred<h.HouseholdSession>();
+		const staleDataSource = h.activeListDataSourceFixture();
+		const freshDataSource = h.activeListDataSourceFixture();
 		const staleCoordinator = h.syncCoordinatorFixture();
 		const freshCoordinator = h.syncCoordinatorFixture();
 		const sessionService = h.sessionServiceFixture({
 			getHouseholdSession: jest
 				.fn()
-				.mockResolvedValueOnce(
-					h.householdSessionFixture({ householdName: "Stale" }),
-				)
+				.mockReturnValueOnce(staleSession.promise)
 				.mockResolvedValueOnce(
 					h.householdSessionFixture({ householdName: "Fresh" }),
 				),
@@ -303,7 +215,9 @@ describe("createActiveHouseholdController activation", () => {
 			authReady: true,
 			signedIn: true,
 		});
-		await h.waitForAsync(() => expect(staleDataSource.load).toHaveBeenCalled());
+		await h.waitForAsync(() =>
+			expect(sessionService.getHouseholdSession).toHaveBeenCalledTimes(1),
+		);
 		await controller.activate({
 			getToken: async () => "fresh-token",
 			authReady: true,
@@ -312,20 +226,17 @@ describe("createActiveHouseholdController activation", () => {
 
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "Fresh" } } },
+			view: { currentList: { resourceKey: "current-list:1" } },
 		});
-		staleLoad.resolve(h.initialListFixture({ householdName: "Stale" }));
+		staleSession.resolve(h.householdSessionFixture({ householdName: "Stale" }));
 		await staleActivation;
 
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "Fresh" } } },
+			view: { currentList: { resourceKey: "current-list:1" } },
 		});
 		expect(freshCoordinator.stop).not.toHaveBeenCalled();
 		expect(freshDataSource.close).not.toHaveBeenCalled();
-		expect(staleCoordinator.start).not.toHaveBeenCalled();
-		expect(staleCoordinator.stop).toHaveBeenCalledTimes(1);
-		expect(staleDataSource.close).toHaveBeenCalledTimes(1);
 		expect(sessionService.saveCachedHouseholdSession).toHaveBeenCalledTimes(1);
 		expect(sessionService.saveCachedHouseholdSession).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -388,7 +299,7 @@ describe("createActiveHouseholdController activation", () => {
 		expect(savedHouseholdNames).toEqual(["Stale", "Fresh"]);
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { initialState: { householdName: "Avery" } } },
+			view: { currentList: { resourceKey: "current-list:2" } },
 		});
 	});
 });

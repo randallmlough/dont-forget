@@ -8,6 +8,7 @@ import {
 	useActiveHousehold,
 } from "@/components/active-household";
 import { ActiveList } from "@/components/active-list";
+import { useCurrentListLoad } from "./use-current-list-load";
 
 export type HomeScreenViewProps = {
 	currentMemberName: string;
@@ -62,21 +63,11 @@ export function HomeScreenView({
 			</View>
 
 			{content.status === "ready" ? (
-				<ActiveList.Provider
+				<CurrentListContent
 					key={content.resourceKey}
-					initialState={content.initialList}
 					currentMemberName={displayMemberName}
-					dataSource={content.dataSource}
-					syncCoordinator={content.syncCoordinator}
-					closeDataSourceOnUnmount={false}
-					manageSyncCoordinatorLifecycle={false}
-				>
-					<ActiveList.Screen>
-						<ActiveList.Header />
-						<ActiveList.Items />
-						<ActiveList.AddItemForm />
-					</ActiveList.Screen>
-				</ActiveList.Provider>
+					content={content}
+				/>
 			) : content.status === "loading" ? (
 				<HomeStatus
 					title="Preparing your Household"
@@ -101,6 +92,62 @@ export function HomeScreenView({
 				</HomeStatus>
 			)}
 		</SafeAreaView>
+	);
+}
+
+function CurrentListContent({
+	content,
+	currentMemberName,
+}: {
+	content: Extract<ActiveHouseholdContentState, { status: "ready" }>;
+	currentMemberName: string;
+}) {
+	const currentList = useCurrentListLoad(content);
+	const loadState = currentList.state;
+
+	if (loadState.status === "loading") {
+		return (
+			<HomeStatus
+				title="Preparing your Household"
+				body="Loading your Household List."
+			>
+				<ActivityIndicator />
+			</HomeStatus>
+		);
+	}
+
+	if (loadState.status === "error") {
+		return (
+			<HomeStatus title="Current List unavailable" body={loadState.message}>
+				<Pressable
+					accessibilityRole="button"
+					onPress={currentList.retry}
+					style={({ pressed }) => [
+						styles.retryButton,
+						pressed ? styles.retryButtonPressed : undefined,
+					]}
+				>
+					<Text style={styles.retryButtonLabel}>Try again</Text>
+				</Pressable>
+			</HomeStatus>
+		);
+	}
+
+	return (
+		<ActiveList.Provider
+			initialState={loadState.initialList}
+			currentMemberName={currentMemberName}
+			dataSource={content.dataSource}
+			syncCoordinator={content.syncCoordinator}
+			closeDataSourceOnUnmount={false}
+			manageSyncCoordinatorLifecycle={false}
+		>
+			<ActiveList.Screen>
+				<ActiveList.Header />
+				<ActiveList.Items />
+				<ActiveList.AddItemForm />
+			</ActiveList.Screen>
+		</ActiveList.Provider>
 	);
 }
 

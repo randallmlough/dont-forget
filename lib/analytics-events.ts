@@ -11,14 +11,12 @@
 export type EventMap = {
 	household_session_loaded: {
 		household_id: string;
-		list_id: string;
 		member_role: "owner" | "member";
 		member_count: number;
 		source: "online" | "cached";
 	};
 	household_session_cached: {
 		household_id: string;
-		list_id: string;
 		member_role: "owner" | "member";
 		member_count: number;
 	};

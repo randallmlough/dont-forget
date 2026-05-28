@@ -41,7 +41,7 @@ The current route that renders the active Household's current List while the app
 _Avoid_: dashboard, landing page
 
 **Household Session**:
-The app's active Household context for a signed-in User: the active Household, active Member, initial Current List, current Members, and short-lived Household DB connection metadata. A cached Household Session may omit secrets and allow offline active Household startup.
+The app's active Household context for a signed-in User: the active Household, active Member, current Members, and short-lived Household DB connection metadata. A cached Household Session may omit secrets and allow offline active Household startup. It does not load the Current List, Lists, or Items; those load after the active Household context exists.
 _Avoid_: auth session, bootstrap payload, account session
 
 ## Relationships
@@ -52,7 +52,7 @@ _Avoid_: auth session, bootstrap payload, account session
 - A **List** contains zero or more **Items**
 - The active **Household** has one active **Member** and one **Current List** selection for the signed-in **User**
 - **Home** currently renders the active **Household**'s **Current List**, but active **Household** resources are owned by the signed-in Active Household controller/provider boundary rather than **Home**
-- A **Household Session** identifies one active **Household**, one active **Member**, and one initial **Current List**
+- A **Household Session** identifies one active **Household** and one active **Member**; Current List/List/Item data is loaded separately through Household data services after the session is established.
 
 ## Decisions in flight
 

@@ -5,6 +5,7 @@ import type {
 	ActiveListSyncResult,
 } from "@/components/active-list";
 import type { BootstrapResponse } from "@/lib/bootstrap";
+import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import { asError, isNetworkUnavailableError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 import {
@@ -31,7 +32,7 @@ type ActiveListStore = HouseholdStoreExecutor & {
 export type HouseholdCurrentListDataSourceConfig = {
 	household: BootstrapResponse["activeHousehold"];
 	activeMember: BootstrapResponse["activeMember"];
-	list: BootstrapResponse["activeList"];
+	currentListId?: string;
 	currentUser: BootstrapResponse["user"];
 	members: BootstrapResponse["members"];
 	database: HouseholdDatabaseConfig;
@@ -66,9 +67,10 @@ export function createHouseholdCurrentListDataSource(
 				database: config.database,
 			});
 	const ownsStore = !options.store;
+	const currentListId = config.currentListId ?? DEFAULT_LIST_ID;
 	const memberNames = new Map<string, string | null>();
 	const log = config.logger.with({
-		list_id: config.list.id,
+		list_id: currentListId,
 		feature: "active_list",
 	});
 	const syncAuthorized = options.store
@@ -98,8 +100,8 @@ export function createHouseholdCurrentListDataSource(
 		async load() {
 			try {
 				const { listService, itemService } = await getServices();
-				const list = await listService.getList({ listId: config.list.id });
-				const items = await itemService.listItems({ listId: config.list.id });
+				const list = await listService.getList({ listId: currentListId });
+				const items = await itemService.listItems({ listId: currentListId });
 
 				return {
 					householdName: config.household.name,
@@ -114,7 +116,7 @@ export function createHouseholdCurrentListDataSource(
 		async addItem(rawName) {
 			const { itemService } = await getServices();
 			const item = await itemService.addItem({
-				listId: config.list.id,
+				listId: currentListId,
 				userId: config.activeMember.userId,
 				name: rawName,
 			});

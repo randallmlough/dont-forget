@@ -468,7 +468,7 @@ describe("createHouseholdCurrentListDataSource", () => {
 						role: "owner",
 						displayName: "Avery Chen",
 					},
-					list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
+					currentListId: DEFAULT_LIST_ID,
 					currentUser: {
 						id: "usr_avery",
 						email: "avery@example.com",
@@ -561,7 +561,7 @@ function dataSourceConfigFixture() {
 			role: "owner" as const,
 			displayName: "Avery Chen",
 		},
-		list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
+		currentListId: DEFAULT_LIST_ID,
 		currentUser: {
 			id: "usr_avery",
 			email: "avery@example.com",
