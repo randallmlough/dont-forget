@@ -68,16 +68,6 @@ export type ActiveListMeta = {
 	syncState: ActiveListSyncState;
 };
 
-export type ActiveListDataSource = {
-	syncAuthorized: boolean;
-	load: () => Promise<ActiveListInitialState>;
-	addItem: (name: string) => Promise<ActiveListItem>;
-	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-	pull: () => Promise<ActiveListSyncResult>;
-	sync: (options?: ActiveListSyncOptions) => Promise<ActiveListSyncResult>;
-	close: () => Promise<void>;
-};
-
 type ActiveListContextValue = {
 	state: ActiveListState;
 	actions: ActiveListActions;
@@ -87,9 +77,10 @@ type ActiveListContextValue = {
 type ActiveListProviderProps = PropsWithChildren<{
 	initialState: ActiveListInitialState;
 	currentMemberName: string;
-	dataSource: ActiveListDataSource;
+	onLoadList: () => Promise<ActiveListInitialState>;
+	onAddItem: (name: string) => Promise<ActiveListItem>;
+	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	syncCoordinator: ActiveListSyncCoordinator;
-	closeDataSourceOnUnmount?: boolean;
 	manageSyncCoordinatorLifecycle?: boolean;
 }>;
 
@@ -98,9 +89,10 @@ const ActiveListContext = createContext<ActiveListContextValue | null>(null);
 function ActiveListProvider({
 	initialState,
 	currentMemberName,
-	dataSource,
+	onLoadList,
+	onAddItem,
+	onSetItemChecked,
 	syncCoordinator,
-	closeDataSourceOnUnmount = true,
 	manageSyncCoordinatorLifecycle = true,
 	children,
 }: ActiveListProviderProps) {
@@ -126,10 +118,10 @@ function ActiveListProvider({
 		};
 	}, []);
 
-	const loadFromDataSource = useCallback(async () => {
-		const nextState = await dataSource.load();
+	const loadList = useCallback(async () => {
+		const nextState = await onLoadList();
 		transition({ type: "listLoaded", list: nextState });
-	}, [dataSource, transition]);
+	}, [onLoadList, transition]);
 
 	useEffect(() => {
 		const subscription = syncCoordinator.subscribe((syncState) => {
@@ -141,7 +133,7 @@ function ActiveListProvider({
 				syncState === "synced" &&
 				!isManualRefresh
 			) {
-				void loadFromDataSource().catch((error) => {
+				void loadList().catch((error) => {
 					logger.error("active list reload after sync failed", { error });
 				});
 			}
@@ -160,15 +152,10 @@ function ActiveListProvider({
 				if (manageSyncCoordinatorLifecycle) {
 					await syncCoordinator.stop();
 				}
-				if (closeDataSourceOnUnmount) {
-					await dataSource.close();
-				}
 			})();
 		};
 	}, [
-		closeDataSourceOnUnmount,
-		dataSource,
-		loadFromDataSource,
+		loadList,
 		logger,
 		manageSyncCoordinatorLifecycle,
 		syncCoordinator,
@@ -179,24 +166,24 @@ function ActiveListProvider({
 		void syncCoordinator
 			.requestSync({ reason: "localWrite" })
 			.then(async (result) => {
-				if (mounted.current && result?.changed) await loadFromDataSource();
+				if (mounted.current && result?.changed) await loadList();
 			})
 			.catch(() => undefined);
-	}, [loadFromDataSource, syncCoordinator]);
+	}, [loadList, syncCoordinator]);
 
 	const refresh = useCallback(async () => {
 		transition({ type: "refreshRequested" });
 
 		try {
 			await syncCoordinator.requestSync({ reason: "manualRefresh" });
-			await loadFromDataSource();
+			await loadList();
 		} catch (error) {
 			if (syncCoordinator.getStatus() !== "failed") {
 				logger.error("active list refresh failed", { error });
 			}
 			transition({ type: "refreshFailed" });
 		}
-	}, [loadFromDataSource, logger, syncCoordinator, transition]);
+	}, [loadList, logger, syncCoordinator, transition]);
 
 	const addItem = useCallback(
 		async (rawName: string) => {
@@ -214,7 +201,7 @@ function ActiveListProvider({
 			transition({ type: "itemAddedOptimistically", item });
 
 			try {
-				const persistedItem = await dataSource.addItem(name);
+				const persistedItem = await onAddItem(name);
 				transition({
 					type: "itemAddPersisted",
 					pendingItemId: item.id,
@@ -223,10 +210,10 @@ function ActiveListProvider({
 				requestLocalWriteSync();
 			} catch {
 				transition({ type: "itemAddFailed" });
-				await loadFromDataSource().catch(() => undefined);
+				await loadList().catch(() => undefined);
 			}
 		},
-		[dataSource, loadFromDataSource, requestLocalWriteSync, transition],
+		[onAddItem, loadList, requestLocalWriteSync, transition],
 	);
 
 	const toggleItem = useCallback(
@@ -245,18 +232,18 @@ function ActiveListProvider({
 			});
 
 			try {
-				await dataSource.setItemChecked(itemId, checked);
+				await onSetItemChecked(itemId, checked);
 				transition({ type: "itemTogglePersisted" });
 				requestLocalWriteSync();
 			} catch {
 				transition({ type: "itemToggleFailed" });
-				await loadFromDataSource().catch(() => undefined);
+				await loadList().catch(() => undefined);
 			}
 		},
 		[
-			dataSource,
+			onSetItemChecked,
 			currentMemberName,
-			loadFromDataSource,
+			loadList,
 			requestLocalWriteSync,
 			transition,
 		],

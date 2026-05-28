@@ -1,17 +1,17 @@
 # Sync Coordinator
 
-The Sync Coordinator owns sync policy for one controller-owned Current List resource set. It is the app-owned policy boundary that decides when sync work starts, which sync mode to use, how sync status changes, how failures are classified, and when retry or lifecycle work should stop. The Active Household controller owns when a coordinator exists, starts, stops, and is replaced.
+The Sync Coordinator owns sync policy for one controller-owned active Household resource set. It is the app-owned policy boundary that decides when sync work starts, which sync mode to use, how sync status changes, how failures are classified, and when retry or lifecycle work should stop. The Active Household controller owns when a coordinator exists, starts, stops, and is replaced.
 
 The coordinator is a deep module: callers see a small interface, while the retry, serialization, status, and failure policy stays inside `lib/services/sync/sync-coordinator.ts`.
 
 ## Public Interface
 
-Create one coordinator for each controller-owned Current List resource set and pass a logger already scoped to that Household. Product callers normally use the default coordinator factory, which supplies app-wide platform lifecycle and network adapters:
+Create one coordinator for each controller-owned active Household resource set and pass a logger already scoped to that Household. Product callers normally use the default coordinator factory, which supplies app-wide platform lifecycle and network adapters:
 
 ```ts
 const syncCoordinator = createDefaultSyncCoordinator({
-	syncAuthorized: dataSource.syncAuthorized,
-	sync: dataSource.sync,
+	syncAuthorized: activeHouseholdDataServices.syncAuthorized,
+	sync: activeHouseholdDataServices.sync,
 	logger: logger.with({ household_id: session.activeHousehold.id }),
 });
 ```
@@ -21,7 +21,7 @@ Tests and lower-level policy checks may call `createSyncCoordinator` directly wi
 The public surface is intentionally small:
 
 - `getStatus()` returns `synced`, `pending`, `offline`, or `failed`.
-- `subscribe(listener)` lets the active Household controller and current-List UI observe coordinator-owned status changes.
+- `subscribe(listener)` lets the active Household controller and List UI observe coordinator-owned status changes.
 - `start()` begins foreground lifecycle handling and retry cadence for the active Household.
 - `stop()` removes lifecycle listeners, stops retry timers, drains active sync work, and prevents stale status updates.
 - `requestSync({ reason })` requests sync for an explicit reason.
@@ -36,7 +36,7 @@ The coordinator accepts these request reasons:
 - `networkReconnect`: The app learned the device moved from a non-online network state to a known-online network state. This is a Household catch-up request, not only a local upload request.
 - `retry`: The foreground retry cadence is attempting to propagate pending local Household rows after earlier offline or recoverable failures.
 
-Only the coordinator should decide what these reasons mean. Domain services, HouseholdStore, active Household controller, and current-List UI should request sync by reason instead of choosing native Turso behavior directly.
+Only the coordinator should decide what these reasons mean. Domain services, HouseholdStore, active Household controller, and List UI should request sync by reason instead of choosing native Turso behavior directly.
 
 ## App Lifecycle
 
@@ -116,7 +116,7 @@ HouseholdStore owns local/native Household DB access, operation serialization, a
 
 List and Item services own local domain reads and writes. They commit local Household rows and should not start remote sync as part of mutation success.
 
-The active Household controller creates controller-owned data sources and the coordinator, closes Household resources, stops sync before sign-out or replacement, and starts fresh authorized sync lifecycle work after offline reopen. The authenticated app provider activates and observes the controller; route surfaces borrow provider state/actions instead of owning Household DB or sync lifecycle.
+The active Household controller creates active Household List/Item services and the coordinator, closes Household resources, stops sync before sign-out or replacement, and starts fresh authorized sync lifecycle work after offline reopen. The authenticated app provider activates and observes the controller; route surfaces borrow provider dependencies and actions instead of owning Household DB or sync lifecycle.
 
 Current-List UI owns visible List interaction and rendering. It subscribes to coordinator status, requests `localWrite` after successful local mutations, requests `manualRefresh` for explicit refresh, and reloads visible rows after sync reports remote changes.
 

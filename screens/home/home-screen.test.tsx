@@ -5,12 +5,19 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import { useActiveHousehold } from "@/components/active-household";
 import {
-	activeListDataSourceFixture,
+	type ActiveHouseholdContentState,
+	useActiveHousehold,
+} from "@/components/active-household";
+import {
 	initialListFixture,
+	itemFixture,
+	itemServiceFixture,
+	listFixture,
+	listServiceFixture,
 	syncCoordinatorFixture,
 } from "@/db/fixtures/active-household";
+import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
 jest.mock("@/components/active-household", () => ({
@@ -33,13 +40,7 @@ describe("HomeScreen", () => {
 
 	it("renders provider-derived ready state", async () => {
 		jest.mocked(useActiveHousehold).mockReturnValue({
-			content: {
-				status: "ready",
-				activeMemberName: "Avery Chen",
-				resourceKey: "current-list:1",
-				dataSource: activeListDataSourceFixture(),
-				syncCoordinator: syncCoordinatorFixture(),
-			},
+			content: readyContent(),
 			currentMemberName: "Avery Chen",
 			retry: jest.fn(),
 			signOut: jest.fn(),
@@ -73,21 +74,14 @@ describe("HomeScreen", () => {
 	});
 });
 
-it("remounts Active List when the Current List resource changes", async () => {
-	const cachedList = initialListFixture({ itemName: "Cached Milk" });
-	const freshList = initialListFixture({ itemName: "Fresh Eggs" });
+it("remounts Active List when the Household resource changes", async () => {
 	const { rerender } = render(
 		<HomeScreenView
 			currentMemberName="Avery Chen"
-			content={{
-				status: "ready",
-				activeMemberName: "Avery Chen",
-				resourceKey: "current-list:1",
-				dataSource: activeListDataSourceFixture({
-					load: jest.fn().mockResolvedValue(cachedList),
-				}),
-				syncCoordinator: syncCoordinatorFixture(),
-			}}
+			content={readyContent({
+				resourceKey: "active-household:1",
+				initialList: initialListFixture({ itemName: "Cached Milk" }),
+			})}
 		/>,
 	);
 
@@ -95,15 +89,10 @@ it("remounts Active List when the Current List resource changes", async () => {
 	rerender(
 		<HomeScreenView
 			currentMemberName="Avery Chen"
-			content={{
-				status: "ready",
-				activeMemberName: "Avery Chen",
-				resourceKey: "current-list:2",
-				dataSource: activeListDataSourceFixture({
-					load: jest.fn().mockResolvedValue(freshList),
-				}),
-				syncCoordinator: syncCoordinatorFixture(),
-			}}
+			content={readyContent({
+				resourceKey: "active-household:2",
+				initialList: initialListFixture({ itemName: "Fresh Eggs" }),
+			})}
 		/>,
 	);
 
@@ -139,23 +128,15 @@ describe("HomeScreenView", () => {
 	});
 
 	it("renders Active List data after active Household loading succeeds", async () => {
-		const initialList = initialListFixture({
-			checked: true,
-			checkedByMemberName: "Avery Chen",
-		});
-
 		render(
 			<HomeScreenView
 				currentMemberName="Avery Chen"
-				content={{
-					status: "ready",
-					activeMemberName: "Avery Chen",
-					resourceKey: "current-list:1",
-					dataSource: activeListDataSourceFixture({
-						load: jest.fn().mockResolvedValue(initialList),
+				content={readyContent({
+					initialList: initialListFixture({
+						checked: true,
+						checkedByMemberName: "Avery Chen",
 					}),
-					syncCoordinator: syncCoordinatorFixture(),
-				}}
+				})}
 			/>,
 		);
 
@@ -165,82 +146,182 @@ describe("HomeScreenView", () => {
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
 
-	it("shows a retryable Current List error when list loading fails", async () => {
-		const initialList = initialListFixture({ itemName: "Retry Milk" });
-		const load = jest
-			.fn()
-			.mockRejectedValueOnce(new Error("offline"))
-			.mockResolvedValueOnce(initialList);
-
-		render(
-			<HomeScreenView
-				currentMemberName="Avery Chen"
-				content={{
-					status: "ready",
-					activeMemberName: "Avery Chen",
-					resourceKey: "current-list:1",
-					dataSource: activeListDataSourceFixture({ load }),
-					syncCoordinator: syncCoordinatorFixture(),
-				}}
-			/>,
+	it("uses active Member fallback name for checked Item display", async () => {
+		const content = readyContent({
+			initialList: initialListFixture({ checked: true }),
+		});
+		content.activeMember.displayName = null;
+		content.members = content.members.map((member) =>
+			member.userId === content.activeMember.userId
+				? { ...member, displayName: null }
+				: member,
 		);
 
+		render(<HomeScreenView currentMemberName="Avery Chen" content={content} />);
+
 		await waitFor(() =>
-			expect(screen.getByText("Current List unavailable")).toBeTruthy(),
+			expect(screen.getByText("Checked by Avery Chen")).toBeTruthy(),
+		);
+	});
+
+	it("shows a retryable List error when list loading fails", async () => {
+		const content = readyContent();
+		jest
+			.mocked(content.listService.getList)
+			.mockRejectedValueOnce(new Error("offline"))
+			.mockResolvedValueOnce(listFixture());
+
+		render(<HomeScreenView currentMemberName="Avery Chen" content={content} />);
+
+		await waitFor(() =>
+			expect(screen.getByText("List unavailable")).toBeTruthy(),
 		);
 		fireEvent.press(screen.getByText("Try again"));
 
-		await waitFor(() => expect(screen.getByText("Retry Milk")).toBeTruthy());
-		expect(load).toHaveBeenCalledTimes(2);
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		expect(content.listService.getList).toHaveBeenCalledTimes(2);
 	});
 
-	it("ignores stale Current List loads after the resource changes", async () => {
-		const staleLoad = deferred<ReturnType<typeof initialListFixture>>();
-		const freshLoad = deferred<ReturnType<typeof initialListFixture>>();
+	it("loads the default List by explicit listId after active Household context exists", async () => {
+		const content = readyContent();
+
+		render(<HomeScreenView currentMemberName="Avery Chen" content={content} />);
+
+		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+		expect(content.listService.getList).toHaveBeenCalledWith({
+			listId: DEFAULT_LIST_ID,
+		});
+		expect(content.itemService.listItems).toHaveBeenCalledWith({
+			listId: DEFAULT_LIST_ID,
+		});
+	});
+
+	it("uses explicit listId for List operations", async () => {
+		const addItem = jest
+			.fn()
+			.mockResolvedValue(itemFixture({ id: "itm_eggs", name: "Eggs" }));
+		const setItemChecked = jest.fn().mockResolvedValue(undefined);
+		const content = readyContent({
+			itemService: itemServiceFixture({ addItem, setItemChecked }),
+		});
+
+		render(<HomeScreenView currentMemberName="Avery Chen" content={content} />);
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+
+		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Eggs");
+		await act(async () => {
+			fireEvent.press(screen.getByText("Add"));
+		});
+		await act(async () => {
+			fireEvent.press(screen.getByRole("checkbox", { name: "Eggs" }));
+		});
+
+		expect(addItem).toHaveBeenCalledWith({
+			listId: DEFAULT_LIST_ID,
+			userId: "usr_avery",
+			name: "Eggs",
+		});
+		expect(setItemChecked).toHaveBeenCalledWith({
+			listId: DEFAULT_LIST_ID,
+			itemId: "itm_eggs",
+			userId: "usr_avery",
+			checked: true,
+		});
+	});
+
+	it("ignores stale List loads after the Household resource changes", async () => {
+		const staleLoad = deferred<ReturnType<typeof listFixture>>();
+		const freshLoad = deferred<ReturnType<typeof listFixture>>();
 		const { rerender } = render(
 			<HomeScreenView
 				currentMemberName="Avery Chen"
-				content={{
-					status: "ready",
-					activeMemberName: "Avery Chen",
-					resourceKey: "current-list:1",
-					dataSource: activeListDataSourceFixture({
-						load: jest.fn(() => staleLoad.promise),
+				content={readyContent({
+					resourceKey: "active-household:1",
+					listService: listServiceFixture({
+						getList: jest.fn(() => staleLoad.promise),
 					}),
-					syncCoordinator: syncCoordinatorFixture(),
-				}}
+				})}
 			/>,
 		);
 
 		rerender(
 			<HomeScreenView
 				currentMemberName="Avery Chen"
-				content={{
-					status: "ready",
-					activeMemberName: "Avery Chen",
-					resourceKey: "current-list:2",
-					dataSource: activeListDataSourceFixture({
-						load: jest.fn(() => freshLoad.promise),
+				content={readyContent({
+					resourceKey: "active-household:2",
+					initialList: initialListFixture({ itemName: "Fresh Eggs" }),
+					listService: listServiceFixture({
+						getList: jest.fn(() => freshLoad.promise),
 					}),
-					syncCoordinator: syncCoordinatorFixture(),
-				}}
+				})}
 			/>,
 		);
 
 		await act(async () => {
-			freshLoad.resolve(initialListFixture({ itemName: "Fresh Eggs" }));
+			freshLoad.resolve(listFixture());
 			await freshLoad.promise;
 		});
 		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
 
 		await act(async () => {
-			staleLoad.resolve(initialListFixture({ itemName: "Stale Milk" }));
+			staleLoad.resolve(listFixture({ name: "Stale" }));
 			await staleLoad.promise;
 		});
-		expect(screen.queryByText("Stale Milk")).toBeNull();
+		expect(screen.queryByText("Stale")).toBeNull();
 		expect(screen.getByText("Fresh Eggs")).toBeTruthy();
 	});
 });
+
+type ReadyContentOverrides = {
+	resourceKey?: string;
+	initialList?: ReturnType<typeof initialListFixture>;
+	listService?: ReturnType<typeof listServiceFixture>;
+	itemService?: ReturnType<typeof itemServiceFixture>;
+};
+
+function readyContent(
+	overrides: ReadyContentOverrides = {},
+): Extract<ActiveHouseholdContentState, { status: "ready" }> {
+	const initialList = overrides.initialList ?? initialListFixture();
+	return {
+		status: "ready",
+		activeMemberName: "Avery Chen",
+		household: { id: "hh_avery", name: initialList.householdName },
+		activeMember: { userId: "usr_avery", displayName: "Avery Chen" },
+		members: [
+			{
+				membershipId: "mbr_avery",
+				userId: "usr_avery",
+				role: "owner",
+				displayName: "Avery Chen",
+			},
+		],
+		resourceKey: overrides.resourceKey ?? "active-household:1",
+		listService:
+			overrides.listService ??
+			listServiceFixture({
+				getList: jest
+					.fn()
+					.mockResolvedValue(listFixture({ name: initialList.listName })),
+			}),
+		itemService:
+			overrides.itemService ??
+			itemServiceFixture({
+				listItems: jest.fn().mockResolvedValue(
+					initialList.items.map((item, index) =>
+						itemFixture({
+							id: item.id,
+							name: item.name,
+							checked: item.checked,
+							checkedByUserId: item.checked ? "usr_avery" : null,
+							position: index,
+						}),
+					),
+				),
+			}),
+		syncCoordinator: syncCoordinatorFixture(),
+	};
+}
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;

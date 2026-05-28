@@ -25,7 +25,7 @@ A named collection of Items, owned by a Household. Every Member of the Household
 _Avoid_: shopping list, board
 
 **Current List**:
-The List a Member is currently viewing or editing within the active Household.
+The List a Member is currently viewing or editing within the active Household. This is selection state, not a Household service/resource boundary.
 _Avoid_: only list, singleton list
 
 **Item**:
@@ -51,8 +51,8 @@ _Avoid_: auth session, bootstrap payload, account session
 - A **Household** owns zero or more **Lists**
 - A **List** contains zero or more **Items**
 - The active **Household** has one active **Member** and one **Current List** selection for the signed-in **User**
-- **Home** currently renders the active **Household**'s **Current List**, but active **Household** resources are owned by the signed-in Active Household controller/provider boundary rather than **Home**
-- A **Household Session** identifies one active **Household** and one active **Member**; Current List/List/Item data is loaded separately through Household data services after the session is established.
+- **Home** currently renders the active **Household**'s selected **Current List**, using the default List selection while List switching is not built. Active **Household** resources are owned by the signed-in Active Household controller/provider boundary rather than **Home**.
+- A **Household Session** identifies one active **Household** and one active **Member**; List and Item data is loaded separately by explicit List ID through Household data services after the session is established.
 
 ## Decisions in flight
 
@@ -68,7 +68,7 @@ _Avoid_: auth session, bootstrap payload, account session
 - **Soft-delete**: tombstones (`deleted_at`) on every replicated table; no hard deletes from the app; server-side GC after replicas catch up. _Decided 2026-04-29._
 - **First-run flow**: on first sign-in, server auto-creates a Household named after the User's first name (or "Untitled" if Apple didn't return one). The new Household starts with one empty List named "Groceries"; the User can rename it or invite Members later. Invitation links route through a separate accept flow. _Decided 2026-04-29; List name clarified 2026-05-13._
 - **First-run onboarding**: optional onboarding happens after the server creates or loads the User's Household, Membership, Household DB, and initial List. The server determines first-run status from directory membership state, not from which sign-in/sign-up/SSO client path fired. _Decided 2026-05-13._
-- **Initial signed-in surface**: after authentication, the app shows the Current List for the active Household, not a generic dashboard. Today the Home route renders that surface, but active Household resources are owned by the signed-in Active Household controller/provider boundary rather than Home. Future signed-in surfaces may consume the same active Household context. First-run shows the auto-created Household and an empty List state. _Decided 2026-05-10; Home boundary clarified 2026-05-22; implemented boundary documented 2026-05-25._
+- **Initial signed-in surface**: after authentication, the app shows the selected Current List for the active Household, not a generic dashboard. Today the Home route renders the default List selection by explicit List ID after active Household context exists; active Household resources are owned by the signed-in Active Household controller/provider boundary rather than Home. Future signed-in surfaces may consume the same active Household context. First-run shows the auto-created Household and an empty List state. _Decided 2026-05-10; Home boundary clarified 2026-05-22; implemented boundary documented 2026-05-25; Current List selection boundary clarified 2026-05-28._
 - **Offline active Household startup**: after a successful online Household Session load and local Household DB initialization, the app can reopen the last active Household/List while offline and accept Item changes locally. Cached Household Session state does not include Household DB auth tokens; membership and sync resume only after a fresh online Household Session load. Cached/offline startup does not start network-aware sync lifecycle work because it is not authorized to sync the Household DB. If a fresh Household Session no longer authorizes the cached Household, unsynced local changes for that Household are discarded rather than synced. _Decided 2026-05-16; cached sync lifecycle clarified 2026-05-21._
 - **Offline sync visibility**: the active Household surface should show a minimal sync status for offline, pending sync, and sync failure states; detailed conflict/recovery UI is deferred until needed. _Decided 2026-05-16._
 - **Sign-out data boundary**: signing out deletes cached Household Session metadata and local Household DB files for the signed-out User; offline Household data belongs to an active signed-in session, not the device forever. _Decided 2026-05-16._

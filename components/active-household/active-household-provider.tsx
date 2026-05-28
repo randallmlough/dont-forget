@@ -9,14 +9,10 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type {
-	ActiveListDataSource,
-	ActiveListSyncCoordinator,
-} from "@/components/active-list";
+import type { ActiveListSyncCoordinator } from "@/components/active-list";
 import { reset, track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { useLogger } from "@/lib/logger";
-
 import {
 	type ActiveHouseholdActivation,
 	type ActiveHouseholdController,
@@ -25,6 +21,8 @@ import {
 	clearSignedOutHouseholdSessionData,
 	createActiveHouseholdController,
 } from "@/lib/services/household";
+import type { ItemService } from "@/lib/services/item";
+import type { ListService } from "@/lib/services/list";
 
 export type ActiveHouseholdContentState =
 	| { status: "loading" }
@@ -32,8 +30,15 @@ export type ActiveHouseholdContentState =
 	| {
 			status: "ready";
 			activeMemberName: string;
+			household: { id: string; name: string };
+			activeMember: { userId: string; displayName: string | null };
+			members: Extract<
+				ActiveHouseholdSnapshot,
+				{ status: "ready" }
+			>["view"]["members"];
 			resourceKey: string;
-			dataSource: ActiveListDataSource;
+			listService: ListService;
+			itemService: ItemService;
 			syncCoordinator: ActiveListSyncCoordinator;
 	  };
 
@@ -254,8 +259,12 @@ function contentFromView(
 	return {
 		status: "ready",
 		activeMemberName: view.activeMemberName,
-		resourceKey: view.currentList.resourceKey,
-		dataSource: view.currentList.dataSource,
-		syncCoordinator: view.currentList.syncCoordinator,
+		household: view.household,
+		activeMember: view.activeMember,
+		members: view.members,
+		resourceKey: view.resourceKey,
+		listService: view.listService,
+		itemService: view.itemService,
+		syncCoordinator: view.syncCoordinator,
 	};
 }

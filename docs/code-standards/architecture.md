@@ -40,7 +40,7 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
 - **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. Do not name this `*-db-service`.
-- **Should** keep List and Item services separate even when the Active Household controller composes them into one Current List experience for Home to render.
+- **Should** keep List and Item services separate; route-owned List loading should call them by explicit List ID after active Household context exists.
 - **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to the Active Household controller and sync coordinator.
 
 ## Single-Responsibility Functions

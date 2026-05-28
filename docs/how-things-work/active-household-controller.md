@@ -2,55 +2,49 @@
 
 The Active Household controller owns the signed-in active Household resource graph. It is activated through the Active Household provider at the authenticated route-group boundary.
 
-Home currently renders the active Household's Current List, but Home is a consumer. It does not open, replace, sync, close, or delete Household DB resources directly.
+Home currently renders the active Household's selected Current List, but Home is a consumer. It does not open, replace, sync, close, or delete Household DB resources directly. Current List is selection state only; it is not a Household-owned service or resource boundary.
 
-## Public Boundary
+## Snapshot model
 
-- `ActiveHouseholdProvider`: mounted from `app/(app)/_layout.tsx` around signed-in routes.
-- `useActiveHousehold()`: gives screens the current content state, current Member display name, retry action, and sign-out action.
-- `createActiveHouseholdController(...)`: constructs the controller for tests and provider-owned app use.
+Controller snapshots are intentionally Household-shell-shaped:
 
-## Snapshot Model
+- `idle`: no signed-in active Household resources are available.
+- `loading`: the controller is preparing cached or fresh Household resources. It may include a previous borrowed active Household view during safe replacement.
+- `error`: active Household preparation failed, optionally with a previous borrowed view.
+- `ready`: a borrowed active Household view is available.
 
-The controller publishes these snapshots:
+The provider maps `ready` snapshots, and `loading` snapshots with a previous view, to reusable Active Household content for screens. That content contains the active Household, active Member, Members, List and Item services, a sync coordinator, and an opaque active Household resource key. It does not contain preloaded List or Item state.
 
-- `idle`: no active Household resource is published.
-- `loading`: activation or replacement is in progress; may include a previous view during safe cached-to-fresh replacement.
-- `ready`: a borrowed Active Household view is available.
-- `error`: activation failed. A previous view is kept only when it is still safe to render.
+## Boundary
 
-The provider maps `ready` snapshots, and `loading` snapshots with a previous view, to reusable Active Household content for screens. That content contains the borrowed Current List data source, but it does not contain preloaded List or Item state.
+The controller owns Household Session loading and composes the signed-in Household dependencies in one place: HouseholdStore access, List and Item services, sync fallback, and the sync coordinator. Activation publishes those app-shell resources without loading the Current List, Lists, or Items. Consumers borrow handles and never close services, stop coordinators, or delete Household DB files directly.
 
-## Resource Ownership
+Route-owned loading code chooses a List ID and calls services explicitly. Home uses `DEFAULT_LIST_ID` for now, then calls `getList({ listId })`, `listItems({ listId })`, `addItem({ listId, ... })`, and `setItemChecked({ listId, ... })` only after active Household content exists. `ActiveList` receives loaded state and explicit callbacks; it does not receive a Current List data source.
 
-The controller owns Household Session loading and composes the signed-in Household dependencies in one place: HouseholdStore access, List and Item services behind the Current List data source, and the sync coordinator. Activation publishes those app-shell resources without loading the Current List, Lists, or Items. Consumers borrow handles and never close data sources, stop coordinators, or delete Household DB files directly.
+## Replacement and stale resources
 
-Reusable Current List UI receives an `ActiveListDataSource` and sync coordinator from the provider-owned active Household view. Home calls `dataSource.load()` after the active Household view exists, then passes the loaded state to `ActiveList.Provider`. Active List may request `localWrite` or `manualRefresh` sync through the coordinator, but it does not call HouseholdStore or native sync APIs directly.
-
-## Replacement Policy
-
-Safe cached-to-fresh replacement keeps cached Current List UI writable while fresh authorized resources are prepared. When the replacement view is published, the old borrowed resource rejects new calls with a typed stale-resource error and closes only after accepted operations drain.
+Safe cached-to-fresh replacement keeps cached List UI writable while fresh authorized active Household resources are prepared. When the replacement view is published, the old borrowed resource rejects new List/Item/sync calls with a typed stale-resource error and closes only after accepted operations drain.
 
 Unauthorized cached invalidation is stricter. If a fresh Household Session proves the cached Household is unauthorized, the controller retires cached resources before deleting local data and does not keep stale Household data visible.
 
-## Sync Ownership
+## Sync ownership
 
-The Active Household controller owns when a sync coordinator exists, starts, stops, and is replaced. The coordinator owns reason-to-mode policy for one controller-owned Current List resource set:
+The Active Household controller owns when a sync coordinator exists, starts, stops, and is replaced. The coordinator owns reason-to-mode policy for one controller-owned active Household resource set:
 
-- `localWrite` and `retry` use push-local sync.
-- `manualRefresh`, `appForeground`, and `networkReconnect` use full sync.
+- cached/offline resources are not authorized for remote sync and publish offline coordinator state;
+- fresh authorized resources start the coordinator after publication;
+- local List and Item writes request coordinator sync through `localWrite` after the local service write succeeds;
+- manual refresh requests coordinator sync through `manualRefresh`, then reloads the explicit List ID.
 
-See [Sync Coordinator](./sync-coordinator.md) for retry, foreground, reconnect, offline, and failure policy.
+## Sign-out cleanup
 
-## Sign-Out
-
-The provider sign-out action runs in this order:
+The Active Household provider owns sign-out order:
 
 1. Track `user_signed_out`.
-2. Reset analytics.
+2. Reset analytics identity.
 3. Dispose the Active Household controller.
-4. Delete cached Household local DB data when cached metadata exists.
+4. Delete local Household DB files for disposed Household IDs.
 5. Clear cached Household Session metadata.
 6. Call Clerk `signOut()`.
 
-Controller disposal and local cleanup failures are logged but do not block Clerk sign-out. Duplicate sign-out presses are ignored while the first sign-out is in flight.
+If Clerk sign-out fails after local cleanup, the provider attempts to reactivate the controller with the latest auth inputs so the app can recover a valid signed-in Household view.

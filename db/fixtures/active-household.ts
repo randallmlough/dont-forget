@@ -1,5 +1,4 @@
 import type {
-	ActiveListDataSource,
 	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
@@ -7,6 +6,9 @@ import type {
 	CachedHouseholdSession,
 	HouseholdSession,
 } from "@/lib/services/household";
+import type { ActiveHouseholdDataServices } from "@/lib/services/household/active-household-data-services";
+import type { Item, ItemService } from "@/lib/services/item";
+import type { List, ListService } from "@/lib/services/list";
 
 export type HouseholdSessionFixtureOverrides = {
 	householdId?: string;
@@ -99,18 +101,77 @@ export function initialListFixture(
 	};
 }
 
-export function activeListDataSourceFixture(
-	overrides: Partial<ActiveListDataSource> = {},
-): ActiveListDataSource {
+export function listFixture(overrides: Partial<List> = {}): List {
 	return {
-		syncAuthorized: true,
-		load: jest.fn().mockResolvedValue(initialListFixture()),
-		addItem: jest.fn(),
-		setItemChecked: jest.fn(),
-		pull: jest.fn().mockResolvedValue({ changed: false }),
-		sync: jest.fn().mockResolvedValue({ changed: false }),
-		close: jest.fn().mockResolvedValue(undefined),
+		id: "lst_default_groceries",
+		householdId: "hh_avery",
+		name: "Groceries",
+		createdByUserId: "usr_avery",
+		createdAt: 1_700_000_000_000,
+		updatedAt: 1_700_000_000_000,
 		...overrides,
+	};
+}
+
+export function itemFixture(overrides: Partial<Item> = {}): Item {
+	return {
+		id: "itm_milk",
+		householdId: "hh_avery",
+		listId: "lst_default_groceries",
+		name: "Milk",
+		checked: false,
+		checkedByUserId: null,
+		position: 0,
+		createdByUserId: "usr_avery",
+		createdAt: 1_700_000_000_000,
+		updatedAt: 1_700_000_000_000,
+		...overrides,
+	};
+}
+
+export function listServiceFixture(
+	overrides: Partial<ListService> = {},
+): ListService {
+	return {
+		getList: jest.fn().mockResolvedValue(listFixture()),
+		...overrides,
+	};
+}
+
+export function itemServiceFixture(
+	overrides: Partial<ItemService> = {},
+): ItemService {
+	return {
+		listItems: jest.fn().mockResolvedValue([itemFixture()]),
+		addItem: jest.fn(),
+		setItemChecked: jest.fn().mockResolvedValue(undefined),
+		...overrides,
+	};
+}
+
+export type ActiveHouseholdDataServicesFixture = ActiveHouseholdDataServices;
+
+type ActiveHouseholdDataServicesFixtureOverrides =
+	Partial<ActiveHouseholdDataServices> & {
+		addItem?: jest.Mock;
+		setItemChecked?: jest.Mock;
+	};
+
+export function activeHouseholdDataServicesFixture(
+	overrides: ActiveHouseholdDataServicesFixtureOverrides = {},
+): ActiveHouseholdDataServicesFixture {
+	const addItem = overrides.addItem ?? jest.fn();
+	const setItemChecked =
+		overrides.setItemChecked ?? jest.fn().mockResolvedValue(undefined);
+	const itemService =
+		overrides.itemService ?? itemServiceFixture({ addItem, setItemChecked });
+
+	return {
+		listService: overrides.listService ?? listServiceFixture(),
+		itemService,
+		syncAuthorized: overrides.syncAuthorized ?? true,
+		sync: overrides.sync ?? jest.fn().mockResolvedValue({ changed: false }),
+		close: overrides.close ?? jest.fn().mockResolvedValue(undefined),
 	};
 }
 

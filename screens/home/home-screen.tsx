@@ -8,7 +8,8 @@ import {
 	useActiveHousehold,
 } from "@/components/active-household";
 import { ActiveList } from "@/components/active-list";
-import { useCurrentListLoad } from "./use-current-list-load";
+import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
+import { useListLoad } from "./use-list-load";
 
 export type HomeScreenViewProps = {
 	currentMemberName: string;
@@ -63,7 +64,7 @@ export function HomeScreenView({
 			</View>
 
 			{content.status === "ready" ? (
-				<CurrentListContent
+				<DefaultListContent
 					key={content.resourceKey}
 					currentMemberName={displayMemberName}
 					content={content}
@@ -95,15 +96,15 @@ export function HomeScreenView({
 	);
 }
 
-function CurrentListContent({
+function DefaultListContent({
 	content,
 	currentMemberName,
 }: {
 	content: Extract<ActiveHouseholdContentState, { status: "ready" }>;
 	currentMemberName: string;
 }) {
-	const currentList = useCurrentListLoad(content);
-	const loadState = currentList.state;
+	const list = useListLoad(content, DEFAULT_LIST_ID);
+	const loadState = list.state;
 
 	if (loadState.status === "loading") {
 		return (
@@ -118,10 +119,10 @@ function CurrentListContent({
 
 	if (loadState.status === "error") {
 		return (
-			<HomeStatus title="Current List unavailable" body={loadState.message}>
+			<HomeStatus title="List unavailable" body={loadState.message}>
 				<Pressable
 					accessibilityRole="button"
-					onPress={currentList.retry}
+					onPress={list.retry}
 					style={({ pressed }) => [
 						styles.retryButton,
 						pressed ? styles.retryButtonPressed : undefined,
@@ -137,9 +138,10 @@ function CurrentListContent({
 		<ActiveList.Provider
 			initialState={loadState.initialList}
 			currentMemberName={currentMemberName}
-			dataSource={content.dataSource}
+			onLoadList={loadState.actions.loadList}
+			onAddItem={loadState.actions.addItem}
+			onSetItemChecked={loadState.actions.setItemChecked}
 			syncCoordinator={content.syncCoordinator}
-			closeDataSourceOnUnmount={false}
 			manageSyncCoordinatorLifecycle={false}
 		>
 			<ActiveList.Screen>

@@ -1,19 +1,20 @@
-import type {
-	ActiveListDataSource,
-	ActiveListSyncCoordinator,
-} from "@/components/active-list";
 import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
-import { createDefaultSyncCoordinator } from "@/lib/services/sync";
+import type { ItemService } from "@/lib/services/item";
+import type { ListService } from "@/lib/services/list";
+import {
+	createDefaultSyncCoordinator,
+	type SyncCoordinator,
+} from "@/lib/services/sync";
+import { createActiveHouseholdDataServices } from "./active-household-data-services";
 import {
 	type ActiveHouseholdSession,
-	type CreateCurrentListDataSource,
+	type CreateActiveHouseholdDataServices,
 	type CreateSyncCoordinator,
 	createActiveHouseholdResourceManager,
 	type OpenedActiveHouseholdResource,
 } from "./active-household-resource-manager";
-import { createHouseholdCurrentListDataSource } from "./current-list-data-source";
 import {
 	type CachedHouseholdSession,
 	createHouseholdSessionService,
@@ -34,11 +35,19 @@ export type ActiveHouseholdSnapshot =
 
 export type ActiveHouseholdView = {
 	activeMemberName: string;
-	currentList: {
-		resourceKey: string;
-		dataSource: ActiveListDataSource;
-		syncCoordinator: ActiveListSyncCoordinator;
+	household: {
+		id: string;
+		name: string;
 	};
+	activeMember: {
+		userId: string;
+		displayName: string | null;
+	};
+	members: ActiveHouseholdSession["members"];
+	resourceKey: string;
+	listService: ListService;
+	itemService: ItemService;
+	syncCoordinator: SyncCoordinator;
 };
 
 export type ActiveHouseholdActivation = {
@@ -76,7 +85,7 @@ export type ActiveHouseholdDisposal = {
 
 export type ActiveHouseholdControllerDeps = {
 	householdSessionService?: HouseholdSessionService;
-	createCurrentListDataSource?: CreateCurrentListDataSource;
+	createDataServices?: CreateActiveHouseholdDataServices;
 	createSyncCoordinator?: CreateSyncCoordinator;
 	logger?: Logger;
 };
@@ -89,8 +98,8 @@ export function createActiveHouseholdController(
 ): ActiveHouseholdController {
 	const householdSessionService =
 		deps.householdSessionService ?? createHouseholdSessionService();
-	const createCurrentListDataSource =
-		deps.createCurrentListDataSource ?? createHouseholdCurrentListDataSource;
+	const createDataServices =
+		deps.createDataServices ?? createActiveHouseholdDataServices;
 	const createSyncCoordinator =
 		deps.createSyncCoordinator ?? createDefaultSyncCoordinator;
 	const logger = deps.logger ?? defaultLogger;
@@ -99,7 +108,7 @@ export function createActiveHouseholdController(
 	let activationRun = 0;
 	let cacheWriteQueue: Promise<void> = Promise.resolve();
 	const resources = createActiveHouseholdResourceManager({
-		createCurrentListDataSource,
+		createDataServices,
 		createSyncCoordinator,
 		logger,
 	});
@@ -152,7 +161,7 @@ export function createActiveHouseholdController(
 		publish({ status: "ready", view });
 		options.onPublished?.();
 		if (options.startSync) {
-			view.currentList.syncCoordinator.start();
+			view.syncCoordinator.start();
 		}
 
 		if (previousResource) {
@@ -443,11 +452,16 @@ function activeHouseholdViewFromOpened(
 ): ActiveHouseholdView {
 	return {
 		activeMemberName: activeMemberNameFromSession(session),
-		currentList: {
-			resourceKey: opened.resourceKey,
-			dataSource: opened.resource.dataSource,
-			syncCoordinator: opened.resource.syncCoordinator,
+		household: session.activeHousehold,
+		activeMember: {
+			userId: session.activeMember.userId,
+			displayName: session.activeMember.displayName,
 		},
+		members: session.members,
+		resourceKey: opened.resourceKey,
+		listService: opened.resource.listService,
+		itemService: opened.resource.itemService,
+		syncCoordinator: opened.resource.syncCoordinator,
 	};
 }
 

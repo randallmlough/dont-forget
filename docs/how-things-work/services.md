@@ -190,7 +190,7 @@ export type OpenHouseholdStoreConfig = {
 };
 ```
 
-Open one shared `HouseholdStore` for a Household workflow and inject it into the services that need it. For active Household UI, the Active Household controller composes one store with List and Item services and closes it through the controller-owned Current List data source. `HouseholdStore` is infrastructure, so it usually logs diagnostics but should not emit product analytics unless the store itself owns a user-visible product outcome; most product events belong in the service, screen, or data-source operation that understands user intent.
+Open one shared `HouseholdStore` for a Household workflow and inject it into the services that need it. For active Household UI, the Active Household controller composes one store with List and Item services and closes it through controller-owned active Household resources. `HouseholdStore` is infrastructure, so it usually logs diagnostics but should not emit product analytics unless the store itself owns a user-visible product outcome; most product events belong in the service or route-owned operation that understands user intent.
 
 Any app-owned store or DB wrapper that shares one native/local database handle must serialize operations through `createDatabaseOperationQueue()` from `db/utils.ts`. This includes reads, writes, sync operations, and close/delete paths. The queue is per store instance, not global. This prevents local writes and sync operations from racing on one handle, and it keeps later operations running even after one operation rejects. See the [offline Item sync post-mortem](../post-mortem/2026-05-20-offline-item-sync.md) for the original failure mode.
 
@@ -230,36 +230,41 @@ export type Item = {
 
 The owning screen maps domain records into UI contracts.
 
-## UI Data Sources
+## UI Data Loading
 
-Reusable components keep UI-facing contracts. They should not import domain services directly when that would couple them to Household Session, stores, or service factories.
+Reusable components keep UI-facing contracts. They should not import domain services directly when that would couple them to Household Session, stores, or service factories. Route-owned hooks or containers adapt domain services into component props.
 
-For active Household UI, the Active Household controller owns the composition of Household Session loading, HouseholdStore access, List and Item services behind the Current List data source, sync fallback, and sync coordinator lifecycle. Household activation does not load Lists or Items. Screens consume the Active Household controller through the authenticated app provider, then load Current List data through the borrowed `ActiveListDataSource` instead of opening or closing Household resources directly.
+For active Household UI, the Active Household controller owns the composition of Household Session loading, HouseholdStore access, List and Item services, sync fallback, and sync coordinator lifecycle. Household activation does not load Lists or Items. Screens consume the Active Household controller through the authenticated app provider, then load List and Item data by explicit List ID instead of opening or closing Household resources directly.
 
 ```txt
 lib/services/household/
   active-household-controller.ts
+  active-household-data-services.ts
+  active-household-resource-lease.ts
 
 components/active-household/
   active-household-provider.tsx
+
+screens/home/
+  use-list-load.ts
 ```
 
-Controller-owned data sources may adapt List and Item services into reusable UI component contracts:
+Route-owned List loading adapts List and Item services into reusable UI component contracts:
 
 ```ts
 const list = await listService.getList({ listId });
 const items = await itemService.listItems({ listId });
 
 return {
-  householdName: session.activeHousehold.name,
+  householdName: activeHousehold.household.name,
   listName: list.name,
   items: items.map(toActiveListItem),
 };
 ```
 
-The reusable Current List component contract is named `ActiveListDataSource`; do not reintroduce adapter aliases at the UI boundary. Treat the currently viewed List as controller-owned selection state inside the active Household, not as proof that a Household owns only one List.
+Current List is selection state only. Today Home selects `DEFAULT_LIST_ID`; future List switching should change the selected `listId`, not introduce a new Household-owned Current List service or data source. `ActiveList` receives loaded state and explicit callbacks such as `onLoadList`, `onAddItem`, and `onSetItemChecked`.
 
-During safe cached-to-fresh replacement, the controller may publish a loading snapshot with the previous Active Household view. The previous Current List remains writable until a replacement view is published. After replacement, the old borrowed resource rejects new calls with a typed stale-resource error and closes only after accepted operations drain.
+During safe cached-to-fresh replacement, the controller may publish a loading snapshot with the previous Active Household view. The previous List UI remains writable until a replacement view is published. After replacement, the old borrowed active Household resource rejects new List/Item/sync calls with a typed stale-resource error and closes only after accepted operations drain.
 
 If fresh authorization proves the cached Household is unauthorized, the controller retires cached resources before deleting local data and does not keep stale Household data visible.
 
@@ -299,16 +304,6 @@ Preferred naming:
 
 Cached Household Sessions must not store Household DB auth tokens. Offline active Household startup may use cached non-secret metadata and the local Household DB file; push/pull authorization resumes only after a fresh online Household Session is obtained.
 
-## Initial Migration Checklist
+## Historical Migration Note
 
-Historical initial Home/List/Item migration checklist:
-
-1. Create `lib/services/household/household-store.ts` from the existing Household DB wrapper.
-2. Create `lib/services/household/household-session-service.ts` from bootstrap client and offline cache behavior.
-3. Create `lib/services/list/list-service.ts` for List metadata operations.
-4. Create `lib/services/item/item-service.ts` for Item operations.
-5. Use `lib/services/household/current-list-data-source.ts` to compose Household Session shell data, HouseholdStore, ListService, and ItemService for the Current List UI contract after active Household context exists.
-6. Keep the Active List UI boundary on `ActiveListDataSource` naming.
-7. Hard-cut imports away from touched `lib/app/*` files; do not add compatibility wrappers.
-8. Add the custom ESLint service-boundary rule.
-9. Run focused tests for Home, Active List, and migrated services, then `make verify` when practical.
+The initial Home/List/Item migration introduced the domain services and HouseholdStore. The current boundary supersedes the old Current List data-source helper: active Household infrastructure exposes Household-scoped List and Item services, and route-owned code loads the selected List by explicit List ID.

@@ -7,10 +7,14 @@ import type { ActiveHouseholdSnapshot } from "./active-household-controller";
 import type { HouseholdSessionService } from "./household-session-service";
 
 export {
-	activeListDataSourceFixture,
+	activeHouseholdDataServicesFixture,
 	cachedHouseholdSessionFixture,
 	householdSessionFixture,
 	initialListFixture,
+	itemFixture,
+	itemServiceFixture,
+	listFixture,
+	listServiceFixture,
 	syncCoordinatorFixture,
 } from "@/db/fixtures/active-household";
 export { deferred, waitForAsync } from "@/lib/test/async";

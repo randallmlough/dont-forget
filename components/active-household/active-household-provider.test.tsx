@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
 import {
-	activeListDataSourceFixture,
+	activeHouseholdDataServicesFixture,
 	syncCoordinatorFixture,
 } from "@/db/fixtures/active-household";
 import type {
@@ -68,7 +68,7 @@ describe("ActiveHouseholdProvider", () => {
 		});
 
 		await waitFor(() =>
-			expect(screen.getByText("current-list:1")).toBeTruthy(),
+			expect(screen.getByText("active-household:1")).toBeTruthy(),
 		);
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 	});
@@ -116,7 +116,7 @@ describe("ActiveHouseholdProvider", () => {
 		});
 
 		await waitFor(() =>
-			expect(screen.getByText("current-list:1")).toBeTruthy(),
+			expect(screen.getByText("active-household:1")).toBeTruthy(),
 		);
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 	});
@@ -135,7 +135,7 @@ describe("ActiveHouseholdProvider", () => {
 			});
 		});
 		await waitFor(() =>
-			expect(screen.getByText("current-list:1")).toBeTruthy(),
+			expect(screen.getByText("active-household:1")).toBeTruthy(),
 		);
 
 		act(() => {
@@ -143,7 +143,7 @@ describe("ActiveHouseholdProvider", () => {
 		});
 
 		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
-		expect(screen.queryByText("current-list:1")).toBeNull();
+		expect(screen.queryByText("active-household:1")).toBeNull();
 	});
 
 	it("exposes error state and retries with the latest auth inputs", async () => {
@@ -181,7 +181,7 @@ describe("ActiveHouseholdProvider", () => {
 				view: activeHouseholdViewFixture(),
 			});
 		});
-		expect(screen.getByText("current-list:1")).toBeTruthy();
+		expect(screen.getByText("active-household:1")).toBeTruthy();
 	});
 
 	it("signs out in analytics, controller, local cleanup, Clerk order", async () => {
@@ -622,13 +622,23 @@ function activeHouseholdControllerFixture({
 }
 
 function activeHouseholdViewFixture() {
+	const dataServices = activeHouseholdDataServicesFixture();
 	return {
 		activeMemberName: "Avery Chen",
-		currentList: {
-			resourceKey: "current-list:1",
-			dataSource: activeListDataSourceFixture(),
-			syncCoordinator: syncCoordinatorFixture(),
-		},
+		household: { id: "hh_avery", name: "Avery" },
+		activeMember: { userId: "usr_avery", displayName: "Avery Chen" },
+		members: [
+			{
+				membershipId: "mbr_avery",
+				userId: "usr_avery",
+				role: "owner" as const,
+				displayName: "Avery Chen",
+			},
+		],
+		resourceKey: "active-household:1",
+		listService: dataServices.listService,
+		itemService: dataServices.itemService,
+		syncCoordinator: syncCoordinatorFixture(),
 	};
 }
 

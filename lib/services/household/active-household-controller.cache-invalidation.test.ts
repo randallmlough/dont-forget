@@ -12,20 +12,13 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const freshSession = h.deferred<h.HouseholdSession>();
 		const events: string[] = [];
-		const cachedDataSource = h.activeListDataSourceFixture({
+		const cachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Old" })),
 			close: jest.fn(async () => {
 				events.push("close:cached");
 			}),
 		});
-		const freshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "New" })),
-		});
+		const freshDataServices = h.activeHouseholdDataServicesFixture({});
 		const sessionService = h.sessionServiceFixture({
 			readCachedHouseholdSession: jest.fn().mockResolvedValue(cached),
 			getHouseholdSession: jest.fn(() => freshSession.promise),
@@ -41,10 +34,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: sessionService,
-			createCurrentListDataSource: jest
+			createDataServices: jest
 				.fn()
-				.mockReturnValueOnce(cachedDataSource)
-				.mockReturnValueOnce(freshDataSource),
+				.mockReturnValueOnce(cachedDataServices)
+				.mockReturnValueOnce(freshDataServices),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -59,7 +52,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		await h.waitForAsync(() =>
 			expect(controller.getSnapshot()).toMatchObject({
 				status: "ready",
-				view: { currentList: { resourceKey: "current-list:1" } },
+				view: { resourceKey: "active-household:1" },
 			}),
 		);
 
@@ -78,7 +71,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		).toHaveBeenCalledWith(cached, fresh);
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { resourceKey: "current-list:2" } },
+			view: { resourceKey: "active-household:2" },
 		});
 	});
 
@@ -93,17 +86,13 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const freshSession = h.deferred<h.HouseholdSession>();
 		const events: string[] = [];
-		const cachedDataSource = h.activeListDataSourceFixture({
+		const cachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
 			close: jest.fn(async () => {
 				events.push("close:cached");
 			}),
 		});
-		const freshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "New" })),
-		});
+		const freshDataServices = h.activeHouseholdDataServicesFixture({});
 		const cachedCoordinator = h.syncCoordinatorFixture();
 		cachedCoordinator.stop = jest.fn(async () => {
 			events.push("stop:cached");
@@ -123,10 +112,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: sessionService,
-			createCurrentListDataSource: jest
+			createDataServices: jest
 				.fn()
-				.mockReturnValueOnce(cachedDataSource)
-				.mockReturnValueOnce(freshDataSource),
+				.mockReturnValueOnce(cachedDataServices)
+				.mockReturnValueOnce(freshDataServices),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValueOnce(cachedCoordinator)
@@ -170,7 +159,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdName: "New",
 		});
 		const freshSession = h.deferred<h.HouseholdSession>();
-		const cachedDataSource = h.activeListDataSourceFixture({
+		const cachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
 			close: jest.fn(async () => {
 				throw new Error("close failed");
@@ -185,7 +174,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: sessionService,
-			createCurrentListDataSource: jest.fn().mockReturnValue(cachedDataSource),
+			createDataServices: jest.fn().mockReturnValue(cachedDataServices),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -226,17 +215,11 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdName: "New",
 		});
 		const freshSession = h.deferred<h.HouseholdSession>();
-		const firstCachedDataSource = h.activeListDataSourceFixture({
+		const firstCachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Old" })),
 		});
-		const secondCachedDataSource = h.activeListDataSourceFixture({
+		const secondCachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Old" })),
 		});
 		const sessionService = h.sessionServiceFixture({
 			readCachedHouseholdSession: jest.fn().mockResolvedValue(cached),
@@ -250,10 +233,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: sessionService,
-			createCurrentListDataSource: jest
+			createDataServices: jest
 				.fn()
-				.mockReturnValueOnce(firstCachedDataSource)
-				.mockReturnValueOnce(secondCachedDataSource),
+				.mockReturnValueOnce(firstCachedDataServices)
+				.mockReturnValueOnce(secondCachedDataServices),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -267,7 +250,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { resourceKey: "current-list:1" } },
+			view: { resourceKey: "active-household:1" },
 		});
 
 		const activation = controller.activate({
@@ -300,17 +283,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdId: "hh_new",
 			householdName: "New",
 		});
-		const cachedDataSource = h.activeListDataSourceFixture({
+		const cachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Old" })),
 		});
-		const freshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "New" })),
-		});
+		const freshDataServices = h.activeHouseholdDataServicesFixture({});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: h.sessionServiceFixture({
 				readCachedHouseholdSession: jest
@@ -322,10 +298,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 					.fn()
 					.mockResolvedValue(cached),
 			}),
-			createCurrentListDataSource: jest
+			createDataServices: jest
 				.fn()
-				.mockReturnValueOnce(cachedDataSource)
-				.mockReturnValueOnce(freshDataSource),
+				.mockReturnValueOnce(cachedDataServices)
+				.mockReturnValueOnce(freshDataServices),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -349,11 +325,15 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 
 		await expect(
-			cachedSnapshot.view.currentList.dataSource.addItem("Milk"),
-		).rejects.toMatchObject({ code: "stale_current_list_resource" });
+			cachedSnapshot.view.itemService.addItem({
+				listId: "lst_default_groceries",
+				userId: "usr_avery",
+				name: "Milk",
+			}),
+		).rejects.toMatchObject({ code: "stale_active_household_resource" });
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { resourceKey: "current-list:2" } },
+			view: { resourceKey: "active-household:2" },
 		});
 	});
 
@@ -367,17 +347,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdName: "New",
 		});
 		const deleteCached = h.deferred<void>();
-		const cachedDataSource = h.activeListDataSourceFixture({
+		const cachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Old" })),
 		});
-		const freshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "New" })),
-		});
+		const freshDataServices = h.activeHouseholdDataServicesFixture({});
 		const sessionService = h.sessionServiceFixture({
 			readCachedHouseholdSession: jest
 				.fn()
@@ -393,10 +366,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: sessionService,
-			createCurrentListDataSource: jest
+			createDataServices: jest
 				.fn()
-				.mockReturnValueOnce(cachedDataSource)
-				.mockReturnValueOnce(freshDataSource),
+				.mockReturnValueOnce(cachedDataServices)
+				.mockReturnValueOnce(freshDataServices),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -425,15 +398,19 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		);
 
 		await expect(
-			cachedSnapshot.view.currentList.dataSource.addItem("Milk"),
-		).rejects.toMatchObject({ code: "stale_current_list_resource" });
-		expect(freshDataSource.load).not.toHaveBeenCalled();
+			cachedSnapshot.view.itemService.addItem({
+				listId: "lst_default_groceries",
+				userId: "usr_avery",
+				name: "Milk",
+			}),
+		).rejects.toMatchObject({ code: "stale_active_household_resource" });
+		expect(freshDataServices.listService.getList).not.toHaveBeenCalled();
 
 		deleteCached.resolve(undefined);
 		await activation;
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { resourceKey: "current-list:2" } },
+			view: { resourceKey: "active-household:2" },
 		});
 	});
 
@@ -451,23 +428,12 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdName: "Second",
 		});
 		const closeCached = h.deferred<void>();
-		const cachedDataSource = h.activeListDataSourceFixture({
+		const cachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Old" })),
 			close: jest.fn(() => closeCached.promise),
 		});
-		const firstFreshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "First" })),
-		});
-		const secondFreshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Second" })),
-		});
+		const firstFreshDataServices = h.activeHouseholdDataServicesFixture({});
+		const secondFreshDataServices = h.activeHouseholdDataServicesFixture({});
 		const sessionService = h.sessionServiceFixture({
 			readCachedHouseholdSession: jest
 				.fn()
@@ -484,11 +450,11 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: sessionService,
-			createCurrentListDataSource: jest
+			createDataServices: jest
 				.fn()
-				.mockReturnValueOnce(cachedDataSource)
-				.mockReturnValueOnce(secondFreshDataSource)
-				.mockReturnValueOnce(firstFreshDataSource),
+				.mockReturnValueOnce(cachedDataServices)
+				.mockReturnValueOnce(secondFreshDataServices)
+				.mockReturnValueOnce(firstFreshDataServices),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -506,7 +472,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(cachedDataSource.close).toHaveBeenCalled(),
+			expect(cachedDataServices.close).toHaveBeenCalled(),
 		);
 
 		const freshActivation = controller.activate({
@@ -525,7 +491,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		).not.toHaveBeenCalled();
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { resourceKey: expect.any(String) } },
+			view: { resourceKey: expect.any(String) },
 		});
 	});
 
@@ -543,17 +509,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdName: "Second",
 		});
 		const deleteCached = h.deferred<void>();
-		const cachedDataSource = h.activeListDataSourceFixture({
+		const cachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Old" })),
 		});
-		const secondFreshDataSource = h.activeListDataSourceFixture({
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Second" })),
-		});
+		const secondFreshDataServices = h.activeHouseholdDataServicesFixture({});
 		const sessionService = h.sessionServiceFixture({
 			readCachedHouseholdSession: jest
 				.fn()
@@ -573,10 +532,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: sessionService,
-			createCurrentListDataSource: jest
+			createDataServices: jest
 				.fn()
-				.mockReturnValueOnce(cachedDataSource)
-				.mockReturnValueOnce(secondFreshDataSource),
+				.mockReturnValueOnce(cachedDataServices)
+				.mockReturnValueOnce(secondFreshDataServices),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -612,7 +571,7 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		).not.toHaveBeenCalled();
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { currentList: { resourceKey: expect.any(String) } },
+			view: { resourceKey: expect.any(String) },
 		});
 	});
 
@@ -625,15 +584,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			householdId: "hh_new",
 			householdName: "New",
 		});
-		const cachedDataSource = h.activeListDataSourceFixture({
+		const cachedDataServices = h.activeHouseholdDataServicesFixture({
 			syncAuthorized: false,
-			load: jest
-				.fn()
-				.mockResolvedValue(h.initialListFixture({ householdName: "Old" })),
 		});
-		const freshDataSource = h.activeListDataSourceFixture({
-			load: jest.fn().mockRejectedValue(new Error("fresh open failed")),
-		});
+		const openFresh = new Error("fresh open failed");
 		const sessionService = h.sessionServiceFixture({
 			readCachedHouseholdSession: jest.fn().mockResolvedValue(cached),
 			getHouseholdSession: jest.fn().mockResolvedValue(fresh),
@@ -643,10 +597,12 @@ describe("createActiveHouseholdController cache invalidation", () => {
 		});
 		const controller = h.createActiveHouseholdController({
 			householdSessionService: sessionService,
-			createCurrentListDataSource: jest
+			createDataServices: jest
 				.fn()
-				.mockReturnValueOnce(cachedDataSource)
-				.mockReturnValueOnce(freshDataSource),
+				.mockReturnValueOnce(cachedDataServices)
+				.mockImplementationOnce(() => {
+					throw openFresh;
+				}),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -659,7 +615,10 @@ describe("createActiveHouseholdController cache invalidation", () => {
 			signedIn: true,
 		});
 
-		expect(controller.getSnapshot()).toMatchObject({ status: "ready" });
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "error",
+			message: "Unable to prepare your Household. Please try again.",
+		});
 		expect(
 			sessionService.deleteCachedHouseholdSessionLocalData,
 		).toHaveBeenCalledWith(cached);

@@ -304,6 +304,7 @@ describe("createItemService", () => {
 				name: "Eggs",
 			});
 			await service.setItemChecked({
+				listId: "lst_weekend",
 				itemId: milk.id,
 				userId: "usr_avery",
 				checked: true,
@@ -337,11 +338,63 @@ describe("createItemService", () => {
 				"item_checked_state_changed",
 				{
 					household_id: "hh_avery",
+					list_id: "lst_weekend",
 					item_id: milk.id,
 					user_id: "usr_avery",
 					checked: true,
 				},
 			);
+		} finally {
+			await household.close();
+		}
+	});
+
+	it("rejects checked state changes when the Item is outside the explicit List", async () => {
+		const household = await createTestHouseholdDb();
+		const analytics = analyticsFixture();
+
+		try {
+			await household.db.insert(lists).values([
+				{
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+				},
+				{
+					id: "lst_hardware",
+					name: "Hardware",
+					createdByUserId: "usr_avery",
+				},
+			]);
+			await household.db.insert(items).values({
+				id: "itm_milk",
+				listId: "lst_weekend",
+				name: "Milk",
+				position: 0,
+				createdByUserId: "usr_avery",
+			});
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics,
+			});
+
+			await expect(
+				service.setItemChecked({
+					listId: "lst_hardware",
+					itemId: "itm_milk",
+					userId: "usr_avery",
+					checked: true,
+				}),
+			).rejects.toThrow("Item not found in List");
+
+			await expect(
+				household.db.query.itemChecks.findFirst({
+					where: (table, { eq }) => eq(table.itemId, "itm_milk"),
+				}),
+			).resolves.toBeUndefined();
+			expect(analytics.track).not.toHaveBeenCalled();
 		} finally {
 			await household.close();
 		}
@@ -376,11 +429,13 @@ describe("createItemService", () => {
 			});
 
 			await service.setItemChecked({
+				listId: "lst_weekend",
 				itemId: milk.id,
 				userId: "usr_avery",
 				checked: true,
 			});
 			await service.setItemChecked({
+				listId: "lst_weekend",
 				itemId: milk.id,
 				userId: "usr_avery",
 				checked: false,
@@ -408,6 +463,7 @@ describe("createItemService", () => {
 				"item_checked_state_changed",
 				{
 					household_id: "hh_avery",
+					list_id: "lst_weekend",
 					item_id: milk.id,
 					user_id: "usr_avery",
 					checked: false,
@@ -433,6 +489,7 @@ describe("createItemService", () => {
 
 		await expect(
 			service.setItemChecked({
+				listId: "lst_weekend",
 				itemId: "itm_milk",
 				userId: "usr_avery",
 				checked: true,

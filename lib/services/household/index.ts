@@ -9,9 +9,10 @@ export {
 } from "./active-household-controller";
 
 export {
-	createHouseholdCurrentListDataSource,
-	type HouseholdCurrentListDataSourceConfig,
-} from "./current-list-data-source";
+	type ActiveHouseholdDataServices,
+	type ActiveHouseholdDataServicesConfig,
+	createActiveHouseholdDataServices,
+} from "./active-household-data-services";
 
 export {
 	type CachedHouseholdSession,

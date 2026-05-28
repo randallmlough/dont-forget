@@ -33,6 +33,7 @@ export type EventMap = {
 	};
 	item_checked_state_changed: {
 		household_id: string;
+		list_id: string;
 		item_id: string;
 		user_id: string;
 		checked: boolean;

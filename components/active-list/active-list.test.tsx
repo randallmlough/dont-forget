@@ -8,7 +8,6 @@ import {
 
 import {
 	ActiveList,
-	type ActiveListDataSource,
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
@@ -34,6 +33,16 @@ const emptyList: ActiveListInitialState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [],
+};
+
+type MemoryListActions = {
+	syncAuthorized: boolean;
+	load: () => Promise<ActiveListInitialState>;
+	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
+	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
+	pull: () => Promise<{ changed: boolean }>;
+	sync: () => Promise<{ changed: boolean }>;
+	close: () => Promise<void>;
 };
 
 type TestSyncCoordinator = Omit<ActiveListSyncCoordinator, "requestSync"> & {
@@ -92,7 +101,7 @@ describe("ActiveList", () => {
 			return null;
 		});
 
-		renderActiveList(emptyList, memoryDataSource(emptyList), coordinator);
+		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
 
 		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
 		await act(async () => {
@@ -115,7 +124,7 @@ describe("ActiveList", () => {
 	it("shows offline sync state when sync is not authorized", () => {
 		renderActiveList(
 			emptyList,
-			memoryDataSource(emptyList, { syncAuthorized: false }),
+			memoryListActions(emptyList, { syncAuthorized: false }),
 			passiveSyncCoordinator("offline"),
 		);
 
@@ -125,9 +134,9 @@ describe("ActiveList", () => {
 	it("requests local-write sync after adding an Item", async () => {
 		const coordinator = controllableSyncCoordinator("synced");
 		const sync = jest.fn(async () => ({ changed: false }));
-		const dataSource = memoryDataSource(emptyList, { sync });
+		const actions = memoryListActions(emptyList, { sync });
 
-		renderActiveList(emptyList, dataSource, coordinator);
+		renderActiveList(emptyList, actions, coordinator);
 
 		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
 		await act(async () => {
@@ -145,13 +154,12 @@ describe("ActiveList", () => {
 	it("requests manual sync before refreshing the List view", async () => {
 		let state = emptyList;
 		const coordinator = controllableSyncCoordinator("synced");
-		const dataSource = memoryDataSource(emptyList, {
+		const actions = memoryListActions(emptyList, {
 			async load() {
 				return state;
 			},
 		});
-		const load = jest.spyOn(dataSource, "load");
-		const pull = jest.spyOn(dataSource, "pull");
+		const load = jest.spyOn(actions, "load");
 
 		coordinator.requestSync.mockImplementationOnce(async () => {
 			coordinator.emit("pending");
@@ -171,7 +179,7 @@ describe("ActiveList", () => {
 			return { changed: true };
 		});
 
-		renderActiveList(emptyList, dataSource, coordinator);
+		renderActiveList(emptyList, actions, coordinator);
 
 		await act(async () => {
 			fireEvent.press(screen.getByText("Refresh"));
@@ -183,16 +191,15 @@ describe("ActiveList", () => {
 			reason: "manualRefresh",
 		});
 		expect(load).toHaveBeenCalledTimes(1);
-		expect(pull).not.toHaveBeenCalled();
 	});
 
 	it("reloads visible List rows after coordinator-owned sync completes", async () => {
 		let state = emptyList;
 		const coordinator = controllableSyncCoordinator("synced");
 		const load = jest.fn(async () => state);
-		const dataSource = memoryDataSource(emptyList, { load });
+		const actions = memoryListActions(emptyList, { load });
 
-		renderActiveList(emptyList, dataSource, coordinator);
+		renderActiveList(emptyList, actions, coordinator);
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 
 		state = {
@@ -221,7 +228,7 @@ describe("ActiveList", () => {
 		const load = jest
 			.fn<Promise<ActiveListInitialState>, []>()
 			.mockRejectedValueOnce(new Error("load failed"));
-		const dataSource = memoryDataSource(emptyList, {
+		const actions = memoryListActions(emptyList, {
 			load,
 		});
 		const coordinator = controllableSyncCoordinator("synced");
@@ -232,7 +239,7 @@ describe("ActiveList", () => {
 			return { changed: true };
 		});
 
-		renderActiveList(emptyList, dataSource, coordinator);
+		renderActiveList(emptyList, actions, coordinator);
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 
 		await act(async () => {
@@ -264,7 +271,7 @@ describe("ActiveList", () => {
 			throw syncError;
 		});
 
-		renderActiveList(emptyList, memoryDataSource(emptyList), coordinator);
+		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 
 		await act(async () => {
@@ -292,7 +299,7 @@ describe("ActiveList", () => {
 		});
 		const { unmount } = renderActiveList(
 			emptyList,
-			memoryDataSource(emptyList, { load }),
+			memoryListActions(emptyList, { load }),
 			coordinator,
 		);
 
@@ -313,9 +320,8 @@ describe("ActiveList", () => {
 		expect(load).not.toHaveBeenCalled();
 	});
 
-	it("waits for sync coordinator stop before closing an owned data source", async () => {
+	it("stops a managed sync coordinator on unmount", async () => {
 		const stopSync = deferred<void>();
-		const close = jest.fn(async () => undefined);
 		const coordinator = passiveSyncCoordinator();
 		jest
 			.mocked(coordinator.stop)
@@ -323,29 +329,29 @@ describe("ActiveList", () => {
 
 		const { unmount } = renderActiveList(
 			emptyList,
-			memoryDataSource(emptyList, { close }),
+			memoryListActions(emptyList),
 			coordinator,
 		);
 
 		unmount();
 
 		await waitFor(() => expect(coordinator.stop).toHaveBeenCalledTimes(1));
-		expect(close).not.toHaveBeenCalled();
 		stopSync.resolve(undefined);
-		await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 	});
 });
 
 function renderActiveList(
 	initialState: ActiveListInitialState,
-	dataSource = memoryDataSource(initialState),
+	actions = memoryListActions(initialState),
 	syncCoordinator = passiveSyncCoordinator(),
 ) {
 	return render(
 		<ActiveList.Provider
 			initialState={initialState}
 			currentMemberName="Avery Chen"
-			dataSource={dataSource}
+			onLoadList={actions.load}
+			onAddItem={actions.addItem}
+			onSetItemChecked={actions.setItemChecked}
 			syncCoordinator={syncCoordinator}
 		>
 			<ActiveList.Screen>
@@ -405,10 +411,10 @@ function controllableSyncCoordinator(
 	};
 }
 
-function memoryDataSource(
+function memoryListActions(
 	initialState: ActiveListInitialState,
-	overrides: Partial<ActiveListDataSource> = {},
-): ActiveListDataSource {
+	overrides: Partial<MemoryListActions> = {},
+): MemoryListActions {
 	let state = initialState;
 	let nextItem = initialState.items.length + 1;
 

@@ -3,10 +3,11 @@ import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import type {
-	ActiveListDataSource,
 	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
+import type { ItemService } from "@/lib/services/item";
+import type { ListService } from "@/lib/services/list";
 import { HomeScreenView } from "@/screens/home/home-screen";
 
 const emptyHomeList: ActiveListInitialState = {
@@ -96,55 +97,92 @@ function readyContent(initialList: ActiveListInitialState) {
 	return {
 		status: "ready" as const,
 		activeMemberName: "Avery Chen",
+		household: { id: "hh_story", name: initialList.householdName },
+		activeMember: { userId: "usr_avery", displayName: "Avery Chen" },
+		members: [
+			{
+				membershipId: "mbr_avery",
+				userId: "usr_avery",
+				role: "owner" as const,
+				displayName: "Avery Chen",
+			},
+		],
 		resourceKey: `story:${initialList.householdName}:${initialList.listName}`,
-		dataSource: storyDataSource(initialList),
+		...storyServices(initialList),
 		syncCoordinator: storySyncCoordinator(),
 	};
 }
 
-function storyDataSource(
-	initialList: ActiveListInitialState,
-): ActiveListDataSource {
+function storyServices(initialList: ActiveListInitialState): {
+	listService: ListService;
+	itemService: ItemService;
+} {
 	let state = initialList;
 	let nextItem = initialList.items.length + 1;
 
 	return {
-		syncAuthorized: true,
-		async load() {
-			return state;
+		listService: {
+			async getList() {
+				return {
+					id: "lst_default_groceries",
+					householdId: "hh_story",
+					name: state.listName,
+					createdByUserId: "usr_avery",
+					createdAt: 1,
+					updatedAt: 1,
+				};
+			},
 		},
-		async addItem(name) {
-			const item = {
-				id: `story-item-${nextItem}`,
-				name,
-				checked: false,
-				checkedByMemberName: null,
-			};
-			nextItem += 1;
-			state = { ...state, items: [...state.items, item] };
-			return item;
+		itemService: {
+			async listItems() {
+				return state.items.map((item, position) => ({
+					id: item.id,
+					householdId: "hh_story",
+					listId: "lst_default_groceries",
+					name: item.name,
+					checked: item.checked,
+					checkedByUserId: item.checked ? "usr_avery" : null,
+					position,
+					createdByUserId: "usr_avery",
+					createdAt: 1,
+					updatedAt: 1,
+				}));
+			},
+			async addItem({ name }) {
+				const item = {
+					id: `story-item-${nextItem}`,
+					householdId: "hh_story",
+					listId: "lst_default_groceries",
+					name,
+					checked: false,
+					checkedByUserId: null,
+					position: nextItem,
+					createdByUserId: "usr_avery",
+					createdAt: 1,
+					updatedAt: 1,
+				};
+				nextItem += 1;
+				state = {
+					...state,
+					items: [...state.items, { ...item, checkedByMemberName: null }],
+				};
+				return item;
+			},
+			async setItemChecked({ itemId, checked }) {
+				state = {
+					...state,
+					items: state.items.map((item) =>
+						item.id === itemId
+							? {
+									...item,
+									checked,
+									checkedByMemberName: checked ? "Avery Chen" : null,
+								}
+							: item,
+					),
+				};
+			},
 		},
-		async setItemChecked(itemId, checked) {
-			state = {
-				...state,
-				items: state.items.map((item) =>
-					item.id === itemId
-						? {
-								...item,
-								checked,
-								checkedByMemberName: checked ? "Avery Chen" : null,
-							}
-						: item,
-				),
-			};
-		},
-		async pull() {
-			return { changed: false };
-		},
-		async sync() {
-			return { changed: false };
-		},
-		async close() {},
 	};
 }
 

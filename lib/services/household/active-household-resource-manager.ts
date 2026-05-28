@@ -1,13 +1,13 @@
-import type {
-	ActiveListDataSource,
-	ActiveListSyncCoordinator,
-} from "@/components/active-list";
 import type { Logger } from "@/lib/logger";
-import type { HouseholdCurrentListDataSourceConfig } from "./current-list-data-source";
+import type { SyncCoordinator } from "@/lib/services/sync";
+import type {
+	ActiveHouseholdDataServices,
+	ActiveHouseholdDataServicesConfig,
+} from "./active-household-data-services";
 import {
-	createCurrentListResourceLease,
-	staleCurrentListResourceError,
-} from "./current-list-resource-lease";
+	createActiveHouseholdResourceLease,
+	staleActiveHouseholdResourceError,
+} from "./active-household-resource-lease";
 import type {
 	CachedHouseholdSession,
 	HouseholdSession,
@@ -16,9 +16,10 @@ import type {
 export type ActiveHouseholdSession = HouseholdSession | CachedHouseholdSession;
 
 export type ActiveHouseholdResource = {
-	dataSource: ActiveListDataSource;
+	listService: ActiveHouseholdDataServices["listService"];
+	itemService: ActiveHouseholdDataServices["itemService"];
 	close: (options?: { waitForDrain?: boolean }) => Promise<void>;
-	syncCoordinator: ActiveListSyncCoordinator;
+	syncCoordinator: SyncCoordinator;
 };
 
 export type OpenedActiveHouseholdResource = {
@@ -26,15 +27,15 @@ export type OpenedActiveHouseholdResource = {
 	resourceKey: string;
 };
 
-export type CreateCurrentListDataSource = (
-	config: HouseholdCurrentListDataSourceConfig,
-) => ActiveListDataSource;
+export type CreateActiveHouseholdDataServices = (
+	config: ActiveHouseholdDataServicesConfig,
+) => ActiveHouseholdDataServices;
 
 export type CreateSyncCoordinator = (config: {
 	syncAuthorized: boolean;
-	sync: ActiveListDataSource["sync"];
+	sync: ActiveHouseholdDataServices["sync"];
 	logger: Logger;
-}) => ActiveListSyncCoordinator;
+}) => SyncCoordinator;
 
 type OpeningActiveHouseholdResource = {
 	session: ActiveHouseholdSession;
@@ -60,7 +61,7 @@ export type ActiveHouseholdResourceManager = {
 };
 
 export type ActiveHouseholdResourceManagerDeps = {
-	createCurrentListDataSource: CreateCurrentListDataSource;
+	createDataServices: CreateActiveHouseholdDataServices;
 	createSyncCoordinator: CreateSyncCoordinator;
 	logger: Logger;
 };
@@ -68,7 +69,7 @@ export type ActiveHouseholdResourceManagerDeps = {
 export function createActiveHouseholdResourceManager(
 	deps: ActiveHouseholdResourceManagerDeps,
 ): ActiveHouseholdResourceManager {
-	const { createCurrentListDataSource, createSyncCoordinator, logger } = deps;
+	const { createDataServices, createSyncCoordinator, logger } = deps;
 	let activeResource: ActiveHouseholdResource | null = null;
 	let activeResourceSession: ActiveHouseholdSession | null = null;
 	const openingResources = new Set<OpeningActiveHouseholdResource>();
@@ -131,37 +132,40 @@ export function createActiveHouseholdResourceManager(
 	async function createSessionResource(
 		session: ActiveHouseholdSession,
 	): Promise<ActiveHouseholdResource> {
-		let rawDataSource: ActiveListDataSource | null = null;
+		let dataServices: ActiveHouseholdDataServices | null = null;
 		try {
 			const householdLogger = logger.with({
 				household_id: session.activeHousehold.id,
 			});
-			rawDataSource = createCurrentListDataSource({
-				household: session.activeHousehold,
-				activeMember: session.activeMember,
-				currentUser: session.user,
-				members: session.members,
+			const openedDataServices = createDataServices({
+				householdId: session.activeHousehold.id,
 				database: session.householdDatabase,
 				logger: householdLogger,
 			});
-			const lease = createCurrentListResourceLease(rawDataSource);
-			const dataSource = lease.dataSource;
+			dataServices = openedDataServices;
+			const lease = createActiveHouseholdResourceLease({
+				listService: openedDataServices.listService,
+				itemService: openedDataServices.itemService,
+				sync: openedDataServices.sync,
+			});
 			const syncCoordinator = createSyncCoordinator({
-				syncAuthorized: dataSource.syncAuthorized,
-				sync: dataSource.sync,
+				syncAuthorized: openedDataServices.syncAuthorized,
+				sync: lease.services.sync,
 				logger: householdLogger,
 			});
 			return {
-				dataSource,
+				listService: lease.services.listService,
+				itemService: lease.services.itemService,
 				close: (options) =>
 					lease.retireAndClose({
+						close: openedDataServices.close,
 						stopSync: syncCoordinator.stop,
 						waitForDrain: options?.waitForDrain,
 					}),
 				syncCoordinator,
 			};
 		} catch (error) {
-			await rawDataSource?.close().catch(() => undefined);
+			await dataServices?.close().catch(() => undefined);
 			throw error;
 		}
 	}
@@ -176,9 +180,9 @@ export function createActiveHouseholdResourceManager(
 		try {
 			if (opening.closePromise) {
 				await opening.closePromise;
-				throw staleCurrentListResourceError();
+				throw staleActiveHouseholdResourceError();
 			}
-			const resourceKey = `current-list:${nextResourceVersion}`;
+			const resourceKey = `active-household:${nextResourceVersion}`;
 			nextResourceVersion += 1;
 			return {
 				resource,

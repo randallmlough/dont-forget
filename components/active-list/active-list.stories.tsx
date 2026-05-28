@@ -5,7 +5,6 @@ import { StyleSheet } from "react-native-unistyles";
 
 import {
 	ActiveList,
-	type ActiveListDataSource,
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
@@ -58,10 +57,7 @@ function ActiveListStory({
 }: {
 	initialState: ActiveListInitialState;
 }) {
-	const dataSource = useMemo(
-		() => storyDataSource(initialState),
-		[initialState],
-	);
+	const actions = useMemo(() => storyActions(initialState), [initialState]);
 	const syncCoordinator = useMemo(() => storySyncCoordinator(), []);
 
 	return (
@@ -69,7 +65,9 @@ function ActiveListStory({
 			<ActiveList.Provider
 				initialState={initialState}
 				currentMemberName="Avery Chen"
-				dataSource={dataSource}
+				onLoadList={actions.load}
+				onAddItem={actions.addItem}
+				onSetItemChecked={actions.setItemChecked}
 				syncCoordinator={syncCoordinator}
 			>
 				<ActiveList.Screen>
@@ -94,9 +92,15 @@ function storySyncCoordinator(): ActiveListSyncCoordinator {
 	};
 }
 
-function storyDataSource(
-	initialState: ActiveListInitialState,
-): ActiveListDataSource {
+function storyActions(initialState: ActiveListInitialState): {
+	syncAuthorized: boolean;
+	load: () => Promise<ActiveListInitialState>;
+	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
+	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
+	pull: () => Promise<{ changed: boolean }>;
+	sync: () => Promise<{ changed: boolean }>;
+	close: () => Promise<void>;
+} {
 	let state = initialState;
 	let nextItem = initialState.items.length + 1;
 
