@@ -1,91 +1,91 @@
 import type { Logger } from "@/lib/logger";
 import type { SyncCoordinator } from "@/lib/services/sync";
-import type {
-	ActiveHouseholdDataServices,
-	ActiveHouseholdDataServicesConfig,
-} from "./active-household-data-services";
+import type { SessionBootstrap } from "./bootstrap";
+import type { CachedSessionBootstrap } from "./cache";
 import {
-	createActiveHouseholdResourceLease,
-	staleActiveHouseholdResourceError,
-} from "./active-household-resource-lease";
+	createSessionResourceLease,
+	staleAuthenticatedAppSessionResourceError,
+} from "./resource-lease";
 import type {
-	CachedHouseholdSession,
-	HouseholdSession,
-} from "./household-session-service";
+	SessionDataServices,
+	SessionDataServicesConfig,
+} from "./services";
 
-export type ActiveHouseholdSession = HouseholdSession | CachedHouseholdSession;
+export type SessionResourceBootstrap =
+	| SessionBootstrap
+	| CachedSessionBootstrap;
 
-export type ActiveHouseholdResource = {
-	listService: ActiveHouseholdDataServices["listService"];
-	itemService: ActiveHouseholdDataServices["itemService"];
+export type SessionResource = {
+	lists: SessionDataServices["lists"];
+	items: SessionDataServices["items"];
 	close: (options?: { waitForDrain?: boolean }) => Promise<void>;
 	syncCoordinator: SyncCoordinator;
 };
 
-export type OpenedActiveHouseholdResource = {
-	resource: ActiveHouseholdResource;
+export type OpenedSessionResource = {
+	resource: SessionResource;
 	resourceKey: string;
 };
 
-export type CreateActiveHouseholdDataServices = (
-	config: ActiveHouseholdDataServicesConfig,
-) => ActiveHouseholdDataServices;
+export type CreateSessionDataServices = (
+	config: SessionDataServicesConfig,
+) => SessionDataServices;
 
 export type CreateSyncCoordinator = (config: {
 	syncAuthorized: boolean;
-	sync: ActiveHouseholdDataServices["sync"];
+	sync: SessionDataServices["sync"];
 	logger: Logger;
 }) => SyncCoordinator;
 
-type OpeningActiveHouseholdResource = {
-	session: ActiveHouseholdSession;
-	resource: ActiveHouseholdResource;
+type OpeningSessionResource = {
+	session: SessionResourceBootstrap;
+	resource: SessionResource;
 	closePromise?: Promise<void>;
 };
 
-export type ActiveHouseholdResourceManager = {
+export type SessionResourceManager = {
 	closeActiveResource: () => Promise<void>;
 	closeOpeningResources: () => Promise<void>;
-	closeResource: (resource: ActiveHouseholdResource) => Promise<void>;
+	closeResource: (resource: SessionResource) => Promise<void>;
 	closeUnauthorizedCachedResource: (
-		cached: CachedHouseholdSession,
+		cached: CachedSessionBootstrap,
 	) => Promise<void>;
 	openSessionResource: (
-		session: ActiveHouseholdSession,
-	) => Promise<OpenedActiveHouseholdResource>;
+		session: SessionResourceBootstrap,
+	) => Promise<OpenedSessionResource>;
 	replaceActiveResource: (
-		resource: ActiveHouseholdResource,
-		session: ActiveHouseholdSession,
-	) => ActiveHouseholdResource | null;
+		resource: SessionResource,
+		session: SessionResourceBootstrap,
+	) => SessionResource | null;
 	getHouseholdIds: () => string[];
 };
 
-export type ActiveHouseholdResourceManagerDeps = {
-	createDataServices: CreateActiveHouseholdDataServices;
+export type SessionResourceManagerDeps = {
+	createDataServices: CreateSessionDataServices;
 	createSyncCoordinator: CreateSyncCoordinator;
 	logger: Logger;
 };
 
-export function createActiveHouseholdResourceManager(
-	deps: ActiveHouseholdResourceManagerDeps,
-): ActiveHouseholdResourceManager {
+export function createSessionResourceManager(
+	deps: SessionResourceManagerDeps,
+): SessionResourceManager {
 	const { createDataServices, createSyncCoordinator, logger } = deps;
-	let activeResource: ActiveHouseholdResource | null = null;
-	let activeResourceSession: ActiveHouseholdSession | null = null;
-	const openingResources = new Set<OpeningActiveHouseholdResource>();
+	let activeResource: SessionResource | null = null;
+	let activeResourceSession: SessionResourceBootstrap | null = null;
+	const openingResources = new Set<OpeningSessionResource>();
 	let nextResourceVersion = 1;
 
 	async function closeResource(
-		resource: ActiveHouseholdResource,
+		resource: SessionResource,
 		options?: { waitForDrain?: boolean },
 	) {
 		await resource.close(options);
 	}
 
 	function replaceActiveResource(
-		resource: ActiveHouseholdResource,
-		session: ActiveHouseholdSession,
-	): ActiveHouseholdResource | null {
+		resource: SessionResource,
+		session: SessionResourceBootstrap,
+	): SessionResource | null {
 		const previousResource = activeResource;
 		activeResource = resource;
 		activeResourceSession = session;
@@ -130,9 +130,9 @@ export function createActiveHouseholdResourceManager(
 	}
 
 	async function createSessionResource(
-		session: ActiveHouseholdSession,
-	): Promise<ActiveHouseholdResource> {
-		let dataServices: ActiveHouseholdDataServices | null = null;
+		session: SessionResourceBootstrap,
+	): Promise<SessionResource> {
+		let dataServices: SessionDataServices | null = null;
 		try {
 			const householdLogger = logger.with({
 				household_id: session.activeHousehold.id,
@@ -143,9 +143,9 @@ export function createActiveHouseholdResourceManager(
 				logger: householdLogger,
 			});
 			dataServices = openedDataServices;
-			const lease = createActiveHouseholdResourceLease({
-				listService: openedDataServices.listService,
-				itemService: openedDataServices.itemService,
+			const lease = createSessionResourceLease({
+				lists: openedDataServices.lists,
+				items: openedDataServices.items,
 				sync: openedDataServices.sync,
 			});
 			const syncCoordinator = createSyncCoordinator({
@@ -154,8 +154,8 @@ export function createActiveHouseholdResourceManager(
 				logger: householdLogger,
 			});
 			return {
-				listService: lease.services.listService,
-				itemService: lease.services.itemService,
+				lists: lease.services.lists,
+				items: lease.services.items,
 				close: (options) =>
 					lease.retireAndClose({
 						close: openedDataServices.close,
@@ -171,18 +171,18 @@ export function createActiveHouseholdResourceManager(
 	}
 
 	async function openSessionResource(
-		session: ActiveHouseholdSession,
-	): Promise<OpenedActiveHouseholdResource> {
+		session: SessionResourceBootstrap,
+	): Promise<OpenedSessionResource> {
 		const resource = await createSessionResource(session);
-		const opening: OpeningActiveHouseholdResource = { session, resource };
+		const opening: OpeningSessionResource = { session, resource };
 		openingResources.add(opening);
 
 		try {
 			if (opening.closePromise) {
 				await opening.closePromise;
-				throw staleActiveHouseholdResourceError();
+				throw staleAuthenticatedAppSessionResourceError();
 			}
-			const resourceKey = `active-household:${nextResourceVersion}`;
+			const resourceKey = `authenticated-app-session:${nextResourceVersion}`;
 			nextResourceVersion += 1;
 			return {
 				resource,
@@ -199,7 +199,7 @@ export function createActiveHouseholdResourceManager(
 	}
 
 	async function closeUnauthorizedCachedResource(
-		cached: CachedHouseholdSession,
+		cached: CachedSessionBootstrap,
 	) {
 		for (const opening of openingResources) {
 			if (isUnauthorizedCachedSession(opening.session, cached)) {
@@ -216,7 +216,7 @@ export function createActiveHouseholdResourceManager(
 		}
 	}
 
-	function closeOpeningResource(opening: OpeningActiveHouseholdResource) {
+	function closeOpeningResource(opening: OpeningSessionResource) {
 		opening.closePromise ??= closeResource(opening.resource, {
 			waitForDrain: false,
 		});
@@ -235,8 +235,8 @@ export function createActiveHouseholdResourceManager(
 }
 
 function isUnauthorizedCachedSession(
-	session: ActiveHouseholdSession,
-	cached: CachedHouseholdSession,
+	session: SessionResourceBootstrap,
+	cached: CachedSessionBootstrap,
 ): boolean {
 	return (
 		session.activeHousehold.id === cached.activeHousehold.id &&

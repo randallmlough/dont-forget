@@ -2,7 +2,7 @@
 
 ## Domain Language
 
-- **Must** use the domain language from `CONTEXT.md`: Household, Member, Owner, User, List, Item, Invitation, Home, and Household Session.
+- **Must** use the domain language from `CONTEXT.md`: Household, Member, Owner, User, List, Item, Invitation, Home, and Authenticated App Session.
 - **Must** not introduce replacement language such as group, team, account, todo, task, invite link, dashboard, or landing page unless the glossary changes first.
 - **Should** name components, props, events, logs, and tests with product language instead of generic placeholders.
 
@@ -25,7 +25,7 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 
 ## Service Layer
 
-- **Must** choose the service folder by domain first: `auth`, `household`, `invitation`, `item`, `list`, `member`, or `user`.
+- **Must** choose the service folder by domain or app-runtime boundary first: `auth`, `household`, `invitation`, `item`, `list`, `member`, `session`, or `user`.
 - **Must** use factory-based service construction with explicit dependency types: `create<Domain>Service`, `<Domain>Service`, and `<Domain>ServiceDeps`.
 - **Must** keep server-only service code under `lib/services/<domain>/server/`.
 - **Must** not add a root `lib/services/index.ts` barrel.
@@ -40,8 +40,8 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
 - **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. Do not name this `*-db-service`.
-- **Should** keep List and Item services separate; route-owned List loading should call them by explicit List ID after active Household context exists.
-- **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to the Active Household controller and sync coordinator.
+- **Should** keep List and Item services separate; route-owned List loading should call them by explicit List ID after authenticated app session context exists.
+- **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to the Authenticated App Session controller and sync coordinator.
 
 ## Single-Responsibility Functions
 
@@ -58,10 +58,10 @@ See also: [`docs/best-practices/expo-app-structure.md`](../best-practices/expo-a
 - **Must** keep app-wide providers in `app/_layout.tsx` unless a documented architecture change moves them.
 - **Must** keep root layout effects limited to app-wide provider, navigation, analytics, auth, theme, and native SDK lifecycle synchronization.
 - **Must** keep feature-specific data loading and mutation lifecycle out of `app/_layout.tsx`.
-- **Must** initialize signed-in active Household infrastructure from the authenticated route group (`app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
-- **Must** make screens and reusable components borrow controller-owned active Household resources and actions; they must not open or close HouseholdStore resources directly.
+- **Must** initialize signed-in authenticated app session infrastructure from the authenticated route group (`app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
+- **Must** make screens and reusable components borrow controller-owned authenticated app session resources and actions; they must not open or close HouseholdStore resources directly.
 - **Must** call `setActive(...)` after successful Clerk auth attempts.
-- **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose active Household resources, clear local Household cache/DB files when that path exists, then call `signOut()`.
+- **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose authenticated app session resources, clear local Household cache/DB files when that path exists, then call `signOut()`.
 - **Should** extract root effect logic into named hooks when it has branching, cleanup, or testable behavior.
 - **Avoid** using root layout as a catch-all initialization file for feature state.
 

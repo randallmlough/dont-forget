@@ -5,28 +5,29 @@ import {
 } from "@/lib/bootstrap";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import type { ServerUserProfile } from "@/lib/server/auth";
-import { createMemberService } from "@/lib/services/member/server";
-import { createUserService } from "@/lib/services/user/server";
 import {
 	createProductionHouseholdProvisioningService,
 	type HouseholdProvisioningService,
-} from "./household-provisioning-service";
+} from "@/lib/services/household/server/household-provisioning-service";
 import {
 	createHouseholdService,
 	householdDatabaseName,
-} from "./household-service";
+} from "@/lib/services/household/server/household-service";
+import { createMemberService } from "@/lib/services/member/server";
+import { createUserService } from "@/lib/services/user/server";
 
-export type BootstrapServiceDeps = {
+export type AuthenticatedAppSessionBootstrapDeps = {
 	appEnv: AppEnv;
 	directory: DirectoryDb;
 	provisioning: HouseholdProvisioningService;
 };
 
-export type ProductionBootstrapServiceDeps = BootstrapServiceDeps;
+export type ProductionAuthenticatedAppSessionBootstrapDeps =
+	AuthenticatedAppSessionBootstrapDeps;
 
-export function createProductionBootstrapDeps(
+export function createProductionAuthenticatedAppSessionBootstrapDeps(
 	directory: DirectoryDb,
-): ProductionBootstrapServiceDeps {
+): ProductionAuthenticatedAppSessionBootstrapDeps {
 	const config = readTursoOperatorConfig();
 
 	return {
@@ -36,9 +37,9 @@ export function createProductionBootstrapDeps(
 	};
 }
 
-export async function bootstrapUser(
+export async function bootstrapAuthenticatedAppSession(
 	profile: ServerUserProfile,
-	deps: BootstrapServiceDeps,
+	deps: AuthenticatedAppSessionBootstrapDeps,
 ): Promise<BootstrapResponse> {
 	const userService = createUserService({ directory: deps.directory });
 	const memberService = createMemberService({ directory: deps.directory });
@@ -89,9 +90,7 @@ export async function bootstrapUser(
 	const authToken = await deps.provisioning.createHouseholdDatabaseToken(
 		active.householdTursoDbName,
 	);
-	const members = await memberService.listActiveHouseholdMembers(
-		active.householdId,
-	);
+	const members = await memberService.listHouseholdMembers(active.householdId);
 
 	return {
 		user: {

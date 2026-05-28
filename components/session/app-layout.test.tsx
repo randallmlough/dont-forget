@@ -8,10 +8,10 @@ jest.mock("expo-router", () => ({
 	Stack: () => <mockReactNative.Text>Signed-in stack</mockReactNative.Text>,
 }));
 
-jest.mock("@/components/active-household", () => ({
-	ActiveHouseholdProvider({ children }: PropsWithChildren) {
+jest.mock("@/components/session", () => ({
+	AuthenticatedAppSessionProvider({ children }: PropsWithChildren) {
 		return (
-			<mockReactNative.View testID="active-household-provider">
+			<mockReactNative.View testID="authenticated-app-session-provider">
 				{children}
 			</mockReactNative.View>
 		);
@@ -19,10 +19,12 @@ jest.mock("@/components/active-household", () => ({
 }));
 
 describe("AppLayout", () => {
-	it("wraps signed-in routes with the Active Household provider", () => {
+	it("wraps signed-in routes with the Authenticated App Session provider", () => {
 		render(<AppLayout />);
 
-		expect(screen.getByTestId("active-household-provider")).toBeTruthy();
+		expect(
+			screen.getByTestId("authenticated-app-session-provider"),
+		).toBeTruthy();
 		expect(screen.getByText("Signed-in stack")).toBeTruthy();
 	});
 });

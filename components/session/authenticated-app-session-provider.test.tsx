@@ -7,18 +7,19 @@ import {
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
 import {
-	activeHouseholdDataServicesFixture,
+	sessionDataServicesFixture,
 	syncCoordinatorFixture,
-} from "@/db/fixtures/active-household";
+} from "@/db/fixtures/session";
 import type {
-	ActiveHouseholdActivation,
-	ActiveHouseholdController,
-	ActiveHouseholdSnapshot,
-} from "@/lib/services/household";
+	AuthenticatedAppSession,
+	AuthenticatedAppSessionActivation,
+	AuthenticatedAppSessionController,
+	AuthenticatedAppSessionStateSnapshot,
+} from "@/lib/services/session";
 import {
-	ActiveHouseholdProvider,
-	useActiveHousehold,
-} from "./active-household-provider";
+	AuthenticatedAppSessionProvider,
+	useAuthenticatedAppSession,
+} from "./authenticated-app-session-provider";
 
 const mockLogger = {
 	debug: jest.fn(),
@@ -37,21 +38,20 @@ jest.mock("@/lib/analytics", () => ({
 	reset: jest.fn(),
 }));
 
-describe("ActiveHouseholdProvider", () => {
+describe("AuthenticatedAppSessionProvider", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 	});
 
 	it("eagerly activates the controller and renders fresh ready state", async () => {
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		render(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
-				fallbackMemberName="Avery Chen"
 			>
 				<CurrentState />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		expect(controller.activate).toHaveBeenCalledWith({
@@ -63,79 +63,87 @@ describe("ActiveHouseholdProvider", () => {
 		act(() => {
 			controller.publish({
 				status: "ready",
-				view: activeHouseholdViewFixture(),
+				session: authenticatedAppSessionFixture(),
 			});
 		});
 
 		await waitFor(() =>
-			expect(screen.getByText("active-household:1")).toBeTruthy(),
+			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
 		);
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
+		expect(screen.getByText("ready")).toBeTruthy();
 	});
 
 	it("does not reactivate when only the token callback identity changes", async () => {
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		const firstAuth = authFixture();
 		const { rerender } = render(
-			<ActiveHouseholdProvider controller={controller} auth={firstAuth}>
+			<AuthenticatedAppSessionProvider controller={controller} auth={firstAuth}>
 				<CurrentState />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		expect(controller.activate).toHaveBeenCalledTimes(1);
 
 		rerender(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture({
 					getToken: jest.fn(async () => "next-token"),
 				})}
 			>
 				<CurrentState />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		await Promise.resolve();
 		expect(controller.activate).toHaveBeenCalledTimes(1);
 	});
 
-	it("renders the previous ready state while a replacement is loading", async () => {
-		const controller = activeHouseholdControllerFixture();
+	it("keeps the previous session while a replacement is loading", async () => {
+		const controller = authenticatedAppSessionControllerFixture();
 		render(
-			<ActiveHouseholdProvider controller={controller} auth={authFixture()}>
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
 				<CurrentState />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		act(() => {
 			controller.publish({
 				status: "loading",
-				previous: activeHouseholdViewFixture(),
+				previous: authenticatedAppSessionFixture(),
 				refreshingSession: true,
 			});
 		});
 
 		await waitFor(() =>
-			expect(screen.getByText("active-household:1")).toBeTruthy(),
+			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
 		);
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
+		expect(screen.getByText("refreshing")).toBeTruthy();
 	});
 
-	it("stops exposing ready content when loading no longer has a previous view", async () => {
-		const controller = activeHouseholdControllerFixture();
+	it("stops exposing ready session data while loading has no previous session", async () => {
+		const controller = authenticatedAppSessionControllerFixture();
 		render(
-			<ActiveHouseholdProvider controller={controller} auth={authFixture()}>
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
 				<CurrentState />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 		act(() => {
 			controller.publish({
 				status: "ready",
-				view: activeHouseholdViewFixture(),
+				session: authenticatedAppSessionFixture(),
 			});
 		});
 		await waitFor(() =>
-			expect(screen.getByText("active-household:1")).toBeTruthy(),
+			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
 		);
 
 		act(() => {
@@ -143,25 +151,21 @@ describe("ActiveHouseholdProvider", () => {
 		});
 
 		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
-		expect(screen.queryByText("active-household:1")).toBeNull();
+		expect(screen.queryByText("authenticated-app-session:1")).toBeNull();
 	});
 
 	it("exposes error state and retries with the latest auth inputs", async () => {
 		const auth = authFixture();
-		const controller = activeHouseholdControllerFixture({
+		const controller = authenticatedAppSessionControllerFixture({
 			snapshot: {
 				status: "error",
 				message: "Unable to prepare your Household.",
 			},
 		});
 		render(
-			<ActiveHouseholdProvider
-				controller={controller}
-				auth={auth}
-				fallbackMemberName="Avery Chen"
-			>
+			<AuthenticatedAppSessionProvider controller={controller} auth={auth}>
 				<RetryState />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		expect(screen.getByText("Unable to prepare your Household.")).toBeTruthy();
@@ -178,15 +182,15 @@ describe("ActiveHouseholdProvider", () => {
 		act(() => {
 			controller.publish({
 				status: "ready",
-				view: activeHouseholdViewFixture(),
+				session: authenticatedAppSessionFixture(),
 			});
 		});
-		expect(screen.getByText("active-household:1")).toBeTruthy();
+		expect(screen.getByText("authenticated-app-session:1")).toBeTruthy();
 	});
 
 	it("signs out in analytics, controller, local cleanup, Clerk order", async () => {
 		const order: string[] = [];
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		controller.dispose.mockImplementation(async () => {
 			order.push("dispose");
 			return { householdIdsForLocalDataDeletion: [] };
@@ -201,52 +205,44 @@ describe("ActiveHouseholdProvider", () => {
 			reset: jest.fn(() => order.push("reset")),
 		};
 		const clearSignedOutData = jest.fn(async () => {
-			order.push("delete");
 			order.push("clear");
 		});
 
 		render(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={analytics}
-				clearSignedOutHouseholdSessionData={clearSignedOutData}
+				clearSignedOutSessionData={clearSignedOutData}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
-		expect(order).toEqual([
-			"track",
-			"reset",
-			"dispose",
-			"delete",
-			"clear",
-			"clerk",
-		]);
+		expect(order).toEqual(["track", "reset", "dispose", "clear", "clerk"]);
 		expect(analytics.track).toHaveBeenCalledWith("user_signed_out", {});
 		expect(clearSignedOutData).toHaveBeenCalledWith([]);
 	});
 
 	it("passes disposed Household IDs to signed-out cleanup", async () => {
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		controller.dispose.mockResolvedValue({
 			householdIdsForLocalDataDeletion: ["hh_active"],
 		});
 		const clearSignedOutData = jest.fn(async () => undefined);
 
 		render(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={clearSignedOutData}
+				clearSignedOutSessionData={clearSignedOutData}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
@@ -256,46 +252,46 @@ describe("ActiveHouseholdProvider", () => {
 	});
 
 	it("continues Clerk sign out when controller disposal fails", async () => {
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		controller.dispose.mockRejectedValue(new Error("dispose failed"));
 		const auth = authFixture();
 
 		render(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={jest.fn(async () => undefined)}
+				clearSignedOutSessionData={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		expect(mockLogger.error).toHaveBeenCalledWith(
-			"active Household sign-out dispose failed",
+			"authenticated app session sign-out dispose failed",
 			{ error: expect.any(Error) },
 		);
 	});
 
 	it("ignores duplicate sign-out presses while the first sign-out is pending", async () => {
 		const auth = authFixture();
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		const analytics = { track: jest.fn(), reset: jest.fn() };
 		const localDataDeleted = deferred<void>();
 		const clearSignedOutData = jest.fn(() => localDataDeleted.promise);
 
 		render(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={analytics}
-				clearSignedOutHouseholdSessionData={clearSignedOutData}
+				clearSignedOutSessionData={clearSignedOutData}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		const signOutButton = screen.getByRole("button", { name: "Sign out" });
@@ -314,19 +310,19 @@ describe("ActiveHouseholdProvider", () => {
 
 	it("skips activation runs while sign-out is in progress", async () => {
 		const signOutFinished = deferred<void>();
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		const auth = authFixture({
 			signOut: jest.fn(() => signOutFinished.promise),
 		});
 		const { rerender } = render(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={jest.fn(async () => undefined)}
+				clearSignedOutSessionData={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		expect(controller.activate).toHaveBeenCalledTimes(1);
@@ -334,14 +330,14 @@ describe("ActiveHouseholdProvider", () => {
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
 		rerender(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={{ ...auth, signedIn: false }}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={jest.fn(async () => undefined)}
+				clearSignedOutSessionData={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		await Promise.resolve();
@@ -356,17 +352,17 @@ describe("ActiveHouseholdProvider", () => {
 				.mockRejectedValueOnce(new Error("sign out failed"))
 				.mockResolvedValueOnce(undefined),
 		});
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 
 		render(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={jest.fn(async () => undefined)}
+				clearSignedOutSessionData={jest.fn(async () => undefined)}
 			>
 				<CatchingSignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		const button = screen.getByRole("button", { name: "Sign out" });
@@ -382,16 +378,16 @@ describe("ActiveHouseholdProvider", () => {
 		const auth = authFixture();
 
 		render(
-			<ActiveHouseholdProvider
-				controller={activeHouseholdControllerFixture()}
+			<AuthenticatedAppSessionProvider
+				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={jest.fn(async () => {
+				clearSignedOutSessionData={jest.fn(async () => {
 					throw new Error("cleanup failed");
 				})}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		const button = screen.getByRole("button", { name: "Sign out" });
@@ -404,7 +400,7 @@ describe("ActiveHouseholdProvider", () => {
 
 	it("does not clean local Household data before controller disposal finishes", async () => {
 		const auth = authFixture();
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		const disposed = deferred<{
 			householdIdsForLocalDataDeletion: string[];
 		}>();
@@ -412,14 +408,14 @@ describe("ActiveHouseholdProvider", () => {
 		const clearSignedOutData = jest.fn(async () => undefined);
 
 		render(
-			<ActiveHouseholdProvider
+			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={clearSignedOutData}
+				clearSignedOutSessionData={clearSignedOutData}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
@@ -432,20 +428,20 @@ describe("ActiveHouseholdProvider", () => {
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 	});
 
-	it("does not call Clerk sign out before local Household data deletion succeeds", async () => {
+	it("does not call Clerk sign out before local Household data deletion finishes", async () => {
 		const auth = authFixture();
 		const localDataDeleted = deferred<void>();
 		const clearSignedOutData = jest.fn(() => localDataDeleted.promise);
 
 		render(
-			<ActiveHouseholdProvider
-				controller={activeHouseholdControllerFixture()}
+			<AuthenticatedAppSessionProvider
+				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={clearSignedOutData}
+				clearSignedOutSessionData={clearSignedOutData}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
@@ -460,58 +456,36 @@ describe("ActiveHouseholdProvider", () => {
 		const auth = authFixture();
 
 		render(
-			<ActiveHouseholdProvider
-				controller={activeHouseholdControllerFixture()}
+			<AuthenticatedAppSessionProvider
+				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
 				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={jest.fn(async () => {
+				clearSignedOutSessionData={jest.fn(async () => {
 					throw new Error("cleanup failed");
 				})}
 			>
 				<SignOutButton />
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		expect(mockLogger.error).toHaveBeenCalledWith(
-			"active Household sign-out local cleanup failed",
-			{ error: expect.any(Error) },
-		);
-	});
-
-	it("continues Clerk sign out when cached Household metadata clearing fails", async () => {
-		const auth = authFixture();
-
-		render(
-			<ActiveHouseholdProvider
-				controller={activeHouseholdControllerFixture()}
-				auth={auth}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
-				clearSignedOutHouseholdSessionData={jest.fn(async () => {
-					throw new Error("cleanup failed");
-				})}
-			>
-				<SignOutButton />
-			</ActiveHouseholdProvider>,
-		);
-
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
-
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-		expect(mockLogger.error).toHaveBeenCalledWith(
-			"active Household sign-out local cleanup failed",
+			"authenticated app session sign-out local cleanup failed",
 			{ error: expect.any(Error) },
 		);
 	});
 
 	it("disposes the controller on provider unmount", () => {
-		const controller = activeHouseholdControllerFixture();
+		const controller = authenticatedAppSessionControllerFixture();
 		const { unmount } = render(
-			<ActiveHouseholdProvider controller={controller} auth={authFixture()}>
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
 				<Text>Child</Text>
-			</ActiveHouseholdProvider>,
+			</AuthenticatedAppSessionProvider>,
 		);
 
 		unmount();
@@ -521,19 +495,24 @@ describe("ActiveHouseholdProvider", () => {
 });
 
 function CurrentState() {
-	const { content } = useActiveHousehold();
-	if (content.status !== "ready") return <Text>{content.status}</Text>;
+	const { state, session } = useAuthenticatedAppSession();
+	if (!session) return <Text>{state.status}</Text>;
 
 	return (
 		<>
-			<Text>{content.activeMemberName}</Text>
-			<Text>{content.resourceKey}</Text>
+			<Text>{session.activeMember.displayName}</Text>
+			<Text>{session.resourceKey}</Text>
+			<Text>
+				{state.status === "ready" && state.refreshing
+					? "refreshing"
+					: state.status}
+			</Text>
 		</>
 	);
 }
 
 function SignOutButton() {
-	const { signOut } = useActiveHousehold();
+	const { signOut } = useAuthenticatedAppSession();
 	return (
 		<Pressable accessibilityRole="button" onPress={signOut}>
 			<Text>Sign out</Text>
@@ -542,7 +521,7 @@ function SignOutButton() {
 }
 
 function CatchingSignOutButton() {
-	const { signOut } = useActiveHousehold();
+	const { signOut } = useAuthenticatedAppSession();
 	return (
 		<Pressable
 			accessibilityRole="button"
@@ -554,15 +533,15 @@ function CatchingSignOutButton() {
 }
 
 function RetryState() {
-	const { content, retry } = useActiveHousehold();
+	const { state, session, retry } = useAuthenticatedAppSession();
 	return (
 		<>
 			<Text>
-				{content.status === "ready"
-					? content.resourceKey
-					: content.status === "error"
-						? content.message
-						: content.status}
+				{session
+					? session.resourceKey
+					: state.status === "error"
+						? state.message
+						: state.status}
 			</Text>
 			<Pressable accessibilityRole="button" onPress={retry}>
 				<Text>Retry</Text>
@@ -573,9 +552,9 @@ function RetryState() {
 
 function authFixture(
 	overrides: Partial<
-		ActiveHouseholdActivation & { signOut: () => Promise<void> }
+		AuthenticatedAppSessionActivation & { signOut: () => Promise<void> }
 	> = {},
-): ActiveHouseholdActivation & { signOut: () => Promise<void> } {
+): AuthenticatedAppSessionActivation & { signOut: () => Promise<void> } {
 	return {
 		getToken: jest.fn(async () => "token"),
 		authReady: true,
@@ -585,31 +564,33 @@ function authFixture(
 	};
 }
 
-function activeHouseholdControllerFixture({
+function authenticatedAppSessionControllerFixture({
 	snapshot = { status: "loading" },
 }: {
-	snapshot?: ActiveHouseholdSnapshot;
-} = {}): jest.Mocked<ActiveHouseholdController> & {
-	publish: (snapshot: ActiveHouseholdSnapshot) => void;
+	snapshot?: AuthenticatedAppSessionStateSnapshot;
+} = {}): jest.Mocked<AuthenticatedAppSessionController> & {
+	publish: (snapshot: AuthenticatedAppSessionStateSnapshot) => void;
 } {
 	let currentSnapshot = snapshot;
-	const subscribers = new Set<(snapshot: ActiveHouseholdSnapshot) => void>();
+	const subscribers = new Set<
+		(snapshot: AuthenticatedAppSessionStateSnapshot) => void
+	>();
 	return {
 		activate: jest.fn<
-			ReturnType<ActiveHouseholdController["activate"]>,
-			Parameters<ActiveHouseholdController["activate"]>
+			ReturnType<AuthenticatedAppSessionController["activate"]>,
+			Parameters<AuthenticatedAppSessionController["activate"]>
 		>(async () => undefined),
 		dispose: jest.fn<
-			ReturnType<ActiveHouseholdController["dispose"]>,
-			Parameters<ActiveHouseholdController["dispose"]>
+			ReturnType<AuthenticatedAppSessionController["dispose"]>,
+			Parameters<AuthenticatedAppSessionController["dispose"]>
 		>(async () => ({ householdIdsForLocalDataDeletion: [] })),
 		getSnapshot: jest.fn<
-			ReturnType<ActiveHouseholdController["getSnapshot"]>,
-			Parameters<ActiveHouseholdController["getSnapshot"]>
+			ReturnType<AuthenticatedAppSessionController["getSnapshot"]>,
+			Parameters<AuthenticatedAppSessionController["getSnapshot"]>
 		>(() => currentSnapshot),
 		subscribe: jest.fn<
-			ReturnType<ActiveHouseholdController["subscribe"]>,
-			Parameters<ActiveHouseholdController["subscribe"]>
+			ReturnType<AuthenticatedAppSessionController["subscribe"]>,
+			Parameters<AuthenticatedAppSessionController["subscribe"]>
 		>((subscriber) => {
 			subscribers.add(subscriber);
 			return { remove: () => subscribers.delete(subscriber) };
@@ -621,24 +602,35 @@ function activeHouseholdControllerFixture({
 	};
 }
 
-function activeHouseholdViewFixture() {
-	const dataServices = activeHouseholdDataServicesFixture();
+function authenticatedAppSessionFixture(): AuthenticatedAppSession {
+	const dataServices = sessionDataServicesFixture();
 	return {
-		activeMemberName: "Avery Chen",
-		household: { id: "hh_avery", name: "Avery" },
-		activeMember: { userId: "usr_avery", displayName: "Avery Chen" },
+		user: {
+			id: "usr_avery",
+			email: "avery@example.com",
+			displayName: "Avery Chen",
+		},
+		activeHousehold: { id: "hh_avery", name: "Avery" },
+		activeMember: {
+			id: "mbr_avery",
+			userId: "usr_avery",
+			role: "owner",
+			displayName: "Avery Chen",
+		},
 		members: [
 			{
 				membershipId: "mbr_avery",
 				userId: "usr_avery",
-				role: "owner" as const,
+				role: "owner",
 				displayName: "Avery Chen",
 			},
 		],
-		resourceKey: "active-household:1",
-		listService: dataServices.listService,
-		itemService: dataServices.itemService,
-		syncCoordinator: syncCoordinatorFixture(),
+		resourceKey: "authenticated-app-session:1",
+		services: {
+			lists: dataServices.lists,
+			items: dataServices.items,
+			sync: syncCoordinatorFixture(),
+		},
 	};
 }
 

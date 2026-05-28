@@ -8,6 +8,7 @@ import type {
 } from "@/components/active-list";
 import type { ItemService } from "@/lib/services/item";
 import type { ListService } from "@/lib/services/list";
+import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeScreenView } from "@/screens/home/home-screen";
 
 const emptyHomeList: ActiveListInitialState = {
@@ -57,35 +58,35 @@ type Story = StoryObj<typeof meta>;
 
 export const EmptyList: Story = {
 	args: {
-		currentMemberName: "Avery Chen",
-		content: readyContent(emptyHomeList),
+		state: { status: "ready", refreshing: false },
+		session: readySession(emptyHomeList),
 		onSignOut: noop,
 	},
 };
 
 export const WithItems: Story = {
 	args: {
-		currentMemberName: "Avery Chen",
-		content: readyContent(populatedHomeList),
+		state: { status: "ready", refreshing: false },
+		session: readySession(populatedHomeList),
 		onSignOut: noop,
 	},
 };
 
 export const Loading: Story = {
 	args: {
-		currentMemberName: "Avery Chen",
-		content: { status: "loading" },
+		state: { status: "loading" },
+		session: null,
 		onSignOut: noop,
 	},
 };
 
-export const HouseholdSessionError: Story = {
+export const AuthenticatedAppSessionError: Story = {
 	args: {
-		currentMemberName: "Avery Chen",
-		content: {
+		state: {
 			status: "error",
 			message: "Unable to prepare your Household. Please try again.",
 		},
+		session: null,
 		onRetry: noop,
 		onSignOut: noop,
 	},
@@ -93,12 +94,22 @@ export const HouseholdSessionError: Story = {
 
 function noop() {}
 
-function readyContent(initialList: ActiveListInitialState) {
+function readySession(
+	initialList: ActiveListInitialState,
+): AuthenticatedAppSession {
 	return {
-		status: "ready" as const,
-		activeMemberName: "Avery Chen",
-		household: { id: "hh_story", name: initialList.householdName },
-		activeMember: { userId: "usr_avery", displayName: "Avery Chen" },
+		user: {
+			id: "usr_avery",
+			email: "avery@example.com",
+			displayName: "Avery Chen",
+		},
+		activeHousehold: { id: "hh_story", name: initialList.householdName },
+		activeMember: {
+			id: "mbr_avery",
+			userId: "usr_avery",
+			role: "owner",
+			displayName: "Avery Chen",
+		},
 		members: [
 			{
 				membershipId: "mbr_avery",
@@ -108,20 +119,22 @@ function readyContent(initialList: ActiveListInitialState) {
 			},
 		],
 		resourceKey: `story:${initialList.householdName}:${initialList.listName}`,
-		...storyServices(initialList),
-		syncCoordinator: storySyncCoordinator(),
+		services: {
+			...storyServices(initialList),
+			sync: storySyncCoordinator(),
+		},
 	};
 }
 
 function storyServices(initialList: ActiveListInitialState): {
-	listService: ListService;
-	itemService: ItemService;
+	lists: ListService;
+	items: ItemService;
 } {
 	let state = initialList;
 	let nextItem = initialList.items.length + 1;
 
 	return {
-		listService: {
+		lists: {
 			async getList() {
 				return {
 					id: "lst_default_groceries",
@@ -133,7 +146,7 @@ function storyServices(initialList: ActiveListInitialState): {
 				};
 			},
 		},
-		itemService: {
+		items: {
 			async listItems() {
 				return state.items.map((item, position) => ({
 					id: item.id,
@@ -190,8 +203,6 @@ function storySyncCoordinator(): ActiveListSyncCoordinator {
 	return {
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),
-		start() {},
-		async stop() {},
 		async requestSync() {
 			return { changed: false };
 		},

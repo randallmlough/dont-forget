@@ -1,7 +1,7 @@
 import { render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { AuthGate } from "@/components/auth/auth-gate";
-import { readCachedHouseholdSession } from "@/lib/services/household";
+import { readCachedSessionBootstrap } from "@/lib/services/session";
 import { setMockAuthState } from "@/lib/test/mocks/clerk";
 
 const mockReplace = jest.fn();
@@ -10,8 +10,8 @@ jest.mock("@/lib/analytics", () => ({
 	useAnalyticsIdentity: jest.fn(),
 }));
 
-jest.mock("@/lib/services/household", () => ({
-	readCachedHouseholdSession: jest.fn(),
+jest.mock("@/lib/services/session", () => ({
+	readCachedSessionBootstrap: jest.fn(),
 }));
 
 jest.mock("expo-router", () => {
@@ -37,34 +37,34 @@ jest.mock("expo-router", () => {
 
 beforeEach(() => {
 	mockReplace.mockReset();
-	jest.mocked(readCachedHouseholdSession).mockResolvedValue(null);
+	jest.mocked(readCachedSessionBootstrap).mockResolvedValue(null);
 });
 
 describe("AuthGate", () => {
 	it("keeps Home mounted while auth is unknown and a cached Household session exists", async () => {
 		jest
-			.mocked(readCachedHouseholdSession)
-			.mockResolvedValue(cachedHouseholdSessionFixture());
+			.mocked(readCachedSessionBootstrap)
+			.mockResolvedValue(cachedSessionBootstrapFixture());
 		setMockAuthState({ isLoaded: false, isSignedIn: false });
 
 		render(<AuthGate pathname="/" />);
 
 		await waitFor(() =>
-			expect(readCachedHouseholdSession).toHaveBeenCalledTimes(1),
+			expect(readCachedSessionBootstrap).toHaveBeenCalledTimes(1),
 		);
 		expect(mockReplace).not.toHaveBeenCalledWith("/sign-in");
 	});
 
 	it("redirects to sign-in when Clerk reports signed out even if a cached Household session exists", async () => {
 		jest
-			.mocked(readCachedHouseholdSession)
-			.mockResolvedValue(cachedHouseholdSessionFixture());
+			.mocked(readCachedSessionBootstrap)
+			.mockResolvedValue(cachedSessionBootstrapFixture());
 		setMockAuthState({ isLoaded: true, isSignedIn: false });
 
 		render(<AuthGate pathname="/" />);
 
 		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/sign-in"));
-		expect(readCachedHouseholdSession).not.toHaveBeenCalled();
+		expect(readCachedSessionBootstrap).not.toHaveBeenCalled();
 	});
 
 	it("redirects to sign-in when there is no Clerk session or cached Household session", async () => {
@@ -76,7 +76,7 @@ describe("AuthGate", () => {
 	});
 });
 
-function cachedHouseholdSessionFixture() {
+function cachedSessionBootstrapFixture() {
 	return {
 		user: {
 			id: "usr_avery",

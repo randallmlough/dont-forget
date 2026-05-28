@@ -1,11 +1,11 @@
 import { Stack } from "expo-router";
 
-import { ActiveHouseholdProvider } from "@/components/active-household";
+import { AuthenticatedAppSessionProvider } from "@/components/session";
 
 export default function AppLayout() {
 	return (
-		<ActiveHouseholdProvider>
+		<AuthenticatedAppSessionProvider>
 			<Stack screenOptions={{ headerShown: false }} />
-		</ActiveHouseholdProvider>
+		</AuthenticatedAppSessionProvider>
 	);
 }

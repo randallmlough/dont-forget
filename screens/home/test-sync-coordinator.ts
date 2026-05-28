@@ -1,26 +1,26 @@
-import type { ActiveListSyncCoordinator } from "@/components/active-list";
+import type { ActiveListManagedSyncCoordinator } from "@/components/active-list";
 
-export type MockActiveListSyncCoordinator = {
-	[K in keyof ActiveListSyncCoordinator]: jest.MockedFunction<
-		ActiveListSyncCoordinator[K]
+export type MockActiveListManagedSyncCoordinator = {
+	[K in keyof ActiveListManagedSyncCoordinator]: jest.MockedFunction<
+		ActiveListManagedSyncCoordinator[K]
 	>;
 };
 
 export function createMockSyncCoordinatorFactory() {
-	const created: MockActiveListSyncCoordinator[] = [];
+	const created: MockActiveListManagedSyncCoordinator[] = [];
 	const createDefaultSyncCoordinator = jest.fn(
 		(deps: { syncAuthorized: boolean }) => {
-			const coordinator: MockActiveListSyncCoordinator = {
+			const coordinator: MockActiveListManagedSyncCoordinator = {
 				getStatus: jest.fn(() => (deps.syncAuthorized ? "synced" : "offline")),
 				subscribe: jest.fn<
-					ReturnType<ActiveListSyncCoordinator["subscribe"]>,
-					Parameters<ActiveListSyncCoordinator["subscribe"]>
+					ReturnType<ActiveListManagedSyncCoordinator["subscribe"]>,
+					Parameters<ActiveListManagedSyncCoordinator["subscribe"]>
 				>(() => ({ remove() {} })),
 				start: jest.fn(),
 				stop: jest.fn(async () => undefined),
 				requestSync: jest.fn<
-					ReturnType<ActiveListSyncCoordinator["requestSync"]>,
-					Parameters<ActiveListSyncCoordinator["requestSync"]>
+					ReturnType<ActiveListManagedSyncCoordinator["requestSync"]>,
+					Parameters<ActiveListManagedSyncCoordinator["requestSync"]>
 				>(async () => null),
 			};
 			created.push(coordinator);

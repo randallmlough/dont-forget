@@ -16,24 +16,24 @@ For route screens, extract composed view components for Storybook and keep hooks
 
 If a Story renders an app route shell that already owns safe-area handling, set `parameters.noSafeArea = true` on that Story or meta. React Native Storybook's mobile UI adds safe-area padding by default, and route shells such as `HomeScreen` already apply their own safe area.
 
-For current-List UI, use a provider whose context is shaped around `state`, `actions`, and `meta`. Stories can use local state; production signed-in routes consume Active Household provider dependencies and route-owned List loading backed by active Household resources. Do not inject raw Turso clients, Drizzle row types, or generic storage repositories into presentational components.
+For current-List UI, use a provider whose context is shaped around `state`, `actions`, and `meta`. Stories can use local state; production signed-in routes consume Authenticated App Session provider dependencies and route-owned List loading backed by authenticated app session resources. Do not inject raw Turso clients, Drizzle row types, or generic storage repositories into presentational components.
 
 Use dot-notation compound exports for the active List surface only, such as `ActiveList.Provider`, `ActiveList.Header`, `ActiveList.Items`, and `ActiveList.AddItemForm`. Do not force simple standalone components like `AuthScreen` into a compound namespace unless they grow shared state.
 
 Keep User/session controls outside `ActiveList.*`. Sign-out and account affordances belong to signed-in route/provider composition, not to the current-List provider.
 
-The first active List stories model Home's selected default List for the active Household. Do not add multiple-List switching until that product slice is being built.
+The first active List stories model Home's selected default List for the authenticated app session. Do not add multiple-List switching until that product slice is being built.
 
 Active List stories may use a UI-facing Item shape with an effective checked state for the current Member, plus optional display metadata such as who checked it. Production route-owned List loading computes that shape from List and Item service results.
 
-The first Add Item flow is text-only. Append Items in local state for Storybook; the app writes Items through active Household Item services with an explicit List ID. Notes, manual ordering, and richer Item editing belong to later product slices.
+The first Add Item flow is text-only. Append Items in local state for Storybook; the app writes Items through authenticated app session Item services with an explicit List ID. Notes, manual ordering, and richer Item editing belong to later product slices.
 
 Co-locate stories next to the component or view they describe under `components/`. Use a separate top-level stories folder only for cross-component compositions that do not belong to a single component.
 
 ## Initial Scope
 
 - `AuthScreen` stories show authentication layout states.
-- `Home` stories render the selected default List for the active Household.
+- `Home` stories render the selected default List for the authenticated app session.
 - Home stories cover at least an empty List and a List with Items. Home stories may use local React state for lightweight Item interactions, such as checking an Item or appending fixture Items.
 - The first implementation replaces the Expo starter Home route with a thin product-shaped composition using the same current-List surface that production backs with controller-owned Household data.
 

@@ -53,7 +53,13 @@ export type ActiveListSyncResult = SyncResult;
 
 export type ActiveListSyncOptions = SyncOptions;
 
-export type ActiveListSyncCoordinator = SyncCoordinator;
+export type ActiveListSyncCoordinator = Pick<
+	SyncCoordinator,
+	"getStatus" | "subscribe" | "requestSync"
+>;
+
+export type ActiveListManagedSyncCoordinator = ActiveListSyncCoordinator &
+	Pick<SyncCoordinator, "start" | "stop">;
 
 export type ActiveListActions = {
 	addItem: (name: string) => Promise<void>;
@@ -74,28 +80,42 @@ type ActiveListContextValue = {
 	meta: ActiveListMeta;
 };
 
-type ActiveListProviderProps = PropsWithChildren<{
+type ActiveListProviderBaseProps = PropsWithChildren<{
 	initialState: ActiveListInitialState;
 	currentMemberName: string;
 	onLoadList: () => Promise<ActiveListInitialState>;
 	onAddItem: (name: string) => Promise<ActiveListItem>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-	syncCoordinator: ActiveListSyncCoordinator;
-	manageSyncCoordinatorLifecycle?: boolean;
 }>;
+
+type ActiveListProviderProps = ActiveListProviderBaseProps &
+	(
+		| {
+				syncCoordinator: ActiveListManagedSyncCoordinator;
+				manageSyncCoordinatorLifecycle?: true;
+		  }
+		| {
+				syncCoordinator: ActiveListSyncCoordinator;
+				manageSyncCoordinatorLifecycle: false;
+		  }
+	);
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
 
-function ActiveListProvider({
-	initialState,
-	currentMemberName,
-	onLoadList,
-	onAddItem,
-	onSetItemChecked,
-	syncCoordinator,
-	manageSyncCoordinatorLifecycle = true,
-	children,
-}: ActiveListProviderProps) {
+function ActiveListProvider(props: ActiveListProviderProps) {
+	const {
+		initialState,
+		currentMemberName,
+		onLoadList,
+		onAddItem,
+		onSetItemChecked,
+		children,
+	} = props;
+	const syncCoordinator = props.syncCoordinator;
+	const managedSyncCoordinator =
+		props.manageSyncCoordinatorLifecycle === false
+			? null
+			: props.syncCoordinator;
 	const logger = useLogger();
 	const [model, setModel] = useState(() =>
 		initialActiveListModel(initialState, syncCoordinator.getStatus()),
@@ -142,25 +162,19 @@ function ActiveListProvider({
 			type: "syncStatusChanged",
 			syncState: syncCoordinator.getStatus(),
 		});
-		if (manageSyncCoordinatorLifecycle) {
-			syncCoordinator.start();
+		if (managedSyncCoordinator) {
+			managedSyncCoordinator.start();
+
+			return () => {
+				subscription.remove();
+				void managedSyncCoordinator.stop();
+			};
 		}
 
 		return () => {
 			subscription.remove();
-			void (async () => {
-				if (manageSyncCoordinatorLifecycle) {
-					await syncCoordinator.stop();
-				}
-			})();
 		};
-	}, [
-		loadList,
-		logger,
-		manageSyncCoordinatorLifecycle,
-		syncCoordinator,
-		transition,
-	]);
+	}, [loadList, logger, managedSyncCoordinator, syncCoordinator, transition]);
 
 	const requestLocalWriteSync = useCallback(() => {
 		void syncCoordinator

@@ -6,12 +6,12 @@ This note captures decisions made while stress-testing the next simplification o
 
 ## Context
 
-The previous Active Household controller refactor moved resource ownership out of Home and decoupled Household activation from List/Item loading. The branch now needs a second simplification pass because `lib/services/household/active-household-controller.ts` still owns concerns that are broader than the Household domain.
+The previous Active Household controller refactor moved resource ownership out of Home and decoupled Household activation from List/Item loading. Before this simplification pass, `lib/services/household/active-household-controller.ts` still owned concerns that were broader than the Household domain.
 
 Current concern:
 
-- The "Active Household" controller is really an authenticated app session runtime.
-- `ActiveHouseholdView` exposes app-session context such as active Member, Members, services, and sync coordinator.
+- The Active Household controller is really an authenticated app session runtime.
+- `AuthenticatedAppSession` exposes app-session context such as active Member, Members, services, and sync coordinator.
 - Household ID remains an important relationship key for Lists and Items, but that does not mean the Household service should be the app's central entity.
 - "Current List" should remain selection state only, not a dedicated service/resource concept.
 
@@ -24,13 +24,13 @@ The current controller should be reframed from **Active Household** to **Authent
 Rationale:
 
 - The current boundary owns signed-in app runtime concerns, not just Household domain behavior.
-- It coordinates auth readiness, token access, active Household selection/session metadata, active Member context, Household DB/runtime, sync lifecycle, and sign-out cleanup.
+- It coordinates auth readiness, token access, authenticated app session selection/session metadata, active Member context, Household DB/runtime, sync lifecycle, and sign-out cleanup.
 - Calling this "Household" makes Household look like the main central app entity instead of one domain selected inside the signed-in session.
 
 Rejected names:
 
 - **Auth service**: too narrow; auth should mean external identity/token/sign-out integration.
-- **Active Household**: too domain-specific for a boundary that owns signed-in app runtime.
+- **Active Household**: too Household-specific for a boundary that owns signed-in app runtime.
 
 ### 2. Use `lib/services/session/` for the new runtime home
 
@@ -62,7 +62,7 @@ Rationale:
 
 Active Member and Members are not pure auth and should not remain Household-controller output. They are app-session context: they describe who the signed-in User is inside the selected Household.
 
-`AuthenticatedAppSession` should expose the app-facing session context needed after sign-in, including active Household identity and active Member identity.
+`AuthenticatedAppSession` should expose the app-facing session context needed after sign-in, including authenticated app session identity and active Member identity.
 
 The Household service should shrink toward Household domain operations instead of being the app runtime container.
 
@@ -95,7 +95,7 @@ Rationale:
 
 - `services` is easier to reason about than `householdRuntime`.
 - Grouping service capabilities avoids turning the top-level session into a flat service locator.
-- The object is explicitly session-scoped: services are bound to the authenticated app session and active Household ID.
+- The object is explicitly session-scoped: services are bound to the authenticated app session and authenticated app session ID.
 - Route-owned hooks can call `session.services.lists.getList({ listId })` and `session.services.items.listItems({ listId })` after session readiness.
 
 ### 6. Keep `HouseholdStore`, move runtime composition to `lib/services/session/`
@@ -120,9 +120,9 @@ Rationale:
 - Avoid verbose names such as `authenticated-app-session-controller.ts` and repeated `session-*` file names inside `lib/services/session/`.
 - Keep domain-specific storage infrastructure named honestly as `HouseholdStore` while moving app-session orchestration to the session module.
 
-### 7. Move app-side Household Session behavior to `session/bootstrap.ts` and `session/cache.ts`
+### 7. Move app-side Authenticated App Session behavior to `session/bootstrap.ts` and `session/cache.ts`
 
-The current `lib/services/household/household-session-service.ts` should move out of the Household service area because it owns authenticated app session bootstrap and cache behavior, not Household domain behavior.
+The current Household session bootstrap/cache behavior should move out of the Household service area because it owns authenticated app session bootstrap and cache behavior, not Household domain behavior.
 
 Preferred direction:
 
@@ -147,7 +147,7 @@ This preserves the existing `lib/services/<domain>/server/` safety pattern while
 
 ### 8. Move server bootstrap orchestration to `lib/services/session/server/`
 
-Server-side `/api/bootstrap` orchestration should move from `lib/services/household/server/household-bootstrap-service.ts` to `lib/services/session/server/bootstrap.ts`.
+Server-side `/api/bootstrap` orchestration should move from the Household server service area to `lib/services/session/server/bootstrap.ts`.
 
 Target direction:
 
@@ -172,14 +172,14 @@ Rationale:
 - Household provisioning and Household domain operations stay under `lib/services/household/server/`.
 - API routes must continue lazy-loading `@/lib/services/session/server` inside request handlers to preserve mobile bundle safety.
 
-### 9. Keep active Household selection inside session bootstrap/cache for now
+### 9. Keep authenticated app session selection inside session bootstrap/cache for now
 
-Do not introduce separate persisted active Household selection storage yet.
+Do not introduce separate persisted authenticated app session selection storage yet.
 
 Rationale:
 
 - The app does not currently have Household switching.
-- Server bootstrap is still the source that chooses or creates the active Household.
+- Server bootstrap is still the source that chooses or creates the authenticated app session.
 - A separate stored `activeHouseholdId` would create a second source of truth without a product flow that changes it.
 
 Current source of truth:
@@ -223,7 +223,7 @@ Implementation scope should include:
 
 ### 11. Remove `view`; expose top-level `session` from the hook
 
-Do not keep the `view` property from the Active Household controller design.
+Do not keep the `view` property from the Authenticated App Session controller design.
 
 Preferred hook shape:
 
@@ -372,3 +372,13 @@ Rationale:
 ## Open Questions
 
 - None yet. Next step is to turn these decisions into an implementation goal.
+
+## Implementation Update
+
+Implemented 2026-05-28 with the agreed hard cut:
+
+- Runtime code lives under `lib/services/session/{controller,resource-manager,services,resource-lease,bootstrap,cache}.ts`.
+- Server `/api/bootstrap` orchestration lives under `lib/services/session/server/bootstrap.ts`, while Household provisioning/domain services remain under `lib/services/household/server/`.
+- The React boundary lives under `components/session/` and exposes `AuthenticatedAppSessionProvider` plus `useAuthenticatedAppSession()`.
+- The public hook exposes `{ state, session, retry, signOut }`; `session` is top-level and nullable, and services are grouped under `session.services`.
+- `HouseholdStore` remains under `lib/services/household/household-store.ts` because the physical local/synced DB is per Household.

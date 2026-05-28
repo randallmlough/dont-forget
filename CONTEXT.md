@@ -25,7 +25,7 @@ A named collection of Items, owned by a Household. Every Member of the Household
 _Avoid_: shopping list, board
 
 **Current List**:
-The List a Member is currently viewing or editing within the active Household. This is selection state, not a Household service/resource boundary.
+The List a Member is currently viewing or editing within the Authenticated App Session. This is selection state, not a Household service/resource boundary.
 _Avoid_: only list, singleton list
 
 **Item**:
@@ -37,11 +37,11 @@ A token issued by a Member to invite a User to join their Household. Single-use,
 _Avoid_: invite link, share, request
 
 **Home**:
-The current route that renders the active Household's current List while the app is still early in development.
+The current route that renders the Authenticated App Session's Current List while the app is still early in development.
 _Avoid_: dashboard, landing page
 
-**Household Session**:
-The app's active Household context for a signed-in User: the active Household, active Member, current Members, and short-lived Household DB connection metadata. A cached Household Session may omit secrets and allow offline active Household startup. It does not load the Current List, Lists, or Items; those load after the active Household context exists.
+**Authenticated App Session**:
+The top-level signed-in app runtime for a User. It identifies the active Household, active Member, current Members, and session-scoped services backed by short-lived Household DB connection metadata. A cached Authenticated App Session may omit secrets and allow offline startup. It does not load the Current List, Lists, or Items; those load after the Authenticated App Session exists.
 _Avoid_: auth session, bootstrap payload, account session
 
 ## Relationships
@@ -51,8 +51,8 @@ _Avoid_: auth session, bootstrap payload, account session
 - A **Household** owns zero or more **Lists**
 - A **List** contains zero or more **Items**
 - The active **Household** has one active **Member** and one **Current List** selection for the signed-in **User**
-- **Home** currently renders the active **Household**'s selected **Current List**, using the default List selection while List switching is not built. Active **Household** resources are owned by the signed-in Active Household controller/provider boundary rather than **Home**.
-- A **Household Session** identifies one active **Household** and one active **Member**; List and Item data is loaded separately by explicit List ID through Household data services after the session is established.
+- **Home** currently renders the active **Household**'s selected **Current List**, using the default List selection while List switching is not built. Active **Household** resources are owned by the signed-in Authenticated App Session controller/provider boundary rather than **Home**.
+- An **Authenticated App Session** identifies one active **Household** and one active **Member**; List and Item data is loaded separately by explicit List ID through session-scoped services after the session is established.
 
 ## Decisions in flight
 
@@ -68,12 +68,12 @@ _Avoid_: auth session, bootstrap payload, account session
 - **Soft-delete**: tombstones (`deleted_at`) on every replicated table; no hard deletes from the app; server-side GC after replicas catch up. _Decided 2026-04-29._
 - **First-run flow**: on first sign-in, server auto-creates a Household named after the User's first name (or "Untitled" if Apple didn't return one). The new Household starts with one empty List named "Groceries"; the User can rename it or invite Members later. Invitation links route through a separate accept flow. _Decided 2026-04-29; List name clarified 2026-05-13._
 - **First-run onboarding**: optional onboarding happens after the server creates or loads the User's Household, Membership, Household DB, and initial List. The server determines first-run status from directory membership state, not from which sign-in/sign-up/SSO client path fired. _Decided 2026-05-13._
-- **Initial signed-in surface**: after authentication, the app shows the selected Current List for the active Household, not a generic dashboard. Today the Home route renders the default List selection by explicit List ID after active Household context exists; active Household resources are owned by the signed-in Active Household controller/provider boundary rather than Home. Future signed-in surfaces may consume the same active Household context. First-run shows the auto-created Household and an empty List state. _Decided 2026-05-10; Home boundary clarified 2026-05-22; implemented boundary documented 2026-05-25; Current List selection boundary clarified 2026-05-28._
-- **Offline active Household startup**: after a successful online Household Session load and local Household DB initialization, the app can reopen the last active Household/List while offline and accept Item changes locally. Cached Household Session state does not include Household DB auth tokens; membership and sync resume only after a fresh online Household Session load. Cached/offline startup does not start network-aware sync lifecycle work because it is not authorized to sync the Household DB. If a fresh Household Session no longer authorizes the cached Household, unsynced local changes for that Household are discarded rather than synced. _Decided 2026-05-16; cached sync lifecycle clarified 2026-05-21._
-- **Offline sync visibility**: the active Household surface should show a minimal sync status for offline, pending sync, and sync failure states; detailed conflict/recovery UI is deferred until needed. _Decided 2026-05-16._
-- **Sign-out data boundary**: signing out deletes cached Household Session metadata and local Household DB files for the signed-out User; offline Household data belongs to an active signed-in session, not the device forever. _Decided 2026-05-16._
-- **Active Household fallback**: until explicit Household switching exists, the server returns the oldest active Membership for a User; it creates a new Household only when the User has no active Memberships. _Decided 2026-05-13._
-- **Real-time delivery**: coordinator-owned sync polling and lifecycle triggers, plus an immediate sync request after local Item/List mutations when authorized. The coordinator treats app lifecycle and device connectivity as app-wide platform inputs through app-owned adapters, while active Household infrastructure owns when a Household coordinator exists. Known-offline state pauses new automatic remote attempts without cancelling in-flight sync work; reconnect to known-online triggers a full Household catch-up sync only while the app is active, so local changes can upload and other Members' changes can download. Unknown connectivity keeps the foreground/retry fallback behavior. Silent APNs push hints deferred to a later iteration. _Decided 2026-04-29; local-write sync trigger clarified 2026-05-16; network-aware reconnect clarified 2026-05-21; active Household ownership clarified 2026-05-22._
+- **Initial signed-in surface**: after authentication, the app shows the selected Current List for the authenticated app session, not a generic dashboard. Today the Home route renders the default List selection by explicit List ID after the Authenticated App Session exists; session resources are owned by the signed-in Authenticated App Session controller/provider boundary rather than Home. Future signed-in surfaces may consume the same session context. First-run shows the auto-created Household and an empty List state. _Decided 2026-05-10; Home boundary clarified 2026-05-22; implemented boundary documented 2026-05-25; Current List selection boundary clarified 2026-05-28._
+- **Offline authenticated app session startup**: after a successful online Authenticated App Session load and local Household DB initialization, the app can reopen the last active Household/List while offline and accept Item changes locally. Cached Authenticated App Session state does not include Household DB auth tokens; membership and sync resume only after a fresh online Authenticated App Session load. Cached/offline startup does not start network-aware sync lifecycle work because it is not authorized to sync the Household DB. If a fresh Authenticated App Session no longer authorizes the cached Household, unsynced local changes for that Household are discarded rather than synced. _Decided 2026-05-16; cached sync lifecycle clarified 2026-05-21._
+- **Offline sync visibility**: the authenticated app session surface should show a minimal sync status for offline, pending sync, and sync failure states; detailed conflict/recovery UI is deferred until needed. _Decided 2026-05-16._
+- **Sign-out data boundary**: signing out deletes cached Authenticated App Session metadata and local Household DB files for the signed-out User; offline Household data belongs to an active signed-in session, not the device forever. _Decided 2026-05-16._
+- **Authenticated App Session fallback**: until explicit Household switching exists, the server returns the oldest active Membership for a User; it creates a new Household only when the User has no active Memberships. _Decided 2026-05-13._
+- **Real-time delivery**: coordinator-owned sync polling and lifecycle triggers, plus an immediate sync request after local Item/List mutations when authorized. The coordinator treats app lifecycle and device connectivity as app-wide platform inputs through app-owned adapters, while authenticated app session infrastructure owns when a Household coordinator exists. Known-offline state pauses new automatic remote attempts without cancelling in-flight sync work; reconnect to known-online triggers a full Household catch-up sync only while the app is active, so local changes can upload and other Members' changes can download. Unknown connectivity keeps the foreground/retry fallback behavior. Silent APNs push hints deferred to a later iteration. _Decided 2026-04-29; local-write sync trigger clarified 2026-05-16; network-aware reconnect clarified 2026-05-21; authenticated app session ownership clarified 2026-05-22._
 - **ORM & migrations**: Drizzle for schema definition (shared between Expo app and API Routes); drizzle-kit for migration generation; custom runner fans out across the directory DB and all Household DBs (see ADR-0003). _Decided 2026-04-29._
 
 ## Flagged ambiguities

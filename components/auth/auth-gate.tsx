@@ -3,7 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import { useAnalyticsIdentity } from "@/lib/analytics";
-import { readCachedHouseholdSession } from "@/lib/services/household";
+import { readCachedSessionBootstrap } from "@/lib/services/session";
 
 const AUTH_PATHS = new Set(["/sign-in", "/sign-up"]);
 
@@ -15,8 +15,8 @@ export function AuthGate({ pathname }: { pathname: string }) {
 	const onAuthScreen = AUTH_PATHS.has(pathname);
 	const [cachedSessionStatus, setCachedSessionStatus] =
 		useState<CachedSessionStatus>("checking");
-	const hasCachedHouseholdSession = cachedSessionStatus === "available";
-	const checkedCachedHouseholdSession = cachedSessionStatus !== "checking";
+	const hasCachedSessionBootstrap = cachedSessionStatus === "available";
+	const checkedCachedSessionBootstrap = cachedSessionStatus !== "checking";
 
 	useAnalyticsIdentity();
 
@@ -28,7 +28,7 @@ export function AuthGate({ pathname }: { pathname: string }) {
 			return;
 		}
 
-		void readCachedHouseholdSession()
+		void readCachedSessionBootstrap()
 			.then((cached) => {
 				if (!cancelled) {
 					setCachedSessionStatus(cached ? "available" : "unavailable");
@@ -53,9 +53,9 @@ export function AuthGate({ pathname }: { pathname: string }) {
 			return;
 		}
 
-		if (!checkedCachedHouseholdSession) return;
+		if (!checkedCachedSessionBootstrap) return;
 
-		if (hasCachedHouseholdSession) {
+		if (hasCachedSessionBootstrap) {
 			if (onAuthScreen) {
 				router.replace("/");
 			}
@@ -66,8 +66,8 @@ export function AuthGate({ pathname }: { pathname: string }) {
 			router.replace("/sign-in");
 		}
 	}, [
-		checkedCachedHouseholdSession,
-		hasCachedHouseholdSession,
+		checkedCachedSessionBootstrap,
+		hasCachedSessionBootstrap,
 		isLoaded,
 		isSignedIn,
 		onAuthScreen,
@@ -80,8 +80,8 @@ export function AuthGate({ pathname }: { pathname: string }) {
 		if (
 			!isLoaded ||
 			isSignedIn ||
-			!checkedCachedHouseholdSession ||
-			hasCachedHouseholdSession
+			!checkedCachedSessionBootstrap ||
+			hasCachedSessionBootstrap
 		)
 			return;
 		void WebBrowser.warmUpAsync();
@@ -89,8 +89,8 @@ export function AuthGate({ pathname }: { pathname: string }) {
 			void WebBrowser.coolDownAsync();
 		};
 	}, [
-		checkedCachedHouseholdSession,
-		hasCachedHouseholdSession,
+		checkedCachedSessionBootstrap,
+		hasCachedSessionBootstrap,
 		isLoaded,
 		isSignedIn,
 	]);

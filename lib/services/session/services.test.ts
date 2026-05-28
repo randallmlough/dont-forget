@@ -1,5 +1,5 @@
-import { createActiveHouseholdDataServices } from "./active-household-data-services";
-import type { HouseholdSqlStatement } from "./household-store";
+import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import { createSessionDataServices } from "./services";
 
 const logger = {
 	debug: jest.fn(),
@@ -9,7 +9,7 @@ const logger = {
 	with: jest.fn(),
 };
 
-describe("createActiveHouseholdDataServices", () => {
+describe("createSessionDataServices", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		logger.with.mockReturnValue(logger);
@@ -17,7 +17,7 @@ describe("createActiveHouseholdDataServices", () => {
 
 	it("loads List and Item data through explicit listId service calls", async () => {
 		const store = storeFixture();
-		const services = createActiveHouseholdDataServices(
+		const services = createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -27,13 +27,13 @@ describe("createActiveHouseholdDataServices", () => {
 		);
 
 		await expect(
-			services.listService.getList({ listId: "lst_default_groceries" }),
+			services.lists.getList({ listId: "lst_default_groceries" }),
 		).resolves.toMatchObject({
 			id: "lst_default_groceries",
 			name: "Groceries",
 		});
 		await expect(
-			services.itemService.listItems({ listId: "lst_default_groceries" }),
+			services.items.listItems({ listId: "lst_default_groceries" }),
 		).resolves.toEqual([
 			expect.objectContaining({
 				id: "itm_milk",
@@ -49,7 +49,7 @@ describe("createActiveHouseholdDataServices", () => {
 
 	it("uses explicit listId for Item writes", async () => {
 		const store = storeFixture();
-		const services = createActiveHouseholdDataServices(
+		const services = createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -58,12 +58,12 @@ describe("createActiveHouseholdDataServices", () => {
 			{ store },
 		);
 
-		await services.itemService.addItem({
+		await services.items.addItem({
 			listId: "lst_default_groceries",
 			userId: "usr_avery",
 			name: "Eggs",
 		});
-		await services.itemService.setItemChecked({
+		await services.items.setItemChecked({
 			listId: "lst_default_groceries",
 			itemId: "itm_milk",
 			userId: "usr_avery",

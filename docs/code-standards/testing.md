@@ -8,7 +8,7 @@
 - **Must** use local isolated libSQL database helpers for database behavior instead of running migrations against configured environments.
 - **Must** test loading, ready, empty, error, and retry states for route-owned data hooks or containers.
 - **Must** test stale async responses, cancellation, or unmount cleanup when a hook or container owns async lifecycle.
-- **Must** test active Household controller cached load, fresh load, safe cached-to-fresh replacement, unauthorized cached invalidation, stale run IDs, disposal, and write races through borrowed active Household resources.
+- **Must** test authenticated app session controller cached load, fresh load, safe cached-to-fresh replacement, unauthorized cached invalidation, stale run IDs, disposal, and write races through borrowed authenticated app session resources.
 - **Must** test reducers and transition helpers directly when they encode product behavior or async UI recovery.
 - **Must** cover success, failure, and ignored or no-op transitions where relevant.
 - **Must** test user actions through visible behavior and accessibility queries, not implementation state.
@@ -39,7 +39,7 @@ See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 - **Should** keep shared fixtures domain-shaped and product-language-first: Household, Member, User, List, Item, and Invitation.
 - **Should** allow narrow overrides for test-specific facts while preserving realistic defaults.
 - **Should** split large test files by behavior theme when a single file starts covering several independent concerns.
-- **Should** name focused test files after the behavior under test, for example `active-household-controller.activation.test.ts`, `active-household-controller.cache-invalidation.test.ts`, or `active-household-controller.resource-lifecycle.test.ts`.
+- **Should** name focused test files after the behavior under test, for example `lib/services/session/controller.activation.test.ts`, `lib/services/session/controller.cache-invalidation.test.ts`, or `lib/services/session/controller.resource-lifecycle.test.ts`.
 - **Should** keep each focused test file readable as a behavior spec for one concern.
 - **Avoid** extracting one-off setup into shared fixtures. Promote only fixtures used across multiple modules or likely to support future domain tests.
 - **Avoid** hiding behavior in fixtures. Fixtures should create data and test doubles, not encode product logic.

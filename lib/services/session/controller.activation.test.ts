@@ -1,11 +1,11 @@
-import * as h from "./active-household-controller.test-helpers";
+import * as h from "./controller.test-helpers";
 
-describe("createActiveHouseholdController activation", () => {
-	it("publishes a ready Active Household view from a fresh Household Session", async () => {
-		const dataServices = h.activeHouseholdDataServicesFixture();
+describe("createAuthenticatedAppSessionController activation", () => {
+	it("publishes a ready Authenticated App Session from a fresh Authenticated App Session", async () => {
+		const dataServices = h.sessionDataServicesFixture();
 		const syncCoordinator = h.syncCoordinatorFixture();
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: h.sessionServiceFixture(),
+		const controller = h.createAuthenticatedAppSessionController({
+			...h.sessionRuntimeFixture(),
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -25,29 +25,38 @@ describe("createActiveHouseholdController activation", () => {
 		]);
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: {
-				activeMemberName: "Avery Chen",
-				resourceKey: "active-household:1",
-				listService: expect.objectContaining({
-					getList: expect.any(Function),
-				}),
-				itemService: expect.objectContaining({
-					listItems: expect.any(Function),
-					addItem: expect.any(Function),
-					setItemChecked: expect.any(Function),
-				}),
-				syncCoordinator,
+			session: {
+				resourceKey: "authenticated-app-session:1",
+				services: {
+					lists: expect.objectContaining({
+						getList: expect.any(Function),
+					}),
+					items: expect.objectContaining({
+						listItems: expect.any(Function),
+						addItem: expect.any(Function),
+						setItemChecked: expect.any(Function),
+					}),
+					sync: expect.objectContaining({
+						getStatus: expect.any(Function),
+						subscribe: expect.any(Function),
+						requestSync: expect.any(Function),
+					}),
+				},
 			},
 		});
-		expect(dataServices.listService.getList).not.toHaveBeenCalled();
-		expect(dataServices.itemService.listItems).not.toHaveBeenCalled();
+		const snapshot = controller.getSnapshot();
+		if (snapshot.status !== "ready") throw new Error("Expected ready snapshot");
+		expect(snapshot.session.services.sync).not.toHaveProperty("start");
+		expect(snapshot.session.services.sync).not.toHaveProperty("stop");
+		expect(dataServices.lists.getList).not.toHaveBeenCalled();
+		expect(dataServices.items.listItems).not.toHaveBeenCalled();
 		expect(syncCoordinator.start).toHaveBeenCalledTimes(1);
 	});
 
 	it("publishes loading and error snapshots when fresh activation fails", async () => {
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: h.sessionServiceFixture({
-				getHouseholdSession: jest.fn().mockRejectedValue(new Error("offline")),
+		const controller = h.createAuthenticatedAppSessionController({
+			...h.sessionRuntimeFixture({
+				getSession: jest.fn().mockRejectedValue(new Error("offline")),
 			}),
 			logger: h.loggerFixture(),
 		});
@@ -70,16 +79,16 @@ describe("createActiveHouseholdController activation", () => {
 	});
 
 	it("publishes cached Household shell state without loading the List or starting authorized sync", async () => {
-		const cached = h.cachedHouseholdSessionFixture();
-		const dataServices = h.activeHouseholdDataServicesFixture({
+		const cached = h.cachedSessionBootstrapFixture();
+		const dataServices = h.sessionDataServicesFixture({
 			syncAuthorized: false,
 		});
 		const syncCoordinator = h.syncCoordinatorFixture();
-		const sessionService = h.sessionServiceFixture({
-			readCachedHouseholdSession: jest.fn().mockResolvedValue(cached),
+		const sessionService = h.sessionRuntimeFixture({
+			read: jest.fn().mockResolvedValue(cached),
 		});
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: sessionService,
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -93,26 +102,28 @@ describe("createActiveHouseholdController activation", () => {
 
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: {
-				resourceKey: "active-household:1",
-				listService: expect.objectContaining({
-					getList: expect.any(Function),
-				}),
-				itemService: expect.objectContaining({
-					listItems: expect.any(Function),
-					addItem: expect.any(Function),
-					setItemChecked: expect.any(Function),
-				}),
+			session: {
+				resourceKey: "authenticated-app-session:1",
+				services: {
+					lists: expect.objectContaining({
+						getList: expect.any(Function),
+					}),
+					items: expect.objectContaining({
+						listItems: expect.any(Function),
+						addItem: expect.any(Function),
+						setItemChecked: expect.any(Function),
+					}),
+				},
 			},
 		});
-		expect(sessionService.getHouseholdSession).not.toHaveBeenCalled();
-		expect(dataServices.listService.getList).not.toHaveBeenCalled();
-		expect(dataServices.itemService.listItems).not.toHaveBeenCalled();
+		expect(sessionService.getSession).not.toHaveBeenCalled();
+		expect(dataServices.lists.getList).not.toHaveBeenCalled();
+		expect(dataServices.items.listItems).not.toHaveBeenCalled();
 		expect(syncCoordinator.start).not.toHaveBeenCalled();
 	});
 
 	it("keeps cached Household shell state when fresh loading fails", async () => {
-		const dataServices = h.activeHouseholdDataServicesFixture({
+		const dataServices = h.sessionDataServicesFixture({
 			syncAuthorized: false,
 			addItem: jest.fn().mockResolvedValue({
 				id: "itm_cached",
@@ -122,12 +133,10 @@ describe("createActiveHouseholdController activation", () => {
 			}),
 		});
 		const syncCoordinator = h.syncCoordinatorFixture();
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: h.sessionServiceFixture({
-				readCachedHouseholdSession: jest
-					.fn()
-					.mockResolvedValue(h.cachedHouseholdSessionFixture()),
-				getHouseholdSession: jest.fn().mockRejectedValue(new Error("offline")),
+		const controller = h.createAuthenticatedAppSessionController({
+			...h.sessionRuntimeFixture({
+				read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
+				getSession: jest.fn().mockRejectedValue(new Error("offline")),
 			}),
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
@@ -142,17 +151,19 @@ describe("createActiveHouseholdController activation", () => {
 
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: {
-				resourceKey: "active-household:1",
-				itemService: expect.objectContaining({
-					addItem: expect.any(Function),
-				}),
+			session: {
+				resourceKey: "authenticated-app-session:1",
+				services: {
+					items: expect.objectContaining({
+						addItem: expect.any(Function),
+					}),
+				},
 			},
 		});
 		const snapshot = controller.getSnapshot();
 		if (snapshot.status !== "ready") throw new Error("Expected cached ready");
 		await expect(
-			snapshot.view.itemService.addItem({
+			snapshot.session.services.items.addItem({
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Cached eggs",
@@ -164,11 +175,11 @@ describe("createActiveHouseholdController activation", () => {
 	});
 
 	it("does not read or publish cached Household data when signed out", async () => {
-		const dataServices = h.activeHouseholdDataServicesFixture();
+		const dataServices = h.sessionDataServicesFixture();
 		const syncCoordinator = h.syncCoordinatorFixture();
-		const sessionService = h.sessionServiceFixture();
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: sessionService,
+		const sessionService = h.sessionRuntimeFixture();
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -178,10 +189,10 @@ describe("createActiveHouseholdController activation", () => {
 			authReady: true,
 			signedIn: true,
 		});
-		jest.mocked(sessionService.readCachedHouseholdSession).mockClear();
+		jest.mocked(sessionService.read).mockClear();
 		jest
-			.mocked(sessionService.readCachedHouseholdSession)
-			.mockResolvedValue(h.cachedHouseholdSessionFixture());
+			.mocked(sessionService.read)
+			.mockResolvedValue(h.cachedSessionBootstrapFixture());
 
 		await controller.activate({
 			getToken: async () => null,
@@ -190,27 +201,27 @@ describe("createActiveHouseholdController activation", () => {
 		});
 
 		expect(controller.getSnapshot()).toEqual({ status: "idle" });
-		expect(sessionService.readCachedHouseholdSession).not.toHaveBeenCalled();
+		expect(sessionService.read).not.toHaveBeenCalled();
 		expect(dataServices.close).toHaveBeenCalledTimes(1);
 		expect(syncCoordinator.stop).toHaveBeenCalledTimes(1);
 	});
 
 	it("ignores stale activation completion without closing the newer resource or saving stale cache", async () => {
-		const staleSession = h.deferred<h.HouseholdSession>();
-		const staleDataServices = h.activeHouseholdDataServicesFixture();
-		const freshDataServices = h.activeHouseholdDataServicesFixture();
+		const staleSession = h.deferred<h.SessionBootstrap>();
+		const staleDataServices = h.sessionDataServicesFixture();
+		const freshDataServices = h.sessionDataServicesFixture();
 		const staleCoordinator = h.syncCoordinatorFixture();
 		const freshCoordinator = h.syncCoordinatorFixture();
-		const sessionService = h.sessionServiceFixture({
-			getHouseholdSession: jest
+		const sessionService = h.sessionRuntimeFixture({
+			getSession: jest
 				.fn()
 				.mockReturnValueOnce(staleSession.promise)
 				.mockResolvedValueOnce(
-					h.householdSessionFixture({ householdName: "Fresh" }),
+					h.sessionBootstrapFixture({ householdName: "Fresh" }),
 				),
 		});
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: sessionService,
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(staleDataServices)
@@ -228,7 +239,7 @@ describe("createActiveHouseholdController activation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(sessionService.getHouseholdSession).toHaveBeenCalledTimes(1),
+			expect(sessionService.getSession).toHaveBeenCalledTimes(1),
 		);
 		await controller.activate({
 			getToken: async () => "fresh-token",
@@ -238,19 +249,19 @@ describe("createActiveHouseholdController activation", () => {
 
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { resourceKey: "active-household:1" },
+			session: { resourceKey: "authenticated-app-session:1" },
 		});
-		staleSession.resolve(h.householdSessionFixture({ householdName: "Stale" }));
+		staleSession.resolve(h.sessionBootstrapFixture({ householdName: "Stale" }));
 		await staleActivation;
 
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { resourceKey: "active-household:1" },
+			session: { resourceKey: "authenticated-app-session:1" },
 		});
 		expect(freshCoordinator.stop).not.toHaveBeenCalled();
 		expect(freshDataServices.close).not.toHaveBeenCalled();
-		expect(sessionService.saveCachedHouseholdSession).toHaveBeenCalledTimes(1);
-		expect(sessionService.saveCachedHouseholdSession).toHaveBeenCalledWith(
+		expect(sessionService.save).toHaveBeenCalledTimes(1);
+		expect(sessionService.save).toHaveBeenCalledWith(
 			expect.objectContaining({
 				activeHousehold: { id: "hh_avery", name: "Fresh" },
 			}),
@@ -258,33 +269,33 @@ describe("createActiveHouseholdController activation", () => {
 	});
 
 	it("serializes cache writes so a stale in-flight save cannot overwrite fresh cache", async () => {
-		const staleSave = h.deferred<h.CachedHouseholdSession>();
+		const staleSave = h.deferred<h.CachedSessionBootstrap>();
 		const savedHouseholdNames: string[] = [];
-		const sessionService = h.sessionServiceFixture({
-			getHouseholdSession: jest
+		const sessionService = h.sessionRuntimeFixture({
+			getSession: jest
 				.fn()
 				.mockResolvedValueOnce(
-					h.householdSessionFixture({ householdName: "Stale" }),
+					h.sessionBootstrapFixture({ householdName: "Stale" }),
 				)
 				.mockResolvedValueOnce(
-					h.householdSessionFixture({ householdName: "Fresh" }),
+					h.sessionBootstrapFixture({ householdName: "Fresh" }),
 				),
 		});
-		sessionService.saveCachedHouseholdSession = jest
+		sessionService.cache.save = sessionService.save = jest
 			.fn()
-			.mockImplementationOnce(async (session: h.HouseholdSession) => {
+			.mockImplementationOnce(async (session: h.SessionBootstrap) => {
 				savedHouseholdNames.push(session.activeHousehold.name);
 				return staleSave.promise;
 			})
-			.mockImplementationOnce(async (session: h.HouseholdSession) => {
+			.mockImplementationOnce(async (session: h.SessionBootstrap) => {
 				savedHouseholdNames.push(session.activeHousehold.name);
-				return h.cachedHouseholdSessionFixture();
+				return h.cachedSessionBootstrapFixture();
 			});
-		const controller = h.createActiveHouseholdController({
-			householdSessionService: sessionService,
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService,
 			createDataServices: jest
 				.fn()
-				.mockReturnValue(h.activeHouseholdDataServicesFixture()),
+				.mockReturnValue(h.sessionDataServicesFixture()),
 			createSyncCoordinator: jest
 				.fn()
 				.mockReturnValue(h.syncCoordinatorFixture()),
@@ -305,13 +316,13 @@ describe("createActiveHouseholdController activation", () => {
 		await Promise.resolve();
 		expect(savedHouseholdNames).toEqual(["Stale"]);
 
-		staleSave.resolve(h.cachedHouseholdSessionFixture());
+		staleSave.resolve(h.cachedSessionBootstrapFixture());
 		await Promise.all([staleActivation, freshActivation]);
 
 		expect(savedHouseholdNames).toEqual(["Stale", "Fresh"]);
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
-			view: { resourceKey: "active-household:2" },
+			session: { resourceKey: "authenticated-app-session:2" },
 		});
 	});
 });

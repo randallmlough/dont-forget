@@ -1,16 +1,16 @@
 import type {
 	ActiveListInitialState,
-	ActiveListSyncCoordinator,
+	ActiveListManagedSyncCoordinator,
 } from "@/components/active-list";
-import type {
-	CachedHouseholdSession,
-	HouseholdSession,
-} from "@/lib/services/household";
-import type { ActiveHouseholdDataServices } from "@/lib/services/household/active-household-data-services";
 import type { Item, ItemService } from "@/lib/services/item";
 import type { List, ListService } from "@/lib/services/list";
+import type {
+	CachedSessionBootstrap,
+	SessionBootstrap,
+	SessionDataServices,
+} from "@/lib/services/session";
 
-export type HouseholdSessionFixtureOverrides = {
+export type SessionBootstrapFixtureOverrides = {
 	householdId?: string;
 	householdName?: string;
 	householdDatabaseAuthToken?: string;
@@ -18,8 +18,8 @@ export type HouseholdSessionFixtureOverrides = {
 	householdDatabaseUrl?: string;
 };
 
-export type CachedHouseholdSessionFixtureOverrides =
-	HouseholdSessionFixtureOverrides & {
+export type CachedSessionBootstrapFixtureOverrides =
+	SessionBootstrapFixtureOverrides & {
 		initializedAt?: number;
 	};
 
@@ -32,9 +32,9 @@ export type InitialListFixtureOverrides = {
 	listName?: string;
 };
 
-export function householdSessionFixture(
-	overrides: HouseholdSessionFixtureOverrides = {},
-): HouseholdSession {
+export function sessionBootstrapFixture(
+	overrides: SessionBootstrapFixtureOverrides = {},
+): SessionBootstrap {
 	return {
 		user: {
 			id: "usr_avery",
@@ -68,11 +68,11 @@ export function householdSessionFixture(
 	};
 }
 
-export function cachedHouseholdSessionFixture(
-	overrides: CachedHouseholdSessionFixtureOverrides = {},
-): CachedHouseholdSession {
+export function cachedSessionBootstrapFixture(
+	overrides: CachedSessionBootstrapFixtureOverrides = {},
+): CachedSessionBootstrap {
 	const { householdDatabase: _householdDatabase, ...sessionMetadata } =
-		householdSessionFixture(overrides);
+		sessionBootstrapFixture(overrides);
 
 	return {
 		...sessionMetadata,
@@ -149,33 +149,32 @@ export function itemServiceFixture(
 	};
 }
 
-export type ActiveHouseholdDataServicesFixture = ActiveHouseholdDataServices;
+export type SessionDataServicesFixture = SessionDataServices;
 
-type ActiveHouseholdDataServicesFixtureOverrides =
-	Partial<ActiveHouseholdDataServices> & {
-		addItem?: jest.Mock;
-		setItemChecked?: jest.Mock;
-	};
+type SessionDataServicesFixtureOverrides = Partial<SessionDataServices> & {
+	addItem?: jest.Mock;
+	setItemChecked?: jest.Mock;
+};
 
-export function activeHouseholdDataServicesFixture(
-	overrides: ActiveHouseholdDataServicesFixtureOverrides = {},
-): ActiveHouseholdDataServicesFixture {
+export function sessionDataServicesFixture(
+	overrides: SessionDataServicesFixtureOverrides = {},
+): SessionDataServicesFixture {
 	const addItem = overrides.addItem ?? jest.fn();
 	const setItemChecked =
 		overrides.setItemChecked ?? jest.fn().mockResolvedValue(undefined);
-	const itemService =
-		overrides.itemService ?? itemServiceFixture({ addItem, setItemChecked });
+	const items =
+		overrides.items ?? itemServiceFixture({ addItem, setItemChecked });
 
 	return {
-		listService: overrides.listService ?? listServiceFixture(),
-		itemService,
+		lists: overrides.lists ?? listServiceFixture(),
+		items,
 		syncAuthorized: overrides.syncAuthorized ?? true,
 		sync: overrides.sync ?? jest.fn().mockResolvedValue({ changed: false }),
 		close: overrides.close ?? jest.fn().mockResolvedValue(undefined),
 	};
 }
 
-export function syncCoordinatorFixture(): ActiveListSyncCoordinator {
+export function syncCoordinatorFixture(): ActiveListManagedSyncCoordinator {
 	return {
 		getStatus: jest.fn(() => "synced"),
 		subscribe: jest.fn(() => ({ remove() {} })),

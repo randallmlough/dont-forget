@@ -9,6 +9,7 @@ import {
 import {
 	ActiveList,
 	type ActiveListInitialState,
+	type ActiveListManagedSyncCoordinator,
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
 
@@ -45,7 +46,10 @@ type MemoryListActions = {
 	close: () => Promise<void>;
 };
 
-type TestSyncCoordinator = Omit<ActiveListSyncCoordinator, "requestSync"> & {
+type TestSyncCoordinator = Omit<
+	ActiveListManagedSyncCoordinator,
+	"requestSync"
+> & {
 	requestSync: jest.MockedFunction<ActiveListSyncCoordinator["requestSync"]>;
 	emit: (status: ReturnType<ActiveListSyncCoordinator["getStatus"]>) => void;
 };
@@ -365,7 +369,7 @@ function renderActiveList(
 
 function passiveSyncCoordinator(
 	status: ReturnType<ActiveListSyncCoordinator["getStatus"]> = "synced",
-): ActiveListSyncCoordinator {
+): ActiveListManagedSyncCoordinator {
 	return {
 		getStatus: () => status,
 		subscribe: jest.fn(() => ({ remove() {} })),

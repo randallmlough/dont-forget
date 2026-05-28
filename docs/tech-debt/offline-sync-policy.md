@@ -4,7 +4,7 @@
 
 Don't Forget requires local-first Household data: List and Item writes must commit to the local Household DB while offline, remain visible in Home, and sync after connectivity and authorization are available again.
 
-Recent iOS Simulator airplane-mode testing showed the app still attempts Turso sync after local Item writes even when the active Household surface already reports `Offline - changes saved locally`. The user-visible Item behavior is mostly correct, but the runtime still emits noisy Turso transport errors such as `[Turso HTTP] Request failed` while the simulator has no internet connection.
+Recent iOS Simulator airplane-mode testing showed the app still attempts Turso sync after local Item writes even when the authenticated app session surface already reports `Offline - changes saved locally`. The user-visible Item behavior is mostly correct, but the runtime still emits noisy Turso transport errors such as `[Turso HTTP] Request failed` while the simulator has no internet connection.
 
 ## Issues We Have Been Experiencing
 

@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ActiveHouseholdContentState } from "@/components/active-household";
 import type {
 	ActiveListInitialState,
 	ActiveListItem,
 } from "@/components/active-list";
 import type { Item } from "@/lib/services/item";
-
-type ReadyActiveHouseholdContent = Extract<
-	ActiveHouseholdContentState,
-	{ status: "ready" }
->;
+import type { AuthenticatedAppSession } from "@/lib/services/session";
 
 export type ListActions = {
 	loadList: () => Promise<ActiveListInitialState>;
@@ -27,7 +22,7 @@ export type ListState =
 	  };
 
 export function useList(
-	content: ReadyActiveHouseholdContent,
+	session: AuthenticatedAppSession,
 	listId: string,
 ): {
 	state: ListState;
@@ -40,57 +35,66 @@ export function useList(
 	const [retryAttempt, setRetryAttempt] = useState(0);
 	const memberNames = useMemo(() => {
 		const names = new Map<string, string | null>();
-		for (const member of content.members) {
+		for (const member of session.members) {
 			names.set(member.userId, member.displayName);
 		}
 		names.set(
-			content.activeMember.userId,
-			content.activeMember.displayName ?? content.activeMemberName,
+			session.activeMember.userId,
+			session.activeMember.displayName ??
+				session.user.displayName ??
+				session.user.email ??
+				"Member",
 		);
 		return names;
-	}, [content.activeMember, content.activeMemberName, content.members]);
+	}, [
+		session.activeMember.displayName,
+		session.activeMember.userId,
+		session.members,
+		session.user.displayName,
+		session.user.email,
+	]);
 
 	const loadList = useCallback(async (): Promise<ActiveListInitialState> => {
 		const [list, items] = await Promise.all([
-			content.listService.getList({ listId }),
-			content.itemService.listItems({ listId }),
+			session.services.lists.getList({ listId }),
+			session.services.items.listItems({ listId }),
 		]);
 
 		return {
-			householdName: content.household.name,
+			householdName: session.activeHousehold.name,
 			listName: list.name,
 			items: items.map((item) => activeListItemFromItem(item, memberNames)),
 		};
 	}, [
-		content.household.name,
-		content.itemService,
-		content.listService,
+		session.activeHousehold.name,
+		session.services.items,
+		session.services.lists,
 		listId,
 		memberNames,
 	]);
 
 	const addItem = useCallback(
 		async (name: string): Promise<ActiveListItem> => {
-			const item = await content.itemService.addItem({
+			const item = await session.services.items.addItem({
 				listId,
-				userId: content.activeMember.userId,
+				userId: session.activeMember.userId,
 				name,
 			});
 			return activeListItemFromItem(item, memberNames);
 		},
-		[content.activeMember.userId, content.itemService, listId, memberNames],
+		[session.activeMember.userId, session.services.items, listId, memberNames],
 	);
 
 	const setItemChecked = useCallback(
 		async (itemId: string, checked: boolean) => {
-			await content.itemService.setItemChecked({
+			await session.services.items.setItemChecked({
 				listId,
 				itemId,
-				userId: content.activeMember.userId,
+				userId: session.activeMember.userId,
 				checked,
 			});
 		},
-		[content.activeMember.userId, content.itemService, listId],
+		[session.activeMember.userId, session.services.items, listId],
 	);
 
 	const actions = useMemo<ListActions>(

@@ -3,28 +3,29 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
-import {
-	type ActiveHouseholdContentState,
-	useActiveHousehold,
-} from "@/components/active-household";
 import { ActiveList } from "@/components/active-list";
+import {
+	type AuthenticatedAppSessionState,
+	useAuthenticatedAppSession,
+} from "@/components/session";
 import { useList } from "@/hooks/use-list";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
+import type { AuthenticatedAppSession } from "@/lib/services/session";
 
 export type HomeScreenViewProps = {
-	currentMemberName: string;
-	content: ActiveHouseholdContentState;
+	state: AuthenticatedAppSessionState;
+	session: AuthenticatedAppSession | null;
 	onRetry?: () => void;
 	onSignOut?: () => void;
 };
 
 export default function HomeScreen() {
-	const { content, currentMemberName, retry, signOut } = useActiveHousehold();
+	const { state, session, retry, signOut } = useAuthenticatedAppSession();
 
 	return (
 		<HomeScreenView
-			currentMemberName={currentMemberName}
-			content={content}
+			state={state}
+			session={session}
 			onRetry={retry}
 			onSignOut={signOut}
 		/>
@@ -32,13 +33,12 @@ export default function HomeScreen() {
 }
 
 export function HomeScreenView({
-	currentMemberName,
-	content,
+	state,
+	session,
 	onRetry,
 	onSignOut,
 }: HomeScreenViewProps) {
-	const displayMemberName =
-		content.status === "ready" ? content.activeMemberName : currentMemberName;
+	const displayMemberName = sessionMemberName(session);
 
 	return (
 		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
@@ -63,21 +63,14 @@ export function HomeScreenView({
 				) : null}
 			</View>
 
-			{content.status === "ready" ? (
+			{session ? (
 				<DefaultListContent
-					key={content.resourceKey}
+					key={session.resourceKey}
 					currentMemberName={displayMemberName}
-					content={content}
+					session={session}
 				/>
-			) : content.status === "loading" ? (
-				<HomeStatus
-					title="Preparing your Household"
-					body="Loading your Household List."
-				>
-					<ActivityIndicator />
-				</HomeStatus>
-			) : (
-				<HomeStatus title="Household unavailable" body={content.message}>
+			) : state.status === "error" ? (
+				<HomeStatus title="Household unavailable" body={state.message}>
 					{onRetry ? (
 						<Pressable
 							accessibilityRole="button"
@@ -91,19 +84,26 @@ export function HomeScreenView({
 						</Pressable>
 					) : null}
 				</HomeStatus>
+			) : (
+				<HomeStatus
+					title="Preparing your Household"
+					body="Loading your Household List."
+				>
+					<ActivityIndicator />
+				</HomeStatus>
 			)}
 		</SafeAreaView>
 	);
 }
 
 function DefaultListContent({
-	content,
+	session,
 	currentMemberName,
 }: {
-	content: Extract<ActiveHouseholdContentState, { status: "ready" }>;
+	session: AuthenticatedAppSession;
 	currentMemberName: string;
 }) {
-	const list = useList(content, DEFAULT_LIST_ID);
+	const list = useList(session, DEFAULT_LIST_ID);
 	const loadState = list.state;
 
 	if (loadState.status === "loading") {
@@ -141,7 +141,7 @@ function DefaultListContent({
 			onLoadList={loadState.actions.loadList}
 			onAddItem={loadState.actions.addItem}
 			onSetItemChecked={loadState.actions.setItemChecked}
-			syncCoordinator={content.syncCoordinator}
+			syncCoordinator={session.services.sync}
 			manageSyncCoordinatorLifecycle={false}
 		>
 			<ActiveList.Screen>
@@ -150,6 +150,16 @@ function DefaultListContent({
 				<ActiveList.AddItemForm />
 			</ActiveList.Screen>
 		</ActiveList.Provider>
+	);
+}
+
+function sessionMemberName(session: AuthenticatedAppSession | null): string {
+	if (!session) return "Member";
+	return (
+		session.activeMember.displayName ??
+		session.user.displayName ??
+		session.user.email ??
+		"Member"
 	);
 }
 
@@ -259,7 +269,8 @@ const styles = StyleSheet.create((theme) => ({
 		opacity: theme.opacities.pressed,
 	},
 	retryButtonLabel: {
-		...theme.typography.controlLabel,
+		...theme.typography.callout,
 		color: theme.colors.inverseText,
+		fontWeight: theme.fontWeights.bold,
 	},
 }));

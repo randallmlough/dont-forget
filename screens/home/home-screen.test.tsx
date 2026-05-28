@@ -5,10 +5,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import {
-	type ActiveHouseholdContentState,
-	useActiveHousehold,
-} from "@/components/active-household";
+import { useAuthenticatedAppSession } from "@/components/session";
 import {
 	initialListFixture,
 	itemFixture,
@@ -16,21 +13,22 @@ import {
 	listFixture,
 	listServiceFixture,
 	syncCoordinatorFixture,
-} from "@/db/fixtures/active-household";
+} from "@/db/fixtures/session";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
+import type { AuthenticatedAppSession } from "@/lib/services/session";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
-jest.mock("@/components/active-household", () => ({
-	useActiveHousehold: jest.fn(),
+jest.mock("@/components/session", () => ({
+	useAuthenticatedAppSession: jest.fn(),
 }));
 
 describe("HomeScreen", () => {
 	it("renders provider-derived loading state", () => {
-		jest.mocked(useActiveHousehold).mockReturnValue({
-			content: { status: "loading" },
-			currentMemberName: "Avery Chen",
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "loading" },
+			session: null,
 			retry: jest.fn(),
-			signOut: jest.fn(),
+			signOut: jest.fn(async () => undefined),
 		});
 
 		render(<HomeScreen />);
@@ -39,11 +37,11 @@ describe("HomeScreen", () => {
 	});
 
 	it("renders provider-derived ready state", async () => {
-		jest.mocked(useActiveHousehold).mockReturnValue({
-			content: readyContent(),
-			currentMemberName: "Avery Chen",
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "ready", refreshing: false },
+			session: readySession(),
 			retry: jest.fn(),
-			signOut: jest.fn(),
+			signOut: jest.fn(async () => undefined),
 		});
 
 		render(<HomeScreen />);
@@ -54,13 +52,13 @@ describe("HomeScreen", () => {
 
 	it("wires retry and sign out actions from the provider", () => {
 		const retry = jest.fn();
-		const signOut = jest.fn();
-		jest.mocked(useActiveHousehold).mockReturnValue({
-			content: {
+		const signOut = jest.fn(async () => undefined);
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: {
 				status: "error",
 				message: "Unable to prepare your Household. Please try again.",
 			},
-			currentMemberName: "Avery Chen",
+			session: null,
 			retry,
 			signOut,
 		});
@@ -74,12 +72,12 @@ describe("HomeScreen", () => {
 	});
 });
 
-it("remounts Active List when the Household resource changes", async () => {
+it("remounts Active List when the session resource changes", async () => {
 	const { rerender } = render(
 		<HomeScreenView
-			currentMemberName="Avery Chen"
-			content={readyContent({
-				resourceKey: "active-household:1",
+			state={{ status: "ready", refreshing: false }}
+			session={readySession({
+				resourceKey: "authenticated-app-session:1",
 				initialList: initialListFixture({ itemName: "Cached Milk" }),
 			})}
 		/>,
@@ -88,9 +86,9 @@ it("remounts Active List when the Household resource changes", async () => {
 	await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
 	rerender(
 		<HomeScreenView
-			currentMemberName="Avery Chen"
-			content={readyContent({
-				resourceKey: "active-household:2",
+			state={{ status: "ready", refreshing: false }}
+			session={readySession({
+				resourceKey: "authenticated-app-session:2",
 				initialList: initialListFixture({ itemName: "Fresh Eggs" }),
 			})}
 		/>,
@@ -101,24 +99,21 @@ it("remounts Active List when the Household resource changes", async () => {
 });
 
 describe("HomeScreenView", () => {
-	it("shows Household Session loading and retryable error states", () => {
+	it("shows Authenticated App Session loading and retryable error states", () => {
 		const retry = jest.fn();
 
 		const { rerender } = render(
-			<HomeScreenView
-				currentMemberName="Avery Chen"
-				content={{ status: "loading" }}
-			/>,
+			<HomeScreenView state={{ status: "loading" }} session={null} />,
 		);
 		expect(screen.getByText("Preparing your Household")).toBeTruthy();
 
 		rerender(
 			<HomeScreenView
-				currentMemberName="Avery Chen"
-				content={{
+				state={{
 					status: "error",
 					message: "Unable to prepare your Household. Please try again.",
 				}}
+				session={null}
 				onRetry={retry}
 			/>,
 		);
@@ -127,11 +122,11 @@ describe("HomeScreenView", () => {
 		expect(retry).toHaveBeenCalledTimes(1);
 	});
 
-	it("renders Active List data after active Household loading succeeds", async () => {
+	it("renders Active List data after authenticated app session loading succeeds", async () => {
 		render(
 			<HomeScreenView
-				currentMemberName="Avery Chen"
-				content={readyContent({
+				state={{ status: "ready", refreshing: false }}
+				session={readySession({
 					initialList: initialListFixture({
 						checked: true,
 						checkedByMemberName: "Avery Chen",
@@ -147,17 +142,22 @@ describe("HomeScreenView", () => {
 	});
 
 	it("uses active Member fallback name for checked Item display", async () => {
-		const content = readyContent({
+		const session = readySession({
 			initialList: initialListFixture({ checked: true }),
 		});
-		content.activeMember.displayName = null;
-		content.members = content.members.map((member) =>
-			member.userId === content.activeMember.userId
+		session.activeMember.displayName = null;
+		session.members = session.members.map((member) =>
+			member.userId === session.activeMember.userId
 				? { ...member, displayName: null }
 				: member,
 		);
 
-		render(<HomeScreenView currentMemberName="Avery Chen" content={content} />);
+		render(
+			<HomeScreenView
+				state={{ status: "ready", refreshing: false }}
+				session={session}
+			/>,
+		);
 
 		await waitFor(() =>
 			expect(screen.getByText("Checked by Avery Chen")).toBeTruthy(),
@@ -165,13 +165,18 @@ describe("HomeScreenView", () => {
 	});
 
 	it("shows a retryable List error when list loading fails", async () => {
-		const content = readyContent();
+		const session = readySession();
 		jest
-			.mocked(content.listService.getList)
+			.mocked(session.services.lists.getList)
 			.mockRejectedValueOnce(new Error("offline"))
 			.mockResolvedValueOnce(listFixture());
 
-		render(<HomeScreenView currentMemberName="Avery Chen" content={content} />);
+		render(
+			<HomeScreenView
+				state={{ status: "ready", refreshing: false }}
+				session={session}
+			/>,
+		);
 
 		await waitFor(() =>
 			expect(screen.getByText("List unavailable")).toBeTruthy(),
@@ -179,19 +184,24 @@ describe("HomeScreenView", () => {
 		fireEvent.press(screen.getByText("Try again"));
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(content.listService.getList).toHaveBeenCalledTimes(2);
+		expect(session.services.lists.getList).toHaveBeenCalledTimes(2);
 	});
 
-	it("loads the default List by explicit listId after active Household context exists", async () => {
-		const content = readyContent();
+	it("loads the default List by explicit listId after authenticated app session context exists", async () => {
+		const session = readySession();
 
-		render(<HomeScreenView currentMemberName="Avery Chen" content={content} />);
+		render(
+			<HomeScreenView
+				state={{ status: "ready", refreshing: false }}
+				session={session}
+			/>,
+		);
 
 		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
-		expect(content.listService.getList).toHaveBeenCalledWith({
+		expect(session.services.lists.getList).toHaveBeenCalledWith({
 			listId: DEFAULT_LIST_ID,
 		});
-		expect(content.itemService.listItems).toHaveBeenCalledWith({
+		expect(session.services.items.listItems).toHaveBeenCalledWith({
 			listId: DEFAULT_LIST_ID,
 		});
 	});
@@ -201,11 +211,16 @@ describe("HomeScreenView", () => {
 			.fn()
 			.mockResolvedValue(itemFixture({ id: "itm_eggs", name: "Eggs" }));
 		const setItemChecked = jest.fn().mockResolvedValue(undefined);
-		const content = readyContent({
-			itemService: itemServiceFixture({ addItem, setItemChecked }),
+		const session = readySession({
+			items: itemServiceFixture({ addItem, setItemChecked }),
 		});
 
-		render(<HomeScreenView currentMemberName="Avery Chen" content={content} />);
+		render(
+			<HomeScreenView
+				state={{ status: "ready", refreshing: false }}
+				session={session}
+			/>,
+		);
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
 
 		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Eggs");
@@ -229,15 +244,15 @@ describe("HomeScreenView", () => {
 		});
 	});
 
-	it("ignores stale List loads after the Household resource changes", async () => {
+	it("ignores stale List loads after the session resource changes", async () => {
 		const staleLoad = deferred<ReturnType<typeof listFixture>>();
 		const freshLoad = deferred<ReturnType<typeof listFixture>>();
 		const { rerender } = render(
 			<HomeScreenView
-				currentMemberName="Avery Chen"
-				content={readyContent({
-					resourceKey: "active-household:1",
-					listService: listServiceFixture({
+				state={{ status: "ready", refreshing: false }}
+				session={readySession({
+					resourceKey: "authenticated-app-session:1",
+					lists: listServiceFixture({
 						getList: jest.fn(() => staleLoad.promise),
 					}),
 				})}
@@ -246,11 +261,11 @@ describe("HomeScreenView", () => {
 
 		rerender(
 			<HomeScreenView
-				currentMemberName="Avery Chen"
-				content={readyContent({
-					resourceKey: "active-household:2",
+				state={{ status: "ready", refreshing: false }}
+				session={readySession({
+					resourceKey: "authenticated-app-session:2",
 					initialList: initialListFixture({ itemName: "Fresh Eggs" }),
-					listService: listServiceFixture({
+					lists: listServiceFixture({
 						getList: jest.fn(() => freshLoad.promise),
 					}),
 				})}
@@ -272,22 +287,31 @@ describe("HomeScreenView", () => {
 	});
 });
 
-type ReadyContentOverrides = {
+type ReadySessionOverrides = {
 	resourceKey?: string;
 	initialList?: ReturnType<typeof initialListFixture>;
-	listService?: ReturnType<typeof listServiceFixture>;
-	itemService?: ReturnType<typeof itemServiceFixture>;
+	lists?: ReturnType<typeof listServiceFixture>;
+	items?: ReturnType<typeof itemServiceFixture>;
+	sync?: ReturnType<typeof syncCoordinatorFixture>;
 };
 
-function readyContent(
-	overrides: ReadyContentOverrides = {},
-): Extract<ActiveHouseholdContentState, { status: "ready" }> {
+function readySession(
+	overrides: ReadySessionOverrides = {},
+): AuthenticatedAppSession {
 	const initialList = overrides.initialList ?? initialListFixture();
 	return {
-		status: "ready",
-		activeMemberName: "Avery Chen",
-		household: { id: "hh_avery", name: initialList.householdName },
-		activeMember: { userId: "usr_avery", displayName: "Avery Chen" },
+		user: {
+			id: "usr_avery",
+			email: "avery@example.com",
+			displayName: "Avery Chen",
+		},
+		activeHousehold: { id: "hh_avery", name: initialList.householdName },
+		activeMember: {
+			id: "mbr_avery",
+			userId: "usr_avery",
+			role: "owner",
+			displayName: "Avery Chen",
+		},
 		members: [
 			{
 				membershipId: "mbr_avery",
@@ -296,30 +320,32 @@ function readyContent(
 				displayName: "Avery Chen",
 			},
 		],
-		resourceKey: overrides.resourceKey ?? "active-household:1",
-		listService:
-			overrides.listService ??
-			listServiceFixture({
-				getList: jest
-					.fn()
-					.mockResolvedValue(listFixture({ name: initialList.listName })),
-			}),
-		itemService:
-			overrides.itemService ??
-			itemServiceFixture({
-				listItems: jest.fn().mockResolvedValue(
-					initialList.items.map((item, index) =>
-						itemFixture({
-							id: item.id,
-							name: item.name,
-							checked: item.checked,
-							checkedByUserId: item.checked ? "usr_avery" : null,
-							position: index,
-						}),
+		resourceKey: overrides.resourceKey ?? "authenticated-app-session:1",
+		services: {
+			lists:
+				overrides.lists ??
+				listServiceFixture({
+					getList: jest
+						.fn()
+						.mockResolvedValue(listFixture({ name: initialList.listName })),
+				}),
+			items:
+				overrides.items ??
+				itemServiceFixture({
+					listItems: jest.fn().mockResolvedValue(
+						initialList.items.map((item, index) =>
+							itemFixture({
+								id: item.id,
+								name: item.name,
+								checked: item.checked,
+								checkedByUserId: item.checked ? "usr_avery" : null,
+								position: index,
+							}),
+						),
 					),
-				),
-			}),
-		syncCoordinator: syncCoordinatorFixture(),
+				}),
+			sync: overrides.sync ?? syncCoordinatorFixture(),
+		},
 	};
 }
 

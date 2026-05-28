@@ -6,7 +6,7 @@ import { StyleSheet } from "react-native-unistyles";
 import {
 	ActiveList,
 	type ActiveListInitialState,
-	type ActiveListSyncCoordinator,
+	type ActiveListManagedSyncCoordinator,
 } from "@/components/active-list";
 
 const emptyList: ActiveListInitialState = {
@@ -80,7 +80,7 @@ function ActiveListStory({
 	);
 }
 
-function storySyncCoordinator(): ActiveListSyncCoordinator {
+function storySyncCoordinator(): ActiveListManagedSyncCoordinator {
 	return {
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),

@@ -6,7 +6,7 @@ export async function POST(request: Request): Promise<Response> {
 	try {
 		const [db, bootstrap, auth] = await Promise.all([
 			import("@/db/client"),
-			import("@/lib/services/household/server"),
+			import("@/lib/services/session/server"),
 			import("@/lib/server/auth"),
 		]);
 		UnauthorizedError = auth.UnauthorizedError;
@@ -15,9 +15,11 @@ export async function POST(request: Request): Promise<Response> {
 		const client = db.directoryClient();
 
 		try {
-			const response = await bootstrap.bootstrapUser(
+			const response = await bootstrap.bootstrapAuthenticatedAppSession(
 				profile,
-				bootstrap.createProductionBootstrapDeps(db.directoryDb(client)),
+				bootstrap.createProductionAuthenticatedAppSessionBootstrapDeps(
+					db.directoryDb(client),
+				),
 			);
 			return Response.json(response);
 		} finally {

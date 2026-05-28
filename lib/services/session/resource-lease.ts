@@ -3,18 +3,18 @@ import type { ItemService } from "@/lib/services/item";
 import type { ListService } from "@/lib/services/list";
 import type { SyncOperation } from "@/lib/services/sync";
 
-export type StaleActiveHouseholdResourceError = Error & {
-	code: "stale_active_household_resource";
+export type StaleAuthenticatedAppSessionResourceError = Error & {
+	code: "stale_authenticated_app_session_resource";
 };
 
-export type LeasedActiveHouseholdServices = {
-	listService: ListService;
-	itemService: ItemService;
+export type LeasedSessionServices = {
+	lists: ListService;
+	items: ItemService;
 	sync: SyncOperation;
 };
 
-export type ActiveHouseholdResourceLease = {
-	services: LeasedActiveHouseholdServices;
+export type SessionResourceLease = {
+	services: LeasedSessionServices;
 	retireAndClose: (options: {
 		close: () => Promise<void>;
 		stopSync?: () => Promise<void>;
@@ -22,15 +22,15 @@ export type ActiveHouseholdResourceLease = {
 	}) => Promise<void>;
 };
 
-export function createActiveHouseholdResourceLease(
-	services: LeasedActiveHouseholdServices,
-): ActiveHouseholdResourceLease {
+export function createSessionResourceLease(
+	services: LeasedSessionServices,
+): SessionResourceLease {
 	let retired = false;
 	let inFlight = 0;
 	const drainWaiters = new Set<() => void>();
 
 	async function run<T>(operation: () => Promise<T>): Promise<T> {
-		if (retired) throw staleActiveHouseholdResourceError();
+		if (retired) throw staleAuthenticatedAppSessionResourceError();
 		inFlight += 1;
 		try {
 			return await operation();
@@ -93,14 +93,14 @@ export function createActiveHouseholdResourceLease(
 
 	return {
 		services: {
-			listService: {
-				getList: (input) => run(() => services.listService.getList(input)),
+			lists: {
+				getList: (input) => run(() => services.lists.getList(input)),
 			},
-			itemService: {
-				listItems: (input) => run(() => services.itemService.listItems(input)),
-				addItem: (input) => run(() => services.itemService.addItem(input)),
+			items: {
+				listItems: (input) => run(() => services.items.listItems(input)),
+				addItem: (input) => run(() => services.items.addItem(input)),
 				setItemChecked: (input) =>
-					run(() => services.itemService.setItemChecked(input)),
+					run(() => services.items.setItemChecked(input)),
 			},
 			sync: (options) => run(() => services.sync(options)),
 		},
@@ -108,18 +108,21 @@ export function createActiveHouseholdResourceLease(
 	};
 }
 
-export function isStaleActiveHouseholdResourceError(
+export function isStaleAuthenticatedAppSessionResourceError(
 	error: unknown,
-): error is StaleActiveHouseholdResourceError {
+): error is StaleAuthenticatedAppSessionResourceError {
 	return (
 		error instanceof Error &&
 		"code" in error &&
-		error.code === "stale_active_household_resource"
+		error.code === "stale_authenticated_app_session_resource"
 	);
 }
 
-export function staleActiveHouseholdResourceError(): StaleActiveHouseholdResourceError {
-	return Object.assign(new Error("Active Household resource is stale"), {
-		code: "stale_active_household_resource" as const,
-	});
+export function staleAuthenticatedAppSessionResourceError(): StaleAuthenticatedAppSessionResourceError {
+	return Object.assign(
+		new Error("Authenticated app session resource is stale"),
+		{
+			code: "stale_authenticated_app_session_resource" as const,
+		},
+	);
 }

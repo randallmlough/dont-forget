@@ -14,7 +14,7 @@ import { createItemService, type ItemService } from "@/lib/services/item";
 import { createListService, type ListService } from "@/lib/services/list";
 import type { SyncOptions, SyncResult } from "@/lib/services/sync";
 
-type ActiveHouseholdStore = HouseholdStoreExecutor & {
+type SessionStore = HouseholdStoreExecutor & {
 	syncAuthorized?: boolean;
 	push?: () => Promise<void>;
 	pull?: () => Promise<SyncResult>;
@@ -22,32 +22,30 @@ type ActiveHouseholdStore = HouseholdStoreExecutor & {
 	close: () => void | Promise<void>;
 };
 
-export type ActiveHouseholdDataServicesConfig = {
+export type SessionDataServicesConfig = {
 	householdId: string;
 	database: HouseholdDatabaseConfig;
 	logger: Logger;
 };
 
-export type ActiveHouseholdDataServicesOptions = {
-	store?: ActiveHouseholdStore;
-	openStore?: (
-		config: OpenHouseholdStoreConfig,
-	) => Promise<ActiveHouseholdStore>;
+export type SessionDataServicesOptions = {
+	store?: SessionStore;
+	openStore?: (config: OpenHouseholdStoreConfig) => Promise<SessionStore>;
 	openRemoteClient?: OpenHouseholdRemoteClient;
 };
 
-export type ActiveHouseholdDataServices = {
-	listService: ListService;
-	itemService: ItemService;
+export type SessionDataServices = {
+	lists: ListService;
+	items: ItemService;
 	syncAuthorized: boolean;
 	sync: (options?: SyncOptions) => Promise<SyncResult>;
 	close: () => Promise<void>;
 };
 
-export function createActiveHouseholdDataServices(
-	config: ActiveHouseholdDataServicesConfig,
-	options: ActiveHouseholdDataServicesOptions = {},
-): ActiveHouseholdDataServices {
+export function createSessionDataServices(
+	config: SessionDataServicesConfig,
+	options: SessionDataServicesOptions = {},
+): SessionDataServices {
 	const storePromise = options.store
 		? Promise.resolve(options.store)
 		: (options.openStore ?? openHouseholdStore)({
@@ -55,7 +53,9 @@ export function createActiveHouseholdDataServices(
 				database: config.database,
 			});
 	const ownsStore = !options.store;
-	const log = config.logger.with({ feature: "active_household_data" });
+	const log = config.logger.with({
+		feature: "authenticated_app_session_services",
+	});
 	const syncAuthorized = options.store
 		? Boolean(
 				options.store.syncAuthorized &&
@@ -65,18 +65,18 @@ export function createActiveHouseholdDataServices(
 		: Boolean(config.database.url && config.database.authToken);
 	let closed = false;
 	let servicesPromise: Promise<{
-		listService: ListService;
-		itemService: ItemService;
+		lists: ListService;
+		items: ItemService;
 	}> | null = null;
 
 	function getServices() {
 		servicesPromise ??= storePromise.then((store) => ({
-			listService: createListService({
+			lists: createListService({
 				householdId: config.householdId,
 				store,
 				logger: log,
 			}),
-			itemService: createItemService({
+			items: createItemService({
 				householdId: config.householdId,
 				store,
 				logger: log,
@@ -86,24 +86,24 @@ export function createActiveHouseholdDataServices(
 	}
 
 	return {
-		listService: {
+		lists: {
 			async getList(input) {
-				const { listService } = await getServices();
-				return listService.getList(input);
+				const { lists } = await getServices();
+				return lists.getList(input);
 			},
 		},
-		itemService: {
+		items: {
 			async listItems(input) {
-				const { itemService } = await getServices();
-				return itemService.listItems(input);
+				const { items } = await getServices();
+				return items.listItems(input);
 			},
 			async addItem(input) {
-				const { itemService } = await getServices();
-				return itemService.addItem(input);
+				const { items } = await getServices();
+				return items.addItem(input);
 			},
 			async setItemChecked(input) {
-				const { itemService } = await getServices();
-				return itemService.setItemChecked(input);
+				const { items } = await getServices();
+				return items.setItemChecked(input);
 			},
 		},
 		syncAuthorized,
@@ -179,7 +179,7 @@ export function createActiveHouseholdDataServices(
 			try {
 				await store?.close();
 			} catch (error) {
-				log.error("active Household data store close failed", {
+				log.error("authenticated app session data store close failed", {
 					error: asError(error),
 				});
 				throw error;

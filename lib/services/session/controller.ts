@@ -7,58 +7,73 @@ import {
 	createDefaultSyncCoordinator,
 	type SyncCoordinator,
 } from "@/lib/services/sync";
-import { createActiveHouseholdDataServices } from "./active-household-data-services";
 import {
-	type ActiveHouseholdSession,
-	type CreateActiveHouseholdDataServices,
+	type ActiveMember,
+	createSessionBootstrapService,
+	type GetSessionToken,
+	type Member,
+	type SessionBootstrap,
+	type SessionBootstrapService,
+	type SessionUser,
+} from "./bootstrap";
+import {
+	type CachedSessionBootstrap,
+	createSessionCache,
+	type SessionCache,
+} from "./cache";
+import {
+	type CreateSessionDataServices,
 	type CreateSyncCoordinator,
-	createActiveHouseholdResourceManager,
-	type OpenedActiveHouseholdResource,
-} from "./active-household-resource-manager";
-import {
-	type CachedHouseholdSession,
-	createHouseholdSessionService,
-	type GetHouseholdSessionToken,
-	type HouseholdSession,
-	type HouseholdSessionService,
-} from "./household-session-service";
+	createSessionResourceManager,
+	type OpenedSessionResource,
+	type SessionResourceBootstrap,
+} from "./resource-manager";
+import { createSessionDataServices } from "./services";
 
-export type ActiveHouseholdSnapshot =
+export type AuthenticatedAppSessionStateSnapshot =
 	| { status: "idle" }
 	| {
 			status: "loading";
-			previous?: ActiveHouseholdView;
+			previous?: AuthenticatedAppSession;
 			refreshingSession?: boolean;
 	  }
-	| { status: "error"; message: string; previous?: ActiveHouseholdView }
-	| { status: "ready"; view: ActiveHouseholdView };
+	| { status: "error"; message: string; previous?: AuthenticatedAppSession }
+	| { status: "ready"; session: AuthenticatedAppSession };
 
-export type ActiveHouseholdView = {
-	activeMemberName: string;
-	household: {
+export type AuthenticatedAppSessionSync = Pick<
+	SyncCoordinator,
+	"getStatus" | "subscribe" | "requestSync"
+>;
+
+export type AuthenticatedAppSessionServices = {
+	lists: ListService;
+	items: ItemService;
+	sync: AuthenticatedAppSessionSync;
+};
+
+export type AuthenticatedAppSession = {
+	user: SessionUser;
+	activeHousehold: {
 		id: string;
 		name: string;
 	};
-	activeMember: {
-		userId: string;
-		displayName: string | null;
-	};
-	members: ActiveHouseholdSession["members"];
+	activeMember: ActiveMember;
+	members: Member[];
 	resourceKey: string;
-	listService: ListService;
-	itemService: ItemService;
-	syncCoordinator: SyncCoordinator;
+	services: AuthenticatedAppSessionServices;
 };
 
-export type ActiveHouseholdActivation = {
-	getToken: GetHouseholdSessionToken;
+export type AuthenticatedAppSessionActivation = {
+	getToken: GetSessionToken;
 	authReady: boolean;
 	signedIn: boolean;
 };
 
-type ActiveHouseholdAuthState = "unknown" | "signedOut" | "signedIn";
+type AuthenticatedAppSessionAuthState = "unknown" | "signedOut" | "signedIn";
 
-type ActiveHouseholdSubscriber = (snapshot: ActiveHouseholdSnapshot) => void;
+type AuthenticatedAppSessionSubscriber = (
+	snapshot: AuthenticatedAppSessionStateSnapshot,
+) => void;
 
 type ActivationRunGuard = {
 	id: number;
@@ -67,25 +82,28 @@ type ActivationRunGuard = {
 
 type CachedActivationAttempt = {
 	promise: Promise<boolean>;
-	invalidateHousehold: (cached: CachedHouseholdSession) => void;
+	invalidateHousehold: (cached: CachedSessionBootstrap) => void;
 	markFreshPublished: () => void;
 	throwDiscardCloseError: () => void;
 };
 
-export type ActiveHouseholdController = {
-	activate: (activation: ActiveHouseholdActivation) => Promise<void>;
-	dispose: () => Promise<ActiveHouseholdDisposal>;
-	getSnapshot: () => ActiveHouseholdSnapshot;
-	subscribe: (subscriber: ActiveHouseholdSubscriber) => { remove: () => void };
+export type AuthenticatedAppSessionController = {
+	activate: (activation: AuthenticatedAppSessionActivation) => Promise<void>;
+	dispose: () => Promise<AuthenticatedAppSessionDisposal>;
+	getSnapshot: () => AuthenticatedAppSessionStateSnapshot;
+	subscribe: (subscriber: AuthenticatedAppSessionSubscriber) => {
+		remove: () => void;
+	};
 };
 
-export type ActiveHouseholdDisposal = {
+export type AuthenticatedAppSessionDisposal = {
 	householdIdsForLocalDataDeletion: string[];
 };
 
-export type ActiveHouseholdControllerDeps = {
-	householdSessionService?: HouseholdSessionService;
-	createDataServices?: CreateActiveHouseholdDataServices;
+export type AuthenticatedAppSessionControllerDeps = {
+	bootstrap?: SessionBootstrapService;
+	cache?: SessionCache;
+	createDataServices?: CreateSessionDataServices;
 	createSyncCoordinator?: CreateSyncCoordinator;
 	logger?: Logger;
 };
@@ -93,40 +111,38 @@ export type ActiveHouseholdControllerDeps = {
 const GENERIC_ERROR_MESSAGE =
 	"Unable to prepare your Household. Please try again.";
 
-export function createActiveHouseholdController(
-	deps: ActiveHouseholdControllerDeps = {},
-): ActiveHouseholdController {
-	const householdSessionService =
-		deps.householdSessionService ?? createHouseholdSessionService();
+export function createAuthenticatedAppSessionController(
+	deps: AuthenticatedAppSessionControllerDeps = {},
+): AuthenticatedAppSessionController {
+	const bootstrap = deps.bootstrap ?? createSessionBootstrapService();
+	const cache = deps.cache ?? createSessionCache();
 	const createDataServices =
-		deps.createDataServices ?? createActiveHouseholdDataServices;
+		deps.createDataServices ?? createSessionDataServices;
 	const createSyncCoordinator =
 		deps.createSyncCoordinator ?? createDefaultSyncCoordinator;
 	const logger = deps.logger ?? defaultLogger;
-	const subscribers = new Set<ActiveHouseholdSubscriber>();
-	let snapshot: ActiveHouseholdSnapshot = { status: "idle" };
+	const subscribers = new Set<AuthenticatedAppSessionSubscriber>();
+	let snapshot: AuthenticatedAppSessionStateSnapshot = { status: "idle" };
 	let activationRun = 0;
 	let cacheWriteQueue: Promise<void> = Promise.resolve();
-	const resources = createActiveHouseholdResourceManager({
+	const resources = createSessionResourceManager({
 		createDataServices,
 		createSyncCoordinator,
 		logger,
 	});
 
-	function publish(nextSnapshot: ActiveHouseholdSnapshot) {
+	function publish(nextSnapshot: AuthenticatedAppSessionStateSnapshot) {
 		snapshot = nextSnapshot;
 		for (const subscriber of subscribers) {
 			subscriber(nextSnapshot);
 		}
 	}
 
-	function saveFreshSession(session: HouseholdSession) {
+	function saveFreshSession(session: SessionBootstrap) {
 		const write = cacheWriteQueue
 			.catch(() => undefined)
 			.then(async () => {
-				await householdSessionService
-					.saveCachedHouseholdSession(session)
-					.catch(() => undefined);
+				await cache.save(session).catch(() => undefined);
 			});
 		cacheWriteQueue = write;
 	}
@@ -136,8 +152,8 @@ export function createActiveHouseholdController(
 	}
 
 	async function publishOpened(
-		opened: OpenedActiveHouseholdResource,
-		session: ActiveHouseholdSession,
+		opened: OpenedSessionResource,
+		session: SessionResourceBootstrap,
 		run: number,
 		options: {
 			startSync: boolean;
@@ -157,11 +173,11 @@ export function createActiveHouseholdController(
 			opened.resource,
 			session,
 		);
-		const view = activeHouseholdViewFromOpened(opened, session);
-		publish({ status: "ready", view });
+		const appSession = authenticatedAppSessionFromOpened(opened, session);
+		publish({ status: "ready", session: appSession });
 		options.onPublished?.();
 		if (options.startSync) {
-			view.syncCoordinator.start();
+			opened.resource.syncCoordinator.start();
 		}
 
 		if (previousResource) {
@@ -180,41 +196,39 @@ export function createActiveHouseholdController(
 		};
 	}
 
-	function publishLoading(previousView?: ActiveHouseholdView) {
+	function publishLoading(previousSession?: AuthenticatedAppSession) {
 		publish(
-			previousView
+			previousSession
 				? {
 						status: "loading",
-						previous: previousView,
+						previous: previousSession,
 						refreshingSession: true,
 					}
 				: { status: "loading" },
 		);
 	}
 
-	function publishLoadingFromCurrentView() {
-		const previousView = previousViewFromSnapshot(snapshot);
-		if (previousView) {
-			publishLoading(previousView);
+	function publishLoadingFromCurrentSession() {
+		const previousSession = previousSessionFromSnapshot(snapshot);
+		if (previousSession) {
+			publishLoading(previousSession);
 		}
 	}
 
 	function startCachedActivationAttempt(
 		run: ActivationRunGuard,
 	): CachedActivationAttempt {
-		const invalidatedCachedHouseholds = new Set<string>();
+		const invalidatedHouseholdIds = new Set<string>();
 		let freshPublished = false;
 		let discardCloseError: unknown = null;
 
 		return {
 			promise: (async (): Promise<boolean> => {
-				const cached = await householdSessionService
-					.readCachedHouseholdSession()
-					.catch(() => null);
+				const cached = await cache.read().catch(() => null);
 				if (
 					!cached ||
 					!run.isCurrent() ||
-					invalidatedCachedHouseholds.has(cached.activeHousehold.id)
+					invalidatedHouseholdIds.has(cached.activeHousehold.id)
 				) {
 					return false;
 				}
@@ -225,7 +239,7 @@ export function createActiveHouseholdController(
 						startSync: false,
 						shouldPublish: () =>
 							!freshPublished &&
-							!invalidatedCachedHouseholds.has(cached.activeHousehold.id),
+							!invalidatedHouseholdIds.has(cached.activeHousehold.id),
 						onDiscardCloseError: (error) => {
 							discardCloseError = error;
 						},
@@ -235,7 +249,7 @@ export function createActiveHouseholdController(
 				}
 			})(),
 			invalidateHousehold(cached) {
-				invalidatedCachedHouseholds.add(cached.activeHousehold.id);
+				invalidatedHouseholdIds.add(cached.activeHousehold.id);
 			},
 			markFreshPublished() {
 				freshPublished = true;
@@ -254,7 +268,7 @@ export function createActiveHouseholdController(
 		]).then((results) => {
 			for (const result of results) {
 				if (result.status === "rejected") {
-					logger.error("active Household resource close failed", {
+					logger.error("authenticated app session resource close failed", {
 						error: asError(result.reason),
 					});
 				}
@@ -265,21 +279,18 @@ export function createActiveHouseholdController(
 
 	async function loadFreshSessionForRun(
 		run: ActivationRunGuard,
-		getToken: GetHouseholdSessionToken,
-	): Promise<HouseholdSession | null> {
-		const session = await householdSessionService.getHouseholdSession(getToken);
+		getToken: GetSessionToken,
+	): Promise<SessionBootstrap | null> {
+		const session = await bootstrap.getSession(getToken);
 		return run.isCurrent() ? session : null;
 	}
 
 	async function invalidateUnauthorizedCachedSessionForFreshRun(
-		freshSession: HouseholdSession,
+		freshSession: SessionBootstrap,
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
 	): Promise<boolean> {
-		const cached =
-			await householdSessionService.readUnauthorizedCachedHouseholdSession(
-				freshSession,
-			);
+		const cached = await cache.readUnauthorized(freshSession);
 		if (!cached || !run.isCurrent()) return false;
 
 		cachedAttempt.invalidateHousehold(cached);
@@ -289,22 +300,19 @@ export function createActiveHouseholdController(
 		cachedAttempt.throwDiscardCloseError();
 		if (!run.isCurrent()) return true;
 
-		await householdSessionService.deleteCachedHouseholdSessionLocalData(cached);
+		await cache.deleteLocalData(cached);
 		if (!run.isCurrent()) return true;
 
-		await householdSessionService.clearUnauthorizedCachedHouseholdSessionMetadata(
-			cached,
-			freshSession,
-		);
+		await cache.clearUnauthorizedMetadata(cached, freshSession);
 		return true;
 	}
 
 	async function publishFreshSessionForRun(
-		session: HouseholdSession,
+		session: SessionBootstrap,
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
 	) {
-		publishLoadingFromCurrentView();
+		publishLoadingFromCurrentSession();
 		const opened = await resources.openSessionResource(session);
 		if (!run.isCurrent()) {
 			await resources.closeResource(opened.resource).catch(() => undefined);
@@ -321,7 +329,7 @@ export function createActiveHouseholdController(
 	}
 
 	async function handleSignedInActivation(
-		activation: ActiveHouseholdActivation,
+		activation: AuthenticatedAppSessionActivation,
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
 	) {
@@ -350,22 +358,22 @@ export function createActiveHouseholdController(
 		cachedAttempt: CachedActivationAttempt,
 		options: { invalidatedUnauthorizedCached: boolean },
 	) {
-		logger.error("active Household activation failed", {
+		logger.error("authenticated app session activation failed", {
 			error: asError(error),
 		});
 
 		const publishedCached = await cachedAttempt.promise;
 		if (publishedCached && run.isCurrent()) {
-			const previousView = previousViewFromSnapshot(snapshot);
-			if (previousView && !options.invalidatedUnauthorizedCached) {
-				publish({ status: "ready", view: previousView });
+			const previousSession = previousSessionFromSnapshot(snapshot);
+			if (previousSession && !options.invalidatedUnauthorizedCached) {
+				publish({ status: "ready", session: previousSession });
 			} else {
 				publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
 			}
 		} else if (!publishedCached && run.isCurrent()) {
-			const previousView = previousViewFromSnapshot(snapshot);
-			if (previousView) {
-				publish({ status: "ready", view: previousView });
+			const previousSession = previousSessionFromSnapshot(snapshot);
+			if (previousSession) {
+				publish({ status: "ready", session: previousSession });
 				return;
 			}
 			await resources.closeActiveResource().catch(() => undefined);
@@ -376,13 +384,14 @@ export function createActiveHouseholdController(
 	return {
 		async activate(activation) {
 			const run = startActivationRun();
-			const authState = activeHouseholdAuthStateFromActivation(activation);
+			const authState =
+				authenticatedAppSessionAuthStateFromActivation(activation);
 			if (authState === "signedOut") {
 				await handleSignedOutActivation(run);
 				return;
 			}
 
-			publishLoading(previousViewFromSnapshot(snapshot));
+			publishLoading(previousSessionFromSnapshot(snapshot));
 
 			const cachedAttempt = startCachedActivationAttempt(run);
 			if (authState === "unknown") {
@@ -429,42 +438,47 @@ export function createActiveHouseholdController(
 	};
 }
 
-function previousViewFromSnapshot(
-	snapshot: ActiveHouseholdSnapshot,
-): ActiveHouseholdView | undefined {
-	if (snapshot.status === "ready") return snapshot.view;
+function previousSessionFromSnapshot(
+	snapshot: AuthenticatedAppSessionStateSnapshot,
+): AuthenticatedAppSession | undefined {
+	if (snapshot.status === "ready") return snapshot.session;
 	if (snapshot.status === "loading" || snapshot.status === "error") {
 		return snapshot.previous;
 	}
 	return undefined;
 }
 
-function activeHouseholdAuthStateFromActivation(
-	activation: ActiveHouseholdActivation,
-): ActiveHouseholdAuthState {
+function authenticatedAppSessionAuthStateFromActivation(
+	activation: AuthenticatedAppSessionActivation,
+): AuthenticatedAppSessionAuthState {
 	if (!activation.authReady) return "unknown";
 	return activation.signedIn ? "signedIn" : "signedOut";
 }
 
-function activeHouseholdViewFromOpened(
-	opened: OpenedActiveHouseholdResource,
-	session: ActiveHouseholdSession,
-): ActiveHouseholdView {
+function syncHandleFromCoordinator(
+	syncCoordinator: SyncCoordinator,
+): AuthenticatedAppSessionSync {
 	return {
-		activeMemberName: activeMemberNameFromSession(session),
-		household: session.activeHousehold,
-		activeMember: {
-			userId: session.activeMember.userId,
-			displayName: session.activeMember.displayName,
-		},
-		members: session.members,
-		resourceKey: opened.resourceKey,
-		listService: opened.resource.listService,
-		itemService: opened.resource.itemService,
-		syncCoordinator: opened.resource.syncCoordinator,
+		getStatus: syncCoordinator.getStatus,
+		subscribe: syncCoordinator.subscribe,
+		requestSync: syncCoordinator.requestSync,
 	};
 }
 
-function activeMemberNameFromSession(session: ActiveHouseholdSession): string {
-	return session.activeMember.displayName ?? session.user.email ?? "Member";
+function authenticatedAppSessionFromOpened(
+	opened: OpenedSessionResource,
+	session: SessionResourceBootstrap,
+): AuthenticatedAppSession {
+	return {
+		user: session.user,
+		activeHousehold: session.activeHousehold,
+		activeMember: session.activeMember,
+		members: session.members,
+		resourceKey: opened.resourceKey,
+		services: {
+			lists: opened.resource.lists,
+			items: opened.resource.items,
+			sync: syncHandleFromCoordinator(opened.resource.syncCoordinator),
+		},
+	};
 }

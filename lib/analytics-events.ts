@@ -9,18 +9,18 @@
  * dashboards — keep the old name firing until dashboards migrate, then drop.
  */
 export type EventMap = {
-	household_session_loaded: {
+	authenticated_app_session_loaded: {
 		household_id: string;
 		member_role: "owner" | "member";
 		member_count: number;
 		source: "online" | "cached";
 	};
-	household_session_cached: {
+	authenticated_app_session_cached: {
 		household_id: string;
 		member_role: "owner" | "member";
 		member_count: number;
 	};
-	household_session_cache_invalidated: {
+	authenticated_app_session_cache_invalidated: {
 		household_id: string;
 		fresh_household_id: string;
 		reason: "unauthorized";
