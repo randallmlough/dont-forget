@@ -19,26 +19,24 @@ ruleTester.run("no-server-service-imports", rule, {
 			code: `export { createItemService } from "./item-service";`,
 		},
 		{
-			filename: "/repo/lib/services/household/server/index.ts",
-			code: `export { createHouseholdBootstrapService } from "./household-bootstrap-service";`,
+			filename: "/repo/lib/services/session/server/index.ts",
+			code: `export { bootstrapAuthenticatedAppSession } from "./bootstrap";`,
 		},
 		{
-			filename:
-				"/repo/lib/services/household/server/household-bootstrap-service.ts",
+			filename: "/repo/lib/services/session/server/bootstrap.ts",
 			code: `import { createUserService } from "@/lib/services/user/server";`,
 		},
 		{
 			filename: "/repo/app/api/bootstrap+api.ts",
 			code: `
 				export async function POST() {
-					const server = await import("@/lib/services/household/server");
+					const server = await import("@/lib/services/session/server");
 					return Response.json(server);
 				}
 			`,
 		},
 		{
-			filename:
-				"/repo/lib/services/household/server/household-bootstrap-service.test.ts",
+			filename: "/repo/lib/services/session/server/bootstrap.test.ts",
 			code: `import { createUserService } from "@/lib/services/user/server";`,
 		},
 	],
@@ -65,7 +63,7 @@ ruleTester.run("no-server-service-imports", rule, {
 		},
 		{
 			filename: "/repo/lib/services/household/index.ts",
-			code: `import { createHouseholdBootstrapService } from "./server/household-bootstrap-service";`,
+			code: `import { bootstrapAuthenticatedAppSession } from "./server/bootstrap";`,
 			errors: [{ messageId: "appSafeIndex" }],
 		},
 		{

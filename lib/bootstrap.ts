@@ -23,10 +23,6 @@ export const bootstrapResponseSchema = z.object({
 		role: memberRoleSchema,
 		displayName: z.string().nullable(),
 	}),
-	activeList: z.object({
-		id: z.string(),
-		name: z.string(),
-	}),
 	members: z.array(
 		z.object({
 			membershipId: z.string(),

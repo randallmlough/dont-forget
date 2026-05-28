@@ -3,7 +3,7 @@ import { createTestDirectoryDb } from "@/db/test";
 import { createMemberService } from "./member-service";
 
 describe("createMemberService", () => {
-	it("finds the oldest active Membership and lists active Household Members", async () => {
+	it("finds the oldest active Membership and lists authenticated app session Members", async () => {
 		const directory = await createTestDirectoryDb();
 		const service = createMemberService({ directory: directory.db });
 
@@ -86,9 +86,7 @@ describe("createMemberService", () => {
 				householdId: "hh_older",
 				householdName: "Older",
 			});
-			await expect(
-				service.listActiveHouseholdMembers("hh_older"),
-			).resolves.toEqual([
+			await expect(service.listHouseholdMembers("hh_older")).resolves.toEqual([
 				{
 					membershipId: "mbr_older",
 					userId: "usr_avery",

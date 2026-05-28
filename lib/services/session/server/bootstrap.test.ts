@@ -8,14 +8,14 @@ import {
 } from "@/db/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import type { ServerUserProfile } from "@/lib/server/auth";
+import { createHouseholdProvisioningService } from "@/lib/services/household/server";
 import {
-	type BootstrapServiceDeps,
-	bootstrapUser,
+	type AuthenticatedAppSessionBootstrapDeps,
+	bootstrapAuthenticatedAppSession,
 	householdDatabaseName,
-} from "./household-bootstrap-service";
-import { createHouseholdProvisioningService } from "./household-provisioning-service";
+} from "./bootstrap";
 
-describe("bootstrapUser", () => {
+describe("bootstrapAuthenticatedAppSession", () => {
 	it("generates Turso-safe Household database names", () => {
 		const name = householdDatabaseName(
 			"production",
@@ -31,7 +31,10 @@ describe("bootstrapUser", () => {
 		const harness = await createBootstrapHarness();
 
 		try {
-			const response = await bootstrapUser(averyProfile, harness.deps);
+			const response = await bootstrapAuthenticatedAppSession(
+				averyProfile,
+				harness.deps,
+			);
 
 			expect(response.user).toMatchObject({
 				id: expect.stringMatching(/^usr_/),
@@ -45,10 +48,6 @@ describe("bootstrapUser", () => {
 				id: expect.stringMatching(/^mbr_/),
 				userId: response.user.id,
 				role: "owner",
-			});
-			expect(response.activeList).toEqual({
-				id: DEFAULT_LIST_ID,
-				name: DEFAULT_LIST_NAME,
 			});
 			expect(response.householdDatabase.authToken).toBe(
 				`token-${householdDatabaseName("test", response.activeHousehold.id)}`,
@@ -99,8 +98,11 @@ describe("bootstrapUser", () => {
 		const harness = await createBootstrapHarness();
 
 		try {
-			const response = await bootstrapUser(averyProfile, harness.deps);
-			await bootstrapUser(averyProfile, harness.deps);
+			const response = await bootstrapAuthenticatedAppSession(
+				averyProfile,
+				harness.deps,
+			);
+			await bootstrapAuthenticatedAppSession(averyProfile, harness.deps);
 
 			expect(await harness.directory.db.select().from(users)).toHaveLength(1);
 			expect(await harness.directory.db.select().from(households)).toHaveLength(
@@ -166,7 +168,10 @@ describe("bootstrapUser", () => {
 				},
 			]);
 
-			const response = await bootstrapUser(averyProfile, harness.deps);
+			const response = await bootstrapAuthenticatedAppSession(
+				averyProfile,
+				harness.deps,
+			);
 
 			expect(response.activeHousehold).toEqual({
 				id: "hh_older",
@@ -201,7 +206,10 @@ describe("bootstrapUser", () => {
 				provisioningCompletedAt: null,
 			});
 
-			const response = await bootstrapUser(averyProfile, harness.deps);
+			const response = await bootstrapAuthenticatedAppSession(
+				averyProfile,
+				harness.deps,
+			);
 
 			expect(response.activeHousehold).toEqual({
 				id: "hh_pending",
@@ -239,7 +247,7 @@ async function createBootstrapHarness() {
 	const householdDbs = new Map<string, TestHouseholdDb>();
 	const createdDatabases: string[] = [];
 
-	const deps: BootstrapServiceDeps = {
+	const deps: AuthenticatedAppSessionBootstrapDeps = {
 		appEnv: "test",
 		directory: directory.db,
 		provisioning: createHouseholdProvisioningService({

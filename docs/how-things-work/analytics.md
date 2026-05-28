@@ -101,7 +101,7 @@ You don't call `identify` from sign-in/sign-up code. After `setActive(...)`, Cle
 
 `identify(userId, traits)` is exported for the day you build a settings screen that lets users update analytics-only traits (preferred name, subscription tier, etc.). Until that day, leave it alone.
 
-`reset()` is paired with sign-out. The Active Household provider action calls `track("user_signed_out", {})` *then* `reset()` *then* Active Household cleanup *then* Clerk `signOut()` — order matters. Reset before the event fires would tag the event against the next anonymous distinct_id; reset after Clerk fully signs out would race the next anonymous session.
+`reset()` is paired with sign-out. The Authenticated App Session provider action calls `track("user_signed_out", {})` *then* `reset()` *then* Authenticated App Session cleanup *then* Clerk `signOut()` — order matters. Reset before the event fires would tag the event against the next anonymous distinct_id; reset after Clerk fully signs out would race the next anonymous session.
 
 ## Where data ends up
 

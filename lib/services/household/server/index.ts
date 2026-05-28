@@ -1,10 +1,4 @@
 export {
-	type BootstrapServiceDeps,
-	bootstrapUser,
-	createProductionBootstrapDeps,
-	householdDatabaseName,
-} from "./household-bootstrap-service";
-export {
 	createHouseholdProvisioningService,
 	createProductionHouseholdProvisioningService,
 	type HouseholdDatabaseProvisioningResult,
@@ -15,4 +9,5 @@ export {
 	createHouseholdService,
 	type HouseholdService,
 	type HouseholdServiceDeps,
+	householdDatabaseName,
 } from "./household-service";

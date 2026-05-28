@@ -13,7 +13,7 @@ This revises the earlier op-sqlite candidate after the Issue #6 spike found Turs
 
 ## Consequences
 
-- App-side Household SQL must go through the app-owned Household DB wrapper/`HouseholdStore` or domain services that depend on its app-owned interface. Feature components must not import `@tursodatabase/sync-react-native` directly. If native sync cannot checkpoint and push a local replica, the Active List data source may use the Household Session DB token for a narrow remote upsert recovery path so offline Item changes are not stranded locally.
+- App-side Household SQL must go through the app-owned Household DB wrapper/`HouseholdStore` or domain services that depend on its app-owned interface. Feature components must not import `@tursodatabase/sync-react-native` directly. If native sync cannot checkpoint and push a local replica, the Active List data source may use the Authenticated App Session DB token for a narrow remote upsert recovery path so offline Item changes are not stranded locally.
 - Local DB filenames are keyed by app-owned Household IDs, not Turso database names, so future Household switching can add more local DBs without changing the domain model.
 - The wrapper adapts Turso's `all()` and `run()` result shapes into the app's `execute()` result shape. The wrapper implements `sync()` as `push()` then `pull()` because package `0.6.0` exposes `push()` and `pull()` but not the README-documented `sync()` method.
 - Household schema migrations remain server-owned. The app does not run bundled migrations against synced Household DB files.

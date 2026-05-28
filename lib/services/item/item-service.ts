@@ -36,6 +36,7 @@ export type AddItemInput = {
 };
 
 export type SetItemCheckedInput = {
+	listId: string;
 	itemId: string;
 	userId: string;
 	checked: boolean;
@@ -171,6 +172,19 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		async setItemChecked(input) {
 			try {
 				const now = nextItemServiceTimestamp();
+				const itemResult = await deps.store.execute({
+					sql: `
+            SELECT id
+            FROM items
+            WHERE id = ? AND list_id = ? AND deleted_at IS NULL
+            LIMIT 1
+          `,
+					args: [input.itemId, input.listId],
+				});
+				if (!itemResult.rows[0]) {
+					throw new Error("Item not found in List");
+				}
+
 				await deps.store.execute({
 					sql: `
             INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
@@ -183,6 +197,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 				});
 				analytics.track("item_checked_state_changed", {
 					household_id: deps.householdId,
+					list_id: input.listId,
 					item_id: input.itemId,
 					user_id: input.userId,
 					checked: input.checked,
@@ -190,6 +205,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 			} catch (error) {
 				log.error("item checked state update failed", {
 					error: asError(error),
+					list_id: input.listId,
 					item_id: input.itemId,
 				});
 				throw error;

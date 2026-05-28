@@ -3,10 +3,12 @@ import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import type {
-	ActiveListDataSource,
 	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
+import type { ItemService } from "@/lib/services/item";
+import type { ListService } from "@/lib/services/list";
+import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeScreenView } from "@/screens/home/home-screen";
 
 const emptyHomeList: ActiveListInitialState = {
@@ -56,35 +58,35 @@ type Story = StoryObj<typeof meta>;
 
 export const EmptyList: Story = {
 	args: {
-		currentMemberName: "Avery Chen",
-		content: readyContent(emptyHomeList),
+		state: { status: "ready", refreshing: false },
+		session: readySession(emptyHomeList),
 		onSignOut: noop,
 	},
 };
 
 export const WithItems: Story = {
 	args: {
-		currentMemberName: "Avery Chen",
-		content: readyContent(populatedHomeList),
+		state: { status: "ready", refreshing: false },
+		session: readySession(populatedHomeList),
 		onSignOut: noop,
 	},
 };
 
 export const Loading: Story = {
 	args: {
-		currentMemberName: "Avery Chen",
-		content: { status: "loading" },
+		state: { status: "loading" },
+		session: null,
 		onSignOut: noop,
 	},
 };
 
-export const HouseholdSessionError: Story = {
+export const AuthenticatedAppSessionError: Story = {
 	args: {
-		currentMemberName: "Avery Chen",
-		content: {
+		state: {
 			status: "error",
 			message: "Unable to prepare your Household. Please try again.",
 		},
+		session: null,
 		onRetry: noop,
 		onSignOut: noop,
 	},
@@ -92,60 +94,108 @@ export const HouseholdSessionError: Story = {
 
 function noop() {}
 
-function readyContent(initialList: ActiveListInitialState) {
+function readySession(
+	initialList: ActiveListInitialState,
+): AuthenticatedAppSession {
 	return {
-		status: "ready" as const,
-		activeMemberName: "Avery Chen",
+		user: {
+			id: "usr_avery",
+			email: "avery@example.com",
+			displayName: "Avery Chen",
+		},
+		activeHousehold: { id: "hh_story", name: initialList.householdName },
+		activeMember: {
+			id: "mbr_avery",
+			userId: "usr_avery",
+			role: "owner",
+			displayName: "Avery Chen",
+		},
+		members: [
+			{
+				membershipId: "mbr_avery",
+				userId: "usr_avery",
+				role: "owner" as const,
+				displayName: "Avery Chen",
+			},
+		],
 		resourceKey: `story:${initialList.householdName}:${initialList.listName}`,
-		initialList,
-		dataSource: storyDataSource(initialList),
-		syncCoordinator: storySyncCoordinator(),
+		services: {
+			...storyServices(initialList),
+			sync: storySyncCoordinator(),
+		},
 	};
 }
 
-function storyDataSource(
-	initialList: ActiveListInitialState,
-): ActiveListDataSource {
+function storyServices(initialList: ActiveListInitialState): {
+	lists: ListService;
+	items: ItemService;
+} {
 	let state = initialList;
 	let nextItem = initialList.items.length + 1;
 
 	return {
-		syncAuthorized: true,
-		async load() {
-			return state;
+		lists: {
+			async getList() {
+				return {
+					id: "lst_default_groceries",
+					householdId: "hh_story",
+					name: state.listName,
+					createdByUserId: "usr_avery",
+					createdAt: 1,
+					updatedAt: 1,
+				};
+			},
 		},
-		async addItem(name) {
-			const item = {
-				id: `story-item-${nextItem}`,
-				name,
-				checked: false,
-				checkedByMemberName: null,
-			};
-			nextItem += 1;
-			state = { ...state, items: [...state.items, item] };
-			return item;
+		items: {
+			async listItems() {
+				return state.items.map((item, position) => ({
+					id: item.id,
+					householdId: "hh_story",
+					listId: "lst_default_groceries",
+					name: item.name,
+					checked: item.checked,
+					checkedByUserId: item.checked ? "usr_avery" : null,
+					position,
+					createdByUserId: "usr_avery",
+					createdAt: 1,
+					updatedAt: 1,
+				}));
+			},
+			async addItem({ name }) {
+				const item = {
+					id: `story-item-${nextItem}`,
+					householdId: "hh_story",
+					listId: "lst_default_groceries",
+					name,
+					checked: false,
+					checkedByUserId: null,
+					position: nextItem,
+					createdByUserId: "usr_avery",
+					createdAt: 1,
+					updatedAt: 1,
+				};
+				nextItem += 1;
+				state = {
+					...state,
+					items: [...state.items, { ...item, checkedByMemberName: null }],
+				};
+				return item;
+			},
+			async setItemChecked({ itemId, checked }) {
+				state = {
+					...state,
+					items: state.items.map((item) =>
+						item.id === itemId
+							? {
+									...item,
+									checked,
+									checkedByMemberName: checked ? "Avery Chen" : null,
+								}
+							: item,
+					),
+				};
+			},
 		},
-		async setItemChecked(itemId, checked) {
-			state = {
-				...state,
-				items: state.items.map((item) =>
-					item.id === itemId
-						? {
-								...item,
-								checked,
-								checkedByMemberName: checked ? "Avery Chen" : null,
-							}
-						: item,
-				),
-			};
-		},
-		async pull() {
-			return { changed: false };
-		},
-		async sync() {
-			return { changed: false };
-		},
-		async close() {},
 	};
 }
 
@@ -153,8 +203,6 @@ function storySyncCoordinator(): ActiveListSyncCoordinator {
 	return {
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),
-		start() {},
-		async stop() {},
 		async requestSync() {
 			return { changed: false };
 		},

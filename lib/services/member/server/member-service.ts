@@ -25,7 +25,7 @@ export type ActiveMembership = {
 	householdProvisioningCompletedAt: number | null;
 };
 
-export type ActiveHouseholdMember = {
+export type HouseholdMember = {
 	membershipId: string;
 	userId: string;
 	role: "owner" | "member";
@@ -38,9 +38,7 @@ export type MemberService = {
 		householdId: string;
 		user: User;
 	}): Promise<Membership>;
-	listActiveHouseholdMembers(
-		householdId: string,
-	): Promise<ActiveHouseholdMember[]>;
+	listHouseholdMembers(householdId: string): Promise<HouseholdMember[]>;
 };
 
 export type MemberServiceDeps = {
@@ -55,8 +53,8 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 		ensureOwnerMembership(input) {
 			return ensureOwnerMembership(input, deps.directory);
 		},
-		listActiveHouseholdMembers(householdId) {
-			return listActiveHouseholdMembers(householdId, deps.directory);
+		listHouseholdMembers(householdId) {
+			return listHouseholdMembers(householdId, deps.directory);
 		},
 	};
 }
@@ -119,10 +117,10 @@ async function ensureOwnerMembership(
 	return membership;
 }
 
-async function listActiveHouseholdMembers(
+async function listHouseholdMembers(
 	householdId: string,
 	directory: MemberServiceDirectory,
-): Promise<ActiveHouseholdMember[]> {
+): Promise<HouseholdMember[]> {
 	const rows = await directory
 		.select({
 			membershipId: memberships.id,

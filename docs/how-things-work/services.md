@@ -1,27 +1,21 @@
 # Services
 
-Services are the primary entrypoint for querying and mutating product data in Don't Forget. They are organized by domain first, not by runtime first. See [ADR-0011](../adr/0011-domain-first-service-layer.md) for the decision record and [`docs/code-standards/architecture.md`](../code-standards/architecture.md) for mandatory rules.
+Services are the primary entrypoint for querying and mutating product data in Don't Forget. They are organized by domain first, with the signed-in app runtime isolated under `lib/services/session/`. See [ADR-0011](../adr/0011-domain-first-service-layer.md) and [`docs/code-standards/architecture.md`](../code-standards/architecture.md).
 
 ## Folder Shape
 
-Use the domain noun from `CONTEXT.md` as the folder name:
+Use the domain noun from `CONTEXT.md` as the service folder name. Runtime/session code gets its own session folder because it composes multiple domains for the signed-in app shell.
 
 ```txt
 lib/services/
   auth/
     index.ts
-    auth-service.ts
-    server/
-      index.ts
-      auth-service.ts
   household/
     index.ts
-    household-session-service.ts
     household-store.ts
-    household-service.ts
+    household-sync-fallback.ts
     server/
       index.ts
-      household-bootstrap-service.ts
       household-provisioning-service.ts
       household-service.ts
       turso-platform.ts
@@ -36,6 +30,17 @@ lib/services/
     server/
       index.ts
       member-service.ts
+  session/
+    index.ts
+    bootstrap.ts
+    cache.ts
+    controller.ts
+    resource-manager.ts
+    resource-lease.ts
+    services.ts
+    server/
+      index.ts
+      bootstrap.ts
   user/
     server/
       index.ts
@@ -44,8 +49,8 @@ lib/services/
 
 Rules:
 
-- `lib/services/<domain>/index.ts` is app-safe and may export app-safe service APIs only.
-- `lib/services/<domain>/server/index.ts` may export server-only APIs for API routes and server tests.
+- `lib/services/<domain>/index.ts` is app-safe and may export app-safe APIs only.
+- `lib/services/<domain>/server/index.ts` and `lib/services/session/server/index.ts` may export server-only APIs for API routes and server tests.
 - There is no root `lib/services/index.ts` barrel.
 - Top-level `lib/app/` and `lib/server/` are legacy locations. Do not add new data-access modules there.
 
@@ -68,17 +73,17 @@ Expo API Routes must keep server imports lazy inside request handlers:
 
 ```ts
 export async function POST(request: Request): Promise<Response> {
-  const [{ directoryClient }, authServer, householdServer] = await Promise.all([
+  const [{ directoryClient }, authServer, sessionServer] = await Promise.all([
     import("@/db/client"),
     import("@/lib/services/auth/server"),
-    import("@/lib/services/household/server"),
+    import("@/lib/services/session/server"),
   ]);
 
   // ...
 }
 ```
 
-This preserves the current native bundle safety behavior until a better Expo API Route bundling proof exists.
+This preserves native bundle safety until a better Expo API Route bundling proof exists.
 
 ## Service Style
 
@@ -87,10 +92,6 @@ Use factory-based dependency injection:
 ```ts
 import { track } from "@/lib/analytics";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-
-type ItemServiceAnalytics = {
-  track: typeof track;
-};
 
 export type ItemService = {
   addItem(input: AddItemInput): Promise<Item>;
@@ -102,7 +103,7 @@ export type ItemServiceDeps = {
   householdId: string;
   store: HouseholdStore;
   logger?: Logger;
-  analytics?: ItemServiceAnalytics;
+  analytics?: { track: typeof track };
 };
 
 export function createItemService(deps: ItemServiceDeps): ItemService {
@@ -110,7 +111,6 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
     household_id: deps.householdId,
     service: "item",
   });
-  const analytics = deps.analytics ?? { track };
   // ...
 }
 ```
@@ -123,47 +123,9 @@ Naming conventions:
 - `<Operation>Input`
 - `<Operation>Result` only when needed
 
-Production call sites should stay clean:
+Use optional dependencies sparingly. Services own ID generation and timestamp generation directly; tests that need deterministic time should spy on `Date.now()` at the test boundary. Logger and analytics are the normal observability exceptions.
 
-```ts
-import { track } from "@/lib/analytics";
-import { useLogger } from "@/lib/logger";
-
-const logger = useLogger();
-const analytics = { track };
-
-const store = await openHouseholdStore({
-  householdId: session.activeHousehold.id,
-  database: session.householdDatabase,
-  logger,
-});
-
-const listService = createListService({
-  householdId: session.activeHousehold.id,
-  store,
-  logger,
-  analytics,
-});
-
-const itemService = createItemService({
-  householdId: session.activeHousehold.id,
-  store,
-  logger,
-  analytics,
-});
-```
-
-Use optional dependencies sparingly. Services own ID generation and timestamp generation directly; do not add clock/time-provider dependencies to services. Tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary instead of introducing service dependency shape that production callers could cargo-cult.
-
-Logger and analytics dependencies are the observability exception to that rule. Services and stores that log diagnostics or track product outcomes should accept `logger` and/or `analytics` through their dependency object or open config, then default to the app-owned implementation at the service/store boundary. This keeps tests and non-app processes from mocking global modules, while preserving app-owned redaction and typed event contracts.
-
-Service methods should emit informative product tracking after successful operations when the method owns a user-visible or domain outcome, such as loading an online Household Session, saving an offline-capable cache, creating an Item, or sending an Invitation. Do not track exploratory diagnostics, expected validation failures, or reads that do not represent a meaningful product outcome.
-
-Scope injected analytics to the operations a service actually needs. For example, prefer `{ track: typeof track }` for a service that only emits product events, rather than a broad dependency bag with unused `identify`, `reset`, or `screen` functions. Do not inject analytics into a service or store that does not own a product outcome.
-
-Do not inject generated IDs into normal services. New domain record IDs are generated inside the service. Tests should assert ID shape and consistency, not exact random values.
-
-Do not inject clocks into services. If a service writes app-owned timestamps, generate them inside the service and keep any monotonicity guard local to that service.
+Service methods should emit informative product tracking after successful operations when the method owns a user-visible or domain outcome, such as loading an online Authenticated App Session, saving an offline-capable cache, creating an Item, or sending an Invitation. Do not track exploratory diagnostics, expected validation failures, or reads that do not represent a meaningful product outcome.
 
 ## HouseholdStore
 
@@ -182,19 +144,11 @@ export type HouseholdStore = {
   close(): Promise<void>;
   deleteLocalData(): Promise<void>;
 };
-
-export type OpenHouseholdStoreConfig = {
-  householdId: string;
-  database: HouseholdDatabaseConfig;
-  logger?: Logger;
-};
 ```
 
-Open one shared `HouseholdStore` for a Household workflow and inject it into the services that need it. For active Household UI, the Active Household controller composes one store with List and Item services and closes it through the controller-owned Current List data source. `HouseholdStore` is infrastructure, so it usually logs diagnostics but should not emit product analytics unless the store itself owns a user-visible product outcome; most product events belong in the service, screen, or data-source operation that understands user intent.
+Open one shared `HouseholdStore` for a Household workflow and inject it into the services that need it. For signed-in app UI, the Authenticated App Session controller composes one store with List and Item services and closes it through controller-owned session resources.
 
-Any app-owned store or DB wrapper that shares one native/local database handle must serialize operations through `createDatabaseOperationQueue()` from `db/utils.ts`. This includes reads, writes, sync operations, and close/delete paths. The queue is per store instance, not global. This prevents local writes and sync operations from racing on one handle, and it keeps later operations running even after one operation rejects. See the [offline Item sync post-mortem](../post-mortem/2026-05-20-offline-item-sync.md) for the original failure mode.
-
-Defer transaction helpers until a real service operation needs them.
+Any app-owned store or DB wrapper that shares one native/local database handle must serialize operations through `createDatabaseOperationQueue()` from `db/utils.ts`. This includes reads, writes, sync operations, and close/delete paths. The queue is per store instance, not global.
 
 ## SQL Ownership
 
@@ -205,6 +159,7 @@ Allowed:
 - app-safe List/Item services executing SQL through `HouseholdStore`
 - server User/Member/Household services using Drizzle/directory DB infrastructure
 - server Household provisioning services using Turso Platform and Household DB migration infrastructure
+- session runtime code composing app-safe services for the Authenticated App Session
 - service tests injecting fake or local SQL stores
 
 Not allowed:
@@ -217,38 +172,21 @@ Not allowed:
 
 Services should return domain-shaped records, not raw SQL rows and not component types.
 
-```ts
-export type Item = {
-  id: string;
-  listId: string;
-  name: string;
-  checked: boolean;
-  checkedByUserId: string | null;
-  position: number;
-};
-```
+## UI Data Loading
 
-The owning screen maps domain records into UI contracts.
+Reusable components keep UI-facing contracts. They should not import domain services directly when that would couple them to Authenticated App Session, stores, or service factories. Route-owned hooks or containers adapt domain services into component props.
 
-## UI Data Sources
-
-Reusable components keep UI-facing contracts. They should not import domain services directly when that would couple them to Household Session, stores, or service factories.
-
-For active Household UI, the Active Household controller owns the composition of Household Session loading, HouseholdStore, List and Item services, the Current List data source, sync fallback, and sync coordinator lifecycle. Screens consume the Active Household controller through the authenticated app provider instead of opening or closing Household resources directly.
-
-```txt
-lib/services/household/
-  active-household-controller.ts
-
-components/active-household/
-  active-household-provider.tsx
-```
-
-Controller-owned data sources may adapt List and Item services into reusable UI component contracts:
+For signed-in UI, `components/session/AuthenticatedAppSessionProvider` exposes:
 
 ```ts
-const list = await listService.getList({ listId });
-const items = await itemService.listItems({ listId });
+const { state, session, retry, signOut } = useAuthenticatedAppSession();
+```
+
+`state` is lifecycle/UI metadata only. `session` is top-level and nullable; when it is non-null, route-owned hooks may use session-scoped services:
+
+```ts
+const list = await session.services.lists.getList({ listId });
+const items = await session.services.items.listItems({ listId });
 
 return {
   householdName: session.activeHousehold.name,
@@ -257,13 +195,13 @@ return {
 };
 ```
 
-The reusable Current List component contract is named `ActiveListDataSource`; do not reintroduce adapter aliases at the UI boundary. Treat the currently viewed List as controller-owned selection state inside the active Household, not as proof that a Household owns only one List.
+Current List is selection state only. Today Home selects `DEFAULT_LIST_ID`; future List switching should change the selected `listId`, not introduce a new Household-owned Current List service or data source. `ActiveList` receives loaded state and explicit callbacks such as `onLoadList`, `onAddItem`, and `onSetItemChecked`.
 
-During safe cached-to-fresh replacement, the controller may publish a loading snapshot with the previous Active Household view. The previous Current List remains writable until a replacement view is published. After replacement, the old borrowed resource rejects new calls with a typed stale-resource error and closes only after accepted operations drain.
+During safe cached-to-fresh replacement, the provider may expose `state: { status: "ready", refreshing: true }` with the previous `session`. The previous List UI remains writable until a replacement session is published. After replacement, the old borrowed session resource rejects new List/Item/sync calls with a typed stale-resource error and closes only after accepted operations drain.
 
 If fresh authorization proves the cached Household is unauthorized, the controller retires cached resources before deleting local data and does not keep stale Household data visible.
 
-See [Active Household Controller](./active-household-controller.md) for the public boundary and replacement policy.
+See [Authenticated App Session](./authenticated-app-session.md) for the public boundary and replacement policy.
 
 ## Offline-First Sync Semantics
 
@@ -275,40 +213,32 @@ Domain services should resolve mutations on local commit:
 const item = await itemService.addItem({ listId, userId, name });
 ```
 
-They should not treat remote sync as part of mutation success. Sync timing is an application/controller policy owned by the active Household controller and its sync coordinator:
+They should not treat remote sync as part of mutation success. Sync timing is an application/controller policy owned by the Authenticated App Session controller and its sync coordinator:
 
 ```ts
-const item = await itemService.addItem(input);
-void syncCoordinator.requestSync({ reason: "localWrite" });
+const item = await session.services.items.addItem(input);
+void session.services.sync.requestSync({ reason: "localWrite" });
 return item;
 ```
 
-The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while the app is active, and receives app lifecycle and connectivity events through app-owned adapter seams. The Active Household controller owns when a Household coordinator exists, starts, stops, and is replaced. Keep future platform awareness behind the same coordinator boundary rather than pushing sync calls into List or Item services, UI components, or native package call sites. See [Sync Coordinator](./sync-coordinator.md) for the active Household sync policy.
+The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while the app is active, and receives app lifecycle and connectivity events through app-owned adapter seams. The Authenticated App Session controller owns when a Household coordinator exists, starts, stops, and is replaced. See [Sync Coordinator](./sync-coordinator.md).
 
-Turso's transport conflict behavior is last-push-wins. App-owned timestamps remain useful for `created_at`, `updated_at`, latest checked-state display, recovery upserts, and future migration paths, but they are not Turso's merge clock.
+`session.services.sync` is a narrowed consumer handle: route-owned UI may call `getStatus`, `subscribe`, and `requestSync`, but only the Authenticated App Session controller starts or stops the underlying coordinator.
 
-## Household Session
+## Authenticated App Session
 
-Use **Household Session** for the app's active Household context: active Household, active Member, initial Current List, Members, and short-lived Household DB connection metadata needed to open active Household infrastructure.
+Use **Authenticated App Session** for the top-level signed-in app runtime. It identifies the active Household, active Member, current Members, resource key, and session-scoped services. Do not put Current List, List, or Item state in the session; load those through `session.services` after `session !== null`.
 
-Preferred naming:
+Preferred app-side names:
 
-- `getHouseholdSession`, not `bootstrapWithClerk`
-- `CachedHouseholdSession`, not `CachedBootstrapMetadata`
-- `household-session-service.ts`, not `offline-bootstrap-cache.ts`
+- `getSessionBootstrap`, not `bootstrapWithClerk`
+- `CachedSessionBootstrap`, not `CachedBootstrapMetadata`
+- `lib/services/session/bootstrap.ts` for fresh online session loading
+- `lib/services/session/cache.ts` for offline-capable non-secret cache behavior
+- `lib/services/session/controller.ts` for signed-in runtime orchestration
 
-Cached Household Sessions must not store Household DB auth tokens. Offline active Household startup may use cached non-secret metadata and the local Household DB file; push/pull authorization resumes only after a fresh online Household Session is obtained.
+Cached Authenticated App Sessions must not store Household DB auth tokens. Offline startup may use cached non-secret metadata and the local Household DB file; push/pull authorization resumes only after a fresh online Authenticated App Session is obtained.
 
-## Initial Migration Checklist
+## Historical Migration Note
 
-Historical initial Home/List/Item migration checklist:
-
-1. Create `lib/services/household/household-store.ts` from the existing Household DB wrapper.
-2. Create `lib/services/household/household-session-service.ts` from bootstrap client and offline cache behavior.
-3. Create `lib/services/list/list-service.ts` for List metadata operations.
-4. Create `lib/services/item/item-service.ts` for Item operations.
-5. Use `lib/services/household/current-list-data-source.ts` to compose Household Session, HouseholdStore, ListService, and ItemService for the Current List UI contract.
-6. Keep the Active List UI boundary on `ActiveListDataSource` naming.
-7. Hard-cut imports away from touched `lib/app/*` files; do not add compatibility wrappers.
-8. Add the custom ESLint service-boundary rule.
-9. Run focused tests for Home, Active List, and migrated services, then `make verify` when practical.
+The initial Home/List/Item migration introduced domain services and `HouseholdStore`. The current boundary supersedes the old Home-owned resource lifecycle: Authenticated App Session infrastructure exposes Household-scoped List and Item services, and route-owned code loads the selected List by explicit List ID.
