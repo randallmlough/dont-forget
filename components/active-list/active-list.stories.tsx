@@ -6,7 +6,7 @@ import { StyleSheet } from "react-native-unistyles";
 import {
 	ActiveList,
 	type ActiveListInitialState,
-	type ActiveListManagedSyncCoordinator,
+	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
 
 const emptyList: ActiveListInitialState = {
@@ -80,12 +80,10 @@ function ActiveListStory({
 	);
 }
 
-function storySyncCoordinator(): ActiveListManagedSyncCoordinator {
+function storySyncCoordinator(): ActiveListSyncCoordinator {
 	return {
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),
-		start() {},
-		async stop() {},
 		async requestSync() {
 			return { changed: false };
 		},
@@ -93,19 +91,14 @@ function storySyncCoordinator(): ActiveListManagedSyncCoordinator {
 }
 
 function storyActions(initialState: ActiveListInitialState): {
-	syncAuthorized: boolean;
 	load: () => Promise<ActiveListInitialState>;
 	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-	pull: () => Promise<{ changed: boolean }>;
-	sync: () => Promise<{ changed: boolean }>;
-	close: () => Promise<void>;
 } {
 	let state = initialState;
 	let nextItem = initialState.items.length + 1;
 
 	return {
-		syncAuthorized: true,
 		async load() {
 			return state;
 		},
@@ -134,13 +127,6 @@ function storyActions(initialState: ActiveListInitialState): {
 				),
 			};
 		},
-		async pull() {
-			return { changed: false };
-		},
-		async sync() {
-			return { changed: false };
-		},
-		async close() {},
 	};
 }
 

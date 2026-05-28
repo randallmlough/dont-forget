@@ -1,37 +1,30 @@
-import type { ActiveListInitialState } from "@/components/active-list";
 import {
 	cachedSessionBootstrapFixture,
 	sessionBootstrapFixture,
 } from "@/db/fixtures/session";
-import type {
-	SessionBootstrapService,
-	SessionCache,
-} from "@/lib/services/session";
+import type { SessionBootstrapService } from "./bootstrap";
+import type { SessionCache } from "./cache";
 import type { AuthenticatedAppSessionStateSnapshot } from "./controller";
 
 export {
 	cachedSessionBootstrapFixture,
-	initialListFixture,
 	itemFixture,
-	itemServiceFixture,
 	listFixture,
-	listServiceFixture,
 	sessionBootstrapFixture,
+} from "@/db/fixtures/session";
+export {
+	authenticatedAppSessionFixture,
+	itemServiceFixture,
+	listServiceFixture,
 	sessionDataServicesFixture,
 	syncCoordinatorFixture,
-} from "@/db/fixtures/session";
-export type {
-	CachedSessionBootstrap,
-	SessionBootstrap,
-	SessionBootstrapService,
-	SessionCache,
-} from "@/lib/services/session";
+} from "@/lib/services/session/test-fixtures";
 export { deferred, waitForAsync } from "@/lib/test/async";
 export { createMockLogger as loggerFixture } from "@/lib/test/mocks/logger";
+export type { SessionBootstrap, SessionBootstrapService } from "./bootstrap";
+export type { CachedSessionBootstrap, SessionCache } from "./cache";
 export type { AuthenticatedAppSessionStateSnapshot } from "./controller";
 export { createAuthenticatedAppSessionController } from "./controller";
-
-export type { ActiveListInitialState };
 
 export function collectSnapshots(controller: {
 	getSnapshot: () => AuthenticatedAppSessionStateSnapshot;
@@ -47,10 +40,13 @@ export function collectSnapshots(controller: {
 }
 
 type SessionRuntimeFixture = {
+	deps: {
+		bootstrap: SessionBootstrapService;
+		cache: SessionCache;
+	};
 	bootstrap: SessionBootstrapService;
 	cache: SessionCache;
-} & SessionBootstrapService &
-	SessionCache;
+};
 
 type SessionRuntimeFixtureOverrides = Partial<SessionBootstrapService> &
 	Partial<SessionCache>;
@@ -73,7 +69,11 @@ export function sessionRuntimeFixture(
 		...pickCacheOverrides(overrides),
 	};
 
-	return Object.assign({ bootstrap, cache }, bootstrap, cache);
+	return {
+		deps: { bootstrap, cache },
+		bootstrap,
+		cache,
+	};
 }
 
 function pickBootstrapOverrides(

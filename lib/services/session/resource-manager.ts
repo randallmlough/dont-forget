@@ -22,6 +22,11 @@ export type SessionResource = {
 	syncCoordinator: SyncCoordinator;
 };
 
+type CreatedSessionResource = {
+	resource: SessionResource;
+	ready: Promise<void>;
+};
+
 export type OpenedSessionResource = {
 	resource: SessionResource;
 	resourceKey: string;
@@ -131,7 +136,7 @@ export function createSessionResourceManager(
 
 	async function createSessionResource(
 		session: SessionResourceBootstrap,
-	): Promise<SessionResource> {
+	): Promise<CreatedSessionResource> {
 		let dataServices: SessionDataServices | null = null;
 		try {
 			const householdLogger = logger.with({
@@ -154,15 +159,18 @@ export function createSessionResourceManager(
 				logger: householdLogger,
 			});
 			return {
-				lists: lease.services.lists,
-				items: lease.services.items,
-				close: (options) =>
-					lease.retireAndClose({
-						close: openedDataServices.close,
-						stopSync: syncCoordinator.stop,
-						waitForDrain: options?.waitForDrain,
-					}),
-				syncCoordinator,
+				ready: openedDataServices.ready,
+				resource: {
+					lists: lease.services.lists,
+					items: lease.services.items,
+					close: (options) =>
+						lease.retireAndClose({
+							close: openedDataServices.close,
+							stopSync: syncCoordinator.stop,
+							waitForDrain: options?.waitForDrain,
+						}),
+					syncCoordinator,
+				},
 			};
 		} catch (error) {
 			await dataServices?.close().catch(() => undefined);
@@ -173,11 +181,12 @@ export function createSessionResourceManager(
 	async function openSessionResource(
 		session: SessionResourceBootstrap,
 	): Promise<OpenedSessionResource> {
-		const resource = await createSessionResource(session);
+		const { ready, resource } = await createSessionResource(session);
 		const opening: OpeningSessionResource = { session, resource };
 		openingResources.add(opening);
 
 		try {
+			await ready;
 			if (opening.closePromise) {
 				await opening.closePromise;
 				throw staleAuthenticatedAppSessionResourceError();

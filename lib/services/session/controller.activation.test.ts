@@ -5,7 +5,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 		const dataServices = h.sessionDataServicesFixture();
 		const syncCoordinator = h.syncCoordinatorFixture();
 		const controller = h.createAuthenticatedAppSessionController({
-			...h.sessionRuntimeFixture(),
+			...h.sessionRuntimeFixture().deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -57,7 +57,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 		const controller = h.createAuthenticatedAppSessionController({
 			...h.sessionRuntimeFixture({
 				getSession: jest.fn().mockRejectedValue(new Error("offline")),
-			}),
+			}).deps,
 			logger: h.loggerFixture(),
 		});
 		const snapshots = h.collectSnapshots(controller);
@@ -88,7 +88,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 			read: jest.fn().mockResolvedValue(cached),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -116,7 +116,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 				},
 			},
 		});
-		expect(sessionService.getSession).not.toHaveBeenCalled();
+		expect(sessionService.bootstrap.getSession).not.toHaveBeenCalled();
 		expect(dataServices.lists.getList).not.toHaveBeenCalled();
 		expect(dataServices.items.listItems).not.toHaveBeenCalled();
 		expect(syncCoordinator.start).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 			...h.sessionRuntimeFixture({
 				read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
 				getSession: jest.fn().mockRejectedValue(new Error("offline")),
-			}),
+			}).deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -179,7 +179,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 		const syncCoordinator = h.syncCoordinatorFixture();
 		const sessionService = h.sessionRuntimeFixture();
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -189,9 +189,9 @@ describe("createAuthenticatedAppSessionController activation", () => {
 			authReady: true,
 			signedIn: true,
 		});
-		jest.mocked(sessionService.read).mockClear();
+		jest.mocked(sessionService.cache.read).mockClear();
 		jest
-			.mocked(sessionService.read)
+			.mocked(sessionService.cache.read)
 			.mockResolvedValue(h.cachedSessionBootstrapFixture());
 
 		await controller.activate({
@@ -201,7 +201,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 		});
 
 		expect(controller.getSnapshot()).toEqual({ status: "idle" });
-		expect(sessionService.read).not.toHaveBeenCalled();
+		expect(sessionService.cache.read).not.toHaveBeenCalled();
 		expect(dataServices.close).toHaveBeenCalledTimes(1);
 		expect(syncCoordinator.stop).toHaveBeenCalledTimes(1);
 	});
@@ -221,7 +221,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 				),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(staleDataServices)
@@ -239,7 +239,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(sessionService.getSession).toHaveBeenCalledTimes(1),
+			expect(sessionService.bootstrap.getSession).toHaveBeenCalledTimes(1),
 		);
 		await controller.activate({
 			getToken: async () => "fresh-token",
@@ -260,8 +260,8 @@ describe("createAuthenticatedAppSessionController activation", () => {
 		});
 		expect(freshCoordinator.stop).not.toHaveBeenCalled();
 		expect(freshDataServices.close).not.toHaveBeenCalled();
-		expect(sessionService.save).toHaveBeenCalledTimes(1);
-		expect(sessionService.save).toHaveBeenCalledWith(
+		expect(sessionService.cache.save).toHaveBeenCalledTimes(1);
+		expect(sessionService.cache.save).toHaveBeenCalledWith(
 			expect.objectContaining({
 				activeHousehold: { id: "hh_avery", name: "Fresh" },
 			}),
@@ -281,7 +281,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 					h.sessionBootstrapFixture({ householdName: "Fresh" }),
 				),
 		});
-		sessionService.cache.save = sessionService.save = jest
+		sessionService.cache.save = jest
 			.fn()
 			.mockImplementationOnce(async (session: h.SessionBootstrap) => {
 				savedHouseholdNames.push(session.activeHousehold.name);
@@ -292,7 +292,7 @@ describe("createAuthenticatedAppSessionController activation", () => {
 				return h.cachedSessionBootstrapFixture();
 			});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValue(h.sessionDataServicesFixture()),

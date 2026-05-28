@@ -1,14 +1,7 @@
-import type {
-	ActiveListInitialState,
-	ActiveListManagedSyncCoordinator,
-} from "@/components/active-list";
-import type { Item, ItemService } from "@/lib/services/item";
-import type { List, ListService } from "@/lib/services/list";
-import type {
-	CachedSessionBootstrap,
-	SessionBootstrap,
-	SessionDataServices,
-} from "@/lib/services/session";
+import type { Item } from "@/lib/services/item";
+import type { List } from "@/lib/services/list";
+import type { SessionBootstrap } from "@/lib/services/session/bootstrap";
+import type { CachedSessionBootstrap } from "@/lib/services/session/cache";
 
 export type SessionBootstrapFixtureOverrides = {
 	householdId?: string;
@@ -22,15 +15,6 @@ export type CachedSessionBootstrapFixtureOverrides =
 	SessionBootstrapFixtureOverrides & {
 		initializedAt?: number;
 	};
-
-export type InitialListFixtureOverrides = {
-	checked?: boolean;
-	checkedByMemberName?: string | null;
-	householdName?: string;
-	itemName?: string;
-	items?: ActiveListInitialState["items"];
-	listName?: string;
-};
 
 export function sessionBootstrapFixture(
 	overrides: SessionBootstrapFixtureOverrides = {},
@@ -84,23 +68,6 @@ export function cachedSessionBootstrapFixture(
 	};
 }
 
-export function initialListFixture(
-	overrides: InitialListFixtureOverrides = {},
-): ActiveListInitialState {
-	return {
-		householdName: overrides.householdName ?? "Avery",
-		listName: overrides.listName ?? "Groceries",
-		items: overrides.items ?? [
-			{
-				id: "itm_milk",
-				name: overrides.itemName ?? "Milk",
-				checked: overrides.checked ?? false,
-				checkedByMemberName: overrides.checkedByMemberName ?? null,
-			},
-		],
-	};
-}
-
 export function listFixture(overrides: Partial<List> = {}): List {
 	return {
 		id: "lst_default_groceries",
@@ -126,60 +93,5 @@ export function itemFixture(overrides: Partial<Item> = {}): Item {
 		createdAt: 1_700_000_000_000,
 		updatedAt: 1_700_000_000_000,
 		...overrides,
-	};
-}
-
-export function listServiceFixture(
-	overrides: Partial<ListService> = {},
-): ListService {
-	return {
-		getList: jest.fn().mockResolvedValue(listFixture()),
-		...overrides,
-	};
-}
-
-export function itemServiceFixture(
-	overrides: Partial<ItemService> = {},
-): ItemService {
-	return {
-		listItems: jest.fn().mockResolvedValue([itemFixture()]),
-		addItem: jest.fn(),
-		setItemChecked: jest.fn().mockResolvedValue(undefined),
-		...overrides,
-	};
-}
-
-export type SessionDataServicesFixture = SessionDataServices;
-
-type SessionDataServicesFixtureOverrides = Partial<SessionDataServices> & {
-	addItem?: jest.Mock;
-	setItemChecked?: jest.Mock;
-};
-
-export function sessionDataServicesFixture(
-	overrides: SessionDataServicesFixtureOverrides = {},
-): SessionDataServicesFixture {
-	const addItem = overrides.addItem ?? jest.fn();
-	const setItemChecked =
-		overrides.setItemChecked ?? jest.fn().mockResolvedValue(undefined);
-	const items =
-		overrides.items ?? itemServiceFixture({ addItem, setItemChecked });
-
-	return {
-		lists: overrides.lists ?? listServiceFixture(),
-		items,
-		syncAuthorized: overrides.syncAuthorized ?? true,
-		sync: overrides.sync ?? jest.fn().mockResolvedValue({ changed: false }),
-		close: overrides.close ?? jest.fn().mockResolvedValue(undefined),
-	};
-}
-
-export function syncCoordinatorFixture(): ActiveListManagedSyncCoordinator {
-	return {
-		getStatus: jest.fn(() => "synced"),
-		subscribe: jest.fn(() => ({ remove() {} })),
-		start: jest.fn(),
-		stop: jest.fn().mockResolvedValue(undefined),
-		requestSync: jest.fn().mockResolvedValue(null),
 	};
 }

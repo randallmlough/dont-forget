@@ -18,9 +18,9 @@ import {
 	type AuthenticatedAppSessionController,
 	type AuthenticatedAppSessionDisposal,
 	type AuthenticatedAppSessionStateSnapshot,
-	clearSignedOutSessionData,
 	createAuthenticatedAppSessionController,
 } from "@/lib/services/session";
+import { clearSignedOutSessionData } from "@/lib/services/session/cache";
 
 export type AuthenticatedAppSessionState =
 	| { status: "loading" }

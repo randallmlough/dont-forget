@@ -35,6 +35,7 @@ export type SessionDataServicesOptions = {
 };
 
 export type SessionDataServices = {
+	ready: Promise<void>;
 	lists: ListService;
 	items: ItemService;
 	syncAuthorized: boolean;
@@ -53,6 +54,7 @@ export function createSessionDataServices(
 				database: config.database,
 			});
 	const ownsStore = !options.store;
+	const ready = storePromise.then(() => undefined);
 	const log = config.logger.with({
 		feature: "authenticated_app_session_services",
 	});
@@ -86,6 +88,7 @@ export function createSessionDataServices(
 	}
 
 	return {
+		ready,
 		lists: {
 			async getList(input) {
 				const { lists } = await getServices();

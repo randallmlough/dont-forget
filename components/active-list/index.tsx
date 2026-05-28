@@ -58,9 +58,6 @@ export type ActiveListSyncCoordinator = Pick<
 	"getStatus" | "subscribe" | "requestSync"
 >;
 
-export type ActiveListManagedSyncCoordinator = ActiveListSyncCoordinator &
-	Pick<SyncCoordinator, "start" | "stop">;
-
 export type ActiveListActions = {
 	addItem: (name: string) => Promise<void>;
 	toggleItem: (itemId: string) => Promise<void>;
@@ -86,23 +83,12 @@ type ActiveListProviderBaseProps = PropsWithChildren<{
 	onLoadList: () => Promise<ActiveListInitialState>;
 	onAddItem: (name: string) => Promise<ActiveListItem>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
+	syncCoordinator: ActiveListSyncCoordinator;
 }>;
-
-type ActiveListProviderProps = ActiveListProviderBaseProps &
-	(
-		| {
-				syncCoordinator: ActiveListManagedSyncCoordinator;
-				manageSyncCoordinatorLifecycle?: true;
-		  }
-		| {
-				syncCoordinator: ActiveListSyncCoordinator;
-				manageSyncCoordinatorLifecycle: false;
-		  }
-	);
 
 const ActiveListContext = createContext<ActiveListContextValue | null>(null);
 
-function ActiveListProvider(props: ActiveListProviderProps) {
+function ActiveListProvider(props: ActiveListProviderBaseProps) {
 	const {
 		initialState,
 		currentMemberName,
@@ -112,10 +98,6 @@ function ActiveListProvider(props: ActiveListProviderProps) {
 		children,
 	} = props;
 	const syncCoordinator = props.syncCoordinator;
-	const managedSyncCoordinator =
-		props.manageSyncCoordinatorLifecycle === false
-			? null
-			: props.syncCoordinator;
 	const logger = useLogger();
 	const [model, setModel] = useState(() =>
 		initialActiveListModel(initialState, syncCoordinator.getStatus()),
@@ -162,19 +144,11 @@ function ActiveListProvider(props: ActiveListProviderProps) {
 			type: "syncStatusChanged",
 			syncState: syncCoordinator.getStatus(),
 		});
-		if (managedSyncCoordinator) {
-			managedSyncCoordinator.start();
-
-			return () => {
-				subscription.remove();
-				void managedSyncCoordinator.stop();
-			};
-		}
 
 		return () => {
 			subscription.remove();
 		};
-	}, [loadList, logger, managedSyncCoordinator, syncCoordinator, transition]);
+	}, [loadList, logger, syncCoordinator, transition]);
 
 	const requestLocalWriteSync = useCallback(() => {
 		void syncCoordinator

@@ -5,7 +5,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		const dataServices = h.sessionDataServicesFixture();
 		const syncCoordinator = h.syncCoordinatorFixture();
 		const controller = h.createAuthenticatedAppSessionController({
-			...h.sessionRuntimeFixture(),
+			...h.sessionRuntimeFixture().deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -39,7 +39,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		const controller = h.createAuthenticatedAppSessionController({
 			...h.sessionRuntimeFixture({
 				read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
-			}),
+			}).deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -72,11 +72,9 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 	it("publishes fresh state before waiting for cache persistence", async () => {
 		const cacheSave = h.deferred<h.CachedSessionBootstrap>();
 		const sessionService = h.sessionRuntimeFixture();
-		sessionService.cache.save = sessionService.save = jest.fn(
-			() => cacheSave.promise,
-		);
+		sessionService.cache.save = jest.fn(() => cacheSave.promise);
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValue(h.sessionDataServicesFixture()),
@@ -105,19 +103,53 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		);
 		await h.waitForAsync(() => expect(activationFinished).toBe(true));
 
-		expect(sessionService.save).toHaveBeenCalledTimes(1);
+		expect(sessionService.cache.save).toHaveBeenCalledTimes(1);
 		cacheSave.resolve(h.cachedSessionBootstrapFixture());
 		await activation;
+	});
+
+	it("does not publish or cache a fresh session before the HouseholdStore opens", async () => {
+		const dataServicesReady = h.deferred<void>();
+		const dataServices = h.sessionDataServicesFixture({
+			ready: dataServicesReady.promise,
+		});
+		const syncCoordinator = h.syncCoordinatorFixture();
+		const sessionService = h.sessionRuntimeFixture();
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest.fn().mockReturnValue(dataServices),
+			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
+			logger: h.loggerFixture(),
+		});
+		const activation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		await h.waitForAsync(() =>
+			expect(controller.getSnapshot()).toEqual({ status: "loading" }),
+		);
+		expect(sessionService.cache.save).not.toHaveBeenCalled();
+		expect(syncCoordinator.start).not.toHaveBeenCalled();
+
+		dataServicesReady.resolve(undefined);
+		await activation;
+
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			session: { resourceKey: "authenticated-app-session:1" },
+		});
+		expect(sessionService.cache.save).toHaveBeenCalledTimes(1);
+		expect(syncCoordinator.start).toHaveBeenCalledTimes(1);
 	});
 
 	it("waits for in-flight cache persistence during dispose", async () => {
 		const cacheSave = h.deferred<h.CachedSessionBootstrap>();
 		const sessionService = h.sessionRuntimeFixture();
-		sessionService.cache.save = sessionService.save = jest.fn(
-			() => cacheSave.promise,
-		);
+		sessionService.cache.save = jest.fn(() => cacheSave.promise);
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValue(h.sessionDataServicesFixture()),
@@ -150,11 +182,9 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 	it("waits for in-flight cache persistence before signed-out activation finishes", async () => {
 		const cacheSave = h.deferred<h.CachedSessionBootstrap>();
 		const sessionService = h.sessionRuntimeFixture();
-		sessionService.cache.save = sessionService.save = jest.fn(
-			() => cacheSave.promise,
-		);
+		sessionService.cache.save = jest.fn(() => cacheSave.promise);
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValue(h.sessionDataServicesFixture()),
@@ -206,12 +236,12 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 				.mockResolvedValueOnce(firstSession)
 				.mockResolvedValueOnce(secondSession),
 		});
-		sessionService.cache.save = sessionService.save = jest
+		sessionService.cache.save = jest
 			.fn()
 			.mockReturnValueOnce(firstCacheSave.promise)
 			.mockResolvedValue(h.cachedSessionBootstrapFixture());
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValue(h.sessionDataServicesFixture()),
@@ -235,13 +265,13 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		const dispose = controller.dispose();
 		await Promise.resolve();
 
-		expect(sessionService.save).toHaveBeenCalledTimes(1);
+		expect(sessionService.cache.save).toHaveBeenCalledTimes(1);
 
 		firstCacheSave.resolve(h.cachedSessionBootstrapFixture());
 		await dispose;
 
-		expect(sessionService.save).toHaveBeenCalledTimes(2);
-		expect(sessionService.save).toHaveBeenLastCalledWith(secondSession);
+		expect(sessionService.cache.save).toHaveBeenCalledTimes(2);
+		expect(sessionService.cache.save).toHaveBeenLastCalledWith(secondSession);
 	});
 
 	it("keeps the cached session published while the fresh Authenticated App Session is pending", async () => {
@@ -254,7 +284,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			...h.sessionRuntimeFixture({
 				read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
 				getSession: jest.fn(() => freshSession.promise),
-			}),
+			}).deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -298,7 +328,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 	it("closes active resources when auth transitions to signed out", async () => {
 		const dataServices = h.sessionDataServicesFixture();
 		const controller = h.createAuthenticatedAppSessionController({
-			...h.sessionRuntimeFixture(),
+			...h.sessionRuntimeFixture().deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest
 				.fn()
@@ -334,7 +364,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 					.mockResolvedValueOnce(h.cachedSessionBootstrapFixture())
 					.mockResolvedValueOnce(null),
 				getSession: jest.fn(() => freshSession.promise),
-			}),
+			}).deps,
 			createDataServices: jest.fn().mockReturnValue(cachedDataServices),
 			createSyncCoordinator: jest
 				.fn()
@@ -396,7 +426,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		const controller = h.createAuthenticatedAppSessionController({
 			...h.sessionRuntimeFixture({
 				read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
-			}),
+			}).deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -481,7 +511,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			...h.sessionRuntimeFixture({
 				read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
 				getSession: jest.fn(() => freshSession.promise),
-			}),
+			}).deps,
 			createDataServices: jest.fn((config) =>
 				config.database.authToken ? freshDataServices : cachedDataServices,
 			),
@@ -548,7 +578,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 	it("closes the active resource when disposed after Household shell activation", async () => {
 		const dataServices = h.sessionDataServicesFixture();
 		const controller = h.createAuthenticatedAppSessionController({
-			...h.sessionRuntimeFixture(),
+			...h.sessionRuntimeFixture().deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest
 				.fn()
@@ -578,7 +608,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			addItem: jest.fn(() => write.promise),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...h.sessionRuntimeFixture(),
+			...h.sessionRuntimeFixture().deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest
 				.fn()
@@ -632,7 +662,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			.fn()
 			.mockRejectedValue(new Error("stop failed"));
 		const controller = h.createAuthenticatedAppSessionController({
-			...h.sessionRuntimeFixture(),
+			...h.sessionRuntimeFixture().deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -655,7 +685,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			.fn()
 			.mockRejectedValue(new Error("stop failed"));
 		const controller = h.createAuthenticatedAppSessionController({
-			...h.sessionRuntimeFixture(),
+			...h.sessionRuntimeFixture().deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
@@ -674,7 +704,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 	it("closes the data source when sync coordinator construction fails", async () => {
 		const dataServices = h.sessionDataServicesFixture();
 		const controller = h.createAuthenticatedAppSessionController({
-			...h.sessionRuntimeFixture(),
+			...h.sessionRuntimeFixture().deps,
 			createDataServices: jest.fn().mockReturnValue(dataServices),
 			createSyncCoordinator: jest.fn(() => {
 				throw new Error("coordinator failed");
@@ -707,7 +737,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		const controller = h.createAuthenticatedAppSessionController({
 			...h.sessionRuntimeFixture({
 				getSession: jest.fn().mockResolvedValue(session),
-			}),
+			}).deps,
 			createDataServices,
 			createSyncCoordinator,
 			logger,

@@ -79,11 +79,162 @@ describe("createSessionDataServices", () => {
 			}),
 		);
 	});
+
+	it("reports ready only after the HouseholdStore opens", async () => {
+		const store = storeFixture();
+		const openStore = jest.fn(async () => store);
+		const services = createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ openStore },
+		);
+
+		await expect(services.ready).resolves.toBeUndefined();
+		expect(openStore).toHaveBeenCalledWith({
+			householdId: "hh_avery",
+			database: { url: "libsql://example", authToken: "secret" },
+		});
+	});
+
+	it("uses native sync result and still pushes local rows through the remote fallback", async () => {
+		const store = storeFixture();
+		store.sync.mockResolvedValueOnce({ changed: true });
+		const remote = remoteClientFixture();
+		const openRemoteClient = jest.fn(async () => remote);
+		const services = createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ store, openRemoteClient },
+		);
+
+		await expect(services.sync()).resolves.toEqual({ changed: true });
+
+		expect(store.sync).toHaveBeenCalledTimes(1);
+		expect(openRemoteClient).toHaveBeenCalledWith({
+			url: "libsql://example",
+			authToken: "secret",
+		});
+		expect(remote.execute).toHaveBeenCalled();
+		expect(remote.close).toHaveBeenCalledTimes(1);
+	});
+
+	it("uses native push only for pushLocalOnly sync when native push succeeds", async () => {
+		const store = storeFixture();
+		const openRemoteClient = jest.fn(async () => remoteClientFixture());
+		const services = createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ store, openRemoteClient },
+		);
+
+		await expect(services.sync({ mode: "pushLocalOnly" })).resolves.toEqual({
+			changed: false,
+		});
+
+		expect(store.push).toHaveBeenCalledTimes(1);
+		expect(store.sync).not.toHaveBeenCalled();
+		expect(openRemoteClient).not.toHaveBeenCalled();
+	});
+
+	it("falls back to remote push when native pushLocalOnly sync fails after local writes", async () => {
+		const store = storeFixture();
+		const nativeError = new Error("unable to checkpoint synced portion of WAL");
+		store.push.mockRejectedValueOnce(nativeError);
+		const remote = remoteClientFixture();
+		const openRemoteClient = jest.fn(async () => remote);
+		const services = createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ store, openRemoteClient },
+		);
+
+		await expect(services.sync({ mode: "pushLocalOnly" })).resolves.toEqual({
+			changed: false,
+			recoveredNativeSyncError: nativeError,
+		});
+
+		expect(openRemoteClient).toHaveBeenCalledTimes(1);
+		expect(remote.execute).toHaveBeenCalled();
+		expect(remote.close).toHaveBeenCalledTimes(1);
+	});
+
+	it("falls back to remote push when full native sync fails after local writes", async () => {
+		const store = storeFixture();
+		const nativeError = new Error("native sync failed");
+		store.sync.mockRejectedValueOnce(nativeError);
+		const remote = remoteClientFixture();
+		const openRemoteClient = jest.fn(async () => remote);
+		const services = createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ store, openRemoteClient },
+		);
+
+		await expect(services.sync()).resolves.toEqual({
+			changed: false,
+			recoveredNativeSyncError: nativeError,
+		});
+
+		expect(openRemoteClient).toHaveBeenCalledTimes(1);
+		expect(remote.execute).toHaveBeenCalled();
+		expect(remote.close).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not run remote fallback when native sync fails offline", async () => {
+		const store = storeFixture();
+		const networkError = new TypeError("Network request failed");
+		store.sync.mockRejectedValueOnce(networkError);
+		const openRemoteClient = jest.fn(async () => remoteClientFixture());
+		const services = createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ store, openRemoteClient },
+		);
+
+		await expect(services.sync()).rejects.toBe(networkError);
+		expect(openRemoteClient).not.toHaveBeenCalled();
+	});
+
+	it("does not run native or remote sync when the session is not authorized for sync", async () => {
+		const store = storeFixture({ syncAuthorized: false });
+		const openRemoteClient = jest.fn(async () => remoteClientFixture());
+		const services = createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example" },
+				logger,
+			},
+			{ store, openRemoteClient },
+		);
+
+		await expect(services.sync()).resolves.toEqual({ changed: false });
+		expect(store.sync).not.toHaveBeenCalled();
+		expect(store.push).not.toHaveBeenCalled();
+		expect(openRemoteClient).not.toHaveBeenCalled();
+	});
 });
 
-function storeFixture() {
+function storeFixture(overrides: { syncAuthorized?: boolean } = {}) {
 	return {
-		syncAuthorized: true,
+		syncAuthorized: overrides.syncAuthorized ?? true,
 		execute: jest.fn(async (statement: HouseholdSqlStatement) => {
 			const sql = typeof statement === "string" ? statement : statement.sql;
 			const args = typeof statement === "string" ? [] : statement.args;
@@ -126,5 +277,12 @@ function storeFixture() {
 		push: jest.fn(async () => undefined),
 		sync: jest.fn(async () => ({ changed: false })),
 		close: jest.fn(async () => undefined),
+	};
+}
+
+function remoteClientFixture() {
+	return {
+		execute: jest.fn(async () => undefined),
+		close: jest.fn(),
 	};
 }

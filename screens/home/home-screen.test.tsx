@@ -5,17 +5,17 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
+import type { ActiveListInitialState } from "@/components/active-list";
 import { useAuthenticatedAppSession } from "@/components/session";
-import {
-	initialListFixture,
-	itemFixture,
-	itemServiceFixture,
-	listFixture,
-	listServiceFixture,
-	syncCoordinatorFixture,
-} from "@/db/fixtures/session";
+import { itemFixture, listFixture } from "@/db/fixtures/session";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import {
+	authenticatedAppSessionFixture,
+	itemServiceFixture,
+	listServiceFixture,
+	syncCoordinatorFixture,
+} from "@/lib/services/session/test-fixtures";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
 jest.mock("@/components/session", () => ({
@@ -289,7 +289,7 @@ describe("HomeScreenView", () => {
 
 type ReadySessionOverrides = {
 	resourceKey?: string;
-	initialList?: ReturnType<typeof initialListFixture>;
+	initialList?: ActiveListInitialState;
 	lists?: ReturnType<typeof listServiceFixture>;
 	items?: ReturnType<typeof itemServiceFixture>;
 	sync?: ReturnType<typeof syncCoordinatorFixture>;
@@ -299,28 +299,9 @@ function readySession(
 	overrides: ReadySessionOverrides = {},
 ): AuthenticatedAppSession {
 	const initialList = overrides.initialList ?? initialListFixture();
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-		},
+	return authenticatedAppSessionFixture({
 		activeHousehold: { id: "hh_avery", name: initialList.householdName },
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner",
-			displayName: "Avery Chen",
-		},
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner",
-				displayName: "Avery Chen",
-			},
-		],
-		resourceKey: overrides.resourceKey ?? "authenticated-app-session:1",
+		resourceKey: overrides.resourceKey,
 		services: {
 			lists:
 				overrides.lists ??
@@ -346,6 +327,30 @@ function readySession(
 				}),
 			sync: overrides.sync ?? syncCoordinatorFixture(),
 		},
+	});
+}
+
+function initialListFixture(
+	overrides: {
+		checked?: boolean;
+		checkedByMemberName?: string | null;
+		householdName?: string;
+		itemName?: string;
+		items?: ActiveListInitialState["items"];
+		listName?: string;
+	} = {},
+): ActiveListInitialState {
+	return {
+		householdName: overrides.householdName ?? "Avery",
+		listName: overrides.listName ?? "Groceries",
+		items: overrides.items ?? [
+			{
+				id: "itm_milk",
+				name: overrides.itemName ?? "Milk",
+				checked: overrides.checked ?? false,
+				checkedByMemberName: overrides.checkedByMemberName ?? null,
+			},
+		],
 	};
 }
 

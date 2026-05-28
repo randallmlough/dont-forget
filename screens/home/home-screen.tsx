@@ -142,7 +142,6 @@ function DefaultListContent({
 			onAddItem={loadState.actions.addItem}
 			onSetItemChecked={loadState.actions.setItemChecked}
 			syncCoordinator={session.services.sync}
-			manageSyncCoordinatorLifecycle={false}
 		>
 			<ActiveList.Screen>
 				<ActiveList.Header />

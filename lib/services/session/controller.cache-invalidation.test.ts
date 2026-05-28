@@ -31,7 +31,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			}),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -58,9 +58,9 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 		await activation;
 
 		expect(events).toEqual(["close:cached", "delete:cached", "clear:cached"]);
-		expect(sessionService.readUnauthorized).toHaveBeenCalledWith(fresh);
-		expect(sessionService.deleteLocalData).toHaveBeenCalledWith(cached);
-		expect(sessionService.clearUnauthorizedMetadata).toHaveBeenCalledWith(
+		expect(sessionService.cache.readUnauthorized).toHaveBeenCalledWith(fresh);
+		expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(cached);
+		expect(sessionService.cache.clearUnauthorizedMetadata).toHaveBeenCalledWith(
 			cached,
 			fresh,
 		);
@@ -104,7 +104,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			}),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -127,7 +127,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 
 		freshSession.resolve(fresh);
 		await Promise.resolve();
-		expect(sessionService.deleteLocalData).not.toHaveBeenCalled();
+		expect(sessionService.cache.deleteLocalData).not.toHaveBeenCalled();
 
 		await activation;
 
@@ -162,7 +162,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			readUnauthorized: jest.fn().mockResolvedValue(cached),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest.fn().mockReturnValue(cachedDataServices),
 			createSyncCoordinator: jest
 				.fn()
@@ -182,8 +182,10 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 		freshSession.resolve(fresh);
 		await activation;
 
-		expect(sessionService.deleteLocalData).not.toHaveBeenCalled();
-		expect(sessionService.clearUnauthorizedMetadata).not.toHaveBeenCalled();
+		expect(sessionService.cache.deleteLocalData).not.toHaveBeenCalled();
+		expect(
+			sessionService.cache.clearUnauthorizedMetadata,
+		).not.toHaveBeenCalled();
 		expect(controller.getSnapshot()).toEqual({
 			status: "error",
 			message: "Unable to prepare your Household. Please try again.",
@@ -215,7 +217,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			}),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(firstCachedDataServices)
@@ -252,7 +254,9 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			status: "error",
 			message: "Unable to prepare your Household. Please try again.",
 		});
-		expect(sessionService.clearUnauthorizedMetadata).not.toHaveBeenCalled();
+		expect(
+			sessionService.cache.clearUnauthorizedMetadata,
+		).not.toHaveBeenCalled();
 	});
 
 	it("rejects new operations on an unauthorized cached resource after invalidation", async () => {
@@ -276,7 +280,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 					.mockResolvedValueOnce(null),
 				getSession: jest.fn().mockResolvedValue(fresh),
 				readUnauthorized: jest.fn().mockResolvedValue(cached),
-			}),
+			}).deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -339,7 +343,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			deleteLocalData: jest.fn(() => deleteCached.promise),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -366,7 +370,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(sessionService.deleteLocalData).toHaveBeenCalledWith(cached),
+			expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(cached),
 		);
 
 		await expect(
@@ -420,7 +424,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 				.mockResolvedValueOnce(null),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -454,8 +458,10 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 		closeCached.resolve(undefined);
 		await Promise.all([staleActivation, freshActivation]);
 
-		expect(sessionService.deleteLocalData).not.toHaveBeenCalled();
-		expect(sessionService.clearUnauthorizedMetadata).not.toHaveBeenCalled();
+		expect(sessionService.cache.deleteLocalData).not.toHaveBeenCalled();
+		expect(
+			sessionService.cache.clearUnauthorizedMetadata,
+		).not.toHaveBeenCalled();
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
 			session: { resourceKey: expect.any(String) },
@@ -493,7 +499,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			deleteLocalData: jest.fn(() => deleteCached.promise),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -515,7 +521,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(sessionService.deleteLocalData).toHaveBeenCalledWith(cached),
+			expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(cached),
 		);
 
 		const freshActivation = controller.activate({
@@ -526,7 +532,9 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 		deleteCached.resolve(undefined);
 		await Promise.all([staleActivation, freshActivation]);
 
-		expect(sessionService.clearUnauthorizedMetadata).not.toHaveBeenCalled();
+		expect(
+			sessionService.cache.clearUnauthorizedMetadata,
+		).not.toHaveBeenCalled();
 		expect(controller.getSnapshot()).toMatchObject({
 			status: "ready",
 			session: { resourceKey: expect.any(String) },
@@ -552,7 +560,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			readUnauthorized: jest.fn().mockResolvedValue(cached),
 		});
 		const controller = h.createAuthenticatedAppSessionController({
-			...sessionService,
+			...sessionService.deps,
 			createDataServices: jest
 				.fn()
 				.mockReturnValueOnce(cachedDataServices)
@@ -575,8 +583,8 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			status: "error",
 			message: "Unable to prepare your Household. Please try again.",
 		});
-		expect(sessionService.deleteLocalData).toHaveBeenCalledWith(cached);
-		expect(sessionService.clearUnauthorizedMetadata).toHaveBeenCalledWith(
+		expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(cached);
+		expect(sessionService.cache.clearUnauthorizedMetadata).toHaveBeenCalledWith(
 			cached,
 			fresh,
 		);

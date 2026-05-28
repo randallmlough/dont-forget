@@ -6,16 +6,12 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
-import {
-	sessionDataServicesFixture,
-	syncCoordinatorFixture,
-} from "@/db/fixtures/session";
 import type {
-	AuthenticatedAppSession,
 	AuthenticatedAppSessionActivation,
 	AuthenticatedAppSessionController,
 	AuthenticatedAppSessionStateSnapshot,
 } from "@/lib/services/session";
+import { authenticatedAppSessionFixture } from "@/lib/services/session/test-fixtures";
 import {
 	AuthenticatedAppSessionProvider,
 	useAuthenticatedAppSession,
@@ -598,38 +594,6 @@ function authenticatedAppSessionControllerFixture({
 		publish(nextSnapshot) {
 			currentSnapshot = nextSnapshot;
 			for (const subscriber of subscribers) subscriber(nextSnapshot);
-		},
-	};
-}
-
-function authenticatedAppSessionFixture(): AuthenticatedAppSession {
-	const dataServices = sessionDataServicesFixture();
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-		},
-		activeHousehold: { id: "hh_avery", name: "Avery" },
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner",
-			displayName: "Avery Chen",
-		},
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner",
-				displayName: "Avery Chen",
-			},
-		],
-		resourceKey: "authenticated-app-session:1",
-		services: {
-			lists: dataServices.lists,
-			items: dataServices.items,
-			sync: syncCoordinatorFixture(),
 		},
 	};
 }

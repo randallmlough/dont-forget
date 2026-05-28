@@ -3,7 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import { useAnalyticsIdentity } from "@/lib/analytics";
-import { readCachedSessionBootstrap } from "@/lib/services/session";
+import { hasCachedAuthenticatedAppSession } from "@/lib/services/session";
 
 const AUTH_PATHS = new Set(["/sign-in", "/sign-up"]);
 
@@ -15,8 +15,8 @@ export function AuthGate({ pathname }: { pathname: string }) {
 	const onAuthScreen = AUTH_PATHS.has(pathname);
 	const [cachedSessionStatus, setCachedSessionStatus] =
 		useState<CachedSessionStatus>("checking");
-	const hasCachedSessionBootstrap = cachedSessionStatus === "available";
-	const checkedCachedSessionBootstrap = cachedSessionStatus !== "checking";
+	const hasCachedSession = cachedSessionStatus === "available";
+	const checkedCachedSession = cachedSessionStatus !== "checking";
 
 	useAnalyticsIdentity();
 
@@ -28,10 +28,12 @@ export function AuthGate({ pathname }: { pathname: string }) {
 			return;
 		}
 
-		void readCachedSessionBootstrap()
-			.then((cached) => {
+		void hasCachedAuthenticatedAppSession()
+			.then((hasCachedSession) => {
 				if (!cancelled) {
-					setCachedSessionStatus(cached ? "available" : "unavailable");
+					setCachedSessionStatus(
+						hasCachedSession ? "available" : "unavailable",
+					);
 				}
 			})
 			.catch(() => {
@@ -53,9 +55,9 @@ export function AuthGate({ pathname }: { pathname: string }) {
 			return;
 		}
 
-		if (!checkedCachedSessionBootstrap) return;
+		if (!checkedCachedSession) return;
 
-		if (hasCachedSessionBootstrap) {
+		if (hasCachedSession) {
 			if (onAuthScreen) {
 				router.replace("/");
 			}
@@ -66,8 +68,8 @@ export function AuthGate({ pathname }: { pathname: string }) {
 			router.replace("/sign-in");
 		}
 	}, [
-		checkedCachedSessionBootstrap,
-		hasCachedSessionBootstrap,
+		checkedCachedSession,
+		hasCachedSession,
 		isLoaded,
 		isSignedIn,
 		onAuthScreen,
@@ -77,23 +79,13 @@ export function AuthGate({ pathname }: { pathname: string }) {
 	// Warm up the OAuth browser once while truly signed-out so the first SSO tap is snappy.
 	// Hoisted out of the auth screens so swapping sign-in ↔ sign-up doesn't thrash.
 	useEffect(() => {
-		if (
-			!isLoaded ||
-			isSignedIn ||
-			!checkedCachedSessionBootstrap ||
-			hasCachedSessionBootstrap
-		)
+		if (!isLoaded || isSignedIn || !checkedCachedSession || hasCachedSession)
 			return;
 		void WebBrowser.warmUpAsync();
 		return () => {
 			void WebBrowser.coolDownAsync();
 		};
-	}, [
-		checkedCachedSessionBootstrap,
-		hasCachedSessionBootstrap,
-		isLoaded,
-		isSignedIn,
-	]);
+	}, [checkedCachedSession, hasCachedSession, isLoaded, isSignedIn]);
 
 	return (
 		<Stack screenOptions={{ headerShown: false }}>

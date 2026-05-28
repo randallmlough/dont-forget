@@ -9,7 +9,6 @@ import {
 import {
 	ActiveList,
 	type ActiveListInitialState,
-	type ActiveListManagedSyncCoordinator,
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
 
@@ -37,19 +36,12 @@ const emptyList: ActiveListInitialState = {
 };
 
 type MemoryListActions = {
-	syncAuthorized: boolean;
 	load: () => Promise<ActiveListInitialState>;
 	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-	pull: () => Promise<{ changed: boolean }>;
-	sync: () => Promise<{ changed: boolean }>;
-	close: () => Promise<void>;
 };
 
-type TestSyncCoordinator = Omit<
-	ActiveListManagedSyncCoordinator,
-	"requestSync"
-> & {
+type TestSyncCoordinator = Omit<ActiveListSyncCoordinator, "requestSync"> & {
 	requestSync: jest.MockedFunction<ActiveListSyncCoordinator["requestSync"]>;
 	emit: (status: ReturnType<ActiveListSyncCoordinator["getStatus"]>) => void;
 };
@@ -128,7 +120,7 @@ describe("ActiveList", () => {
 	it("shows offline sync state when sync is not authorized", () => {
 		renderActiveList(
 			emptyList,
-			memoryListActions(emptyList, { syncAuthorized: false }),
+			memoryListActions(emptyList),
 			passiveSyncCoordinator("offline"),
 		);
 
@@ -137,10 +129,8 @@ describe("ActiveList", () => {
 
 	it("requests local-write sync after adding an Item", async () => {
 		const coordinator = controllableSyncCoordinator("synced");
-		const sync = jest.fn(async () => ({ changed: false }));
-		const actions = memoryListActions(emptyList, { sync });
 
-		renderActiveList(emptyList, actions, coordinator);
+		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
 
 		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
 		await act(async () => {
@@ -152,7 +142,6 @@ describe("ActiveList", () => {
 				reason: "localWrite",
 			}),
 		);
-		expect(sync).not.toHaveBeenCalled();
 	});
 
 	it("requests manual sync before refreshing the List view", async () => {
@@ -323,25 +312,6 @@ describe("ActiveList", () => {
 
 		expect(load).not.toHaveBeenCalled();
 	});
-
-	it("stops a managed sync coordinator on unmount", async () => {
-		const stopSync = deferred<void>();
-		const coordinator = passiveSyncCoordinator();
-		jest
-			.mocked(coordinator.stop)
-			.mockImplementationOnce(() => stopSync.promise);
-
-		const { unmount } = renderActiveList(
-			emptyList,
-			memoryListActions(emptyList),
-			coordinator,
-		);
-
-		unmount();
-
-		await waitFor(() => expect(coordinator.stop).toHaveBeenCalledTimes(1));
-		stopSync.resolve(undefined);
-	});
 });
 
 function renderActiveList(
@@ -369,12 +339,10 @@ function renderActiveList(
 
 function passiveSyncCoordinator(
 	status: ReturnType<ActiveListSyncCoordinator["getStatus"]> = "synced",
-): ActiveListManagedSyncCoordinator {
+): ActiveListSyncCoordinator {
 	return {
 		getStatus: () => status,
 		subscribe: jest.fn(() => ({ remove() {} })),
-		start: jest.fn(),
-		stop: jest.fn(async () => undefined),
 		requestSync: jest.fn<
 			ReturnType<ActiveListSyncCoordinator["requestSync"]>,
 			Parameters<ActiveListSyncCoordinator["requestSync"]>
@@ -400,8 +368,6 @@ function controllableSyncCoordinator(
 				},
 			};
 		},
-		start: jest.fn(),
-		stop: jest.fn(async () => undefined),
 		requestSync: jest.fn<
 			ReturnType<ActiveListSyncCoordinator["requestSync"]>,
 			Parameters<ActiveListSyncCoordinator["requestSync"]>
@@ -423,7 +389,6 @@ function memoryListActions(
 	let nextItem = initialState.items.length + 1;
 
 	return {
-		syncAuthorized: true,
 		async load() {
 			return state;
 		},
@@ -452,25 +417,6 @@ function memoryListActions(
 				),
 			};
 		},
-		async pull() {
-			state = {
-				...state,
-				items: [
-					...state.items,
-					{
-						id: "test-item-remote",
-						name: "Remote Apples",
-						checked: false,
-						checkedByMemberName: null,
-					},
-				],
-			};
-			return { changed: true };
-		},
-		async sync() {
-			return { changed: false };
-		},
-		async close() {},
 		...overrides,
 	};
 }

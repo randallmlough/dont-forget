@@ -212,6 +212,10 @@ export function readCachedSessionBootstrap(): Promise<CachedSessionBootstrap | n
 	return defaultSessionCache.read();
 }
 
+export async function hasCachedAuthenticatedAppSession(): Promise<boolean> {
+	return (await defaultSessionCache.read()) !== null;
+}
+
 export function readUnauthorizedCachedSessionBootstrap(
 	freshSession: SessionBootstrap,
 ): Promise<CachedSessionBootstrap | null> {
