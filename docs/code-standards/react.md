@@ -3,9 +3,11 @@
 ## React Compiler
 
 - **Must** treat React Compiler as the default rendering optimization layer.
+- **Must** treat React Compiler cleanup diagnostics as a prompt to simplify ownership first.
 - **Must** avoid reflexive `useMemo`, `useCallback`, and `memo` just to make references look stable.
 - **Should** use manual memoization only for a concrete reason: measured expensive work, list row boundaries, context values whose identity is part of the API, or third-party/native APIs that require stable references.
 - **Should** preserve deliberate existing memoization at list, provider, adapter, and logging boundaries unless a refactor proves it is unnecessary.
+- **Avoid** mechanically deleting `useMemo`, `useCallback`, or `memo` when the real issue is oversized component ownership, unclear state ownership, or lifecycle coupling.
 
 ## State
 
@@ -46,9 +48,12 @@
 - **Must** keep dependency suppressions as narrow as possible on the specific line and lint rule.
 - **Must** explain effects that update local React state from async work, refs, or props unless the synchronization boundary is self-evident from the surrounding API names.
 - **Must** explain effect patterns that are easy to misuse, including trigger tokens, stale response guards, ref handoffs, SDK lifecycle cleanup, and dependency suppression.
+- **Must** know whether an external subscription emits the current snapshot on subscribe. If it does not, subscribe first and then sample the current snapshot.
+- **Must** test subscription and snapshot ordering when a missed event can leave visible UI stale.
 - **Should** split effects with unrelated dependencies into separate effects.
 - **Should** reset component state with a `key`, by deriving from current props/state, or by moving state to the right owner before adding a reset effect.
 - **Should** use `useEffectEvent` for stable callback refs when an effect needs the latest callback without resubscribing.
+- **Should** use `useSyncExternalStore` for pure external snapshots, and keep explicit subscription handling when event ordering drives product behavior.
 - **Should** prefer `useEffectEvent`, a route-owned hook, or a reducer/action model before using refs to dodge dependency churn.
 - **Should** leave obvious external synchronization effects uncommented when function names and dependencies make the purpose clear.
 - **Should** keep each route-owned data hook or container focused on one synchronization responsibility and expose a testable state/actions API.
@@ -87,9 +92,14 @@
 
 - **Must** name hooks by the behavior they own, such as `useHomeBootstrap` or `useActiveListState`, not vague names like `useData` when the domain is known.
 - **Must** return explicit objects rather than positional tuples unless matching a React or native convention.
+- **Must** model route-owned async resources as discriminated states such as `loading`, `ready`, `error`, and `empty`, not scattered booleans, nullable data, and retry counters.
+- **Must** key route-owned async resource state by the resource identity it represents, such as authenticated app session resource key plus List ID, so stale loads cannot publish into the current view.
 - **Should** return `{ state, actions, meta }` when the hook owns a feature surface or interaction model.
+- **Should** expose route-owned resource hooks as explicit objects, such as `{ state, retry }` or `{ state, actions, meta }`.
 - **Should** expose command-like actions that match user or domain intent, not raw setters.
+- **Should** use a reducer or transition helper when load, retry, success, and failure paths all update the same resource lifecycle.
 - **Avoid** returning raw setters from reusable hooks unless the hook is a tiny local state primitive.
+- **Avoid** scattered `setState` calls across load, retry, success, and failure paths when they represent one route-owned resource lifecycle.
 - **Avoid** hiding unrelated responsibilities in one hook just to reduce component code.
 
 See also: [`docs/code-standards/react-composition.md`](./react-composition.md).
@@ -97,12 +107,15 @@ See also: [`docs/code-standards/react-composition.md`](./react-composition.md).
 ## Async Work
 
 - **Must** avoid avoidable waterfalls. Start independent async work in parallel and await it as late as practical.
+- **Must** prove async work is independent before parallelizing it.
 - **Must** check cheap synchronous guards before starting expensive async work when the async result is only needed inside the guarded branch.
 - **Must** handle async errors at the boundary where the user, retry model, logger, or caller can do something useful.
 - **Must** show user-facing recovery copy for failed user actions or screen loads unless the failure is intentionally silent and documented.
 - **Should** prefer `Promise.all` for independent operations.
 - **Should** start dependent follow-up work as early as its dependency is available instead of waiting for unrelated work to finish.
+- **Should** parallelize narrow independent reads after required mutations and provisioning steps complete.
 - **Should** preserve the previous usable UI state when a mutation fails and refresh only when needed to restore correctness.
 - **Should** keep best-effort cleanup failures silent only when they cannot affect user-visible correctness.
+- **Avoid** parallelizing migrations, reset flows, pull/push/pull sync, cleanup loops, or retry/order-sensitive workflows unless the ordering contract is explicitly redesigned.
 - **Avoid** empty `catch {}` blocks except for documented best-effort cleanup or test setup.
 - **Avoid** catch-all "Something went wrong" copy when a domain-specific message is possible.
