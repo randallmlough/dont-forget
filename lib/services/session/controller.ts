@@ -162,30 +162,20 @@ export function createAuthenticatedAppSessionController(
 			onDiscardCloseError?: (error: unknown) => void;
 		},
 	): Promise<boolean> {
-		if (run !== activationRun || options.shouldPublish?.() === false) {
-			await resources.closeResource(opened.resource).catch((error) => {
-				options.onDiscardCloseError?.(error);
-			});
-			return false;
-		}
-
-		const previousResource = resources.replaceActiveResource(
-			opened.resource,
-			session,
-		);
-		const appSession = authenticatedAppSessionFromOpened(opened, session);
-		publish({ status: "ready", session: appSession });
-		options.onPublished?.();
-		if (options.startSync) {
-			opened.resource.syncCoordinator.start();
-		}
-
-		if (previousResource) {
-			const closePreviousResource = resources.closeResource(previousResource);
-			await Promise.resolve();
-			await closePreviousResource;
-		}
-		return true;
+		return resources.publishOpenedResource(opened, session, {
+			startSync: options.startSync,
+			shouldPublish: () =>
+				run === activationRun && options.shouldPublish?.() !== false,
+			publish: (published) => {
+				const appSession = authenticatedAppSessionFromOpened(
+					published,
+					session,
+				);
+				publish({ status: "ready", session: appSession });
+			},
+			onPublished: options.onPublished,
+			onDiscardCloseError: options.onDiscardCloseError,
+		});
 	}
 
 	function startActivationRun(): ActivationRunGuard {
@@ -315,7 +305,10 @@ export function createAuthenticatedAppSessionController(
 		publishLoadingFromCurrentSession();
 		const opened = await resources.openSessionResource(session);
 		if (!run.isCurrent()) {
-			await resources.closeResource(opened.resource).catch(() => undefined);
+			await publishOpened(opened, session, run.id, {
+				startSync: false,
+				shouldPublish: () => false,
+			});
 			return;
 		}
 

@@ -27,6 +27,14 @@ export type OpenedSessionResource = {
 	resourceKey: string;
 };
 
+export type PublishOpenedSessionResourceOptions = {
+	startSync: boolean;
+	shouldPublish?: () => boolean;
+	publish: (opened: OpenedSessionResource) => void;
+	onPublished?: () => void;
+	onDiscardCloseError?: (error: unknown) => void;
+};
+
 export type CreateSessionDataServices = (
 	config: SessionDataServicesConfig,
 ) => Promise<SessionDataServices>;
@@ -48,17 +56,17 @@ type OpeningSessionResource = {
 export type SessionResourceManager = {
 	closeActiveResource: () => Promise<void>;
 	closeOpeningResources: () => Promise<void>;
-	closeResource: (resource: SessionResource) => Promise<void>;
 	closeUnauthorizedCachedResource: (
 		cached: CachedSessionBootstrap,
 	) => Promise<void>;
 	openSessionResource: (
 		session: SessionResourceBootstrap,
 	) => Promise<OpenedSessionResource>;
-	replaceActiveResource: (
-		resource: SessionResource,
+	publishOpenedResource: (
+		opened: OpenedSessionResource,
 		session: SessionResourceBootstrap,
-	) => SessionResource | null;
+		options: PublishOpenedSessionResourceOptions,
+	) => Promise<boolean>;
 	getHouseholdIds: () => string[];
 };
 
@@ -205,6 +213,33 @@ export function createSessionResourceManager(
 		}
 	}
 
+	async function publishOpenedResource(
+		opened: OpenedSessionResource,
+		session: SessionResourceBootstrap,
+		options: PublishOpenedSessionResourceOptions,
+	): Promise<boolean> {
+		if (options.shouldPublish?.() === false) {
+			await closeResource(opened.resource).catch((error) => {
+				options.onDiscardCloseError?.(error);
+			});
+			return false;
+		}
+
+		const previousResource = replaceActiveResource(opened.resource, session);
+		options.publish(opened);
+		options.onPublished?.();
+		if (options.startSync) {
+			opened.resource.syncCoordinator.start();
+		}
+
+		if (previousResource) {
+			const closePreviousResource = closeResource(previousResource);
+			await Promise.resolve();
+			await closePreviousResource;
+		}
+		return true;
+	}
+
 	async function closeUnauthorizedCachedResource(
 		cached: CachedSessionBootstrap,
 	) {
@@ -240,11 +275,10 @@ export function createSessionResourceManager(
 	return {
 		closeActiveResource,
 		closeOpeningResources,
-		closeResource,
 		closeUnauthorizedCachedResource,
 		getHouseholdIds,
 		openSessionResource,
-		replaceActiveResource,
+		publishOpenedResource,
 	};
 }
 
