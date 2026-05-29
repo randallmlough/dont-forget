@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useReducer } from "react";
 import type {
 	ActiveListInitialState,
 	ActiveListItem,
@@ -13,7 +13,7 @@ export type HomeCurrentListActions = {
 };
 
 export type HomeCurrentListState =
-	| { status: "loading"; retryAttempt: number }
+	| { status: "loading" }
 	| { status: "error"; message: string }
 	| {
 			status: "ready";
@@ -28,92 +28,56 @@ export function useHomeCurrentList(
 	state: HomeCurrentListState;
 	retry: () => void;
 } {
-	const [state, setState] = useState<HomeCurrentListState>({
-		status: "loading",
-		retryAttempt: 0,
-	});
-	const [retryAttempt, setRetryAttempt] = useState(0);
-	const memberNames = useMemo(() => {
-		const names = new Map<string, string | null>();
-		for (const member of session.members) {
-			names.set(member.userId, member.displayName);
-		}
-		names.set(
-			session.activeMember.userId,
-			session.activeMember.displayName ??
-				session.user.displayName ??
-				session.user.email ??
-				"Member",
-		);
-		return names;
-	}, [
-		session.activeMember.displayName,
-		session.activeMember.userId,
-		session.members,
-		session.user.displayName,
-		session.user.email,
-	]);
-
-	const loadList = useCallback(async (): Promise<ActiveListInitialState> => {
-		const [list, items] = await Promise.all([
-			session.services.lists.getList({ listId }),
-			session.services.items.listItems({ listId }),
-		]);
-
-		return {
-			householdName: session.activeHousehold.name,
-			listName: list.name,
-			items: items.map((item) => activeListItemFromItem(item, memberNames)),
-		};
-	}, [
-		session.activeHousehold.name,
-		session.services.items,
-		session.services.lists,
-		listId,
-		memberNames,
-	]);
-
-	const addItem = useCallback(
-		async (name: string): Promise<ActiveListItem> => {
-			const item = await session.services.items.addItem({
-				listId,
-				userId: session.activeMember.userId,
-				name,
-			});
-			return activeListItemFromItem(item, memberNames);
-		},
-		[session.activeMember.userId, session.services.items, listId, memberNames],
+	const loadKey = `${session.resourceKey}:${listId}`;
+	const [resource, dispatch] = useReducer(
+		homeCurrentListReducer,
+		loadKey,
+		initialHomeCurrentListResource,
 	);
+	const loadAttempt = resource.loadKey === loadKey ? resource.attempt : 0;
 
-	const setItemChecked = useCallback(
-		async (itemId: string, checked: boolean) => {
-			await session.services.items.setItemChecked({
-				listId,
-				itemId,
-				userId: session.activeMember.userId,
-				checked,
-			});
-		},
-		[session.activeMember.userId, session.services.items, listId],
-	);
+	async function loadList(): Promise<ActiveListInitialState> {
+		return loadCurrentList(session, listId);
+	}
 
-	const actions = useMemo<HomeCurrentListActions>(
-		() => ({ addItem, loadList, setItemChecked }),
-		[addItem, loadList, setItemChecked],
-	);
+	async function addItem(name: string): Promise<ActiveListItem> {
+		const item = await session.services.items.addItem({
+			listId,
+			userId: session.activeMember.userId,
+			name,
+		});
+		return activeListItemFromItem(item, memberNamesFromSession(session));
+	}
+
+	async function setItemChecked(itemId: string, checked: boolean) {
+		await session.services.items.setItemChecked({
+			listId,
+			itemId,
+			userId: session.activeMember.userId,
+			checked,
+		});
+	}
 
 	useEffect(() => {
 		let cancelled = false;
-		setState({ status: "loading", retryAttempt });
 
-		loadList()
+		loadCurrentList(session, listId)
 			.then((initialList) => {
-				if (!cancelled) setState({ status: "ready", initialList, actions });
+				if (!cancelled) {
+					dispatch({
+						type: "listLoaded",
+						loadKey,
+						attempt: loadAttempt,
+						initialList,
+					});
+				}
 			})
 			.catch(() => {
 				if (!cancelled) {
-					setState({
-						status: "error",
+					dispatch({
+						type: "listLoadFailed",
+						loadKey,
+						attempt: loadAttempt,
 						message: "Unable to load this List. Please try again.",
 					});
 				}
@@ -122,12 +86,128 @@ export function useHomeCurrentList(
 		return () => {
 			cancelled = true;
 		};
-	}, [actions, loadList, retryAttempt]);
+	}, [loadAttempt, loadKey, listId, session]);
+
+	const actions = { addItem, loadList, setItemChecked };
 
 	return {
-		state,
-		retry: () => setRetryAttempt((attempt) => attempt + 1),
+		state: homeCurrentListStateFromResource(resource, loadKey, actions),
+		retry: () => dispatch({ type: "retryRequested", loadKey }),
 	};
+}
+
+type HomeCurrentListResource =
+	| { status: "loading"; loadKey: string; attempt: number }
+	| { status: "error"; loadKey: string; attempt: number; message: string }
+	| {
+			status: "ready";
+			loadKey: string;
+			attempt: number;
+			initialList: ActiveListInitialState;
+	  };
+
+type HomeCurrentListResourceAction =
+	| { type: "retryRequested"; loadKey: string }
+	| {
+			type: "listLoaded";
+			loadKey: string;
+			attempt: number;
+			initialList: ActiveListInitialState;
+	  }
+	| {
+			type: "listLoadFailed";
+			loadKey: string;
+			attempt: number;
+			message: string;
+	  };
+
+function initialHomeCurrentListResource(
+	loadKey: string,
+): HomeCurrentListResource {
+	return { status: "loading", loadKey, attempt: 0 };
+}
+
+function homeCurrentListReducer(
+	state: HomeCurrentListResource,
+	action: HomeCurrentListResourceAction,
+): HomeCurrentListResource {
+	if (action.type === "retryRequested") {
+		return {
+			status: "loading",
+			loadKey: action.loadKey,
+			attempt: state.loadKey === action.loadKey ? state.attempt + 1 : 0,
+		};
+	}
+
+	if (state.loadKey === action.loadKey && state.attempt !== action.attempt) {
+		return state;
+	}
+
+	if (action.type === "listLoaded") {
+		return {
+			status: "ready",
+			loadKey: action.loadKey,
+			attempt: action.attempt,
+			initialList: action.initialList,
+		};
+	}
+
+	return {
+		status: "error",
+		loadKey: action.loadKey,
+		attempt: action.attempt,
+		message: action.message,
+	};
+}
+
+function homeCurrentListStateFromResource(
+	resource: HomeCurrentListResource,
+	loadKey: string,
+	actions: HomeCurrentListActions,
+): HomeCurrentListState {
+	if (resource.loadKey !== loadKey || resource.status === "loading") {
+		return { status: "loading" };
+	}
+
+	if (resource.status === "error") {
+		return { status: "error", message: resource.message };
+	}
+
+	return { status: "ready", initialList: resource.initialList, actions };
+}
+
+async function loadCurrentList(
+	session: AuthenticatedAppSession,
+	listId: string,
+): Promise<ActiveListInitialState> {
+	const [list, items] = await Promise.all([
+		session.services.lists.getList({ listId }),
+		session.services.items.listItems({ listId }),
+	]);
+	const memberNames = memberNamesFromSession(session);
+
+	return {
+		householdName: session.activeHousehold.name,
+		listName: list.name,
+		items: items.map((item) => activeListItemFromItem(item, memberNames)),
+	};
+}
+
+function memberNamesFromSession(
+	session: AuthenticatedAppSession,
+): Map<string, string | null> {
+	const names = new Map<string, string | null>();
+	for (const member of session.members) {
+		names.set(member.userId, member.displayName);
+	}
+	names.set(
+		session.activeMember.userId,
+		session.activeMember.displayName ??
+			session.user.displayName ??
+			session.user.email ??
+			"Member",
+	);
+	return names;
 }
 
 function activeListItemFromItem(
