@@ -10,15 +10,16 @@ import {
 	useState,
 } from "react";
 import { reset, track } from "@/lib/analytics";
-import { asError } from "@/lib/errors";
 import { useLogger } from "@/lib/logger";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionActivation,
 	type AuthenticatedAppSessionController,
-	type AuthenticatedAppSessionDisposal,
+	type AuthenticatedAppSessionSignOut,
+	type AuthenticatedAppSessionSignOutAnalytics,
 	type AuthenticatedAppSessionStateSnapshot,
 	createAuthenticatedAppSessionController,
+	createAuthenticatedAppSessionSignOut,
 } from "@/lib/services/session";
 import { clearSignedOutSessionData } from "@/lib/services/session/cache";
 
@@ -38,19 +39,14 @@ type AuthenticatedAppSessionProviderAuth = AuthenticatedAppSessionActivation & {
 	signOut: () => Promise<void>;
 };
 
-type AuthenticatedAppSessionProviderAnalytics = {
-	track: typeof track;
-	reset: typeof reset;
-};
-
 type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	controller?: AuthenticatedAppSessionController;
 	auth?: AuthenticatedAppSessionProviderAuth;
-	analytics?: AuthenticatedAppSessionProviderAnalytics;
+	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearSignedOutSessionData?: typeof clearSignedOutSessionData;
 }>;
 
-const defaultAnalytics: AuthenticatedAppSessionProviderAnalytics = {
+const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 	track,
 	reset,
 };
@@ -93,7 +89,19 @@ export function AuthenticatedAppSessionProvider({
 			controller.getSnapshot(),
 		);
 	const [retryAttempt, setRetryAttempt] = useState(0);
-	const signingOutRef = useRef(false);
+	const authRef = useRef(auth);
+	useEffect(() => {
+		authRef.current = auth;
+	}, [auth]);
+	const signOutFlowRef = useRef<AuthenticatedAppSessionSignOut | null>(null);
+	signOutFlowRef.current ??= createAuthenticatedAppSessionSignOut({
+		controller,
+		getAuth: () => authRef.current,
+		analytics,
+		clearSignedOutSessionData: clearSignedOutSessionDataProp,
+		logger,
+	});
+	const signOutFlow = signOutFlowRef.current;
 	const getTokenRef = useRef(auth.getToken);
 	useEffect(() => {
 		getTokenRef.current = auth.getToken;
@@ -108,13 +116,20 @@ export function AuthenticatedAppSessionProvider({
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: retryAttempt intentionally retriggers authenticated app session activation.
 	useEffect(() => {
-		if (signingOutRef.current) return;
+		if (signOutFlow.isRunning()) return;
 		void controller.activate({
 			getToken,
 			authReady: auth.authReady,
 			signedIn: auth.signedIn,
 		});
-	}, [auth.authReady, auth.signedIn, controller, getToken, retryAttempt]);
+	}, [
+		auth.authReady,
+		auth.signedIn,
+		controller,
+		getToken,
+		retryAttempt,
+		signOutFlow,
+	]);
 
 	useEffect(() => {
 		return () => {
@@ -126,75 +141,13 @@ export function AuthenticatedAppSessionProvider({
 		setRetryAttempt((attempt) => attempt + 1);
 	}, []);
 
-	const signOutAction = auth.signOut;
-	const signOut = useCallback(async () => {
-		if (signingOutRef.current) return;
-		signingOutRef.current = true;
-
-		analytics.track("user_signed_out", {});
-		analytics.reset();
-		let disposal: AuthenticatedAppSessionDisposal = {
-			householdIdsForLocalDataDeletion: [],
-		};
-		await controller
-			.dispose()
-			.then((nextDisposal) => {
-				disposal = nextDisposal;
-			})
-			.catch((error) => {
-				logger.error("authenticated app session sign-out dispose failed", {
-					error: asError(error),
-				});
-			});
-
-		try {
-			await clearSignedOutSessionDataProp(
-				disposal.householdIdsForLocalDataDeletion,
-			);
-		} catch (error) {
-			logger.error("authenticated app session sign-out local cleanup failed", {
-				error: asError(error),
-			});
-		}
-
-		try {
-			await signOutAction();
-		} catch (error) {
-			if (auth.authReady && auth.signedIn) {
-				await controller
-					.activate({
-						getToken,
-						authReady: auth.authReady,
-						signedIn: auth.signedIn,
-					})
-					.catch((activationError) => {
-						logger.error("authenticated app session sign-out recovery failed", {
-							error: asError(activationError),
-						});
-					});
-			}
-			throw error;
-		} finally {
-			signingOutRef.current = false;
-		}
-	}, [
-		analytics,
-		auth.authReady,
-		auth.signedIn,
-		clearSignedOutSessionDataProp,
-		controller,
-		getToken,
-		logger,
-		signOutAction,
-	]);
-
 	const value = useMemo<AuthenticatedAppSessionContextValue>(
 		() => ({
 			...publicStateFromSnapshot(snapshot),
 			retry,
-			signOut,
+			signOut: signOutFlow.run,
 		}),
-		[retry, signOut, snapshot],
+		[retry, signOutFlow, snapshot],
 	);
 
 	return (

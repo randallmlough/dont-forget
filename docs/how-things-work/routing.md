@@ -41,7 +41,7 @@ Do not add duplicate Clerk or PostHog providers inside route groups.
 
 ## Authenticated Layout
 
-`app/(app)/_layout.tsx` owns signed-in product providers. It mounts the Authenticated App Session provider around signed-in routes, and that provider eagerly activates the app-owned Authenticated App Session controller and exposes controller state/actions to screens.
+`app/(app)/_layout.tsx` owns signed-in product providers. It mounts the Authenticated App Session provider around signed-in routes, and that provider eagerly activates the app-owned Authenticated App Session controller and exposes session state/actions to screens.
 
 Screens consume `useAuthenticatedAppSession()`. They should not open, replace, sync, close, or delete Household DB resources directly, and they should not own sync coordinator lifecycle.
 
@@ -51,7 +51,7 @@ See [Authenticated App Session](./authenticated-app-session.md) for the controll
 
 `AuthGate` uses the current pathname to detect signed-out auth routes. Signed-out Users are redirected to `/sign-in`; signed-in Users are redirected away from auth routes to `/`.
 
-The provider-owned sign-out action runs in this order:
+The session-owned sign-out action runs in this order:
 
 ```ts
 track("user_signed_out", {});

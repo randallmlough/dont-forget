@@ -69,7 +69,7 @@ Only the controller can start or stop the underlying coordinator. Screens and ro
 
 ## Sign-out Cleanup
 
-The Authenticated App Session provider owns sign-out order:
+The Authenticated App Session sign-out module owns sign-out order. The provider adapts Clerk auth and exposes the session-owned action:
 
 1. Track `user_signed_out`.
 2. Reset analytics identity.
@@ -77,4 +77,4 @@ The Authenticated App Session provider owns sign-out order:
 4. Clear signed-out session data for the disposed Household IDs, including cached metadata and local Household DB files.
 5. Call Clerk `signOut()`.
 
-If Clerk sign-out fails after local cleanup, the provider attempts to reactivate the controller with the latest auth inputs so the app can recover a valid signed-in session.
+If Clerk sign-out fails after local cleanup, the sign-out module attempts to reactivate the controller with the latest auth inputs so the app can recover a valid signed-in session.
