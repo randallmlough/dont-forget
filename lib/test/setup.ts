@@ -66,12 +66,9 @@ jest.mock("expo-web-browser", () => ({
 }));
 
 jest.mock("posthog-react-native", () => {
-	const logger = {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-	};
+	const { createMockLogger } =
+		jest.requireActual<typeof import("./mocks/logger")>("./mocks/logger");
+	const logger = createMockLogger();
 
 	return {
 		__esModule: true,

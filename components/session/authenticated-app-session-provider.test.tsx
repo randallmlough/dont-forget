@@ -6,37 +6,41 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
+import { useLogger } from "@/lib/logger";
 import type {
+	AuthenticatedAppSession,
 	AuthenticatedAppSessionActivation,
 	AuthenticatedAppSessionController,
 	AuthenticatedAppSessionStateSnapshot,
 } from "@/lib/services/session";
-import { authenticatedAppSessionFixture } from "@/lib/services/session/test-fixtures";
+import { deferred } from "@/lib/test/async";
+import { createMockAnalytics } from "@/lib/test/mocks/analytics";
+import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 import {
 	AuthenticatedAppSessionProvider,
 	useAuthenticatedAppSession,
 } from "./authenticated-app-session-provider";
 
-const mockLogger = {
-	debug: jest.fn(),
-	info: jest.fn(),
-	warn: jest.fn(),
-	error: jest.fn(),
-	with: jest.fn(),
-};
+let mockLogger: MockLogger;
 
-jest.mock("@/lib/logger", () => ({
-	useLogger: () => mockLogger,
-}));
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
 
-jest.mock("@/lib/analytics", () => ({
-	track: jest.fn(),
-	reset: jest.fn(),
-}));
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
 describe("AuthenticatedAppSessionProvider", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockLogger = createMockLogger();
+		mockLogger.with.mockReturnValue(mockLogger);
+		jest.mocked(useLogger).mockReturnValue(mockLogger);
 	});
 
 	it("eagerly activates the controller and renders fresh ready state", async () => {
@@ -57,10 +61,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		});
 
 		act(() => {
-			controller.publish({
-				status: "ready",
-				session: authenticatedAppSessionFixture(),
-			});
+			controller.publish({ status: "ready", session: appSessionFixture() });
 		});
 
 		await waitFor(() =>
@@ -110,7 +111,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		act(() => {
 			controller.publish({
 				status: "loading",
-				previous: authenticatedAppSessionFixture(),
+				previous: appSessionFixture(),
 				refreshingSession: true,
 			});
 		});
@@ -133,10 +134,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 		act(() => {
-			controller.publish({
-				status: "ready",
-				session: authenticatedAppSessionFixture(),
-			});
+			controller.publish({ status: "ready", session: appSessionFixture() });
 		});
 		await waitFor(() =>
 			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
@@ -176,10 +174,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await expect(activation?.getToken()).resolves.toBe("token");
 
 		act(() => {
-			controller.publish({
-				status: "ready",
-				session: authenticatedAppSessionFixture(),
-			});
+			controller.publish({ status: "ready", session: appSessionFixture() });
 		});
 		expect(screen.getByText("authenticated-app-session:1")).toBeTruthy();
 	});
@@ -196,10 +191,9 @@ describe("AuthenticatedAppSessionProvider", () => {
 				order.push("clerk");
 			}),
 		});
-		const analytics = {
-			track: jest.fn(() => order.push("track")),
-			reset: jest.fn(() => order.push("reset")),
-		};
+		const analytics = createMockAnalytics();
+		analytics.track.mockImplementation(() => order.push("track"));
+		analytics.reset.mockImplementation(() => order.push("reset"));
 		const clearSignedOutData = jest.fn(async () => {
 			order.push("clear");
 		});
@@ -274,7 +268,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={clearSignedOutData}
 			>
 				<SignOutButton />
@@ -296,7 +290,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
@@ -315,7 +309,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 	it("ignores duplicate sign-out presses while the first sign-out is pending", async () => {
 		const auth = authFixture();
 		const controller = authenticatedAppSessionControllerFixture();
-		const analytics = { track: jest.fn(), reset: jest.fn() };
+		const analytics = createMockAnalytics();
 		const localDataDeleted = deferred<void>();
 		const clearSignedOutData = jest.fn(() => localDataDeleted.promise);
 
@@ -354,7 +348,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
@@ -369,7 +363,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={{ ...auth, signedIn: false }}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
@@ -394,7 +388,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={jest.fn(async () => undefined)}
 			>
 				<CatchingSignOutButton />
@@ -417,7 +411,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={jest.fn(async () => {
 					throw new Error("cleanup failed");
 				})}
@@ -447,7 +441,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={clearSignedOutData}
 			>
 				<SignOutButton />
@@ -473,7 +467,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={clearSignedOutData}
 			>
 				<SignOutButton />
@@ -495,7 +489,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			<AuthenticatedAppSessionProvider
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
-				analytics={{ track: jest.fn(), reset: jest.fn() }}
+				analytics={createMockAnalytics()}
 				clearSignedOutSessionData={jest.fn(async () => {
 					throw new Error("cleanup failed");
 				})}
@@ -600,6 +594,51 @@ function authFixture(
 	};
 }
 
+function appSessionFixture(): AuthenticatedAppSession {
+	return {
+		user: {
+			id: "usr_avery",
+			email: "avery@example.com",
+			displayName: "Avery Chen",
+		},
+		activeHousehold: { id: "hh_avery", name: "Avery" },
+		activeMember: {
+			id: "mbr_avery",
+			userId: "usr_avery",
+			role: "owner",
+			displayName: "Avery Chen",
+		},
+		members: [
+			{
+				membershipId: "mbr_avery",
+				userId: "usr_avery",
+				role: "owner",
+				displayName: "Avery Chen",
+			},
+		],
+		resourceKey: "authenticated-app-session:1",
+		services: {
+			lists: {
+				getList: unusedSessionService,
+			},
+			items: {
+				listItems: unusedSessionService,
+				addItem: unusedSessionService,
+				setItemChecked: unusedSessionService,
+			},
+			sync: {
+				getStatus: () => "synced",
+				subscribe: () => ({ remove() {} }),
+				requestSync: async () => null,
+			},
+		},
+	};
+}
+
+async function unusedSessionService(): Promise<never> {
+	throw new Error("Provider tests must not call session data services");
+}
+
 function authenticatedAppSessionControllerFixture({
 	snapshot = { status: "loading" },
 }: {
@@ -636,13 +675,4 @@ function authenticatedAppSessionControllerFixture({
 			for (const subscriber of subscribers) subscriber(nextSnapshot);
 		},
 	};
-}
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((nextResolve) => {
-		resolve = nextResolve;
-	});
-
-	return { promise, resolve };
 }

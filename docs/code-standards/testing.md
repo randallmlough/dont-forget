@@ -3,8 +3,10 @@
 ## Test Boundaries
 
 - **Must** test app-owned behavior, not external SDK behavior.
+- **Must** use integration-style tests as the default for product behavior that can run locally through Jest, React Native Testing Library, Expo Router testing utilities, or isolated temp libSQL databases.
 - **Must** mock true external SDK and native boundaries such as Clerk hooks, native auth/browser/storage modules, PostHog sinks, and platform APIs.
 - **Must** not mock local product behavior that can run deterministically in tests.
+- **Must** justify any mock of local product behavior in the test or implementation notes; convenience is not a justification.
 - **Must** use local isolated libSQL database helpers for database behavior instead of running migrations against configured environments.
 - **Must** test loading, ready, empty, error, and retry states for route-owned data hooks or containers.
 - **Must** test stale async responses, cancellation, or unmount cleanup when a hook or container owns async lifecycle.
@@ -16,7 +18,7 @@
 - **Must** test diagnostic logging when the log is part of an error-handling contract.
 - **Must** mock logging sinks in tests to avoid noisy expected error output.
 - **Must** prefer injected logger fixtures or narrow analytics test doubles for services and stores over module-mocking app-wide observability singletons.
-- **Should** prefer integration-style tests for Household, Member, Owner, Invitation, List, Item, auth, analytics/logging contract, and sync behavior.
+- **Must** prove Household, Member, Owner, Invitation, List, Item, Authenticated App Session, and sync product behavior through integration-style tests unless the behavior is pure logic, a narrow adapter, or a deliberately controlled race case.
 - **Should** use focused unit tests for pure helpers and narrow adapters.
 - **Should** test state machines through their discriminated variants rather than boolean combinations.
 - **Should** assert the resulting state shape rather than implementation details like action ordering.
@@ -27,6 +29,13 @@
 
 See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 
+## Mock Boundaries
+
+- **Must** mock true external or nondeterministic boundaries by category: external SDKs, native/platform APIs, network-only providers, observability sinks, system time/randomness when needed, and intentionally controlled race collaborators.
+- **Must** use real app-owned services, stores, database queries, session resources, List/Item behavior, and sync policy when they can run deterministically in the local harness.
+- **Must** keep race-control fakes narrow: fake only the collaborator whose timing is the assertion, and keep the rest of the product path real when practical.
+- **Avoid** replacing database rows or service results with hand-written maps when a temp libSQL database plus fixtures can prove the same behavior.
+
 ## Test Location
 
 - **Must** colocate tests next to the module they exercise outside `app/`.
@@ -36,13 +45,15 @@ See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 ## Test Organization And Shared Fixtures
 
 - **Must** move reusable cross-feature test fixtures into a domain-owned shared fixture folder, such as `db/fixtures/`, instead of duplicating fixture builders across test files.
+- **Must** keep `db/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and Household DBs.
+- **Must** not return services, providers, sync coordinators, app sessions, or UI model objects from `db/fixtures/`.
 - **Should** keep shared fixtures domain-shaped and product-language-first: Household, Member, User, List, Item, and Invitation.
 - **Should** allow narrow overrides for test-specific facts while preserving realistic defaults.
 - **Should** split large test files by behavior theme when a single file starts covering several independent concerns.
 - **Should** name focused test files after the behavior under test, for example `lib/services/session/controller.activation.test.ts`, `lib/services/session/controller.cache-invalidation.test.ts`, or `lib/services/session/controller.resource-lifecycle.test.ts`.
 - **Should** keep each focused test file readable as a behavior spec for one concern.
 - **Avoid** extracting one-off setup into shared fixtures. Promote only fixtures used across multiple modules or likely to support future domain tests.
-- **Avoid** hiding behavior in fixtures. Fixtures should create data and test doubles, not encode product logic.
+- **Avoid** hiding behavior in fixtures. Database fixtures should create rows, not encode product logic or runtime composition.
 - **Avoid** giant catch-all test files where setup, assertions, and scenarios for unrelated behaviors are interleaved.
 - **Avoid** splitting tests only to satisfy a line count. Split when the behavior themes are distinct enough that separate files improve navigation and review.
 

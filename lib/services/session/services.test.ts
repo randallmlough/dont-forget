@@ -1,13 +1,25 @@
+import { eq } from "drizzle-orm";
+import { seedPrimaryHouseholdScenario } from "@/db/fixtures";
+import { itemChecks, items } from "@/db/schema/household";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import { deferred } from "@/lib/test/async";
+import { createMockLogger } from "@/lib/test/mocks/logger";
 import { createSessionDataServices } from "./services";
 
-const logger = {
-	debug: jest.fn(),
-	info: jest.fn(),
-	warn: jest.fn(),
-	error: jest.fn(),
-	with: jest.fn(),
-};
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
+
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
+
+const logger = createMockLogger();
 
 describe("createSessionDataServices", () => {
 	beforeEach(() => {
@@ -16,65 +28,83 @@ describe("createSessionDataServices", () => {
 	});
 
 	it("loads List and Item data through explicit listId service calls", async () => {
-		const store = storeFixture();
-		const services = await createSessionDataServices(
-			{
-				householdId: "hh_avery",
-				database: { url: "libsql://example", authToken: "secret" },
-				logger,
-			},
-			{ store },
-		);
+		const harness = await createSeededServicesHarness();
 
-		await expect(
-			services.lists.getList({ listId: "lst_default_groceries" }),
-		).resolves.toMatchObject({
-			id: "lst_default_groceries",
-			name: "Groceries",
-		});
-		await expect(
-			services.items.listItems({ listId: "lst_default_groceries" }),
-		).resolves.toEqual([
-			expect.objectContaining({
-				id: "itm_milk",
-				listId: "lst_default_groceries",
-				name: "Milk",
-			}),
-		]);
-
-		expect(store.execute).toHaveBeenCalledWith(
-			expect.objectContaining({ args: ["lst_default_groceries"] }),
-		);
+		try {
+			await expect(
+				harness.services.lists.getList({
+					listId: harness.scenario.ids.groceriesListId,
+				}),
+			).resolves.toMatchObject({
+				id: harness.scenario.ids.groceriesListId,
+				name: "Groceries",
+			});
+			await expect(
+				harness.services.items.listItems({
+					listId: harness.scenario.ids.groceriesListId,
+				}),
+			).resolves.toEqual([
+				expect.objectContaining({
+					id: harness.scenario.items.unchecked.id,
+					listId: harness.scenario.ids.groceriesListId,
+					name: "Milk",
+					checked: false,
+				}),
+				expect.objectContaining({
+					id: harness.scenario.items.checkedByAvery.id,
+					name: "Eggs",
+					checked: true,
+					checkedByUserId: harness.scenario.users.avery.id,
+				}),
+				expect.objectContaining({
+					id: harness.scenario.items.checkedByBlake.id,
+					name: "Bread",
+					checked: true,
+					checkedByUserId: harness.scenario.users.blake.id,
+				}),
+			]);
+		} finally {
+			await harness.close();
+		}
 	});
 
 	it("uses explicit listId for Item writes", async () => {
-		const store = storeFixture();
-		const services = await createSessionDataServices(
-			{
-				householdId: "hh_avery",
-				database: { url: "libsql://example", authToken: "secret" },
-				logger,
-			},
-			{ store },
-		);
+		const harness = await createSeededServicesHarness();
 
-		await services.items.addItem({
-			listId: "lst_default_groceries",
-			userId: "usr_avery",
-			name: "Eggs",
-		});
-		await services.items.setItemChecked({
-			listId: "lst_default_groceries",
-			itemId: "itm_milk",
-			userId: "usr_avery",
-			checked: true,
-		});
+		try {
+			const item = await harness.services.items.addItem({
+				listId: harness.scenario.ids.groceriesListId,
+				userId: harness.scenario.users.avery.id,
+				name: "Eggs",
+			});
+			await harness.services.items.setItemChecked({
+				listId: harness.scenario.ids.groceriesListId,
+				itemId: item.id,
+				userId: harness.scenario.users.avery.id,
+				checked: true,
+			});
 
-		expect(store.execute).toHaveBeenCalledWith(
-			expect.objectContaining({
-				args: expect.arrayContaining(["lst_default_groceries", "Eggs"]),
-			}),
-		);
+			await expect(
+				harness.household.db.query.items.findFirst({
+					where: eq(items.id, item.id),
+				}),
+			).resolves.toMatchObject({
+				id: item.id,
+				listId: harness.scenario.ids.groceriesListId,
+				name: "Eggs",
+			});
+			await expect(
+				harness.household.db.query.itemChecks.findFirst({
+					where: eq(itemChecks.itemId, item.id),
+				}),
+			).resolves.toMatchObject({
+				itemId: item.id,
+				userId: harness.scenario.users.avery.id,
+				checkedAt: expect.any(Number),
+			});
+		} finally {
+			await harness.close();
+		}
 	});
 
 	it("creates services only after the HouseholdStore opens", async () => {
@@ -176,63 +206,51 @@ describe("createSessionDataServices", () => {
 	});
 });
 
-function storeFixture(overrides: { syncAuthorized?: boolean } = {}) {
+async function createSeededServicesHarness() {
+	const directory = await createTestDirectoryDb();
+	const household = await createTestHouseholdDb();
+	const scenario = await seedPrimaryHouseholdScenario({
+		directory: directory.db,
+		household: household.db,
+	});
+	const store = storeFixture({
+		execute: household.client.execute.bind(household.client),
+	});
+	const services = await createSessionDataServices(
+		{
+			householdId: scenario.household.id,
+			database: { url: "libsql://example", authToken: "secret" },
+			logger,
+		},
+		{ store },
+	);
+
+	return {
+		directory,
+		household,
+		scenario,
+		services,
+		async close() {
+			await directory.close();
+			await household.close();
+		},
+	};
+}
+
+function storeFixture(
+	overrides: {
+		execute?: (statement: HouseholdSqlStatement) => Promise<{
+			rows: Record<string, unknown>[];
+		}>;
+		syncAuthorized?: boolean;
+	} = {},
+) {
 	return {
 		syncAuthorized: overrides.syncAuthorized ?? true,
-		execute: jest.fn(async (statement: HouseholdSqlStatement) => {
-			const { sql, args = [] } = statement;
-			if (sql.includes("FROM lists")) {
-				return {
-					rows: [
-						{
-							id: args?.[0],
-							name: "Groceries",
-							created_by_user_id: "usr_avery",
-							created_at: 1,
-							updated_at: 1,
-						},
-					],
-				};
-			}
-			if (sql.includes("COALESCE(MAX(position)")) {
-				return { rows: [{ position: 1 }] };
-			}
-			if (sql.includes("FROM items")) {
-				return {
-					rows: [
-						{
-							id: "itm_milk",
-							list_id: args?.[0],
-							name: "Milk",
-							checked_by_user_id: null,
-							checked_at: null,
-							position: 0,
-							created_by_user_id: "usr_avery",
-							created_at: 1,
-							updated_at: 1,
-						},
-					],
-				};
-			}
-			return { rows: [] };
-		}),
+		execute: jest.fn(overrides.execute ?? (async () => ({ rows: [] }))),
 		pull: jest.fn(async () => ({ changed: false })),
 		push: jest.fn(async () => undefined),
 		sync: jest.fn(async () => ({ changed: false })),
 		close: jest.fn(async () => undefined),
 	};
-}
-
-function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	let reject: ((error: Error) => void) | undefined;
-	const promise = new Promise<T>((nextResolve, nextReject) => {
-		resolve = nextResolve;
-		reject = nextReject;
-	});
-	if (!resolve || !reject) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve, reject };
 }

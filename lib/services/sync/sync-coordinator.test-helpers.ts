@@ -1,9 +1,13 @@
+import { createMockLogger } from "@/lib/test/mocks/logger";
 import type { SyncAppStateAdapter } from "./app-state";
 import type { SyncNetworkStatusAdapter } from "./network-status";
 import {
 	createSyncCoordinator,
 	type SyncCoordinator,
 } from "./sync-coordinator";
+
+export { deferred } from "@/lib/test/async";
+export { createMockLogger as loggerFixture } from "@/lib/test/mocks/logger";
 
 const activeCoordinators: SyncCoordinator[] = [];
 
@@ -23,7 +27,7 @@ export function createCoordinator(
 		sync: jest.fn(async () => ({ changed: false })),
 		appState: memoryAppState("active"),
 		networkStatus: memoryNetworkStatus("unknown"),
-		logger: loggerFixture(),
+		logger: createMockLogger(),
 		...overrides,
 	});
 	activeCoordinators.push(coordinator);
@@ -164,30 +168,6 @@ export function controllableNetworkStatus(
 			}
 		},
 	};
-}
-
-export function loggerFixture() {
-	return {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-		with: jest.fn(),
-	};
-}
-
-export function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	let reject: ((error: Error) => void) | undefined;
-	const promise = new Promise<T>((nextResolve, nextReject) => {
-		resolve = nextResolve;
-		reject = nextReject;
-	});
-	if (!resolve || !reject) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve, reject };
 }
 
 export async function actTicks() {

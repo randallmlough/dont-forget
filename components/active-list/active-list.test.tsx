@@ -11,22 +11,24 @@ import {
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
+import { useLogger } from "@/lib/logger";
+import { deferred } from "@/lib/test/async";
+import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 
-const mockLoggerError = jest.fn();
-const mockLogger = {
-	debug: jest.fn(),
-	info: jest.fn(),
-	warn: jest.fn(),
-	error: mockLoggerError,
-	with: jest.fn(),
-};
+let mockLogger: MockLogger;
 
-jest.mock("@/lib/logger", () => ({
-	useLogger: () => mockLogger,
-}));
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
 
 beforeEach(() => {
-	mockLoggerError.mockReset();
+	mockLogger = createMockLogger();
+	mockLogger.with.mockReturnValue(mockLogger);
+	jest.mocked(useLogger).mockReturnValue(mockLogger);
 });
 
 const emptyList: ActiveListInitialState = {
@@ -114,7 +116,7 @@ describe("ActiveList", () => {
 			expect(screen.getByText("Offline - changes saved locally")).toBeTruthy(),
 		);
 		expect(screen.getByRole("checkbox", { name: "Milk" })).toBeTruthy();
-		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLogger.error).not.toHaveBeenCalled();
 	});
 
 	it("shows offline sync state when sync is not authorized", () => {
@@ -250,9 +252,12 @@ describe("ActiveList", () => {
 			).toBeTruthy(),
 		);
 		expect(screen.getByText("Refresh")).toBeTruthy();
-		expect(mockLoggerError).toHaveBeenCalledWith("active list refresh failed", {
-			error: expect.any(Error),
-		});
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"active list refresh failed",
+			{
+				error: expect.any(Error),
+			},
+		);
 	});
 
 	it("reports manual refresh failure when sync fails unexpectedly", async () => {
@@ -279,7 +284,7 @@ describe("ActiveList", () => {
 		expect(
 			screen.getByText("Sync failed - changes saved locally"),
 		).toBeTruthy();
-		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLogger.error).not.toHaveBeenCalled();
 	});
 
 	it("does not reload List data when a sync completes after unmount", async () => {
@@ -419,18 +424,4 @@ function memoryListActions(
 		},
 		...overrides,
 	};
-}
-
-function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	let reject: ((error: Error) => void) | undefined;
-	const promise = new Promise<T>((nextResolve, nextReject) => {
-		resolve = nextResolve;
-		reject = nextReject;
-	});
-	if (!resolve || !reject) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve, reject };
 }
