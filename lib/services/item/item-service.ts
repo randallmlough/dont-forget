@@ -80,6 +80,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		async listItems(input) {
 			try {
 				const result = await deps.store.execute({
+					kind: "read",
 					sql: `
             SELECT
               i.id,
@@ -125,6 +126,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 				const id = createAppId("itm", randomUuid);
 
 				await deps.store.execute({
+					kind: "write",
 					sql: `
             INSERT INTO items (
               id,
@@ -182,6 +184,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 			try {
 				const now = nextItemServiceTimestamp();
 				const itemResult = await deps.store.execute({
+					kind: "read",
 					sql: `
             SELECT id
             FROM items
@@ -195,6 +198,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 				}
 
 				await deps.store.execute({
+					kind: "write",
 					sql: `
             INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
             VALUES (?, ?, ?, ?)
@@ -228,6 +232,7 @@ async function insertedItemPosition(
 	itemId: string,
 ): Promise<number> {
 	const result = await store.execute({
+		kind: "read",
 		sql: "SELECT position FROM items WHERE id = ? LIMIT 1",
 		args: [itemId],
 	});

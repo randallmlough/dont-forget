@@ -97,6 +97,7 @@ describe("openHouseholdStore", () => {
 
 		await expect(
 			store.execute({
+				kind: "read",
 				sql: "SELECT id, position FROM items WHERE list_id = ?",
 				args: ["lst_groceries"],
 			}),
@@ -112,6 +113,7 @@ describe("openHouseholdStore", () => {
 
 		await expect(
 			store.execute({
+				kind: "write",
 				sql: "INSERT INTO items (id, name) VALUES (?, ?)",
 				args: ["itm_eggs", "Eggs"],
 			}),
@@ -164,6 +166,7 @@ describe("openHouseholdStore", () => {
 		const sync = store.sync();
 		await Promise.resolve();
 		const write = store.execute({
+			kind: "write",
 			sql: "INSERT INTO items (id, name) VALUES (?, ?)",
 			args: ["itm_eggs", "Eggs"],
 		});
@@ -252,6 +255,7 @@ describe("openHouseholdStore", () => {
 
 		await expect(
 			store.execute({
+				kind: "write",
 				sql: "INSERT INTO items (id, name) VALUES (?, ?)",
 				args: ["itm_eggs", "Eggs"],
 			}),

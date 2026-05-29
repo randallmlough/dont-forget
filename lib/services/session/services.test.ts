@@ -169,8 +169,7 @@ function storeFixture(overrides: { syncAuthorized?: boolean } = {}) {
 	return {
 		syncAuthorized: overrides.syncAuthorized ?? true,
 		execute: jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = typeof statement === "string" ? statement : statement.sql;
-			const args = typeof statement === "string" ? [] : statement.args;
+			const { sql, args = [] } = statement;
 			if (sql.includes("FROM lists")) {
 				return {
 					rows: [

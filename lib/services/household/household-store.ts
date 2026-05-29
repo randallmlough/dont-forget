@@ -5,12 +5,11 @@ import type { SyncResult } from "@/lib/services/sync";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
 
-export type HouseholdSqlStatement =
-	| string
-	| {
-			sql: string;
-			args?: HouseholdSqlValue[];
-	  };
+export type HouseholdSqlStatement = {
+	kind: "read" | "write";
+	sql: string;
+	args?: HouseholdSqlValue[];
+};
 
 export type HouseholdSqlResult = {
 	rows: Record<string, unknown>[];
@@ -140,8 +139,8 @@ export async function openHouseholdStore(
 		path,
 		syncAuthorized,
 		async execute(statement) {
-			const { sql, args } = normalizeStatement(statement);
-			if (isReadStatement(sql)) {
+			const { kind, sql, args } = normalizeStatement(statement);
+			if (kind === "read") {
 				return enqueueDatabaseOperation(async () => {
 					try {
 						const rows = await database.all(sql, args);
@@ -225,23 +224,15 @@ export function householdStoreFilename(householdId: string): string {
 }
 
 function normalizeStatement(statement: HouseholdSqlStatement): {
+	kind: "read" | "write";
 	sql: string;
 	args: HouseholdSqlValue[];
 } {
-	if (typeof statement === "string") {
-		return { sql: statement, args: [] };
-	}
-
-	return { sql: statement.sql, args: statement.args ?? [] };
-}
-
-function isReadStatement(sql: string): boolean {
-	const normalized = sql.trimStart().toLowerCase();
-	return (
-		normalized.startsWith("select") ||
-		normalized.startsWith("with") ||
-		normalized.startsWith("pragma")
-	);
+	return {
+		kind: statement.kind,
+		sql: statement.sql,
+		args: statement.args ?? [],
+	};
 }
 
 async function loadTursoRuntime(): Promise<TursoHouseholdStoreRuntime> {

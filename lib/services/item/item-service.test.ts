@@ -252,8 +252,7 @@ describe("createItemService", () => {
 
 	it("allocates Item position inside the insert statement", async () => {
 		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = typeof statement === "string" ? statement : statement.sql;
-			if (sql.includes("SELECT position FROM items")) {
+			if (statement.sql.includes("SELECT position FROM items")) {
 				return { rows: [{ position: 4 }] };
 			}
 			return { rows: [] };
@@ -274,8 +273,7 @@ describe("createItemService", () => {
 		).resolves.toMatchObject({ position: 4 });
 
 		const firstStatement = execute.mock.calls[0]?.[0];
-		const firstSql =
-			typeof firstStatement === "string" ? firstStatement : firstStatement?.sql;
+		const firstSql = firstStatement?.sql;
 		expect(firstSql).toContain("INSERT INTO items");
 		expect(firstSql).toContain("COALESCE(MAX(position), -1) + 1");
 		expect(firstSql).not.toMatch(/^\s*SELECT COALESCE\(MAX\(position\)/);
