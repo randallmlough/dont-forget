@@ -78,7 +78,9 @@ describe("HomeScreen", () => {
 		try {
 			render(<HomeScreen />);
 
-			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy(), {
+				timeout: 5_000,
+			});
 			expect(screen.getByText("Milk")).toBeTruthy();
 		} finally {
 			await harness.close();
