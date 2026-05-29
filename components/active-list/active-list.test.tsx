@@ -370,17 +370,15 @@ function passiveSyncCoordinator(
 function syncCoordinatorWithPostSubscribeStatus(
 	status: ReturnType<ActiveListSyncCoordinator["getStatus"]>,
 ): ActiveListSyncCoordinator {
-	let sampled = false;
+	let currentStatus: ReturnType<ActiveListSyncCoordinator["getStatus"]> =
+		"synced";
 
 	return {
-		getStatus: jest.fn(() => {
-			if (!sampled) {
-				sampled = true;
-				return "synced";
-			}
-			return status;
+		getStatus: jest.fn(() => currentStatus),
+		subscribe: jest.fn(() => {
+			currentStatus = status;
+			return { remove() {} };
 		}),
-		subscribe: jest.fn(() => ({ remove() {} })),
 		requestSync: jest.fn<
 			ReturnType<ActiveListSyncCoordinator["requestSync"]>,
 			Parameters<ActiveListSyncCoordinator["requestSync"]>
