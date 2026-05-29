@@ -158,21 +158,6 @@ describe("createSessionCache", () => {
 		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
 	});
 
-	it("clears cached Authenticated App Session metadata without deleting local Household data", async () => {
-		const storage = memoryStorage();
-		const analytics = analyticsFixture();
-		const cache = createSessionCache({ storage, analytics });
-
-		await cache.save(sessionBootstrapFixture());
-		analytics.track.mockClear();
-		const removed = await cache.clearMetadata();
-
-		expect(removed).toMatchObject({ activeHousehold: { id: "hh_avery" } });
-		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
-		expect(analytics.track).not.toHaveBeenCalled();
-		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
-	});
-
 	it("clears signed-out Authenticated App Session data after deleting local data", async () => {
 		const storage = memoryStorage();
 		const cache = createSessionCache({ storage });
