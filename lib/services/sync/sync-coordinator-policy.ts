@@ -1,10 +1,6 @@
 import type { SyncNetworkStatus } from "./network-status";
-import type {
-	SyncOptions,
-	SyncRequestReason,
-	SyncStatus,
-} from "./sync-coordinator";
 import { isSyncInterruptedError } from "./sync-errors";
+import type { SyncOptions, SyncRequestReason, SyncStatus } from "./sync-types";
 
 export type SyncCoordinatorPolicyState = {
 	status: SyncStatus;

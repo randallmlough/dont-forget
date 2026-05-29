@@ -1,10 +1,8 @@
 import { createDatabaseOperationQueue } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import {
-	nativeSyncInterruptedError,
-	type SyncResult,
-} from "@/lib/services/sync";
+import { nativeSyncInterruptedError } from "@/lib/services/sync/sync-errors";
+import type { SyncResult } from "@/lib/services/sync/sync-types";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
 
