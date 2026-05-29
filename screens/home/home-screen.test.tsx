@@ -5,59 +5,45 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import type { ActiveListInitialState } from "@/components/active-list";
+import { eq } from "drizzle-orm";
 import { useAuthenticatedAppSession } from "@/components/session";
 import {
 	type PrimaryHouseholdScenario,
 	seedPrimaryHouseholdScenario,
 } from "@/db/fixtures";
+import { items, lists } from "@/db/schema/household";
 import type { TestDirectoryDb, TestHouseholdDb } from "@/db/test";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
-import type { Logger } from "@/lib/logger";
+import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionDataServices } from "@/lib/services/session/services";
-import {
-	authenticatedAppSessionFixture,
-	itemServiceFixture,
-	listServiceFixture,
-	sessionItemFixture,
-	sessionListFixture,
-	syncCoordinatorFixture,
-} from "@/lib/services/session/test-fixtures";
+import { deferred } from "@/lib/test/async";
+import { createMockLogger } from "@/lib/test/mocks/logger";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
 jest.mock("@/components/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
 }));
 
-jest.mock("@/lib/analytics", () => ({
-	track: jest.fn(),
-}));
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
-jest.mock("@/lib/logger", () => {
-	const logger = {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-		with: jest.fn(),
-	};
-	logger.with.mockReturnValue(logger);
-	return {
-		logger,
-		useLogger: jest.fn(() => logger),
-	};
-});
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
 
-const testLogger = {
-	debug: jest.fn(),
-	info: jest.fn(),
-	warn: jest.fn(),
-	error: jest.fn(),
-	with: jest.fn(),
-} satisfies jest.Mocked<Logger>;
-testLogger.with.mockImplementation(() => testLogger);
+const testLogger = createMockLogger();
+testLogger.with.mockReturnValue(testLogger);
+const noopProviderActions = {
+	retry() {},
+	async signOut() {},
+};
 
 describe("HomeScreen", () => {
 	beforeEach(() => {
@@ -73,8 +59,7 @@ describe("HomeScreen", () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "loading" },
 			session: null,
-			retry: jest.fn(),
-			signOut: jest.fn(async () => undefined),
+			...noopProviderActions,
 		});
 
 		render(<HomeScreen />);
@@ -87,8 +72,7 @@ describe("HomeScreen", () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "ready", refreshing: false },
 			session: harness.session,
-			retry: jest.fn(),
-			signOut: jest.fn(async () => undefined),
+			...noopProviderActions,
 		});
 
 		try {
@@ -124,29 +108,37 @@ describe("HomeScreen", () => {
 });
 
 it("remounts Active List when the session resource changes", async () => {
-	const { rerender } = render(
-		<HomeScreenView
-			state={{ status: "ready", refreshing: false }}
-			session={controlledSession({
-				resourceKey: "authenticated-app-session:1",
-				initialList: initialListFixture({ itemName: "Cached Milk" }),
-			})}
-		/>,
-	);
+	const firstHarness = await createHomeSessionHarness({
+		uncheckedItemName: "Cached Milk",
+		resourceKey: "authenticated-app-session:1",
+	});
+	const secondHarness = await createHomeSessionHarness({
+		uncheckedItemName: "Fresh Eggs",
+		resourceKey: "authenticated-app-session:2",
+	});
 
-	await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
-	rerender(
-		<HomeScreenView
-			state={{ status: "ready", refreshing: false }}
-			session={controlledSession({
-				resourceKey: "authenticated-app-session:2",
-				initialList: initialListFixture({ itemName: "Fresh Eggs" }),
-			})}
-		/>,
-	);
+	try {
+		const { rerender } = render(
+			<HomeScreenView
+				state={{ status: "ready", refreshing: false }}
+				session={firstHarness.session}
+			/>,
+		);
 
-	await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
-	expect(screen.queryByText("Cached Milk")).toBeNull();
+		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
+		rerender(
+			<HomeScreenView
+				state={{ status: "ready", refreshing: false }}
+				session={secondHarness.session}
+			/>,
+		);
+
+		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+		expect(screen.queryByText("Cached Milk")).toBeNull();
+	} finally {
+		await firstHarness.close();
+		await secondHarness.close();
+	}
 });
 
 describe("HomeScreenView", () => {
@@ -223,26 +215,26 @@ describe("HomeScreenView", () => {
 	});
 
 	it("shows a retryable List error when list loading fails", async () => {
-		const session = controlledSession();
-		jest
-			.mocked(session.services.lists.getList)
-			.mockRejectedValueOnce(new Error("offline"))
-			.mockResolvedValueOnce(sessionListFixture());
+		const harness = await createHomeSessionHarness({ failNextListRead: true });
 
-		render(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
-				session={session}
-			/>,
-		);
+		try {
+			render(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
 
-		await waitFor(() =>
-			expect(screen.getByText("List unavailable")).toBeTruthy(),
-		);
-		fireEvent.press(screen.getByText("Try again"));
+			await waitFor(() =>
+				expect(screen.getByText("List unavailable")).toBeTruthy(),
+			);
+			fireEvent.press(screen.getByText("Try again"));
 
-		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		expect(session.services.lists.getList).toHaveBeenCalledTimes(2);
+			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+			expect(harness.listReadCount()).toBeGreaterThanOrEqual(2);
+		} finally {
+			await harness.close();
+		}
 	});
 
 	it("loads the default List from the seeded Household DB after authenticated app session context exists", async () => {
@@ -312,45 +304,50 @@ describe("HomeScreenView", () => {
 	});
 
 	it("ignores stale List loads after the session resource changes", async () => {
-		const staleLoad = deferred<ReturnType<typeof sessionListFixture>>();
-		const freshLoad = deferred<ReturnType<typeof sessionListFixture>>();
-		const { rerender } = render(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
-				session={controlledSession({
-					resourceKey: "authenticated-app-session:1",
-					lists: listServiceFixture({
-						getList: jest.fn(() => staleLoad.promise),
-					}),
-				})}
-			/>,
-		);
-
-		rerender(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
-				session={controlledSession({
-					resourceKey: "authenticated-app-session:2",
-					initialList: initialListFixture({ itemName: "Fresh Eggs" }),
-					lists: listServiceFixture({
-						getList: jest.fn(() => freshLoad.promise),
-					}),
-				})}
-			/>,
-		);
-
-		await act(async () => {
-			freshLoad.resolve(sessionListFixture());
-			await freshLoad.promise;
+		const staleListRead = deferred<void>();
+		const freshListRead = deferred<void>();
+		const staleHarness = await createHomeSessionHarness({
+			listName: "Stale",
+			resourceKey: "authenticated-app-session:1",
+			listReadGate: staleListRead.promise,
 		});
-		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
-
-		await act(async () => {
-			staleLoad.resolve(sessionListFixture({ name: "Stale" }));
-			await staleLoad.promise;
+		const freshHarness = await createHomeSessionHarness({
+			uncheckedItemName: "Fresh Eggs",
+			resourceKey: "authenticated-app-session:2",
+			listReadGate: freshListRead.promise,
 		});
-		expect(screen.queryByText("Stale")).toBeNull();
-		expect(screen.getByText("Fresh Eggs")).toBeTruthy();
+
+		try {
+			const { rerender } = render(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={staleHarness.session}
+				/>,
+			);
+
+			rerender(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={freshHarness.session}
+				/>,
+			);
+
+			await act(async () => {
+				freshListRead.resolve();
+				await freshListRead.promise;
+			});
+			await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
+
+			await act(async () => {
+				staleListRead.resolve();
+				await staleListRead.promise;
+			});
+			expect(screen.queryByText("Stale")).toBeNull();
+			expect(screen.getByText("Fresh Eggs")).toBeTruthy();
+		} finally {
+			await staleHarness.close();
+			await freshHarness.close();
+		}
 	});
 });
 
@@ -359,16 +356,42 @@ type HomeSessionHarness = {
 	household: TestHouseholdDb;
 	scenario: PrimaryHouseholdScenario;
 	session: AuthenticatedAppSession;
+	listReadCount: () => number;
 	close: () => Promise<void>;
 };
 
-async function createHomeSessionHarness(): Promise<HomeSessionHarness> {
+type HomeSessionHarnessOptions = {
+	failNextListRead?: boolean;
+	listName?: string;
+	listReadGate?: Promise<void>;
+	resourceKey?: string;
+	uncheckedItemName?: string;
+};
+
+async function createHomeSessionHarness(
+	options: HomeSessionHarnessOptions = {},
+): Promise<HomeSessionHarness> {
 	const directory = await createTestDirectoryDb();
 	const household = await createTestHouseholdDb();
 	const scenario = await seedPrimaryHouseholdScenario({
 		directory: directory.db,
 		household: household.db,
 	});
+	await applyHomeScenarioOptions(household, scenario, options);
+
+	let listReadCount = 0;
+	let shouldFailNextListRead = options.failNextListRead ?? false;
+	const execute = async (statement: HouseholdSqlStatement) => {
+		if (isListRead(statement)) {
+			listReadCount += 1;
+			await options.listReadGate;
+			if (shouldFailNextListRead) {
+				shouldFailNextListRead = false;
+				throw new Error("offline");
+			}
+		}
+		return household.client.execute(statement);
+	};
 	const dataServices = await createSessionDataServices(
 		{
 			householdId: scenario.household.id,
@@ -377,11 +400,9 @@ async function createHomeSessionHarness(): Promise<HomeSessionHarness> {
 		},
 		{
 			store: {
-				syncAuthorized: true,
-				execute: household.client.execute.bind(household.client),
-				push: jest.fn(async () => undefined),
-				sync: jest.fn(async () => ({ changed: false })),
-				close: jest.fn(async () => undefined),
+				syncAuthorized: false,
+				execute,
+				close() {},
 			},
 		},
 	);
@@ -415,11 +436,11 @@ async function createHomeSessionHarness(): Promise<HomeSessionHarness> {
 				displayName: scenario.users.blake.displayName ?? null,
 			},
 		],
-		resourceKey: "authenticated-app-session:seeded",
+		resourceKey: options.resourceKey ?? "authenticated-app-session:seeded",
 		services: {
 			lists: dataServices.lists,
 			items: dataServices.items,
-			sync: syncCoordinatorFixture(),
+			sync: passiveSyncCoordinator(),
 		},
 	};
 
@@ -428,6 +449,7 @@ async function createHomeSessionHarness(): Promise<HomeSessionHarness> {
 		household,
 		scenario,
 		session,
+		listReadCount: () => listReadCount,
 		async close() {
 			await dataServices.close();
 			await directory.close();
@@ -436,81 +458,34 @@ async function createHomeSessionHarness(): Promise<HomeSessionHarness> {
 	};
 }
 
-type ControlledSessionOverrides = {
-	resourceKey?: string;
-	initialList?: ActiveListInitialState;
-	lists?: ReturnType<typeof listServiceFixture>;
-	items?: ReturnType<typeof itemServiceFixture>;
-	sync?: ReturnType<typeof syncCoordinatorFixture>;
-};
+async function applyHomeScenarioOptions(
+	household: TestHouseholdDb,
+	scenario: PrimaryHouseholdScenario,
+	options: HomeSessionHarnessOptions,
+): Promise<void> {
+	if (options.listName) {
+		await household.db
+			.update(lists)
+			.set({ name: options.listName })
+			.where(eq(lists.id, scenario.ids.groceriesListId));
+	}
 
-function controlledSession(
-	overrides: ControlledSessionOverrides = {},
-): AuthenticatedAppSession {
-	const initialList = overrides.initialList ?? initialListFixture();
-	return authenticatedAppSessionFixture({
-		activeHousehold: { id: "hh_avery", name: initialList.householdName },
-		resourceKey: overrides.resourceKey,
-		services: {
-			lists:
-				overrides.lists ??
-				listServiceFixture({
-					getList: jest
-						.fn()
-						.mockResolvedValue(
-							sessionListFixture({ name: initialList.listName }),
-						),
-				}),
-			items:
-				overrides.items ??
-				itemServiceFixture({
-					listItems: jest.fn().mockResolvedValue(
-						initialList.items.map((item, index) =>
-							sessionItemFixture({
-								id: item.id,
-								name: item.name,
-								checked: item.checked,
-								checkedByUserId: item.checked ? "usr_avery" : null,
-								position: index,
-							}),
-						),
-					),
-				}),
-			sync: overrides.sync ?? syncCoordinatorFixture(),
-		},
-	});
+	if (options.uncheckedItemName) {
+		await household.db
+			.update(items)
+			.set({ name: options.uncheckedItemName })
+			.where(eq(items.id, scenario.items.unchecked.id));
+	}
 }
 
-function initialListFixture(
-	overrides: {
-		checked?: boolean;
-		checkedByMemberName?: string | null;
-		householdName?: string;
-		itemName?: string;
-		items?: ActiveListInitialState["items"];
-		listName?: string;
-	} = {},
-): ActiveListInitialState {
+function isListRead(statement: HouseholdSqlStatement): boolean {
+	return statement.kind === "read" && /FROM\s+lists/i.test(statement.sql);
+}
+
+function passiveSyncCoordinator(): AuthenticatedAppSession["services"]["sync"] {
 	return {
-		householdName: overrides.householdName ?? "Avery",
-		listName: overrides.listName ?? "Groceries",
-		items: overrides.items ?? [
-			{
-				id: "itm_milk",
-				name: overrides.itemName ?? "Milk",
-				checked: overrides.checked ?? false,
-				checkedByMemberName: overrides.checkedByMemberName ?? null,
-			},
-		],
+		getStatus: () => "synced",
+		subscribe: () => ({ remove() {} }),
+		requestSync: async () => null,
 	};
-}
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (error: unknown) => void;
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve;
-		reject = promiseReject;
-	});
-	return { promise, resolve, reject };
 }

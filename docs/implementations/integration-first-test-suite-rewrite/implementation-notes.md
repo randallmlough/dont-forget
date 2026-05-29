@@ -11,6 +11,7 @@ This slice makes the repository teach the integration-first pattern in executabl
 - moved Authenticated App Session payload/model fixtures into session-owned test helpers;
 - added local-only seed and reseed commands;
 - converted representative List, Item, session data service, and Home screen tests to use seeded temp libSQL where they prove product data paths;
+- removed the central mocked session fixture module and consolidated logger/analytics mocks on `lib/test/mocks`;
 - updated testing standards and workflows to make integration-first the hard default for product behavior and to define mocks by boundary.
 
 ## Fixture API
@@ -29,7 +30,7 @@ This slice makes the repository teach the integration-first pattern in executabl
 
 The low-level builders return Drizzle insert-shaped rows with full caller overrides. Scenario helpers accept caller-provided directory and Household Drizzle DB handles, insert rows through Drizzle, and return the inserted records/IDs.
 
-`db/fixtures/` intentionally does not return services, providers, sync coordinators, app sessions, or UI model objects. Session payload fixtures now live in `lib/services/session/test-fixtures.ts`.
+`db/fixtures/` intentionally does not return services, providers, sync coordinators, app sessions, or UI model objects. Session bootstrap payload helpers now live in `lib/services/session/bootstrap.test-helpers.ts`; session-controller-only service and sync coordinator boundary fakes live in `lib/services/session/controller.test-helpers.ts`. The old central `lib/services/session/test-fixtures.ts` module was removed.
 
 ## Canonical primary Household scenario
 
@@ -55,13 +56,16 @@ Invitation scenarios remain deferred until Invitation behavior exists; only the 
 ## Tests converted in this slice
 
 - `lib/services/session/services.test.ts`: List/Item reads and writes now use temp libSQL plus `seedPrimaryHouseholdScenario`; sync/open timing tests retain narrow store fakes.
-- `screens/home/home-screen.test.tsx`: ready/default List/checked display/add/toggle paths now use a real session-shaped harness backed by seeded temp directory and Household DBs; retry/stale-load tests retain controlled fakes for failure/race assertions.
+- `screens/home/home-screen.test.tsx`: ready/default List/checked display/add/toggle paths now use a real session-shaped harness backed by seeded temp directory and Household DBs; List failure and stale-load assertions use the same DB-backed harness with narrow store-level failure/race gates instead of mocked session services.
 - `lib/services/item/item-service.test.ts`: retained temp libSQL coverage and adopted `db/fixtures` builders for persisted rows.
 - `lib/services/list/list-service.test.ts`: retained temp libSQL coverage and adopted the primary scenario/builder fixtures.
+- Shared test utilities: logger module mocks now use `createMockLoggerModule`; analytics module mocks and injected analytics doubles use `lib/test/mocks/analytics`; `screens/home/home-screen.test.tsx` no longer imports session service mock fixtures.
 
 ## Commands run
 
 - `pnpm test:ci -- lib/services/list/list-service.test.ts lib/services/item/item-service.test.ts lib/services/session/services.test.ts screens/home/home-screen.test.tsx`
+- `pnpm test:ci -- screens/home/home-screen.test.tsx components/auth/auth-gate.test.tsx components/session/authenticated-app-session-provider.test.tsx screens/auth/sign-in-screen.test.tsx lib/services/session/services.test.ts lib/services/list/list-service.test.ts lib/services/item/item-service.test.ts lib/services/session/bootstrap.test.ts lib/services/session/cache.test.ts lib/services/session/controller.activation.test.ts lib/services/session/controller.cache-invalidation.test.ts lib/services/session/controller.resource-lifecycle.test.ts components/active-list/active-list.test.tsx lib/services/household/household-store.test.ts lib/services/sync/default-sync-coordinator.test.ts lib/services/sync/sync-coordinator.test.ts lib/services/sync/sync-coordinator.local-write-policy.test.ts`
+- `pnpm test:ci -- lib/services/session/controller.activation.test.ts lib/services/session/controller.cache-invalidation.test.ts lib/services/session/controller.resource-lifecycle.test.ts`
 - `pnpm typecheck`
 - `pnpm test:ci -- lib/services/list/list-service.test.ts lib/services/item/item-service.test.ts lib/services/session/services.test.ts screens/home/home-screen.test.tsx lib/services/session/bootstrap.test.ts lib/services/session/cache.test.ts lib/services/session/controller.activation.test.ts lib/services/session/controller.cache-invalidation.test.ts lib/services/session/controller.resource-lifecycle.test.ts`
 - `APP_ENV=staging pnpm db:seed` (expected refusal)

@@ -1,3 +1,4 @@
+import { logger as defaultLogger } from "@/lib/logger";
 import {
 	deleteLocalHouseholdStoreData,
 	householdStoreFilename,
@@ -5,18 +6,21 @@ import {
 	type TursoHouseholdStoreRuntime,
 } from "@/lib/services/household/household-store";
 import { SyncInterruptedError } from "@/lib/services/sync";
-import { loggerFixture } from "@/lib/test/mocks/logger";
+import {
+	createMockLogger,
+	loggerFixture,
+	type MockLogger,
+} from "@/lib/test/mocks/logger";
 
-const mockLoggerError = jest.fn();
-const mockLogger = {
-	error: mockLoggerError,
-};
+let defaultScopedLogger: MockLogger;
 
-jest.mock("@/lib/logger", () => ({
-	logger: {
-		with: jest.fn(() => mockLogger),
-	},
-}));
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
 
 describe("openHouseholdStore", () => {
 	let instances: MockTursoDatabase[];
@@ -24,7 +28,9 @@ describe("openHouseholdStore", () => {
 	let fileSystem: { deleteFilesWithPrefix: jest.Mock<Promise<void>, [string]> };
 
 	beforeEach(() => {
-		mockLoggerError.mockReset();
+		defaultScopedLogger = createMockLogger();
+		defaultScopedLogger.with.mockReturnValue(defaultScopedLogger);
+		jest.mocked(defaultLogger.with).mockReturnValue(defaultScopedLogger);
 		instances = [];
 		runtime = {
 			Database: class extends MockTursoDatabase {
@@ -192,7 +198,7 @@ describe("openHouseholdStore", () => {
 
 		await expect(store.sync()).rejects.toThrow(error);
 
-		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(defaultScopedLogger.error).not.toHaveBeenCalled();
 	});
 
 	it("wraps offline native sync failures as typed sync interruptions", async () => {
@@ -206,7 +212,7 @@ describe("openHouseholdStore", () => {
 
 		await expect(store.sync()).rejects.toBeInstanceOf(SyncInterruptedError);
 
-		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(defaultScopedLogger.error).not.toHaveBeenCalled();
 	});
 
 	it("wraps recoverable sync engine failures as typed sync interruptions", async () => {
@@ -222,7 +228,7 @@ describe("openHouseholdStore", () => {
 
 		await expect(store.sync()).rejects.toBeInstanceOf(SyncInterruptedError);
 
-		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(defaultScopedLogger.error).not.toHaveBeenCalled();
 	});
 
 	it("does not use an injected logger for native sync failures", async () => {
@@ -242,7 +248,7 @@ describe("openHouseholdStore", () => {
 			sync_authorized: true,
 		});
 		expect(injected.error).not.toHaveBeenCalled();
-		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(defaultScopedLogger.error).not.toHaveBeenCalled();
 	});
 
 	it("continues to log local write failures because they affect data safety", async () => {
@@ -262,7 +268,7 @@ describe("openHouseholdStore", () => {
 			}),
 		).rejects.toThrow(error);
 
-		expect(mockLoggerError).toHaveBeenCalledWith(
+		expect(defaultScopedLogger.error).toHaveBeenCalledWith(
 			"household store write failed",
 			{
 				error,

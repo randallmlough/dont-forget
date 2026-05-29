@@ -1,3 +1,4 @@
+import { createMockLogger } from "@/lib/test/mocks/logger";
 import type { SyncAppStateAdapter } from "./app-state";
 import type { SyncNetworkStatusAdapter } from "./network-status";
 import {
@@ -167,13 +168,7 @@ export function controllableNetworkStatus(
 }
 
 export function loggerFixture() {
-	return {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-		with: jest.fn(),
-	};
+	return createMockLogger();
 }
 
 export function deferred<T>() {

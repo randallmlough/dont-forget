@@ -1,37 +1,24 @@
 import { listFixture, seedPrimaryHouseholdScenario } from "@/db/fixtures";
 import { lists } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
-import type { Logger } from "@/lib/logger";
+import { createMockLogger } from "@/lib/test/mocks/logger";
 
 import { createListService, ListNotFoundError } from "./list-service";
 
-jest.mock("@/lib/analytics", () => ({
-	track: jest.fn(),
-}));
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
-jest.mock("@/lib/logger", () => {
-	const logger = {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-		with: jest.fn(),
-	};
-	logger.with.mockReturnValue(logger);
-	return {
-		logger,
-		useLogger: jest.fn(() => logger),
-	};
-});
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
 
-const testLogger = {
-	debug: jest.fn(),
-	info: jest.fn(),
-	warn: jest.fn(),
-	error: jest.fn(),
-	with: jest.fn(),
-} satisfies jest.Mocked<Logger>;
-testLogger.with.mockImplementation(() => testLogger);
+const testLogger = createMockLogger();
+testLogger.with.mockReturnValue(testLogger);
 
 beforeEach(() => {
 	testLogger.debug.mockReset();
@@ -39,6 +26,7 @@ beforeEach(() => {
 	testLogger.warn.mockReset();
 	testLogger.error.mockReset();
 	testLogger.with.mockClear();
+	testLogger.with.mockReturnValue(testLogger);
 });
 
 describe("createListService", () => {

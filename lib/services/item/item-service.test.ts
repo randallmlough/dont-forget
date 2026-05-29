@@ -1,35 +1,26 @@
 import { itemCheckFixture, itemFixture, listFixture } from "@/db/fixtures";
 import { itemChecks, items, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
-import type { Logger } from "@/lib/logger";
 import type { HouseholdSqlStatement } from "@/lib/services/household";
+import { createMockAnalytics } from "@/lib/test/mocks/analytics";
+import { createMockLogger } from "@/lib/test/mocks/logger";
 
 import { createItemService } from "./item-service";
 
-jest.mock("@/lib/analytics", () => ({
-	track: jest.fn(),
-}));
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
-jest.mock("@/lib/logger", () => ({
-	logger: {
-		with: jest.fn(() => ({
-			debug: jest.fn(),
-			info: jest.fn(),
-			warn: jest.fn(),
-			error: jest.fn(),
-			with: jest.fn(),
-		})),
-	},
-}));
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
 
-const testLogger = {
-	debug: jest.fn(),
-	info: jest.fn(),
-	warn: jest.fn(),
-	error: jest.fn(),
-	with: jest.fn(),
-} satisfies jest.Mocked<Logger>;
-testLogger.with.mockImplementation(() => testLogger);
+const testLogger = createMockLogger();
+testLogger.with.mockReturnValue(testLogger);
 
 beforeEach(() => {
 	jest.restoreAllMocks();
@@ -38,6 +29,7 @@ beforeEach(() => {
 	testLogger.warn.mockReset();
 	testLogger.error.mockReset();
 	testLogger.with.mockClear();
+	testLogger.with.mockReturnValue(testLogger);
 });
 
 describe("createItemService", () => {
@@ -151,7 +143,7 @@ describe("createItemService", () => {
 
 	it("adds a trimmed Item with generated ID and controlled timestamps", async () => {
 		const household = await createTestHouseholdDb();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		jest.spyOn(Date, "now").mockReturnValue(8_000_000_000_000);
 
 		try {
@@ -268,7 +260,7 @@ describe("createItemService", () => {
 			householdId: "hh_avery",
 			store: { execute },
 			logger: testLogger,
-			analytics: analyticsFixture(),
+			analytics: createMockAnalytics(),
 		});
 
 		await expect(
@@ -287,7 +279,7 @@ describe("createItemService", () => {
 	});
 
 	it("rejects empty Item names before writing", async () => {
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const execute = jest.fn(async () => ({ rows: [] }));
 		const service = createItemService({
 			householdId: "hh_avery",
@@ -309,7 +301,7 @@ describe("createItemService", () => {
 
 	it("updates checked state with monotonic service timestamps", async () => {
 		const household = await createTestHouseholdDb();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const rawTimestamps = [
 			9_000_000_000_000, 8_999_999_999_999, 8_999_999_999_999,
 		];
@@ -390,7 +382,7 @@ describe("createItemService", () => {
 
 	it("rejects checked state changes when the Item is outside the explicit List", async () => {
 		const household = await createTestHouseholdDb();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 
 		try {
 			await household.db.insert(lists).values([
@@ -443,7 +435,7 @@ describe("createItemService", () => {
 
 	it("unchecks an Item for the active User and derives the unchecked state", async () => {
 		const household = await createTestHouseholdDb();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const rawTimestamps = [
 			10_000_000_000_000, 10_000_000_000_001, 10_000_000_000_002,
 		];
@@ -518,7 +510,7 @@ describe("createItemService", () => {
 	});
 
 	it("does not track checked state changes when the local write fails", async () => {
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const service = createItemService({
 			householdId: "hh_avery",
 			store: {
@@ -541,9 +533,3 @@ describe("createItemService", () => {
 		expect(analytics.track).not.toHaveBeenCalled();
 	});
 });
-
-function analyticsFixture() {
-	return {
-		track: jest.fn(),
-	};
-}

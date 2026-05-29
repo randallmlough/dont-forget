@@ -3,34 +3,22 @@ import { seedPrimaryHouseholdScenario } from "@/db/fixtures";
 import { itemChecks, items } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import { createMockLogger } from "@/lib/test/mocks/logger";
 import { createSessionDataServices } from "./services";
 
-jest.mock("@/lib/analytics", () => ({
-	track: jest.fn(),
-}));
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
-jest.mock("@/lib/logger", () => {
-	const logger = {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-		with: jest.fn(),
-	};
-	logger.with.mockReturnValue(logger);
-	return {
-		logger,
-		useLogger: jest.fn(() => logger),
-	};
-});
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
 
-const logger = {
-	debug: jest.fn(),
-	info: jest.fn(),
-	warn: jest.fn(),
-	error: jest.fn(),
-	with: jest.fn(),
-};
+const logger = createMockLogger();
 
 describe("createSessionDataServices", () => {
 	beforeEach(() => {

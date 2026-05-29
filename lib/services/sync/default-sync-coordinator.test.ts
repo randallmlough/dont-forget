@@ -1,4 +1,4 @@
-import type { Logger } from "@/lib/logger";
+import { createMockLogger } from "@/lib/test/mocks/logger";
 
 const mockGetDefaultSyncAppStateAdapter = jest.fn();
 const mockGetDefaultSyncNetworkStatusAdapter = jest.fn();
@@ -79,17 +79,7 @@ function coordinatorDeps(overrides: { syncAuthorized: boolean }) {
 	return {
 		syncAuthorized: overrides.syncAuthorized,
 		sync: jest.fn(async () => ({ changed: false })),
-		logger: loggerFixture(),
-	};
-}
-
-function loggerFixture(): Logger {
-	return {
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-		with: jest.fn(),
+		logger: createMockLogger(),
 	};
 }
 

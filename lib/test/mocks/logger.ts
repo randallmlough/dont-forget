@@ -37,3 +37,13 @@ export function createMockLogger(): MockLogger {
 	logger.with.mockImplementation(() => createMockLogger());
 	return logger;
 }
+
+export function createMockLoggerModule() {
+	const logger = createMockLogger();
+	logger.with.mockReturnValue(logger);
+
+	return {
+		logger,
+		useLogger: jest.fn(() => logger),
+	};
+}
