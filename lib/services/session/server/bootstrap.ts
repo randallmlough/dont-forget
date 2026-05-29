@@ -87,10 +87,10 @@ export async function bootstrapAuthenticatedAppSession(
 	}
 
 	const expiresAt = Date.now() + HOUSEHOLD_TOKEN_TTL_MS;
-	const authToken = await deps.provisioning.createHouseholdDatabaseToken(
-		active.householdTursoDbName,
-	);
-	const members = await memberService.listHouseholdMembers(active.householdId);
+	const [authToken, members] = await Promise.all([
+		deps.provisioning.createHouseholdDatabaseToken(active.householdTursoDbName),
+		memberService.listHouseholdMembers(active.householdId),
+	]);
 
 	return {
 		user: {
