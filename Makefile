@@ -30,10 +30,6 @@ verify: typecheck biome-check eslint-rules lint test-ci ## Run typecheck, Biome,
 .PHONY: ci
 ci: verify expo-check expo-config-check audit ## Run the full CI contract *common*
 
-.PHONY: reset-project
-reset-project: ## Run Expo starter reset script
-	@$(PNPM) reset-project
-
 ##@ Storybook
 
 .PHONY: storybook-ios
