@@ -42,7 +42,6 @@ export type SessionCache = {
 		cached: CachedSessionBootstrap,
 		freshSession: SessionBootstrap,
 	) => Promise<void>;
-	clearMetadata: () => Promise<CachedSessionBootstrap | null>;
 	clearSignedOutData: (householdIds?: string[]) => Promise<void>;
 	deleteLocalData: (cached: CachedSessionBootstrap) => Promise<void>;
 };
@@ -171,12 +170,6 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 		readUnauthorized,
 
 		clearUnauthorizedMetadata,
-
-		async clearMetadata() {
-			const cached = await read();
-			await clearCachedMetadata();
-			return cached;
-		},
 
 		async clearSignedOutData(householdIds = []) {
 			const cached = await read();

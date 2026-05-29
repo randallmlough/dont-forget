@@ -1,13 +1,18 @@
+import { deleteLocalHouseholdStoreData } from "@/lib/services/household/household-store";
+import { createMockAnalytics } from "@/lib/test/mocks/analytics";
 import {
 	cachedSessionBootstrapFixture,
 	sessionBootstrapFixture,
-} from "@/db/fixtures/session";
-import { deleteLocalHouseholdStoreData } from "@/lib/services/household/household-store";
+} from "./bootstrap.test-helpers";
 import {
 	createSessionCache,
 	SESSION_CACHE_KEY,
 	type SessionCacheStorage,
 } from "./cache";
+
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
 jest.mock("@/lib/services/household/household-store", () => ({
 	deleteLocalHouseholdStoreData: jest.fn(async () => undefined),
@@ -26,7 +31,7 @@ describe("createSessionCache", () => {
 
 	it("stores cached Authenticated App Session metadata without Household DB auth tokens", async () => {
 		const storage = memoryStorage();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_100);
 		const cache = createSessionCache({ storage, analytics });
 
@@ -52,7 +57,7 @@ describe("createSessionCache", () => {
 
 	it("reads cached Authenticated App Session metadata while stripping persisted auth tokens", async () => {
 		const storage = memoryStorage();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const cache = createSessionCache({ storage, analytics });
 		const { householdDatabase: _householdDatabase, ...sessionMetadata } =
 			sessionBootstrapFixture();
@@ -83,7 +88,7 @@ describe("createSessionCache", () => {
 
 	it("reports no unauthorized cached Authenticated App Session for matching fresh authorization without side effects", async () => {
 		const storage = memoryStorage();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const cache = createSessionCache({ storage, analytics });
 
 		await cache.save(sessionBootstrapFixture());
@@ -103,7 +108,7 @@ describe("createSessionCache", () => {
 
 	it("reports unauthorized cached Authenticated App Session metadata without deleting local data or clearing metadata", async () => {
 		const storage = memoryStorage();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const cache = createSessionCache({ storage, analytics });
 		const oldSession = sessionBootstrapFixture({
 			householdId: "hh_old",
@@ -131,7 +136,7 @@ describe("createSessionCache", () => {
 
 	it("clears unauthorized cached Authenticated App Session metadata and tracks invalidation", async () => {
 		const storage = memoryStorage();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const cache = createSessionCache({ storage, analytics });
 		const oldSession = sessionBootstrapFixture({
 			householdId: "hh_old",
@@ -155,21 +160,6 @@ describe("createSessionCache", () => {
 				reason: "unauthorized",
 			},
 		);
-		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
-	});
-
-	it("clears cached Authenticated App Session metadata without deleting local Household data", async () => {
-		const storage = memoryStorage();
-		const analytics = analyticsFixture();
-		const cache = createSessionCache({ storage, analytics });
-
-		await cache.save(sessionBootstrapFixture());
-		analytics.track.mockClear();
-		const removed = await cache.clearMetadata();
-
-		expect(removed).toMatchObject({ activeHousehold: { id: "hh_avery" } });
-		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
-		expect(analytics.track).not.toHaveBeenCalled();
 		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
 	});
 
@@ -239,11 +229,5 @@ function memoryStorage(): SessionCacheStorage {
 		async removeItem(key) {
 			values.delete(key);
 		},
-	};
-}
-
-function analyticsFixture() {
-	return {
-		track: jest.fn(),
 	};
 }

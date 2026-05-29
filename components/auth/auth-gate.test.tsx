@@ -6,9 +6,9 @@ import { setMockAuthState } from "@/lib/test/mocks/clerk";
 
 const mockReplace = jest.fn();
 
-jest.mock("@/lib/analytics", () => ({
-	useAnalyticsIdentity: jest.fn(),
-}));
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
 jest.mock("@/lib/services/session", () => ({
 	hasCachedAuthenticatedAppSession: jest.fn(),

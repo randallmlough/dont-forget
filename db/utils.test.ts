@@ -1,4 +1,5 @@
 import { createDatabaseOperationQueue } from "@/db/utils";
+import { deferred } from "@/lib/test/async";
 
 describe("createDatabaseOperationQueue", () => {
 	it("serializes operations for one database handle", async () => {
@@ -47,15 +48,3 @@ describe("createDatabaseOperationQueue", () => {
 		expect(calls).toEqual(["failed", "next"]);
 	});
 });
-
-function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	const promise = new Promise<T>((nextResolve) => {
-		resolve = nextResolve;
-	});
-	if (!resolve) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve };
-}
