@@ -5,8 +5,8 @@ import {
 	Text,
 	View,
 } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { useActiveList } from "./context";
-import { activeListStyles as styles } from "./styles";
 import type { ActiveListItem } from "./types";
 
 export function ActiveListItems() {
@@ -94,3 +94,90 @@ function keyExtractor(item: ActiveListItem) {
 function renderItem({ item }: ListRenderItemInfo<ActiveListItem>) {
 	return <ItemRow item={item} />;
 }
+
+const styles = StyleSheet.create((theme) => ({
+	itemsContent: {
+		padding: theme.spacing(5),
+	},
+	emptyItemsContent: {
+		flexGrow: 1,
+		justifyContent: "center",
+	},
+	emptyState: {
+		alignItems: "center",
+		gap: theme.spacing(2),
+		padding: theme.spacing(7),
+		borderRadius: theme.radii.card,
+		borderCurve: "continuous",
+		backgroundColor: theme.colors.surface,
+		borderWidth: theme.borders.hairline,
+		borderColor: theme.colors.border,
+	},
+	emptyTitle: {
+		fontSize: theme.fontSizes.titleSmall,
+		fontWeight: theme.fontWeights.bold,
+		color: theme.colors.text,
+		textAlign: "center",
+	},
+	emptyBody: {
+		...theme.typography.callout,
+		color: theme.colors.textMuted,
+		textAlign: "center",
+	},
+	itemRow: {
+		minHeight: theme.spacing(16),
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(3),
+		padding: theme.spacing(3.5),
+		borderRadius: theme.radii.card,
+		borderCurve: "continuous",
+		backgroundColor: theme.colors.surface,
+		borderWidth: theme.borders.hairline,
+		borderColor: theme.colors.border,
+	},
+	itemRowPressed: {
+		opacity: theme.opacities.pressed,
+	},
+	checkbox: {
+		width: theme.spacing(6),
+		height: theme.spacing(6),
+		borderRadius: theme.radii.checkbox,
+		borderCurve: "continuous",
+		borderWidth: theme.borders.thick,
+		borderColor: theme.colors.textSubtle,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	checkboxChecked: {
+		borderColor: theme.colors.primary,
+		backgroundColor: theme.colors.primary,
+	},
+	checkboxMark: {
+		width: theme.spacing(2.5),
+		height: theme.spacing(2.5),
+		borderRadius: theme.radii.checkboxMark,
+		backgroundColor: theme.colors.inverseText,
+	},
+	itemTextGroup: {
+		flex: 1,
+		minWidth: 0,
+	},
+	itemName: {
+		color: theme.colors.text,
+		fontSize: theme.fontSizes.subheadline,
+		fontWeight: theme.fontWeights.semibold,
+	},
+	itemNameChecked: {
+		color: theme.colors.textMuted,
+		textDecorationLine: "line-through",
+	},
+	itemMeta: {
+		...theme.typography.caption,
+		color: theme.colors.textSubtle,
+		marginTop: theme.spacing(0.5),
+	},
+	itemSeparator: {
+		height: theme.spacing(2.5),
+	},
+}));

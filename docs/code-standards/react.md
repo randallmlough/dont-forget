@@ -70,6 +70,7 @@
 - **Must** keep route files as route wiring only.
 - **Must** define explicit prop types for reusable app components.
 - **Must** keep event prop names semantic when the component owns domain intent, such as `onToggleItem`, `onSubmitName`, or `onRetry`, instead of generic `onPress`.
+- **Must** decompose large stateful feature surfaces by responsibility: one owner for state/actions, role-named child components for rendering, and a stable compound export only when the pieces share a meaningful provider.
 - **Should** use domain-shaped context values with `{ state, actions, meta }` for composed feature surfaces that share meaningful state.
 - **Should** use a `Screen`/`ScreenView` split for testability when a route has non-trivial state or side effects.
 - **Should** extract child components when they own independent local state, repeat a domain UI pattern, represent a list row or card, or have a distinct accessibility contract.

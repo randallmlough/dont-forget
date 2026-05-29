@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { useActiveList } from "./context";
-import { activeListStyles as styles } from "./styles";
 
 export function ActiveListAddItemForm() {
 	const { actions } = useActiveList();
@@ -42,3 +42,46 @@ export function ActiveListAddItemForm() {
 		</View>
 	);
 }
+
+const styles = StyleSheet.create((theme) => ({
+	addForm: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(2.5),
+		padding: theme.spacing(4),
+		backgroundColor: theme.colors.surface,
+		borderTopWidth: theme.borders.hairline,
+		borderTopColor: theme.colors.border,
+	},
+	input: {
+		flex: 1,
+		minHeight: theme.spacing(12),
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.inputBorder,
+		paddingHorizontal: theme.spacing(3.5),
+		color: theme.colors.text,
+		fontSize: theme.fontSizes.body,
+		backgroundColor: theme.colors.surface,
+	},
+	addButton: {
+		minWidth: theme.spacing(18),
+		height: theme.spacing(12),
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: theme.colors.primary,
+	},
+	addButtonDisabled: {
+		backgroundColor: theme.colors.primaryDisabled,
+	},
+	addButtonPressed: {
+		opacity: theme.opacities.pressed,
+	},
+	addButtonLabel: {
+		...theme.typography.controlLabel,
+		color: theme.colors.inverseText,
+	},
+}));

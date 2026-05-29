@@ -5,6 +5,7 @@
 - **Must** use Unistyles for app-owned React Native styling.
 - **Must** not add NativeWind, Uniwind, or a second app styling foundation.
 - **Must** keep styles colocated at the bottom of the component or screen file when they are local to that file.
+- **Should** keep decomposed feature child styles in the child component file instead of a feature-level style registry.
 - **Should** extract styles only when they are shared or when a file becomes hard to navigate.
 
 See also: [`docs/adr/0007-unistyles-styling-foundation.md`](../adr/0007-unistyles-styling-foundation.md).

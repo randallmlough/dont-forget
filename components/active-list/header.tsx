@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { useActiveList } from "./context";
-import { activeListStyles as styles } from "./styles";
 import type { ActiveListSyncState } from "./types";
 
 export function ActiveListHeader() {
@@ -67,3 +67,73 @@ function syncStatusStyle(syncState: ActiveListSyncState) {
 			return undefined;
 	}
 }
+
+const styles = StyleSheet.create((theme) => ({
+	header: {
+		paddingHorizontal: theme.spacing(5),
+		paddingTop: theme.spacing(5),
+		paddingBottom: theme.spacing(4),
+		gap: theme.spacing(1),
+		backgroundColor: theme.colors.surface,
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.border,
+	},
+	headerTopRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: theme.spacing(3),
+	},
+	householdName: {
+		flex: 1,
+		color: theme.colors.textMuted,
+		fontSize: theme.fontSizes.footnote,
+		fontWeight: theme.fontWeights.semibold,
+	},
+	refreshButton: {
+		minHeight: theme.spacing(11),
+		paddingHorizontal: theme.spacing(2.5),
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: theme.colors.background,
+		borderWidth: theme.borders.hairline,
+		borderColor: theme.colors.border,
+	},
+	refreshButtonPressed: {
+		opacity: theme.opacities.pressed,
+	},
+	refreshButtonLabel: {
+		...theme.typography.caption,
+		color: theme.colors.text,
+		fontWeight: theme.fontWeights.bold,
+	},
+	listName: {
+		...theme.typography.largeTitle,
+		color: theme.colors.text,
+	},
+	progressLabel: {
+		...theme.typography.callout,
+		color: theme.colors.textMuted,
+	},
+	syncStatus: {
+		...theme.typography.captionStrong,
+		color: theme.colors.textMuted,
+	},
+	syncStatusSynced: {
+		color: theme.colors.primary,
+	},
+	syncStatusPending: {
+		color: theme.colors.link,
+	},
+	syncStatusFailed: {
+		color: theme.colors.destructive,
+	},
+	errorMessage: {
+		fontSize: theme.fontSizes.footnote,
+		fontWeight: theme.fontWeights.semibold,
+		marginTop: theme.spacing(2),
+		color: theme.colors.destructive,
+	},
+}));
