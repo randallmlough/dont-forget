@@ -86,6 +86,7 @@ export function ActiveListProvider({
 
 	useEffect(() => {
 		const subscription = syncCoordinator.subscribe(syncStatusChanged);
+		syncStatusChanged(syncCoordinator.getStatus());
 		return () => {
 			subscription.remove();
 		};

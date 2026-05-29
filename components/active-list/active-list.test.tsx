@@ -129,6 +129,18 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Offline - changes saved locally")).toBeTruthy();
 	});
 
+	it("samples sync status after subscribing", async () => {
+		const coordinator = syncCoordinatorWithPostSubscribeStatus("offline");
+
+		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
+
+		expect(coordinator.subscribe).toHaveBeenCalledTimes(1);
+		expect(
+			await screen.findByText("Offline - changes saved locally"),
+		).toBeTruthy();
+		expect(coordinator.getStatus).toHaveBeenCalledTimes(2);
+	});
+
 	it("requests local-write sync after adding an Item", async () => {
 		const coordinator = controllableSyncCoordinator("synced");
 
@@ -347,6 +359,27 @@ function passiveSyncCoordinator(
 ): ActiveListSyncCoordinator {
 	return {
 		getStatus: () => status,
+		subscribe: jest.fn(() => ({ remove() {} })),
+		requestSync: jest.fn<
+			ReturnType<ActiveListSyncCoordinator["requestSync"]>,
+			Parameters<ActiveListSyncCoordinator["requestSync"]>
+		>(async () => ({ changed: false })),
+	};
+}
+
+function syncCoordinatorWithPostSubscribeStatus(
+	status: ReturnType<ActiveListSyncCoordinator["getStatus"]>,
+): ActiveListSyncCoordinator {
+	let sampled = false;
+
+	return {
+		getStatus: jest.fn(() => {
+			if (!sampled) {
+				sampled = true;
+				return "synced";
+			}
+			return status;
+		}),
 		subscribe: jest.fn(() => ({ remove() {} })),
 		requestSync: jest.fn<
 			ReturnType<ActiveListSyncCoordinator["requestSync"]>,
