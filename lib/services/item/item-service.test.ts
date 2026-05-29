@@ -1,6 +1,7 @@
 import { itemChecks, items, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import type { Logger } from "@/lib/logger";
+import type { HouseholdSqlStatement } from "@/lib/services/household";
 
 import { createItemService } from "./item-service";
 
@@ -247,6 +248,37 @@ describe("createItemService", () => {
 		} finally {
 			await household.close();
 		}
+	});
+
+	it("allocates Item position inside the insert statement", async () => {
+		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
+			const sql = typeof statement === "string" ? statement : statement.sql;
+			if (sql.includes("SELECT position FROM items")) {
+				return { rows: [{ position: 4 }] };
+			}
+			return { rows: [] };
+		});
+		const service = createItemService({
+			householdId: "hh_avery",
+			store: { execute },
+			logger: testLogger,
+			analytics: analyticsFixture(),
+		});
+
+		await expect(
+			service.addItem({
+				listId: "lst_weekend",
+				userId: "usr_avery",
+				name: "Milk",
+			}),
+		).resolves.toMatchObject({ position: 4 });
+
+		const firstStatement = execute.mock.calls[0]?.[0];
+		const firstSql =
+			typeof firstStatement === "string" ? firstStatement : firstStatement?.sql;
+		expect(firstSql).toContain("INSERT INTO items");
+		expect(firstSql).toContain("COALESCE(MAX(position), -1) + 1");
+		expect(firstSql).not.toMatch(/^\s*SELECT COALESCE\(MAX\(position\)/);
 	});
 
 	it("rejects empty Item names before writing", async () => {

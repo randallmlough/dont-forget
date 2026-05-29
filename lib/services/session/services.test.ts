@@ -71,9 +71,6 @@ describe("createSessionDataServices", () => {
 		});
 
 		expect(store.execute).toHaveBeenCalledWith(
-			expect.objectContaining({ args: ["lst_default_groceries"] }),
-		);
-		expect(store.execute).toHaveBeenCalledWith(
 			expect.objectContaining({
 				args: expect.arrayContaining(["lst_default_groceries", "Eggs"]),
 			}),

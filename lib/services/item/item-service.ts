@@ -121,7 +121,6 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 			}
 
 			try {
-				const position = await nextPosition(deps.store, input.listId);
 				const now = nextItemServiceTimestamp();
 				const id = createAppId("itm", randomUuid);
 
@@ -134,12 +133,22 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
               position,
               created_by_user_id,
               created_at,
-              updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `,
-					args: [id, input.listId, name, position, input.userId, now, now],
+	              updated_at
+	            )
+	            SELECT
+	              ?,
+	              ?,
+	              ?,
+	              COALESCE(MAX(position), -1) + 1,
+	              ?,
+	              ?,
+	              ?
+	            FROM items
+	            WHERE list_id = ? AND deleted_at IS NULL
+	          `,
+					args: [id, input.listId, name, input.userId, now, now, input.listId],
 				});
+				const position = await insertedItemPosition(deps.store, id);
 
 				const item = {
 					id,
@@ -214,16 +223,16 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 	};
 }
 
-async function nextPosition(
+async function insertedItemPosition(
 	store: HouseholdStoreExecutor,
-	listId: string,
+	itemId: string,
 ): Promise<number> {
 	const result = await store.execute({
-		sql: "SELECT COALESCE(MAX(position), -1) + 1 AS position FROM items WHERE list_id = ? AND deleted_at IS NULL",
-		args: [listId],
+		sql: "SELECT position FROM items WHERE id = ? LIMIT 1",
+		args: [itemId],
 	});
 	const value = result.rows[0]?.position;
-	return typeof value === "number" ? value : Number(value ?? 0);
+	return sqlNumberSchema.parse(value);
 }
 
 function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
