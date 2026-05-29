@@ -109,6 +109,7 @@ export function AuthenticatedAppSessionProvider({
 			authReady,
 			signedIn,
 		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- getToken is a React Effect Event that supplies the latest token callback without reactivating on token identity changes.
 	}, [authReady, signedIn, controller, activationRequest, signOutRunningState]);
 
 	useEffect(() => {

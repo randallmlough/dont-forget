@@ -89,6 +89,7 @@ export function ActiveListProvider({
 		return () => {
 			subscription.remove();
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- syncStatusChanged is a React Effect Event; resubscribe only when the coordinator changes.
 	}, [syncCoordinator]);
 
 	function requestLocalWriteSync() {
