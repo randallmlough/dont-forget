@@ -217,6 +217,46 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(clearSignedOutData).toHaveBeenCalledWith([]);
 	});
 
+	it("uses the latest sign-out dependencies after provider rerender", async () => {
+		const controller = authenticatedAppSessionControllerFixture();
+		const auth = authFixture();
+		const firstAnalytics = { track: jest.fn(), reset: jest.fn() };
+		const nextAnalytics = { track: jest.fn(), reset: jest.fn() };
+		const firstClearSignedOutData = jest.fn(async () => undefined);
+		const nextClearSignedOutData = jest.fn(async () => undefined);
+		const { rerender } = render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={auth}
+				analytics={firstAnalytics}
+				clearSignedOutSessionData={firstClearSignedOutData}
+			>
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		rerender(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={auth}
+				analytics={nextAnalytics}
+				clearSignedOutSessionData={nextClearSignedOutData}
+			>
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(firstAnalytics.track).not.toHaveBeenCalled();
+		expect(firstAnalytics.reset).not.toHaveBeenCalled();
+		expect(firstClearSignedOutData).not.toHaveBeenCalled();
+		expect(nextAnalytics.track).toHaveBeenCalledWith("user_signed_out", {});
+		expect(nextAnalytics.reset).toHaveBeenCalledTimes(1);
+		expect(nextClearSignedOutData).toHaveBeenCalledWith([]);
+	});
+
 	it("passes disposed Household IDs to signed-out cleanup", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		controller.dispose.mockResolvedValue({
