@@ -6,29 +6,29 @@ import type {
 import type { Item } from "@/lib/services/item";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 
-export type ListActions = {
+export type HomeCurrentListActions = {
 	loadList: () => Promise<ActiveListInitialState>;
 	addItem: (name: string) => Promise<ActiveListItem>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
-export type ListState =
+export type HomeCurrentListState =
 	| { status: "loading"; retryAttempt: number }
 	| { status: "error"; message: string }
 	| {
 			status: "ready";
 			initialList: ActiveListInitialState;
-			actions: ListActions;
+			actions: HomeCurrentListActions;
 	  };
 
-export function useList(
+export function useHomeCurrentList(
 	session: AuthenticatedAppSession,
 	listId: string,
 ): {
-	state: ListState;
+	state: HomeCurrentListState;
 	retry: () => void;
 } {
-	const [state, setState] = useState<ListState>({
+	const [state, setState] = useState<HomeCurrentListState>({
 		status: "loading",
 		retryAttempt: 0,
 	});
@@ -97,7 +97,7 @@ export function useList(
 		[session.activeMember.userId, session.services.items, listId],
 	);
 
-	const actions = useMemo<ListActions>(
+	const actions = useMemo<HomeCurrentListActions>(
 		() => ({ addItem, loadList, setItemChecked }),
 		[addItem, loadList, setItemChecked],
 	);

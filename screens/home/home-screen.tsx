@@ -8,9 +8,9 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/components/session";
-import { useList } from "@/hooks/use-list";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { useHomeCurrentList } from "./use-home-current-list";
 
 export type HomeScreenViewProps = {
 	state: AuthenticatedAppSessionState;
@@ -64,7 +64,7 @@ export function HomeScreenView({
 			</View>
 
 			{session ? (
-				<DefaultListContent
+				<CurrentListContent
 					key={session.resourceKey}
 					currentMemberName={displayMemberName}
 					session={session}
@@ -96,14 +96,14 @@ export function HomeScreenView({
 	);
 }
 
-function DefaultListContent({
+function CurrentListContent({
 	session,
 	currentMemberName,
 }: {
 	session: AuthenticatedAppSession;
 	currentMemberName: string;
 }) {
-	const list = useList(session, DEFAULT_LIST_ID);
+	const list = useHomeCurrentList(session, DEFAULT_LIST_ID);
 	const loadState = list.state;
 
 	if (loadState.status === "loading") {
