@@ -24,12 +24,17 @@ export type AuthenticatedAppSessionSignOut = {
 	run: () => Promise<void>;
 };
 
+export type AuthenticatedAppSessionSignOutRunningState = {
+	running: boolean;
+};
+
 export type AuthenticatedAppSessionSignOutDeps = {
 	controller: AuthenticatedAppSessionController;
 	getAuth: () => AuthenticatedAppSessionSignOutAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearSignedOutSessionData?: typeof defaultClearSignedOutSessionData;
 	logger?: Logger;
+	runningState?: AuthenticatedAppSessionSignOutRunningState;
 };
 
 const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
@@ -43,12 +48,13 @@ export function createAuthenticatedAppSessionSignOut({
 	analytics = defaultAnalytics,
 	clearSignedOutSessionData = defaultClearSignedOutSessionData,
 	logger = defaultLogger,
+	runningState,
 }: AuthenticatedAppSessionSignOutDeps): AuthenticatedAppSessionSignOut {
-	let running = false;
+	const state = runningState ?? { running: false };
 
 	async function run() {
-		if (running) return;
-		running = true;
+		if (state.running) return;
+		state.running = true;
 		const signOut = getAuth().signOut;
 
 		analytics.track("user_signed_out", {});
@@ -97,12 +103,12 @@ export function createAuthenticatedAppSessionSignOut({
 			}
 			throw error;
 		} finally {
-			running = false;
+			state.running = false;
 		}
 	}
 
 	return {
-		isRunning: () => running,
+		isRunning: () => state.running,
 		run,
 	};
 }

@@ -21,7 +21,8 @@
 		"db:migrate": "tsx db/migrate.ts",
 		"db:reset": "tsx db/reset.ts",
 		"db:seed": "tsx scripts/seed.ts",
-		"db:reseed": "tsx scripts/reseed.ts"
+		"db:reseed": "tsx scripts/reseed.ts",
+		"doctor": "npx react-doctor@latest"
 	},
 	"dependencies": {
 		"@babel/core": "^7.29.0",

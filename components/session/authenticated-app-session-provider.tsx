@@ -2,11 +2,10 @@ import { useAuth } from "@clerk/clerk-expo";
 import {
 	createContext,
 	type PropsWithChildren,
-	useCallback,
-	useContext,
+	use,
 	useEffect,
-	useMemo,
-	useRef,
+	useEffectEvent,
+	useReducer,
 	useState,
 } from "react";
 import { reset, track } from "@/lib/analytics";
@@ -15,7 +14,6 @@ import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionActivation,
 	type AuthenticatedAppSessionController,
-	type AuthenticatedAppSessionSignOut,
 	type AuthenticatedAppSessionSignOutAnalytics,
 	type AuthenticatedAppSessionStateSnapshot,
 	createAuthenticatedAppSessionController,
@@ -64,94 +62,55 @@ export function AuthenticatedAppSessionProvider({
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
 	const logger = useLogger();
-	const auth = useMemo(
-		() =>
-			authProp ?? {
-				getToken: clerkAuth.getToken,
-				authReady: clerkAuth.isLoaded,
-				signedIn: Boolean(clerkAuth.isSignedIn),
-				signOut: clerkAuth.signOut,
-			},
-		[
-			authProp,
-			clerkAuth.getToken,
-			clerkAuth.isLoaded,
-			clerkAuth.isSignedIn,
-			clerkAuth.signOut,
-		],
+	const clerkGetToken = clerkAuth.getToken;
+	const clerkAuthReady = clerkAuth.isLoaded;
+	const clerkSignedIn = Boolean(clerkAuth.isSignedIn);
+	const clerkSignOut = clerkAuth.signOut;
+	const auth = providerAuthFromClerk(authProp, {
+		getToken: clerkGetToken,
+		authReady: clerkAuthReady,
+		signedIn: clerkSignedIn,
+		signOut: clerkSignOut,
+	});
+	const authReady = auth.authReady;
+	const signedIn = auth.signedIn;
+	const [controller] = useState<AuthenticatedAppSessionController>(
+		() => controllerProp ?? createAuthenticatedAppSessionController(),
 	);
-	const controllerRef = useRef<AuthenticatedAppSessionController | null>(null);
-	controllerRef.current ??=
-		controllerProp ?? createAuthenticatedAppSessionController();
-	const controller = controllerRef.current;
 	const [snapshot, setSnapshot] =
 		useState<AuthenticatedAppSessionStateSnapshot>(() =>
 			controller.getSnapshot(),
 		);
-	const [retryAttempt, setRetryAttempt] = useState(0);
-	const authRef = useRef(auth);
-	useEffect(() => {
-		authRef.current = auth;
-	}, [auth]);
-	const analyticsRef = useRef(analytics);
-	useEffect(() => {
-		analyticsRef.current = analytics;
-	}, [analytics]);
-	const clearSignedOutSessionDataRef = useRef(clearSignedOutSessionDataProp);
-	useEffect(() => {
-		clearSignedOutSessionDataRef.current = clearSignedOutSessionDataProp;
-	}, [clearSignedOutSessionDataProp]);
-	const loggerRef = useRef(logger);
-	useEffect(() => {
-		loggerRef.current = logger;
-	}, [logger]);
-	const signOutFlowRef = useRef<AuthenticatedAppSessionSignOut | null>(null);
-	signOutFlowRef.current ??= createAuthenticatedAppSessionSignOut({
+	const [activationRequest, requestActivation] = useReducer(
+		(attempt: number) => attempt + 1,
+		0,
+	);
+	const [signOutRunningState] = useState(() => ({ running: false }));
+	const getToken = useEffectEvent(() => auth.getToken());
+	const signOutFlow = createAuthenticatedAppSessionSignOut({
 		controller,
-		getAuth: () => authRef.current,
-		analytics: {
-			track: (...args) => analyticsRef.current.track(...args),
-			reset: () => analyticsRef.current.reset(),
-		},
-		clearSignedOutSessionData: (...args) =>
-			clearSignedOutSessionDataRef.current(...args),
-		logger: {
-			debug: (...args) => loggerRef.current.debug(...args),
-			info: (...args) => loggerRef.current.info(...args),
-			warn: (...args) => loggerRef.current.warn(...args),
-			error: (...args) => loggerRef.current.error(...args),
-			with: (...args) => loggerRef.current.with(...args),
-		},
+		getAuth: () => auth,
+		analytics,
+		clearSignedOutSessionData: clearSignedOutSessionDataProp,
+		logger,
+		runningState: signOutRunningState,
 	});
-	const signOutFlow = signOutFlowRef.current;
-	const getTokenRef = useRef(auth.getToken);
-	useEffect(() => {
-		getTokenRef.current = auth.getToken;
-	}, [auth.getToken]);
-	const getToken = useCallback(() => getTokenRef.current(), []);
 
 	useEffect(() => {
 		const subscription = controller.subscribe(setSnapshot);
-		setSnapshot(controller.getSnapshot());
 		return () => subscription.remove();
 	}, [controller]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: retryAttempt intentionally retriggers authenticated app session activation.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: activationRequest intentionally retriggers authenticated app session activation.
 	useEffect(() => {
-		if (signOutFlow.isRunning()) return;
+		if (signOutRunningState.running) return;
 		void controller.activate({
 			getToken,
-			authReady: auth.authReady,
-			signedIn: auth.signedIn,
+			authReady,
+			signedIn,
 		});
-	}, [
-		auth.authReady,
-		auth.signedIn,
-		controller,
-		getToken,
-		retryAttempt,
-		signOutFlow,
-	]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- getToken is a React Effect Event that supplies the latest token callback without reactivating on token identity changes.
+	}, [authReady, signedIn, controller, activationRequest, signOutRunningState]);
 
 	useEffect(() => {
 		return () => {
@@ -159,18 +118,15 @@ export function AuthenticatedAppSessionProvider({
 		};
 	}, [controller]);
 
-	const retry = useCallback(() => {
-		setRetryAttempt((attempt) => attempt + 1);
-	}, []);
+	function retry() {
+		requestActivation();
+	}
 
-	const value = useMemo<AuthenticatedAppSessionContextValue>(
-		() => ({
-			...publicStateFromSnapshot(snapshot),
-			retry,
-			signOut: signOutFlow.run,
-		}),
-		[retry, signOutFlow, snapshot],
-	);
+	const value: AuthenticatedAppSessionContextValue = {
+		...publicStateFromSnapshot(snapshot),
+		retry,
+		signOut: signOutFlow.run,
+	};
 
 	return (
 		<AuthenticatedAppSessionContext.Provider value={value}>
@@ -179,8 +135,15 @@ export function AuthenticatedAppSessionProvider({
 	);
 }
 
+function providerAuthFromClerk(
+	authProp: AuthenticatedAppSessionProviderAuth | undefined,
+	clerkAuth: AuthenticatedAppSessionProviderAuth,
+): AuthenticatedAppSessionProviderAuth {
+	return authProp ?? clerkAuth;
+}
+
 export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValue {
-	const value = useContext(AuthenticatedAppSessionContext);
+	const value = use(AuthenticatedAppSessionContext);
 	if (!value) {
 		throw new Error(
 			"useAuthenticatedAppSession must be used inside AuthenticatedAppSessionProvider",

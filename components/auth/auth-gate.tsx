@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { Stack, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
+import { useEffect, useReducer } from "react";
 import { useAnalyticsIdentity } from "@/lib/analytics";
 import { hasCachedAuthenticatedAppSession } from "@/lib/services/session";
 
@@ -11,46 +11,48 @@ type CachedSessionStatus = "checking" | "available" | "unavailable";
 
 export function AuthGate({ pathname }: { pathname: string }) {
 	const { isSignedIn, isLoaded } = useAuth();
-	const router = useRouter();
-	const onAuthScreen = AUTH_PATHS.has(pathname);
-	const [cachedSessionStatus, setCachedSessionStatus] =
-		useState<CachedSessionStatus>("checking");
-	const hasCachedSession = cachedSessionStatus === "available";
-	const checkedCachedSession = cachedSessionStatus !== "checking";
+	const { replace } = useRouter();
+	const [cachedSessionStatus, dispatchCachedSessionStatus] = useReducer(
+		cachedSessionStatusReducer,
+		"checking",
+	);
+	const effectiveCachedSessionStatus = isLoaded
+		? "unavailable"
+		: cachedSessionStatus;
+	const hasCachedSession = effectiveCachedSessionStatus === "available";
+	const checkedCachedSession = effectiveCachedSessionStatus !== "checking";
 
 	useAnalyticsIdentity();
 
 	useEffect(() => {
+		if (isLoaded) return;
 		let cancelled = false;
-		setCachedSessionStatus("checking");
-		if (isLoaded && !isSignedIn) {
-			setCachedSessionStatus("unavailable");
-			return;
-		}
 
 		void hasCachedAuthenticatedAppSession()
 			.then((hasCachedSession) => {
 				if (!cancelled) {
-					setCachedSessionStatus(
+					dispatchCachedSessionStatus(
 						hasCachedSession ? "available" : "unavailable",
 					);
 				}
 			})
 			.catch(() => {
 				if (!cancelled) {
-					setCachedSessionStatus("unavailable");
+					dispatchCachedSessionStatus("unavailable");
 				}
 			});
 
 		return () => {
 			cancelled = true;
 		};
-	}, [isLoaded, isSignedIn]);
+	}, [isLoaded]);
 
 	useEffect(() => {
+		const onAuthScreen = AUTH_PATHS.has(pathname);
+
 		if (isSignedIn) {
 			if (onAuthScreen) {
-				router.replace("/");
+				replace("/");
 			}
 			return;
 		}
@@ -59,21 +61,21 @@ export function AuthGate({ pathname }: { pathname: string }) {
 
 		if (hasCachedSession) {
 			if (onAuthScreen) {
-				router.replace("/");
+				replace("/");
 			}
 			return;
 		}
 
 		if (isLoaded && !onAuthScreen) {
-			router.replace("/sign-in");
+			replace("/sign-in");
 		}
 	}, [
 		checkedCachedSession,
 		hasCachedSession,
 		isLoaded,
 		isSignedIn,
-		onAuthScreen,
-		router,
+		pathname,
+		replace,
 	]);
 
 	// Warm up the OAuth browser once while truly signed-out so the first SSO tap is snappy.
@@ -93,4 +95,11 @@ export function AuthGate({ pathname }: { pathname: string }) {
 			<Stack.Screen name="(auth)" />
 		</Stack>
 	);
+}
+
+function cachedSessionStatusReducer(
+	_status: CachedSessionStatus,
+	nextStatus: CachedSessionStatus,
+): CachedSessionStatus {
+	return nextStatus;
 }

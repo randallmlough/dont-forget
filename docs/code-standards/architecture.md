@@ -60,9 +60,16 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** keep feature-specific data loading and mutation lifecycle out of `app/_layout.tsx`.
 - **Must** initialize signed-in authenticated app session infrastructure from the authenticated route group (`app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
 - **Must** make screens and reusable components borrow controller-owned authenticated app session resources and actions; they must not open or close HouseholdStore resources directly.
+- **Must** create provider-owned controllers, resource managers, and long-lived service adapters with lazy initialization, not render-time ref assignment.
+- **Must** make provider activation, subscription, and disposal effects depend on the owned controller or resource identity.
+- **Must** keep sign-out, disposal, cleanup, and recovery order centralized in the owning runtime module instead of duplicating it in components.
+- **Must** keep auth routing effects separate from cache probes and native SDK warmup effects.
+- **Must** derive effective auth and cache state from authoritative auth readiness state instead of storing duplicate signed-in or signed-out booleans.
 - **Must** call `setActive(...)` after successful Clerk auth attempts.
 - **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose authenticated app session resources, clear local Household cache/DB files when that path exists, then call `signOut()`.
+- **Should** use `useEffectEvent` when an effect needs the latest callback without reactivating provider lifecycle.
 - **Should** extract root effect logic into named hooks when it has branching, cleanup, or testable behavior.
+- **Should** keep route membership checks inside the redirect effect when the result is only used for navigation synchronization.
 - **Avoid** using root layout as a catch-all initialization file for feature state.
 
 ## Data Boundaries

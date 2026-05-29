@@ -18,8 +18,10 @@
 - **Must** test diagnostic logging when the log is part of an error-handling contract.
 - **Must** mock logging sinks in tests to avoid noisy expected error output.
 - **Must** prefer injected logger fixtures or narrow analytics test doubles for services and stores over module-mocking app-wide observability singletons.
+- **Must** make regression fakes fail for the broken ordering or race they are proving, not just pass for the fixed final outcome.
 - **Must** prove Household, Member, Owner, Invitation, List, Item, Authenticated App Session, and sync product behavior through integration-style tests unless the behavior is pure logic, a narrow adapter, or a deliberately controlled race case.
 - **Should** use focused unit tests for pure helpers and narrow adapters.
+- **Should** mutate race-control fake state at the causal boundary under test, such as inside `subscribe()` when proving post-subscribe sampling.
 - **Should** test state machines through their discriminated variants rather than boolean combinations.
 - **Should** assert the resulting state shape rather than implementation details like action ordering.
 - **Should** assert diagnostic log messages and safe context shape, not implementation details of the logger adapter.

@@ -108,16 +108,6 @@ export function createSessionResourceLease(
 	};
 }
 
-export function isStaleAuthenticatedAppSessionResourceError(
-	error: unknown,
-): error is StaleAuthenticatedAppSessionResourceError {
-	return (
-		error instanceof Error &&
-		"code" in error &&
-		error.code === "stale_authenticated_app_session_resource"
-	);
-}
-
 export function staleAuthenticatedAppSessionResourceError(): StaleAuthenticatedAppSessionResourceError {
 	return Object.assign(
 		new Error("Authenticated app session resource is stale"),

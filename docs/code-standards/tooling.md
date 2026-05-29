@@ -39,3 +39,9 @@
 - **Should** export only the types, components, and functions intended for other features to consume.
 - **Avoid** root-level or folder-level barrel files that re-export unrelated components, utilities, or heavy modules for convenience.
 - **Avoid** importing from a feature entrypoint inside that same feature because it obscures dependency direction.
+
+## Dead Export Cleanup
+
+- **Must** verify local reachability before removing an export flagged as unused.
+- **Must** search source, tests, stories, generated entrypoints, and documented dynamic imports before deleting exported symbols.
+- **Should** remove only the unused export surface when the underlying type or function is still useful inside its module.
