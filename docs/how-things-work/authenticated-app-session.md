@@ -46,7 +46,7 @@ The provider maps `ready` snapshots, and `loading` snapshots with a previous ses
 
 ## Boundary
 
-The controller owns Authenticated App Session loading and composes the signed-in Household dependencies in one place: `HouseholdStore` access, List and Item services, sync fallback, and the sync coordinator. Activation publishes those app-shell resources without loading the Current List, Lists, or Items. Consumers borrow handles and never close services, stop coordinators, or delete Household DB files directly.
+The controller owns Authenticated App Session loading and composes the signed-in Household dependencies in one place: `HouseholdStore` access, List and Item services, native sync access, and the sync coordinator. Activation publishes those app-shell resources without loading the Current List, Lists, or Items. Consumers borrow handles and never close services, stop coordinators, or delete Household DB files directly.
 
 Route-owned loading code chooses a List ID and calls services explicitly. Home uses `DEFAULT_LIST_ID` for now, then calls `getList({ listId })`, `listItems({ listId })`, `addItem({ listId, ... })`, and `setItemChecked({ listId, ... })` only after `session` exists. `ActiveList` receives loaded state and explicit callbacks; it does not receive a Current List data source.
 

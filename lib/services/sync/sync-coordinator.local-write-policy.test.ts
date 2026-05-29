@@ -6,6 +6,7 @@ import {
 	refreshableNetworkStatus,
 	stopActiveCoordinators,
 } from "./sync-coordinator.test-helpers";
+import { SyncInterruptedError } from "./sync-errors";
 
 describe("createSyncCoordinator local write policy", () => {
 	afterEach(stopActiveCoordinators);
@@ -51,7 +52,7 @@ describe("createSyncCoordinator local write policy", () => {
 		const networkStatus = refreshableNetworkStatus("online", "online");
 		const sync = jest
 			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
-			.mockRejectedValueOnce(new TypeError("Network request failed"))
+			.mockRejectedValueOnce(syncInterruptedError())
 			.mockResolvedValue({ changed: false });
 		const coordinator = createCoordinator({
 			logger,
@@ -80,7 +81,7 @@ describe("createSyncCoordinator local write policy", () => {
 		const networkStatus = refreshableNetworkStatus("online", "online");
 		const sync = jest
 			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
-			.mockRejectedValueOnce(new TypeError("Network request failed"))
+			.mockRejectedValueOnce(syncInterruptedError())
 			.mockResolvedValue({ changed: true });
 		const coordinator = createCoordinator({
 			networkStatus,
@@ -108,3 +109,10 @@ describe("createSyncCoordinator local write policy", () => {
 		expect(coordinator.getStatus()).toBe("synced");
 	});
 });
+
+function syncInterruptedError() {
+	return new SyncInterruptedError(
+		"networkUnavailable",
+		new TypeError("Network request failed"),
+	);
+}

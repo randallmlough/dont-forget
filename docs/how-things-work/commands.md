@@ -25,7 +25,6 @@ App and Storybook make targets default to `APP_ENV=local` unless you pass anothe
 | --- | --- |
 | `make start` | Start Expo for normal app development. |
 | `make ios` | Run the native iOS target. |
-| `make reset-project` | Run Expo's starter reset script. Use only when intentionally resetting scaffolded files. |
 
 ## Storybook
 

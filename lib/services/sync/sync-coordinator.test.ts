@@ -13,6 +13,7 @@ import {
 	refreshableNetworkStatus,
 	stopActiveCoordinators,
 } from "./sync-coordinator.test-helpers";
+import { SyncInterruptedError } from "./sync-errors";
 
 describe("createSyncCoordinator", () => {
 	afterEach(stopActiveCoordinators);
@@ -250,12 +251,12 @@ describe("createSyncCoordinator", () => {
 		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
 	});
 
-	it("transitions network-unavailable failures to offline without error logging", async () => {
+	it("transitions typed sync interruptions to offline without error logging", async () => {
 		const logger = loggerFixture();
 		const coordinator = createCoordinator({
 			logger,
 			sync: jest.fn(async () => {
-				throw new TypeError("Network request failed");
+				throw syncInterruptedError();
 			}),
 		});
 
@@ -524,74 +525,6 @@ describe("createSyncCoordinator", () => {
 		expect(sync).toHaveBeenLastCalledWith({ mode: "full" });
 	});
 
-	it("logs unexpected native sync failure once when fallback then fails offline", async () => {
-		const logger = loggerFixture();
-		const nativeError = new Error("native sync failed");
-		const fallbackError = Object.assign(
-			new TypeError("Network request failed"),
-			{ nativeSyncError: nativeError },
-		);
-		const coordinator = createCoordinator({
-			logger,
-			sync: jest.fn(async () => {
-				throw fallbackError;
-			}),
-		});
-
-		await coordinator.requestSync({ reason: "localWrite" });
-
-		expect(coordinator.getStatus()).toBe("offline");
-		expect(logger.error).toHaveBeenCalledTimes(1);
-		expect(logger.error).toHaveBeenCalledWith(
-			"household native sync failed before fallback",
-			{
-				error: nativeError,
-				reason: "localWrite",
-			},
-		);
-	});
-
-	it("keeps recovered native checkpoint interruptions quiet", async () => {
-		const logger = loggerFixture();
-		const coordinator = createCoordinator({
-			logger,
-			sync: jest.fn(async () => ({
-				changed: false,
-				recoveredNativeSyncError: new Error(
-					"sync engine operation failed: unable to checkpoint synced portion of WAL",
-				),
-			})),
-		});
-
-		await coordinator.requestSync({ reason: "manualRefresh" });
-
-		expect(coordinator.getStatus()).toBe("synced");
-		expect(logger.error).not.toHaveBeenCalled();
-		expect(logger.warn).not.toHaveBeenCalled();
-	});
-
-	it("warns once at the coordinator boundary when fallback recovers an unexpected native failure", async () => {
-		const logger = loggerFixture();
-		const nativeError = new Error("native sync failed");
-		const coordinator = createCoordinator({
-			logger,
-			sync: jest.fn(async () => ({
-				changed: false,
-				recoveredNativeSyncError: nativeError,
-			})),
-		});
-
-		await coordinator.requestSync({ reason: "manualRefresh" });
-
-		expect(coordinator.getStatus()).toBe("synced");
-		expect(logger.error).not.toHaveBeenCalled();
-		expect(logger.warn).toHaveBeenCalledTimes(1);
-		expect(logger.warn).toHaveBeenCalledWith("household sync recovered", {
-			error: nativeError,
-			reason: "manualRefresh",
-		});
-	});
-
 	it("logs and rethrows unexpected manual refresh failures", async () => {
 		const logger = loggerFixture();
 		const syncError = new Error("remote unavailable");
@@ -618,7 +551,7 @@ describe("createSyncCoordinator", () => {
 		jest.useFakeTimers();
 		const sync = jest
 			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
-			.mockRejectedValueOnce(new TypeError("Network request failed"))
+			.mockRejectedValueOnce(syncInterruptedError())
 			.mockResolvedValue({ changed: false });
 		const coordinator = createCoordinator({ sync });
 
@@ -649,7 +582,7 @@ describe("createSyncCoordinator", () => {
 		const retryError = new Error("retry failed");
 		const sync = jest
 			.fn<Promise<SyncResult>, [{ mode?: "full" | "pushLocalOnly" }?]>()
-			.mockRejectedValueOnce(new TypeError("Network request failed"))
+			.mockRejectedValueOnce(syncInterruptedError())
 			.mockRejectedValueOnce(foregroundError)
 			.mockRejectedValueOnce(retryError);
 		const coordinator = createCoordinator({ appState, logger, sync });
@@ -770,3 +703,10 @@ describe("createSyncCoordinator", () => {
 		expect(statuses).toEqual(["pending"]);
 	});
 });
+
+function syncInterruptedError() {
+	return new SyncInterruptedError(
+		"networkUnavailable",
+		new TypeError("Network request failed"),
+	);
+}

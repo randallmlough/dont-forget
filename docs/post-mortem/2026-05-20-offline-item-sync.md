@@ -93,11 +93,11 @@ The first offline retry fix retried every second and called full native sync. Wh
 
 This prevents local writes and sync operations from racing each other inside the same native DB file.
 
-### Add an app-owned remote upsert recovery path
+### Previously add an app-owned remote upsert recovery path
 
-The Active List data source now pushes local `lists`, `items`, and `item_checks` rows to the remote Household DB using an app-owned LWW upsert fallback. The fallback uses each row's app-owned `updated_at` value so it matches the domain conflict strategy documented in `CONTEXT.md` and ADR-0009.
+The Active List data source previously pushed local `lists`, `items`, and `item_checks` rows to the remote Household DB using an app-owned LWW upsert fallback. That fallback was later removed because native Turso Sync must be the single Household propagation path.
 
-Full manual sync still tries native sync first, then runs the app-owned upsert path.
+Full manual sync now runs native sync only, and sync failures return through the Household sync coordinator boundary.
 
 ### Move sync orchestration to the Active List component
 
@@ -112,11 +112,11 @@ The error helper now classifies:
 - offline network errors such as `Network request failed`
 - recoverable native sync engine interruptions such as `unable to checkpoint synced portion of WAL`
 
-Expected sync interruptions no longer emit app error logs when local data is safe or when fallback recovery succeeds.
+Expected sync interruptions no longer emit app error logs when local data is safe.
 
 ### Avoid native sync in automatic offline retry
 
-Automatic retry uses `sync({ mode: "pushLocalOnly" })`, which runs the app-owned remote upsert path without calling native Turso sync. This avoids the native `/pull-updates` loop while still allowing locally committed Items to reach the remote DB after connectivity returns.
+Automatic retry uses `sync({ mode: "pushLocalOnly" })`, which calls native `push()` without native pull work. This avoids the native `/pull-updates` loop while still allowing locally committed Items to reach the remote DB after connectivity returns.
 
 The retry cadence is 30 seconds while Home is foregrounded, plus an immediate attempt when the app returns active.
 
@@ -137,7 +137,7 @@ Automated checks added:
 - Active List shows offline state without discarding local Item changes.
 - Active List does not retry offline sync every second.
 - Automatic retry uses `pushLocalOnly`.
-- Active List data source can push local rows without native sync.
+- Active List data source can push local rows without native pull work.
 - Local Item/check writes do not start hidden sync attempts.
 
 Final proof:
@@ -156,7 +156,7 @@ Completed 2026-05-20. The current production data paths were reviewed after extr
 
 - `HouseholdStore` owns one long-lived native/local Turso sync handle and now uses the shared queue.
 - List and Item services receive a store and do not own a DB handle, so they inherit the store's serialization.
-- Active List remote upsert fallback opens a short-lived HTTP client and performs sequential statements; it does not share a native/local handle.
+- The removed Active List remote upsert path opened a short-lived HTTP client and did not share a native/local handle.
 - Server directory and Household clients in API routes, provisioning, migrations, and reset scripts are request- or command-scoped HTTP clients, so they do not need the native/local handle queue pattern.
 - Test DB helpers create local file clients for isolated Jest fixtures, but they are not app-owned production stores. Add the queue there only if a test helper begins to model a long-lived concurrent store.
 
@@ -193,17 +193,17 @@ Add a Maestro or RocketSim-driven flow once the project has a native E2E harness
 7. Return offline.
 8. Assert there is no one-second native sync error loop.
 
-### Keep sync fallback documented as temporary infrastructure
+### Keep native sync reliability at the store boundary
 
-The app-owned remote upsert fallback exists because native sync package `0.6.0` can strand local rows after checkpoint failures. Keep this in ADR-0009 and remove it only when a newer native sync path is proven not to strand offline writes.
+Native sync package `0.6.0` can strand local rows after checkpoint failures, but the app should not carry a parallel remote writer path. Keep native sync reliability work at the `HouseholdStore` or package boundary.
 
 ### Tighten observability contracts
 
 Add conventions for sync logging:
 
 - expected offline/unavailable states should be `debug` or silent
-- recoverable native sync failures should be silent when fallback succeeds
-- fallback failures should log only once at the data-source/coordinator boundary
+- recoverable native sync failures should be classified at the sync boundary
+- sync failures should log only once at the data-source/coordinator boundary
 - local write failures should remain errors because they affect user data safety
 
 ### Track pending local changes explicitly

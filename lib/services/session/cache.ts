@@ -202,47 +202,14 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 
 const defaultSessionCache = createSessionCache();
 
-export function saveCachedSessionBootstrap(
-	session: SessionBootstrap,
-): Promise<CachedSessionBootstrap> {
-	return defaultSessionCache.save(session);
-}
-
-export function readCachedSessionBootstrap(): Promise<CachedSessionBootstrap | null> {
-	return defaultSessionCache.read();
-}
-
 export async function hasCachedAuthenticatedAppSession(): Promise<boolean> {
 	return (await defaultSessionCache.read()) !== null;
-}
-
-export function readUnauthorizedCachedSessionBootstrap(
-	freshSession: SessionBootstrap,
-): Promise<CachedSessionBootstrap | null> {
-	return defaultSessionCache.readUnauthorized(freshSession);
-}
-
-export function clearUnauthorizedCachedSessionMetadata(
-	cached: CachedSessionBootstrap,
-	freshSession: SessionBootstrap,
-): Promise<void> {
-	return defaultSessionCache.clearUnauthorizedMetadata(cached, freshSession);
-}
-
-export function clearCachedSessionMetadata(): Promise<CachedSessionBootstrap | null> {
-	return defaultSessionCache.clearMetadata();
 }
 
 export function clearSignedOutSessionData(
 	householdIds?: string[],
 ): Promise<void> {
 	return defaultSessionCache.clearSignedOutData(householdIds);
-}
-
-export function deleteCachedSessionLocalData(
-	cached: CachedSessionBootstrap,
-): Promise<void> {
-	return defaultSessionCache.deleteLocalData(cached);
 }
 
 function cachedSessionIsStillAuthorized(

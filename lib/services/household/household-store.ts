@@ -1,16 +1,16 @@
 import { createDatabaseOperationQueue } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import type { SyncResult } from "@/lib/services/sync";
+import { nativeSyncInterruptedError } from "@/lib/services/sync/sync-errors";
+import type { SyncResult } from "@/lib/services/sync/sync-types";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
 
-export type HouseholdSqlStatement =
-	| string
-	| {
-			sql: string;
-			args?: HouseholdSqlValue[];
-	  };
+export type HouseholdSqlStatement = {
+	kind: "read" | "write";
+	sql: string;
+	args?: HouseholdSqlValue[];
+};
 
 export type HouseholdSqlResult = {
 	rows: Record<string, unknown>[];
@@ -140,8 +140,8 @@ export async function openHouseholdStore(
 		path,
 		syncAuthorized,
 		async execute(statement) {
-			const { sql, args } = normalizeStatement(statement);
-			if (isReadStatement(sql)) {
+			const { kind, sql, args } = normalizeStatement(statement);
+			if (kind === "read") {
 				return enqueueDatabaseOperation(async () => {
 					try {
 						const rows = await database.all(sql, args);
@@ -171,19 +171,23 @@ export async function openHouseholdStore(
 		},
 		async push() {
 			return enqueueDatabaseOperation(async () => {
-				await database.push();
+				await runNativeSyncOperation(() => database.push());
 			});
 		},
 		async pull() {
 			return enqueueDatabaseOperation(async () => {
-				return { changed: await database.pull() };
+				return { changed: await runNativeSyncOperation(() => database.pull()) };
 			});
 		},
 		async sync() {
 			return enqueueDatabaseOperation(async () => {
-				const changedBeforePush = await database.pull();
-				await database.push();
-				const changedAfterPush = await database.pull();
+				const changedBeforePush = await runNativeSyncOperation(() =>
+					database.pull(),
+				);
+				await runNativeSyncOperation(() => database.push());
+				const changedAfterPush = await runNativeSyncOperation(() =>
+					database.pull(),
+				);
 				return { changed: changedBeforePush || changedAfterPush };
 			});
 		},
@@ -225,23 +229,25 @@ export function householdStoreFilename(householdId: string): string {
 }
 
 function normalizeStatement(statement: HouseholdSqlStatement): {
+	kind: "read" | "write";
 	sql: string;
 	args: HouseholdSqlValue[];
 } {
-	if (typeof statement === "string") {
-		return { sql: statement, args: [] };
-	}
-
-	return { sql: statement.sql, args: statement.args ?? [] };
+	return {
+		kind: statement.kind,
+		sql: statement.sql,
+		args: statement.args ?? [],
+	};
 }
 
-function isReadStatement(sql: string): boolean {
-	const normalized = sql.trimStart().toLowerCase();
-	return (
-		normalized.startsWith("select") ||
-		normalized.startsWith("with") ||
-		normalized.startsWith("pragma")
-	);
+async function runNativeSyncOperation<T>(
+	operation: () => Promise<T>,
+): Promise<T> {
+	try {
+		return await operation();
+	} catch (error) {
+		throw nativeSyncInterruptedError(error) ?? error;
+	}
 }
 
 async function loadTursoRuntime(): Promise<TursoHouseholdStoreRuntime> {

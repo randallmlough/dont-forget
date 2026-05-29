@@ -22,11 +22,6 @@ export type SessionResource = {
 	syncCoordinator: SyncCoordinator;
 };
 
-type CreatedSessionResource = {
-	resource: SessionResource;
-	ready: Promise<void>;
-};
-
 export type OpenedSessionResource = {
 	resource: SessionResource;
 	resourceKey: string;
@@ -34,7 +29,7 @@ export type OpenedSessionResource = {
 
 export type CreateSessionDataServices = (
 	config: SessionDataServicesConfig,
-) => SessionDataServices;
+) => Promise<SessionDataServices>;
 
 export type CreateSyncCoordinator = (config: {
 	syncAuthorized: boolean;
@@ -44,7 +39,9 @@ export type CreateSyncCoordinator = (config: {
 
 type OpeningSessionResource = {
 	session: SessionResourceBootstrap;
-	resource: SessionResource;
+	resource?: SessionResource;
+	resourcePromise: Promise<SessionResource>;
+	cancelRequested: boolean;
 	closePromise?: Promise<void>;
 };
 
@@ -136,13 +133,13 @@ export function createSessionResourceManager(
 
 	async function createSessionResource(
 		session: SessionResourceBootstrap,
-	): Promise<CreatedSessionResource> {
+	): Promise<SessionResource> {
 		let dataServices: SessionDataServices | null = null;
 		try {
 			const householdLogger = logger.with({
 				household_id: session.activeHousehold.id,
 			});
-			const openedDataServices = createDataServices({
+			const openedDataServices = await createDataServices({
 				householdId: session.activeHousehold.id,
 				database: session.householdDatabase,
 				logger: householdLogger,
@@ -159,18 +156,15 @@ export function createSessionResourceManager(
 				logger: householdLogger,
 			});
 			return {
-				ready: openedDataServices.ready,
-				resource: {
-					lists: lease.services.lists,
-					items: lease.services.items,
-					close: (options) =>
-						lease.retireAndClose({
-							close: openedDataServices.close,
-							stopSync: syncCoordinator.stop,
-							waitForDrain: options?.waitForDrain,
-						}),
-					syncCoordinator,
-				},
+				lists: lease.services.lists,
+				items: lease.services.items,
+				close: (options) =>
+					lease.retireAndClose({
+						close: openedDataServices.close,
+						stopSync: syncCoordinator.stop,
+						waitForDrain: options?.waitForDrain,
+					}),
+				syncCoordinator,
 			};
 		} catch (error) {
 			await dataServices?.close().catch(() => undefined);
@@ -181,14 +175,18 @@ export function createSessionResourceManager(
 	async function openSessionResource(
 		session: SessionResourceBootstrap,
 	): Promise<OpenedSessionResource> {
-		const { ready, resource } = await createSessionResource(session);
-		const opening: OpeningSessionResource = { session, resource };
+		const opening: OpeningSessionResource = {
+			session,
+			resourcePromise: createSessionResource(session),
+			cancelRequested: false,
+		};
 		openingResources.add(opening);
 
 		try {
-			await ready;
-			if (opening.closePromise) {
-				await opening.closePromise;
+			const resource = await opening.resourcePromise;
+			opening.resource = resource;
+			if (opening.cancelRequested) {
+				await closeOpeningResource(opening);
 				throw staleAuthenticatedAppSessionResourceError();
 			}
 			const resourceKey = `authenticated-app-session:${nextResourceVersion}`;
@@ -198,8 +196,8 @@ export function createSessionResourceManager(
 				resourceKey,
 			};
 		} catch (error) {
-			if (!opening.closePromise) {
-				await closeResource(resource).catch(() => undefined);
+			if (opening.resource && !opening.closePromise) {
+				await closeResource(opening.resource).catch(() => undefined);
 			}
 			throw error;
 		} finally {
@@ -226,9 +224,16 @@ export function createSessionResourceManager(
 	}
 
 	function closeOpeningResource(opening: OpeningSessionResource) {
-		opening.closePromise ??= closeResource(opening.resource, {
-			waitForDrain: false,
-		});
+		opening.cancelRequested = true;
+		opening.closePromise ??= opening.resource
+			? closeResource(opening.resource, { waitForDrain: false })
+			: opening.resourcePromise.then(
+					(resource) => {
+						opening.resource = resource;
+						return closeResource(resource, { waitForDrain: false });
+					},
+					() => undefined,
+				);
 		return opening.closePromise;
 	}
 

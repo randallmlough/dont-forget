@@ -53,6 +53,7 @@ export function createListService(deps: ListServiceDeps): ListService {
 		async getList(input) {
 			try {
 				const result = await deps.store.execute({
+					kind: "read",
 					sql: `
             SELECT id, name, created_by_user_id, created_at, updated_at
             FROM lists

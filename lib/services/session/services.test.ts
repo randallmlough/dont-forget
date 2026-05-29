@@ -17,7 +17,7 @@ describe("createSessionDataServices", () => {
 
 	it("loads List and Item data through explicit listId service calls", async () => {
 		const store = storeFixture();
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -49,7 +49,7 @@ describe("createSessionDataServices", () => {
 
 	it("uses explicit listId for Item writes", async () => {
 		const store = storeFixture();
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -71,19 +71,17 @@ describe("createSessionDataServices", () => {
 		});
 
 		expect(store.execute).toHaveBeenCalledWith(
-			expect.objectContaining({ args: ["lst_default_groceries"] }),
-		);
-		expect(store.execute).toHaveBeenCalledWith(
 			expect.objectContaining({
 				args: expect.arrayContaining(["lst_default_groceries", "Eggs"]),
 			}),
 		);
 	});
 
-	it("reports ready only after the HouseholdStore opens", async () => {
+	it("creates services only after the HouseholdStore opens", async () => {
 		const store = storeFixture();
-		const openStore = jest.fn(async () => store);
-		const services = createSessionDataServices(
+		const openedStore = deferred<ReturnType<typeof storeFixture>>();
+		const openStore = jest.fn(() => openedStore.promise);
+		const servicesPromise = createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -91,49 +89,50 @@ describe("createSessionDataServices", () => {
 			},
 			{ openStore },
 		);
+		let resolved = false;
+		void servicesPromise.then(() => {
+			resolved = true;
+		});
+		await Promise.resolve();
 
-		await expect(services.ready).resolves.toBeUndefined();
+		expect(resolved).toBe(false);
 		expect(openStore).toHaveBeenCalledWith({
 			householdId: "hh_avery",
 			database: { url: "libsql://example", authToken: "secret" },
 		});
+
+		openedStore.resolve(store);
+		await expect(servicesPromise).resolves.toMatchObject({
+			syncAuthorized: true,
+		});
 	});
 
-	it("uses native sync result and still pushes local rows through the remote fallback", async () => {
+	it("uses native sync result for full sync", async () => {
 		const store = storeFixture();
 		store.sync.mockResolvedValueOnce({ changed: true });
-		const remote = remoteClientFixture();
-		const openRemoteClient = jest.fn(async () => remote);
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
-			{ store, openRemoteClient },
+			{ store },
 		);
 
 		await expect(services.sync()).resolves.toEqual({ changed: true });
 
 		expect(store.sync).toHaveBeenCalledTimes(1);
-		expect(openRemoteClient).toHaveBeenCalledWith({
-			url: "libsql://example",
-			authToken: "secret",
-		});
-		expect(remote.execute).toHaveBeenCalled();
-		expect(remote.close).toHaveBeenCalledTimes(1);
 	});
 
 	it("uses native push only for pushLocalOnly sync when native push succeeds", async () => {
 		const store = storeFixture();
-		const openRemoteClient = jest.fn(async () => remoteClientFixture());
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
-			{ store, openRemoteClient },
+			{ store },
 		);
 
 		await expect(services.sync({ mode: "pushLocalOnly" })).resolves.toEqual({
@@ -142,93 +141,38 @@ describe("createSessionDataServices", () => {
 
 		expect(store.push).toHaveBeenCalledTimes(1);
 		expect(store.sync).not.toHaveBeenCalled();
-		expect(openRemoteClient).not.toHaveBeenCalled();
 	});
 
-	it("falls back to remote push when native pushLocalOnly sync fails after local writes", async () => {
-		const store = storeFixture();
-		const nativeError = new Error("unable to checkpoint synced portion of WAL");
-		store.push.mockRejectedValueOnce(nativeError);
-		const remote = remoteClientFixture();
-		const openRemoteClient = jest.fn(async () => remote);
-		const services = createSessionDataServices(
-			{
-				householdId: "hh_avery",
-				database: { url: "libsql://example", authToken: "secret" },
-				logger,
-			},
-			{ store, openRemoteClient },
-		);
-
-		await expect(services.sync({ mode: "pushLocalOnly" })).resolves.toEqual({
-			changed: false,
-			recoveredNativeSyncError: nativeError,
-		});
-
-		expect(openRemoteClient).toHaveBeenCalledTimes(1);
-		expect(remote.execute).toHaveBeenCalled();
-		expect(remote.close).toHaveBeenCalledTimes(1);
-	});
-
-	it("falls back to remote push when full native sync fails after local writes", async () => {
-		const store = storeFixture();
-		const nativeError = new Error("native sync failed");
-		store.sync.mockRejectedValueOnce(nativeError);
-		const remote = remoteClientFixture();
-		const openRemoteClient = jest.fn(async () => remote);
-		const services = createSessionDataServices(
-			{
-				householdId: "hh_avery",
-				database: { url: "libsql://example", authToken: "secret" },
-				logger,
-			},
-			{ store, openRemoteClient },
-		);
-
-		await expect(services.sync()).resolves.toEqual({
-			changed: false,
-			recoveredNativeSyncError: nativeError,
-		});
-
-		expect(openRemoteClient).toHaveBeenCalledTimes(1);
-		expect(remote.execute).toHaveBeenCalled();
-		expect(remote.close).toHaveBeenCalledTimes(1);
-	});
-
-	it("does not run remote fallback when native sync fails offline", async () => {
+	it("propagates native sync failures", async () => {
 		const store = storeFixture();
 		const networkError = new TypeError("Network request failed");
 		store.sync.mockRejectedValueOnce(networkError);
-		const openRemoteClient = jest.fn(async () => remoteClientFixture());
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
-			{ store, openRemoteClient },
+			{ store },
 		);
 
 		await expect(services.sync()).rejects.toBe(networkError);
-		expect(openRemoteClient).not.toHaveBeenCalled();
 	});
 
-	it("does not run native or remote sync when the session is not authorized for sync", async () => {
+	it("does not run native sync when the session is not authorized for sync", async () => {
 		const store = storeFixture({ syncAuthorized: false });
-		const openRemoteClient = jest.fn(async () => remoteClientFixture());
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example" },
 				logger,
 			},
-			{ store, openRemoteClient },
+			{ store },
 		);
 
 		await expect(services.sync()).resolves.toEqual({ changed: false });
 		expect(store.sync).not.toHaveBeenCalled();
 		expect(store.push).not.toHaveBeenCalled();
-		expect(openRemoteClient).not.toHaveBeenCalled();
 	});
 });
 
@@ -236,8 +180,7 @@ function storeFixture(overrides: { syncAuthorized?: boolean } = {}) {
 	return {
 		syncAuthorized: overrides.syncAuthorized ?? true,
 		execute: jest.fn(async (statement: HouseholdSqlStatement) => {
-			const sql = typeof statement === "string" ? statement : statement.sql;
-			const args = typeof statement === "string" ? [] : statement.args;
+			const { sql, args = [] } = statement;
 			if (sql.includes("FROM lists")) {
 				return {
 					rows: [
@@ -280,9 +223,16 @@ function storeFixture(overrides: { syncAuthorized?: boolean } = {}) {
 	};
 }
 
-function remoteClientFixture() {
-	return {
-		execute: jest.fn(async () => undefined),
-		close: jest.fn(),
-	};
+function deferred<T>() {
+	let resolve: ((value: T) => void) | undefined;
+	let reject: ((error: Error) => void) | undefined;
+	const promise = new Promise<T>((nextResolve, nextReject) => {
+		resolve = nextResolve;
+		reject = nextReject;
+	});
+	if (!resolve || !reject) {
+		throw new Error("Unable to create deferred promise");
+	}
+
+	return { promise, resolve, reject };
 }

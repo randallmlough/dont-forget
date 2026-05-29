@@ -2,7 +2,7 @@ import type {
 	ActiveListItem,
 	ActiveListState,
 	ActiveListSyncState,
-} from "@/components/active-list";
+} from "./types";
 
 export type ActiveListModel = {
 	list: ActiveListState;

@@ -11,12 +11,20 @@ export {
 export type { SyncStatusSubscription } from "./subscription";
 export {
 	createSyncCoordinator,
-	type SyncCoordinator,
 	type SyncCoordinatorDeps,
-	type SyncMode,
-	type SyncOperation,
-	type SyncOptions,
-	type SyncRequestReason,
-	type SyncResult,
-	type SyncStatus,
 } from "./sync-coordinator";
+export {
+	isSyncInterruptedError,
+	nativeSyncInterruptedError,
+	SyncInterruptedError,
+	type SyncInterruptionReason,
+} from "./sync-errors";
+export type {
+	SyncCoordinator,
+	SyncMode,
+	SyncOperation,
+	SyncOptions,
+	SyncRequestReason,
+	SyncResult,
+	SyncStatus,
+} from "./sync-types";

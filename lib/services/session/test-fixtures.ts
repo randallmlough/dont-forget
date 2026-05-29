@@ -49,7 +49,6 @@ export function sessionDataServicesFixture(
 		overrides.items ?? itemServiceFixture({ addItem, setItemChecked });
 
 	return {
-		ready: overrides.ready ?? Promise.resolve(),
 		lists: overrides.lists ?? listServiceFixture(),
 		items,
 		syncAuthorized: overrides.syncAuthorized ?? true,

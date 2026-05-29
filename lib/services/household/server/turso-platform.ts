@@ -1,11 +1,8 @@
+import { z } from "zod";
+
 import { readTursoOperatorConfig, type TursoOperatorConfig } from "@/lib/env";
 
 type Fetch = typeof fetch;
-
-type TursoDatabasePayload = {
-	database?: Record<string, unknown>;
-	[key: string]: unknown;
-};
 
 export type TursoDatabase = {
 	name: string;
@@ -31,6 +28,22 @@ export type TursoPlatformClient = {
 		expiration: string,
 	) => Promise<string>;
 };
+
+const recordSchema = z.record(z.string(), z.unknown());
+
+const tursoDatabasePayloadSchema = z
+	.object({
+		database: recordSchema.optional(),
+	})
+	.passthrough();
+
+const tursoAuthTokenPayloadSchema = z
+	.object({
+		jwt: z.string().optional(),
+		token: z.string().optional(),
+		authToken: z.string().optional(),
+	})
+	.passthrough();
 
 export function createTursoPlatformClient(
 	config: TursoOperatorConfig = readTursoOperatorConfig(),
@@ -81,10 +94,8 @@ export function createTursoPlatformClient(
 	}
 
 	async function getDatabase(databaseName: string): Promise<TursoDatabase> {
-		const payload = (await request(
-			`/databases/${databaseName}`,
-		)) as TursoDatabasePayload;
-		return normalizeDatabase(payload);
+		const payload = await request(`/databases/${databaseName}`);
+		return normalizeDatabase(parseDatabasePayload(payload));
 	}
 
 	return {
@@ -94,11 +105,13 @@ export function createTursoPlatformClient(
 		},
 		getDatabase,
 		async createDatabaseAuthToken(databaseName: string, expiration: string) {
-			const payload = (await request(`/databases/${databaseName}/auth/tokens`, {
+			const payload = await request(`/databases/${databaseName}/auth/tokens`, {
 				method: "POST",
 				body: JSON.stringify({ authorization: "full-access", expiration }),
-			})) as Record<string, unknown>;
-			const token = payload.jwt ?? payload.token ?? payload.authToken;
+			});
+			const tokenPayload = parseAuthTokenPayload(payload);
+			const token =
+				tokenPayload.jwt ?? tokenPayload.token ?? tokenPayload.authToken;
 			if (typeof token !== "string" || token.length === 0) {
 				throw new TursoPlatformError(
 					"Turso Platform token response did not include a token",
@@ -110,8 +123,34 @@ export function createTursoPlatformClient(
 	};
 }
 
-function normalizeDatabase(payload: TursoDatabasePayload): TursoDatabase {
-	const database = recordValue(payload.database) ?? payload;
+function parseDatabasePayload(
+	payload: unknown,
+): z.infer<typeof tursoDatabasePayloadSchema> {
+	const parsed = tursoDatabasePayloadSchema.safeParse(payload);
+	if (!parsed.success) {
+		throw new TursoPlatformError(
+			"Turso Platform database response was malformed",
+		);
+	}
+
+	return parsed.data;
+}
+
+function parseAuthTokenPayload(
+	payload: unknown,
+): z.infer<typeof tursoAuthTokenPayloadSchema> {
+	const parsed = tursoAuthTokenPayloadSchema.safeParse(payload);
+	if (!parsed.success) {
+		throw new TursoPlatformError("Turso Platform token response was malformed");
+	}
+
+	return parsed.data;
+}
+
+function normalizeDatabase(
+	payload: z.infer<typeof tursoDatabasePayloadSchema>,
+): TursoDatabase {
+	const database = payload.database ?? payload;
 	const name = requiredString(database.Name ?? database.name, "database name");
 	const hostname = requiredString(
 		database.Hostname ?? database.hostname,
@@ -122,12 +161,6 @@ function normalizeDatabase(payload: TursoDatabasePayload): TursoDatabase {
 		: `libsql://${hostname}`;
 
 	return { name, url };
-}
-
-function recordValue(value: unknown): Record<string, unknown> | null {
-	return typeof value === "object" && value !== null
-		? (value as Record<string, unknown>)
-		: null;
 }
 
 function requiredString(value: unknown, label: string): string {

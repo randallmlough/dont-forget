@@ -1,4 +1,4 @@
-import { asError, isNetworkUnavailableError } from "@/lib/errors";
+import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
@@ -6,10 +6,6 @@ import {
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
 } from "@/lib/services/household/household-store";
-import {
-	type OpenHouseholdRemoteClient,
-	pushLocalHouseholdRowsToRemote,
-} from "@/lib/services/household/household-sync-fallback";
 import { createItemService, type ItemService } from "@/lib/services/item";
 import { createListService, type ListService } from "@/lib/services/list";
 import type { SyncOptions, SyncResult } from "@/lib/services/sync";
@@ -17,7 +13,6 @@ import type { SyncOptions, SyncResult } from "@/lib/services/sync";
 type SessionStore = HouseholdStoreExecutor & {
 	syncAuthorized?: boolean;
 	push?: () => Promise<void>;
-	pull?: () => Promise<SyncResult>;
 	sync?: () => Promise<SyncResult>;
 	close: () => void | Promise<void>;
 };
@@ -31,11 +26,9 @@ export type SessionDataServicesConfig = {
 export type SessionDataServicesOptions = {
 	store?: SessionStore;
 	openStore?: (config: OpenHouseholdStoreConfig) => Promise<SessionStore>;
-	openRemoteClient?: OpenHouseholdRemoteClient;
 };
 
 export type SessionDataServices = {
-	ready: Promise<void>;
 	lists: ListService;
 	items: ItemService;
 	syncAuthorized: boolean;
@@ -43,144 +36,54 @@ export type SessionDataServices = {
 	close: () => Promise<void>;
 };
 
-export function createSessionDataServices(
+export async function createSessionDataServices(
 	config: SessionDataServicesConfig,
 	options: SessionDataServicesOptions = {},
-): SessionDataServices {
-	const storePromise = options.store
-		? Promise.resolve(options.store)
-		: (options.openStore ?? openHouseholdStore)({
-				householdId: config.householdId,
-				database: config.database,
-			});
+): Promise<SessionDataServices> {
+	const store =
+		options.store ??
+		(await (options.openStore ?? openHouseholdStore)({
+			householdId: config.householdId,
+			database: config.database,
+		}));
 	const ownsStore = !options.store;
-	const ready = storePromise.then(() => undefined);
 	const log = config.logger.with({
 		feature: "authenticated_app_session_services",
 	});
-	const syncAuthorized = options.store
-		? Boolean(
-				options.store.syncAuthorized &&
-					options.store.pull &&
-					options.store.sync,
-			)
-		: Boolean(config.database.url && config.database.authToken);
+	const syncAuthorized = Boolean(
+		store.syncAuthorized && store.push && store.sync,
+	);
 	let closed = false;
-	let servicesPromise: Promise<{
-		lists: ListService;
-		items: ItemService;
-	}> | null = null;
-
-	function getServices() {
-		servicesPromise ??= storePromise.then((store) => ({
-			lists: createListService({
-				householdId: config.householdId,
-				store,
-				logger: log,
-			}),
-			items: createItemService({
-				householdId: config.householdId,
-				store,
-				logger: log,
-			}),
-		}));
-		return servicesPromise;
-	}
+	const lists = createListService({
+		householdId: config.householdId,
+		store,
+		logger: log,
+	});
+	const items = createItemService({
+		householdId: config.householdId,
+		store,
+		logger: log,
+	});
 
 	return {
-		ready,
-		lists: {
-			async getList(input) {
-				const { lists } = await getServices();
-				return lists.getList(input);
-			},
-		},
-		items: {
-			async listItems(input) {
-				const { items } = await getServices();
-				return items.listItems(input);
-			},
-			async addItem(input) {
-				const { items } = await getServices();
-				return items.addItem(input);
-			},
-			async setItemChecked(input) {
-				const { items } = await getServices();
-				return items.setItemChecked(input);
-			},
-		},
+		lists,
+		items,
 		syncAuthorized,
 		async sync(syncOptions?: SyncOptions) {
 			if (!syncAuthorized) return { changed: false };
 
-			const store = await storePromise;
 			if (syncOptions?.mode === "pushLocalOnly") {
-				let nativeError: unknown = null;
-
-				if (store.push) {
-					try {
-						await store.push();
-						return { changed: false };
-					} catch (error) {
-						nativeError = error;
-					}
-				}
-				if (isNetworkUnavailableError(nativeError)) {
-					throw nativeError;
-				}
-
-				await pushLocalHouseholdRowsToRemote(
-					store,
-					config.database,
-					options.openRemoteClient,
-				);
-				if (nativeError) {
-					return {
-						changed: false,
-						recoveredNativeSyncError: asError(nativeError),
-					};
-				}
+				await store.push?.();
 				return { changed: false };
 			}
 
-			let nativeResult: SyncResult = { changed: false };
-			let nativeError: unknown = null;
-
-			try {
-				nativeResult = store.sync ? await store.sync() : { changed: false };
-			} catch (error) {
-				nativeError = error;
-			}
-			if (isNetworkUnavailableError(nativeError)) {
-				throw nativeError;
-			}
-
-			try {
-				await pushLocalHouseholdRowsToRemote(
-					store,
-					config.database,
-					options.openRemoteClient,
-				);
-			} catch (fallbackError) {
-				if (nativeError) {
-					throw attachNativeSyncError(fallbackError, nativeError);
-				}
-				throw fallbackError;
-			}
-			if (nativeError) {
-				return {
-					changed: false,
-					recoveredNativeSyncError: asError(nativeError),
-				};
-			}
-			return nativeResult;
+			return store.sync ? store.sync() : { changed: false };
 		},
 		async close() {
 			if (!ownsStore || closed) return;
 			closed = true;
-			const store = await storePromise.catch(() => null);
 			try {
-				await store?.close();
+				await store.close();
 			} catch (error) {
 				log.error("authenticated app session data store close failed", {
 					error: asError(error),
@@ -189,13 +92,4 @@ export function createSessionDataServices(
 			}
 		},
 	};
-}
-
-function attachNativeSyncError(
-	fallbackError: unknown,
-	nativeError: unknown,
-): Error & { nativeSyncError: Error } {
-	return Object.assign(asError(fallbackError), {
-		nativeSyncError: asError(nativeError),
-	});
 }
