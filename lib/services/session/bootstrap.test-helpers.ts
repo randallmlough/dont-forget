@@ -1,7 +1,5 @@
-import type { Item } from "@/lib/services/item";
-import type { List } from "@/lib/services/list";
-import type { SessionBootstrap } from "@/lib/services/session/bootstrap";
-import type { CachedSessionBootstrap } from "@/lib/services/session/cache";
+import type { SessionBootstrap } from "./bootstrap";
+import type { CachedSessionBootstrap } from "./cache";
 
 export type SessionBootstrapFixtureOverrides = {
 	householdId?: string;
@@ -65,33 +63,5 @@ export function cachedSessionBootstrapFixture(
 			expiresAt: overrides.householdDatabaseExpiresAt ?? 1_700_000_000_000,
 		},
 		initializedAt: overrides.initializedAt ?? 1_700_000_000_000,
-	};
-}
-
-export function listFixture(overrides: Partial<List> = {}): List {
-	return {
-		id: "lst_default_groceries",
-		householdId: "hh_avery",
-		name: "Groceries",
-		createdByUserId: "usr_avery",
-		createdAt: 1_700_000_000_000,
-		updatedAt: 1_700_000_000_000,
-		...overrides,
-	};
-}
-
-export function itemFixture(overrides: Partial<Item> = {}): Item {
-	return {
-		id: "itm_milk",
-		householdId: "hh_avery",
-		listId: "lst_default_groceries",
-		name: "Milk",
-		checked: false,
-		checkedByUserId: null,
-		position: 0,
-		createdByUserId: "usr_avery",
-		createdAt: 1_700_000_000_000,
-		updatedAt: 1_700_000_000_000,
-		...overrides,
 	};
 }

@@ -2,6 +2,8 @@
 
 Tests are React Native-first. The default stack is Jest through `jest-expo` plus React Native Testing Library. Use Expo Router testing utilities for router and auth-gate flows when a test needs real route behavior.
 
+Integration-first testing is the hard default for product behavior. If Household, Member, Owner, Invitation, List, Item, Authenticated App Session, or sync behavior can run locally through Jest, React Native Testing Library, Expo Router testing utilities, and/or isolated temp libSQL databases, the test should exercise that real collaboration instead of replacing it with app-owned fakes.
+
 There is no separate React DOM/jsdom track. Add one later only if the app grows web-specific behavior that cannot be exercised through the React Native surface.
 
 Native end-to-end coverage uses Maestro. Add Maestro flows when behavior depends on a real iOS app runtime, native modules, app relaunch, device state, or offline/online transitions that Jest cannot prove.
@@ -34,8 +36,17 @@ Mock true external SDK and native boundaries:
 - Apple/Google/native auth modules
 - PostHog and analytics/logging sinks
 - Expo browser and secure storage APIs
+- NetInfo, app foreground/background state, timers, time, random ID sources, or deliberately controlled race collaborators when the behavior under test depends on deterministic ordering
 
-Do not mock product behavior that can run locally. Database behavior should use an isolated local libSQL database loaded from checked-in migration SQL.
+Do not mock product behavior that can run locally. Database behavior should use an isolated local libSQL database loaded from checked-in migration SQL. Hand-written SQL result maps are not product coverage when the behavior can be seeded into temp libSQL.
+
+Allowed mocks are defined by boundary, not convenience:
+
+- External SDK/native/platform boundary: mock it.
+- Network-only provider or observability sink: mock it or inject a narrow test double.
+- Nondeterministic system input: control it only as far as the assertion requires.
+- App-owned service/store/session/List/Item/sync policy: run it for product behavior.
+- Race-control collaborator: fake only the timing edge being asserted and keep the rest of the path real when practical.
 
 Use Maestro, not Jest, to prove native database module behavior such as Turso React Native open/sync, offline cold start, app relaunch, and airplane-mode transitions.
 
@@ -63,6 +74,39 @@ Use helpers from `db/test.ts`. They create temp local libSQL files and apply SQL
 
 Do not use `pnpm db:migrate` in tests. That command is for intentionally applying migrations to configured databases.
 
+## Database Fixtures And Scenarios
+
+`db/fixtures/` is the shared persistence fixture layer. It contains:
+
+- low-level Drizzle insert-shaped builders for User, Household, Membership/Member, Invitation, List, Item, and `item_checks` rows;
+- scenario helpers that seed caller-provided directory and Household DB handles and return the inserted records/IDs.
+
+`db/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, sync coordinators, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
+
+The first canonical scenario is `seedPrimaryHouseholdScenario`:
+
+- Avery is the Owner.
+- Blake is a Member.
+- The Household is named `Avery`.
+- The default List is named `Groceries`.
+- Items cover unchecked, checked by Avery, checked by Blake, and tombstoned states.
+
+Invitation scenarios are intentionally deferred until Invitation behavior exists. The Invitation row builder is available for focused persistence setup.
+
+## Local Seed Commands
+
+Local development seed data uses the same persisted fixture facts but is operationally separate from tests:
+
+```bash
+make db-seed APP_ENV=local
+make db-reseed APP_ENV=local CONFIRM_DB_RESET=local
+```
+
+- `db-seed` runs `scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist. It assumes the deterministic seed Household DB already exists and has Household migrations applied. Use `db-reseed` for a first local setup after an empty reset.
+- `db-reseed` is the explicit destructive fast path: reset local app data, migrate the directory DB, ensure and migrate the deterministic seed Household DB, then seed.
+- `db-reset` still means reset to empty.
+- Seed/reseed commands fail closed outside `APP_ENV=local`; staging and production are not seed sandboxes.
+
 ## File Layout
 
 - `lib/test/setup.ts` configures global Jest setup and native/SDK mocks.
@@ -76,7 +120,7 @@ Do not put test files in `app/`; Expo Router treats files there as routes or lay
 
 ## What Needs Tests
 
-Prefer integration-style tests for product behavior:
+Use integration-style tests for product behavior:
 
 - auth screens and auth-gate routing
 - Household, Member, Owner, Invitation flows

@@ -33,10 +33,12 @@ Prefer a failing test before the fix when practical.
 
 Good regression signals include:
 
-- a focused unit test for pure logic;
-- an integration-style Jest test for service or screen behavior;
+- an integration-style Jest test for service, session, provider, screen, or database behavior;
+- a focused unit test for pure logic, narrow adapters, or deliberately controlled race cases;
 - a documented RocketSim repro when the behavior depends on native runtime state;
 - a migration or database test for schema/data bugs.
+
+For product regressions, default to an integration harness that uses real app-owned services and temp libSQL fixtures. Mock only true external/native boundaries or the single timing collaborator needed to reproduce a race.
 
 If a test is not practical, document why and include the manual proof needed to verify the fix.
 

@@ -1,11 +1,16 @@
-import { sessionBootstrapFixture } from "@/db/fixtures/session";
 import { BOOTSTRAP_API_PATH } from "@/lib/bootstrap";
+import { createMockAnalytics } from "@/lib/test/mocks/analytics";
 import { createSessionBootstrapService } from "./bootstrap";
+import { sessionBootstrapFixture } from "./bootstrap.test-helpers";
+
+jest.mock("@/lib/analytics", () =>
+	jest.requireActual("@/lib/test/mocks/analytics"),
+);
 
 describe("createSessionBootstrapService", () => {
 	it("loads a fresh online Authenticated App Session with a Clerk session token", async () => {
 		const session = sessionBootstrapFixture();
-		const analytics = analyticsFixture();
+		const analytics = createMockAnalytics();
 		const fetcher = jest.fn(async (_input: unknown, _init?: unknown) =>
 			responseFixture(session),
 		);
@@ -40,12 +45,6 @@ describe("createSessionBootstrapService", () => {
 		);
 	});
 });
-
-function analyticsFixture() {
-	return {
-		track: jest.fn(),
-	};
-}
 
 function responseFixture(payload: unknown): Response {
 	const response: Pick<Response, "json" | "ok"> = {
