@@ -52,6 +52,17 @@ describe("createTursoPlatformClient", () => {
 		);
 	});
 
+	it("fails clearly when the token response is malformed", async () => {
+		const fetchMock = jest
+			.fn()
+			.mockResolvedValueOnce(response(200, { jwt: 123 }));
+		const client = createTursoPlatformClient(config, fetchMock as typeof fetch);
+
+		await expect(
+			client.createDatabaseAuthToken("db-one", "24h"),
+		).rejects.toThrow("Turso Platform token response was malformed");
+	});
+
 	it("includes platform error response details", async () => {
 		const fetchMock = jest
 			.fn()
@@ -82,6 +93,17 @@ describe("createTursoPlatformClient", () => {
 
 		await expect(client.ensureDatabase("db-one")).rejects.toThrow(
 			"Turso Platform database response did not include database hostname",
+		);
+	});
+
+	it("rejects malformed database envelopes before normalization", async () => {
+		const fetchMock = jest
+			.fn()
+			.mockResolvedValueOnce(response(200, { database: "db-one" }));
+		const client = createTursoPlatformClient(config, fetchMock as typeof fetch);
+
+		await expect(client.getDatabase("db-one")).rejects.toThrow(
+			"Turso Platform database response was malformed",
 		);
 	});
 });
