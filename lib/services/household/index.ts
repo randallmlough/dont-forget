@@ -9,7 +9,3 @@ export {
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
 } from "./household-store";
-export {
-	type OpenHouseholdRemoteClient,
-	pushLocalHouseholdRowsToRemote,
-} from "./household-sync-fallback";

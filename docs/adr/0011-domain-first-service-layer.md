@@ -77,7 +77,6 @@ lib/services/session/
 
 lib/services/household/
   household-store.ts
-  household-sync-fallback.ts
   server/
     household-provisioning-service.ts
     household-service.ts

@@ -1,4 +1,4 @@
-import { asError, isNetworkUnavailableError } from "@/lib/errors";
+import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 import {
 	type HouseholdDatabaseConfig,
@@ -6,10 +6,6 @@ import {
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
 } from "@/lib/services/household/household-store";
-import {
-	type OpenHouseholdRemoteClient,
-	pushLocalHouseholdRowsToRemote,
-} from "@/lib/services/household/household-sync-fallback";
 import { createItemService, type ItemService } from "@/lib/services/item";
 import { createListService, type ListService } from "@/lib/services/list";
 import type { SyncOptions, SyncResult } from "@/lib/services/sync";
@@ -31,7 +27,6 @@ export type SessionDataServicesConfig = {
 export type SessionDataServicesOptions = {
 	store?: SessionStore;
 	openStore?: (config: OpenHouseholdStoreConfig) => Promise<SessionStore>;
-	openRemoteClient?: OpenHouseholdRemoteClient;
 };
 
 export type SessionDataServices = {
@@ -61,7 +56,7 @@ export function createSessionDataServices(
 	const syncAuthorized = options.store
 		? Boolean(
 				options.store.syncAuthorized &&
-					options.store.pull &&
+					options.store.push &&
 					options.store.sync,
 			)
 		: Boolean(config.database.url && config.database.authToken);
@@ -115,65 +110,11 @@ export function createSessionDataServices(
 
 			const store = await storePromise;
 			if (syncOptions?.mode === "pushLocalOnly") {
-				let nativeError: unknown = null;
-
-				if (store.push) {
-					try {
-						await store.push();
-						return { changed: false };
-					} catch (error) {
-						nativeError = error;
-					}
-				}
-				if (isNetworkUnavailableError(nativeError)) {
-					throw nativeError;
-				}
-
-				await pushLocalHouseholdRowsToRemote(
-					store,
-					config.database,
-					options.openRemoteClient,
-				);
-				if (nativeError) {
-					return {
-						changed: false,
-						recoveredNativeSyncError: asError(nativeError),
-					};
-				}
+				await store.push?.();
 				return { changed: false };
 			}
 
-			let nativeResult: SyncResult = { changed: false };
-			let nativeError: unknown = null;
-
-			try {
-				nativeResult = store.sync ? await store.sync() : { changed: false };
-			} catch (error) {
-				nativeError = error;
-			}
-			if (isNetworkUnavailableError(nativeError)) {
-				throw nativeError;
-			}
-
-			try {
-				await pushLocalHouseholdRowsToRemote(
-					store,
-					config.database,
-					options.openRemoteClient,
-				);
-			} catch (fallbackError) {
-				if (nativeError) {
-					throw attachNativeSyncError(fallbackError, nativeError);
-				}
-				throw fallbackError;
-			}
-			if (nativeError) {
-				return {
-					changed: false,
-					recoveredNativeSyncError: asError(nativeError),
-				};
-			}
-			return nativeResult;
+			return store.sync ? store.sync() : { changed: false };
 		},
 		async close() {
 			if (!ownsStore || closed) return;
@@ -189,13 +130,4 @@ export function createSessionDataServices(
 			}
 		},
 	};
-}
-
-function attachNativeSyncError(
-	fallbackError: unknown,
-	nativeError: unknown,
-): Error & { nativeSyncError: Error } {
-	return Object.assign(asError(fallbackError), {
-		nativeSyncError: asError(nativeError),
-	});
 }

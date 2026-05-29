@@ -71,9 +71,9 @@ The coordinator maps request reasons to `SyncOptions`:
 - `localWrite` and `retry` use `pushLocalOnly`.
 - `manualRefresh`, `appForeground`, and `networkReconnect` use `full`.
 
-`pushLocalOnly` runs native `push()` without native pull work. If native push fails, it uses the app-owned remote upsert fallback. This keeps automatic local-write and retry paths from starting native pull loops while still avoiding full-row remote upserts on the normal online path.
+`pushLocalOnly` runs native `push()` without native pull work. If native push fails, the failure returns through the same sync error boundary as every other sync attempt; there is no second remote writer path.
 
-`full` is reserved for deliberate catch-up work. Manual refresh, app foreground recovery, and network reconnect run native sync first, then the app-owned remote upsert fallback, so the authenticated app session can both push local rows and pull remote rows when connectivity and authorization allow it.
+`full` is reserved for deliberate catch-up work. Manual refresh, app foreground recovery, and network reconnect run native sync so the authenticated app session can both push local rows and pull remote rows when connectivity and authorization allow it.
 
 If a passive `retry` request arrives while there is no pending local change and the coordinator is already `synced`, the coordinator may no-op. App foreground and active-app network reconnect remain catch-up requests even when the coordinator is already `synced`, because other Members may have changed the Household while this device was backgrounded or offline. If the authenticated app session controller starts a fresh authorized coordinator after offline reopen, it starts retry lifecycle work so local rows saved while offline can be attempted again.
 
@@ -108,7 +108,7 @@ Expected sync interruption errors are treated as offline behavior. They transiti
 
 Known-offline `localWrite` requests short-circuit before network refresh because they are local-first propagation hints, not connectivity probes. When refreshed network status is offline for other reasons, sync requests short-circuit without calling remote sync. Manual refresh also short-circuits to offline state instead of forcing a doomed remote call. Unknown or online network states still allow recovery and catch-up attempts, and expected network failures remain classified as offline because network status can still be stale or imprecise.
 
-Recoverable native sync failures that are repaired by the remote upsert fallback stay quiet when they are expected interruptions. If fallback recovers an unexpected native failure, the coordinator logs a warning once with the sync reason and keeps the operation successful.
+Recoverable native sync interruptions are classified as expected offline-style interruptions when they match the app-owned sync interruption boundary. Unexpected sync failures are not recovered by a second writer path.
 
 Unexpected sync failures are logged once at the coordinator boundary with safe Household sync context and transition status to `failed`. Manual refresh rethrows unexpected failures so the explicit refresh action can show failure state. Automatic local-write, retry, and foreground requests keep local data visible and let later coordinator retries attempt propagation again.
 

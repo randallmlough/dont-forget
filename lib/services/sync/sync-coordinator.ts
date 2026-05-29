@@ -10,7 +10,6 @@ import type { SyncStatusSubscription } from "./subscription";
 
 export type SyncResult = {
 	changed: boolean;
-	recoveredNativeSyncError?: Error;
 };
 
 export type SyncStatus = "synced" | "pending" | "offline" | "failed";
@@ -207,8 +206,6 @@ export function createSyncCoordinator({
 			return null;
 		}
 
-		handleRecoveredNativeSyncFailure(result, reason);
-
 		if (pendingLocalChangeVersion === syncStartedAtChangeVersion) {
 			pendingLocalChangeVersion = 0;
 		} else {
@@ -256,13 +253,6 @@ export function createSyncCoordinator({
 		result: SyncResult | null;
 	} {
 		const syncError = asError(error);
-		const nativeSyncError = nativeSyncErrorFromFallbackFailure(error);
-		if (nativeSyncError && !isExpectedSyncInterruptionError(nativeSyncError)) {
-			logger.error("household native sync failed before fallback", {
-				error: nativeSyncError,
-				reason,
-			});
-		}
 		if (isExpectedSyncInterruptionError(error)) {
 			setStatus("offline");
 			return { error: syncError, result: null };
@@ -274,21 +264,6 @@ export function createSyncCoordinator({
 		});
 		setStatus("failed");
 		return { error: syncError, result: null };
-	}
-
-	function handleRecoveredNativeSyncFailure(
-		result: SyncResult,
-		reason: SyncRequestReason,
-	) {
-		if (!result.recoveredNativeSyncError) return;
-		if (isExpectedSyncInterruptionError(result.recoveredNativeSyncError)) {
-			return;
-		}
-
-		logger.warn("household sync recovered", {
-			error: result.recoveredNativeSyncError,
-			reason,
-		});
 	}
 
 	function requestForegroundSync() {
@@ -459,11 +434,4 @@ function coalesceQueuedReason(
 	}
 
 	return "retry";
-}
-
-function nativeSyncErrorFromFallbackFailure(error: unknown): Error | null {
-	if (!error || typeof error !== "object") return null;
-	const nativeSyncError = (error as { nativeSyncError?: unknown })
-		.nativeSyncError;
-	return nativeSyncError instanceof Error ? nativeSyncError : null;
 }

@@ -13,7 +13,6 @@ lib/services/
   household/
     index.ts
     household-store.ts
-    household-sync-fallback.ts
     server/
       index.ts
       household-provisioning-service.ts
