@@ -3,6 +3,7 @@ import { seedPrimaryHouseholdScenario } from "@/db/fixtures";
 import { itemChecks, items } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 import { createSessionDataServices } from "./services";
 
@@ -252,18 +253,4 @@ function storeFixture(
 		sync: jest.fn(async () => ({ changed: false })),
 		close: jest.fn(async () => undefined),
 	};
-}
-
-function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	let reject: ((error: Error) => void) | undefined;
-	const promise = new Promise<T>((nextResolve, nextReject) => {
-		resolve = nextResolve;
-		reject = nextReject;
-	});
-	if (!resolve || !reject) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve, reject };
 }

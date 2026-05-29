@@ -6,6 +6,7 @@ import {
 	type TursoHouseholdStoreRuntime,
 } from "@/lib/services/household/household-store";
 import { SyncInterruptedError } from "@/lib/services/sync";
+import { deferred } from "@/lib/test/async";
 import {
 	createMockLogger,
 	loggerFixture,
@@ -343,16 +344,4 @@ function onlyInstance(instances: MockTursoDatabase[]): MockTursoDatabase {
 	}
 
 	return instance;
-}
-
-function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	const promise = new Promise<T>((nextResolve) => {
-		resolve = nextResolve;
-	});
-	if (!resolve) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve };
 }

@@ -12,6 +12,7 @@ import {
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
 import { useLogger } from "@/lib/logger";
+import { deferred } from "@/lib/test/async";
 import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 
 let mockLogger: MockLogger;
@@ -423,18 +424,4 @@ function memoryListActions(
 		},
 		...overrides,
 	};
-}
-
-function deferred<T>() {
-	let resolve: ((value: T) => void) | undefined;
-	let reject: ((error: Error) => void) | undefined;
-	const promise = new Promise<T>((nextResolve, nextReject) => {
-		resolve = nextResolve;
-		reject = nextReject;
-	});
-	if (!resolve || !reject) {
-		throw new Error("Unable to create deferred promise");
-	}
-
-	return { promise, resolve, reject };
 }
