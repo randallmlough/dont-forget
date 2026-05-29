@@ -97,7 +97,7 @@ This prevents local writes and sync operations from racing each other inside the
 
 The Active List data source previously pushed local `lists`, `items`, and `item_checks` rows to the remote Household DB using an app-owned LWW upsert fallback. That fallback was later removed because native Turso Sync must be the single Household propagation path.
 
-Full manual sync still tries native sync first, then runs the app-owned upsert path.
+Full manual sync now runs native sync only, and sync failures return through the Household sync coordinator boundary.
 
 ### Move sync orchestration to the Active List component
 
