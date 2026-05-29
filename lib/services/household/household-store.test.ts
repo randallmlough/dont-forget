@@ -4,6 +4,7 @@ import {
 	openHouseholdStore,
 	type TursoHouseholdStoreRuntime,
 } from "@/lib/services/household/household-store";
+import { SyncInterruptedError } from "@/lib/services/sync";
 import { loggerFixture } from "@/lib/test/mocks/logger";
 
 const mockLoggerError = jest.fn();
@@ -194,7 +195,7 @@ describe("openHouseholdStore", () => {
 		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
-	it("does not error-log sync failures caused by offline networking", async () => {
+	it("wraps offline native sync failures as typed sync interruptions", async () => {
 		const store = await openHouseholdStore(configFixture(), {
 			runtime,
 			fileSystem,
@@ -203,12 +204,12 @@ describe("openHouseholdStore", () => {
 		const error = new TypeError("Network request failed");
 		nativeDb.push.mockRejectedValueOnce(error);
 
-		await expect(store.sync()).rejects.toThrow(error);
+		await expect(store.sync()).rejects.toBeInstanceOf(SyncInterruptedError);
 
 		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 
-	it("does not error-log recoverable sync engine checkpoint failures", async () => {
+	it("wraps recoverable sync engine failures as typed sync interruptions", async () => {
 		const store = await openHouseholdStore(configFixture(), {
 			runtime,
 			fileSystem,
@@ -219,7 +220,7 @@ describe("openHouseholdStore", () => {
 		);
 		nativeDb.push.mockRejectedValueOnce(error);
 
-		await expect(store.sync()).rejects.toThrow(error);
+		await expect(store.sync()).rejects.toBeInstanceOf(SyncInterruptedError);
 
 		expect(mockLoggerError).not.toHaveBeenCalled();
 	});

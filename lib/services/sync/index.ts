@@ -20,3 +20,9 @@ export {
 	type SyncResult,
 	type SyncStatus,
 } from "./sync-coordinator";
+export {
+	isSyncInterruptedError,
+	nativeSyncInterruptedError,
+	SyncInterruptedError,
+	type SyncInterruptionReason,
+} from "./sync-errors";

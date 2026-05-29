@@ -1,7 +1,10 @@
 import { createDatabaseOperationQueue } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import type { SyncResult } from "@/lib/services/sync";
+import {
+	nativeSyncInterruptedError,
+	type SyncResult,
+} from "@/lib/services/sync";
 
 export type HouseholdSqlValue = string | number | null | ArrayBuffer;
 
@@ -170,19 +173,23 @@ export async function openHouseholdStore(
 		},
 		async push() {
 			return enqueueDatabaseOperation(async () => {
-				await database.push();
+				await runNativeSyncOperation(() => database.push());
 			});
 		},
 		async pull() {
 			return enqueueDatabaseOperation(async () => {
-				return { changed: await database.pull() };
+				return { changed: await runNativeSyncOperation(() => database.pull()) };
 			});
 		},
 		async sync() {
 			return enqueueDatabaseOperation(async () => {
-				const changedBeforePush = await database.pull();
-				await database.push();
-				const changedAfterPush = await database.pull();
+				const changedBeforePush = await runNativeSyncOperation(() =>
+					database.pull(),
+				);
+				await runNativeSyncOperation(() => database.push());
+				const changedAfterPush = await runNativeSyncOperation(() =>
+					database.pull(),
+				);
 				return { changed: changedBeforePush || changedAfterPush };
 			});
 		},
@@ -233,6 +240,16 @@ function normalizeStatement(statement: HouseholdSqlStatement): {
 		sql: statement.sql,
 		args: statement.args ?? [],
 	};
+}
+
+async function runNativeSyncOperation<T>(
+	operation: () => Promise<T>,
+): Promise<T> {
+	try {
+		return await operation();
+	} catch (error) {
+		throw nativeSyncInterruptedError(error) ?? error;
+	}
 }
 
 async function loadTursoRuntime(): Promise<TursoHouseholdStoreRuntime> {

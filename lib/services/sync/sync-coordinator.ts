@@ -1,4 +1,4 @@
-import { asError, isExpectedSyncInterruptionError } from "@/lib/errors";
+import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 
 import type { SyncAppStateAdapter } from "./app-state";
@@ -21,6 +21,7 @@ import {
 	syncOptionsForReason,
 	takeQueuedFollowUpReason,
 } from "./sync-coordinator-policy";
+import { isSyncInterruptedError } from "./sync-errors";
 
 export type SyncResult = {
 	changed: boolean;
@@ -246,7 +247,7 @@ export function createSyncCoordinator({
 		result: SyncResult | null;
 	} {
 		const syncError = asError(error);
-		if (isExpectedSyncInterruptionError(error)) {
+		if (isSyncInterruptedError(error)) {
 			setStatus("offline");
 			return { error: syncError, result: null };
 		}

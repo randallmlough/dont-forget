@@ -1,11 +1,10 @@
-import { isExpectedSyncInterruptionError } from "@/lib/errors";
-
 import type { SyncNetworkStatus } from "./network-status";
 import type {
 	SyncOptions,
 	SyncRequestReason,
 	SyncStatus,
 } from "./sync-coordinator";
+import { isSyncInterruptedError } from "./sync-errors";
 
 export type SyncCoordinatorPolicyState = {
 	status: SyncStatus;
@@ -119,7 +118,7 @@ export function shouldRethrowSyncFailure(
 	error: unknown,
 	reason: SyncRequestReason,
 ): boolean {
-	return reason === "manualRefresh" && !isExpectedSyncInterruptionError(error);
+	return reason === "manualRefresh" && !isSyncInterruptedError(error);
 }
 
 export function syncOptionsForReason(
