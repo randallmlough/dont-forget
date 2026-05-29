@@ -93,7 +93,6 @@
 		"eslint-plugin-react-native-a11y": "^3.5.1",
 		"jest": "~29.7.0",
 		"jest-expo": "~55.0.17",
-		"react-doctor": "^0.2.11",
 		"tsx": "^4.21.0",
 		"typescript": "~5.9.2"
 	},
