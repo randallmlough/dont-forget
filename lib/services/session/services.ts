@@ -13,7 +13,6 @@ import type { SyncOptions, SyncResult } from "@/lib/services/sync";
 type SessionStore = HouseholdStoreExecutor & {
 	syncAuthorized?: boolean;
 	push?: () => Promise<void>;
-	pull?: () => Promise<SyncResult>;
 	sync?: () => Promise<SyncResult>;
 	close: () => void | Promise<void>;
 };
@@ -30,7 +29,6 @@ export type SessionDataServicesOptions = {
 };
 
 export type SessionDataServices = {
-	ready: Promise<void>;
 	lists: ListService;
 	items: ItemService;
 	syncAuthorized: boolean;
@@ -38,77 +36,42 @@ export type SessionDataServices = {
 	close: () => Promise<void>;
 };
 
-export function createSessionDataServices(
+export async function createSessionDataServices(
 	config: SessionDataServicesConfig,
 	options: SessionDataServicesOptions = {},
-): SessionDataServices {
-	const storePromise = options.store
-		? Promise.resolve(options.store)
-		: (options.openStore ?? openHouseholdStore)({
-				householdId: config.householdId,
-				database: config.database,
-			});
+): Promise<SessionDataServices> {
+	const store =
+		options.store ??
+		(await (options.openStore ?? openHouseholdStore)({
+			householdId: config.householdId,
+			database: config.database,
+		}));
 	const ownsStore = !options.store;
-	const ready = storePromise.then(() => undefined);
 	const log = config.logger.with({
 		feature: "authenticated_app_session_services",
 	});
-	const syncAuthorized = options.store
-		? Boolean(
-				options.store.syncAuthorized &&
-					options.store.push &&
-					options.store.sync,
-			)
-		: Boolean(config.database.url && config.database.authToken);
+	const syncAuthorized = Boolean(
+		store.syncAuthorized && store.push && store.sync,
+	);
 	let closed = false;
-	let servicesPromise: Promise<{
-		lists: ListService;
-		items: ItemService;
-	}> | null = null;
-
-	function getServices() {
-		servicesPromise ??= storePromise.then((store) => ({
-			lists: createListService({
-				householdId: config.householdId,
-				store,
-				logger: log,
-			}),
-			items: createItemService({
-				householdId: config.householdId,
-				store,
-				logger: log,
-			}),
-		}));
-		return servicesPromise;
-	}
+	const lists = createListService({
+		householdId: config.householdId,
+		store,
+		logger: log,
+	});
+	const items = createItemService({
+		householdId: config.householdId,
+		store,
+		logger: log,
+	});
 
 	return {
-		ready,
-		lists: {
-			async getList(input) {
-				const { lists } = await getServices();
-				return lists.getList(input);
-			},
-		},
-		items: {
-			async listItems(input) {
-				const { items } = await getServices();
-				return items.listItems(input);
-			},
-			async addItem(input) {
-				const { items } = await getServices();
-				return items.addItem(input);
-			},
-			async setItemChecked(input) {
-				const { items } = await getServices();
-				return items.setItemChecked(input);
-			},
-		},
+		lists,
+		items,
 		syncAuthorized,
 		async sync(syncOptions?: SyncOptions) {
 			if (!syncAuthorized) return { changed: false };
 
-			const store = await storePromise;
 			if (syncOptions?.mode === "pushLocalOnly") {
 				await store.push?.();
 				return { changed: false };
@@ -119,9 +82,8 @@ export function createSessionDataServices(
 		async close() {
 			if (!ownsStore || closed) return;
 			closed = true;
-			const store = await storePromise.catch(() => null);
 			try {
-				await store?.close();
+				await store.close();
 			} catch (error) {
 				log.error("authenticated app session data store close failed", {
 					error: asError(error),

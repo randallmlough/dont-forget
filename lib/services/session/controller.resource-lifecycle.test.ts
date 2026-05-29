@@ -109,15 +109,14 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 	});
 
 	it("does not publish or cache a fresh session before the HouseholdStore opens", async () => {
-		const dataServicesReady = h.deferred<void>();
-		const dataServices = h.sessionDataServicesFixture({
-			ready: dataServicesReady.promise,
-		});
+		const dataServicesOpened =
+			h.deferred<ReturnType<typeof h.sessionDataServicesFixture>>();
+		const dataServices = h.sessionDataServicesFixture();
 		const syncCoordinator = h.syncCoordinatorFixture();
 		const sessionService = h.sessionRuntimeFixture();
 		const controller = h.createAuthenticatedAppSessionController({
 			...sessionService.deps,
-			createDataServices: jest.fn().mockReturnValue(dataServices),
+			createDataServices: jest.fn(() => dataServicesOpened.promise),
 			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
 			logger: h.loggerFixture(),
 		});
@@ -133,7 +132,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		expect(sessionService.cache.save).not.toHaveBeenCalled();
 		expect(syncCoordinator.start).not.toHaveBeenCalled();
 
-		dataServicesReady.resolve(undefined);
+		dataServicesOpened.resolve(dataServices);
 		await activation;
 
 		expect(controller.getSnapshot()).toMatchObject({
@@ -512,7 +511,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 				read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
 				getSession: jest.fn(() => freshSession.promise),
 			}).deps,
-			createDataServices: jest.fn((config) =>
+			createDataServices: jest.fn(async (config) =>
 				config.database.authToken ? freshDataServices : cachedDataServices,
 			),
 			createSyncCoordinator: jest

@@ -68,14 +68,6 @@ export function createSessionBootstrapService(
 	};
 }
 
-const defaultSessionBootstrapService = createSessionBootstrapService();
-
-export function getSessionBootstrap(
-	getToken: GetSessionToken,
-): Promise<SessionBootstrap> {
-	return defaultSessionBootstrapService.getSession(getToken);
-}
-
 export function sessionAnalyticsProperties(session: SessionBootstrap): {
 	household_id: string;
 	member_role: "owner" | "member";

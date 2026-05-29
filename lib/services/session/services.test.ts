@@ -17,7 +17,7 @@ describe("createSessionDataServices", () => {
 
 	it("loads List and Item data through explicit listId service calls", async () => {
 		const store = storeFixture();
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -49,7 +49,7 @@ describe("createSessionDataServices", () => {
 
 	it("uses explicit listId for Item writes", async () => {
 		const store = storeFixture();
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -77,10 +77,11 @@ describe("createSessionDataServices", () => {
 		);
 	});
 
-	it("reports ready only after the HouseholdStore opens", async () => {
+	it("creates services only after the HouseholdStore opens", async () => {
 		const store = storeFixture();
-		const openStore = jest.fn(async () => store);
-		const services = createSessionDataServices(
+		const openedStore = deferred<ReturnType<typeof storeFixture>>();
+		const openStore = jest.fn(() => openedStore.promise);
+		const servicesPromise = createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -88,18 +89,28 @@ describe("createSessionDataServices", () => {
 			},
 			{ openStore },
 		);
+		let resolved = false;
+		void servicesPromise.then(() => {
+			resolved = true;
+		});
+		await Promise.resolve();
 
-		await expect(services.ready).resolves.toBeUndefined();
+		expect(resolved).toBe(false);
 		expect(openStore).toHaveBeenCalledWith({
 			householdId: "hh_avery",
 			database: { url: "libsql://example", authToken: "secret" },
+		});
+
+		openedStore.resolve(store);
+		await expect(servicesPromise).resolves.toMatchObject({
+			syncAuthorized: true,
 		});
 	});
 
 	it("uses native sync result for full sync", async () => {
 		const store = storeFixture();
 		store.sync.mockResolvedValueOnce({ changed: true });
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -115,7 +126,7 @@ describe("createSessionDataServices", () => {
 
 	it("uses native push only for pushLocalOnly sync when native push succeeds", async () => {
 		const store = storeFixture();
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -136,7 +147,7 @@ describe("createSessionDataServices", () => {
 		const store = storeFixture();
 		const networkError = new TypeError("Network request failed");
 		store.sync.mockRejectedValueOnce(networkError);
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example", authToken: "secret" },
@@ -150,7 +161,7 @@ describe("createSessionDataServices", () => {
 
 	it("does not run native sync when the session is not authorized for sync", async () => {
 		const store = storeFixture({ syncAuthorized: false });
-		const services = createSessionDataServices(
+		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
 				database: { url: "libsql://example" },
@@ -210,4 +221,18 @@ function storeFixture(overrides: { syncAuthorized?: boolean } = {}) {
 		sync: jest.fn(async () => ({ changed: false })),
 		close: jest.fn(async () => undefined),
 	};
+}
+
+function deferred<T>() {
+	let resolve: ((value: T) => void) | undefined;
+	let reject: ((error: Error) => void) | undefined;
+	const promise = new Promise<T>((nextResolve, nextReject) => {
+		resolve = nextResolve;
+		reject = nextReject;
+	});
+	if (!resolve || !reject) {
+		throw new Error("Unable to create deferred promise");
+	}
+
+	return { promise, resolve, reject };
 }
