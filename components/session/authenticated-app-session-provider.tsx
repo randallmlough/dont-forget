@@ -93,13 +93,35 @@ export function AuthenticatedAppSessionProvider({
 	useEffect(() => {
 		authRef.current = auth;
 	}, [auth]);
+	const analyticsRef = useRef(analytics);
+	useEffect(() => {
+		analyticsRef.current = analytics;
+	}, [analytics]);
+	const clearSignedOutSessionDataRef = useRef(clearSignedOutSessionDataProp);
+	useEffect(() => {
+		clearSignedOutSessionDataRef.current = clearSignedOutSessionDataProp;
+	}, [clearSignedOutSessionDataProp]);
+	const loggerRef = useRef(logger);
+	useEffect(() => {
+		loggerRef.current = logger;
+	}, [logger]);
 	const signOutFlowRef = useRef<AuthenticatedAppSessionSignOut | null>(null);
 	signOutFlowRef.current ??= createAuthenticatedAppSessionSignOut({
 		controller,
 		getAuth: () => authRef.current,
-		analytics,
-		clearSignedOutSessionData: clearSignedOutSessionDataProp,
-		logger,
+		analytics: {
+			track: (...args) => analyticsRef.current.track(...args),
+			reset: () => analyticsRef.current.reset(),
+		},
+		clearSignedOutSessionData: (...args) =>
+			clearSignedOutSessionDataRef.current(...args),
+		logger: {
+			debug: (...args) => loggerRef.current.debug(...args),
+			info: (...args) => loggerRef.current.info(...args),
+			warn: (...args) => loggerRef.current.warn(...args),
+			error: (...args) => loggerRef.current.error(...args),
+			with: (...args) => loggerRef.current.with(...args),
+		},
 	});
 	const signOutFlow = signOutFlowRef.current;
 	const getTokenRef = useRef(auth.getToken);
