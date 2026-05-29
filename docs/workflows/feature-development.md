@@ -18,15 +18,23 @@ Ship the smallest vertical slice that satisfies the requested behavior, with tes
    - product data access in `lib/services/<domain>/`;
    - migrations and database helpers in `db/`.
 5. Define the user-visible outcome and the verification plan.
+6. Choose the lowest integration harness that proves the product collaboration:
+   - temp libSQL plus real services for database/service behavior;
+   - session/controller integration for Authenticated App Session resource behavior;
+   - React Native Testing Library screen/provider integration for visible List/Item behavior;
+   - Expo Router utilities when route behavior is the thing being proved.
+7. If a mock is needed, name the boundary category it replaces. Do not mock local product behavior for convenience.
 
 ## Implementation Loop
 
-1. Add or update the most focused useful test first when behavior can be proven in Jest.
+1. Add or update the most focused integration-style test first when product behavior can be proven in Jest.
 2. Add or update Storybook stories for reusable UI or meaningful screen/view states.
 3. Implement the smallest vertical slice through the owning boundary.
 4. Keep route files thin and keep SQL/database access behind domain services.
 5. Use domain-shaped names and avoid generic group/team/account/todo/task language.
 6. Remove only unused code created by the change; do not opportunistically refactor adjacent code.
+
+Use focused unit tests only for pure helpers, narrow adapters, or precise race-control cases where an integration harness would hide the assertion. For database-backed behavior, seed temp libSQL with `db/fixtures/` builders/scenarios instead of mocking query results.
 
 ## Native UI Checks
 

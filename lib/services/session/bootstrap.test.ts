@@ -1,5 +1,5 @@
-import { sessionBootstrapFixture } from "@/db/fixtures/session";
 import { BOOTSTRAP_API_PATH } from "@/lib/bootstrap";
+import { sessionBootstrapFixture } from "@/lib/services/session/test-fixtures";
 import { createSessionBootstrapService } from "./bootstrap";
 
 describe("createSessionBootstrapService", () => {

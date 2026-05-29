@@ -1,22 +1,20 @@
 import {
 	cachedSessionBootstrapFixture,
 	sessionBootstrapFixture,
-} from "@/db/fixtures/session";
+} from "@/lib/services/session/test-fixtures";
 import type { SessionBootstrapService } from "./bootstrap";
 import type { SessionCache } from "./cache";
 import type { AuthenticatedAppSessionStateSnapshot } from "./controller";
 
 export {
-	cachedSessionBootstrapFixture,
-	itemFixture,
-	listFixture,
-	sessionBootstrapFixture,
-} from "@/db/fixtures/session";
-export {
 	authenticatedAppSessionFixture,
+	cachedSessionBootstrapFixture,
 	itemServiceFixture,
 	listServiceFixture,
+	sessionBootstrapFixture,
 	sessionDataServicesFixture,
+	sessionItemFixture,
+	sessionListFixture,
 	syncCoordinatorFixture,
 } from "@/lib/services/session/test-fixtures";
 export { deferred, waitForAsync } from "@/lib/test/async";

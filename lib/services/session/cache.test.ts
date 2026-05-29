@@ -1,8 +1,8 @@
+import { deleteLocalHouseholdStoreData } from "@/lib/services/household/household-store";
 import {
 	cachedSessionBootstrapFixture,
 	sessionBootstrapFixture,
-} from "@/db/fixtures/session";
-import { deleteLocalHouseholdStoreData } from "@/lib/services/household/household-store";
+} from "@/lib/services/session/test-fixtures";
 import {
 	createSessionCache,
 	SESSION_CACHE_KEY,

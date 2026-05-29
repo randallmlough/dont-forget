@@ -1,3 +1,4 @@
+import { itemCheckFixture, itemFixture, listFixture } from "@/db/fixtures";
 import { itemChecks, items, lists } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import type { Logger } from "@/lib/logger";
@@ -44,13 +45,15 @@ describe("createItemService", () => {
 		const household = await createTestHouseholdDb();
 
 		try {
-			await household.db.insert(lists).values({
-				id: "lst_weekend",
-				name: "Weekend Groceries",
-				createdByUserId: "usr_avery",
-			});
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+				}),
+			);
 			await household.db.insert(items).values([
-				{
+				itemFixture({
 					id: "itm_b",
 					listId: "lst_weekend",
 					name: "Bananas",
@@ -58,8 +61,8 @@ describe("createItemService", () => {
 					createdByUserId: "usr_avery",
 					createdAt: 20,
 					updatedAt: 20,
-				},
-				{
+				}),
+				itemFixture({
 					id: "itm_a",
 					listId: "lst_weekend",
 					name: "Apples",
@@ -67,8 +70,8 @@ describe("createItemService", () => {
 					createdByUserId: "usr_avery",
 					createdAt: 10,
 					updatedAt: 10,
-				},
-				{
+				}),
+				itemFixture({
 					id: "itm_c",
 					listId: "lst_weekend",
 					name: "Coffee",
@@ -76,8 +79,8 @@ describe("createItemService", () => {
 					createdByUserId: "usr_avery",
 					createdAt: 30,
 					updatedAt: 30,
-				},
-				{
+				}),
+				itemFixture({
 					id: "itm_deleted",
 					listId: "lst_weekend",
 					name: "Deleted",
@@ -86,27 +89,27 @@ describe("createItemService", () => {
 					createdAt: 1,
 					updatedAt: 1,
 					deletedAt: 2,
-				},
+				}),
 			]);
 			await household.db.insert(itemChecks).values([
-				{
+				itemCheckFixture({
 					itemId: "itm_a",
 					userId: "usr_blake",
 					checkedAt: 40,
 					updatedAt: 40,
-				},
-				{
+				}),
+				itemCheckFixture({
 					itemId: "itm_a",
 					userId: "usr_avery",
 					checkedAt: null,
 					updatedAt: 50,
-				},
-				{
+				}),
+				itemCheckFixture({
 					itemId: "itm_b",
 					userId: "usr_blake",
 					checkedAt: 60,
 					updatedAt: 60,
-				},
+				}),
 			]);
 			const service = createItemService({
 				householdId: "hh_avery",
@@ -152,11 +155,13 @@ describe("createItemService", () => {
 		jest.spyOn(Date, "now").mockReturnValue(8_000_000_000_000);
 
 		try {
-			await household.db.insert(lists).values({
-				id: "lst_weekend",
-				name: "Weekend Groceries",
-				createdByUserId: "usr_avery",
-			});
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+				}),
+			);
 			const service = createItemService({
 				householdId: "hh_avery",
 				store: { execute: household.client.execute.bind(household.client) },
@@ -210,27 +215,29 @@ describe("createItemService", () => {
 		const household = await createTestHouseholdDb();
 
 		try {
-			await household.db.insert(lists).values({
-				id: "lst_weekend",
-				name: "Weekend Groceries",
-				createdByUserId: "usr_avery",
-			});
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+				}),
+			);
 			await household.db.insert(items).values([
-				{
+				itemFixture({
 					id: "itm_existing",
 					listId: "lst_weekend",
 					name: "Apples",
 					position: 2,
 					createdByUserId: "usr_avery",
-				},
-				{
+				}),
+				itemFixture({
 					id: "itm_deleted",
 					listId: "lst_weekend",
 					name: "Deleted",
 					position: 20,
 					createdByUserId: "usr_avery",
 					deletedAt: 1,
-				},
+				}),
 			]);
 			const service = createItemService({
 				householdId: "hh_avery",
@@ -311,11 +318,13 @@ describe("createItemService", () => {
 			.mockImplementation(() => rawTimestamps.shift() ?? 8_999_999_999_999);
 
 		try {
-			await household.db.insert(lists).values({
-				id: "lst_weekend",
-				name: "Weekend Groceries",
-				createdByUserId: "usr_avery",
-			});
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+				}),
+			);
 			const service = createItemService({
 				householdId: "hh_avery",
 				store: { execute: household.client.execute.bind(household.client) },
@@ -385,24 +394,26 @@ describe("createItemService", () => {
 
 		try {
 			await household.db.insert(lists).values([
-				{
+				listFixture({
 					id: "lst_weekend",
 					name: "Weekend Groceries",
 					createdByUserId: "usr_avery",
-				},
-				{
+				}),
+				listFixture({
 					id: "lst_hardware",
 					name: "Hardware",
 					createdByUserId: "usr_avery",
-				},
+				}),
 			]);
-			await household.db.insert(items).values({
-				id: "itm_milk",
-				listId: "lst_weekend",
-				name: "Milk",
-				position: 0,
-				createdByUserId: "usr_avery",
-			});
+			await household.db.insert(items).values(
+				itemFixture({
+					id: "itm_milk",
+					listId: "lst_weekend",
+					name: "Milk",
+					position: 0,
+					createdByUserId: "usr_avery",
+				}),
+			);
 			const service = createItemService({
 				householdId: "hh_avery",
 				store: { execute: household.client.execute.bind(household.client) },
@@ -441,11 +452,13 @@ describe("createItemService", () => {
 			.mockImplementation(() => rawTimestamps.shift() ?? 10_000_000_000_002);
 
 		try {
-			await household.db.insert(lists).values({
-				id: "lst_weekend",
-				name: "Weekend Groceries",
-				createdByUserId: "usr_avery",
-			});
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+				}),
+			);
 			const service = createItemService({
 				householdId: "hh_avery",
 				store: { execute: household.client.execute.bind(household.client) },

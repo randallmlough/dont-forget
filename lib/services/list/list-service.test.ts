@@ -1,8 +1,28 @@
+import { listFixture, seedPrimaryHouseholdScenario } from "@/db/fixtures";
 import { lists } from "@/db/schema/household";
-import { createTestHouseholdDb } from "@/db/test";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 import type { Logger } from "@/lib/logger";
 
 import { createListService, ListNotFoundError } from "./list-service";
+
+jest.mock("@/lib/analytics", () => ({
+	track: jest.fn(),
+}));
+
+jest.mock("@/lib/logger", () => {
+	const logger = {
+		debug: jest.fn(),
+		info: jest.fn(),
+		warn: jest.fn(),
+		error: jest.fn(),
+		with: jest.fn(),
+	};
+	logger.with.mockReturnValue(logger);
+	return {
+		logger,
+		useLogger: jest.fn(() => logger),
+	};
+});
 
 const testLogger = {
 	debug: jest.fn(),
@@ -23,15 +43,13 @@ beforeEach(() => {
 
 describe("createListService", () => {
 	it("loads List metadata by List ID", async () => {
+		const directory = await createTestDirectoryDb();
 		const household = await createTestHouseholdDb();
 
 		try {
-			await household.db.insert(lists).values({
-				id: "lst_weekend",
-				name: "Weekend Groceries",
-				createdByUserId: "usr_avery",
-				createdAt: 1_700_000_000_000,
-				updatedAt: 1_700_000_000_100,
+			const scenario = await seedPrimaryHouseholdScenario({
+				directory: directory.db,
+				household: household.db,
 			});
 			const service = createListService({
 				householdId: "hh_avery",
@@ -39,17 +57,18 @@ describe("createListService", () => {
 				logger: testLogger,
 			});
 
-			await expect(service.getList({ listId: "lst_weekend" })).resolves.toEqual(
-				{
-					id: "lst_weekend",
-					householdId: "hh_avery",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-					createdAt: 1_700_000_000_000,
-					updatedAt: 1_700_000_000_100,
-				},
-			);
+			await expect(
+				service.getList({ listId: scenario.lists.groceries.id }),
+			).resolves.toEqual({
+				id: scenario.lists.groceries.id,
+				householdId: scenario.household.id,
+				name: scenario.lists.groceries.name,
+				createdByUserId: scenario.users.avery.id,
+				createdAt: scenario.lists.groceries.createdAt,
+				updatedAt: scenario.lists.groceries.updatedAt,
+			});
 		} finally {
+			await directory.close();
 			await household.close();
 		}
 	});
@@ -105,12 +124,14 @@ describe("createListService", () => {
 		const household = await createTestHouseholdDb();
 
 		try {
-			await household.db.insert(lists).values({
-				id: "lst_archived",
-				name: "Archived Groceries",
-				createdByUserId: "usr_avery",
-				deletedAt: 1_700_000_000_200,
-			});
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_archived",
+					name: "Archived Groceries",
+					createdByUserId: "usr_avery",
+					deletedAt: 1_700_000_000_200,
+				}),
+			);
 			const service = createListService({
 				householdId: "hh_avery",
 				store: { execute: household.client.execute.bind(household.client) },

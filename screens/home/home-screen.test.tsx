@@ -7,13 +7,22 @@ import {
 } from "@testing-library/react-native";
 import type { ActiveListInitialState } from "@/components/active-list";
 import { useAuthenticatedAppSession } from "@/components/session";
-import { itemFixture, listFixture } from "@/db/fixtures/session";
+import {
+	type PrimaryHouseholdScenario,
+	seedPrimaryHouseholdScenario,
+} from "@/db/fixtures";
+import type { TestDirectoryDb, TestHouseholdDb } from "@/db/test";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
+import type { Logger } from "@/lib/logger";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { createSessionDataServices } from "@/lib/services/session/services";
 import {
 	authenticatedAppSessionFixture,
 	itemServiceFixture,
 	listServiceFixture,
+	sessionItemFixture,
+	sessionListFixture,
 	syncCoordinatorFixture,
 } from "@/lib/services/session/test-fixtures";
 import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
@@ -22,7 +31,44 @@ jest.mock("@/components/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
 }));
 
+jest.mock("@/lib/analytics", () => ({
+	track: jest.fn(),
+}));
+
+jest.mock("@/lib/logger", () => {
+	const logger = {
+		debug: jest.fn(),
+		info: jest.fn(),
+		warn: jest.fn(),
+		error: jest.fn(),
+		with: jest.fn(),
+	};
+	logger.with.mockReturnValue(logger);
+	return {
+		logger,
+		useLogger: jest.fn(() => logger),
+	};
+});
+
+const testLogger = {
+	debug: jest.fn(),
+	info: jest.fn(),
+	warn: jest.fn(),
+	error: jest.fn(),
+	with: jest.fn(),
+} satisfies jest.Mocked<Logger>;
+testLogger.with.mockImplementation(() => testLogger);
+
 describe("HomeScreen", () => {
+	beforeEach(() => {
+		testLogger.debug.mockReset();
+		testLogger.info.mockReset();
+		testLogger.warn.mockReset();
+		testLogger.error.mockReset();
+		testLogger.with.mockClear();
+		testLogger.with.mockImplementation(() => testLogger);
+	});
+
 	it("renders provider-derived loading state", () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "loading" },
@@ -37,17 +83,22 @@ describe("HomeScreen", () => {
 	});
 
 	it("renders provider-derived ready state", async () => {
+		const harness = await createHomeSessionHarness();
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "ready", refreshing: false },
-			session: readySession(),
+			session: harness.session,
 			retry: jest.fn(),
 			signOut: jest.fn(async () => undefined),
 		});
 
-		render(<HomeScreen />);
+		try {
+			render(<HomeScreen />);
 
-		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
-		expect(screen.getByText("Milk")).toBeTruthy();
+			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+			expect(screen.getByText("Milk")).toBeTruthy();
+		} finally {
+			await harness.close();
+		}
 	});
 
 	it("wires retry and sign out actions from the provider", () => {
@@ -76,7 +127,7 @@ it("remounts Active List when the session resource changes", async () => {
 	const { rerender } = render(
 		<HomeScreenView
 			state={{ status: "ready", refreshing: false }}
-			session={readySession({
+			session={controlledSession({
 				resourceKey: "authenticated-app-session:1",
 				initialList: initialListFixture({ itemName: "Cached Milk" }),
 			})}
@@ -87,7 +138,7 @@ it("remounts Active List when the session resource changes", async () => {
 	rerender(
 		<HomeScreenView
 			state={{ status: "ready", refreshing: false }}
-			session={readySession({
+			session={controlledSession({
 				resourceKey: "authenticated-app-session:2",
 				initialList: initialListFixture({ itemName: "Fresh Eggs" }),
 			})}
@@ -122,54 +173,61 @@ describe("HomeScreenView", () => {
 		expect(retry).toHaveBeenCalledTimes(1);
 	});
 
-	it("renders Active List data after authenticated app session loading succeeds", async () => {
-		render(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
-				session={readySession({
-					initialList: initialListFixture({
-						checked: true,
-						checkedByMemberName: "Avery Chen",
-					}),
-				})}
-			/>,
-		);
+	it("renders Active List data from seeded session services", async () => {
+		const harness = await createHomeSessionHarness();
 
-		await waitFor(() => expect(screen.getByText("Avery")).toBeTruthy());
-		expect(screen.getByText("Groceries")).toBeTruthy();
-		expect(screen.getByText("Milk")).toBeTruthy();
-		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
+		try {
+			render(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() => expect(screen.getByText("Avery")).toBeTruthy());
+			expect(screen.getByText("Groceries")).toBeTruthy();
+			expect(screen.getByText("Milk")).toBeTruthy();
+			expect(screen.getByText("Eggs")).toBeTruthy();
+			expect(screen.getByText("Bread")).toBeTruthy();
+			expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
+			expect(screen.getByText("Checked by Blake Rivera")).toBeTruthy();
+			expect(screen.queryByText("Coffee")).toBeNull();
+		} finally {
+			await harness.close();
+		}
 	});
 
 	it("uses active Member fallback name for checked Item display", async () => {
-		const session = readySession({
-			initialList: initialListFixture({ checked: true }),
-		});
-		session.activeMember.displayName = null;
-		session.members = session.members.map((member) =>
-			member.userId === session.activeMember.userId
+		const harness = await createHomeSessionHarness();
+		harness.session.activeMember.displayName = null;
+		harness.session.members = harness.session.members.map((member) =>
+			member.userId === harness.session.activeMember.userId
 				? { ...member, displayName: null }
 				: member,
 		);
 
-		render(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
-				session={session}
-			/>,
-		);
+		try {
+			render(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
 
-		await waitFor(() =>
-			expect(screen.getByText("Checked by Avery Chen")).toBeTruthy(),
-		);
+			await waitFor(() =>
+				expect(screen.getByText("Checked by Avery Chen")).toBeTruthy(),
+			);
+		} finally {
+			await harness.close();
+		}
 	});
 
 	it("shows a retryable List error when list loading fails", async () => {
-		const session = readySession();
+		const session = controlledSession();
 		jest
 			.mocked(session.services.lists.getList)
 			.mockRejectedValueOnce(new Error("offline"))
-			.mockResolvedValueOnce(listFixture());
+			.mockResolvedValueOnce(sessionListFixture());
 
 		render(
 			<HomeScreenView
@@ -187,70 +245,79 @@ describe("HomeScreenView", () => {
 		expect(session.services.lists.getList).toHaveBeenCalledTimes(2);
 	});
 
-	it("loads the default List by explicit listId after authenticated app session context exists", async () => {
-		const session = readySession();
+	it("loads the default List from the seeded Household DB after authenticated app session context exists", async () => {
+		const harness = await createHomeSessionHarness();
 
-		render(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
-				session={session}
-			/>,
-		);
+		try {
+			render(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
 
-		await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
-		expect(session.services.lists.getList).toHaveBeenCalledWith({
-			listId: DEFAULT_LIST_ID,
-		});
-		expect(session.services.items.listItems).toHaveBeenCalledWith({
-			listId: DEFAULT_LIST_ID,
-		});
+			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+			expect(harness.scenario.lists.groceries.id).toBe(DEFAULT_LIST_ID);
+		} finally {
+			await harness.close();
+		}
 	});
 
-	it("uses explicit listId for List operations", async () => {
-		const addItem = jest
-			.fn()
-			.mockResolvedValue(itemFixture({ id: "itm_eggs", name: "Eggs" }));
-		const setItemChecked = jest.fn().mockResolvedValue(undefined);
-		const session = readySession({
-			items: itemServiceFixture({ addItem, setItemChecked }),
-		});
+	it("persists Item add and checked state through seeded session services", async () => {
+		const harness = await createHomeSessionHarness();
 
-		render(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
-				session={session}
-			/>,
-		);
-		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		try {
+			render(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
 
-		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Eggs");
-		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
-		});
-		await act(async () => {
-			fireEvent.press(screen.getByRole("checkbox", { name: "Eggs" }));
-		});
+			fireEvent.changeText(
+				screen.getByPlaceholderText("Add an Item"),
+				"Yogurt",
+			);
+			await act(async () => {
+				fireEvent.press(screen.getByText("Add"));
+			});
+			await waitFor(() => expect(screen.getByText("Yogurt")).toBeTruthy());
+			await act(async () => {
+				fireEvent.press(screen.getByRole("checkbox", { name: "Yogurt" }));
+			});
 
-		expect(addItem).toHaveBeenCalledWith({
-			listId: DEFAULT_LIST_ID,
-			userId: "usr_avery",
-			name: "Eggs",
-		});
-		expect(setItemChecked).toHaveBeenCalledWith({
-			listId: DEFAULT_LIST_ID,
-			itemId: "itm_eggs",
-			userId: "usr_avery",
-			checked: true,
-		});
+			const persistedItem = await harness.household.db.query.items.findFirst({
+				where: (table, { eq }) => eq(table.name, "Yogurt"),
+			});
+			expect(persistedItem).toBeDefined();
+			if (!persistedItem) throw new Error("Expected persisted Item");
+			expect(persistedItem).toMatchObject({
+				listId: DEFAULT_LIST_ID,
+				name: "Yogurt",
+				createdByUserId: harness.scenario.users.avery.id,
+			});
+			await expect(
+				harness.household.db.query.itemChecks.findFirst({
+					where: (table, { eq }) => eq(table.itemId, persistedItem.id),
+				}),
+			).resolves.toMatchObject({
+				itemId: persistedItem.id,
+				userId: harness.scenario.users.avery.id,
+				checkedAt: expect.any(Number),
+			});
+		} finally {
+			await harness.close();
+		}
 	});
 
 	it("ignores stale List loads after the session resource changes", async () => {
-		const staleLoad = deferred<ReturnType<typeof listFixture>>();
-		const freshLoad = deferred<ReturnType<typeof listFixture>>();
+		const staleLoad = deferred<ReturnType<typeof sessionListFixture>>();
+		const freshLoad = deferred<ReturnType<typeof sessionListFixture>>();
 		const { rerender } = render(
 			<HomeScreenView
 				state={{ status: "ready", refreshing: false }}
-				session={readySession({
+				session={controlledSession({
 					resourceKey: "authenticated-app-session:1",
 					lists: listServiceFixture({
 						getList: jest.fn(() => staleLoad.promise),
@@ -262,7 +329,7 @@ describe("HomeScreenView", () => {
 		rerender(
 			<HomeScreenView
 				state={{ status: "ready", refreshing: false }}
-				session={readySession({
+				session={controlledSession({
 					resourceKey: "authenticated-app-session:2",
 					initialList: initialListFixture({ itemName: "Fresh Eggs" }),
 					lists: listServiceFixture({
@@ -273,13 +340,13 @@ describe("HomeScreenView", () => {
 		);
 
 		await act(async () => {
-			freshLoad.resolve(listFixture());
+			freshLoad.resolve(sessionListFixture());
 			await freshLoad.promise;
 		});
 		await waitFor(() => expect(screen.getByText("Fresh Eggs")).toBeTruthy());
 
 		await act(async () => {
-			staleLoad.resolve(listFixture({ name: "Stale" }));
+			staleLoad.resolve(sessionListFixture({ name: "Stale" }));
 			await staleLoad.promise;
 		});
 		expect(screen.queryByText("Stale")).toBeNull();
@@ -287,7 +354,89 @@ describe("HomeScreenView", () => {
 	});
 });
 
-type ReadySessionOverrides = {
+type HomeSessionHarness = {
+	directory: TestDirectoryDb;
+	household: TestHouseholdDb;
+	scenario: PrimaryHouseholdScenario;
+	session: AuthenticatedAppSession;
+	close: () => Promise<void>;
+};
+
+async function createHomeSessionHarness(): Promise<HomeSessionHarness> {
+	const directory = await createTestDirectoryDb();
+	const household = await createTestHouseholdDb();
+	const scenario = await seedPrimaryHouseholdScenario({
+		directory: directory.db,
+		household: household.db,
+	});
+	const dataServices = await createSessionDataServices(
+		{
+			householdId: scenario.household.id,
+			database: { url: "libsql://example", authToken: "secret" },
+			logger: testLogger,
+		},
+		{
+			store: {
+				syncAuthorized: true,
+				execute: household.client.execute.bind(household.client),
+				push: jest.fn(async () => undefined),
+				sync: jest.fn(async () => ({ changed: false })),
+				close: jest.fn(async () => undefined),
+			},
+		},
+	);
+	const session: AuthenticatedAppSession = {
+		user: {
+			id: scenario.users.avery.id,
+			email: scenario.users.avery.email ?? null,
+			displayName: scenario.users.avery.displayName ?? null,
+		},
+		activeHousehold: {
+			id: scenario.household.id,
+			name: scenario.household.name,
+		},
+		activeMember: {
+			id: scenario.members.avery.id,
+			userId: scenario.users.avery.id,
+			role: scenario.members.avery.role,
+			displayName: scenario.users.avery.displayName ?? null,
+		},
+		members: [
+			{
+				membershipId: scenario.members.avery.id,
+				userId: scenario.users.avery.id,
+				role: scenario.members.avery.role,
+				displayName: scenario.users.avery.displayName ?? null,
+			},
+			{
+				membershipId: scenario.members.blake.id,
+				userId: scenario.users.blake.id,
+				role: scenario.members.blake.role,
+				displayName: scenario.users.blake.displayName ?? null,
+			},
+		],
+		resourceKey: "authenticated-app-session:seeded",
+		services: {
+			lists: dataServices.lists,
+			items: dataServices.items,
+			sync: syncCoordinatorFixture(),
+		},
+	};
+
+	return {
+		directory,
+		household,
+		scenario,
+		session,
+		async close() {
+			await dataServices.close();
+			await directory.close();
+			await household.close();
+		},
+	};
+}
+
+type ControlledSessionOverrides = {
 	resourceKey?: string;
 	initialList?: ActiveListInitialState;
 	lists?: ReturnType<typeof listServiceFixture>;
@@ -295,8 +444,8 @@ type ReadySessionOverrides = {
 	sync?: ReturnType<typeof syncCoordinatorFixture>;
 };
 
-function readySession(
-	overrides: ReadySessionOverrides = {},
+function controlledSession(
+	overrides: ControlledSessionOverrides = {},
 ): AuthenticatedAppSession {
 	const initialList = overrides.initialList ?? initialListFixture();
 	return authenticatedAppSessionFixture({
@@ -308,14 +457,16 @@ function readySession(
 				listServiceFixture({
 					getList: jest
 						.fn()
-						.mockResolvedValue(listFixture({ name: initialList.listName })),
+						.mockResolvedValue(
+							sessionListFixture({ name: initialList.listName }),
+						),
 				}),
 			items:
 				overrides.items ??
 				itemServiceFixture({
 					listItems: jest.fn().mockResolvedValue(
 						initialList.items.map((item, index) =>
-							itemFixture({
+							sessionItemFixture({
 								id: item.id,
 								name: item.name,
 								checked: item.checked,
