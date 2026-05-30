@@ -252,7 +252,7 @@ async function previewInvitation(
 	return {
 		available: true,
 		householdName: row.householdName,
-		inviterDisplayName: row.inviterDisplayName ?? "A Member",
+		inviterDisplayName: publicInviterDisplayName(row.inviterDisplayName),
 	};
 }
 
@@ -615,6 +615,12 @@ function normalizeInvitationEmail(
 ): string | null {
 	const normalized = email?.trim().toLowerCase() ?? "";
 	return normalized ? normalized : null;
+}
+
+function publicInviterDisplayName(displayName: string | null): string {
+	const trimmed = displayName?.trim();
+	if (!trimmed || trimmed.includes("@")) return "A Member";
+	return trimmed;
 }
 
 function generateSecureInvitationToken(): string {

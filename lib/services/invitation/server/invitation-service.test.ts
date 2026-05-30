@@ -150,6 +150,17 @@ describe("createInvitationService", () => {
 					inviterDisplayName: PRIMARY_HOUSEHOLD_SEED.users.avery.displayName,
 				},
 			);
+			await directory.db
+				.update(users)
+				.set({ displayName: "avery@example.com" })
+				.where(eq(users.id, PRIMARY_HOUSEHOLD_SEED.users.avery.id));
+			await expect(service.previewInvitation("pending-token")).resolves.toEqual(
+				{
+					available: true,
+					householdName: PRIMARY_HOUSEHOLD_SEED.household.name,
+					inviterDisplayName: "A Member",
+				},
+			);
 
 			const pending = await service.listPendingInvitations({
 				householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
