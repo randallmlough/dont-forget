@@ -51,6 +51,7 @@ export async function resetDirectoryDatabase(
 		await tx.delete(householdJoinCodes);
 		await tx.delete(invitations);
 		await tx.delete(memberships);
+		await tx.update(users).set({ activeHouseholdId: null });
 		await tx.delete(households);
 		await tx.delete(users);
 	});

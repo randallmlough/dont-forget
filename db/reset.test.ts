@@ -41,6 +41,7 @@ describe("database reset", () => {
 				tursoDbName: "df-test-hh-1",
 				createdByUserId: "usr_1",
 			});
+			await directory.db.update(users).set({ activeHouseholdId: "hh_1" });
 			await directory.db.insert(memberships).values({
 				id: "mbr_1",
 				householdId: "hh_1",
