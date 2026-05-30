@@ -70,6 +70,75 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 		});
 	});
 
+	it("replaces an associated cached Household without unauthorized local data deletion", async () => {
+		const cached = h.cachedSessionBootstrapFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const fresh = h.sessionBootstrapFixture({
+			householdId: "hh_new",
+			householdName: "New",
+			households: [
+				{ id: "hh_old", name: "Old", role: "owner", isActive: false },
+				{ id: "hh_new", name: "New", role: "member", isActive: true },
+			],
+		});
+		const events: string[] = [];
+		const cachedDataServices = h.sessionDataServicesFixture({
+			syncAuthorized: false,
+			close: jest.fn(async () => {
+				events.push("close:cached");
+			}),
+		});
+		const freshDataServices = h.sessionDataServicesFixture({
+			close: jest.fn(async () => {
+				events.push("close:fresh");
+			}),
+		});
+		const sessionService = h.sessionRuntimeFixture({
+			read: jest.fn().mockResolvedValue(cached),
+			getSession: jest.fn().mockResolvedValue(fresh),
+			readUnauthorized: jest.fn().mockResolvedValue(null),
+			deleteLocalData: jest.fn(async () => {
+				events.push("delete:cached");
+			}),
+			clearUnauthorizedMetadata: jest.fn(async () => {
+				events.push("clear:cached");
+			}),
+		});
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataServices)
+				.mockReturnValueOnce(freshDataServices),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		expect(sessionService.cache.readUnauthorized).toHaveBeenCalledWith(fresh);
+		expect(sessionService.cache.deleteLocalData).not.toHaveBeenCalled();
+		expect(
+			sessionService.cache.clearUnauthorizedMetadata,
+		).not.toHaveBeenCalled();
+		expect(events).toEqual(["close:cached"]);
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			session: {
+				resourceKey: "authenticated-app-session:2",
+				activeHousehold: { id: "hh_new", name: "New" },
+			},
+		});
+	});
+
 	it("closes an unauthorized cached resource before deleting local data", async () => {
 		const cached = h.cachedSessionBootstrapFixture({
 			householdId: "hh_old",

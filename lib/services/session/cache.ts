@@ -211,7 +211,9 @@ function cachedSessionIsStillAuthorized(
 ): boolean {
 	return (
 		cached.user.id === freshSession.user.id &&
-		cached.activeHousehold.id === freshSession.activeHousehold.id
+		freshSession.households.some(
+			(household) => household.id === cached.activeHousehold.id,
+		)
 	);
 }
 

@@ -287,6 +287,74 @@ describe("bootstrapAuthenticatedAppSession", () => {
 		}
 	});
 
+	it("repairs missing active Household selection with the oldest active Membership", async () => {
+		const harness = await createBootstrapHarness();
+
+		try {
+			await harness.directory.db.insert(users).values({
+				id: "usr_existing",
+				clerkUserId: "clerk_avery",
+				displayName: "Old Name",
+			});
+			await harness.directory.db.insert(households).values([
+				{
+					id: "hh_newer",
+					name: "Newer",
+					tursoDbName: "db-newer",
+					createdByUserId: "usr_existing",
+					provisioningCompletedAt: 1,
+					createdAt: 1,
+				},
+				{
+					id: "hh_older",
+					name: "Older",
+					tursoDbName: "db-older",
+					createdByUserId: "usr_existing",
+					provisioningCompletedAt: 1,
+					createdAt: 1,
+				},
+			]);
+			await harness.directory.db.insert(memberships).values([
+				{
+					id: "mbr_newer",
+					householdId: "hh_newer",
+					userId: "usr_existing",
+					role: "member",
+					joinedAt: 20,
+				},
+				{
+					id: "mbr_older",
+					householdId: "hh_older",
+					userId: "usr_existing",
+					role: "owner",
+					joinedAt: 10,
+				},
+			]);
+
+			const response = await bootstrapAuthenticatedAppSession(
+				averyProfile,
+				harness.deps,
+			);
+
+			expect(response.activeHousehold).toEqual({
+				id: "hh_older",
+				name: "Older",
+			});
+			expect(response.households).toEqual([
+				{ id: "hh_older", name: "Older", role: "owner", isActive: true },
+				{ id: "hh_newer", name: "Newer", role: "member", isActive: false },
+			]);
+			expect(await activeHouseholdIdFor(harness, "usr_existing")).toBe(
+				"hh_older",
+			);
+			expect(await harness.directory.db.select().from(households)).toHaveLength(
+				2,
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
 	it("retries a pending created Household without creating duplicate directory rows", async () => {
 		const harness = await createBootstrapHarness();
 

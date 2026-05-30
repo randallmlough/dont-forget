@@ -9,7 +9,8 @@ Home currently renders the session's selected Current List, but Home is a consum
 Screens consume the public hook:
 
 ```ts
-const { state, session, retry, signOut } = useAuthenticatedAppSession();
+const { state, session, retry, reloadSession, signOut } =
+  useAuthenticatedAppSession();
 ```
 
 Public state is lifecycle/UI metadata only:
@@ -28,6 +29,8 @@ await session.services.lists.getList({ listId });
 await session.services.items.listItems({ listId });
 await session.services.sync.requestSync({ reason: "manualRefresh" });
 ```
+
+`session.households` lists every active Household associated with the signed-in User. Each entry includes `id`, `name`, the User's Member `role`, and `isActive`. `session.activeHousehold` remains the one Household whose resources back `session.services`.
 
 `session.services.sync` is a consumer-safe sync handle. It exposes status, subscription, and reasoned sync requests, but not coordinator lifecycle methods.
 
@@ -50,11 +53,13 @@ The controller owns Authenticated App Session loading and composes the signed-in
 
 Route-owned loading code chooses a List ID and calls services explicitly. Home uses `DEFAULT_LIST_ID` for now, then calls `getList({ listId })`, `listItems({ listId })`, `addItem({ listId, ... })`, and `setItemChecked({ listId, ... })` only after `session` exists. `ActiveList` receives loaded state and explicit callbacks; it does not receive a Current List data source.
 
+After accept, join, or switch mutations update directory state, screens call the provider-owned `reloadSession()` action. Screens do not call bootstrap directly and do not open, close, replace, or delete Household resources.
+
 ## Replacement and Stale Resources
 
 Safe cached-to-fresh replacement keeps cached List UI writable while fresh authorized session resources are prepared. When the replacement session is published, the old borrowed resource rejects new List/Item/sync calls with a typed stale-resource error and closes only after accepted operations drain.
 
-Unauthorized cached invalidation is stricter. If a fresh Authenticated App Session proves the cached Household is unauthorized, the controller retires cached resources before deleting local data and does not keep stale Household data visible.
+Unauthorized cached invalidation is stricter. If a fresh Authenticated App Session proves the cached Household is no longer associated with the User, the controller retires cached resources before deleting local data and does not keep stale Household data visible. A Household switch to another associated Household is not unauthorized; it uses normal replacement, while the previous Household remains available in `session.households`.
 
 ## Sync Ownership
 

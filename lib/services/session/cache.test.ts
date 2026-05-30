@@ -106,6 +106,36 @@ describe("createSessionCache", () => {
 		);
 	});
 
+	it("keeps cached Household data authorized when a fresh session switches to another associated Household", async () => {
+		const storage = memoryStorage();
+		const analytics = createMockAnalytics();
+		const cache = createSessionCache({ storage, analytics });
+		const oldSession = sessionBootstrapFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const freshSession = sessionBootstrapFixture({
+			householdId: "hh_new",
+			householdName: "New",
+			households: [
+				{ id: "hh_old", name: "Old", role: "owner", isActive: false },
+				{ id: "hh_new", name: "New", role: "member", isActive: true },
+			],
+		});
+
+		await cache.save(oldSession);
+		analytics.track.mockClear();
+		const removeItem = jest.spyOn(storage, "removeItem");
+
+		await expect(cache.readUnauthorized(freshSession)).resolves.toBeNull();
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
+		expect(removeItem).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalled();
+		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toEqual(
+			expect.any(String),
+		);
+	});
+
 	it("reports unauthorized cached Authenticated App Session metadata without deleting local data or clearing metadata", async () => {
 		const storage = memoryStorage();
 		const analytics = createMockAnalytics();
