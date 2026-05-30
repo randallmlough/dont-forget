@@ -32,6 +32,6 @@ describe("analytics test helpers", () => {
 
 		expect(() =>
 			expectAnalyticsTrackCallsToOmitSecrets(analytics.track, ["ABCDEFGH"]),
-		).toThrow();
+		).toThrow("track[0][1].household_id contains secret 0");
 	});
 });

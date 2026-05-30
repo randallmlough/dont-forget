@@ -6,9 +6,9 @@ export type ApiRequestInput = {
 	headers?: HeadersInit;
 };
 
-export type JsonResponse<TBody> = {
+export type JsonResponse = {
 	status: number;
-	body: TBody;
+	body: unknown;
 	headers: Headers;
 };
 
@@ -17,7 +17,7 @@ const API_TEST_ORIGIN = "https://dont-forget.test";
 export function createApiRequest(input: ApiRequestInput = {}): Request {
 	const headers = new Headers(input.headers);
 	const init: RequestInit = {
-		method: input.method ?? "GET",
+		method: input.method ?? (input.body === undefined ? "GET" : "POST"),
 		headers,
 	};
 
@@ -33,12 +33,12 @@ export function createApiRequest(input: ApiRequestInput = {}): Request {
 	return new Request(new URL(input.path ?? "/api/test", API_TEST_ORIGIN), init);
 }
 
-export async function readJsonResponse<TBody = unknown>(
+export async function readJsonResponse(
 	response: Response,
-): Promise<JsonResponse<TBody>> {
+): Promise<JsonResponse> {
 	return {
 		status: response.status,
-		body: (await response.json()) as TBody,
+		body: await response.json(),
 		headers: response.headers,
 	};
 }

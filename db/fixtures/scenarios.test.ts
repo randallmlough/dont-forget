@@ -25,7 +25,7 @@ import {
 } from "./index";
 
 describe("database fixture scenarios", () => {
-	it("inserts Join Code builder rows into a migrated directory DB", async () => {
+	it("inserts Household Join Code builder rows into a migrated directory DB", async () => {
 		const directory = await createTestDirectoryDb();
 
 		try {
@@ -81,7 +81,7 @@ describe("database fixture scenarios", () => {
 		}
 	});
 
-	it("seeds a primary Household with active User selection and a Join Code", async () => {
+	it("seeds a primary Household with active User selection and a Household Join Code", async () => {
 		const directory = await createTestDirectoryDb();
 		const household = await createTestHouseholdDb();
 
@@ -182,12 +182,13 @@ describe("database fixture scenarios", () => {
 			expect(scenario.invitations.expired.expiresAt).toBeLessThan(
 				PRIMARY_HOUSEHOLD_SEED.now,
 			);
+			expect(scenario.members.avery).toBe(scenario.memberships.avery);
 		} finally {
 			await directory.close();
 		}
 	});
 
-	it("seeds Household Join Code lifecycle audit rows without attempted or visible codes", async () => {
+	it("seeds Household Join Code lifecycle audit rows with safe use and attempt columns", async () => {
 		const directory = await createTestDirectoryDb();
 
 		try {
@@ -242,9 +243,21 @@ describe("database fixture scenarios", () => {
 					}),
 				]),
 			);
-			for (const row of [...uses, ...attempts]) {
-				expect(Object.keys(row)).not.toContain("code");
-			}
+			expect(Object.keys(uses[0]).sort()).toEqual([
+				"householdId",
+				"householdJoinCodeId",
+				"id",
+				"membershipId",
+				"usedAt",
+				"userId",
+			]);
+			expect(Object.keys(attempts[0]).sort()).toEqual([
+				"failedCount",
+				"lastFailedAt",
+				"userId",
+				"windowStartedAt",
+			]);
+			expect(scenario.members.blake).toBe(scenario.memberships.blake);
 		} finally {
 			await directory.close();
 		}

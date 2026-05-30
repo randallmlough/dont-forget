@@ -30,6 +30,104 @@ type PrimaryHouseholdScenarioOptions = {
 	householdTursoDbName?: string;
 };
 
+type DirectoryTransaction = Parameters<
+	Parameters<DirectoryDb["transaction"]>[0]
+>[0];
+
+function buildPrimaryDirectoryHouseholdFacts(input: {
+	now: number;
+	includeCameron?: boolean;
+	blakeJoinedAt?: number;
+	cameronJoinedAt?: number;
+}) {
+	const { now } = input;
+	const avery = userFixture({
+		...PRIMARY_HOUSEHOLD_SEED.users.avery,
+		createdAt: now,
+		updatedAt: now,
+	});
+	const blake = userFixture({
+		...PRIMARY_HOUSEHOLD_SEED.users.blake,
+		createdAt: now,
+		updatedAt: now,
+	});
+	const cameron = userFixture({
+		...PRIMARY_HOUSEHOLD_SEED.users.cameron,
+		createdAt: now,
+		updatedAt: now,
+	});
+	const household = householdFixture({
+		...PRIMARY_HOUSEHOLD_SEED.household,
+		createdByUserId: avery.id,
+		provisioningCompletedAt: now,
+		createdAt: now,
+	});
+	const averyMembership = membershipFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
+		householdId: household.id,
+		userId: avery.id,
+		role: "owner",
+		joinedAt: now,
+	});
+	const blakeMembership = membershipFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
+		householdId: household.id,
+		userId: blake.id,
+		role: "member",
+		joinedAt: input.blakeJoinedAt ?? now + 1,
+	});
+	const cameronMembership = membershipFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.memberships.cameron.id,
+		householdId: household.id,
+		userId: cameron.id,
+		role: "member",
+		joinedAt: input.cameronJoinedAt ?? now + 2,
+	});
+	const userRows = input.includeCameron
+		? [avery, blake, cameron]
+		: [avery, blake];
+	const memberRows = input.includeCameron
+		? [averyMembership, blakeMembership, cameronMembership]
+		: [averyMembership, blakeMembership];
+
+	return {
+		users: { avery, blake, cameron },
+		activeUsers: {
+			avery: { ...avery, activeHouseholdId: household.id },
+			blake: { ...blake, activeHouseholdId: household.id },
+			cameron: { ...cameron, activeHouseholdId: household.id },
+		},
+		household,
+		members: {
+			avery: averyMembership,
+			blake: blakeMembership,
+			cameron: cameronMembership,
+		},
+		memberships: {
+			avery: averyMembership,
+			blake: blakeMembership,
+			cameron: cameronMembership,
+		},
+		rows: {
+			users: userRows,
+			memberships: memberRows,
+		},
+	};
+}
+
+async function setActiveHouseholdForUsers(
+	tx: DirectoryTransaction,
+	userIds: readonly string[],
+	householdId: string,
+) {
+	for (const userId of userIds) {
+		await tx
+			.update(users)
+			.set({ activeHouseholdId: householdId })
+			.where(eq(users.id, userId));
+	}
+}
+
 export type PrimaryHouseholdScenario = Awaited<
 	ReturnType<typeof seedPrimaryHouseholdScenario>
 >;
@@ -317,36 +415,9 @@ export async function seedInvitationVariantsScenario(input: {
 	now?: number;
 }) {
 	const now = input.now ?? PRIMARY_HOUSEHOLD_SEED.now;
-	const avery = userFixture({
-		...PRIMARY_HOUSEHOLD_SEED.users.avery,
-		createdAt: now,
-		updatedAt: now,
-	});
-	const blake = userFixture({
-		...PRIMARY_HOUSEHOLD_SEED.users.blake,
-		createdAt: now,
-		updatedAt: now,
-	});
-	const household = householdFixture({
-		...PRIMARY_HOUSEHOLD_SEED.household,
-		createdByUserId: avery.id,
-		provisioningCompletedAt: now,
-		createdAt: now,
-	});
-	const averyMembership = membershipFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
-		householdId: household.id,
-		userId: avery.id,
-		role: "owner",
-		joinedAt: now,
-	});
-	const blakeMembership = membershipFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
-		householdId: household.id,
-		userId: blake.id,
-		role: "member",
-		joinedAt: now + 1,
-	});
+	const facts = buildPrimaryDirectoryHouseholdFacts({ now });
+	const { avery, blake } = facts.users;
+	const { household } = facts;
 	const pendingEmail = invitationFixture({
 		...PRIMARY_HOUSEHOLD_SEED.invitations.pendingEmail,
 		householdId: household.id,
@@ -389,31 +460,32 @@ export async function seedInvitationVariantsScenario(input: {
 	});
 
 	await input.directory.transaction(async (tx) => {
-		await tx.insert(users).values([avery, blake]);
+		await tx.insert(users).values(facts.rows.users);
 		await tx.insert(households).values(household);
-		await tx.insert(memberships).values([averyMembership, blakeMembership]);
+		await tx.insert(memberships).values(facts.rows.memberships);
 		await tx
 			.insert(invitations)
 			.values([pendingEmail, pendingLink, accepted, revoked, expired]);
-		await tx
-			.update(users)
-			.set({ activeHouseholdId: household.id })
-			.where(eq(users.id, avery.id));
-		await tx
-			.update(users)
-			.set({ activeHouseholdId: household.id })
-			.where(eq(users.id, blake.id));
+		await setActiveHouseholdForUsers(
+			tx,
+			facts.rows.users.map((user) => user.id),
+			household.id,
+		);
 	});
 
 	return {
 		users: {
-			avery: { ...avery, activeHouseholdId: household.id },
-			blake: { ...blake, activeHouseholdId: household.id },
+			avery: facts.activeUsers.avery,
+			blake: facts.activeUsers.blake,
 		},
 		household,
+		members: {
+			avery: facts.members.avery,
+			blake: facts.members.blake,
+		},
 		memberships: {
-			avery: averyMembership,
-			blake: blakeMembership,
+			avery: facts.memberships.avery,
+			blake: facts.memberships.blake,
 		},
 		invitations: {
 			pendingEmail,
@@ -439,48 +511,14 @@ export async function seedHouseholdJoinCodeAuditScenario(input: {
 	now?: number;
 }) {
 	const now = input.now ?? PRIMARY_HOUSEHOLD_SEED.now;
-	const avery = userFixture({
-		...PRIMARY_HOUSEHOLD_SEED.users.avery,
-		createdAt: now,
-		updatedAt: now,
+	const facts = buildPrimaryDirectoryHouseholdFacts({
+		now,
+		includeCameron: true,
+		blakeJoinedAt: now + 10,
+		cameronJoinedAt: now + 20,
 	});
-	const blake = userFixture({
-		...PRIMARY_HOUSEHOLD_SEED.users.blake,
-		createdAt: now,
-		updatedAt: now,
-	});
-	const cameron = userFixture({
-		...PRIMARY_HOUSEHOLD_SEED.users.cameron,
-		createdAt: now,
-		updatedAt: now,
-	});
-	const household = householdFixture({
-		...PRIMARY_HOUSEHOLD_SEED.household,
-		createdByUserId: avery.id,
-		provisioningCompletedAt: now,
-		createdAt: now,
-	});
-	const averyMembership = membershipFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
-		householdId: household.id,
-		userId: avery.id,
-		role: "owner",
-		joinedAt: now,
-	});
-	const blakeMembership = membershipFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
-		householdId: household.id,
-		userId: blake.id,
-		role: "member",
-		joinedAt: now + 10,
-	});
-	const cameronMembership = membershipFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.memberships.cameron.id,
-		householdId: household.id,
-		userId: cameron.id,
-		role: "member",
-		joinedAt: now + 20,
-	});
+	const { avery, blake, cameron } = facts.users;
+	const { household } = facts;
 	const active = householdJoinCodeFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.id,
 		householdId: household.id,
@@ -511,7 +549,7 @@ export async function seedHouseholdJoinCodeAuditScenario(input: {
 		householdJoinCodeId: active.id,
 		householdId: household.id,
 		userId: blake.id,
-		membershipId: blakeMembership.id,
+		membershipId: facts.members.blake.id,
 		usedAt: now + 40,
 	});
 	const cameronUse = householdJoinCodeUseFixture({
@@ -519,7 +557,7 @@ export async function seedHouseholdJoinCodeAuditScenario(input: {
 		householdJoinCodeId: active.id,
 		householdId: household.id,
 		userId: cameron.id,
-		membershipId: cameronMembership.id,
+		membershipId: facts.members.cameron.id,
 		usedAt: now + 41,
 	});
 	const blakeAttempt = householdJoinCodeAttemptFixture({
@@ -536,41 +574,37 @@ export async function seedHouseholdJoinCodeAuditScenario(input: {
 	});
 
 	await input.directory.transaction(async (tx) => {
-		await tx.insert(users).values([avery, blake, cameron]);
+		await tx.insert(users).values(facts.rows.users);
 		await tx.insert(households).values(household);
-		await tx
-			.insert(memberships)
-			.values([averyMembership, blakeMembership, cameronMembership]);
+		await tx.insert(memberships).values(facts.rows.memberships);
 		await tx.insert(householdJoinCodes).values([active, replaced, disabled]);
 		await tx.insert(householdJoinCodeUses).values([blakeUse, cameronUse]);
 		await tx
 			.insert(householdJoinCodeAttempts)
 			.values([blakeAttempt, cameronAttempt]);
-		await tx
-			.update(users)
-			.set({ activeHouseholdId: household.id })
-			.where(eq(users.id, avery.id));
-		await tx
-			.update(users)
-			.set({ activeHouseholdId: household.id })
-			.where(eq(users.id, blake.id));
-		await tx
-			.update(users)
-			.set({ activeHouseholdId: household.id })
-			.where(eq(users.id, cameron.id));
+		await setActiveHouseholdForUsers(
+			tx,
+			facts.rows.users.map((user) => user.id),
+			household.id,
+		);
 	});
 
 	return {
 		users: {
-			avery: { ...avery, activeHouseholdId: household.id },
-			blake: { ...blake, activeHouseholdId: household.id },
-			cameron: { ...cameron, activeHouseholdId: household.id },
+			avery: facts.activeUsers.avery,
+			blake: facts.activeUsers.blake,
+			cameron: facts.activeUsers.cameron,
 		},
 		household,
+		members: {
+			avery: facts.members.avery,
+			blake: facts.members.blake,
+			cameron: facts.members.cameron,
+		},
 		memberships: {
-			avery: averyMembership,
-			blake: blakeMembership,
-			cameron: cameronMembership,
+			avery: facts.memberships.avery,
+			blake: facts.memberships.blake,
+			cameron: facts.memberships.cameron,
 		},
 		joinCodes: {
 			active,
