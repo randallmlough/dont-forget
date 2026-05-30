@@ -1,5 +1,6 @@
+import { createClient } from "@libsql/client/node";
 import { eq } from "drizzle-orm";
-import type { DirectoryDb } from "@/db/client";
+import { type DirectoryDb, directoryDb } from "@/db/client";
 import {
 	householdFixture,
 	householdJoinCodeFixture,
@@ -59,7 +60,6 @@ describe("createHouseholdJoinCodeService", () => {
 			).resolves.toMatchObject({
 				enabled: true,
 				code: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.code,
-				groupedCode: "ABCD EFGH",
 				joinUrl: `app://join/${PRIMARY_HOUSEHOLD_SEED.joinCodes.active.code}`,
 			});
 			await expect(service.previewJoinCode("abcd-efgh")).resolves.toEqual({
@@ -132,6 +132,7 @@ describe("createHouseholdJoinCodeService", () => {
 			);
 			const service = createHouseholdJoinCodeService({
 				directory: directory.db,
+				buildJoinUrl: testJoinUrl,
 				generateCode: createCodeGenerator(["ZZZZZZZZ", "HJKLMNPQ", "RSTUVWXY"]),
 				analytics,
 			});
@@ -200,6 +201,7 @@ describe("createHouseholdJoinCodeService", () => {
 			await seedJoinCodeHousehold(directory.db);
 			const service = createHouseholdJoinCodeService({
 				directory: directory.db,
+				buildJoinUrl: testJoinUrl,
 			});
 
 			for (let index = 0; index < 5; index += 1) {
@@ -236,22 +238,32 @@ describe("createHouseholdJoinCodeService", () => {
 	it("lets two different Users use the same active reusable code concurrently", async () => {
 		const directory = await createTestDirectoryDb();
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_400_000);
+		const secondClient = createClient({ url: `file:${directory.path}` });
 
 		try {
+			await secondClient.execute("PRAGMA foreign_keys = ON");
+			await secondClient.execute("PRAGMA busy_timeout = 5000");
+			await secondClient.execute("PRAGMA journal_mode = WAL");
+			const secondDirectory = directoryDb(secondClient);
 			await seedJoinCodeHousehold(directory.db, {
 				includeBlakeMembership: false,
 				includeExtraUser: true,
 			});
-			const service = createHouseholdJoinCodeService({
+			const firstService = createHouseholdJoinCodeService({
 				directory: directory.db,
+				buildJoinUrl: testJoinUrl,
+			});
+			const secondService = createHouseholdJoinCodeService({
+				directory: secondDirectory,
+				buildJoinUrl: testJoinUrl,
 			});
 
 			await Promise.all([
-				service.joinByCode({
+				firstService.joinByCode({
 					code: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.code,
 					userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
 				}),
-				service.joinByCode({
+				secondService.joinByCode({
 					code: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.code,
 					userId: "usr_casey",
 				}),
@@ -268,10 +280,11 @@ describe("createHouseholdJoinCodeService", () => {
 			expect(householdMemberships).toHaveLength(3);
 			expect(uses).toHaveLength(2);
 		} finally {
+			secondClient.close();
 			dateNow.mockRestore();
 			await directory.close();
 		}
-	});
+	}, 15_000);
 });
 
 async function seedJoinCodeHousehold(
@@ -320,4 +333,8 @@ async function seedJoinCodeHousehold(
 			: []),
 	]);
 	await directory.insert(householdJoinCodes).values(householdJoinCodeFixture());
+}
+
+function testJoinUrl(input: { code: string }): string {
+	return `app://join/${input.code}`;
 }

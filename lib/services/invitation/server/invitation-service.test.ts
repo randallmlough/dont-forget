@@ -86,7 +86,7 @@ describe("createInvitationService", () => {
 				secondLinkOnly.invitation.id,
 			);
 			expect(firstLinkOnly.emailDelivery).toEqual({ status: "not_requested" });
-			expect(emailSender.sendInvitationEmail).toHaveBeenCalledTimes(2);
+			expect(emailSender.sendInvitationEmail).toHaveBeenCalledTimes(1);
 			await expect(
 				directory.db.select().from(invitations),
 			).resolves.toHaveLength(3);
@@ -160,13 +160,11 @@ describe("createInvitationService", () => {
 					id: "inv_pending",
 					email: "pending@example.com",
 					acceptUrl: "app://accept/pending-token",
-					canRevoke: true,
 				}),
 				expect.objectContaining({
 					id: "inv_revoke",
 					email: null,
 					acceptUrl: "app://accept/revoke-token",
-					canRevoke: true,
 				}),
 			]);
 
@@ -234,7 +232,10 @@ describe("createInvitationService", () => {
 					expiresAt: 1_700_000_030_000,
 				}),
 			);
-			const service = createInvitationService({ directory: directory.db });
+			const service = createInvitationService({
+				directory: directory.db,
+				buildAcceptUrl: testAcceptUrl,
+			});
 
 			const accepted = await service.acceptInvitation({
 				token: "owner-token",
@@ -268,6 +269,7 @@ describe("createInvitationService", () => {
 				);
 			const service = createInvitationService({
 				directory: directory.db,
+				buildAcceptUrl: testAcceptUrl,
 				generateToken: createTokenGenerator([
 					"duplicate-token",
 					"unique-token",
@@ -303,4 +305,8 @@ async function seedInvitationHousehold(directory: DirectoryDb) {
 			role: "owner",
 		}),
 	);
+}
+
+function testAcceptUrl(input: { token: string }): string {
+	return `app://accept/${input.token}`;
 }

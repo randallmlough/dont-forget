@@ -5,9 +5,9 @@ export {
 	type ActiveHouseholdServiceDeps,
 	type AssociatedHousehold,
 	createActiveHouseholdService,
-	findActiveMembershipSelection,
 } from "./active-household-service";
 export {
+	createHouseholdJoinCode,
 	createHouseholdJoinCodeService,
 	type HouseholdJoinCodeGenerator,
 	HouseholdJoinCodeMembershipRequiredError,

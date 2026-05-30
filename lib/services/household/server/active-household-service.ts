@@ -43,6 +43,9 @@ export type SwitchActiveHouseholdInput = {
 export type ActiveHouseholdService = {
 	getActiveHousehold(userId: string): Promise<ActiveHouseholdSelection | null>;
 	listAssociatedHouseholds(userId: string): Promise<AssociatedHousehold[]>;
+	setActiveHousehold(
+		input: SwitchActiveHouseholdInput,
+	): Promise<ActiveHouseholdSelection>;
 	switchActiveHousehold(
 		input: SwitchActiveHouseholdInput,
 	): Promise<ActiveHouseholdSelection>;
@@ -63,6 +66,9 @@ export function createActiveHouseholdService(
 		},
 		listAssociatedHouseholds(userId) {
 			return listAssociatedHouseholds(userId, deps.directory);
+		},
+		setActiveHousehold(input) {
+			return setActiveHousehold(input, deps.directory);
 		},
 		switchActiveHousehold(input) {
 			return switchActiveHousehold(input, deps.directory, analytics);
@@ -138,6 +144,20 @@ async function switchActiveHousehold(
 	directory: ActiveHouseholdServiceDirectory,
 	analytics: { track: typeof track },
 ): Promise<ActiveHouseholdSelection> {
+	const selection = await setActiveHousehold(input, directory);
+
+	analytics.track("household_switched", {
+		household_id: selection.householdId,
+		user_id: input.userId,
+	});
+
+	return selection;
+}
+
+async function setActiveHousehold(
+	input: SwitchActiveHouseholdInput,
+	directory: ActiveHouseholdServiceDirectory,
+): Promise<ActiveHouseholdSelection> {
 	const selection = await findActiveMembershipSelection(input, directory);
 	if (!selection) throw new ActiveHouseholdMembershipRequiredError();
 
@@ -145,11 +165,6 @@ async function switchActiveHousehold(
 		.update(users)
 		.set({ activeHouseholdId: selection.householdId, updatedAt: Date.now() })
 		.where(eq(users.id, input.userId));
-
-	analytics.track("household_switched", {
-		household_id: selection.householdId,
-		user_id: input.userId,
-	});
 
 	return selection;
 }
@@ -175,7 +190,7 @@ async function findOldestActiveMembershipSelection(
 	return row ?? null;
 }
 
-export async function findActiveMembershipSelection(
+async function findActiveMembershipSelection(
 	input: { userId: string; householdId: string },
 	directory: ActiveHouseholdServiceDirectory,
 ): Promise<ActiveHouseholdSelection | null> {

@@ -1,18 +1,17 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 
 import type { DirectoryDb } from "@/db/client";
 import {
 	households,
 	type Invitation,
 	invitations,
-	type Membership,
-	memberships,
 	users,
 } from "@/db/schema/directory";
 import { track } from "@/lib/analytics";
 import { createAppId } from "@/lib/ids";
-import { findActiveMembershipSelection } from "@/lib/services/household/server/active-household-service";
+import { createActiveHouseholdService } from "@/lib/services/household/server/active-household-service";
+import { createMemberService } from "@/lib/services/member/server";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOKEN_GENERATION_ATTEMPTS = 5;
@@ -115,7 +114,6 @@ export type PendingInvitation = {
 	createdAt: number;
 	expiresAt: number;
 	acceptUrl: string;
-	canRevoke: true;
 };
 
 export type InvitationService = {
@@ -138,7 +136,7 @@ export type InvitationService = {
 
 export type InvitationServiceDeps = {
 	directory: InvitationServiceDirectory;
-	buildAcceptUrl?: InvitationAcceptUrlBuilder;
+	buildAcceptUrl: InvitationAcceptUrlBuilder;
 	generateToken?: InvitationTokenGenerator;
 	emailSender?: InvitationEmailSender;
 	analytics?: { track: typeof track };
@@ -147,7 +145,7 @@ export type InvitationServiceDeps = {
 export function createInvitationService(
 	deps: InvitationServiceDeps,
 ): InvitationService {
-	const buildAcceptUrl = deps.buildAcceptUrl ?? defaultBuildAcceptUrl;
+	const buildAcceptUrl = deps.buildAcceptUrl;
 	const generateToken = deps.generateToken ?? generateSecureInvitationToken;
 	const emailSender = deps.emailSender ?? defaultInvitationEmailSender;
 	const analytics = deps.analytics ?? { track };
@@ -178,7 +176,7 @@ export function createInvitationService(
 
 async function createInvitation(
 	input: CreateInvitationInput,
-	directory: InvitationServiceExecutor,
+	directory: DirectoryDb,
 	deps: {
 		buildAcceptUrl: InvitationAcceptUrlBuilder;
 		generateToken: InvitationTokenGenerator;
@@ -188,41 +186,35 @@ async function createInvitation(
 ): Promise<CreateInvitationResult> {
 	const now = Date.now();
 	const normalizedEmail = normalizeInvitationEmail(input.email);
-	const membership = await findActiveMembershipSelection(
-		{ userId: input.createdByUserId, householdId: input.householdId },
-		directory,
-	);
+	const memberService = createMemberService({ directory });
+	const membership = await memberService.findActiveHouseholdMembership({
+		userId: input.createdByUserId,
+		householdId: input.householdId,
+	});
 	if (!membership) throw new InvitationMembershipRequiredError();
 
-	const invitation = normalizedEmail
-		? await findReusablePendingInvitation(
-				{ householdId: input.householdId, email: normalizedEmail, now },
-				directory,
-			)
-		: null;
-	const reusedExisting = Boolean(invitation);
-	const record =
-		invitation ??
-		(await createNewInvitation(
-			{
-				householdId: input.householdId,
-				createdByUserId: input.createdByUserId,
-				email: normalizedEmail,
-				now,
-			},
-			directory,
-			deps.generateToken,
-		));
+	const { invitation: record, reusedExisting } = await findOrCreateInvitation(
+		{
+			householdId: input.householdId,
+			createdByUserId: input.createdByUserId,
+			email: normalizedEmail,
+			now,
+		},
+		directory,
+		deps.generateToken,
+	);
 	const invitationRecord = toInvitationRecord(record, deps.buildAcceptUrl);
-	const emailDelivery = await deliverInvitationEmail({
-		invitation: invitationRecord,
-		householdName: membership.householdName,
-		inviterDisplayName: await inviterDisplayName(
-			input.createdByUserId,
-			directory,
-		),
-		emailSender: deps.emailSender,
-	});
+	const emailDelivery = reusedExisting
+		? { status: "not_requested" as const }
+		: await deliverInvitationEmail({
+				invitation: invitationRecord,
+				householdName: membership.householdName,
+				inviterDisplayName: await inviterDisplayName(
+					input.createdByUserId,
+					directory,
+				),
+				emailSender: deps.emailSender,
+			});
 
 	deps.analytics.track("invitation_created", {
 		household_id: input.householdId,
@@ -272,26 +264,20 @@ async function acceptInvitation(
 	const now = Date.now();
 
 	const result = await directory.transaction(async (tx) => {
-		const invitation = await findAvailableInvitation(input.token, now, tx);
+		const invitation = await claimInvitation(input, now, tx);
 		if (!invitation) throw new InvitationUnavailableError();
 
-		const { membership, created } = await ensurePlainMemberMembership(
-			{
-				householdId: invitation.householdId,
-				userId: input.userId,
-				now,
-			},
-			tx,
-		);
-
-		await tx
-			.update(invitations)
-			.set({ acceptedAt: now, acceptedByUserId: input.userId })
-			.where(eq(invitations.id, invitation.id));
-		await tx
-			.update(users)
-			.set({ activeHouseholdId: invitation.householdId, updatedAt: now })
-			.where(eq(users.id, input.userId));
+		const { membership, created } = await createMemberService({
+			directory: tx,
+		}).ensurePlainMemberMembership({
+			householdId: invitation.householdId,
+			userId: input.userId,
+			joinedAt: now,
+		});
+		await createActiveHouseholdService({ directory: tx }).setActiveHousehold({
+			userId: input.userId,
+			householdId: invitation.householdId,
+		});
 
 		return {
 			invitationId: invitation.id,
@@ -317,10 +303,12 @@ async function listPendingInvitations(
 	directory: InvitationServiceExecutor,
 	buildAcceptUrl: InvitationAcceptUrlBuilder,
 ): Promise<PendingInvitation[]> {
-	const membership = await findActiveMembershipSelection(
-		{ userId: input.requestedByUserId, householdId: input.householdId },
+	const membership = await createMemberService({
 		directory,
-	);
+	}).findActiveHouseholdMembership({
+		userId: input.requestedByUserId,
+		householdId: input.householdId,
+	});
 	if (!membership) throw new InvitationMembershipRequiredError();
 
 	const rows = await directory
@@ -355,7 +343,6 @@ async function listPendingInvitations(
 		createdAt: row.createdAt,
 		expiresAt: row.expiresAt,
 		acceptUrl: buildAcceptUrl({ token: row.token }),
-		canRevoke: true,
 	}));
 }
 
@@ -381,16 +368,25 @@ async function revokeInvitation(
 		throw new InvitationUnavailableError();
 	}
 
-	const membership = await findActiveMembershipSelection(
-		{ userId: input.revokedByUserId, householdId: invitation.householdId },
+	const membership = await createMemberService({
 		directory,
-	);
+	}).findActiveHouseholdMembership({
+		userId: input.revokedByUserId,
+		householdId: invitation.householdId,
+	});
 	if (!membership) throw new InvitationMembershipRequiredError();
 
 	const [updated] = await directory
 		.update(invitations)
 		.set({ revokedAt: now })
-		.where(eq(invitations.id, input.invitationId))
+		.where(
+			and(
+				eq(invitations.id, input.invitationId),
+				isNull(invitations.acceptedAt),
+				isNull(invitations.revokedAt),
+				gt(invitations.expiresAt, now),
+			),
+		)
 		.returning();
 
 	if (!updated) throw new InvitationUnavailableError();
@@ -423,6 +419,43 @@ async function findReusablePendingInvitation(
 		.limit(1);
 
 	return row ?? null;
+}
+
+async function findOrCreateInvitation(
+	input: {
+		householdId: string;
+		createdByUserId: string;
+		email: string | null;
+		now: number;
+	},
+	directory: DirectoryDb,
+	generateToken: InvitationTokenGenerator,
+): Promise<{ invitation: Invitation; reusedExisting: boolean }> {
+	if (!input.email) {
+		return {
+			invitation: await createNewInvitation(input, directory, generateToken),
+			reusedExisting: false,
+		};
+	}
+	const email = input.email;
+
+	return directory.transaction(async (tx) => {
+		await tx
+			.update(households)
+			.set({ name: sql`${households.name}` })
+			.where(eq(households.id, input.householdId));
+
+		const reusable = await findReusablePendingInvitation(
+			{ householdId: input.householdId, email, now: input.now },
+			tx,
+		);
+		if (reusable) return { invitation: reusable, reusedExisting: true };
+
+		return {
+			invitation: await createNewInvitation(input, tx, generateToken),
+			reusedExisting: false,
+		};
+	});
 }
 
 async function createNewInvitation(
@@ -487,34 +520,40 @@ async function findAvailableInvitation(
 	return row?.invitations ?? null;
 }
 
-async function ensurePlainMemberMembership(
-	input: { householdId: string; userId: string; now: number },
+async function claimInvitation(
+	input: AcceptInvitationInput,
+	now: number,
 	directory: InvitationServiceExecutor,
-): Promise<{ membership: Membership; created: boolean }> {
-	const [existing] = await directory
-		.select()
-		.from(memberships)
+): Promise<Invitation | null> {
+	const [invitation] = await directory
+		.update(invitations)
+		.set({ acceptedAt: now, acceptedByUserId: input.userId })
 		.where(
 			and(
-				eq(memberships.householdId, input.householdId),
-				eq(memberships.userId, input.userId),
-				isNull(memberships.removedAt),
+				eq(invitations.token, input.token),
+				isNull(invitations.acceptedAt),
+				isNull(invitations.revokedAt),
+				gt(invitations.expiresAt, now),
+			),
+		)
+		.returning();
+
+	if (!invitation) return null;
+
+	const [household] = await directory
+		.select()
+		.from(households)
+		.where(
+			and(
+				eq(households.id, invitation.householdId),
+				isNull(households.deletedAt),
 			),
 		)
 		.limit(1);
 
-	if (existing) return { membership: existing, created: false };
+	if (!household) throw new InvitationUnavailableError();
 
-	const membership: Membership = {
-		id: createAppId("mbr"),
-		householdId: input.householdId,
-		userId: input.userId,
-		role: "member",
-		joinedAt: input.now,
-		removedAt: null,
-	};
-	await directory.insert(memberships).values(membership);
-	return { membership, created: true };
+	return invitation;
 }
 
 async function deliverInvitationEmail(input: {
@@ -576,10 +615,6 @@ function normalizeInvitationEmail(
 ): string | null {
 	const normalized = email?.trim().toLowerCase() ?? "";
 	return normalized ? normalized : null;
-}
-
-function defaultBuildAcceptUrl(input: { token: string }): string {
-	return `/invitations/accept?token=${encodeURIComponent(input.token)}`;
 }
 
 function generateSecureInvitationToken(): string {
