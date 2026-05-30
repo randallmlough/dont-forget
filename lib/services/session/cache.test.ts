@@ -204,6 +204,28 @@ describe("createSessionCache", () => {
 		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
 	});
 
+	it("clears all cached associated Household local data on sign out", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+		await cache.save(
+			sessionBootstrapFixture({
+				householdId: "hh_new",
+				householdName: "New",
+				households: [
+					{ id: "hh_old", name: "Old", role: "owner", isActive: false },
+					{ id: "hh_new", name: "New", role: "member", isActive: true },
+				],
+			}),
+		);
+
+		await cache.clearSignedOutData();
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_new");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledTimes(2);
+		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
+	});
+
 	it("clears explicitly signed-out Household local data without cached metadata", async () => {
 		const storage = memoryStorage();
 		const cache = createSessionCache({ storage });

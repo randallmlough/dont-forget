@@ -176,7 +176,9 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 			const signedOutHouseholdIds = [...householdIds];
 
 			if (cached) {
-				signedOutHouseholdIds.push(cached.activeHousehold.id);
+				signedOutHouseholdIds.push(
+					...cached.households.map((household) => household.id),
+				);
 			}
 
 			let cleanupError: unknown = null;
