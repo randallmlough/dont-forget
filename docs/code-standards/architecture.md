@@ -2,7 +2,7 @@
 
 ## Domain Language
 
-- **Must** use the domain language from `CONTEXT.md`: Household, Member, Owner, User, List, Item, Invitation, Home, and Authenticated App Session.
+- **Must** use the domain language from `CONTEXT.md`: Household, Member, Owner, User, List, Item, Invitation, Household Join Code, Home, and Authenticated App Session.
 - **Must** not introduce replacement language such as group, team, account, todo, task, invite link, dashboard, or landing page unless the glossary changes first.
 - **Should** name components, props, events, logs, and tests with product language instead of generic placeholders.
 
@@ -21,7 +21,7 @@
 - **Avoid** generic root `hooks/`, `utils/`, `helpers/`, or `types/` folders unless there is a documented architecture reason.
 - **Avoid** exporting internal hooks or reducers from feature entrypoints unless another feature has a real dependency on them.
 
-See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-structure.md), [`docs/how-things-work/routing.md`](../how-things-work/routing.md), [`docs/how-things-work/services.md`](../how-things-work/services.md), and [ADR-0011](../adr/0011-domain-first-service-layer.md).
+See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-structure.md), [`docs/how-things-work/routing.md`](../how-things-work/routing.md), [`docs/how-things-work/services.md`](../how-things-work/services.md), [`docs/how-things-work/api-routes.md`](../how-things-work/api-routes.md), and [ADR-0011](../adr/0011-domain-first-service-layer.md).
 
 ## Service Layer
 
@@ -84,6 +84,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 ## Server And Environment Safety
 
 - **Must** keep Expo API route modules thin and lazy-load server-only helpers inside request handlers when those imports would otherwise affect native route registration.
+- **Must** follow the `app/api` -> `lib/api` -> `lib/services` boundary from [`docs/how-things-work/api-routes.md`](../how-things-work/api-routes.md) for new or changed HTTP behavior, except for explicitly documented legacy routes awaiting migration.
 - **Must** expose only public config through Expo `extra`.
 - **Must** not expose Turso platform tokens, Clerk secrets, Resend secrets, or other server/operator secrets to client code.
 - **Must** use `APP_ENV` as the app-owned backend selector.
