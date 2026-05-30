@@ -1,4 +1,12 @@
-export type AppIdPrefix = "usr" | "hh" | "mbr" | "inv" | "lst" | "itm";
+export type AppIdPrefix =
+	| "usr"
+	| "hh"
+	| "mbr"
+	| "inv"
+	| "hjc"
+	| "hjcu"
+	| "lst"
+	| "itm";
 
 export type RandomUuid = () => string;
 
