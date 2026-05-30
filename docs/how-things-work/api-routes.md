@@ -20,6 +20,12 @@ Responsibilities:
 
 Request and response schemas can live in `lib/api/**` when they are only HTTP-boundary contracts. Put schemas in an app-safe module only when client code must parse the same shape.
 
+## Legacy Exception
+
+`app/api/bootstrap+api.ts` predates the `lib/api` boundary and still lazy-loads auth, directory DB, and `lib/services/session/server` directly. Do not copy that shape into new routes.
+
+When the Authenticated App Session bootstrap route is next changed for API-boundary work, move its HTTP parsing, auth/error handling, response shaping, and service orchestration into `lib/api` first. Until then, treat bootstrap as the only documented exception to the `app/api` -> `lib/api` -> `lib/services` flow.
+
 ## Route Wrappers
 
 Route files under `app/api` must lazy-load server-only code inside the HTTP method function:

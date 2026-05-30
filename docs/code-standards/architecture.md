@@ -84,7 +84,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 ## Server And Environment Safety
 
 - **Must** keep Expo API route modules thin and lazy-load server-only helpers inside request handlers when those imports would otherwise affect native route registration.
-- **Must** follow the `app/api` -> `lib/api` -> `lib/services` boundary from [`docs/how-things-work/api-routes.md`](../how-things-work/api-routes.md) for HTTP behavior.
+- **Must** follow the `app/api` -> `lib/api` -> `lib/services` boundary from [`docs/how-things-work/api-routes.md`](../how-things-work/api-routes.md) for new or changed HTTP behavior, except for explicitly documented legacy routes awaiting migration.
 - **Must** expose only public config through Expo `extra`.
 - **Must** not expose Turso platform tokens, Clerk secrets, Resend secrets, or other server/operator secrets to client code.
 - **Must** use `APP_ENV` as the app-owned backend selector.
