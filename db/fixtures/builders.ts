@@ -34,10 +34,45 @@ export const PRIMARY_HOUSEHOLD_SEED = {
 			lastName: "Rivera",
 			displayName: "Blake Rivera",
 		},
+		cameron: {
+			id: "usr_cameron",
+			clerkUserId: "user_cameron",
+			email: "cameron@example.com",
+			firstName: "Cameron",
+			lastName: "Patel",
+			displayName: "Cameron Patel",
+		},
 	},
 	memberships: {
 		avery: { id: "mbr_avery" },
 		blake: { id: "mbr_blake" },
+		cameron: { id: "mbr_cameron" },
+	},
+	invitations: {
+		pendingEmail: {
+			id: "inv_avery_pending_email",
+			token: "invitation-token-pending-email",
+			email: "new-member@example.com",
+		},
+		pendingLink: {
+			id: "inv_avery_pending_link",
+			token: "invitation-token-pending-link",
+		},
+		accepted: {
+			id: "inv_avery_accepted",
+			token: "invitation-token-accepted",
+			email: "blake@example.com",
+		},
+		revoked: {
+			id: "inv_avery_revoked",
+			token: "invitation-token-revoked",
+			email: "revoked@example.com",
+		},
+		expired: {
+			id: "inv_avery_expired",
+			token: "invitation-token-expired",
+			email: "expired@example.com",
+		},
 	},
 	joinCodes: {
 		active: { id: "hjc_avery_active", code: "ABCDEFGH" },
@@ -46,6 +81,7 @@ export const PRIMARY_HOUSEHOLD_SEED = {
 	},
 	joinCodeUses: {
 		blake: { id: "hjcu_blake" },
+		cameron: { id: "hjcu_cameron" },
 	},
 	list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
 	items: {

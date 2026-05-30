@@ -24,6 +24,18 @@ export function createMockAnalytics(): MockAnalytics {
 	};
 }
 
+export function expectAnalyticsTrackCallsToOmitSecrets(
+	trackMock: MockAnalytics["track"],
+	secrets: readonly string[],
+) {
+	const serializedCalls = JSON.stringify(trackMock.mock.calls);
+
+	for (const secret of secrets) {
+		if (secret.length === 0) continue;
+		expect(serializedCalls).not.toContain(secret);
+	}
+}
+
 export const analyticsMocks = createMockAnalytics();
 
 export const track = analyticsMocks.track;

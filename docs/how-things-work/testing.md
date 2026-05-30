@@ -78,7 +78,7 @@ Do not use `pnpm db:migrate` in tests. That command is for intentionally applyin
 
 `db/fixtures/` is the shared persistence fixture layer. It contains:
 
-- low-level Drizzle insert-shaped builders for User, Household, Membership/Member, Invitation, List, Item, and `item_checks` rows;
+- low-level Drizzle insert-shaped builders for User, Household, Membership/Member, Invitation, Household Join Code, Household Join Code use/attempt, List, Item, and `item_checks` rows;
 - scenario helpers that seed caller-provided directory and Household DB handles and return the inserted records/IDs.
 
 `db/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, sync coordinators, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
@@ -91,7 +91,7 @@ The first canonical scenario is `seedPrimaryHouseholdScenario`:
 - The default List is named `Groceries`.
 - Items cover unchecked, checked by Avery, checked by Blake, and tombstoned states.
 
-Invitation scenarios are intentionally deferred until Invitation behavior exists. The Invitation row builder is available for focused persistence setup.
+Invitation service behavior is intentionally deferred until Invitation behavior exists. Directory fixture scenarios are available for focused persistence setup: multi-Household active User selection, Invitation lifecycle variants, and Household Join Code audit/use/attempt rows.
 
 ## Local Seed Commands
 
