@@ -1,5 +1,8 @@
 import type {
 	NewHousehold,
+	NewHouseholdJoinCode,
+	NewHouseholdJoinCodeAttempt,
+	NewHouseholdJoinCodeUse,
 	NewInvitation,
 	NewMembership,
 	NewUser,
@@ -36,6 +39,14 @@ export const PRIMARY_HOUSEHOLD_SEED = {
 		avery: { id: "mbr_avery" },
 		blake: { id: "mbr_blake" },
 	},
+	joinCodes: {
+		active: { id: "hjc_avery_active", code: "ABCDEFGH" },
+		replaced: { id: "hjc_avery_replaced", code: "HJKLMNPQ" },
+		disabled: { id: "hjc_avery_disabled", code: "RSTUVWXY" },
+	},
+	joinCodeUses: {
+		blake: { id: "hjcu_blake" },
+	},
 	list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
 	items: {
 		unchecked: { id: "itm_seed_milk", name: "Milk" },
@@ -54,6 +65,7 @@ export function userFixture(overrides: Partial<NewUser> = {}): NewUser {
 		firstName: PRIMARY_HOUSEHOLD_SEED.users.avery.firstName,
 		lastName: PRIMARY_HOUSEHOLD_SEED.users.avery.lastName,
 		displayName: PRIMARY_HOUSEHOLD_SEED.users.avery.displayName,
+		activeHouseholdId: null,
 		createdAt: now,
 		updatedAt: now,
 		...overrides,
@@ -108,6 +120,52 @@ export function invitationFixture(
 		acceptedAt: null,
 		acceptedByUserId: null,
 		revokedAt: null,
+		...overrides,
+	};
+}
+
+export function householdJoinCodeFixture(
+	overrides: Partial<NewHouseholdJoinCode> = {},
+): NewHouseholdJoinCode {
+	const now = PRIMARY_HOUSEHOLD_SEED.now;
+	return {
+		id: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.id,
+		householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+		code: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.code,
+		createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+		createdAt: now,
+		disabledAt: null,
+		disabledByUserId: null,
+		replacedAt: null,
+		replacedByUserId: null,
+		...overrides,
+	};
+}
+
+export function householdJoinCodeUseFixture(
+	overrides: Partial<NewHouseholdJoinCodeUse> = {},
+): NewHouseholdJoinCodeUse {
+	const now = PRIMARY_HOUSEHOLD_SEED.now;
+	return {
+		id: PRIMARY_HOUSEHOLD_SEED.joinCodeUses.blake.id,
+		householdJoinCodeId: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.id,
+		householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+		userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
+		membershipId: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
+		usedAt: now + 200,
+		...overrides,
+	};
+}
+
+export function householdJoinCodeAttemptFixture(
+	overrides: Partial<NewHouseholdJoinCodeAttempt> = {},
+): NewHouseholdJoinCodeAttempt {
+	const now = PRIMARY_HOUSEHOLD_SEED.now;
+	return {
+		userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
+		failedCount: 1,
+		windowStartedAt: now,
+		lastFailedAt: now,
 		...overrides,
 	};
 }

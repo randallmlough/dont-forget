@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+	type AnySQLiteColumn,
 	index,
 	integer,
 	sqliteTable,
@@ -16,6 +17,9 @@ export const users = sqliteTable(
 		firstName: text("first_name"),
 		lastName: text("last_name"),
 		displayName: text("display_name"),
+		activeHouseholdId: text("active_household_id").references(
+			(): AnySQLiteColumn => households.id,
+		),
 		createdAt: integer("created_at")
 			.notNull()
 			.default(sql`(unixepoch() * 1000)`),
@@ -32,7 +36,7 @@ export const households = sqliteTable("households", {
 	tursoDbName: text("turso_db_name").notNull().unique(),
 	createdByUserId: text("created_by_user_id")
 		.notNull()
-		.references(() => users.id),
+		.references((): AnySQLiteColumn => users.id),
 	provisioningCompletedAt: integer("provisioning_completed_at"),
 	createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
 	deletedAt: integer("deleted_at"),
@@ -84,6 +88,71 @@ export const invitations = sqliteTable(
 	(t) => [index("invitations_household_idx").on(t.householdId)],
 );
 
+export const householdJoinCodes = sqliteTable(
+	"household_join_codes",
+	{
+		id: text("id").primaryKey(),
+		householdId: text("household_id")
+			.notNull()
+			.references(() => households.id),
+		code: text("code").notNull(),
+		createdByUserId: text("created_by_user_id")
+			.notNull()
+			.references(() => users.id),
+		createdAt: integer("created_at")
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`),
+		disabledAt: integer("disabled_at"),
+		disabledByUserId: text("disabled_by_user_id").references(() => users.id),
+		replacedAt: integer("replaced_at"),
+		replacedByUserId: text("replaced_by_user_id").references(() => users.id),
+	},
+	(t) => [
+		index("household_join_codes_household_idx").on(t.householdId),
+		uniqueIndex("household_join_codes_code_unique").on(t.code),
+		uniqueIndex("household_join_codes_active_household_unique")
+			.on(t.householdId)
+			.where(sql`${t.disabledAt} IS NULL AND ${t.replacedAt} IS NULL`),
+	],
+);
+
+export const householdJoinCodeUses = sqliteTable(
+	"household_join_code_uses",
+	{
+		id: text("id").primaryKey(),
+		householdJoinCodeId: text("household_join_code_id")
+			.notNull()
+			.references(() => householdJoinCodes.id),
+		householdId: text("household_id")
+			.notNull()
+			.references(() => households.id),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id),
+		membershipId: text("membership_id")
+			.notNull()
+			.references(() => memberships.id),
+		usedAt: integer("used_at").notNull().default(sql`(unixepoch() * 1000)`),
+	},
+	(t) => [
+		index("household_join_code_uses_code_idx").on(t.householdJoinCodeId),
+		index("household_join_code_uses_household_idx").on(t.householdId),
+		index("household_join_code_uses_user_idx").on(t.userId),
+	],
+);
+
+export const householdJoinCodeAttempts = sqliteTable(
+	"household_join_code_attempts",
+	{
+		userId: text("user_id")
+			.primaryKey()
+			.references(() => users.id),
+		failedCount: integer("failed_count").notNull(),
+		windowStartedAt: integer("window_started_at").notNull(),
+		lastFailedAt: integer("last_failed_at").notNull(),
+	},
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Household = typeof households.$inferSelect;
@@ -92,3 +161,11 @@ export type Membership = typeof memberships.$inferSelect;
 export type NewMembership = typeof memberships.$inferInsert;
 export type Invitation = typeof invitations.$inferSelect;
 export type NewInvitation = typeof invitations.$inferInsert;
+export type HouseholdJoinCode = typeof householdJoinCodes.$inferSelect;
+export type NewHouseholdJoinCode = typeof householdJoinCodes.$inferInsert;
+export type HouseholdJoinCodeUse = typeof householdJoinCodeUses.$inferSelect;
+export type NewHouseholdJoinCodeUse = typeof householdJoinCodeUses.$inferInsert;
+export type HouseholdJoinCodeAttempt =
+	typeof householdJoinCodeAttempts.$inferSelect;
+export type NewHouseholdJoinCodeAttempt =
+	typeof householdJoinCodeAttempts.$inferInsert;

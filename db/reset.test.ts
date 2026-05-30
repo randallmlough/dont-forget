@@ -1,4 +1,7 @@
 import {
+	householdJoinCodeAttempts,
+	householdJoinCodes,
+	householdJoinCodeUses,
 	households,
 	invitations,
 	memberships,
@@ -38,6 +41,7 @@ describe("database reset", () => {
 				tursoDbName: "df-test-hh-1",
 				createdByUserId: "usr_1",
 			});
+			await directory.db.update(users).set({ activeHouseholdId: "hh_1" });
 			await directory.db.insert(memberships).values({
 				id: "mbr_1",
 				householdId: "hh_1",
@@ -51,6 +55,25 @@ describe("database reset", () => {
 				createdByUserId: "usr_1",
 				expiresAt: 1_700_000_000_000,
 			});
+			await directory.db.insert(householdJoinCodes).values({
+				id: "hjc_1",
+				householdId: "hh_1",
+				code: "ABCDEFGH",
+				createdByUserId: "usr_1",
+			});
+			await directory.db.insert(householdJoinCodeUses).values({
+				id: "hjcu_1",
+				householdJoinCodeId: "hjc_1",
+				householdId: "hh_1",
+				userId: "usr_1",
+				membershipId: "mbr_1",
+			});
+			await directory.db.insert(householdJoinCodeAttempts).values({
+				userId: "usr_1",
+				failedCount: 1,
+				windowStartedAt: 1_700_000_000_000,
+				lastFailedAt: 1_700_000_000_000,
+			});
 
 			expect(await householdDatabasesForReset(directory.db)).toEqual([
 				{ id: "hh_1", tursoDbName: "df-test-hh-1" },
@@ -58,6 +81,15 @@ describe("database reset", () => {
 
 			await resetDirectoryDatabase(directory.db);
 
+			expect(
+				await directory.db.select().from(householdJoinCodeUses),
+			).toHaveLength(0);
+			expect(
+				await directory.db.select().from(householdJoinCodeAttempts),
+			).toHaveLength(0);
+			expect(await directory.db.select().from(householdJoinCodes)).toHaveLength(
+				0,
+			);
 			expect(await directory.db.select().from(invitations)).toHaveLength(0);
 			expect(await directory.db.select().from(memberships)).toHaveLength(0);
 			expect(await directory.db.select().from(households)).toHaveLength(0);

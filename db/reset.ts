@@ -16,6 +16,9 @@ import {
 	householdDbUrl,
 } from "./client";
 import {
+	householdJoinCodeAttempts,
+	householdJoinCodes,
+	householdJoinCodeUses,
 	households,
 	invitations,
 	memberships,
@@ -43,8 +46,12 @@ export async function resetDirectoryDatabase(
 	directory: DirectoryDb,
 ): Promise<void> {
 	await directory.transaction(async (tx) => {
+		await tx.delete(householdJoinCodeUses);
+		await tx.delete(householdJoinCodeAttempts);
+		await tx.delete(householdJoinCodes);
 		await tx.delete(invitations);
 		await tx.delete(memberships);
+		await tx.update(users).set({ activeHouseholdId: null });
 		await tx.delete(households);
 		await tx.delete(users);
 	});
