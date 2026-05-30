@@ -32,8 +32,23 @@ export type HouseholdMember = {
 	displayName: string | null;
 };
 
+export type AssociatedHousehold = {
+	id: string;
+	name: string;
+	role: "owner" | "member";
+	isActive: boolean;
+};
+
 export type MemberService = {
 	findOldestActiveMembership(userId: string): Promise<ActiveMembership | null>;
+	findActiveMembership(input: {
+		userId: string;
+		householdId: string;
+	}): Promise<ActiveMembership | null>;
+	listAssociatedHouseholds(input: {
+		userId: string;
+		activeHouseholdId: string;
+	}): Promise<AssociatedHousehold[]>;
 	ensureOwnerMembership(input: {
 		householdId: string;
 		user: User;
@@ -49,6 +64,12 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 	return {
 		findOldestActiveMembership(userId) {
 			return findOldestActiveMembership(userId, deps.directory);
+		},
+		findActiveMembership(input) {
+			return findActiveMembership(input, deps.directory);
+		},
+		listAssociatedHouseholds(input) {
+			return listAssociatedHouseholds(input, deps.directory);
 		},
 		ensureOwnerMembership(input) {
 			return ensureOwnerMembership(input, deps.directory);
@@ -85,6 +106,62 @@ async function findOldestActiveMembership(
 		.limit(1);
 
 	return row ?? null;
+}
+
+async function findActiveMembership(
+	input: { userId: string; householdId: string },
+	directory: MemberServiceDirectory,
+): Promise<ActiveMembership | null> {
+	const [row] = await directory
+		.select({
+			membershipId: memberships.id,
+			membershipRole: memberships.role,
+			householdId: households.id,
+			householdName: households.name,
+			householdTursoDbName: households.tursoDbName,
+			householdProvisioningCompletedAt: households.provisioningCompletedAt,
+		})
+		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
+		.where(
+			and(
+				eq(memberships.userId, input.userId),
+				eq(memberships.householdId, input.householdId),
+				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
+			),
+		)
+		.limit(1);
+
+	return row ?? null;
+}
+
+async function listAssociatedHouseholds(
+	input: { userId: string; activeHouseholdId: string },
+	directory: MemberServiceDirectory,
+): Promise<AssociatedHousehold[]> {
+	const rows = await directory
+		.select({
+			id: households.id,
+			name: households.name,
+			role: memberships.role,
+			joinedAt: memberships.joinedAt,
+		})
+		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
+		.where(
+			and(
+				eq(memberships.userId, input.userId),
+				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
+			),
+		)
+		.orderBy(asc(memberships.joinedAt), asc(memberships.id));
+
+	return rows.map(({ joinedAt: _joinedAt, ...row }) => ({
+		...row,
+		isActive: row.id === input.activeHouseholdId,
+	}));
 }
 
 async function ensureOwnerMembership(

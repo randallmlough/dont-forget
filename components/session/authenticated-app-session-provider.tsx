@@ -30,6 +30,7 @@ export type AuthenticatedAppSessionContextValue = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
 	retry: () => void;
+	reloadSession: () => void;
 	signOut: () => Promise<void>;
 };
 
@@ -122,9 +123,14 @@ export function AuthenticatedAppSessionProvider({
 		requestActivation();
 	}
 
+	function reloadSession() {
+		requestActivation();
+	}
+
 	const value: AuthenticatedAppSessionContextValue = {
 		...publicStateFromSnapshot(snapshot),
 		retry,
+		reloadSession,
 		signOut: signOutFlow.run,
 	};
 

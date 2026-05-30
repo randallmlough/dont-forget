@@ -42,6 +42,7 @@ const testLogger = createMockLogger();
 testLogger.with.mockReturnValue(testLogger);
 const noopProviderActions = {
 	retry() {},
+	reloadSession() {},
 	async signOut() {},
 };
 
@@ -97,6 +98,7 @@ describe("HomeScreen", () => {
 			},
 			session: null,
 			retry,
+			reloadSession() {},
 			signOut,
 		});
 
@@ -418,6 +420,14 @@ async function createHomeSessionHarness(
 			id: scenario.household.id,
 			name: scenario.household.name,
 		},
+		households: [
+			{
+				id: scenario.household.id,
+				name: scenario.household.name,
+				role: scenario.members.avery.role,
+				isActive: true,
+			},
+		],
 		activeMember: {
 			id: scenario.members.avery.id,
 			userId: scenario.users.avery.id,

@@ -57,6 +57,7 @@ export type AuthenticatedAppSession = {
 		id: string;
 		name: string;
 	};
+	households: SessionBootstrap["households"];
 	activeMember: ActiveMember;
 	members: Member[];
 	resourceKey: string;
@@ -465,6 +466,7 @@ function authenticatedAppSessionFromOpened(
 	return {
 		user: session.user,
 		activeHousehold: session.activeHousehold,
+		households: session.households,
 		activeMember: session.activeMember,
 		members: session.members,
 		resourceKey: opened.resourceKey,
