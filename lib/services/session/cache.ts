@@ -40,7 +40,10 @@ export type SessionCache = {
 		freshSession: SessionBootstrap,
 	) => Promise<void>;
 	clearSignedOutData: (householdIds?: string[]) => Promise<void>;
-	deleteLocalData: (cached: CachedSessionBootstrap) => Promise<void>;
+	deleteLocalData: (
+		cached: CachedSessionBootstrap,
+		freshSession?: SessionBootstrap,
+	) => Promise<void>;
 };
 
 export type SessionCacheDeps = {
@@ -123,8 +126,11 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 
 	async function deleteLocalData(
 		cached: CachedSessionBootstrap,
+		freshSession?: SessionBootstrap,
 	): Promise<void> {
-		await deleteLocalDataForHousehold(cached.activeHousehold.id);
+		await drainPendingSignedOutLocalDataDeletions(
+			unauthorizedCachedHouseholdIds(cached, freshSession),
+		);
 	}
 
 	async function clearUnauthorizedMetadata(
@@ -152,13 +158,23 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 
 	return {
 		async save(session) {
+			const previous = await read();
 			const cached = cachedSessionBootstrapFromSession(session);
+			let cleanupError: unknown = null;
+			try {
+				await drainPendingSignedOutLocalDataDeletions(
+					droppedAssociatedHouseholdIds(previous, cached),
+				);
+			} catch (error) {
+				cleanupError = error;
+			}
 			await storage.setItem(SESSION_CACHE_KEY, JSON.stringify(cached));
 			analytics.track(
 				"authenticated_app_session_cached",
 				sessionAnalyticsProperties(session),
 			);
 
+			if (cleanupError) throw cleanupError;
 			return cached;
 		},
 
@@ -173,7 +189,9 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 			const signedOutHouseholdIds = [...householdIds];
 
 			if (cached) {
-				signedOutHouseholdIds.push(cached.activeHousehold.id);
+				signedOutHouseholdIds.push(
+					...cached.households.map((household) => household.id),
+				);
 			}
 
 			let cleanupError: unknown = null;
@@ -208,7 +226,9 @@ function cachedSessionIsStillAuthorized(
 ): boolean {
 	return (
 		cached.user.id === freshSession.user.id &&
-		cached.activeHousehold.id === freshSession.activeHousehold.id
+		freshSession.households.some(
+			(household) => household.id === cached.activeHousehold.id,
+		)
 	);
 }
 
@@ -225,4 +245,37 @@ function cachedSessionBootstrapFromSession(
 		},
 		initializedAt: Date.now(),
 	});
+}
+
+function droppedAssociatedHouseholdIds(
+	previous: CachedSessionBootstrap | null,
+	next: CachedSessionBootstrap,
+): string[] {
+	if (!previous) return [];
+
+	const nextHouseholdIds = new Set(
+		next.households.map((household) => household.id),
+	);
+	return previous.households
+		.map((household) => household.id)
+		.filter((householdId) => !nextHouseholdIds.has(householdId));
+}
+
+function unauthorizedCachedHouseholdIds(
+	cached: CachedSessionBootstrap,
+	freshSession?: SessionBootstrap,
+): string[] {
+	if (!freshSession) {
+		return cached.households.map((household) => household.id);
+	}
+	if (cached.user.id !== freshSession.user.id) {
+		return cached.households.map((household) => household.id);
+	}
+
+	const freshHouseholdIds = new Set(
+		freshSession.households.map((household) => household.id),
+	);
+	return cached.households
+		.map((household) => household.id)
+		.filter((householdId) => !freshHouseholdIds.has(householdId));
 }

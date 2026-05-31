@@ -398,7 +398,7 @@ async function requireActiveHouseholdMember(
 ) {
 	const membership = await createMemberService({
 		directory,
-	}).findActiveHouseholdMembership({
+	}).findActiveMembership({
 		userId: input.requestedByUserId,
 		householdId: input.householdId,
 	});

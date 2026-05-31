@@ -7,6 +7,13 @@ export const HOUSEHOLD_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 const memberRoleSchema = z.enum(["owner", "member"]);
 
+const associatedHouseholdSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	role: memberRoleSchema,
+	isActive: z.boolean(),
+});
+
 export const bootstrapResponseSchema = z.object({
 	user: z.object({
 		id: z.string(),
@@ -17,6 +24,7 @@ export const bootstrapResponseSchema = z.object({
 		id: z.string(),
 		name: z.string(),
 	}),
+	households: z.array(associatedHouseholdSchema),
 	activeMember: z.object({
 		id: z.string(),
 		userId: z.string(),

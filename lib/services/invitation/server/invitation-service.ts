@@ -188,7 +188,7 @@ async function createInvitation(
 	const now = Date.now();
 	const normalizedEmail = normalizeInvitationEmail(input.email);
 	const memberService = createMemberService({ directory });
-	const membership = await memberService.findActiveHouseholdMembership({
+	const membership = await memberService.findActiveMembership({
 		userId: input.createdByUserId,
 		householdId: input.householdId,
 	});
@@ -306,7 +306,7 @@ async function listPendingInvitations(
 ): Promise<PendingInvitation[]> {
 	const membership = await createMemberService({
 		directory,
-	}).findActiveHouseholdMembership({
+	}).findActiveMembership({
 		userId: input.requestedByUserId,
 		householdId: input.householdId,
 	});
@@ -371,7 +371,7 @@ async function revokeInvitation(
 
 	const membership = await createMemberService({
 		directory,
-	}).findActiveHouseholdMembership({
+	}).findActiveMembership({
 		userId: input.revokedByUserId,
 		householdId: invitation.householdId,
 	});

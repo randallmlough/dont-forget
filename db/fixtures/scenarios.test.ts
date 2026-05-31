@@ -1,8 +1,11 @@
+import { eq } from "drizzle-orm";
+
 import {
 	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
+	invitations,
 	memberships,
 	users,
 } from "@/db/schema/directory";
@@ -14,13 +17,15 @@ import {
 	householdJoinCodeUseFixture,
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
+	seedHouseholdJoinCodeAuditScenario,
+	seedInvitationVariantsScenario,
 	seedMultiHouseholdUserScenario,
 	seedPrimaryHouseholdScenario,
 	userFixture,
 } from "./index";
 
 describe("database fixture scenarios", () => {
-	it("inserts Join Code builder rows into a migrated directory DB", async () => {
+	it("inserts Household Join Code builder rows into a migrated directory DB", async () => {
 		const directory = await createTestDirectoryDb();
 
 		try {
@@ -76,7 +81,7 @@ describe("database fixture scenarios", () => {
 		}
 	});
 
-	it("seeds a primary Household with active User selection and a Join Code", async () => {
+	it("seeds a primary Household with active User selection and a Household Join Code", async () => {
 		const directory = await createTestDirectoryDb();
 		const household = await createTestHouseholdDb();
 
@@ -120,6 +125,139 @@ describe("database fixture scenarios", () => {
 			expect(await directory.db.select().from(householdJoinCodes)).toHaveLength(
 				2,
 			);
+			const [avery] = await directory.db
+				.select()
+				.from(users)
+				.where(eq(users.id, scenario.users.avery.id))
+				.limit(1);
+			expect(avery).toEqual(
+				expect.objectContaining({
+					activeHouseholdId: scenario.households.second.id,
+				}),
+			);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("seeds Invitation variants for pending, accepted, revoked, and expired states", async () => {
+		const directory = await createTestDirectoryDb();
+
+		try {
+			const scenario = await seedInvitationVariantsScenario({
+				directory: directory.db,
+			});
+
+			const rows = await directory.db.select().from(invitations);
+
+			expect(rows).toHaveLength(5);
+			expect(rows).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: scenario.invitations.pendingEmail.id,
+						email: "new-member@example.com",
+						acceptedAt: null,
+						revokedAt: null,
+					}),
+					expect.objectContaining({
+						id: scenario.invitations.pendingLink.id,
+						email: null,
+						acceptedAt: null,
+						revokedAt: null,
+					}),
+					expect.objectContaining({
+						id: scenario.invitations.accepted.id,
+						acceptedByUserId: scenario.users.blake.id,
+					}),
+					expect.objectContaining({
+						id: scenario.invitations.revoked.id,
+						revokedAt: expect.any(Number),
+					}),
+					expect.objectContaining({
+						id: scenario.invitations.expired.id,
+						expiresAt: expect.any(Number),
+					}),
+				]),
+			);
+			expect(scenario.invitations.expired.expiresAt).toBeLessThan(
+				PRIMARY_HOUSEHOLD_SEED.now,
+			);
+			expect(scenario.members.avery).toBe(scenario.memberships.avery);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("seeds Household Join Code lifecycle audit rows with safe use and attempt columns", async () => {
+		const directory = await createTestDirectoryDb();
+
+		try {
+			const scenario = await seedHouseholdJoinCodeAuditScenario({
+				directory: directory.db,
+			});
+
+			const codes = await directory.db.select().from(householdJoinCodes);
+			const uses = await directory.db.select().from(householdJoinCodeUses);
+			const attempts = await directory.db
+				.select()
+				.from(householdJoinCodeAttempts);
+
+			expect(codes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: scenario.joinCodes.active.id,
+						disabledAt: null,
+						replacedAt: null,
+					}),
+					expect.objectContaining({
+						id: scenario.joinCodes.replaced.id,
+						replacedAt: expect.any(Number),
+					}),
+					expect.objectContaining({
+						id: scenario.joinCodes.disabled.id,
+						disabledAt: expect.any(Number),
+					}),
+				]),
+			);
+			expect(uses).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						householdJoinCodeId: scenario.joinCodes.active.id,
+						userId: scenario.users.blake.id,
+					}),
+					expect.objectContaining({
+						householdJoinCodeId: scenario.joinCodes.active.id,
+						userId: scenario.users.cameron.id,
+					}),
+				]),
+			);
+			expect(attempts).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						userId: scenario.users.blake.id,
+						failedCount: 2,
+					}),
+					expect.objectContaining({
+						userId: scenario.users.cameron.id,
+						failedCount: 1,
+					}),
+				]),
+			);
+			expect(Object.keys(uses[0]).sort()).toEqual([
+				"householdId",
+				"householdJoinCodeId",
+				"id",
+				"membershipId",
+				"usedAt",
+				"userId",
+			]);
+			expect(Object.keys(attempts[0]).sort()).toEqual([
+				"failedCount",
+				"lastFailedAt",
+				"userId",
+				"windowStartedAt",
+			]);
+			expect(scenario.members.blake).toBe(scenario.memberships.blake);
 		} finally {
 			await directory.close();
 		}

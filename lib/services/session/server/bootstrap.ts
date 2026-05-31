@@ -1,4 +1,6 @@
+import { eq } from "drizzle-orm";
 import type { DirectoryDb } from "@/db/client";
+import { type User, users } from "@/db/schema/directory";
 import {
 	type BootstrapResponse,
 	HOUSEHOLD_TOKEN_TTL_MS,
@@ -13,7 +15,11 @@ import {
 	createHouseholdService,
 	householdDatabaseName,
 } from "@/lib/services/household/server/household-service";
-import { createMemberService } from "@/lib/services/member/server";
+import { generateInitialHouseholdName } from "@/lib/services/household/server/initial-household-name";
+import {
+	type ActiveMembership,
+	createMemberService,
+} from "@/lib/services/member/server";
 import { createUserService } from "@/lib/services/user/server";
 
 export type AuthenticatedAppSessionBootstrapDeps = {
@@ -51,8 +57,13 @@ export async function bootstrapAuthenticatedAppSession(
 	const active = await deps.directory.transaction(async (tx) => {
 		const txMemberService = createMemberService({ directory: tx });
 		const txHouseholdService = createHouseholdService({ directory: tx });
-		const existing = await txMemberService.findOldestActiveMembership(user.id);
-		if (existing) return existing;
+		const selected = await selectActiveMembership(user, txMemberService);
+		if (selected) {
+			if (user.activeHouseholdId !== selected.householdId) {
+				await setActiveHousehold(tx, user.id, selected.householdId);
+			}
+			return selected;
+		}
 
 		const pending = await txHouseholdService.findPendingCreatedHousehold(
 			user.id,
@@ -62,19 +73,29 @@ export async function bootstrapAuthenticatedAppSession(
 				householdId: pending.id,
 				user,
 			});
-			return txHouseholdService.activeMembershipFrom(pending, membership);
+			const activeMembership = txHouseholdService.activeMembershipFrom(
+				pending,
+				membership,
+			);
+			await setActiveHousehold(tx, user.id, activeMembership.householdId);
+			return activeMembership;
 		}
 
 		const household = await txHouseholdService.createOwnedHousehold({
 			appEnv: deps.appEnv,
 			user,
-			name: profile.firstName ?? "Untitled",
+			name: generateInitialHouseholdName(),
 		});
 		const membership = await txMemberService.ensureOwnerMembership({
 			householdId: household.id,
 			user,
 		});
-		return txHouseholdService.activeMembershipFrom(household, membership);
+		const activeMembership = txHouseholdService.activeMembershipFrom(
+			household,
+			membership,
+		);
+		await setActiveHousehold(tx, user.id, activeMembership.householdId);
+		return activeMembership;
 	});
 
 	const database = await deps.provisioning.ensureHouseholdDatabase({
@@ -87,9 +108,13 @@ export async function bootstrapAuthenticatedAppSession(
 	}
 
 	const expiresAt = Date.now() + HOUSEHOLD_TOKEN_TTL_MS;
-	const [authToken, members] = await Promise.all([
+	const [authToken, members, associatedHouseholds] = await Promise.all([
 		deps.provisioning.createHouseholdDatabaseToken(active.householdTursoDbName),
 		memberService.listHouseholdMembers(active.householdId),
+		memberService.listAssociatedHouseholds({
+			userId: user.id,
+			activeHouseholdId: active.householdId,
+		}),
 	]);
 
 	return {
@@ -102,6 +127,7 @@ export async function bootstrapAuthenticatedAppSession(
 			id: active.householdId,
 			name: active.householdName,
 		},
+		households: associatedHouseholds,
 		activeMember: {
 			id: active.membershipId,
 			userId: user.id,
@@ -115,6 +141,37 @@ export async function bootstrapAuthenticatedAppSession(
 			expiresAt,
 		},
 	};
+}
+
+type BootstrapMemberService = ReturnType<typeof createMemberService>;
+type BootstrapDirectoryTransaction = Parameters<
+	Parameters<DirectoryDb["transaction"]>[0]
+>[0];
+
+async function selectActiveMembership(
+	user: User,
+	memberService: BootstrapMemberService,
+): Promise<ActiveMembership | null> {
+	if (user.activeHouseholdId) {
+		const selected = await memberService.findActiveMembership({
+			userId: user.id,
+			householdId: user.activeHouseholdId,
+		});
+		if (selected) return selected;
+	}
+
+	return memberService.findOldestActiveMembership(user.id);
+}
+
+async function setActiveHousehold(
+	tx: BootstrapDirectoryTransaction,
+	userId: string,
+	householdId: string,
+): Promise<void> {
+	await tx
+		.update(users)
+		.set({ activeHouseholdId: householdId, updatedAt: Date.now() })
+		.where(eq(users.id, userId));
 }
 
 export { householdDatabaseName };

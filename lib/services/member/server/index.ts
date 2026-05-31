@@ -1,6 +1,6 @@
 export {
-	type ActiveHouseholdMembership,
 	type ActiveMembership,
+	type AssociatedHousehold,
 	createMemberService,
 	type EnsurePlainMemberMembershipResult,
 	type HouseholdMember,

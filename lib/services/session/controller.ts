@@ -57,6 +57,7 @@ export type AuthenticatedAppSession = {
 		id: string;
 		name: string;
 	};
+	households: SessionBootstrap["households"];
 	activeMember: ActiveMember;
 	members: Member[];
 	resourceKey: string;
@@ -290,7 +291,7 @@ export function createAuthenticatedAppSessionController(
 		cachedAttempt.throwDiscardCloseError();
 		if (!run.isCurrent()) return true;
 
-		await cache.deleteLocalData(cached);
+		await cache.deleteLocalData(cached, freshSession);
 		if (!run.isCurrent()) return true;
 
 		await cache.clearUnauthorizedMetadata(cached, freshSession);
@@ -327,9 +328,11 @@ export function createAuthenticatedAppSessionController(
 		cachedAttempt: CachedActivationAttempt,
 	) {
 		let invalidatedUnauthorizedCached = false;
+		let attemptedFreshSession: SessionBootstrap | null = null;
 		try {
 			const session = await loadFreshSessionForRun(run, activation.getToken);
 			if (!session) return;
+			attemptedFreshSession = session;
 			invalidatedUnauthorizedCached =
 				await invalidateUnauthorizedCachedSessionForFreshRun(
 					session,
@@ -341,6 +344,7 @@ export function createAuthenticatedAppSessionController(
 		} catch (error) {
 			await recoverActivationFailure(error, run, cachedAttempt, {
 				invalidatedUnauthorizedCached,
+				attemptedFreshSession,
 			});
 		}
 	}
@@ -349,7 +353,10 @@ export function createAuthenticatedAppSessionController(
 		error: unknown,
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
-		options: { invalidatedUnauthorizedCached: boolean },
+		options: {
+			invalidatedUnauthorizedCached: boolean;
+			attemptedFreshSession: SessionBootstrap | null;
+		},
 	) {
 		logger.error("authenticated app session activation failed", {
 			error: asError(error),
@@ -358,14 +365,27 @@ export function createAuthenticatedAppSessionController(
 		const publishedCached = await cachedAttempt.promise;
 		if (publishedCached && run.isCurrent()) {
 			const previousSession = previousSessionFromSnapshot(snapshot);
-			if (previousSession && !options.invalidatedUnauthorizedCached) {
+			if (
+				previousSession &&
+				!options.invalidatedUnauthorizedCached &&
+				sessionMatchesAttemptedActiveHousehold(
+					previousSession,
+					options.attemptedFreshSession,
+				)
+			) {
 				publish({ status: "ready", session: previousSession });
 			} else {
 				publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
 			}
 		} else if (!publishedCached && run.isCurrent()) {
 			const previousSession = previousSessionFromSnapshot(snapshot);
-			if (previousSession) {
+			if (
+				previousSession &&
+				sessionMatchesAttemptedActiveHousehold(
+					previousSession,
+					options.attemptedFreshSession,
+				)
+			) {
 				publish({ status: "ready", session: previousSession });
 				return;
 			}
@@ -448,6 +468,17 @@ function authenticatedAppSessionAuthStateFromActivation(
 	return activation.signedIn ? "signedIn" : "signedOut";
 }
 
+function sessionMatchesAttemptedActiveHousehold(
+	previousSession: AuthenticatedAppSession,
+	attemptedFreshSession: SessionBootstrap | null,
+): boolean {
+	return (
+		!attemptedFreshSession ||
+		previousSession.activeHousehold.id ===
+			attemptedFreshSession.activeHousehold.id
+	);
+}
+
 function syncHandleFromCoordinator(
 	syncCoordinator: SyncCoordinator,
 ): AuthenticatedAppSessionSync {
@@ -465,6 +496,7 @@ function authenticatedAppSessionFromOpened(
 	return {
 		user: session.user,
 		activeHousehold: session.activeHousehold,
+		households: session.households,
 		activeMember: session.activeMember,
 		members: session.members,
 		resourceKey: opened.resourceKey,

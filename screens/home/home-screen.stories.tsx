@@ -104,6 +104,14 @@ function readySession(
 			displayName: "Avery Chen",
 		},
 		activeHousehold: { id: "hh_story", name: initialList.householdName },
+		households: [
+			{
+				id: "hh_story",
+				name: initialList.householdName,
+				role: "owner",
+				isActive: true,
+			},
+		],
 		activeMember: {
 			id: "mbr_avery",
 			userId: "usr_avery",

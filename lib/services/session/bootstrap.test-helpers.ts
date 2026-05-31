@@ -4,6 +4,7 @@ import type { CachedSessionBootstrap } from "./cache";
 export type SessionBootstrapFixtureOverrides = {
 	householdId?: string;
 	householdName?: string;
+	households?: SessionBootstrap["households"];
 	householdDatabaseAuthToken?: string;
 	householdDatabaseExpiresAt?: number;
 	householdDatabaseUrl?: string;
@@ -27,6 +28,14 @@ export function sessionBootstrapFixture(
 			id: overrides.householdId ?? "hh_avery",
 			name: overrides.householdName ?? "Avery",
 		},
+		households: overrides.households ?? [
+			{
+				id: overrides.householdId ?? "hh_avery",
+				name: overrides.householdName ?? "Avery",
+				role: "owner",
+				isActive: true,
+			},
+		],
 		activeMember: {
 			id: "mbr_avery",
 			userId: "usr_avery",
