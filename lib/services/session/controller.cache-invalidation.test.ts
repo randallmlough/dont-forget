@@ -671,6 +671,71 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 		);
 	});
 
+	it("keeps the cached active Household when the same Household reload fails during fresh opening", async () => {
+		const cached = h.cachedSessionBootstrapFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const fresh = h.sessionBootstrapFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const cachedDataServices = h.sessionDataServicesFixture({
+			syncAuthorized: false,
+			addItem: jest.fn().mockResolvedValue({
+				id: "itm_cached",
+				name: "Cached milk",
+				checked: false,
+				checkedByMemberName: null,
+			}),
+		});
+		const openFresh = new Error("fresh open failed");
+		const sessionService = h.sessionRuntimeFixture({
+			read: jest.fn().mockResolvedValue(cached),
+			getSession: jest.fn().mockResolvedValue(fresh),
+			readUnauthorized: jest.fn().mockResolvedValue(null),
+		});
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataServices)
+				.mockImplementationOnce(() => {
+					throw openFresh;
+				}),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			session: { resourceKey: "authenticated-app-session:1" },
+		});
+		const snapshot = controller.getSnapshot();
+		if (snapshot.status !== "ready") {
+			throw new Error("Expected cached ready snapshot");
+		}
+		await expect(
+			snapshot.session.services.items.addItem({
+				listId: "lst_default_groceries",
+				userId: "usr_avery",
+				name: "Cached milk",
+			}),
+		).resolves.toMatchObject({ name: "Cached milk" });
+		expect(sessionService.cache.deleteLocalData).not.toHaveBeenCalled();
+		expect(
+			sessionService.cache.clearUnauthorizedMetadata,
+		).not.toHaveBeenCalled();
+	});
+
 	it("does not fall back to the cached active Household when an associated switch reload fails", async () => {
 		const cached = h.cachedSessionBootstrapFixture({
 			householdId: "hh_old",
