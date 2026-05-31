@@ -155,13 +155,23 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 
 	return {
 		async save(session) {
+			const previous = await read();
 			const cached = cachedSessionBootstrapFromSession(session);
+			let cleanupError: unknown = null;
+			try {
+				await drainPendingSignedOutLocalDataDeletions(
+					droppedAssociatedHouseholdIds(previous, cached),
+				);
+			} catch (error) {
+				cleanupError = error;
+			}
 			await storage.setItem(SESSION_CACHE_KEY, JSON.stringify(cached));
 			analytics.track(
 				"authenticated_app_session_cached",
 				sessionAnalyticsProperties(session),
 			);
 
+			if (cleanupError) throw cleanupError;
 			return cached;
 		},
 
@@ -232,4 +242,18 @@ function cachedSessionBootstrapFromSession(
 		},
 		initializedAt: Date.now(),
 	});
+}
+
+function droppedAssociatedHouseholdIds(
+	previous: CachedSessionBootstrap | null,
+	next: CachedSessionBootstrap,
+): string[] {
+	if (!previous) return [];
+
+	const nextHouseholdIds = new Set(
+		next.households.map((household) => household.id),
+	);
+	return previous.households
+		.map((household) => household.id)
+		.filter((householdId) => !nextHouseholdIds.has(householdId));
 }

@@ -55,6 +55,79 @@ describe("createSessionCache", () => {
 		);
 	});
 
+	it("deletes dropped associated Household local data when saving fresh metadata", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+		await cache.save(
+			sessionBootstrapFixture({
+				householdId: "hh_new",
+				householdName: "New",
+				households: [
+					{ id: "hh_old", name: "Old", role: "owner", isActive: false },
+					{ id: "hh_new", name: "New", role: "member", isActive: true },
+				],
+			}),
+		);
+		mockDeleteLocalHouseholdStoreData.mockClear();
+
+		await cache.save(
+			sessionBootstrapFixture({
+				householdId: "hh_new",
+				householdName: "New",
+				households: [
+					{ id: "hh_new", name: "New", role: "member", isActive: true },
+				],
+			}),
+		);
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledTimes(1);
+		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.not.toContain(
+			"hh_old",
+		);
+	});
+
+	it("keeps dropped associated Household local data deletion retry after fresh metadata save", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+		await cache.save(
+			sessionBootstrapFixture({
+				householdId: "hh_new",
+				householdName: "New",
+				households: [
+					{ id: "hh_old", name: "Old", role: "owner", isActive: false },
+					{ id: "hh_new", name: "New", role: "member", isActive: true },
+				],
+			}),
+		);
+		mockDeleteLocalHouseholdStoreData
+			.mockReset()
+			.mockRejectedValueOnce(new Error("delete failed"))
+			.mockResolvedValue(undefined);
+
+		await expect(
+			cache.save(
+				sessionBootstrapFixture({
+					householdId: "hh_new",
+					householdName: "New",
+					households: [
+						{ id: "hh_new", name: "New", role: "member", isActive: true },
+					],
+				}),
+			),
+		).rejects.toThrow("delete failed");
+		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.not.toContain(
+			"hh_old",
+		);
+
+		mockDeleteLocalHouseholdStoreData.mockClear();
+		await cache.clearSignedOutData();
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_new");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledTimes(2);
+	});
+
 	it("reads cached Authenticated App Session metadata while stripping persisted auth tokens", async () => {
 		const storage = memoryStorage();
 		const analytics = createMockAnalytics();
