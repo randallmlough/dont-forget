@@ -65,6 +65,7 @@ function reportServerImport(context, filename, node) {
 
 function canUseServerServiceImport(filename, { dynamic }) {
 	if (isTestFile(filename)) return true;
+	if (isLibApiFile(filename)) return true;
 	if (isServerServiceFile(filename)) return true;
 	return dynamic && isAppApiFile(filename);
 }
@@ -83,6 +84,10 @@ function isServerServiceImport(source, filename) {
 
 function isServerServiceFile(filename) {
 	return /\/lib\/services\/[^/]+\/server\//.test(filename);
+}
+
+function isLibApiFile(filename) {
+	return /\/lib\/api\//.test(filename);
 }
 
 function isAppSafeDomainIndex(filename) {

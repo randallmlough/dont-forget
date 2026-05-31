@@ -36,6 +36,10 @@ ruleTester.run("no-server-service-imports", rule, {
 			`,
 		},
 		{
+			filename: "/repo/lib/api/invitations/handlers.ts",
+			code: `import { createInvitationService } from "@/lib/services/invitation/server";`,
+		},
+		{
 			filename: "/repo/lib/services/session/server/bootstrap.test.ts",
 			code: `import { createUserService } from "@/lib/services/user/server";`,
 		},

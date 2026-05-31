@@ -18,6 +18,7 @@ module.exports = defineConfig([
 		},
 		rules: {
 			"dont-forget/no-db-imports-outside-services": "error",
+			"dont-forget/no-lib-api-imports": "error",
 			"dont-forget/no-screen-use-effect": "error",
 			"dont-forget/no-server-service-imports": "error",
 			"react-hooks/exhaustive-deps": "error",
