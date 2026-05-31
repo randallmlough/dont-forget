@@ -375,6 +375,38 @@ describe("createSessionCache", () => {
 		);
 		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledTimes(1);
 	});
+
+	it("deletes overlapping cached Household local data when the User changes", async () => {
+		const cache = createSessionCache();
+		const cached = cachedSessionBootstrapFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+			households: [
+				{ id: "hh_old", name: "Old", role: "owner", isActive: true },
+				{ id: "hh_shared", name: "Shared", role: "member", isActive: false },
+			],
+		});
+		const freshSession = {
+			...sessionBootstrapFixture({
+				householdId: "hh_shared",
+				householdName: "Shared",
+				households: [
+					{ id: "hh_shared", name: "Shared", role: "member", isActive: true },
+				],
+			}),
+			user: {
+				id: "usr_blake",
+				email: "blake@example.com",
+				displayName: "Blake Rivera",
+			},
+		};
+
+		await cache.deleteLocalData(cached, freshSession);
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_shared");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledTimes(2);
+	});
 });
 
 function memoryStorage(): SessionCacheStorage {

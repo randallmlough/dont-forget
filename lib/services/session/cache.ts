@@ -271,6 +271,9 @@ function unauthorizedCachedHouseholdIds(
 	if (!freshSession) {
 		return cached.households.map((household) => household.id);
 	}
+	if (cached.user.id !== freshSession.user.id) {
+		return cached.households.map((household) => household.id);
+	}
 
 	const freshHouseholdIds = new Set(
 		freshSession.households.map((household) => household.id),
