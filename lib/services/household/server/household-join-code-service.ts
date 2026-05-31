@@ -143,7 +143,7 @@ export function createHouseholdJoinCodeService(
 			});
 		},
 		disableJoinCode(input) {
-			return disableJoinCode(input, deps.directory, buildJoinUrl, analytics);
+			return disableJoinCode(input, deps.directory, analytics);
 		},
 		enableJoinCode(input) {
 			return enableJoinCode(input, deps.directory, {
@@ -296,29 +296,38 @@ async function regenerateJoinCode(
 
 async function disableJoinCode(
 	input: { householdId: string; requestedByUserId: string },
-	directory: HouseholdJoinCodeServiceExecutor,
-	buildJoinUrl: HouseholdJoinUrlBuilder,
+	directory: DirectoryDb,
 	analytics: ServiceAnalytics,
 ): Promise<HouseholdJoinCodeState> {
 	const now = Date.now();
 	await requireActiveHouseholdMember(input, directory);
-	const current = await findCurrentJoinCode(input.householdId, directory);
-	if (!current) return disabledJoinCode(input.householdId);
 
-	const [updated] = await directory
-		.update(householdJoinCodes)
-		.set({ disabledAt: now, disabledByUserId: input.requestedByUserId })
-		.where(eq(householdJoinCodes.id, current.id))
-		.returning();
+	const disabledCode = await runWithSqliteBusyRetry(() =>
+		directory.transaction(async (tx) => {
+			await lockHouseholdJoinCodeLifecycle(input.householdId, tx);
+			const [updated] = await tx
+				.update(householdJoinCodes)
+				.set({ disabledAt: now, disabledByUserId: input.requestedByUserId })
+				.where(
+					and(
+						eq(householdJoinCodes.householdId, input.householdId),
+						isNull(householdJoinCodes.disabledAt),
+						isNull(householdJoinCodes.replacedAt),
+					),
+				)
+				.returning();
+			return Boolean(updated);
+		}),
+	);
 
-	analytics.track("household_join_code_disabled", {
-		household_id: input.householdId,
-		requested_by_user_id: input.requestedByUserId,
-	});
+	if (disabledCode) {
+		analytics.track("household_join_code_disabled", {
+			household_id: input.householdId,
+			requested_by_user_id: input.requestedByUserId,
+		});
+	}
 
-	return updated
-		? toJoinCodeState(updated, buildJoinUrl)
-		: disabledJoinCode(input.householdId);
+	return disabledJoinCode(input.householdId);
 }
 
 async function enableJoinCode(
@@ -371,6 +380,16 @@ async function createOrFindEnabledJoinCode(
 
 		throw error;
 	}
+}
+
+async function lockHouseholdJoinCodeLifecycle(
+	householdId: string,
+	directory: HouseholdJoinCodeServiceExecutor,
+) {
+	await directory
+		.update(households)
+		.set({ id: sql`${households.id}` })
+		.where(eq(households.id, householdId));
 }
 
 async function requireActiveHouseholdMember(

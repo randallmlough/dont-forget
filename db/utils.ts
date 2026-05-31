@@ -55,7 +55,16 @@ function isSqliteBusyError(error: unknown): boolean {
 		typeof error === "object" && error !== null && "message" in error
 			? String(error.message)
 			: String(error);
-	return (
-		message.includes("SQLITE_BUSY") || message.includes("database is locked")
-	);
+	if (
+		message.includes("SQLITE_BUSY") ||
+		message.includes("database is locked")
+	) {
+		return true;
+	}
+
+	const cause =
+		typeof error === "object" && error !== null && "cause" in error
+			? (error as { cause?: unknown }).cause
+			: undefined;
+	return cause ? isSqliteBusyError(cause) : false;
 }

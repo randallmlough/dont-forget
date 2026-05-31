@@ -377,6 +377,78 @@ describe("createHouseholdJoinCodeService", () => {
 			await directory.close();
 		}
 	}, 15_000);
+
+	it("leaves no active code when disable races with regeneration", async () => {
+		const directory = await createTestDirectoryDb();
+		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_600_000);
+		const secondClient = createClient({ url: `file:${directory.path}` });
+		const generatorStarted = deferred<void>();
+		const releaseGenerator = deferred<void>();
+
+		try {
+			await secondClient.execute("PRAGMA foreign_keys = ON");
+			await secondClient.execute("PRAGMA busy_timeout = 5000");
+			await secondClient.execute("PRAGMA journal_mode = WAL");
+			const secondDirectory = directoryDb(secondClient);
+			await seedJoinCodeHousehold(directory.db);
+			const regeneratingService = createHouseholdJoinCodeService({
+				directory: directory.db,
+				buildJoinUrl: testJoinUrl,
+				generateCode: jest.fn(async () => {
+					generatorStarted.resolve();
+					await releaseGenerator.promise;
+					return "HJKLMNPQ";
+				}),
+				analytics: { track: jest.fn() },
+			});
+			const disablingService = createHouseholdJoinCodeService({
+				directory: secondDirectory,
+				buildJoinUrl: testJoinUrl,
+				analytics: { track: jest.fn() },
+			});
+
+			const regenerate = regeneratingService.regenerateJoinCode({
+				householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+				requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+			});
+			await generatorStarted.promise;
+
+			const disable = disablingService.disableJoinCode({
+				householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+				requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+			});
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			releaseGenerator.resolve();
+
+			await regenerate;
+			await expect(disable).resolves.toEqual({
+				enabled: false,
+				householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+			});
+
+			const currentCodes = await directory.db
+				.select()
+				.from(householdJoinCodes)
+				.where(
+					eq(
+						householdJoinCodes.householdId,
+						PRIMARY_HOUSEHOLD_SEED.household.id,
+					),
+				);
+			expect(
+				currentCodes.filter((code) => !code.disabledAt && !code.replacedAt),
+			).toHaveLength(0);
+			await expect(
+				disablingService.previewJoinCode("HJKLMNPQ"),
+			).resolves.toEqual({
+				available: false,
+			});
+		} finally {
+			secondClient.close();
+			dateNow.mockRestore();
+			await directory.close();
+		}
+	}, 15_000);
 });
 
 async function seedJoinCodeHousehold(
