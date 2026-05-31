@@ -179,6 +179,26 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(screen.getByText("authenticated-app-session:1")).toBeTruthy();
 	});
 
+	it("reloads the Authenticated App Session with the latest auth inputs", async () => {
+		const auth = authFixture();
+		const controller = authenticatedAppSessionControllerFixture();
+		render(
+			<AuthenticatedAppSessionProvider controller={controller} auth={auth}>
+				<ReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+
+		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
+		const [activation] = controller.activate.mock.calls.at(-1) ?? [];
+		expect(activation).toMatchObject({
+			authReady: true,
+			signedIn: true,
+		});
+		await expect(activation?.getToken()).resolves.toBe("token");
+	});
+
 	it("signs out in analytics, controller, local cleanup, Clerk order", async () => {
 		const order: string[] = [];
 		const controller = authenticatedAppSessionControllerFixture();
@@ -580,6 +600,15 @@ function RetryState() {
 	);
 }
 
+function ReloadState() {
+	const { reloadSession } = useAuthenticatedAppSession();
+	return (
+		<Pressable accessibilityRole="button" onPress={reloadSession}>
+			<Text>Reload</Text>
+		</Pressable>
+	);
+}
+
 function authFixture(
 	overrides: Partial<
 		AuthenticatedAppSessionActivation & { signOut: () => Promise<void> }
@@ -602,6 +631,9 @@ function appSessionFixture(): AuthenticatedAppSession {
 			displayName: "Avery Chen",
 		},
 		activeHousehold: { id: "hh_avery", name: "Avery" },
+		households: [
+			{ id: "hh_avery", name: "Avery", role: "owner", isActive: true },
+		],
 		activeMember: {
 			id: "mbr_avery",
 			userId: "usr_avery",

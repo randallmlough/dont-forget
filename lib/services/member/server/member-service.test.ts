@@ -86,6 +86,32 @@ describe("createMemberService", () => {
 				householdId: "hh_older",
 				householdName: "Older",
 			});
+			await expect(
+				service.findActiveMembership({
+					userId: "usr_avery",
+					householdId: "hh_newer",
+				}),
+			).resolves.toMatchObject({
+				membershipId: "mbr_newer",
+				membershipRole: "member",
+				householdId: "hh_newer",
+				householdName: "Newer",
+			});
+			await expect(
+				service.findActiveMembership({
+					userId: "usr_avery",
+					householdId: "hh_deleted",
+				}),
+			).resolves.toBeNull();
+			await expect(
+				service.listAssociatedHouseholds({
+					userId: "usr_avery",
+					activeHouseholdId: "hh_newer",
+				}),
+			).resolves.toEqual([
+				{ id: "hh_older", name: "Older", role: "owner", isActive: false },
+				{ id: "hh_newer", name: "Newer", role: "member", isActive: true },
+			]);
 			await expect(service.listHouseholdMembers("hh_older")).resolves.toEqual([
 				{
 					membershipId: "mbr_older",
@@ -99,6 +125,77 @@ describe("createMemberService", () => {
 					role: "member",
 					displayName: "Blake Park",
 				},
+			]);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("excludes removed Memberships from active lookup and associated Household listing", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				displayName: "Avery Chen",
+			});
+			await directory.db.insert(households).values([
+				{
+					id: "hh_active",
+					name: "Active",
+					tursoDbName: "db-active",
+					createdByUserId: "usr_avery",
+					provisioningCompletedAt: 1,
+					createdAt: 1,
+				},
+				{
+					id: "hh_removed",
+					name: "Removed",
+					tursoDbName: "db-removed",
+					createdByUserId: "usr_avery",
+					provisioningCompletedAt: 1,
+					createdAt: 1,
+				},
+			]);
+			await directory.db.insert(memberships).values([
+				{
+					id: "mbr_active",
+					householdId: "hh_active",
+					userId: "usr_avery",
+					role: "owner",
+					joinedAt: 10,
+				},
+				{
+					id: "mbr_removed",
+					householdId: "hh_removed",
+					userId: "usr_avery",
+					role: "member",
+					joinedAt: 5,
+					removedAt: 20,
+				},
+			]);
+
+			await expect(
+				service.findActiveMembership({
+					userId: "usr_avery",
+					householdId: "hh_removed",
+				}),
+			).resolves.toBeNull();
+			await expect(
+				service.findOldestActiveMembership("usr_avery"),
+			).resolves.toMatchObject({
+				membershipId: "mbr_active",
+				householdId: "hh_active",
+			});
+			await expect(
+				service.listAssociatedHouseholds({
+					userId: "usr_avery",
+					activeHouseholdId: "hh_active",
+				}),
+			).resolves.toEqual([
+				{ id: "hh_active", name: "Active", role: "owner", isActive: true },
 			]);
 		} finally {
 			await directory.close();
