@@ -291,7 +291,7 @@ export function createAuthenticatedAppSessionController(
 		cachedAttempt.throwDiscardCloseError();
 		if (!run.isCurrent()) return true;
 
-		await cache.deleteLocalData(cached);
+		await cache.deleteLocalData(cached, freshSession);
 		if (!run.isCurrent()) return true;
 
 		await cache.clearUnauthorizedMetadata(cached, freshSession);

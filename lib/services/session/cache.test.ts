@@ -348,6 +348,33 @@ describe("createSessionCache", () => {
 		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_new");
 		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledTimes(2);
 	});
+
+	it("preserves still-associated Household local data during unauthorized cached deletion", async () => {
+		const cache = createSessionCache();
+		const cached = cachedSessionBootstrapFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+			households: [
+				{ id: "hh_old", name: "Old", role: "owner", isActive: true },
+				{ id: "hh_current", name: "Current", role: "member", isActive: false },
+			],
+		});
+		const freshSession = sessionBootstrapFixture({
+			householdId: "hh_current",
+			householdName: "Current",
+			households: [
+				{ id: "hh_current", name: "Current", role: "member", isActive: true },
+			],
+		});
+
+		await cache.deleteLocalData(cached, freshSession);
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalledWith(
+			"hh_current",
+		);
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledTimes(1);
+	});
 });
 
 function memoryStorage(): SessionCacheStorage {

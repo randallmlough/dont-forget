@@ -59,7 +59,10 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 
 		expect(events).toEqual(["close:cached", "delete:cached", "clear:cached"]);
 		expect(sessionService.cache.readUnauthorized).toHaveBeenCalledWith(fresh);
-		expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(cached);
+		expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(
+			cached,
+			fresh,
+		);
 		expect(sessionService.cache.clearUnauthorizedMetadata).toHaveBeenCalledWith(
 			cached,
 			fresh,
@@ -439,7 +442,10 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(cached),
+			expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(
+				cached,
+				fresh,
+			),
 		);
 
 		await expect(
@@ -590,7 +596,10 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			signedIn: true,
 		});
 		await h.waitForAsync(() =>
-			expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(cached),
+			expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(
+				cached,
+				firstFresh,
+			),
 		);
 
 		const freshActivation = controller.activate({
@@ -652,7 +661,10 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			status: "error",
 			message: "Unable to prepare your Household. Please try again.",
 		});
-		expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(cached);
+		expect(sessionService.cache.deleteLocalData).toHaveBeenCalledWith(
+			cached,
+			fresh,
+		);
 		expect(sessionService.cache.clearUnauthorizedMetadata).toHaveBeenCalledWith(
 			cached,
 			fresh,

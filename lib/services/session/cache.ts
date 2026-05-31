@@ -43,7 +43,10 @@ export type SessionCache = {
 		freshSession: SessionBootstrap,
 	) => Promise<void>;
 	clearSignedOutData: (householdIds?: string[]) => Promise<void>;
-	deleteLocalData: (cached: CachedSessionBootstrap) => Promise<void>;
+	deleteLocalData: (
+		cached: CachedSessionBootstrap,
+		freshSession?: SessionBootstrap,
+	) => Promise<void>;
 };
 
 export type SessionCacheDeps = {
@@ -126,9 +129,10 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 
 	async function deleteLocalData(
 		cached: CachedSessionBootstrap,
+		freshSession?: SessionBootstrap,
 	): Promise<void> {
 		await drainPendingSignedOutLocalDataDeletions(
-			cached.households.map((household) => household.id),
+			unauthorizedCachedHouseholdIds(cached, freshSession),
 		);
 	}
 
@@ -258,4 +262,20 @@ function droppedAssociatedHouseholdIds(
 	return previous.households
 		.map((household) => household.id)
 		.filter((householdId) => !nextHouseholdIds.has(householdId));
+}
+
+function unauthorizedCachedHouseholdIds(
+	cached: CachedSessionBootstrap,
+	freshSession?: SessionBootstrap,
+): string[] {
+	if (!freshSession) {
+		return cached.households.map((household) => household.id);
+	}
+
+	const freshHouseholdIds = new Set(
+		freshSession.households.map((household) => household.id),
+	);
+	return cached.households
+		.map((household) => household.id)
+		.filter((householdId) => !freshHouseholdIds.has(householdId));
 }
