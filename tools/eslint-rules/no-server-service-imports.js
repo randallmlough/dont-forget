@@ -42,7 +42,14 @@ module.exports = {
 			ImportExpression(node) {
 				const source = dynamicImportSource(node);
 				if (!source || !isServerServiceImport(source, filename)) return;
-				if (canUseServerServiceImport(filename, { dynamic: true })) return;
+				if (
+					canUseServerServiceImport(filename, {
+						dynamic: true,
+						insideFunction: isInsideFunction(node),
+					})
+				) {
+					return;
+				}
 				reportServerImport(context, filename, node);
 			},
 		};
@@ -63,10 +70,14 @@ function reportServerImport(context, filename, node) {
 	context.report({ node, messageId: "appFacing" });
 }
 
-function canUseServerServiceImport(filename, { dynamic }) {
+function canUseServerServiceImport(
+	filename,
+	{ dynamic, insideFunction = false },
+) {
 	if (isTestFile(filename)) return true;
+	if (isLibApiFile(filename)) return true;
 	if (isServerServiceFile(filename)) return true;
-	return dynamic && isAppApiFile(filename);
+	return dynamic && insideFunction && isAppApiFile(filename);
 }
 
 function isServerServiceImport(source, filename) {
@@ -85,6 +96,25 @@ function isServerServiceFile(filename) {
 	return /\/lib\/services\/[^/]+\/server\//.test(filename);
 }
 
+function isLibApiFile(filename) {
+	return /\/lib\/api\//.test(filename);
+}
+
 function isAppSafeDomainIndex(filename) {
 	return /\/lib\/services\/[^/]+\/index\.ts$/.test(filename);
+}
+
+function isInsideFunction(node) {
+	let current = node.parent;
+	while (current) {
+		if (
+			current.type === "FunctionDeclaration" ||
+			current.type === "FunctionExpression" ||
+			current.type === "ArrowFunctionExpression"
+		) {
+			return true;
+		}
+		current = current.parent;
+	}
+	return false;
 }

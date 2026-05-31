@@ -36,6 +36,10 @@ ruleTester.run("no-server-service-imports", rule, {
 			`,
 		},
 		{
+			filename: "/repo/lib/api/invitations/handlers.ts",
+			code: `import { createInvitationService } from "@/lib/services/invitation/server";`,
+		},
+		{
 			filename: "/repo/lib/services/session/server/bootstrap.test.ts",
 			code: `import { createUserService } from "@/lib/services/user/server";`,
 		},
@@ -54,6 +58,11 @@ ruleTester.run("no-server-service-imports", rule, {
 		{
 			filename: "/repo/app/api/bootstrap+api.ts",
 			code: `import { createAuthService } from "@/lib/services/auth/server";`,
+			errors: [{ messageId: "apiStatic" }],
+		},
+		{
+			filename: "/repo/app/api/bootstrap+api.ts",
+			code: `const server = import("@/lib/services/session/server");`,
 			errors: [{ messageId: "apiStatic" }],
 		},
 		{
