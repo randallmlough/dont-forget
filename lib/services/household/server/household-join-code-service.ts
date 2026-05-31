@@ -335,7 +335,7 @@ async function enableJoinCode(
 	const current = await findCurrentJoinCode(input.householdId, directory);
 	if (current) return toJoinCodeState(current, deps.buildJoinUrl);
 
-	const code = await createHouseholdJoinCode(
+	const { code, created } = await createOrFindEnabledJoinCode(
 		{
 			householdId: input.householdId,
 			createdByUserId: input.requestedByUserId,
@@ -345,12 +345,32 @@ async function enableJoinCode(
 		deps.generateCode,
 	);
 
-	deps.analytics.track("household_join_code_enabled", {
-		household_id: input.householdId,
-		requested_by_user_id: input.requestedByUserId,
-	});
+	if (created) {
+		deps.analytics.track("household_join_code_enabled", {
+			household_id: input.householdId,
+			requested_by_user_id: input.requestedByUserId,
+		});
+	}
 
 	return toJoinCodeState(code, deps.buildJoinUrl);
+}
+
+async function createOrFindEnabledJoinCode(
+	input: { householdId: string; createdByUserId: string; now: number },
+	directory: HouseholdJoinCodeServiceExecutor,
+	generateCode: HouseholdJoinCodeGenerator,
+): Promise<{ code: HouseholdJoinCode; created: boolean }> {
+	try {
+		const code = await createHouseholdJoinCode(input, directory, generateCode);
+		return { code, created: true };
+	} catch (error) {
+		if (!isActiveJoinCodeConflict(error)) throw error;
+
+		const current = await findCurrentJoinCode(input.householdId, directory);
+		if (current) return { code: current, created: false };
+
+		throw error;
+	}
 }
 
 async function requireActiveHouseholdMember(
@@ -546,6 +566,21 @@ function disabledJoinCode(householdId: string): HouseholdJoinCodeState {
 
 function normalizeJoinCode(code: string): string {
 	return code.toUpperCase().replace(/[\s-]/g, "");
+}
+
+function isActiveJoinCodeConflict(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	if (
+		error.message.includes("SQLITE_CONSTRAINT") ||
+		error.message.includes(
+			"UNIQUE constraint failed: household_join_codes.household_id",
+		)
+	) {
+		return true;
+	}
+
+	const cause = (error as { cause?: unknown }).cause;
+	return cause ? isActiveJoinCodeConflict(cause) : false;
 }
 
 function generateSecureHouseholdJoinCode(): string {

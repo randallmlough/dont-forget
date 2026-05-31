@@ -17,6 +17,7 @@ import {
 	users,
 } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/test";
+import { deferred } from "@/lib/test/async";
 import {
 	createHouseholdJoinCodeService,
 	HouseholdJoinCodeMembershipRequiredError,
@@ -282,6 +283,94 @@ describe("createHouseholdJoinCodeService", () => {
 
 			expect(householdMemberships).toHaveLength(3);
 			expect(uses).toHaveLength(2);
+		} finally {
+			secondClient.close();
+			dateNow.mockRestore();
+			await directory.close();
+		}
+	}, 15_000);
+
+	it("returns the current code when concurrent enable requests race", async () => {
+		const directory = await createTestDirectoryDb();
+		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_500_000);
+		const secondClient = createClient({ url: `file:${directory.path}` });
+		const releaseGenerators = deferred<void>();
+		const firstGeneratorReady = deferred<void>();
+		const secondGeneratorReady = deferred<void>();
+
+		try {
+			await secondClient.execute("PRAGMA foreign_keys = ON");
+			await secondClient.execute("PRAGMA busy_timeout = 5000");
+			await secondClient.execute("PRAGMA journal_mode = WAL");
+			const secondDirectory = directoryDb(secondClient);
+			await seedJoinCodeHousehold(directory.db);
+			await directory.db
+				.update(householdJoinCodes)
+				.set({
+					disabledAt: 1_700_000_490_000,
+					disabledByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				})
+				.where(
+					eq(householdJoinCodes.id, PRIMARY_HOUSEHOLD_SEED.joinCodes.active.id),
+				);
+			const firstService = createHouseholdJoinCodeService({
+				directory: directory.db,
+				buildJoinUrl: testJoinUrl,
+				generateCode: jest.fn(async () => {
+					firstGeneratorReady.resolve();
+					await releaseGenerators.promise;
+					return "HJKLMNPQ";
+				}),
+				analytics: { track: jest.fn() },
+			});
+			const secondService = createHouseholdJoinCodeService({
+				directory: secondDirectory,
+				buildJoinUrl: testJoinUrl,
+				generateCode: jest.fn(async () => {
+					secondGeneratorReady.resolve();
+					await releaseGenerators.promise;
+					return "RSTUVWXY";
+				}),
+				analytics: { track: jest.fn() },
+			});
+
+			const firstEnable = firstService.enableJoinCode({
+				householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+				requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+			});
+			const secondEnable = secondService.enableJoinCode({
+				householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+				requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+			});
+
+			await Promise.all([
+				firstGeneratorReady.promise,
+				secondGeneratorReady.promise,
+			]);
+			releaseGenerators.resolve();
+
+			const enabled = await Promise.all([firstEnable, secondEnable]);
+			expect(enabled[0]).toMatchObject({ enabled: true });
+			expect(enabled[1]).toMatchObject({ enabled: true });
+			if (!enabled[0].enabled || !enabled[1].enabled) {
+				throw new Error(
+					"Expected both enable requests to return an active code",
+				);
+			}
+			expect(enabled[0].code).toBe(enabled[1].code);
+
+			const currentCodes = await directory.db
+				.select()
+				.from(householdJoinCodes)
+				.where(
+					eq(
+						householdJoinCodes.householdId,
+						PRIMARY_HOUSEHOLD_SEED.household.id,
+					),
+				);
+			expect(
+				currentCodes.filter((code) => !code.disabledAt && !code.replacedAt),
+			).toHaveLength(1);
 		} finally {
 			secondClient.close();
 			dateNow.mockRestore();
