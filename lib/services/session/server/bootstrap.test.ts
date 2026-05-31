@@ -29,6 +29,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 
 	it("creates a first-run User, Household, Owner Membership, Household DB, and default List", async () => {
 		const harness = await createBootstrapHarness();
+		const random = jest.spyOn(Math, "random").mockReturnValue(0);
 
 		try {
 			const response = await bootstrapAuthenticatedAppSession(
@@ -42,7 +43,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 			});
 			expect(response.activeHousehold).toEqual({
 				id: expect.stringMatching(/^hh_/),
-				name: "Avery",
+				name: "Blue Basket",
 			});
 			expect(response.activeMember).toMatchObject({
 				id: expect.stringMatching(/^mbr_/),
@@ -52,7 +53,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 			expect(response.households).toEqual([
 				{
 					id: response.activeHousehold.id,
-					name: "Avery",
+					name: "Blue Basket",
 					role: "owner",
 					isActive: true,
 				},
@@ -80,7 +81,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 			expect(directoryHouseholds).toMatchObject([
 				{
 					id: response.activeHousehold.id,
-					name: "Avery",
+					name: "Blue Basket",
 					createdByUserId: response.user.id,
 					provisioningCompletedAt: expect.any(Number),
 				},
@@ -101,6 +102,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 				},
 			]);
 		} finally {
+			random.mockRestore();
 			await harness.close();
 		}
 	});

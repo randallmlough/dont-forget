@@ -15,6 +15,7 @@ import {
 	createHouseholdService,
 	householdDatabaseName,
 } from "@/lib/services/household/server/household-service";
+import { generateInitialHouseholdName } from "@/lib/services/household/server/initial-household-name";
 import {
 	type ActiveMembership,
 	createMemberService,
@@ -83,7 +84,7 @@ export async function bootstrapAuthenticatedAppSession(
 		const household = await txHouseholdService.createOwnedHousehold({
 			appEnv: deps.appEnv,
 			user,
-			name: profile.firstName ?? "Untitled",
+			name: generateInitialHouseholdName(),
 		});
 		const membership = await txMemberService.ensureOwnerMembership({
 			householdId: household.id,
