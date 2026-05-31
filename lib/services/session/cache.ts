@@ -127,7 +127,9 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 	async function deleteLocalData(
 		cached: CachedSessionBootstrap,
 	): Promise<void> {
-		await deleteLocalDataForHousehold(cached.activeHousehold.id);
+		await drainPendingSignedOutLocalDataDeletions(
+			cached.households.map((household) => household.id),
+		);
 	}
 
 	async function clearUnauthorizedMetadata(

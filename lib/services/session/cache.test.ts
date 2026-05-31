@@ -331,13 +331,22 @@ describe("createSessionCache", () => {
 		expect(mockDeleteLocalHouseholdStoreData).not.toHaveBeenCalled();
 	});
 
-	it("deletes local Household data only through the explicit local data API", async () => {
+	it("deletes all cached associated Household local data only through the explicit local data API", async () => {
 		const cache = createSessionCache();
-		const cached = cachedSessionBootstrapFixture({ householdId: "hh_old" });
+		const cached = cachedSessionBootstrapFixture({
+			householdId: "hh_new",
+			householdName: "New",
+			households: [
+				{ id: "hh_old", name: "Old", role: "owner", isActive: false },
+				{ id: "hh_new", name: "New", role: "member", isActive: true },
+			],
+		});
 
 		await cache.deleteLocalData(cached);
 
 		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_old");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith("hh_new");
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledTimes(2);
 	});
 });
 
