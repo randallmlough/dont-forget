@@ -18,10 +18,17 @@ export class BadRequestError extends Error {
 	}
 }
 
-export class UnauthorizedError extends Error {
+export class ApiUnauthorizedError extends Error {
 	constructor(message = "Unauthorized") {
 		super(message);
-		this.name = "UnauthorizedError";
+		this.name = "ApiUnauthorizedError";
+	}
+}
+
+export class ApiForbiddenError extends Error {
+	constructor(message = "Forbidden") {
+		super(message);
+		this.name = "ApiForbiddenError";
 	}
 }
 
@@ -47,7 +54,7 @@ export async function withDirectory<T>(
 	try {
 		return await handler(directoryDb(client));
 	} finally {
-		client.close();
+		await client.close();
 	}
 }
 
@@ -61,7 +68,15 @@ export async function authenticateApiUser(
 	}
 
 	const { verifyClerkRequest } = await import("@/lib/server/auth");
-	const profile = await verifyClerkRequest(request);
+	let profile: ServerUserProfile;
+	try {
+		profile = await verifyClerkRequest(request);
+	} catch (error) {
+		if (isServerUnauthorizedError(error)) {
+			throw new ApiUnauthorizedError(error.message);
+		}
+		throw error;
+	}
 	return upsertAuthenticatedUser(profile, directory);
 }
 
@@ -131,8 +146,16 @@ export function errorResponse(message: string, status: number): Response {
 	return jsonResponse({ error: message }, status);
 }
 
-export function isUnauthorizedError(error: unknown): error is Error {
-	return error instanceof Error && error.name === "UnauthorizedError";
+export function isApiUnauthorizedError(
+	error: unknown,
+): error is ApiUnauthorizedError {
+	return error instanceof ApiUnauthorizedError;
+}
+
+export function isApiForbiddenError(
+	error: unknown,
+): error is ApiForbiddenError {
+	return error instanceof ApiForbiddenError;
 }
 
 export function publicAppLinkBuilders(): {
@@ -152,4 +175,8 @@ type JsonObject = Record<string, unknown>;
 
 function isJsonObject(value: unknown): value is JsonObject {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isServerUnauthorizedError(error: unknown): error is Error {
+	return error instanceof Error && error.name === "UnauthorizedError";
 }

@@ -5,7 +5,7 @@ import {
 import { createTestDirectoryDb } from "@/db/test";
 import { createInvitationService } from "@/lib/services/invitation/server";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
-import { UnauthorizedError, upsertAuthenticatedUser } from "../shared";
+import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
 	handleAcceptInvitation,
 	handleCreateInvitation,
@@ -26,7 +26,7 @@ describe("Invitation API handlers", () => {
 				{
 					directory: directory.db,
 					authenticate: async () => {
-						throw new UnauthorizedError("Missing bearer token");
+						throw new ApiUnauthorizedError("Missing bearer token");
 					},
 				},
 			);

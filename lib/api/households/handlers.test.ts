@@ -14,7 +14,7 @@ import {
 } from "@/db/test";
 import { createHouseholdJoinCodeService } from "@/lib/services/household/server";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
-import { UnauthorizedError, upsertAuthenticatedUser } from "../shared";
+import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
 	type HouseholdApiDeps,
 	handleGetJoinCode,
@@ -40,7 +40,7 @@ describe("Household API handlers", () => {
 				{
 					directory: directory.db,
 					authenticate: async () => {
-						throw new UnauthorizedError("Invalid Clerk session token");
+						throw new ApiUnauthorizedError("Invalid Clerk session token");
 					},
 				},
 			);
@@ -237,7 +237,7 @@ describe("Household API handlers", () => {
 
 			const joined = await readJsonResponse(
 				await handleJoinByCode(
-					createApiRequest({ body: { code: "STAGE500", source: "join_link" } }),
+					createApiRequest({ body: { code: "STAGE500" } }),
 					householdDeps(directory, "user_casey"),
 				),
 			);

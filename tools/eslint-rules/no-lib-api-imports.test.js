@@ -40,6 +40,11 @@ ruleTester.run("no-lib-api-imports", rule, {
 			errors: [{ messageId: "apiStatic" }],
 		},
 		{
+			filename: "/repo/app/api/invitations+api.ts",
+			code: `const handlers = import("@/lib/api/invitations/handlers");`,
+			errors: [{ messageId: "apiStatic" }],
+		},
+		{
 			filename: "/repo/screens/settings/use-invitations.ts",
 			code: `const api = import("../lib/api/invitations/handlers");`,
 			errors: [{ messageId: "appFacing" }],

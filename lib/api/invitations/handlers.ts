@@ -12,7 +12,7 @@ import {
 	BadRequestError,
 	errorResponse,
 	INVITATION_UNAVAILABLE_MESSAGE,
-	isUnauthorizedError,
+	isApiUnauthorizedError,
 	jsonResponse,
 	optionalStringField,
 	publicAppLinkBuilders,
@@ -23,7 +23,6 @@ import {
 } from "../shared";
 
 export type InvitationApiDeps = ApiHandlerDeps & {
-	invitationService?: InvitationService;
 	createInvitationService?: (directory: DirectoryDb) => InvitationService;
 };
 
@@ -148,7 +147,6 @@ function invitationService(
 	directory: DirectoryDb,
 	deps?: InvitationApiDeps,
 ): InvitationService {
-	if (deps?.invitationService) return deps.invitationService;
 	if (deps?.createInvitationService) {
 		return deps.createInvitationService(directory);
 	}
@@ -169,7 +167,7 @@ function invitationErrorResponse(error: unknown, context: string): Response {
 	if (error instanceof BadRequestError) {
 		return errorResponse(error.message, 400);
 	}
-	if (isUnauthorizedError(error)) {
+	if (isApiUnauthorizedError(error)) {
 		return errorResponse(error.message, 401);
 	}
 	if (error instanceof InvitationMembershipRequiredError) {

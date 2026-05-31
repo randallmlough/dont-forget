@@ -61,6 +61,11 @@ ruleTester.run("no-server-service-imports", rule, {
 			errors: [{ messageId: "apiStatic" }],
 		},
 		{
+			filename: "/repo/app/api/bootstrap+api.ts",
+			code: `const server = import("@/lib/services/session/server");`,
+			errors: [{ messageId: "apiStatic" }],
+		},
+		{
 			filename: "/repo/lib/services/household/index.ts",
 			code: `export * from "./server";`,
 			errors: [{ messageId: "appSafeIndex" }],

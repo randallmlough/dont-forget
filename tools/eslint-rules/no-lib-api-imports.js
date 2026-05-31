@@ -39,7 +39,14 @@ module.exports = {
 			ImportExpression(node) {
 				const source = dynamicImportSource(node);
 				if (!source || !isLibApiImport(source, filename)) return;
-				if (canUseLibApiImport(filename, { dynamic: true })) return;
+				if (
+					canUseLibApiImport(filename, {
+						dynamic: true,
+						insideFunction: isInsideFunction(node),
+					})
+				) {
+					return;
+				}
 				reportLibApiImport(context, filename, node);
 			},
 		};
@@ -55,10 +62,10 @@ function reportLibApiImport(context, filename, node) {
 	context.report({ node, messageId: "appFacing" });
 }
 
-function canUseLibApiImport(filename, { dynamic }) {
+function canUseLibApiImport(filename, { dynamic, insideFunction = false }) {
 	if (isTestFile(filename)) return true;
 	if (isLibApiFile(filename)) return true;
-	return dynamic && isAppApiFile(filename);
+	return dynamic && insideFunction && isAppApiFile(filename);
 }
 
 function isLibApiImport(source, filename) {
@@ -75,4 +82,19 @@ function isLibApiImport(source, filename) {
 
 function isLibApiFile(filename) {
 	return /\/lib\/api\//.test(filename);
+}
+
+function isInsideFunction(node) {
+	let current = node.parent;
+	while (current) {
+		if (
+			current.type === "FunctionDeclaration" ||
+			current.type === "FunctionExpression" ||
+			current.type === "ArrowFunctionExpression"
+		) {
+			return true;
+		}
+		current = current.parent;
+	}
+	return false;
 }

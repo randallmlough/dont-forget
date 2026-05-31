@@ -15,6 +15,7 @@ import {
 	type MemberService,
 } from "@/lib/services/member/server";
 import {
+	ApiForbiddenError,
 	type ApiHandlerDeps,
 	authenticateApiUser,
 	BadRequestError,
@@ -22,7 +23,8 @@ import {
 	errorResponse,
 	HOUSEHOLD_CODE_THROTTLED_MESSAGE,
 	HOUSEHOLD_CODE_UNAVAILABLE_MESSAGE,
-	isUnauthorizedError,
+	isApiForbiddenError,
+	isApiUnauthorizedError,
 	jsonResponse,
 	publicAppLinkBuilders,
 	queryStringField,
@@ -32,15 +34,12 @@ import {
 } from "../shared";
 
 export type HouseholdApiDeps = ApiHandlerDeps & {
-	activeHouseholdService?: ActiveHouseholdService;
 	createActiveHouseholdService?: (
 		directory: DirectoryDb,
 	) => ActiveHouseholdService;
-	householdJoinCodeService?: HouseholdJoinCodeService;
 	createHouseholdJoinCodeService?: (
 		directory: DirectoryDb,
 	) => HouseholdJoinCodeService;
-	memberService?: MemberService;
 	createMemberService?: (directory: DirectoryDb) => MemberService;
 };
 
@@ -79,7 +78,7 @@ export async function handleListMembers(
 				userId: user.id,
 				householdId,
 			});
-			if (!membership) throw new ActiveHouseholdMembershipRequiredError();
+			if (!membership) throw new ApiForbiddenError();
 
 			const members = await service.listHouseholdMembers(householdId);
 			return jsonResponse({ members });
@@ -197,12 +196,10 @@ export async function handleJoinByCode(
 		return await withDirectory(deps, async (directory) => {
 			const user = await authenticateApiUser(request, directory, deps);
 			const body = await readJsonObject(request);
-			const source = body.source === "join_link" ? "join_link" : "manual_code";
 			const result = await householdJoinCodeService(directory, deps).joinByCode(
 				{
 					code: stringField(body, "code"),
 					userId: user.id,
-					source,
 				},
 			);
 			return jsonResponse(result);
@@ -219,7 +216,6 @@ function activeHouseholdService(
 	directory: DirectoryDb,
 	deps?: HouseholdApiDeps,
 ): ActiveHouseholdService {
-	if (deps?.activeHouseholdService) return deps.activeHouseholdService;
 	if (deps?.createActiveHouseholdService) {
 		return deps.createActiveHouseholdService(directory);
 	}
@@ -230,7 +226,6 @@ function householdJoinCodeService(
 	directory: DirectoryDb,
 	deps?: HouseholdApiDeps,
 ): HouseholdJoinCodeService {
-	if (deps?.householdJoinCodeService) return deps.householdJoinCodeService;
 	if (deps?.createHouseholdJoinCodeService) {
 		return deps.createHouseholdJoinCodeService(directory);
 	}
@@ -243,7 +238,6 @@ function memberService(
 	directory: DirectoryDb,
 	deps?: HouseholdApiDeps,
 ): MemberService {
-	if (deps?.memberService) return deps.memberService;
 	if (deps?.createMemberService) return deps.createMemberService(directory);
 	return createMemberService({ directory });
 }
@@ -262,8 +256,11 @@ function householdErrorResponse(error: unknown, context: string): Response {
 	if (error instanceof BadRequestError) {
 		return errorResponse(error.message, 400);
 	}
-	if (isUnauthorizedError(error)) {
+	if (isApiUnauthorizedError(error)) {
 		return errorResponse(error.message, 401);
+	}
+	if (isApiForbiddenError(error)) {
+		return errorResponse(error.message, 403);
 	}
 	if (
 		error instanceof ActiveHouseholdMembershipRequiredError ||
