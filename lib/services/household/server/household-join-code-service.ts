@@ -12,10 +12,8 @@ import {
 } from "@/db/schema/directory";
 import { runWithSqliteBusyRetry } from "@/db/utils";
 import { createAppId } from "@/lib/ids";
-import {
-	noopServiceAnalytics,
-	type ServiceAnalytics,
-} from "@/lib/services/analytics";
+import { serverServiceAnalytics } from "@/lib/server/analytics";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createMemberService } from "@/lib/services/member/server";
 import { createActiveHouseholdService } from "./active-household-service";
 
@@ -125,7 +123,7 @@ export function createHouseholdJoinCodeService(
 ): HouseholdJoinCodeService {
 	const buildJoinUrl = deps.buildJoinUrl;
 	const generateCode = deps.generateCode ?? generateSecureHouseholdJoinCode;
-	const analytics = deps.analytics ?? noopServiceAnalytics;
+	const analytics = deps.analytics ?? serverServiceAnalytics;
 
 	return {
 		getCurrentJoinCode(input) {

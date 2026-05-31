@@ -2,13 +2,11 @@ import * as Crypto from "expo-crypto";
 import { z } from "zod";
 
 import { sqlNumberSchema } from "@/db/utils";
+import { track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import {
-	noopServiceAnalytics,
-	type ServiceAnalytics,
-} from "@/lib/services/analytics";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 import type { HouseholdStoreExecutor } from "@/lib/services/household";
 
 export type Item = {
@@ -73,7 +71,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		household_id: deps.householdId,
 		service: "item",
 	});
-	const analytics = deps.analytics ?? noopServiceAnalytics;
+	const analytics = deps.analytics ?? { track };
 
 	return {
 		async listItems(input) {

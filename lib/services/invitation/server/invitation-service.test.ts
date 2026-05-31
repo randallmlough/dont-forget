@@ -246,6 +246,7 @@ describe("createInvitationService", () => {
 			const service = createInvitationService({
 				directory: directory.db,
 				buildAcceptUrl: testAcceptUrl,
+				analytics: { track: jest.fn() },
 			});
 
 			const accepted = await service.acceptInvitation({
@@ -285,6 +286,7 @@ describe("createInvitationService", () => {
 					"duplicate-token",
 					"unique-token",
 				]),
+				analytics: { track: jest.fn() },
 			});
 
 			const created = await service.createInvitation({

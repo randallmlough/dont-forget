@@ -202,6 +202,7 @@ describe("createHouseholdJoinCodeService", () => {
 			const service = createHouseholdJoinCodeService({
 				directory: directory.db,
 				buildJoinUrl: testJoinUrl,
+				analytics: { track: jest.fn() },
 			});
 
 			for (let index = 0; index < 5; index += 1) {
@@ -252,10 +253,12 @@ describe("createHouseholdJoinCodeService", () => {
 			const firstService = createHouseholdJoinCodeService({
 				directory: directory.db,
 				buildJoinUrl: testJoinUrl,
+				analytics: { track: jest.fn() },
 			});
 			const secondService = createHouseholdJoinCodeService({
 				directory: secondDirectory,
 				buildJoinUrl: testJoinUrl,
+				analytics: { track: jest.fn() },
 			});
 
 			await Promise.all([

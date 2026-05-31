@@ -9,10 +9,8 @@ import {
 	users,
 } from "@/db/schema/directory";
 import { createAppId } from "@/lib/ids";
-import {
-	noopServiceAnalytics,
-	type ServiceAnalytics,
-} from "@/lib/services/analytics";
+import { serverServiceAnalytics } from "@/lib/server/analytics";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createActiveHouseholdService } from "@/lib/services/household/server/active-household-service";
 import { createMemberService } from "@/lib/services/member/server";
 
@@ -151,7 +149,7 @@ export function createInvitationService(
 	const buildAcceptUrl = deps.buildAcceptUrl;
 	const generateToken = deps.generateToken ?? generateSecureInvitationToken;
 	const emailSender = deps.emailSender ?? defaultInvitationEmailSender;
-	const analytics = deps.analytics ?? noopServiceAnalytics;
+	const analytics = deps.analytics ?? serverServiceAnalytics;
 
 	return {
 		createInvitation(input) {

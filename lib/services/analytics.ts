@@ -7,12 +7,3 @@ export type ServiceAnalytics = {
 export type ServiceResetAnalytics = ServiceAnalytics & {
 	reset(): void;
 };
-
-export const noopServiceAnalytics: ServiceAnalytics = {
-	track() {},
-};
-
-export const noopServiceResetAnalytics: ServiceResetAnalytics = {
-	track() {},
-	reset() {},
-};

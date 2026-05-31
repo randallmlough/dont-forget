@@ -2,10 +2,8 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 
 import type { DirectoryDb } from "@/db/client";
 import { households, memberships, users } from "@/db/schema/directory";
-import {
-	noopServiceAnalytics,
-	type ServiceAnalytics,
-} from "@/lib/services/analytics";
+import { serverServiceAnalytics } from "@/lib/server/analytics";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -62,7 +60,7 @@ export type ActiveHouseholdServiceDeps = {
 export function createActiveHouseholdService(
 	deps: ActiveHouseholdServiceDeps,
 ): ActiveHouseholdService {
-	const analytics = deps.analytics ?? noopServiceAnalytics;
+	const analytics = deps.analytics ?? serverServiceAnalytics;
 	return {
 		getActiveHousehold(userId) {
 			return getActiveHousehold(userId, deps.directory);
