@@ -32,6 +32,11 @@ export type HouseholdMember = {
 	displayName: string | null;
 };
 
+export type EnsurePlainMemberMembershipResult = {
+	membership: Membership;
+	created: boolean;
+};
+
 export type AssociatedHousehold = {
 	id: string;
 	name: string;
@@ -53,6 +58,11 @@ export type MemberService = {
 		householdId: string;
 		user: User;
 	}): Promise<Membership>;
+	ensurePlainMemberMembership(input: {
+		householdId: string;
+		userId: string;
+		joinedAt?: number;
+	}): Promise<EnsurePlainMemberMembershipResult>;
 	listHouseholdMembers(householdId: string): Promise<HouseholdMember[]>;
 };
 
@@ -73,6 +83,9 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 		},
 		ensureOwnerMembership(input) {
 			return ensureOwnerMembership(input, deps.directory);
+		},
+		ensurePlainMemberMembership(input) {
+			return ensurePlainMemberMembership(input, deps.directory);
 		},
 		listHouseholdMembers(householdId) {
 			return listHouseholdMembers(householdId, deps.directory);
@@ -192,6 +205,56 @@ async function ensureOwnerMembership(
 	};
 	await directory.insert(memberships).values(membership);
 	return membership;
+}
+
+async function ensurePlainMemberMembership(
+	input: { householdId: string; userId: string; joinedAt?: number },
+	directory: MemberServiceDirectory,
+): Promise<EnsurePlainMemberMembershipResult> {
+	const existing = await findActiveMembershipRow(input, directory);
+	if (existing) return { membership: existing, created: false };
+
+	const membership: Membership = {
+		id: createAppId("mbr"),
+		householdId: input.householdId,
+		userId: input.userId,
+		role: "member",
+		joinedAt: input.joinedAt ?? Date.now(),
+		removedAt: null,
+	};
+
+	try {
+		await directory.insert(memberships).values(membership);
+		return { membership, created: true };
+	} catch (error) {
+		const createdByConcurrentRequest = await findActiveMembershipRow(
+			input,
+			directory,
+		);
+		if (createdByConcurrentRequest) {
+			return { membership: createdByConcurrentRequest, created: false };
+		}
+		throw error;
+	}
+}
+
+async function findActiveMembershipRow(
+	input: { householdId: string; userId: string },
+	directory: MemberServiceDirectory,
+): Promise<Membership | null> {
+	const [existing] = await directory
+		.select()
+		.from(memberships)
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				eq(memberships.userId, input.userId),
+				isNull(memberships.removedAt),
+			),
+		)
+		.limit(1);
+
+	return existing ?? null;
 }
 
 async function listHouseholdMembers(

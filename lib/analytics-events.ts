@@ -38,6 +38,43 @@ export type EventMap = {
 		user_id: string;
 		checked: boolean;
 	};
+	invitation_accepted: {
+		household_id: string;
+		user_id: string;
+		membership_created: boolean;
+	};
+	invitation_created: {
+		household_id: string;
+		creator_user_id: string;
+		source: "email" | "link";
+		reused_existing: boolean;
+	};
+	invitation_revoked: {
+		household_id: string;
+		revoked_by_user_id: string;
+	};
+	household_join_code_used: {
+		household_id: string;
+		user_id: string;
+		membership_created: boolean;
+		source: "manual_code" | "join_link";
+	};
+	household_join_code_regenerated: {
+		household_id: string;
+		requested_by_user_id: string;
+	};
+	household_join_code_disabled: {
+		household_id: string;
+		requested_by_user_id: string;
+	};
+	household_join_code_enabled: {
+		household_id: string;
+		requested_by_user_id: string;
+	};
+	household_switched: {
+		household_id: string;
+		user_id: string;
+	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };
 	user_email_verified: Record<string, never>;

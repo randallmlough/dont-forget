@@ -1,4 +1,7 @@
-import { createDatabaseOperationQueue } from "@/db/utils";
+import {
+	createDatabaseOperationQueue,
+	runWithSqliteBusyRetry,
+} from "@/db/utils";
 import { deferred } from "@/lib/test/async";
 
 describe("createDatabaseOperationQueue", () => {
@@ -46,5 +49,21 @@ describe("createDatabaseOperationQueue", () => {
 		await expect(failedOperation).rejects.toThrow(error);
 		await expect(nextOperation).resolves.toBe("next");
 		expect(calls).toEqual(["failed", "next"]);
+	});
+});
+
+describe("runWithSqliteBusyRetry", () => {
+	it("retries wrapped SQLite busy errors", async () => {
+		const operation = jest
+			.fn()
+			.mockRejectedValueOnce(
+				new Error("Failed query", {
+					cause: new Error("SQLITE_BUSY: database is locked"),
+				}),
+			)
+			.mockResolvedValueOnce("done");
+
+		await expect(runWithSqliteBusyRetry(operation)).resolves.toBe("done");
+		expect(operation).toHaveBeenCalledTimes(2);
 	});
 });

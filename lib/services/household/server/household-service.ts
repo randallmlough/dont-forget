@@ -10,6 +10,10 @@ import {
 import type { AppEnv } from "@/lib/env";
 import { createAppId } from "@/lib/ids";
 import type { ActiveMembership } from "@/lib/services/member/server";
+import {
+	createHouseholdJoinCode,
+	type HouseholdJoinCodeGenerator,
+} from "./household-join-code-service";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -33,6 +37,7 @@ export type HouseholdService = {
 
 export type HouseholdServiceDeps = {
 	directory: HouseholdServiceDirectory;
+	generateJoinCode?: HouseholdJoinCodeGenerator;
 };
 
 export function createHouseholdService(
@@ -43,7 +48,7 @@ export function createHouseholdService(
 			return findPendingCreatedHousehold(userId, deps.directory);
 		},
 		createOwnedHousehold(input) {
-			return createOwnedHousehold(input, deps.directory);
+			return createOwnedHousehold(input, deps.directory, deps.generateJoinCode);
 		},
 		async markProvisioningCompleted(householdId) {
 			await deps.directory
@@ -93,6 +98,7 @@ async function findPendingCreatedHousehold(
 async function createOwnedHousehold(
 	input: { appEnv: AppEnv; user: User; name: string },
 	directory: HouseholdServiceDirectory,
+	generateJoinCode: HouseholdJoinCodeGenerator | undefined,
 ): Promise<Household> {
 	const now = Date.now();
 	const householdId = createAppId("hh");
@@ -107,6 +113,15 @@ async function createOwnedHousehold(
 	};
 
 	await directory.insert(households).values(household);
+	await createHouseholdJoinCode(
+		{
+			householdId,
+			createdByUserId: input.user.id,
+			now,
+		},
+		directory,
+		generateJoinCode,
+	);
 	return household;
 }
 

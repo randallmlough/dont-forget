@@ -2,6 +2,7 @@ import { reset, track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
+import type { ServiceResetAnalytics } from "@/lib/services/analytics";
 import { clearSignedOutSessionData as defaultClearSignedOutSessionData } from "./cache";
 import type {
 	AuthenticatedAppSessionActivation,
@@ -14,10 +15,7 @@ export type AuthenticatedAppSessionSignOutAuth =
 		signOut: () => Promise<void>;
 	};
 
-export type AuthenticatedAppSessionSignOutAnalytics = {
-	track: typeof track;
-	reset: typeof reset;
-};
+export type AuthenticatedAppSessionSignOutAnalytics = ServiceResetAnalytics;
 
 export type AuthenticatedAppSessionSignOut = {
 	isRunning: () => boolean;

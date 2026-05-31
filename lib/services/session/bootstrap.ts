@@ -5,6 +5,7 @@ import {
 	type BootstrapResponse,
 	bootstrapResponseSchema,
 } from "@/lib/bootstrap";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 
 export type SessionBootstrap = BootstrapResponse;
 export type SessionUser = SessionBootstrap["user"];
@@ -14,10 +15,6 @@ export type GetSessionToken = () => Promise<string | null>;
 
 type SessionBootstrapFetch = typeof globalThis.fetch;
 
-type SessionBootstrapAnalytics = {
-	track: typeof track;
-};
-
 export type SessionBootstrapService = {
 	getSession: (getToken: GetSessionToken) => Promise<SessionBootstrap>;
 };
@@ -25,7 +22,7 @@ export type SessionBootstrapService = {
 export type SessionAuthenticatedAppSessionBootstrapDeps = {
 	fetch?: SessionBootstrapFetch;
 	apiBaseUrl?: () => string;
-	analytics?: SessionBootstrapAnalytics;
+	analytics?: ServiceAnalytics;
 };
 
 export function createSessionBootstrapService(

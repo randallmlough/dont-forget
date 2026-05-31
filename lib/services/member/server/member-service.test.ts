@@ -244,4 +244,69 @@ describe("createMemberService", () => {
 			await directory.close();
 		}
 	});
+
+	it("finds active Household Membership and ensures one plain Member Membership", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_010_000);
+
+		try {
+			await directory.db.insert(users).values([
+				{
+					id: "usr_avery",
+					clerkUserId: "clerk_avery",
+					displayName: "Avery Chen",
+				},
+				{
+					id: "usr_blake",
+					clerkUserId: "clerk_blake",
+					displayName: "Blake Park",
+				},
+			]);
+			await directory.db.insert(households).values({
+				id: "hh_avery",
+				name: "Avery",
+				tursoDbName: "db-avery",
+				createdByUserId: "usr_avery",
+				provisioningCompletedAt: 1,
+				createdAt: 1,
+			});
+			await directory.db.insert(memberships).values({
+				id: "mbr_avery",
+				householdId: "hh_avery",
+				userId: "usr_avery",
+				role: "owner",
+				joinedAt: 1,
+			});
+
+			const first = await service.ensurePlainMemberMembership({
+				householdId: "hh_avery",
+				userId: "usr_blake",
+			});
+			const second = await service.ensurePlainMemberMembership({
+				householdId: "hh_avery",
+				userId: "usr_blake",
+			});
+			const membership = await service.findActiveMembership({
+				householdId: "hh_avery",
+				userId: "usr_blake",
+			});
+
+			expect(first.created).toBe(true);
+			expect(second.created).toBe(false);
+			expect(second.membership.id).toBe(first.membership.id);
+			expect(membership).toMatchObject({
+				membershipId: first.membership.id,
+				membershipRole: "member",
+				householdId: "hh_avery",
+				householdName: "Avery",
+			});
+			await expect(
+				directory.db.select().from(memberships),
+			).resolves.toHaveLength(2);
+		} finally {
+			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
 });

@@ -1,4 +1,27 @@
 export {
+	ActiveHouseholdMembershipRequiredError,
+	type ActiveHouseholdSelection,
+	type ActiveHouseholdService,
+	type ActiveHouseholdServiceDeps,
+	type AssociatedHousehold,
+	createActiveHouseholdService,
+} from "./active-household-service";
+export {
+	createHouseholdJoinCode,
+	createHouseholdJoinCodeService,
+	type HouseholdJoinCodeGenerator,
+	HouseholdJoinCodeMembershipRequiredError,
+	type HouseholdJoinCodePreview,
+	type HouseholdJoinCodeService,
+	type HouseholdJoinCodeServiceDeps,
+	type HouseholdJoinCodeState,
+	HouseholdJoinCodeThrottledError,
+	HouseholdJoinCodeUnavailableError,
+	type HouseholdJoinUrlBuilder,
+	type JoinHouseholdByCodeInput,
+	type JoinHouseholdByCodeResult,
+} from "./household-join-code-service";
+export {
 	createHouseholdProvisioningService,
 	createProductionHouseholdProvisioningService,
 	type HouseholdDatabaseProvisioningResult,

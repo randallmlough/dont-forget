@@ -6,11 +6,8 @@ import { track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 import type { HouseholdStoreExecutor } from "@/lib/services/household";
-
-type ItemServiceAnalytics = {
-	track: typeof track;
-};
 
 export type Item = {
 	id: string;
@@ -52,7 +49,7 @@ export type ItemServiceDeps = {
 	householdId: string;
 	store: HouseholdStoreExecutor;
 	logger?: Logger;
-	analytics?: ItemServiceAnalytics;
+	analytics?: ServiceAnalytics;
 };
 
 const itemRowSchema = z.object({

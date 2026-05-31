@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { z } from "zod";
 import { track } from "@/lib/analytics";
 import { bootstrapResponseSchema } from "@/lib/bootstrap";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { deleteLocalHouseholdStoreData } from "@/lib/services/household/household-store";
 import { type SessionBootstrap, sessionAnalyticsProperties } from "./bootstrap";
 
@@ -28,10 +29,6 @@ export type SessionCacheStorage = Pick<
 	"getItem" | "setItem" | "removeItem"
 >;
 
-type SessionCacheAnalytics = {
-	track: typeof track;
-};
-
 export type SessionCache = {
 	save: (session: SessionBootstrap) => Promise<CachedSessionBootstrap>;
 	read: () => Promise<CachedSessionBootstrap | null>;
@@ -51,7 +48,7 @@ export type SessionCache = {
 
 export type SessionCacheDeps = {
 	storage?: SessionCacheStorage;
-	analytics?: SessionCacheAnalytics;
+	analytics?: ServiceAnalytics;
 	deleteLocalHouseholdStoreData?: typeof deleteLocalHouseholdStoreData;
 };
 
