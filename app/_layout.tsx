@@ -64,7 +64,7 @@ export default function RootLayout() {
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
 					<ThemeProvider value={navigationTheme}>
-						<AuthGate pathname={pathname} />
+						<AuthGate pathname={pathname} params={params} />
 						<StatusBar style="dark" />
 					</ThemeProvider>
 				</ClerkProvider>

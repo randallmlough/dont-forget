@@ -1,0 +1,675 @@
+import { useRouter } from "expo-router";
+import type { ReactNode } from "react";
+import { useState } from "react";
+import {
+	ActivityIndicator,
+	FlatList,
+	Pressable,
+	Text,
+	TextInput,
+	View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet } from "react-native-unistyles";
+import {
+	type AuthenticatedAppSessionState,
+	useAuthenticatedAppSession,
+} from "@/components/session";
+import type {
+	HouseholdJoinCode,
+	HouseholdMember,
+	PendingInvitation,
+} from "@/lib/client-api/households";
+import type { AuthenticatedAppSession } from "@/lib/services/session";
+import {
+	type HouseholdSettingsActions,
+	type HouseholdSettingsState,
+	useHouseholdSettings,
+} from "./use-household-settings";
+
+type SettingsRow =
+	| { type: "invitationForm" }
+	| { type: "joinCode" }
+	| { type: "section"; id: string; title: string }
+	| { type: "member"; member: HouseholdMember }
+	| { type: "invitation"; invitation: PendingInvitation }
+	| { type: "empty"; id: string; label: string };
+
+export default function HouseholdSettingsScreen() {
+	const { state, session, retry } = useAuthenticatedAppSession();
+
+	if (!session) {
+		return (
+			<HouseholdSettingsShell title="Household settings">
+				<SessionState state={state} onRetry={retry} />
+			</HouseholdSettingsShell>
+		);
+	}
+
+	return <HouseholdSettingsContent session={session} />;
+}
+
+function HouseholdSettingsContent({
+	session,
+}: {
+	session: AuthenticatedAppSession;
+}) {
+	const { state, actions } = useHouseholdSettings(session);
+
+	return (
+		<HouseholdSettingsView session={session} state={state} actions={actions} />
+	);
+}
+
+export function HouseholdSettingsView({
+	session,
+	state,
+	actions,
+}: {
+	session: AuthenticatedAppSession;
+	state: HouseholdSettingsState;
+	actions: HouseholdSettingsActions;
+}) {
+	const router = useRouter();
+
+	return (
+		<HouseholdSettingsShell title={session.activeHousehold.name}>
+			<View style={styles.topActions}>
+				<SecondaryButton label="Home" onPress={() => router.replace("/")} />
+				<SecondaryButton
+					label="Switch Household"
+					onPress={() => router.push("/household/switch")}
+				/>
+			</View>
+			{state.status === "loading" ? (
+				<CenteredStatus title="Loading Household settings">
+					<ActivityIndicator />
+				</CenteredStatus>
+			) : state.status === "error" ? (
+				<CenteredStatus title="Household settings unavailable">
+					<Text style={styles.statusBody}>{state.message}</Text>
+					<PrimaryButton label="Try again" onPress={actions.retry} />
+				</CenteredStatus>
+			) : (
+				<SettingsList state={state} actions={actions} />
+			)}
+		</HouseholdSettingsShell>
+	);
+}
+
+function SettingsList({
+	state,
+	actions,
+}: {
+	state: Extract<HouseholdSettingsState, { status: "ready" }>;
+	actions: HouseholdSettingsActions;
+}) {
+	const rows = settingsRows(state);
+
+	return (
+		<FlatList
+			data={rows}
+			keyExtractor={settingsRowKey}
+			contentContainerStyle={styles.listContent}
+			keyboardShouldPersistTaps="handled"
+			renderItem={({ item }) => (
+				<SettingsRowView row={item} state={state} actions={actions} />
+			)}
+			ListHeaderComponent={
+				state.notice ? (
+					<View style={styles.notice}>
+						<Text style={styles.noticeText}>{state.notice}</Text>
+					</View>
+				) : null
+			}
+		/>
+	);
+}
+
+function SettingsRowView({
+	row,
+	state,
+	actions,
+}: {
+	row: SettingsRow;
+	state: Extract<HouseholdSettingsState, { status: "ready" }>;
+	actions: HouseholdSettingsActions;
+}) {
+	if (row.type === "section") {
+		return <Text style={styles.sectionTitle}>{row.title}</Text>;
+	}
+	if (row.type === "empty") {
+		return <Text style={styles.emptyText}>{row.label}</Text>;
+	}
+	if (row.type === "member") {
+		return <MemberRow member={row.member} />;
+	}
+	if (row.type === "invitation") {
+		return (
+			<InvitationRow
+				invitation={row.invitation}
+				working={state.working}
+				actions={actions}
+			/>
+		);
+	}
+	if (row.type === "joinCode") {
+		return (
+			<JoinCodeControls
+				joinCode={state.joinCode}
+				working={state.working}
+				actions={actions}
+			/>
+		);
+	}
+	return <CreateInvitationForm working={state.working} actions={actions} />;
+}
+
+function CreateInvitationForm({
+	working,
+	actions,
+}: {
+	working: string | null;
+	actions: HouseholdSettingsActions;
+}) {
+	const [email, setEmail] = useState("");
+	const disabled = working === "createInvitation";
+
+	return (
+		<View style={styles.panel}>
+			<Text style={styles.panelTitle}>Create Invitation</Text>
+			<TextInput
+				accessibilityLabel="Invitation email"
+				autoCapitalize="none"
+				autoComplete="email"
+				editable={!disabled}
+				keyboardType="email-address"
+				onChangeText={setEmail}
+				placeholder="Email address"
+				style={styles.input}
+				textContentType="emailAddress"
+				value={email}
+			/>
+			<PrimaryButton
+				label={disabled ? "Creating" : "Create Invitation"}
+				onPress={() => actions.createInvitation(email)}
+				disabled={disabled}
+			/>
+		</View>
+	);
+}
+
+function JoinCodeControls({
+	joinCode,
+	working,
+	actions,
+}: {
+	joinCode: HouseholdJoinCode;
+	working: string | null;
+	actions: HouseholdSettingsActions;
+}) {
+	const disabled = working === "setJoinCodeEnabled";
+	const regenerating = working === "regenerateJoinCode";
+
+	return (
+		<View style={styles.panel}>
+			<Text style={styles.panelTitle}>Household Join Code</Text>
+			{joinCode.enabled ? (
+				<>
+					<Text style={styles.codeText}>{joinCode.code}</Text>
+					<View style={styles.rowActions}>
+						<SecondaryButton
+							label="Copy code"
+							onPress={() =>
+								actions.copyText(joinCode.code, "Household Join Code copied.")
+							}
+						/>
+						<SecondaryButton
+							label="Copy link"
+							onPress={() =>
+								actions.copyText(
+									joinCode.joinUrl,
+									"Household join link copied.",
+								)
+							}
+						/>
+					</View>
+					<View style={styles.rowActions}>
+						<SecondaryButton
+							label={regenerating ? "Regenerating" : "Regenerate"}
+							onPress={actions.regenerateJoinCode}
+							disabled={regenerating}
+						/>
+						<DangerButton
+							label={disabled ? "Disabling" : "Disable"}
+							onPress={() => actions.setJoinCodeEnabled(false)}
+							disabled={disabled}
+						/>
+					</View>
+				</>
+			) : (
+				<>
+					<Text style={styles.mutedText}>Household Join Code is disabled.</Text>
+					<PrimaryButton
+						label={disabled ? "Enabling" : "Enable Join Code"}
+						onPress={() => actions.setJoinCodeEnabled(true)}
+						disabled={disabled}
+					/>
+				</>
+			)}
+		</View>
+	);
+}
+
+function MemberRow({ member }: { member: HouseholdMember }) {
+	return (
+		<View style={styles.row}>
+			<View style={styles.rowTextGroup}>
+				<Text style={styles.rowTitle} numberOfLines={1}>
+					{member.displayName ?? "Member"}
+				</Text>
+				<Text style={styles.rowSubtitle}>
+					{member.role === "owner" ? "Owner" : "Member"}
+				</Text>
+			</View>
+		</View>
+	);
+}
+
+function InvitationRow({
+	invitation,
+	working,
+	actions,
+}: {
+	invitation: PendingInvitation;
+	working: string | null;
+	actions: HouseholdSettingsActions;
+}) {
+	const revoking = working === `revoke:${invitation.id}`;
+	return (
+		<View style={styles.row}>
+			<View style={styles.rowTextGroup}>
+				<Text style={styles.rowTitle} numberOfLines={1}>
+					{invitation.email ?? "Invitation link"}
+				</Text>
+				<Text style={styles.rowSubtitle}>
+					Expires {formatDate(invitation.expiresAt)}
+				</Text>
+			</View>
+			<View style={styles.invitationActions}>
+				<SecondaryButton
+					label="Copy"
+					onPress={() =>
+						actions.copyText(invitation.acceptUrl, "Invitation link copied.")
+					}
+				/>
+				<DangerButton
+					label={revoking ? "Revoking" : "Revoke"}
+					onPress={() => actions.revokeInvitation(invitation.id)}
+					disabled={revoking}
+				/>
+			</View>
+		</View>
+	);
+}
+
+function HouseholdSettingsShell({
+	title,
+	children,
+}: {
+	title: string;
+	children: ReactNode;
+}) {
+	return (
+		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
+			<View style={styles.header}>
+				<Text style={styles.headerLabel}>Household settings</Text>
+				<Text style={styles.headerTitle} numberOfLines={1}>
+					{title}
+				</Text>
+			</View>
+			{children}
+		</SafeAreaView>
+	);
+}
+
+function SessionState({
+	state,
+	onRetry,
+}: {
+	state: AuthenticatedAppSessionState;
+	onRetry: () => void;
+}) {
+	if (state.status === "error") {
+		return (
+			<CenteredStatus title="Household unavailable">
+				<Text style={styles.statusBody}>{state.message}</Text>
+				<PrimaryButton label="Try again" onPress={onRetry} />
+			</CenteredStatus>
+		);
+	}
+	return (
+		<CenteredStatus title="Preparing your Household">
+			<ActivityIndicator />
+		</CenteredStatus>
+	);
+}
+
+function CenteredStatus({
+	title,
+	children,
+}: {
+	title: string;
+	children?: ReactNode;
+}) {
+	return (
+		<View style={styles.centered}>
+			<Text style={styles.statusTitle}>{title}</Text>
+			{children}
+		</View>
+	);
+}
+
+function PrimaryButton({
+	label,
+	onPress,
+	disabled,
+}: {
+	label: string;
+	onPress: () => void;
+	disabled?: boolean;
+}) {
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityState={{ disabled: Boolean(disabled) }}
+			disabled={disabled}
+			onPress={onPress}
+			style={({ pressed }) => [
+				styles.primaryButton,
+				pressed ? styles.pressed : undefined,
+				disabled ? styles.disabled : undefined,
+			]}
+		>
+			<Text style={styles.primaryButtonLabel}>{label}</Text>
+		</Pressable>
+	);
+}
+
+function SecondaryButton({
+	label,
+	onPress,
+	disabled,
+}: {
+	label: string;
+	onPress: () => void;
+	disabled?: boolean;
+}) {
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityState={{ disabled: Boolean(disabled) }}
+			disabled={disabled}
+			onPress={onPress}
+			style={({ pressed }) => [
+				styles.secondaryButton,
+				pressed ? styles.pressed : undefined,
+				disabled ? styles.disabled : undefined,
+			]}
+		>
+			<Text style={styles.secondaryButtonLabel}>{label}</Text>
+		</Pressable>
+	);
+}
+
+function DangerButton({
+	label,
+	onPress,
+	disabled,
+}: {
+	label: string;
+	onPress: () => void;
+	disabled?: boolean;
+}) {
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityState={{ disabled: Boolean(disabled) }}
+			disabled={disabled}
+			onPress={onPress}
+			style={({ pressed }) => [
+				styles.dangerButton,
+				pressed ? styles.pressed : undefined,
+				disabled ? styles.disabled : undefined,
+			]}
+		>
+			<Text style={styles.dangerButtonLabel}>{label}</Text>
+		</Pressable>
+	);
+}
+
+function settingsRows(
+	state: Extract<HouseholdSettingsState, { status: "ready" }>,
+) {
+	const rows: SettingsRow[] = [
+		{ type: "invitationForm" },
+		{ type: "joinCode" },
+		{ type: "section", id: "members", title: "Members" },
+	];
+	for (const member of state.members) rows.push({ type: "member", member });
+	if (state.members.length === 0) {
+		rows.push({
+			type: "empty",
+			id: "members-empty",
+			label: "No Members found.",
+		});
+	}
+	rows.push({
+		type: "section",
+		id: "invitations",
+		title: "Pending Invitations",
+	});
+	for (const invitation of state.invitations) {
+		rows.push({ type: "invitation", invitation });
+	}
+	if (state.invitations.length === 0) {
+		rows.push({
+			type: "empty",
+			id: "invitations-empty",
+			label: "No pending Invitations.",
+		});
+	}
+	return rows;
+}
+
+function settingsRowKey(row: SettingsRow): string {
+	if (row.type === "member") return `member:${row.member.membershipId}`;
+	if (row.type === "invitation") return `invitation:${row.invitation.id}`;
+	if (row.type === "section" || row.type === "empty") return row.id;
+	return row.type;
+}
+
+function formatDate(timestamp: number): string {
+	return new Date(timestamp).toLocaleDateString();
+}
+
+const styles = StyleSheet.create((theme) => ({
+	root: {
+		flex: 1,
+		backgroundColor: theme.colors.background,
+	},
+	header: {
+		paddingHorizontal: theme.spacing(5),
+		paddingTop: theme.spacing(4.5),
+		paddingBottom: theme.spacing(3),
+		backgroundColor: theme.colors.surface,
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.border,
+	},
+	headerLabel: {
+		...theme.typography.captionStrong,
+		color: theme.colors.textMuted,
+	},
+	headerTitle: {
+		...theme.typography.headline,
+		color: theme.colors.text,
+	},
+	topActions: {
+		flexDirection: "row",
+		gap: theme.spacing(2),
+		padding: theme.spacing(4),
+		backgroundColor: theme.colors.surface,
+	},
+	listContent: {
+		padding: theme.spacing(4),
+		gap: theme.spacing(3),
+	},
+	panel: {
+		gap: theme.spacing(3),
+		padding: theme.spacing(4),
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		borderRadius: theme.radii.card,
+		backgroundColor: theme.colors.surface,
+	},
+	panelTitle: {
+		...theme.typography.headline,
+		color: theme.colors.text,
+	},
+	input: {
+		minHeight: theme.spacing(12),
+		paddingHorizontal: theme.spacing(3),
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.inputBorder,
+		borderRadius: theme.radii.control,
+		backgroundColor: theme.colors.surface,
+		color: theme.colors.text,
+		...theme.typography.body,
+	},
+	codeText: {
+		...theme.typography.title,
+		color: theme.colors.text,
+	},
+	mutedText: {
+		...theme.typography.body,
+		color: theme.colors.textMuted,
+	},
+	rowActions: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		gap: theme.spacing(2),
+	},
+	sectionTitle: {
+		...theme.typography.captionStrong,
+		color: theme.colors.textMuted,
+		textTransform: "uppercase",
+		marginTop: theme.spacing(3),
+	},
+	row: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(3),
+		padding: theme.spacing(4),
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		borderRadius: theme.radii.card,
+		backgroundColor: theme.colors.surface,
+	},
+	rowTextGroup: {
+		flex: 1,
+		minWidth: 0,
+	},
+	rowTitle: {
+		...theme.typography.body,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.text,
+	},
+	rowSubtitle: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
+	},
+	invitationActions: {
+		flexDirection: "row",
+		gap: theme.spacing(2),
+	},
+	emptyText: {
+		...theme.typography.body,
+		color: theme.colors.textMuted,
+		paddingVertical: theme.spacing(2),
+	},
+	notice: {
+		padding: theme.spacing(3),
+		marginBottom: theme.spacing(3),
+		borderRadius: theme.radii.card,
+		backgroundColor: theme.colors.surface,
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.primary,
+	},
+	noticeText: {
+		...theme.typography.callout,
+		color: theme.colors.text,
+	},
+	centered: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		gap: theme.spacing(3),
+		padding: theme.spacing(6),
+	},
+	statusTitle: {
+		...theme.typography.headline,
+		color: theme.colors.text,
+		textAlign: "center",
+	},
+	statusBody: {
+		...theme.typography.body,
+		color: theme.colors.textMuted,
+		textAlign: "center",
+	},
+	primaryButton: {
+		minHeight: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: theme.spacing(4),
+		borderRadius: theme.radii.control,
+		backgroundColor: theme.colors.primary,
+	},
+	primaryButtonLabel: {
+		...theme.typography.controlLabel,
+		color: theme.colors.inverseText,
+	},
+	secondaryButton: {
+		minHeight: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: theme.spacing(3),
+		borderRadius: theme.radii.control,
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		backgroundColor: theme.colors.surface,
+	},
+	secondaryButtonLabel: {
+		...theme.typography.callout,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.text,
+	},
+	dangerButton: {
+		minHeight: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: theme.spacing(3),
+		borderRadius: theme.radii.control,
+		backgroundColor: theme.colors.destructive,
+	},
+	dangerButtonLabel: {
+		...theme.typography.callout,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.inverseText,
+	},
+	pressed: {
+		opacity: theme.opacities.pressed,
+	},
+	disabled: {
+		opacity: theme.opacities.disabled,
+	},
+}));

@@ -70,4 +70,43 @@ describe("AuthGate", () => {
 
 		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/sign-in"));
 	});
+
+	it("keeps public routes reachable while signed in", async () => {
+		setMockAuthState({ isLoaded: true, isSignedIn: true });
+
+		render(
+			<AuthGate
+				pathname="/invitations/accept"
+				params={{ token: "token-123" }}
+			/>,
+		);
+
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("preserves public route intent through sign-in", async () => {
+		setMockAuthState({ isLoaded: true, isSignedIn: false });
+
+		render(
+			<AuthGate pathname="/households/join" params={{ code: "ABCDEFGH" }} />,
+		);
+
+		await waitFor(() =>
+			expect(mockReplace).toHaveBeenCalledWith(
+				"/sign-in?next=%2Fhouseholds%2Fjoin&code=ABCDEFGH",
+			),
+		);
+	});
+
+	it("redirects signed-in auth routes to an internal next target", async () => {
+		setMockAuthState({ isLoaded: true, isSignedIn: true });
+
+		render(
+			<AuthGate pathname="/sign-in" params={{ next: "/household/settings" }} />,
+		);
+
+		await waitFor(() =>
+			expect(mockReplace).toHaveBeenCalledWith("/household/settings"),
+		);
+	});
 });
