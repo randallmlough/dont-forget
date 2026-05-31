@@ -670,4 +670,56 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			fresh,
 		);
 	});
+
+	it("does not fall back to the cached active Household when an associated switch reload fails", async () => {
+		const cached = h.cachedSessionBootstrapFixture({
+			householdId: "hh_old",
+			householdName: "Old",
+		});
+		const fresh = h.sessionBootstrapFixture({
+			householdId: "hh_new",
+			householdName: "New",
+			households: [
+				{ id: "hh_old", name: "Old", role: "owner", isActive: false },
+				{ id: "hh_new", name: "New", role: "member", isActive: true },
+			],
+		});
+		const cachedDataServices = h.sessionDataServicesFixture({
+			syncAuthorized: false,
+		});
+		const openFresh = new Error("fresh open failed");
+		const sessionService = h.sessionRuntimeFixture({
+			read: jest.fn().mockResolvedValue(cached),
+			getSession: jest.fn().mockResolvedValue(fresh),
+			readUnauthorized: jest.fn().mockResolvedValue(null),
+		});
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest
+				.fn()
+				.mockReturnValueOnce(cachedDataServices)
+				.mockImplementationOnce(() => {
+					throw openFresh;
+				}),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		expect(controller.getSnapshot()).toEqual({
+			status: "error",
+			message: "Unable to prepare your Household. Please try again.",
+		});
+		expect(sessionService.cache.deleteLocalData).not.toHaveBeenCalled();
+		expect(
+			sessionService.cache.clearUnauthorizedMetadata,
+		).not.toHaveBeenCalled();
+	});
 });
