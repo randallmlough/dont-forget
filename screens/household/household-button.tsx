@@ -1,0 +1,79 @@
+import { Pressable, Text } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
+
+export function HouseholdButton({
+	label,
+	onPress,
+	disabled,
+	variant = "secondary",
+}: {
+	label: string;
+	onPress: () => void;
+	disabled?: boolean;
+	variant?: "primary" | "secondary" | "danger";
+}) {
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityState={{ disabled: Boolean(disabled) }}
+			disabled={disabled}
+			onPress={onPress}
+			style={({ pressed }) => [
+				styles.base,
+				variant === "primary" ? styles.primary : undefined,
+				variant === "secondary" ? styles.secondary : undefined,
+				variant === "danger" ? styles.danger : undefined,
+				pressed ? styles.pressed : undefined,
+				disabled ? styles.disabled : undefined,
+			]}
+		>
+			<Text
+				style={[
+					styles.label,
+					variant === "secondary" ? styles.secondaryLabel : undefined,
+					variant !== "secondary" ? styles.inverseLabel : undefined,
+				]}
+			>
+				{label}
+			</Text>
+		</Pressable>
+	);
+}
+
+const styles = StyleSheet.create((theme) => ({
+	base: {
+		minHeight: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: theme.spacing(3),
+		borderRadius: theme.radii.control,
+	},
+	primary: {
+		paddingHorizontal: theme.spacing(4),
+		backgroundColor: theme.colors.primary,
+	},
+	secondary: {
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		backgroundColor: theme.colors.surface,
+	},
+	danger: {
+		backgroundColor: theme.colors.destructive,
+	},
+	label: {
+		...theme.typography.callout,
+		fontWeight: theme.fontWeights.semibold,
+	},
+	secondaryLabel: {
+		color: theme.colors.text,
+	},
+	inverseLabel: {
+		color: theme.colors.inverseText,
+	},
+	pressed: {
+		opacity: theme.opacities.pressed,
+	},
+	disabled: {
+		opacity: theme.opacities.disabled,
+	},
+}));

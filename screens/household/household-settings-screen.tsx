@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
-	Pressable,
 	Text,
 	TextInput,
 	View,
@@ -21,8 +20,10 @@ import type {
 	PendingInvitation,
 } from "@/lib/client-api/households";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { HouseholdButton } from "./household-button";
 import {
 	type HouseholdSettingsActions,
+	type HouseholdSettingsOperation,
 	type HouseholdSettingsState,
 	useHouseholdSettings,
 } from "./use-household-settings";
@@ -75,8 +76,8 @@ export function HouseholdSettingsView({
 	return (
 		<HouseholdSettingsShell title={session.activeHousehold.name}>
 			<View style={styles.topActions}>
-				<SecondaryButton label="Home" onPress={() => router.replace("/")} />
-				<SecondaryButton
+				<HouseholdButton label="Home" onPress={() => router.replace("/")} />
+				<HouseholdButton
 					label="Switch Household"
 					onPress={() => router.push("/household/switch")}
 				/>
@@ -88,7 +89,11 @@ export function HouseholdSettingsView({
 			) : state.status === "error" ? (
 				<CenteredStatus title="Household settings unavailable">
 					<Text style={styles.statusBody}>{state.message}</Text>
-					<PrimaryButton label="Try again" onPress={actions.retry} />
+					<HouseholdButton
+						variant="primary"
+						label="Try again"
+						onPress={actions.retry}
+					/>
 				</CenteredStatus>
 			) : (
 				<SettingsList state={state} actions={actions} />
@@ -148,7 +153,7 @@ function SettingsRowView({
 		return (
 			<InvitationRow
 				invitation={row.invitation}
-				working={state.working}
+				operation={state.operation}
 				actions={actions}
 			/>
 		);
@@ -157,23 +162,23 @@ function SettingsRowView({
 		return (
 			<JoinCodeControls
 				joinCode={state.joinCode}
-				working={state.working}
+				operation={state.operation}
 				actions={actions}
 			/>
 		);
 	}
-	return <CreateInvitationForm working={state.working} actions={actions} />;
+	return <CreateInvitationForm operation={state.operation} actions={actions} />;
 }
 
 function CreateInvitationForm({
-	working,
+	operation,
 	actions,
 }: {
-	working: string | null;
+	operation: HouseholdSettingsOperation;
 	actions: HouseholdSettingsActions;
 }) {
 	const [email, setEmail] = useState("");
-	const disabled = working === "createInvitation";
+	const disabled = operation.status === "creatingInvitation";
 
 	return (
 		<View style={styles.panel}>
@@ -190,7 +195,8 @@ function CreateInvitationForm({
 				textContentType="emailAddress"
 				value={email}
 			/>
-			<PrimaryButton
+			<HouseholdButton
+				variant="primary"
 				label={disabled ? "Creating" : "Create Invitation"}
 				onPress={() => actions.createInvitation(email)}
 				disabled={disabled}
@@ -201,30 +207,30 @@ function CreateInvitationForm({
 
 function JoinCodeControls({
 	joinCode,
-	working,
+	operation,
 	actions,
 }: {
 	joinCode: HouseholdJoinCode;
-	working: string | null;
+	operation: HouseholdSettingsOperation;
 	actions: HouseholdSettingsActions;
 }) {
-	const disabled = working === "setJoinCodeEnabled";
-	const regenerating = working === "regenerateJoinCode";
+	const disabled = operation.status === "settingJoinCodeEnabled";
+	const regenerating = operation.status === "regeneratingJoinCode";
 
 	return (
 		<View style={styles.panel}>
 			<Text style={styles.panelTitle}>Household Join Code</Text>
 			{joinCode.enabled ? (
 				<>
-					<Text style={styles.codeText}>{joinCode.code}</Text>
+					<Text style={styles.codeText}>{formatJoinCode(joinCode.code)}</Text>
 					<View style={styles.rowActions}>
-						<SecondaryButton
+						<HouseholdButton
 							label="Copy code"
 							onPress={() =>
 								actions.copyText(joinCode.code, "Household Join Code copied.")
 							}
 						/>
-						<SecondaryButton
+						<HouseholdButton
 							label="Copy link"
 							onPress={() =>
 								actions.copyText(
@@ -235,12 +241,13 @@ function JoinCodeControls({
 						/>
 					</View>
 					<View style={styles.rowActions}>
-						<SecondaryButton
+						<HouseholdButton
 							label={regenerating ? "Regenerating" : "Regenerate"}
 							onPress={actions.regenerateJoinCode}
 							disabled={regenerating}
 						/>
-						<DangerButton
+						<HouseholdButton
+							variant="danger"
 							label={disabled ? "Disabling" : "Disable"}
 							onPress={() => actions.setJoinCodeEnabled(false)}
 							disabled={disabled}
@@ -250,7 +257,8 @@ function JoinCodeControls({
 			) : (
 				<>
 					<Text style={styles.mutedText}>Household Join Code is disabled.</Text>
-					<PrimaryButton
+					<HouseholdButton
+						variant="primary"
 						label={disabled ? "Enabling" : "Enable Join Code"}
 						onPress={() => actions.setJoinCodeEnabled(true)}
 						disabled={disabled}
@@ -278,14 +286,16 @@ function MemberRow({ member }: { member: HouseholdMember }) {
 
 function InvitationRow({
 	invitation,
-	working,
+	operation,
 	actions,
 }: {
 	invitation: PendingInvitation;
-	working: string | null;
+	operation: HouseholdSettingsOperation;
 	actions: HouseholdSettingsActions;
 }) {
-	const revoking = working === `revoke:${invitation.id}`;
+	const revoking =
+		operation.status === "revokingInvitation" &&
+		operation.invitationId === invitation.id;
 	return (
 		<View style={styles.row}>
 			<View style={styles.rowTextGroup}>
@@ -297,13 +307,14 @@ function InvitationRow({
 				</Text>
 			</View>
 			<View style={styles.invitationActions}>
-				<SecondaryButton
+				<HouseholdButton
 					label="Copy"
 					onPress={() =>
 						actions.copyText(invitation.acceptUrl, "Invitation link copied.")
 					}
 				/>
-				<DangerButton
+				<HouseholdButton
+					variant="danger"
 					label={revoking ? "Revoking" : "Revoke"}
 					onPress={() => actions.revokeInvitation(invitation.id)}
 					disabled={revoking}
@@ -344,7 +355,11 @@ function SessionState({
 		return (
 			<CenteredStatus title="Household unavailable">
 				<Text style={styles.statusBody}>{state.message}</Text>
-				<PrimaryButton label="Try again" onPress={onRetry} />
+				<HouseholdButton
+					variant="primary"
+					label="Try again"
+					onPress={onRetry}
+				/>
 			</CenteredStatus>
 		);
 	}
@@ -367,84 +382,6 @@ function CenteredStatus({
 			<Text style={styles.statusTitle}>{title}</Text>
 			{children}
 		</View>
-	);
-}
-
-function PrimaryButton({
-	label,
-	onPress,
-	disabled,
-}: {
-	label: string;
-	onPress: () => void;
-	disabled?: boolean;
-}) {
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityState={{ disabled: Boolean(disabled) }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.primaryButton,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<Text style={styles.primaryButtonLabel}>{label}</Text>
-		</Pressable>
-	);
-}
-
-function SecondaryButton({
-	label,
-	onPress,
-	disabled,
-}: {
-	label: string;
-	onPress: () => void;
-	disabled?: boolean;
-}) {
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityState={{ disabled: Boolean(disabled) }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.secondaryButton,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<Text style={styles.secondaryButtonLabel}>{label}</Text>
-		</Pressable>
-	);
-}
-
-function DangerButton({
-	label,
-	onPress,
-	disabled,
-}: {
-	label: string;
-	onPress: () => void;
-	disabled?: boolean;
-}) {
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityState={{ disabled: Boolean(disabled) }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.dangerButton,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<Text style={styles.dangerButtonLabel}>{label}</Text>
-		</Pressable>
 	);
 }
 
@@ -491,6 +428,10 @@ function settingsRowKey(row: SettingsRow): string {
 
 function formatDate(timestamp: number): string {
 	return new Date(timestamp).toLocaleDateString();
+}
+
+function formatJoinCode(code: string): string {
+	return code.replace(/(.{4})/g, "$1 ").trim();
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -625,51 +566,5 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.body,
 		color: theme.colors.textMuted,
 		textAlign: "center",
-	},
-	primaryButton: {
-		minHeight: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(4),
-		borderRadius: theme.radii.control,
-		backgroundColor: theme.colors.primary,
-	},
-	primaryButtonLabel: {
-		...theme.typography.controlLabel,
-		color: theme.colors.inverseText,
-	},
-	secondaryButton: {
-		minHeight: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.control,
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
-	},
-	secondaryButtonLabel: {
-		...theme.typography.callout,
-		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.text,
-	},
-	dangerButton: {
-		minHeight: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.control,
-		backgroundColor: theme.colors.destructive,
-	},
-	dangerButtonLabel: {
-		...theme.typography.callout,
-		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.inverseText,
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
-	},
-	disabled: {
-		opacity: theme.opacities.disabled,
 	},
 }));

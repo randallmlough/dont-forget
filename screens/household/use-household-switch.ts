@@ -10,12 +10,17 @@ import type { AuthenticatedAppSession } from "@/lib/services/session";
 export type HouseholdSwitchState = {
 	code: string;
 	notice: string | null;
-	working: "switch" | "join" | null;
+	operation: HouseholdSwitchOperation;
 };
+
+export type HouseholdSwitchOperation =
+	| { status: "idle" }
+	| { status: "joiningByCode" }
+	| { status: "switchingHousehold"; householdId: string };
 
 type Action =
 	| { type: "codeChanged"; code: string }
-	| { type: "working"; working: HouseholdSwitchState["working"] }
+	| { type: "operationStarted"; operation: HouseholdSwitchOperation }
 	| { type: "notice"; notice: string | null };
 
 export function useHouseholdSwitch(
@@ -37,14 +42,26 @@ export function useHouseholdSwitch(
 	const [state, dispatch] = useReducer(reducer, {
 		code: "",
 		notice: null,
-		working: null,
+		operation: { status: "idle" },
 	});
 
 	async function switchHousehold(householdId: string) {
 		if (householdId === session.activeHousehold.id) return;
-		dispatch({ type: "working", working: "switch" });
+		dispatch({
+			type: "operationStarted",
+			operation: { status: "switchingHousehold", householdId },
+		});
 		try {
-			await session.services.sync.requestSync({ reason: "manualRefresh" });
+			const syncResult = await session.services.sync.requestSync({
+				reason: "manualRefresh",
+			});
+			if (!syncResult) {
+				dispatch({
+					type: "notice",
+					notice: "Unable to sync this Household before switching. Try again.",
+				});
+				return;
+			}
 		} catch {
 			dispatch({
 				type: "notice",
@@ -68,7 +85,10 @@ export function useHouseholdSwitch(
 			dispatch({ type: "notice", notice: "Enter a Household Join Code." });
 			return;
 		}
-		dispatch({ type: "working", working: "join" });
+		dispatch({
+			type: "operationStarted",
+			operation: { status: "joiningByCode" },
+		});
 		try {
 			await client.joinByCode(code);
 			reloadSession();
@@ -91,10 +111,10 @@ function reducer(
 	action: Action,
 ): HouseholdSwitchState {
 	if (action.type === "codeChanged") return { ...state, code: action.code };
-	if (action.type === "working") {
-		return { ...state, working: action.working, notice: null };
+	if (action.type === "operationStarted") {
+		return { ...state, operation: action.operation, notice: null };
 	}
-	return { ...state, working: null, notice: action.notice };
+	return { ...state, operation: { status: "idle" }, notice: action.notice };
 }
 
 function messageFromError(error: unknown): string {

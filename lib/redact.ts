@@ -7,6 +7,9 @@ const SENSITIVE_KEYS = new Set([
 	"auth",
 	"apikey",
 	"api_key",
+	"code",
+	"joincode",
+	"householdjoincode",
 ]);
 const BEARER_TOKEN_RE = /Bearer\s+[A-Za-z0-9_\-.=]+/g;
 const JWT_RE = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;

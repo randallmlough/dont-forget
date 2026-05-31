@@ -1,10 +1,12 @@
 import { useRouter } from "expo-router";
-import { FlatList, Pressable, Text, TextInput, View } from "react-native";
+import { FlatList, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useAuthenticatedAppSession } from "@/components/session";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { HouseholdButton } from "./household-button";
 import {
+	type HouseholdSwitchOperation,
 	type HouseholdSwitchState,
 	useHouseholdSwitch,
 } from "./use-household-switch";
@@ -63,7 +65,7 @@ export function HouseholdSwitchView({
 				</Text>
 			</View>
 			<View style={styles.topActions}>
-				<SecondaryButton
+				<HouseholdButton
 					label="Settings"
 					onPress={() => router.replace("/household/settings")}
 				/>
@@ -82,7 +84,7 @@ export function HouseholdSwitchView({
 				renderItem={({ item }) => (
 					<HouseholdListRow
 						household={item}
-						working={state.working}
+						operation={state.operation}
 						onSwitchHousehold={onSwitchHousehold}
 					/>
 				)}
@@ -100,7 +102,7 @@ function JoinByCodeForm({
 	onCodeChange: (code: string) => void;
 	onJoinByCode: () => void;
 }) {
-	const joining = state.working === "join";
+	const joining = state.operation.status === "joiningByCode";
 	return (
 		<View style={styles.panel}>
 			<Text style={styles.panelTitle}>Join Household with Code</Text>
@@ -113,7 +115,8 @@ function JoinByCodeForm({
 				style={styles.input}
 				value={state.code}
 			/>
-			<PrimaryButton
+			<HouseholdButton
+				variant="primary"
 				label={joining ? "Joining" : "Join Household"}
 				onPress={onJoinByCode}
 				disabled={joining}
@@ -128,14 +131,19 @@ function JoinByCodeForm({
 
 function HouseholdListRow({
 	household,
-	working,
+	operation,
 	onSwitchHousehold,
 }: {
 	household: HouseholdRow;
-	working: HouseholdSwitchState["working"];
+	operation: HouseholdSwitchOperation;
 	onSwitchHousehold: (householdId: string) => void;
 }) {
-	const switching = working === "switch";
+	const switching =
+		operation.status === "switchingHousehold" &&
+		operation.householdId === household.id;
+	const otherSwitching =
+		operation.status === "switchingHousehold" &&
+		operation.householdId !== household.id;
 	return (
 		<View style={styles.row}>
 			<View style={styles.rowTextGroup}>
@@ -153,66 +161,14 @@ function HouseholdListRow({
 					{household.role === "owner" ? "Owner" : "Member"}
 				</Text>
 			</View>
-			<SecondaryButton
+			<HouseholdButton
 				label={
 					household.isActive ? "Selected" : switching ? "Switching" : "Switch"
 				}
 				onPress={() => onSwitchHousehold(household.id)}
-				disabled={household.isActive || switching}
+				disabled={household.isActive || switching || otherSwitching}
 			/>
 		</View>
-	);
-}
-
-function PrimaryButton({
-	label,
-	onPress,
-	disabled,
-}: {
-	label: string;
-	onPress: () => void;
-	disabled?: boolean;
-}) {
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityState={{ disabled: Boolean(disabled) }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.primaryButton,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<Text style={styles.primaryButtonLabel}>{label}</Text>
-		</Pressable>
-	);
-}
-
-function SecondaryButton({
-	label,
-	onPress,
-	disabled,
-}: {
-	label: string;
-	onPress: () => void;
-	disabled?: boolean;
-}) {
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityState={{ disabled: Boolean(disabled) }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.secondaryButton,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<Text style={styles.secondaryButtonLabel}>{label}</Text>
-		</Pressable>
 	);
 }
 
@@ -315,38 +271,5 @@ const styles = StyleSheet.create((theme) => ({
 	badgeText: {
 		...theme.typography.captionStrong,
 		color: theme.colors.inverseText,
-	},
-	primaryButton: {
-		minHeight: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(4),
-		borderRadius: theme.radii.control,
-		backgroundColor: theme.colors.primary,
-	},
-	primaryButtonLabel: {
-		...theme.typography.controlLabel,
-		color: theme.colors.inverseText,
-	},
-	secondaryButton: {
-		minHeight: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.control,
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
-	},
-	secondaryButtonLabel: {
-		...theme.typography.callout,
-		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.text,
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
-	},
-	disabled: {
-		opacity: theme.opacities.disabled,
 	},
 }));

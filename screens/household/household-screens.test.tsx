@@ -79,7 +79,7 @@ describe("HouseholdSettingsView", () => {
 						createdAt: 1,
 					},
 					notice: null,
-					working: null,
+					operation: { status: "idle" },
 				}}
 				actions={actions}
 			/>,
@@ -87,7 +87,7 @@ describe("HouseholdSettingsView", () => {
 
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 		expect(screen.getByText("pending@example.com")).toBeTruthy();
-		expect(screen.getByText("ABCDEFGH")).toBeTruthy();
+		expect(screen.getByText("ABCD EFGH")).toBeTruthy();
 		fireEvent.press(screen.getByText("Copy link"));
 		expect(actions.copyText).toHaveBeenCalledWith(
 			"https://app.example/households/join?code=ABCDEFGH",
@@ -101,7 +101,7 @@ describe("HouseholdSwitch", () => {
 		render(
 			<HouseholdSwitchView
 				session={sessionFixture()}
-				state={{ code: "", notice: null, working: null }}
+				state={{ code: "", notice: null, operation: { status: "idle" } }}
 				onCodeChange={jest.fn()}
 				onJoinByCode={jest.fn()}
 				onSwitchHousehold={jest.fn()}
@@ -151,6 +151,42 @@ describe("HouseholdSwitch", () => {
 		expect(session.services.sync.requestSync).toHaveBeenCalledWith({
 			reason: "manualRefresh",
 		});
+	});
+
+	it("keeps the current Household when sync-before-switch cannot start", async () => {
+		const session = sessionFixture();
+		const switchHousehold = jest.fn(async () => undefined);
+		session.services.sync.requestSync = jest.fn(async () => null);
+
+		function Harness() {
+			const model = useHouseholdSwitch(session, jest.fn(), {
+				...emptyClient(),
+				switchHousehold,
+			});
+			return (
+				<>
+					<PressableText
+						label="Switch"
+						onPress={() => model.switchHousehold("hh_2")}
+					/>
+					{model.state.notice ? (
+						<TextNode>{model.state.notice}</TextNode>
+					) : null}
+				</>
+			);
+		}
+
+		render(<Harness />);
+		fireEvent.press(screen.getByText("Switch"));
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"Unable to sync this Household before switching. Try again.",
+				),
+			).toBeTruthy(),
+		);
+		expect(switchHousehold).not.toHaveBeenCalled();
 	});
 });
 
@@ -202,6 +238,7 @@ describe("PublicHouseholdEntry", () => {
 					previewInvitation,
 					acceptInvitation,
 				},
+				reloadSession: mockReloadSession,
 			});
 			return (
 				<PublicHouseholdEntryView

@@ -10,12 +10,16 @@ describe("redaction", () => {
 	it("redacts sensitive attribute keys and normalizes Error instances", () => {
 		const attributes = redactAttributes({
 			token: "secret-token",
+			code: "ABCDEFGH",
+			householdJoinCode: "23456789",
 			message: "failed with Bearer secret-token",
 			error: new Error("request failed with eyJabc.def.ghi"),
 		});
 
 		expect(attributes).toMatchObject({
 			token: "[REDACTED]",
+			code: "[REDACTED]",
+			householdJoinCode: "[REDACTED]",
 			message: "failed with Bearer [REDACTED]",
 			error_message: "request failed with [REDACTED_JWT]",
 			error_name: "Error",

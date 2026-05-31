@@ -1,19 +1,21 @@
 import { useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
-import { AuthenticatedAppSessionProvider } from "@/components/session";
+import { useAuthenticatedAppSession } from "@/components/session";
+import { HouseholdButton } from "./household-button";
 import {
 	type PublicHouseholdEntryState,
 	usePublicHouseholdEntry,
 } from "./use-public-household-entry";
-import { useSessionReloadRedirect } from "./use-session-reload-redirect";
 
 export function InvitationAcceptScreen() {
 	const params = useLocalSearchParams<{ token?: string }>();
+	const { reloadSession } = useAuthenticatedAppSession();
 	const entry = usePublicHouseholdEntry({
 		kind: "invitation",
 		secret: firstParam(params.token),
+		reloadSession,
 	});
 
 	return (
@@ -27,9 +29,11 @@ export function InvitationAcceptScreen() {
 
 export function HouseholdJoinScreen() {
 	const params = useLocalSearchParams<{ code?: string }>();
+	const { reloadSession } = useAuthenticatedAppSession();
 	const entry = usePublicHouseholdEntry({
 		kind: "joinCode",
 		secret: firstParam(params.code),
+		reloadSession,
 	});
 
 	return (
@@ -65,9 +69,6 @@ export function PublicHouseholdEntryView({
 					</>
 				) : state.status === "complete" ? (
 					<>
-						<AuthenticatedAppSessionProvider>
-							<SessionReloadRedirect />
-						</AuthenticatedAppSessionProvider>
 						<Text style={styles.title}>Household joined</Text>
 						<Text style={styles.body}>{state.message}</Text>
 					</>
@@ -82,7 +83,8 @@ export function PublicHouseholdEntryView({
 						{state.error ? (
 							<Text style={styles.errorText}>{state.error}</Text>
 						) : null}
-						<PrimaryButton
+						<HouseholdButton
+							variant="primary"
 							label={state.working ? "Joining" : primaryLabel}
 							onPress={onSubmit}
 							disabled={state.working}
@@ -91,37 +93,6 @@ export function PublicHouseholdEntryView({
 				)}
 			</View>
 		</SafeAreaView>
-	);
-}
-
-function SessionReloadRedirect() {
-	useSessionReloadRedirect();
-	return null;
-}
-
-function PrimaryButton({
-	label,
-	onPress,
-	disabled,
-}: {
-	label: string;
-	onPress: () => void;
-	disabled?: boolean;
-}) {
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityState={{ disabled: Boolean(disabled) }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.primaryButton,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<Text style={styles.primaryButtonLabel}>{label}</Text>
-		</Pressable>
 	);
 }
 
@@ -156,23 +127,5 @@ const styles = StyleSheet.create((theme) => ({
 	errorText: {
 		...theme.typography.callout,
 		color: theme.colors.destructive,
-	},
-	primaryButton: {
-		minHeight: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(4),
-		borderRadius: theme.radii.control,
-		backgroundColor: theme.colors.primary,
-	},
-	primaryButtonLabel: {
-		...theme.typography.controlLabel,
-		color: theme.colors.inverseText,
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
-	},
-	disabled: {
-		opacity: theme.opacities.disabled,
 	},
 }));

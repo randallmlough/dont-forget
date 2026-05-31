@@ -1,4 +1,5 @@
 import { useAuth } from "@clerk/clerk-expo";
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useReducer } from "react";
 import {
 	createHouseholdApiClient,
@@ -32,16 +33,19 @@ type Action =
 export function usePublicHouseholdEntry({
 	kind,
 	secret,
+	reloadSession,
 	client: clientProp,
 }: {
 	kind: PublicEntryKind;
 	secret: string | null;
+	reloadSession: () => void;
 	client?: HouseholdApiClient;
 }): {
 	state: PublicHouseholdEntryState;
 	submit: () => Promise<void>;
 } {
 	const { getToken } = useAuth();
+	const router = useRouter();
 	const client = useMemo(
 		() => clientProp ?? createHouseholdApiClient({ getToken }),
 		[clientProp, getToken],
@@ -83,7 +87,9 @@ export function usePublicHouseholdEntry({
 			} else {
 				await client.joinByCode(secret);
 			}
+			reloadSession();
 			dispatch({ type: "complete", message: "Household joined." });
+			router.replace("/");
 		} catch (error) {
 			dispatch({ type: "failed", message: messageFromError(error) });
 		}

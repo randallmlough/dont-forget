@@ -20,8 +20,16 @@ export type HouseholdSettingsState =
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
 			notice: string | null;
-			working: string | null;
+			operation: HouseholdSettingsOperation;
 	  };
+
+export type HouseholdSettingsOperation =
+	| { status: "idle" }
+	| { status: "creatingInvitation" }
+	| { status: "revokingInvitation"; invitationId: string }
+	| { status: "regeneratingJoinCode" }
+	| { status: "settingJoinCodeEnabled" }
+	| { status: "copyingText" };
 
 export type HouseholdSettingsActions = {
 	retry: () => void;
@@ -44,7 +52,7 @@ type Resource =
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
 			notice: string | null;
-			working: string | null;
+			operation: HouseholdSettingsOperation;
 	  };
 
 type Action =
@@ -58,15 +66,20 @@ type Action =
 			joinCode: HouseholdJoinCode;
 	  }
 	| { type: "failed"; loadKey: string; attempt: number; message: string }
-	| { type: "working"; name: string }
-	| { type: "notice"; notice: string | null }
+	| {
+			type: "operationStarted";
+			loadKey: string;
+			operation: HouseholdSettingsOperation;
+	  }
+	| { type: "notice"; loadKey: string; notice: string | null }
 	| {
 			type: "invitationCreated";
+			loadKey: string;
 			response: CreateInvitationResponse;
 			invitations: PendingInvitation[];
 	  }
-	| { type: "invitationRevoked"; invitationId: string }
-	| { type: "joinCodeChanged"; joinCode: HouseholdJoinCode };
+	| { type: "invitationRevoked"; loadKey: string; invitationId: string }
+	| { type: "joinCodeChanged"; loadKey: string; joinCode: HouseholdJoinCode };
 
 export function useHouseholdSettings(
 	session: AuthenticatedAppSession,
@@ -119,66 +132,95 @@ export function useHouseholdSettings(
 	}, [client, householdId, loadAttempt, loadKey]);
 
 	async function createInvitation(email: string) {
-		dispatch({ type: "working", name: "createInvitation" });
+		dispatch({
+			type: "operationStarted",
+			loadKey,
+			operation: { status: "creatingInvitation" },
+		});
 		try {
 			const response = await client.createInvitation({
 				householdId,
 				email: email.trim() || null,
 			});
 			const invitations = await client.listInvitations(householdId);
-			dispatch({ type: "invitationCreated", response, invitations });
+			dispatch({ type: "invitationCreated", loadKey, response, invitations });
 		} catch (error) {
-			dispatch({ type: "notice", notice: messageFromError(error) });
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		}
 	}
 
 	async function revokeInvitation(invitationId: string) {
-		dispatch({ type: "working", name: `revoke:${invitationId}` });
+		dispatch({
+			type: "operationStarted",
+			loadKey,
+			operation: { status: "revokingInvitation", invitationId },
+		});
 		try {
 			await client.revokeInvitation(invitationId);
-			dispatch({ type: "invitationRevoked", invitationId });
+			dispatch({ type: "invitationRevoked", loadKey, invitationId });
 		} catch (error) {
-			dispatch({ type: "notice", notice: messageFromError(error) });
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		}
 	}
 
 	async function regenerateJoinCode() {
-		dispatch({ type: "working", name: "regenerateJoinCode" });
+		dispatch({
+			type: "operationStarted",
+			loadKey,
+			operation: { status: "regeneratingJoinCode" },
+		});
 		try {
 			const joinCode = await client.regenerateJoinCode(householdId);
-			dispatch({ type: "joinCodeChanged", joinCode });
-			dispatch({ type: "notice", notice: "Household Join Code regenerated." });
+			dispatch({ type: "joinCodeChanged", loadKey, joinCode });
+			dispatch({
+				type: "notice",
+				loadKey,
+				notice: "Household Join Code regenerated.",
+			});
 		} catch (error) {
-			dispatch({ type: "notice", notice: messageFromError(error) });
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		}
 	}
 
 	async function setJoinCodeEnabled(enabled: boolean) {
-		dispatch({ type: "working", name: "setJoinCodeEnabled" });
+		dispatch({
+			type: "operationStarted",
+			loadKey,
+			operation: { status: "settingJoinCodeEnabled" },
+		});
 		try {
 			const joinCode = await client.setJoinCodeEnabled({
 				householdId,
 				enabled,
 			});
-			dispatch({ type: "joinCodeChanged", joinCode });
+			dispatch({ type: "joinCodeChanged", loadKey, joinCode });
 			dispatch({
 				type: "notice",
+				loadKey,
 				notice: enabled
 					? "Household Join Code enabled."
 					: "Household Join Code disabled.",
 			});
 		} catch (error) {
-			dispatch({ type: "notice", notice: messageFromError(error) });
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		}
 	}
 
 	async function copyText(text: string, notice: string) {
-		dispatch({ type: "working", name: "copyText" });
+		dispatch({
+			type: "operationStarted",
+			loadKey,
+			operation: { status: "copyingText" },
+		});
 		try {
 			await Clipboard.setStringAsync(text);
-			dispatch({ type: "notice", notice });
+			dispatch({ type: "notice", loadKey, notice });
 		} catch {
-			dispatch({ type: "notice", notice: "Unable to copy. Please try again." });
+			dispatch({
+				type: "notice",
+				loadKey,
+				notice: "Unable to copy. Please try again.",
+			});
 		}
 	}
 
@@ -191,7 +233,7 @@ export function useHouseholdSettings(
 			regenerateJoinCode,
 			setJoinCodeEnabled,
 			copyText,
-			clearNotice: () => dispatch({ type: "notice", notice: null }),
+			clearNotice: () => dispatch({ type: "notice", loadKey, notice: null }),
 		},
 	};
 }
@@ -217,7 +259,12 @@ function reducer(state: Resource, action: Action): Resource {
 	}
 
 	if (action.type === "loaded") {
-		return { ...action, status: "ready", notice: null, working: null };
+		return {
+			...action,
+			status: "ready",
+			notice: null,
+			operation: { status: "idle" },
+		};
 	}
 	if (action.type === "failed") {
 		return {
@@ -228,16 +275,19 @@ function reducer(state: Resource, action: Action): Resource {
 		};
 	}
 	if (state.status !== "ready") return state;
-	if (action.type === "working") return { ...state, working: action.name };
+	if (state.loadKey !== action.loadKey) return state;
+	if (action.type === "operationStarted") {
+		return { ...state, operation: action.operation };
+	}
 	if (action.type === "notice") {
-		return { ...state, notice: action.notice, working: null };
+		return { ...state, notice: action.notice, operation: { status: "idle" } };
 	}
 	if (action.type === "invitationCreated") {
 		return {
 			...state,
 			invitations: action.invitations,
 			notice: invitationCreatedNotice(action.response),
-			working: null,
+			operation: { status: "idle" },
 		};
 	}
 	if (action.type === "invitationRevoked") {
@@ -247,10 +297,10 @@ function reducer(state: Resource, action: Action): Resource {
 				(invitation) => invitation.id !== action.invitationId,
 			),
 			notice: "Invitation revoked.",
-			working: null,
+			operation: { status: "idle" },
 		};
 	}
-	return { ...state, joinCode: action.joinCode, working: null };
+	return { ...state, joinCode: action.joinCode, operation: { status: "idle" } };
 }
 
 function stateFromResource(

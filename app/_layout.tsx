@@ -12,6 +12,11 @@ import {
 } from "react-native-safe-area-context";
 
 import { AuthGate } from "@/components/auth/auth-gate";
+import {
+	AUTH_PATHS,
+	PUBLIC_AUTH_PRESERVING_PATHS,
+} from "@/components/auth/redirect-policy";
+import { AuthenticatedAppSessionProvider } from "@/components/session";
 import { screen } from "@/lib/analytics";
 import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
 import { posthog } from "@/lib/posthog";
@@ -64,11 +69,23 @@ export default function RootLayout() {
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
 					<ThemeProvider value={navigationTheme}>
-						<AuthGate pathname={pathname} params={params} />
+						<AuthenticatedAppSessionProvider
+							activationEnabled={shouldActivateAuthenticatedAppSession(
+								pathname,
+							)}
+						>
+							<AuthGate pathname={pathname} params={params} />
+						</AuthenticatedAppSessionProvider>
 						<StatusBar style="dark" />
 					</ThemeProvider>
 				</ClerkProvider>
 			</SafeAreaProvider>
 		</PostHogProvider>
+	);
+}
+
+function shouldActivateAuthenticatedAppSession(pathname: string): boolean {
+	return (
+		!AUTH_PATHS.has(pathname) && !PUBLIC_AUTH_PRESERVING_PATHS.has(pathname)
 	);
 }
