@@ -1,7 +1,10 @@
-import { reset, track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
+import {
+	noopServiceResetAnalytics,
+	type ServiceResetAnalytics,
+} from "@/lib/services/analytics";
 import { clearSignedOutSessionData as defaultClearSignedOutSessionData } from "./cache";
 import type {
 	AuthenticatedAppSessionActivation,
@@ -14,10 +17,7 @@ export type AuthenticatedAppSessionSignOutAuth =
 		signOut: () => Promise<void>;
 	};
 
-export type AuthenticatedAppSessionSignOutAnalytics = {
-	track: typeof track;
-	reset: typeof reset;
-};
+export type AuthenticatedAppSessionSignOutAnalytics = ServiceResetAnalytics;
 
 export type AuthenticatedAppSessionSignOut = {
 	isRunning: () => boolean;
@@ -37,15 +37,10 @@ export type AuthenticatedAppSessionSignOutDeps = {
 	runningState?: AuthenticatedAppSessionSignOutRunningState;
 };
 
-const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
-	track,
-	reset,
-};
-
 export function createAuthenticatedAppSessionSignOut({
 	controller,
 	getAuth,
-	analytics = defaultAnalytics,
+	analytics = noopServiceResetAnalytics,
 	clearSignedOutSessionData = defaultClearSignedOutSessionData,
 	logger = defaultLogger,
 	runningState,

@@ -11,8 +11,11 @@ import {
 	users,
 } from "@/db/schema/directory";
 import { runWithSqliteBusyRetry } from "@/db/utils";
-import { track } from "@/lib/analytics";
 import { createAppId } from "@/lib/ids";
+import {
+	noopServiceAnalytics,
+	type ServiceAnalytics,
+} from "@/lib/services/analytics";
 import { createMemberService } from "@/lib/services/member/server";
 import { createActiveHouseholdService } from "./active-household-service";
 
@@ -114,7 +117,7 @@ export type HouseholdJoinCodeServiceDeps = {
 	directory: DirectoryDb;
 	buildJoinUrl: HouseholdJoinUrlBuilder;
 	generateCode?: HouseholdJoinCodeGenerator;
-	analytics?: { track: typeof track };
+	analytics?: ServiceAnalytics;
 };
 
 export function createHouseholdJoinCodeService(
@@ -122,7 +125,7 @@ export function createHouseholdJoinCodeService(
 ): HouseholdJoinCodeService {
 	const buildJoinUrl = deps.buildJoinUrl;
 	const generateCode = deps.generateCode ?? generateSecureHouseholdJoinCode;
-	const analytics = deps.analytics ?? { track };
+	const analytics = deps.analytics ?? noopServiceAnalytics;
 
 	return {
 		getCurrentJoinCode(input) {
@@ -181,7 +184,7 @@ async function previewJoinCode(
 async function joinByCode(
 	input: JoinHouseholdByCodeInput,
 	directory: DirectoryDb,
-	analytics: { track: typeof track },
+	analytics: ServiceAnalytics,
 ): Promise<JoinHouseholdByCodeResult> {
 	const now = Date.now();
 	await assertNotThrottled(input.userId, now, directory);
@@ -254,7 +257,7 @@ async function regenerateJoinCode(
 	deps: {
 		buildJoinUrl: HouseholdJoinUrlBuilder;
 		generateCode: HouseholdJoinCodeGenerator;
-		analytics: { track: typeof track };
+		analytics: ServiceAnalytics;
 	},
 ): Promise<HouseholdJoinCodeState> {
 	const now = Date.now();
@@ -297,7 +300,7 @@ async function disableJoinCode(
 	input: { householdId: string; requestedByUserId: string },
 	directory: HouseholdJoinCodeServiceExecutor,
 	buildJoinUrl: HouseholdJoinUrlBuilder,
-	analytics: { track: typeof track },
+	analytics: ServiceAnalytics,
 ): Promise<HouseholdJoinCodeState> {
 	const now = Date.now();
 	await requireActiveHouseholdMember(input, directory);
@@ -326,7 +329,7 @@ async function enableJoinCode(
 	deps: {
 		buildJoinUrl: HouseholdJoinUrlBuilder;
 		generateCode: HouseholdJoinCodeGenerator;
-		analytics: { track: typeof track };
+		analytics: ServiceAnalytics;
 	},
 ): Promise<HouseholdJoinCodeState> {
 	const now = Date.now();

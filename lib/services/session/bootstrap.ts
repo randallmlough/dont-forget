@@ -1,10 +1,13 @@
 import Constants from "expo-constants";
-import { track } from "@/lib/analytics";
 import {
 	BOOTSTRAP_API_PATH,
 	type BootstrapResponse,
 	bootstrapResponseSchema,
 } from "@/lib/bootstrap";
+import {
+	noopServiceAnalytics,
+	type ServiceAnalytics,
+} from "@/lib/services/analytics";
 
 export type SessionBootstrap = BootstrapResponse;
 export type SessionUser = SessionBootstrap["user"];
@@ -14,10 +17,6 @@ export type GetSessionToken = () => Promise<string | null>;
 
 type SessionBootstrapFetch = typeof globalThis.fetch;
 
-type SessionBootstrapAnalytics = {
-	track: typeof track;
-};
-
 export type SessionBootstrapService = {
 	getSession: (getToken: GetSessionToken) => Promise<SessionBootstrap>;
 };
@@ -25,7 +24,7 @@ export type SessionBootstrapService = {
 export type SessionAuthenticatedAppSessionBootstrapDeps = {
 	fetch?: SessionBootstrapFetch;
 	apiBaseUrl?: () => string;
-	analytics?: SessionBootstrapAnalytics;
+	analytics?: ServiceAnalytics;
 };
 
 export function createSessionBootstrapService(
@@ -33,7 +32,7 @@ export function createSessionBootstrapService(
 ): SessionBootstrapService {
 	const fetcher = deps.fetch ?? globalThis.fetch;
 	const apiBaseUrl = deps.apiBaseUrl ?? readApiBaseUrl;
-	const analytics = deps.analytics ?? { track };
+	const analytics = deps.analytics ?? noopServiceAnalytics;
 
 	return {
 		async getSession(getToken) {

@@ -2,7 +2,10 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 
 import type { DirectoryDb } from "@/db/client";
 import { households, memberships, users } from "@/db/schema/directory";
-import { track } from "@/lib/analytics";
+import {
+	noopServiceAnalytics,
+	type ServiceAnalytics,
+} from "@/lib/services/analytics";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -53,13 +56,13 @@ export type ActiveHouseholdService = {
 
 export type ActiveHouseholdServiceDeps = {
 	directory: ActiveHouseholdServiceDirectory;
-	analytics?: { track: typeof track };
+	analytics?: ServiceAnalytics;
 };
 
 export function createActiveHouseholdService(
 	deps: ActiveHouseholdServiceDeps,
 ): ActiveHouseholdService {
-	const analytics = deps.analytics ?? { track };
+	const analytics = deps.analytics ?? noopServiceAnalytics;
 	return {
 		getActiveHousehold(userId) {
 			return getActiveHousehold(userId, deps.directory);
@@ -142,7 +145,7 @@ async function listAssociatedHouseholds(
 async function switchActiveHousehold(
 	input: SwitchActiveHouseholdInput,
 	directory: ActiveHouseholdServiceDirectory,
-	analytics: { track: typeof track },
+	analytics: ServiceAnalytics,
 ): Promise<ActiveHouseholdSelection> {
 	const selection = await setActiveHousehold(input, directory);
 

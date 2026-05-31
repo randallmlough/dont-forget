@@ -8,8 +8,11 @@ import {
 	invitations,
 	users,
 } from "@/db/schema/directory";
-import { track } from "@/lib/analytics";
 import { createAppId } from "@/lib/ids";
+import {
+	noopServiceAnalytics,
+	type ServiceAnalytics,
+} from "@/lib/services/analytics";
 import { createActiveHouseholdService } from "@/lib/services/household/server/active-household-service";
 import { createMemberService } from "@/lib/services/member/server";
 
@@ -139,7 +142,7 @@ export type InvitationServiceDeps = {
 	buildAcceptUrl: InvitationAcceptUrlBuilder;
 	generateToken?: InvitationTokenGenerator;
 	emailSender?: InvitationEmailSender;
-	analytics?: { track: typeof track };
+	analytics?: ServiceAnalytics;
 };
 
 export function createInvitationService(
@@ -148,7 +151,7 @@ export function createInvitationService(
 	const buildAcceptUrl = deps.buildAcceptUrl;
 	const generateToken = deps.generateToken ?? generateSecureInvitationToken;
 	const emailSender = deps.emailSender ?? defaultInvitationEmailSender;
-	const analytics = deps.analytics ?? { track };
+	const analytics = deps.analytics ?? noopServiceAnalytics;
 
 	return {
 		createInvitation(input) {
@@ -181,7 +184,7 @@ async function createInvitation(
 		buildAcceptUrl: InvitationAcceptUrlBuilder;
 		generateToken: InvitationTokenGenerator;
 		emailSender: InvitationEmailSender;
-		analytics: { track: typeof track };
+		analytics: ServiceAnalytics;
 	},
 ): Promise<CreateInvitationResult> {
 	const now = Date.now();
@@ -259,7 +262,7 @@ async function previewInvitation(
 async function acceptInvitation(
 	input: AcceptInvitationInput,
 	directory: InvitationServiceExecutor,
-	analytics: { track: typeof track },
+	analytics: ServiceAnalytics,
 ): Promise<AcceptInvitationResult> {
 	const now = Date.now();
 
@@ -350,7 +353,7 @@ async function revokeInvitation(
 	input: { invitationId: string; revokedByUserId: string },
 	directory: InvitationServiceExecutor,
 	buildAcceptUrl: InvitationAcceptUrlBuilder,
-	analytics: { track: typeof track },
+	analytics: ServiceAnalytics,
 ): Promise<InvitationRecord> {
 	const now = Date.now();
 	const [invitation] = await directory

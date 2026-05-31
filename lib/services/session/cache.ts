@@ -1,7 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { z } from "zod";
-import { track } from "@/lib/analytics";
 import { bootstrapResponseSchema } from "@/lib/bootstrap";
+import {
+	noopServiceAnalytics,
+	type ServiceAnalytics,
+} from "@/lib/services/analytics";
 import { deleteLocalHouseholdStoreData } from "@/lib/services/household/household-store";
 import { type SessionBootstrap, sessionAnalyticsProperties } from "./bootstrap";
 
@@ -28,10 +31,6 @@ export type SessionCacheStorage = Pick<
 	"getItem" | "setItem" | "removeItem"
 >;
 
-type SessionCacheAnalytics = {
-	track: typeof track;
-};
-
 export type SessionCache = {
 	save: (session: SessionBootstrap) => Promise<CachedSessionBootstrap>;
 	read: () => Promise<CachedSessionBootstrap | null>;
@@ -48,13 +47,13 @@ export type SessionCache = {
 
 export type SessionCacheDeps = {
 	storage?: SessionCacheStorage;
-	analytics?: SessionCacheAnalytics;
+	analytics?: ServiceAnalytics;
 	deleteLocalHouseholdStoreData?: typeof deleteLocalHouseholdStoreData;
 };
 
 export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 	const storage = deps.storage ?? AsyncStorage;
-	const analytics = deps.analytics ?? { track };
+	const analytics = deps.analytics ?? noopServiceAnalytics;
 	const deleteLocalDataForHousehold =
 		deps.deleteLocalHouseholdStoreData ?? deleteLocalHouseholdStoreData;
 
