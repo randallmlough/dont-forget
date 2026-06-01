@@ -38,6 +38,13 @@ export class InvitationMembershipRequiredError extends Error {
 	}
 }
 
+export class InvitationInvalidEmailError extends Error {
+	constructor() {
+		super("Enter a valid email address.");
+		this.name = "InvitationInvalidEmailError";
+	}
+}
+
 export type InvitationTokenGenerator = () => string | Promise<string>;
 
 export type InvitationAcceptUrlBuilder = (input: { token: string }) => string;
@@ -615,7 +622,13 @@ function normalizeInvitationEmail(
 	email: string | null | undefined,
 ): string | null {
 	const normalized = email?.trim().toLowerCase() ?? "";
-	return normalized ? normalized : null;
+	if (!normalized) return null;
+	if (!isInvitationEmail(normalized)) throw new InvitationInvalidEmailError();
+	return normalized;
+}
+
+function isInvitationEmail(email: string): boolean {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function publicInviterDisplayName(displayName: string | null): string {

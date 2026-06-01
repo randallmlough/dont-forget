@@ -4,12 +4,17 @@ import * as WebBrowser from "expo-web-browser";
 import { useEffect, useReducer } from "react";
 import { useAnalyticsIdentity } from "@/lib/analytics";
 import { hasCachedAuthenticatedAppSession } from "@/lib/services/session";
-
-const AUTH_PATHS = new Set(["/sign-in", "/sign-up"]);
+import { type AuthRedirectParams, authRedirectTarget } from "./redirect-policy";
 
 type CachedSessionStatus = "checking" | "available" | "unavailable";
 
-export function AuthGate({ pathname }: { pathname: string }) {
+export function AuthGate({
+	pathname,
+	params,
+}: {
+	pathname: string;
+	params?: AuthRedirectParams;
+}) {
 	const { isSignedIn, isLoaded } = useAuth();
 	const { replace } = useRouter();
 	const [cachedSessionStatus, dispatchCachedSessionStatus] = useReducer(
@@ -48,32 +53,21 @@ export function AuthGate({ pathname }: { pathname: string }) {
 	}, [isLoaded]);
 
 	useEffect(() => {
-		const onAuthScreen = AUTH_PATHS.has(pathname);
-
-		if (isSignedIn) {
-			if (onAuthScreen) {
-				replace("/");
-			}
-			return;
-		}
-
-		if (!checkedCachedSession) return;
-
-		if (hasCachedSession) {
-			if (onAuthScreen) {
-				replace("/");
-			}
-			return;
-		}
-
-		if (isLoaded && !onAuthScreen) {
-			replace("/sign-in");
-		}
+		const target = authRedirectTarget({
+			pathname,
+			params,
+			isSignedIn: Boolean(isSignedIn),
+			isAuthLoaded: Boolean(isLoaded),
+			checkedCachedSession,
+			hasCachedSession,
+		});
+		if (target) replace(target);
 	}, [
 		checkedCachedSession,
 		hasCachedSession,
 		isLoaded,
 		isSignedIn,
+		params,
 		pathname,
 		replace,
 	]);
@@ -93,6 +87,8 @@ export function AuthGate({ pathname }: { pathname: string }) {
 		<Stack screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="(app)" />
 			<Stack.Screen name="(auth)" />
+			<Stack.Screen name="invitations/accept" />
+			<Stack.Screen name="households/join" />
 		</Stack>
 	);
 }

@@ -1,6 +1,7 @@
 import type { DirectoryDb } from "@/db/client";
 import {
 	createInvitationService,
+	InvitationInvalidEmailError,
 	InvitationMembershipRequiredError,
 	type InvitationService,
 	type InvitationServiceDeps,
@@ -172,6 +173,9 @@ function invitationErrorResponse(error: unknown, context: string): Response {
 	}
 	if (error instanceof InvitationMembershipRequiredError) {
 		return errorResponse("Forbidden", 403);
+	}
+	if (error instanceof InvitationInvalidEmailError) {
+		return errorResponse(error.message, 400);
 	}
 	if (error instanceof InvitationUnavailableError) {
 		return errorResponse(INVITATION_UNAVAILABLE_MESSAGE, 404);

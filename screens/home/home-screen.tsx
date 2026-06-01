@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
@@ -15,10 +16,12 @@ export type HomeScreenViewProps = {
 	session: AuthenticatedAppSession | null;
 	onRetry?: () => void;
 	onSignOut?: () => void;
+	onOpenHouseholdSettings?: () => void;
 };
 
 export default function HomeScreen() {
 	const { state, session, retry, signOut } = useAuthenticatedAppSession();
+	const router = useRouter();
 
 	return (
 		<HomeScreenView
@@ -26,6 +29,7 @@ export default function HomeScreen() {
 			session={session}
 			onRetry={retry}
 			onSignOut={signOut}
+			onOpenHouseholdSettings={() => router.push("/household/settings")}
 		/>
 	);
 }
@@ -35,6 +39,7 @@ export function HomeScreenView({
 	session,
 	onRetry,
 	onSignOut,
+	onOpenHouseholdSettings,
 }: HomeScreenViewProps) {
 	const displayMemberName = homeSessionMemberName(session);
 
@@ -47,18 +52,32 @@ export function HomeScreenView({
 						{displayMemberName}
 					</Text>
 				</View>
-				{onSignOut ? (
-					<Pressable
-						accessibilityRole="button"
-						onPress={onSignOut}
-						style={({ pressed }) => [
-							styles.signOutButton,
-							pressed ? styles.signOutButtonPressed : undefined,
-						]}
-					>
-						<Text style={styles.signOutLabel}>Sign out</Text>
-					</Pressable>
-				) : null}
+				<View style={styles.memberActions}>
+					{onOpenHouseholdSettings ? (
+						<Pressable
+							accessibilityRole="button"
+							onPress={onOpenHouseholdSettings}
+							style={({ pressed }) => [
+								styles.settingsButton,
+								pressed ? styles.buttonPressed : undefined,
+							]}
+						>
+							<Text style={styles.settingsLabel}>Household</Text>
+						</Pressable>
+					) : null}
+					{onSignOut ? (
+						<Pressable
+							accessibilityRole="button"
+							onPress={onSignOut}
+							style={({ pressed }) => [
+								styles.signOutButton,
+								pressed ? styles.buttonPressed : undefined,
+							]}
+						>
+							<Text style={styles.signOutLabel}>Sign out</Text>
+						</Pressable>
+					) : null}
+				</View>
 			</View>
 
 			{session ? (
@@ -100,6 +119,10 @@ const styles = StyleSheet.create((theme) => ({
 		flex: 1,
 		minWidth: 0,
 	},
+	memberActions: {
+		flexDirection: "row",
+		gap: theme.spacing(2),
+	},
 	memberLabel: {
 		...theme.typography.captionStrong,
 		color: theme.colors.textMuted,
@@ -118,8 +141,24 @@ const styles = StyleSheet.create((theme) => ({
 		justifyContent: "center",
 		backgroundColor: theme.colors.destructive,
 	},
-	signOutButtonPressed: {
+	settingsButton: {
+		minHeight: theme.spacing(11),
+		paddingHorizontal: theme.spacing(3),
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
+		alignItems: "center",
+		justifyContent: "center",
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		backgroundColor: theme.colors.surface,
+	},
+	buttonPressed: {
 		opacity: theme.opacities.pressed,
+	},
+	settingsLabel: {
+		...theme.typography.callout,
+		color: theme.colors.text,
+		fontWeight: theme.fontWeights.bold,
 	},
 	signOutLabel: {
 		...theme.typography.callout,

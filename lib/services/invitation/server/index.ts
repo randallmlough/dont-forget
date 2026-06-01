@@ -7,6 +7,7 @@ export {
 	type InvitationAcceptUrlBuilder,
 	type InvitationEmailDelivery,
 	type InvitationEmailSender,
+	InvitationInvalidEmailError,
 	InvitationMembershipRequiredError,
 	type InvitationPreview,
 	type InvitationRecord,

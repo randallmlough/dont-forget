@@ -43,6 +43,7 @@ type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	auth?: AuthenticatedAppSessionProviderAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearSignedOutSessionData?: typeof clearSignedOutSessionData;
+	activationEnabled?: boolean;
 }>;
 
 const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
@@ -60,6 +61,7 @@ export function AuthenticatedAppSessionProvider({
 	analytics = defaultAnalytics,
 	clearSignedOutSessionData:
 		clearSignedOutSessionDataProp = clearSignedOutSessionData,
+	activationEnabled = true,
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
 	const logger = useLogger();
@@ -102,16 +104,23 @@ export function AuthenticatedAppSessionProvider({
 		return () => subscription.remove();
 	}, [controller]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: activationRequest intentionally retriggers authenticated app session activation.
 	useEffect(() => {
 		if (signOutRunningState.running) return;
+		if (!activationEnabled && activationRequest === 0) return;
 		void controller.activate({
 			getToken,
 			authReady,
 			signedIn,
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- getToken is a React Effect Event that supplies the latest token callback without reactivating on token identity changes.
-	}, [authReady, signedIn, controller, activationRequest, signOutRunningState]);
+	}, [
+		activationEnabled,
+		authReady,
+		signedIn,
+		controller,
+		activationRequest,
+		signOutRunningState,
+	]);
 
 	useEffect(() => {
 		return () => {

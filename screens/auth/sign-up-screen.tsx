@@ -1,4 +1,5 @@
 import { useSignUp } from "@clerk/clerk-expo";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -7,12 +8,14 @@ import { AuthScreen } from "@/components/auth/auth-screen";
 import { AuthTextInput } from "@/components/auth/auth-text-input";
 import { OrDivider } from "@/components/auth/or-divider";
 import { PrimaryButton } from "@/components/auth/primary-button";
+import { authHrefWithIntent } from "@/components/auth/redirect-policy";
 import { SocialSignIn } from "@/components/auth/social-sign-in";
 import { track } from "@/lib/analytics";
 import { userMessage } from "@/lib/clerk-errors";
 
 export default function SignUpScreen() {
 	const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+	const params = useLocalSearchParams();
 
 	if (pendingEmail) {
 		return (
@@ -36,7 +39,7 @@ export default function SignUpScreen() {
 			<AuthFooterLink
 				prompt="Already have an account?"
 				label="Sign in"
-				href="/sign-in"
+				href={authHrefWithIntent("/sign-in", params)}
 			/>
 		</AuthScreen>
 	);

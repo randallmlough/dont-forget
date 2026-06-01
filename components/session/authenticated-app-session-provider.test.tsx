@@ -71,6 +71,26 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(screen.getByText("ready")).toBeTruthy();
 	});
 
+	it("can defer initial activation until reload is requested", async () => {
+		const controller = authenticatedAppSessionControllerFixture();
+		render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+				activationEnabled={false}
+			>
+				<ReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await Promise.resolve();
+		expect(controller.activate).not.toHaveBeenCalled();
+
+		fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+
+		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(1));
+	});
+
 	it("does not reactivate when only the token callback identity changes", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		const firstAuth = authFixture();

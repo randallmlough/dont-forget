@@ -70,4 +70,54 @@ describe("AuthGate", () => {
 
 		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/sign-in"));
 	});
+
+	it("keeps public routes reachable while signed in", async () => {
+		setMockAuthState({ isLoaded: true, isSignedIn: true });
+
+		render(
+			<AuthGate
+				pathname="/invitations/accept"
+				params={{ token: "token-123" }}
+			/>,
+		);
+
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("keeps public routes reachable while signed out", async () => {
+		setMockAuthState({ isLoaded: true, isSignedIn: false });
+
+		render(
+			<AuthGate pathname="/households/join" params={{ code: "ABCDEFGH" }} />,
+		);
+
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("redirects signed-in auth routes to Home", async () => {
+		setMockAuthState({ isLoaded: true, isSignedIn: true });
+
+		render(
+			<AuthGate pathname="/sign-in" params={{ next: "/household/settings" }} />,
+		);
+
+		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+	});
+
+	it("redirects signed-in auth routes to preserved public route intent", async () => {
+		setMockAuthState({ isLoaded: true, isSignedIn: true });
+
+		render(
+			<AuthGate
+				pathname="/sign-in"
+				params={{ next: "/invitations/accept", token: "token-123" }}
+			/>,
+		);
+
+		await waitFor(() =>
+			expect(mockReplace).toHaveBeenCalledWith(
+				"/invitations/accept?token=token-123",
+			),
+		);
+	});
 });

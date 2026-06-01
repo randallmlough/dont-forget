@@ -1,0 +1,100 @@
+import {
+	authHrefWithIntent,
+	authRedirectTarget,
+	internalNextPath,
+} from "@/components/auth/redirect-policy";
+
+describe("authRedirectTarget", () => {
+	it("keeps public Invitation routes reachable for signed-out Users", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/invitations/accept",
+				params: { token: "tok_123" },
+				isSignedIn: false,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+			}),
+		).toBeNull();
+	});
+
+	it("keeps public Household Join Code routes reachable for signed-out Users", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/households/join",
+				params: { code: "ABCDEFGH" },
+				isSignedIn: false,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+			}),
+		).toBeNull();
+	});
+
+	it("sends signed-in Users from auth routes to Home", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				params: { next: "/household/settings" },
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+			}),
+		).toBe("/");
+	});
+
+	it("preserves public Invitation intent for signed-in Users on auth routes", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				params: { next: "/invitations/accept", token: "tok_123" },
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+			}),
+		).toBe("/invitations/accept?token=tok_123");
+	});
+
+	it("preserves public Household Join Code intent for signed-in Users on auth routes", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-up",
+				params: { next: "/households/join", code: "ABCDEFGH" },
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+			}),
+		).toBe("/households/join?code=ABCDEFGH");
+	});
+
+	it("sends Users with cached Authenticated App Sessions from auth routes to Home", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-up",
+				params: { next: "/household/settings" },
+				isSignedIn: false,
+				isAuthLoaded: false,
+				checkedCachedSession: true,
+				hasCachedSession: true,
+			}),
+		).toBe("/");
+	});
+
+	it("rejects external and malformed next targets", () => {
+		expect(internalNextPath("https://example.com")).toBeNull();
+		expect(internalNextPath("//example.com")).toBeNull();
+		expect(internalNextPath("household/settings")).toBeNull();
+	});
+
+	it("preserves safe intent when linking between auth screens", () => {
+		expect(
+			authHrefWithIntent("/sign-up", {
+				next: "/invitations/accept",
+				token: "tok_123",
+			}),
+		).toBe("/sign-up?next=%2Finvitations%2Faccept&token=tok_123");
+	});
+});

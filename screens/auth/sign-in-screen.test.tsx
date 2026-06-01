@@ -21,6 +21,7 @@ jest.mock("expo-router", () => {
 	return {
 		Link: ({ children }: { children: React.ReactNode }) =>
 			React.createElement(Text, null, children),
+		useLocalSearchParams: () => ({}),
 	};
 });
 

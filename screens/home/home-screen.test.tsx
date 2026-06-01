@@ -20,10 +20,13 @@ import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionDataServices } from "@/lib/services/session/services";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
-import HomeScreen, { HomeScreenView } from "@/screens/home/home-screen";
 
 jest.mock("@/components/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
+}));
+
+jest.mock("expo-router", () => ({
+	useRouter: () => ({ push: jest.fn() }),
 }));
 
 jest.mock("@/lib/analytics", () =>
@@ -45,6 +48,10 @@ const noopProviderActions = {
 	reloadSession() {},
 	async signOut() {},
 };
+
+const { default: HomeScreen, HomeScreenView } = jest.requireActual<
+	typeof import("@/screens/home/home-screen")
+>("@/screens/home/home-screen");
 
 describe("HomeScreen", () => {
 	beforeEach(() => {
