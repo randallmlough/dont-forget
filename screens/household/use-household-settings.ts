@@ -56,6 +56,7 @@ type Resource =
 	  };
 
 type Action =
+	| { type: "loadStarted"; loadKey: string; attempt: number }
 	| { type: "retry"; loadKey: string }
 	| {
 			type: "loaded";
@@ -97,6 +98,7 @@ export function useHouseholdSettings(
 
 	useEffect(() => {
 		let cancelled = false;
+		dispatch({ type: "loadStarted", loadKey, attempt: loadAttempt });
 
 		Promise.all([
 			client.listMembers(householdId),
@@ -243,6 +245,14 @@ function initialResource(loadKey: string): Resource {
 }
 
 function reducer(state: Resource, action: Action): Resource {
+	if (action.type === "loadStarted") {
+		return {
+			status: "loading",
+			loadKey: action.loadKey,
+			attempt: action.attempt,
+		};
+	}
+
 	if (action.type === "retry") {
 		return {
 			status: "loading",

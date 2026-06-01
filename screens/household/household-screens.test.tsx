@@ -11,6 +11,7 @@ import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HouseholdSettingsView } from "./household-settings-screen";
 import { HouseholdSwitchView } from "./household-switch-screen";
 import { PublicHouseholdEntryView } from "./public-household-entry-screen";
+import { useHouseholdSettings } from "./use-household-settings";
 import { useHouseholdSwitch } from "./use-household-switch";
 import { usePublicHouseholdEntry } from "./use-public-household-entry";
 
@@ -93,6 +94,68 @@ describe("HouseholdSettingsView", () => {
 			"https://app.example/households/join?code=ABCDEFGH",
 			"Household join link copied.",
 		);
+	});
+});
+
+describe("useHouseholdSettings", () => {
+	it("loads settings after the Authenticated App Session resource key changes", async () => {
+		const freshMembers = [
+			{
+				membershipId: "mbr_fresh",
+				userId: "usr_1",
+				role: "owner" as const,
+				displayName: "Fresh Member",
+			},
+		];
+		const firstLoad = {
+			members:
+				deferred<Awaited<ReturnType<HouseholdApiClient["listMembers"]>>>(),
+			invitations:
+				deferred<Awaited<ReturnType<HouseholdApiClient["listInvitations"]>>>(),
+			joinCode:
+				deferred<Awaited<ReturnType<HouseholdApiClient["getJoinCode"]>>>(),
+		};
+		const client = {
+			...emptyClient(),
+			listMembers: jest
+				.fn()
+				.mockReturnValueOnce(firstLoad.members.promise)
+				.mockResolvedValueOnce(freshMembers),
+			listInvitations: jest
+				.fn()
+				.mockReturnValueOnce(firstLoad.invitations.promise)
+				.mockResolvedValueOnce([]),
+			getJoinCode: jest
+				.fn()
+				.mockReturnValueOnce(firstLoad.joinCode.promise)
+				.mockResolvedValueOnce({ enabled: false, householdId: "hh_1" }),
+		};
+
+		function Harness({ session }: { session: AuthenticatedAppSession }) {
+			const { state } = useHouseholdSettings(session, client);
+			return (
+				<TextNode>
+					{state.status === "ready"
+						? state.members[0]?.displayName
+						: state.status}
+				</TextNode>
+			);
+		}
+
+		const cachedSession = sessionFixture();
+		const { rerender } = render(<Harness session={cachedSession} />);
+		expect(screen.getByText("loading")).toBeTruthy();
+
+		rerender(
+			<Harness
+				session={{
+					...cachedSession,
+					resourceKey: "authenticated-app-session:2",
+				}}
+			/>,
+		);
+
+		await waitFor(() => expect(screen.getByText("Fresh Member")).toBeTruthy());
 	});
 });
 
@@ -353,4 +416,14 @@ function TextNode({ children }: { children: ReactNode }) {
 	const { Text } =
 		jest.requireActual<typeof import("react-native")>("react-native");
 	return <Text>{children}</Text>;
+}
+
+function deferred<T>() {
+	let resolve: (value: T) => void = () => undefined;
+	let reject: (error: unknown) => void = () => undefined;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
 }
