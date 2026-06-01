@@ -20,6 +20,14 @@ start: ## Start Expo for normal app development *common*
 ios: ## Run the native iOS target *common*
 	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) ios
 
+.PHONY: prebuild
+prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to pass --clean
+	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) expo prebuild --platform ios $(if $(filter --clean,$(MAKECMDGOALS)),--clean,)
+
+.PHONY: --clean
+--clean:
+	@:
+
 .PHONY: storybook
 storybook: ## Start Storybook for the native iOS build *common*
 	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) storybook:start

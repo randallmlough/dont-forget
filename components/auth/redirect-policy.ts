@@ -1,3 +1,5 @@
+import type { Href } from "expo-router";
+
 export type AuthRedirectParams = Record<string, string | string[] | undefined>;
 
 export type AuthRedirectInput = {
@@ -22,7 +24,7 @@ export function authRedirectTarget({
 	isAuthLoaded,
 	checkedCachedSession,
 	hasCachedSession,
-}: AuthRedirectInput): string | null {
+}: AuthRedirectInput): Href | null {
 	const onAuthPath = AUTH_PATHS.has(pathname);
 
 	if (isSignedIn) {
@@ -53,26 +55,26 @@ export function internalNextPath(value: unknown): string | null {
 	return next;
 }
 
-function signedInAuthPathTarget(params: AuthRedirectParams): string {
+function signedInAuthPathTarget(params: AuthRedirectParams): Href {
 	const next = internalNextPath(params.next);
 	if (!next) return "/";
 	return targetWithPreservedIntent(next, params);
 }
 
-function signInTarget(pathname: string, params: AuthRedirectParams): string {
+function signInTarget(pathname: string, params: AuthRedirectParams): Href {
 	const query = new URLSearchParams({ next: pathname });
 	addPreservedIntentParams(query, pathname, params);
-	return `/sign-in?${query.toString()}`;
+	return `/sign-in?${query.toString()}` as Href;
 }
 
 function targetWithPreservedIntent(
 	pathname: string,
 	params: AuthRedirectParams,
-): string {
+): Href {
 	const query = new URLSearchParams();
 	addPreservedIntentParams(query, pathname, params);
 	const suffix = query.toString();
-	return suffix ? `${pathname}?${suffix}` : pathname;
+	return (suffix ? `${pathname}?${suffix}` : pathname) as Href;
 }
 
 function addPreservedIntentParams(

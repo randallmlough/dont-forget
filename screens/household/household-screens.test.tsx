@@ -23,6 +23,11 @@ jest.mock("@clerk/clerk-expo", () => ({
 	useAuth: () => ({ getToken: jest.fn(async () => "token") }),
 }));
 
+jest.mock("expo-constants", () => ({
+	__esModule: true,
+	default: { expoConfig: { extra: { apiBaseUrl: "https://api.example" } } },
+}));
+
 jest.mock("@/components/session", () => ({
 	AuthenticatedAppSessionProvider: ({ children }: { children: ReactNode }) =>
 		children,
@@ -98,6 +103,40 @@ describe("HouseholdSettingsView", () => {
 });
 
 describe("useHouseholdSettings", () => {
+	it("does not restart the initial load when the auth token getter changes identity", async () => {
+		const fetcher = jest
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async (input) => {
+				const url = String(input);
+				let body: unknown;
+				if (url.endsWith("/api/households/hh_1/members")) {
+					body = { members: [] };
+				} else if (url.endsWith("/api/households/hh_1/invitations")) {
+					body = { invitations: [] };
+				} else if (url.endsWith("/api/households/hh_1/join-code")) {
+					body = { joinCode: { enabled: false, householdId: "hh_1" } };
+				} else {
+					throw new Error(`Unexpected request: ${url}`);
+				}
+
+				return {
+					ok: true,
+					status: 200,
+					json: async () => body,
+				} as Response;
+			});
+
+		function Harness() {
+			const { state } = useHouseholdSettings(sessionFixture());
+			return <TextNode>{state.status}</TextNode>;
+		}
+
+		render(<Harness />);
+
+		await waitFor(() => expect(screen.getByText("ready")).toBeTruthy());
+		expect(fetcher).toHaveBeenCalledTimes(3);
+	});
+
 	it("loads settings after the Authenticated App Session resource key changes", async () => {
 		const freshMembers = [
 			{

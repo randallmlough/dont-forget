@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import * as Clipboard from "expo-clipboard";
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import {
 	type CreateInvitationResponse,
 	createHouseholdApiClient,
@@ -87,9 +87,15 @@ export function useHouseholdSettings(
 	clientProp?: HouseholdApiClient,
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
+	const getTokenRef = useRef(getToken);
+	getTokenRef.current = getToken;
 	const client = useMemo(
-		() => clientProp ?? createHouseholdApiClient({ getToken }),
-		[clientProp, getToken],
+		() =>
+			clientProp ??
+			createHouseholdApiClient({
+				getToken: () => getTokenRef.current(),
+			}),
+		[clientProp],
 	);
 	const loadKey = `${session.resourceKey}:${session.activeHousehold.id}`;
 	const [resource, dispatch] = useReducer(reducer, loadKey, initialResource);
