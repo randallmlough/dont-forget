@@ -46,7 +46,12 @@ export function useHouseholdSwitch(
 	});
 
 	async function switchHousehold(householdId: string) {
-		if (householdId === session.activeHousehold.id) return;
+		if (
+			householdId === session.activeHousehold.id ||
+			operationInProgress(state.operation)
+		) {
+			return;
+		}
 		dispatch({
 			type: "operationStarted",
 			operation: { status: "switchingHousehold", householdId },
@@ -80,6 +85,7 @@ export function useHouseholdSwitch(
 	}
 
 	async function joinByCode() {
+		if (operationInProgress(state.operation)) return;
 		const code = state.code.trim();
 		if (!code) {
 			dispatch({ type: "notice", notice: "Enter a Household Join Code." });
@@ -115,6 +121,10 @@ function reducer(
 		return { ...state, operation: action.operation, notice: null };
 	}
 	return { ...state, operation: { status: "idle" }, notice: action.notice };
+}
+
+function operationInProgress(operation: HouseholdSwitchOperation): boolean {
+	return operation.status !== "idle";
 }
 
 function messageFromError(error: unknown): string {

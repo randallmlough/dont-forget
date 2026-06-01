@@ -251,6 +251,44 @@ describe("HouseholdSwitch", () => {
 		);
 		expect(switchHousehold).not.toHaveBeenCalled();
 	});
+
+	it("does not join by code while a Household switch is running", async () => {
+		const session = sessionFixture();
+		const sync =
+			deferred<Awaited<ReturnType<typeof session.services.sync.requestSync>>>();
+		const joinByCode = jest.fn(async () => undefined);
+		session.services.sync.requestSync = jest.fn(() => sync.promise);
+
+		function Harness() {
+			const model = useHouseholdSwitch(session, jest.fn(), {
+				...emptyClient(),
+				joinByCode,
+			});
+			return (
+				<>
+					<PressableText
+						label="Set code"
+						onPress={() => model.setCode("ABCDEFGH")}
+					/>
+					<PressableText
+						label="Switch"
+						onPress={() => void model.switchHousehold("hh_2")}
+					/>
+					<PressableText label="Join" onPress={() => void model.joinByCode()} />
+					<TextNode>{model.state.operation.status}</TextNode>
+				</>
+			);
+		}
+
+		render(<Harness />);
+		fireEvent.press(screen.getByText("Set code"));
+		fireEvent.press(screen.getByText("Switch"));
+		await screen.findByText("switchingHousehold");
+
+		fireEvent.press(screen.getByText("Join"));
+
+		expect(joinByCode).not.toHaveBeenCalled();
+	});
 });
 
 describe("PublicHouseholdEntry", () => {

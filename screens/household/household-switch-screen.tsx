@@ -102,6 +102,7 @@ function JoinByCodeForm({
 	onCodeChange: (code: string) => void;
 	onJoinByCode: () => void;
 }) {
+	const busy = state.operation.status !== "idle";
 	const joining = state.operation.status === "joiningByCode";
 	return (
 		<View style={styles.panel}>
@@ -109,7 +110,7 @@ function JoinByCodeForm({
 			<TextInput
 				accessibilityLabel="Household Join Code"
 				autoCapitalize="characters"
-				editable={!joining}
+				editable={!busy}
 				onChangeText={onCodeChange}
 				placeholder="ABCDEFGH"
 				style={styles.input}
@@ -119,7 +120,7 @@ function JoinByCodeForm({
 				variant="primary"
 				label={joining ? "Joining" : "Join Household"}
 				onPress={onJoinByCode}
-				disabled={joining}
+				disabled={busy}
 			/>
 			{state.notice ? (
 				<Text style={styles.noticeText}>{state.notice}</Text>
@@ -141,9 +142,7 @@ function HouseholdListRow({
 	const switching =
 		operation.status === "switchingHousehold" &&
 		operation.householdId === household.id;
-	const otherSwitching =
-		operation.status === "switchingHousehold" &&
-		operation.householdId !== household.id;
+	const busy = operation.status !== "idle";
 	return (
 		<View style={styles.row}>
 			<View style={styles.rowTextGroup}>
@@ -166,7 +165,7 @@ function HouseholdListRow({
 					household.isActive ? "Selected" : switching ? "Switching" : "Switch"
 				}
 				onPress={() => onSwitchHousehold(household.id)}
-				disabled={household.isActive || switching || otherSwitching}
+				disabled={household.isActive || busy}
 			/>
 		</View>
 	);
