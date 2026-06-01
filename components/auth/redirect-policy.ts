@@ -37,11 +37,9 @@ export function authRedirectTarget({
 		return onAuthPath ? signedInAuthPathTarget(params) : null;
 	}
 
-	if (!isAuthLoaded || onAuthPath) return null;
+	if (PUBLIC_AUTH_PRESERVING_PATHS.has(pathname)) return null;
 
-	if (PUBLIC_AUTH_PRESERVING_PATHS.has(pathname)) {
-		return signInTarget(pathname, params);
-	}
+	if (!isAuthLoaded || onAuthPath) return null;
 
 	return pathname === "/" ? "/sign-in" : signInTarget(pathname, {});
 }

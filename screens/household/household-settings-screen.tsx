@@ -463,6 +463,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	listContent: {
 		padding: theme.spacing(4),
+		paddingBottom: theme.spacing(12),
 		gap: theme.spacing(3),
 	},
 	panel: {

@@ -18,9 +18,13 @@ import { usePublicHouseholdEntry } from "./use-public-household-entry";
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockReloadSession = jest.fn();
+let mockIsSignedIn: boolean | undefined = true;
 
 jest.mock("@clerk/clerk-expo", () => ({
-	useAuth: () => ({ getToken: jest.fn(async () => "token") }),
+	useAuth: () => ({
+		getToken: jest.fn(async () => "token"),
+		isSignedIn: mockIsSignedIn,
+	}),
 }));
 
 jest.mock("expo-constants", () => ({
@@ -45,6 +49,7 @@ beforeEach(() => {
 	mockReplace.mockReset();
 	mockPush.mockReset();
 	mockReloadSession.mockReset();
+	mockIsSignedIn = true;
 });
 
 describe("HouseholdSettingsView", () => {
@@ -264,6 +269,58 @@ describe("useHouseholdSettings", () => {
 			});
 		});
 		await screen.findByText("idle");
+	});
+
+	it("does not create an emailed Invitation from invalid email text", async () => {
+		const client = {
+			...emptyClient(),
+			listMembers: jest.fn(async () => []),
+			listInvitations: jest.fn(async () => []),
+			getJoinCode: jest.fn(async () => ({
+				enabled: false as const,
+				householdId: "hh_1",
+			})),
+			createInvitation: jest.fn(async () => ({
+				invitation: {
+					id: "inv_1",
+					householdId: "hh_1",
+					email: "not-an-email",
+					createdByUserId: "usr_1",
+					createdAt: 1,
+					expiresAt: 2,
+					acceptedAt: null,
+					acceptedByUserId: null,
+					revokedAt: null,
+					acceptUrl: "https://app.example/invitations/accept?token=secret",
+				},
+				emailDelivery: { status: "sent" as const },
+				reusedExisting: false,
+			})),
+		};
+
+		function Harness() {
+			const { state, actions } = useHouseholdSettings(sessionFixture(), client);
+			if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+			return (
+				<>
+					<PressableText
+						label="Create"
+						onPress={() =>
+							void actions.createInvitation("qa-hh-join-20260601-0105")
+						}
+					/>
+					{state.notice ? <TextNode>{state.notice}</TextNode> : null}
+				</>
+			);
+		}
+
+		render(<Harness />);
+		await screen.findByText("Create");
+
+		fireEvent.press(screen.getByText("Create"));
+
+		await screen.findByText("Enter a valid email address.");
+		expect(client.createInvitation).not.toHaveBeenCalled();
 	});
 });
 
@@ -511,6 +568,47 @@ describe("PublicHouseholdEntry", () => {
 		);
 		await waitFor(() => expect(mockReloadSession).toHaveBeenCalledTimes(1));
 		expect(mockReplace).toHaveBeenCalledWith("/");
+	});
+
+	it("routes signed-out Users to sign-in with Invitation intent", async () => {
+		mockIsSignedIn = false;
+		const acceptInvitation = jest.fn(async () => undefined);
+		const previewInvitation = jest.fn(async () => ({
+			available: true as const,
+			householdName: "River House",
+			inviterDisplayName: "Avery",
+		}));
+
+		function Harness() {
+			const entry = usePublicHouseholdEntry({
+				kind: "invitation",
+				secret: "secret-token",
+				client: {
+					...emptyClient(),
+					previewInvitation,
+					acceptInvitation,
+				},
+				reloadSession: mockReloadSession,
+			});
+			return (
+				<PublicHouseholdEntryView
+					state={entry.state}
+					primaryLabel="Accept Invitation"
+					onSubmit={entry.submit}
+				/>
+			);
+		}
+
+		render(<Harness />);
+		await screen.findByText("River House");
+
+		fireEvent.press(screen.getByText("Accept Invitation"));
+
+		expect(acceptInvitation).not.toHaveBeenCalled();
+		expect(mockReloadSession).not.toHaveBeenCalled();
+		expect(mockPush).toHaveBeenCalledWith(
+			"/sign-in?next=%2Finvitations%2Faccept&token=secret-token",
+		);
 	});
 
 	it("returns to loading when the Invitation token changes", async () => {

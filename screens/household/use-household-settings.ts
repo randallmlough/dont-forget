@@ -143,11 +143,20 @@ export function useHouseholdSettings(
 	}, [client, householdId, loadAttempt, loadKey]);
 
 	async function createInvitation(email: string) {
+		const normalizedEmail = normalizeInvitationEmailInput(email);
+		if (!normalizedEmail) {
+			dispatch({
+				type: "notice",
+				loadKey,
+				notice: "Enter a valid email address.",
+			});
+			return;
+		}
 		if (!startOperation({ status: "creatingInvitation" })) return;
 		try {
 			const response = await client.createInvitation({
 				householdId,
-				email: email.trim() || null,
+				email: normalizedEmail,
 			});
 			const invitations = await client.listInvitations(householdId);
 			dispatch({ type: "invitationCreated", loadKey, response, invitations });
@@ -352,4 +361,13 @@ function invitationCreatedNotice(response: CreateInvitationResponse): string {
 
 function messageFromError(error: unknown): string {
 	return error instanceof Error ? error.message : "Something went wrong.";
+}
+
+function normalizeInvitationEmailInput(email: string): string | null {
+	const normalized = email.trim().toLowerCase();
+	return isInvitationEmail(normalized) ? normalized : null;
+}
+
+function isInvitationEmail(email: string): boolean {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }

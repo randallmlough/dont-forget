@@ -5,7 +5,7 @@ import {
 } from "@/components/auth/redirect-policy";
 
 describe("authRedirectTarget", () => {
-	it("preserves public Invitation intent for signed-out Users", () => {
+	it("keeps public Invitation routes reachable for signed-out Users", () => {
 		expect(
 			authRedirectTarget({
 				pathname: "/invitations/accept",
@@ -15,10 +15,10 @@ describe("authRedirectTarget", () => {
 				checkedCachedSession: true,
 				hasCachedSession: false,
 			}),
-		).toBe("/sign-in?next=%2Finvitations%2Faccept&token=tok_123");
+		).toBeNull();
 	});
 
-	it("preserves public Household Join Code intent for signed-out Users", () => {
+	it("keeps public Household Join Code routes reachable for signed-out Users", () => {
 		expect(
 			authRedirectTarget({
 				pathname: "/households/join",
@@ -28,7 +28,7 @@ describe("authRedirectTarget", () => {
 				checkedCachedSession: true,
 				hasCachedSession: false,
 			}),
-		).toBe("/sign-in?next=%2Fhouseholds%2Fjoin&code=ABCDEFGH");
+		).toBeNull();
 	});
 
 	it("sends signed-in Users from auth routes to safe internal next targets", () => {

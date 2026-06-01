@@ -2,6 +2,10 @@ import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import {
+	type AuthRedirectParams,
+	authHrefWithIntent,
+} from "@/components/auth/redirect-policy";
+import {
 	createHouseholdApiClient,
 	type HouseholdApiClient,
 	type HouseholdJoinCodePreview,
@@ -63,7 +67,7 @@ export function usePublicHouseholdEntry({
 	state: PublicHouseholdEntryState;
 	submit: () => Promise<void>;
 } {
-	const { getToken } = useAuth();
+	const { getToken, isSignedIn } = useAuth();
 	const router = useRouter();
 	const getTokenRef = useRef(getToken);
 	getTokenRef.current = getToken;
@@ -118,6 +122,11 @@ export function usePublicHouseholdEntry({
 
 	async function submit() {
 		if (!secret || state.status !== "ready") return;
+		if (!isSignedIn) {
+			router.push(authHrefWithIntent("/sign-in", intentParams(kind, secret)));
+			return;
+		}
+
 		dispatch({ type: "working", entryKey });
 		try {
 			if (kind === "invitation") {
@@ -138,6 +147,15 @@ export function usePublicHouseholdEntry({
 	}
 
 	return { state, submit };
+}
+
+function intentParams(
+	kind: PublicEntryKind,
+	secret: string,
+): AuthRedirectParams {
+	return kind === "invitation"
+		? { next: "/invitations/accept", token: secret }
+		: { next: "/households/join", code: secret };
 }
 
 function reducer(

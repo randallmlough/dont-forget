@@ -16,6 +16,7 @@ import {
 import { createTestDirectoryDb } from "@/db/test";
 import {
 	createInvitationService,
+	InvitationInvalidEmailError,
 	InvitationMembershipRequiredError,
 	InvitationUnavailableError,
 } from "./invitation-service";
@@ -104,6 +105,32 @@ describe("createInvitationService", () => {
 			});
 		} finally {
 			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("rejects non-email Invitation recipients", async () => {
+		const directory = await createTestDirectoryDb();
+
+		try {
+			await seedInvitationHousehold(directory.db);
+			const service = createInvitationService({
+				directory: directory.db,
+				buildAcceptUrl: ({ token }) => `app://accept/${token}`,
+				generateToken: createTokenGenerator(["invalid-email-token"]),
+			});
+
+			await expect(
+				service.createInvitation({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+					email: "qa-hh-join-20260601-0105",
+				}),
+			).rejects.toBeInstanceOf(InvitationInvalidEmailError);
+			await expect(
+				directory.db.select().from(invitations),
+			).resolves.toHaveLength(0);
+		} finally {
 			await directory.close();
 		}
 	});
