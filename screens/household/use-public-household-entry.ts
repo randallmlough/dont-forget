@@ -23,12 +23,31 @@ export type PublicHouseholdEntryState =
 	  }
 	| { status: "complete"; message: string };
 
+type PublicHouseholdEntryResource =
+	| { status: "loading"; entryKey: string }
+	| { status: "unavailable"; entryKey: string; message: string }
+	| {
+			status: "ready";
+			entryKey: string;
+			kind: PublicEntryKind;
+			householdName: string;
+			inviterDisplayName?: string;
+			working: boolean;
+			error: string | null;
+	  }
+	| { status: "complete"; entryKey: string; message: string };
+
 type Action =
-	| { type: "loaded"; preview: InvitationPreview | HouseholdJoinCodePreview }
-	| { type: "unavailable"; message: string }
-	| { type: "working" }
-	| { type: "failed"; message: string }
-	| { type: "complete"; message: string };
+	| {
+			type: "loaded";
+			entryKey: string;
+			kind: PublicEntryKind;
+			preview: InvitationPreview | HouseholdJoinCodePreview;
+	  }
+	| { type: "unavailable"; entryKey: string; message: string }
+	| { type: "working"; entryKey: string }
+	| { type: "failed"; entryKey: string; message: string }
+	| { type: "complete"; entryKey: string; message: string };
 
 export function usePublicHouseholdEntry({
 	kind,
@@ -50,12 +69,21 @@ export function usePublicHouseholdEntry({
 		() => clientProp ?? createHouseholdApiClient({ getToken }),
 		[clientProp, getToken],
 	);
-	const [state, dispatch] = useReducer(reducer(kind), { status: "loading" });
+	const entryKey = `${kind}:${secret ?? ""}`;
+	const [resource, dispatch] = useReducer(reducer, {
+		status: "loading",
+		entryKey,
+	});
+	const state = stateFromResource(resource, entryKey);
 
 	useEffect(() => {
 		let cancelled = false;
 		if (!secret) {
-			dispatch({ type: "unavailable", message: unavailableMessage(kind) });
+			dispatch({
+				type: "unavailable",
+				entryKey,
+				message: unavailableMessage(kind),
+			});
 			return;
 		}
 
@@ -65,22 +93,26 @@ export function usePublicHouseholdEntry({
 				: client.previewJoinCode(secret);
 		preview
 			.then((preview) => {
-				if (!cancelled) dispatch({ type: "loaded", preview });
+				if (!cancelled) dispatch({ type: "loaded", entryKey, kind, preview });
 			})
 			.catch(() => {
 				if (!cancelled) {
-					dispatch({ type: "unavailable", message: unavailableMessage(kind) });
+					dispatch({
+						type: "unavailable",
+						entryKey,
+						message: unavailableMessage(kind),
+					});
 				}
 			});
 
 		return () => {
 			cancelled = true;
 		};
-	}, [client, kind, secret]);
+	}, [client, entryKey, kind, secret]);
 
 	async function submit() {
 		if (!secret || state.status !== "ready") return;
-		dispatch({ type: "working" });
+		dispatch({ type: "working", entryKey });
 		try {
 			if (kind === "invitation") {
 				await client.acceptInvitation(secret);
@@ -88,50 +120,88 @@ export function usePublicHouseholdEntry({
 				await client.joinByCode(secret);
 			}
 			reloadSession();
-			dispatch({ type: "complete", message: "Household joined." });
+			dispatch({ type: "complete", entryKey, message: "Household joined." });
 			router.replace("/");
 		} catch (error) {
-			dispatch({ type: "failed", message: messageFromError(error) });
+			dispatch({
+				type: "failed",
+				entryKey,
+				message: messageFromError(error),
+			});
 		}
 	}
 
 	return { state, submit };
 }
 
-function reducer(kind: PublicEntryKind) {
-	return (
-		state: PublicHouseholdEntryState,
-		action: Action,
-	): PublicHouseholdEntryState => {
-		if (action.type === "unavailable") {
-			return { status: "unavailable", message: action.message };
-		}
-		if (action.type === "loaded") {
-			if (!action.preview.available) {
-				return { status: "unavailable", message: unavailableMessage(kind) };
-			}
+function reducer(
+	state: PublicHouseholdEntryResource,
+	action: Action,
+): PublicHouseholdEntryResource {
+	if (action.type === "unavailable") {
+		return {
+			status: "unavailable",
+			entryKey: action.entryKey,
+			message: action.message,
+		};
+	}
+	if (action.type === "loaded") {
+		if (!action.preview.available) {
 			return {
-				status: "ready",
-				kind,
-				householdName: action.preview.householdName,
-				inviterDisplayName:
-					"inviterDisplayName" in action.preview
-						? action.preview.inviterDisplayName
-						: undefined,
-				working: false,
-				error: null,
+				status: "unavailable",
+				entryKey: action.entryKey,
+				message: unavailableMessage(action.kind),
 			};
 		}
-		if (action.type === "working" && state.status === "ready") {
-			return { ...state, working: true, error: null };
-		}
-		if (action.type === "failed" && state.status === "ready") {
-			return { ...state, working: false, error: action.message };
-		}
-		if (action.type === "complete") {
-			return { status: "complete", message: action.message };
-		}
-		return state;
+		return {
+			status: "ready",
+			entryKey: action.entryKey,
+			kind: action.kind,
+			householdName: action.preview.householdName,
+			inviterDisplayName:
+				"inviterDisplayName" in action.preview
+					? action.preview.inviterDisplayName
+					: undefined,
+			working: false,
+			error: null,
+		};
+	}
+	if (state.entryKey !== action.entryKey) return state;
+	if (action.type === "working" && state.status === "ready") {
+		return { ...state, working: true, error: null };
+	}
+	if (action.type === "failed" && state.status === "ready") {
+		return { ...state, working: false, error: action.message };
+	}
+	if (action.type === "complete") {
+		return {
+			status: "complete",
+			entryKey: action.entryKey,
+			message: action.message,
+		};
+	}
+	return state;
+}
+
+function stateFromResource(
+	resource: PublicHouseholdEntryResource,
+	entryKey: string,
+): PublicHouseholdEntryState {
+	if (resource.entryKey !== entryKey) return { status: "loading" };
+	if (resource.status === "loading") return { status: "loading" };
+	if (resource.status === "unavailable") {
+		return { status: "unavailable", message: resource.message };
+	}
+	if (resource.status === "complete") {
+		return { status: "complete", message: resource.message };
+	}
+	return {
+		status: "ready",
+		kind: resource.kind,
+		householdName: resource.householdName,
+		inviterDisplayName: resource.inviterDisplayName,
+		working: resource.working,
+		error: resource.error,
 	};
 }
 

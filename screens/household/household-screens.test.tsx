@@ -329,6 +329,56 @@ describe("PublicHouseholdEntry", () => {
 		await waitFor(() => expect(mockReloadSession).toHaveBeenCalledTimes(1));
 		expect(mockReplace).toHaveBeenCalledWith("/");
 	});
+
+	it("returns to loading when the Invitation token changes", async () => {
+		const nextPreview =
+			deferred<Awaited<ReturnType<HouseholdApiClient["previewInvitation"]>>>();
+		const previewInvitation = jest
+			.fn()
+			.mockResolvedValueOnce({
+				available: true,
+				householdName: "River House",
+				inviterDisplayName: "Avery",
+			})
+			.mockReturnValueOnce(nextPreview.promise);
+		const client = {
+			...emptyClient(),
+			previewInvitation,
+		};
+
+		function Harness({ secret }: { secret: string }) {
+			const entry = usePublicHouseholdEntry({
+				kind: "invitation",
+				secret,
+				client,
+				reloadSession: mockReloadSession,
+			});
+			return (
+				<PublicHouseholdEntryView
+					state={entry.state}
+					primaryLabel="Accept Invitation"
+					onSubmit={entry.submit}
+				/>
+			);
+		}
+
+		const { rerender } = render(<Harness secret="first-token" />);
+		await screen.findByText("River House");
+
+		rerender(<Harness secret="second-token" />);
+
+		expect(screen.getByText("Loading Household")).toBeTruthy();
+		expect(screen.queryByText("River House")).toBeNull();
+
+		await act(async () => {
+			nextPreview.resolve({
+				available: true,
+				householdName: "Lake House",
+				inviterDisplayName: "Blake",
+			});
+		});
+		await screen.findByText("Lake House");
+	});
 });
 
 function sessionFixture(): AuthenticatedAppSession {
