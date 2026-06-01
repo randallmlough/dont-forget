@@ -119,11 +119,7 @@ describe("useHouseholdSettings", () => {
 					throw new Error(`Unexpected request: ${url}`);
 				}
 
-				return {
-					ok: true,
-					status: 200,
-					json: async () => body,
-				} as Response;
+				return jsonResponse(body);
 			});
 
 		function Harness() {
@@ -195,6 +191,79 @@ describe("useHouseholdSettings", () => {
 		);
 
 		await waitFor(() => expect(screen.getByText("Fresh Member")).toBeTruthy());
+	});
+
+	it("does not start a second settings operation while one is running", async () => {
+		const createInvitation =
+			deferred<Awaited<ReturnType<HouseholdApiClient["createInvitation"]>>>();
+		const client = {
+			...emptyClient(),
+			listMembers: jest.fn(async () => []),
+			listInvitations: jest.fn(async () => []),
+			getJoinCode: jest.fn(async () => ({
+				enabled: true,
+				id: "hjc_1",
+				householdId: "hh_1",
+				code: "ABCDEFGH",
+				joinUrl: "https://app.example/households/join?code=ABCDEFGH",
+				createdAt: 1,
+			})),
+			createInvitation: jest.fn(() => createInvitation.promise),
+			regenerateJoinCode: jest.fn(async () => ({
+				enabled: true,
+				id: "hjc_2",
+				householdId: "hh_1",
+				code: "IJKLMNOP",
+				joinUrl: "https://app.example/households/join?code=IJKLMNOP",
+				createdAt: 2,
+			})),
+		};
+
+		function Harness() {
+			const { state, actions } = useHouseholdSettings(sessionFixture(), client);
+			if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+			return (
+				<>
+					<PressableText
+						label="Create"
+						onPress={() => void actions.createInvitation("pending@example.com")}
+					/>
+					<PressableText
+						label="Regenerate"
+						onPress={() => void actions.regenerateJoinCode()}
+					/>
+					<TextNode>{state.operation.status}</TextNode>
+				</>
+			);
+		}
+
+		render(<Harness />);
+		await screen.findByText("idle");
+
+		fireEvent.press(screen.getByText("Create"));
+		await screen.findByText("creatingInvitation");
+		fireEvent.press(screen.getByText("Regenerate"));
+
+		expect(client.regenerateJoinCode).not.toHaveBeenCalled();
+		await act(async () => {
+			createInvitation.resolve({
+				invitation: {
+					id: "inv_1",
+					householdId: "hh_1",
+					email: "pending@example.com",
+					createdByUserId: "usr_1",
+					createdAt: 1,
+					expiresAt: 2,
+					acceptedAt: null,
+					acceptedByUserId: null,
+					revokedAt: null,
+					acceptUrl: "https://app.example/invitations/accept?token=secret",
+				},
+				emailDelivery: { status: "sent" },
+				reusedExisting: false,
+			});
+		});
+		await screen.findByText("idle");
 	});
 });
 
@@ -353,6 +422,43 @@ describe("PublicHouseholdEntry", () => {
 		expect(screen.queryByText("ABCDEFGH")).toBeNull();
 		expect(screen.queryByText("secret-token")).toBeNull();
 		expect(screen.queryByText("Blake Rivera")).toBeNull();
+	});
+
+	it("does not restart the Invitation preview when the auth token getter changes identity", async () => {
+		const fetcher = jest
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async (input) => {
+				const url = String(input);
+				if (!url.endsWith("/api/invitations/preview?token=secret-token")) {
+					throw new Error(`Unexpected request: ${url}`);
+				}
+
+				return jsonResponse({
+					available: true,
+					householdName: "River House",
+					inviterDisplayName: "Avery",
+				});
+			});
+
+		function Harness() {
+			const entry = usePublicHouseholdEntry({
+				kind: "invitation",
+				secret: "secret-token",
+				reloadSession: mockReloadSession,
+			});
+			return (
+				<PublicHouseholdEntryView
+					state={entry.state}
+					primaryLabel="Accept Invitation"
+					onSubmit={entry.submit}
+				/>
+			);
+		}
+
+		render(<Harness />);
+
+		await screen.findByText("River House");
+		expect(fetcher).toHaveBeenCalledTimes(1);
 	});
 
 	it("accepts an Invitation and routes to Home", async () => {
@@ -553,4 +659,11 @@ function deferred<T>() {
 		reject = promiseReject;
 	});
 	return { promise, resolve, reject };
+}
+
+function jsonResponse(body: unknown): Response {
+	return new Response(JSON.stringify(body), {
+		status: 200,
+		headers: { "Content-Type": "application/json" },
+	});
 }

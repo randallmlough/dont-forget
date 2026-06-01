@@ -222,21 +222,23 @@ async function requestJson(
 		allowStatuses?: number[];
 	},
 ): Promise<unknown> {
-	const headers = new Headers(options.headers);
+	const { getToken, fetcher, apiBaseUrl, allowStatuses, ...requestInit } =
+		options;
+	const headers = new Headers(requestInit.headers);
 	headers.set("Accept", "application/json");
-	if (options.body) headers.set("Content-Type", "application/json");
-	if (options.getToken) {
-		const token = await options.getToken();
+	if (requestInit.body) headers.set("Content-Type", "application/json");
+	if (getToken) {
+		const token = await getToken();
 		if (!token) throw new Error("Sign in to continue.");
 		headers.set("Authorization", `Bearer ${token}`);
 	}
 
-	const response = await options.fetcher(`${options.apiBaseUrl()}${path}`, {
-		...options,
+	const response = await fetcher(`${apiBaseUrl()}${path}`, {
+		...requestInit,
 		headers,
 	});
 	const payload: unknown = await response.json().catch(() => null);
-	if (!response.ok && !options.allowStatuses?.includes(response.status)) {
+	if (!response.ok && !allowStatuses?.includes(response.status)) {
 		const message = errorMessageFromPayload(payload);
 		throw new Error(message);
 	}

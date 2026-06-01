@@ -55,6 +55,18 @@ export function internalNextPath(value: unknown): string | null {
 	return next;
 }
 
+export function authHrefWithIntent(
+	pathname: "/sign-in" | "/sign-up",
+	params: AuthRedirectParams,
+): Href {
+	const next = internalNextPath(params.next);
+	if (!next) return pathname;
+
+	const query = new URLSearchParams({ next });
+	addPreservedIntentParams(query, next, params);
+	return `${pathname}?${query.toString()}` as Href;
+}
+
 function signedInAuthPathTarget(params: AuthRedirectParams): Href {
 	const next = internalNextPath(params.next);
 	if (!next) return "/";

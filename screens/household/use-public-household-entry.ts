@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import {
 	createHouseholdApiClient,
 	type HouseholdApiClient,
@@ -65,9 +65,15 @@ export function usePublicHouseholdEntry({
 } {
 	const { getToken } = useAuth();
 	const router = useRouter();
+	const getTokenRef = useRef(getToken);
+	getTokenRef.current = getToken;
 	const client = useMemo(
-		() => clientProp ?? createHouseholdApiClient({ getToken }),
-		[clientProp, getToken],
+		() =>
+			clientProp ??
+			createHouseholdApiClient({
+				getToken: () => getTokenRef.current(),
+			}),
+		[clientProp],
 	);
 	const entryKey = `${kind}:${secret ?? ""}`;
 	const [resource, dispatch] = useReducer(reducer, {

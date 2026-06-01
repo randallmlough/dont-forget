@@ -99,6 +99,9 @@ export function useHouseholdSettings(
 	);
 	const loadKey = `${session.resourceKey}:${session.activeHousehold.id}`;
 	const [resource, dispatch] = useReducer(reducer, loadKey, initialResource);
+	const resourceRef = useRef(resource);
+	const operationInFlightRef = useRef(false);
+	resourceRef.current = resource;
 	const loadAttempt = resource.loadKey === loadKey ? resource.attempt : 0;
 	const householdId = session.activeHousehold.id;
 
@@ -140,11 +143,7 @@ export function useHouseholdSettings(
 	}, [client, householdId, loadAttempt, loadKey]);
 
 	async function createInvitation(email: string) {
-		dispatch({
-			type: "operationStarted",
-			loadKey,
-			operation: { status: "creatingInvitation" },
-		});
+		if (!startOperation({ status: "creatingInvitation" })) return;
 		try {
 			const response = await client.createInvitation({
 				householdId,
@@ -154,29 +153,25 @@ export function useHouseholdSettings(
 			dispatch({ type: "invitationCreated", loadKey, response, invitations });
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
 		}
 	}
 
 	async function revokeInvitation(invitationId: string) {
-		dispatch({
-			type: "operationStarted",
-			loadKey,
-			operation: { status: "revokingInvitation", invitationId },
-		});
+		if (!startOperation({ status: "revokingInvitation", invitationId })) return;
 		try {
 			await client.revokeInvitation(invitationId);
 			dispatch({ type: "invitationRevoked", loadKey, invitationId });
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
 		}
 	}
 
 	async function regenerateJoinCode() {
-		dispatch({
-			type: "operationStarted",
-			loadKey,
-			operation: { status: "regeneratingJoinCode" },
-		});
+		if (!startOperation({ status: "regeneratingJoinCode" })) return;
 		try {
 			const joinCode = await client.regenerateJoinCode(householdId);
 			dispatch({ type: "joinCodeChanged", loadKey, joinCode });
@@ -187,15 +182,13 @@ export function useHouseholdSettings(
 			});
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
 		}
 	}
 
 	async function setJoinCodeEnabled(enabled: boolean) {
-		dispatch({
-			type: "operationStarted",
-			loadKey,
-			operation: { status: "settingJoinCodeEnabled" },
-		});
+		if (!startOperation({ status: "settingJoinCodeEnabled" })) return;
 		try {
 			const joinCode = await client.setJoinCodeEnabled({
 				householdId,
@@ -211,15 +204,13 @@ export function useHouseholdSettings(
 			});
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
 		}
 	}
 
 	async function copyText(text: string, notice: string) {
-		dispatch({
-			type: "operationStarted",
-			loadKey,
-			operation: { status: "copyingText" },
-		});
+		if (!startOperation({ status: "copyingText" })) return;
 		try {
 			await Clipboard.setStringAsync(text);
 			dispatch({ type: "notice", loadKey, notice });
@@ -229,7 +220,25 @@ export function useHouseholdSettings(
 				loadKey,
 				notice: "Unable to copy. Please try again.",
 			});
+		} finally {
+			operationInFlightRef.current = false;
 		}
+	}
+
+	function startOperation(operation: HouseholdSettingsOperation): boolean {
+		const current = resourceRef.current;
+		if (
+			operationInFlightRef.current ||
+			current.status !== "ready" ||
+			current.loadKey !== loadKey ||
+			current.operation.status !== "idle"
+		) {
+			return false;
+		}
+
+		operationInFlightRef.current = true;
+		dispatch({ type: "operationStarted", loadKey, operation });
+		return true;
 	}
 
 	return {

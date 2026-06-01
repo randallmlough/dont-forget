@@ -1,4 +1,5 @@
 import {
+	authHrefWithIntent,
 	authRedirectTarget,
 	internalNextPath,
 } from "@/components/auth/redirect-policy";
@@ -47,5 +48,14 @@ describe("authRedirectTarget", () => {
 		expect(internalNextPath("https://example.com")).toBeNull();
 		expect(internalNextPath("//example.com")).toBeNull();
 		expect(internalNextPath("household/settings")).toBeNull();
+	});
+
+	it("preserves safe intent when linking between auth screens", () => {
+		expect(
+			authHrefWithIntent("/sign-up", {
+				next: "/invitations/accept",
+				token: "tok_123",
+			}),
+		).toBe("/sign-up?next=%2Finvitations%2Faccept&token=tok_123");
 	});
 });
