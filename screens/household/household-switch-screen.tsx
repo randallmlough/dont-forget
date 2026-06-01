@@ -1,8 +1,17 @@
 import { useRouter } from "expo-router";
-import { FlatList, Text, TextInput, View } from "react-native";
+import {
+	ActivityIndicator,
+	FlatList,
+	Text,
+	TextInput,
+	View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
-import { useAuthenticatedAppSession } from "@/components/session";
+import {
+	type AuthenticatedAppSessionState,
+	useAuthenticatedAppSession,
+} from "@/components/session";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HouseholdButton } from "./household-button";
 import {
@@ -14,8 +23,8 @@ import {
 type HouseholdRow = AuthenticatedAppSession["households"][number];
 
 export default function HouseholdSwitchScreen() {
-	const { session, reloadSession } = useAuthenticatedAppSession();
-	if (!session) return null;
+	const { state, session, retry, reloadSession } = useAuthenticatedAppSession();
+	if (!session) return <SwitchSessionState state={state} onRetry={retry} />;
 
 	return (
 		<HouseholdSwitchContent session={session} reloadSession={reloadSession} />
@@ -171,6 +180,39 @@ function HouseholdListRow({
 	);
 }
 
+function SwitchSessionState({
+	state,
+	onRetry,
+}: {
+	state: AuthenticatedAppSessionState;
+	onRetry: () => void;
+}) {
+	if (state.status === "error") {
+		return (
+			<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
+				<View style={styles.centered}>
+					<Text style={styles.statusTitle}>Household unavailable</Text>
+					<Text style={styles.statusBody}>{state.message}</Text>
+					<HouseholdButton
+						variant="primary"
+						label="Try again"
+						onPress={onRetry}
+					/>
+				</View>
+			</SafeAreaView>
+		);
+	}
+
+	return (
+		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
+			<View style={styles.centered}>
+				<Text style={styles.statusTitle}>Preparing your Household</Text>
+				<ActivityIndicator />
+			</View>
+		</SafeAreaView>
+	);
+}
+
 const styles = StyleSheet.create((theme) => ({
 	root: {
 		flex: 1,
@@ -270,5 +312,22 @@ const styles = StyleSheet.create((theme) => ({
 	badgeText: {
 		...theme.typography.captionStrong,
 		color: theme.colors.inverseText,
+	},
+	centered: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		gap: theme.spacing(3),
+		padding: theme.spacing(6),
+	},
+	statusTitle: {
+		...theme.typography.headline,
+		color: theme.colors.text,
+		textAlign: "center",
+	},
+	statusBody: {
+		...theme.typography.body,
+		color: theme.colors.textMuted,
+		textAlign: "center",
 	},
 }));

@@ -6,10 +6,13 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import type { ReactNode } from "react";
+import type { AuthenticatedAppSessionContextValue } from "@/components/session";
 import type { HouseholdApiClient } from "@/lib/client-api/households";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HouseholdSettingsView } from "./household-settings-screen";
-import { HouseholdSwitchView } from "./household-switch-screen";
+import HouseholdSwitchScreen, {
+	HouseholdSwitchView,
+} from "./household-switch-screen";
 import { PublicHouseholdEntryView } from "./public-household-entry-screen";
 import { useHouseholdSettings } from "./use-household-settings";
 import { useHouseholdSwitch } from "./use-household-switch";
@@ -18,7 +21,9 @@ import { usePublicHouseholdEntry } from "./use-public-household-entry";
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockReloadSession = jest.fn();
+const mockRetrySession = jest.fn();
 let mockIsSignedIn: boolean | undefined = true;
+let mockAuthenticatedAppSession: AuthenticatedAppSessionContextValue;
 
 jest.mock("@clerk/clerk-expo", () => ({
 	useAuth: () => ({
@@ -35,9 +40,7 @@ jest.mock("expo-constants", () => ({
 jest.mock("@/components/session", () => ({
 	AuthenticatedAppSessionProvider: ({ children }: { children: ReactNode }) =>
 		children,
-	useAuthenticatedAppSession: () => ({
-		reloadSession: mockReloadSession,
-	}),
+	useAuthenticatedAppSession: () => mockAuthenticatedAppSession,
 }));
 
 jest.mock("expo-router", () => ({
@@ -49,7 +52,15 @@ beforeEach(() => {
 	mockReplace.mockReset();
 	mockPush.mockReset();
 	mockReloadSession.mockReset();
+	mockRetrySession.mockReset();
 	mockIsSignedIn = true;
+	mockAuthenticatedAppSession = {
+		state: { status: "ready", refreshing: false },
+		session: sessionFixture(),
+		retry: mockRetrySession,
+		reloadSession: mockReloadSession,
+		signOut: jest.fn(async () => undefined),
+	};
 });
 
 describe("HouseholdSettingsView", () => {
@@ -325,6 +336,36 @@ describe("useHouseholdSettings", () => {
 });
 
 describe("HouseholdSwitch", () => {
+	it("renders loading state while the Authenticated App Session is preparing", () => {
+		mockAuthenticatedAppSession = {
+			...mockAuthenticatedAppSession,
+			state: { status: "loading" },
+			session: null,
+		};
+
+		render(<HouseholdSwitchScreen />);
+
+		expect(screen.getByText("Preparing your Household")).toBeTruthy();
+	});
+
+	it("renders retryable error state when the Authenticated App Session fails", () => {
+		mockAuthenticatedAppSession = {
+			...mockAuthenticatedAppSession,
+			state: {
+				status: "error",
+				message: "Unable to prepare your Household.",
+			},
+			session: null,
+		};
+
+		render(<HouseholdSwitchScreen />);
+
+		expect(screen.getByText("Household unavailable")).toBeTruthy();
+		expect(screen.getByText("Unable to prepare your Household.")).toBeTruthy();
+		fireEvent.press(screen.getByText("Try again"));
+		expect(mockRetrySession).toHaveBeenCalledTimes(1);
+	});
+
 	it("renders the active Household badge", () => {
 		render(
 			<HouseholdSwitchView

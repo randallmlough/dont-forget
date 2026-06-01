@@ -103,4 +103,21 @@ describe("AuthGate", () => {
 
 		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
 	});
+
+	it("redirects signed-in auth routes to preserved public route intent", async () => {
+		setMockAuthState({ isLoaded: true, isSignedIn: true });
+
+		render(
+			<AuthGate
+				pathname="/sign-in"
+				params={{ next: "/invitations/accept", token: "token-123" }}
+			/>,
+		);
+
+		await waitFor(() =>
+			expect(mockReplace).toHaveBeenCalledWith(
+				"/invitations/accept?token=token-123",
+			),
+		);
+	});
 });
