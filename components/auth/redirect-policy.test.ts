@@ -31,7 +31,7 @@ describe("authRedirectTarget", () => {
 		).toBeNull();
 	});
 
-	it("sends signed-in Users from auth routes to safe internal next targets", () => {
+	it("sends signed-in Users from auth routes to Home", () => {
 		expect(
 			authRedirectTarget({
 				pathname: "/sign-in",
@@ -41,7 +41,20 @@ describe("authRedirectTarget", () => {
 				checkedCachedSession: true,
 				hasCachedSession: false,
 			}),
-		).toBe("/household/settings");
+		).toBe("/");
+	});
+
+	it("sends Users with cached Authenticated App Sessions from auth routes to Home", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-up",
+				params: { next: "/household/settings" },
+				isSignedIn: false,
+				isAuthLoaded: false,
+				checkedCachedSession: true,
+				hasCachedSession: true,
+			}),
+		).toBe("/");
 	});
 
 	it("rejects external and malformed next targets", () => {

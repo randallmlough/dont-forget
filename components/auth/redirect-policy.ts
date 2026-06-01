@@ -19,7 +19,6 @@ export const PUBLIC_AUTH_PRESERVING_PATHS = new Set([
 
 export function authRedirectTarget({
 	pathname,
-	params = {},
 	isSignedIn,
 	isAuthLoaded,
 	checkedCachedSession,
@@ -28,13 +27,13 @@ export function authRedirectTarget({
 	const onAuthPath = AUTH_PATHS.has(pathname);
 
 	if (isSignedIn) {
-		return onAuthPath ? signedInAuthPathTarget(params) : null;
+		return onAuthPath ? "/" : null;
 	}
 
 	if (!checkedCachedSession) return null;
 
 	if (hasCachedSession) {
-		return onAuthPath ? signedInAuthPathTarget(params) : null;
+		return onAuthPath ? "/" : null;
 	}
 
 	if (PUBLIC_AUTH_PRESERVING_PATHS.has(pathname)) return null;
@@ -65,26 +64,10 @@ export function authHrefWithIntent(
 	return `${pathname}?${query.toString()}` as Href;
 }
 
-function signedInAuthPathTarget(params: AuthRedirectParams): Href {
-	const next = internalNextPath(params.next);
-	if (!next) return "/";
-	return targetWithPreservedIntent(next, params);
-}
-
 function signInTarget(pathname: string, params: AuthRedirectParams): Href {
 	const query = new URLSearchParams({ next: pathname });
 	addPreservedIntentParams(query, pathname, params);
 	return `/sign-in?${query.toString()}` as Href;
-}
-
-function targetWithPreservedIntent(
-	pathname: string,
-	params: AuthRedirectParams,
-): Href {
-	const query = new URLSearchParams();
-	addPreservedIntentParams(query, pathname, params);
-	const suffix = query.toString();
-	return (suffix ? `${pathname}?${suffix}` : pathname) as Href;
 }
 
 function addPreservedIntentParams(
