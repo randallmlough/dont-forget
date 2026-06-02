@@ -10,6 +10,10 @@ describe("redaction", () => {
 	it("redacts sensitive attribute keys and normalizes Error instances", () => {
 		const attributes = redactAttributes({
 			token: "secret-token",
+			authToken: "auth-secret",
+			access_token: "access-secret",
+			refreshToken: "refresh-secret",
+			id_token: "id-secret",
 			code: "ABCDEFGH",
 			email: "avery@example.com",
 			householdJoinCode: "23456789",
@@ -19,6 +23,10 @@ describe("redaction", () => {
 
 		expect(attributes).toMatchObject({
 			token: "[REDACTED]",
+			authToken: "[REDACTED]",
+			access_token: "[REDACTED]",
+			refreshToken: "[REDACTED]",
+			id_token: "[REDACTED]",
 			code: "[REDACTED]",
 			email: "[REDACTED]",
 			householdJoinCode: "[REDACTED]",
@@ -33,6 +41,7 @@ describe("redaction", () => {
 			params: {
 				next: "/invitations/accept?token=secret-token&tab=preview",
 				code: "ABCDEFGH",
+				authToken: "auth-secret",
 			},
 			history: [
 				{
@@ -45,6 +54,7 @@ describe("redaction", () => {
 			params: {
 				next: "/invitations/accept?token=[REDACTED]&tab=preview",
 				code: "[REDACTED]",
+				authToken: "[REDACTED]",
 			},
 			history: [
 				{
@@ -52,5 +62,23 @@ describe("redaction", () => {
 				},
 			],
 		});
+	});
+
+	it("redacts raw and encoded bearer params nested inside next query values", () => {
+		expect(
+			redactString(
+				"/sign-in?next=/invitations/accept?token=secret-token&tab=preview",
+			),
+		).toBe("/sign-in?next=/invitations/accept?token=[REDACTED]&tab=preview");
+		expect(
+			redactString(
+				"/sign-in?next=%2Finvitations%2Faccept%3Ftoken%3Dsecret-token%26tab%3Dpreview",
+			),
+		).toBe(
+			"/sign-in?next=%2Finvitations%2Faccept%3Ftoken%3D%5BREDACTED%5D%26tab%3Dpreview",
+		);
+		expect(redactString("/callback?access_token=access-secret&state=ok")).toBe(
+			"/callback?access_token=[REDACTED]&state=ok",
+		);
 	});
 });

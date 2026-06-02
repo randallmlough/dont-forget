@@ -85,9 +85,9 @@ Don't pre-stringify or pre-flatten errors at the call site — let the adapter d
 
 The PostHog adapter redacts before sending:
 
-- **Attribute keys** matching `password`, `token`, `secret`, `authorization`, `cookie`, `auth`, `apikey`, `api_key`, `email`, or visible Join Code fields (case-insensitive) → replaced with `"[REDACTED]"`.
+- **Attribute keys** matching `password`, `token`, `secret`, `authorization`, `cookie`, `auth`, `apikey`, `api_key`, `email`, visible Join Code fields, or token-family keys such as `access_token`, `refreshToken`, and `authToken` (case-insensitive) → replaced with `"[REDACTED]"`.
 - **String values and error messages/stacks** containing `Bearer <…>` or JWT-shaped strings (`eyJ…`) → replaced inline.
-- **String values** containing URL query params such as `token=...` or `code=...` → masked inline.
+- **String values** containing URL query params such as `token=...` or `code=...` → masked inline, including raw or encoded nested route intents.
 
 This is best-effort, not airtight. Still:
 

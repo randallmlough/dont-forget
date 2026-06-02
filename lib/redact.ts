@@ -1,6 +1,12 @@
 const SENSITIVE_KEYS = new Set([
 	"password",
 	"token",
+	"authtoken",
+	"accesstoken",
+	"refreshtoken",
+	"idtoken",
+	"sessiontoken",
+	"bearertoken",
 	"secret",
 	"authorization",
 	"cookie",
@@ -24,7 +30,8 @@ export function redactString(value: string): string {
 }
 
 export function isSensitiveAttributeKey(key: string): boolean {
-	return SENSITIVE_KEYS.has(normalizeAttributeKey(key));
+	const normalized = normalizeAttributeKey(key);
+	return SENSITIVE_KEYS.has(normalized) || normalized.endsWith("token");
 }
 
 export function redactAttributes(
@@ -76,12 +83,23 @@ function appendErrorAttributes(out: Record<string, unknown>, error: Error) {
 }
 
 function redactSensitiveQueryParams(value: string): string {
-	return value.replace(QUERY_PARAM_RE, (match, prefix, key) => {
+	return value.replace(QUERY_PARAM_RE, (_match, prefix, key, rawValue) => {
 		const decodedKey = safeDecodeURIComponent(key);
 		return isSensitiveAttributeKey(decodedKey)
 			? `${prefix}${key}=[REDACTED]`
-			: match;
+			: `${prefix}${key}=${redactNestedQueryValue(rawValue)}`;
 	});
+}
+
+function redactNestedQueryValue(value: string): string {
+	const rawRedacted = redactSensitiveQueryParams(value);
+	const decoded = safeDecodeURIComponent(rawRedacted);
+	if (decoded === rawRedacted) return rawRedacted;
+
+	const decodedRedacted = redactSensitiveQueryParams(decoded);
+	return decodedRedacted === decoded
+		? rawRedacted
+		: encodeURIComponent(decodedRedacted);
 }
 
 function normalizeAttributeKey(key: string): string {

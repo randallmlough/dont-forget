@@ -1,5 +1,4 @@
 import type { Href } from "expo-router";
-import { isSensitiveAttributeKey } from "@/lib/redact";
 
 export type AuthRedirectParams = Record<string, string | string[] | undefined>;
 
@@ -16,6 +15,16 @@ export const AUTH_PATHS = new Set(["/sign-in", "/sign-up"]);
 export const PUBLIC_AUTH_PRESERVING_PATHS = new Set([
 	"/invitations/accept",
 	"/households/join",
+]);
+const SENSITIVE_INTENT_PARAM_KEYS = new Set([
+	"auth",
+	"authorization",
+	"code",
+	"cookie",
+	"email",
+	"password",
+	"secret",
+	"token",
 ]);
 
 export function authRedirectTarget({
@@ -139,7 +148,14 @@ function parseInternalPath(
 function safeSearchParams(params: URLSearchParams): URLSearchParams {
 	const safe = new URLSearchParams();
 	params.forEach((value, key) => {
-		if (!isSensitiveAttributeKey(key)) safe.append(key, value);
+		if (!isSensitiveIntentParamKey(key)) safe.append(key, value);
 	});
 	return safe;
+}
+
+function isSensitiveIntentParamKey(key: string): boolean {
+	const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+	return (
+		SENSITIVE_INTENT_PARAM_KEYS.has(normalized) || normalized.endsWith("token")
+	);
 }

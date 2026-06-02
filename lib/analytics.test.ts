@@ -1,11 +1,12 @@
 import { renderHook, waitFor } from "@testing-library/react-native";
 import { setMockUserState } from "@/lib/test/mocks/clerk";
-import { identify, useAnalyticsIdentity } from "./analytics";
+import { identify, screen, useAnalyticsIdentity } from "./analytics";
 import { posthog } from "./posthog";
 
 const identifyMock = posthog.identify as jest.MockedFunction<
 	typeof posthog.identify
 >;
+const screenMock = posthog.screen as jest.MockedFunction<typeof posthog.screen>;
 
 describe("analytics identity", () => {
 	it("identifies Users without email, name, or avatar traits", async () => {
@@ -40,7 +41,7 @@ describe("analytics identity", () => {
 		identify("user_avery", {
 			$set: {
 				email: "avery@example.com",
-				token: "secret-token",
+				authToken: "secret-token",
 				nested: { next: "/households/join?code=ABCDEFGH" },
 			},
 		});
@@ -48,9 +49,23 @@ describe("analytics identity", () => {
 		expect(identifyMock).toHaveBeenCalledWith("user_avery", {
 			$set: {
 				email: "[REDACTED]",
-				token: "[REDACTED]",
+				authToken: "[REDACTED]",
 				nested: { next: "/households/join?code=[REDACTED]" },
 			},
+		});
+	});
+
+	it("redacts screen analytics route params with nested bearer intent", () => {
+		screen("/sign-in", {
+			next: "/invitations/accept?token=secret-token",
+			access_token: "access-secret",
+			tab: "preview",
+		});
+
+		expect(screenMock).toHaveBeenCalledWith("/sign-in", {
+			next: "/invitations/accept?token=[REDACTED]",
+			access_token: "[REDACTED]",
+			tab: "preview",
 		});
 	});
 });

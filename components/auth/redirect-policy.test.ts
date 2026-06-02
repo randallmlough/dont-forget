@@ -99,6 +99,11 @@ describe("authRedirectTarget", () => {
 		expect(internalNextPath("/household/settings?tab=members")).toBe(
 			"/household/settings?tab=members",
 		);
+		expect(
+			internalNextPath(
+				"/household/settings?tab=members&access_token=secret-token",
+			),
+		).toBe("/household/settings?tab=members");
 	});
 
 	it("ignores nested public route secrets when signed-in Users leave auth routes", () => {

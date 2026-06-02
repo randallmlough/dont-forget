@@ -115,11 +115,12 @@ You don't call `identify` from sign-in/sign-up code. After `setActive(...)`, Cle
 Event properties pass through the same redactor as logs:
 
 - Attribute keys matching `password`, `token`, `secret`, `authorization`,
-  `cookie`, `auth`, `apikey`, `api_key`, `email`, or visible Join Code fields
+  `cookie`, `auth`, `apikey`, `api_key`, `email`, visible Join Code fields,
+  or token-family keys such as `access_token`, `refreshToken`, and `authToken`
   → `"[REDACTED]"`.
 - String values containing `Bearer <…>` or JWT-shaped strings → masked.
 - String values containing URL query params such as `token=...` or `code=...`
-  → masked, including nested route intents such as
+  → masked, including raw or encoded nested route intents such as
   `next=/invitations/accept?token=...`.
 
 The typed event catalog is your first line of defense — if you don't add a `password` property to `EventMap`, you can't fire one. Redaction is the safety net for `screen(...)` properties (route params can carry tokens) and future `identify(traits)` calls.
