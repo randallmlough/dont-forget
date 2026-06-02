@@ -132,7 +132,7 @@ export function usePublicHouseholdEntry({
 			if (kind === "invitation") {
 				await client.acceptInvitation(secret);
 			} else {
-				await client.joinByCode(secret);
+				await client.joinByCode(secret, "join_link");
 			}
 			reloadSession();
 			dispatch({ type: "complete", entryKey, message: "Household joined." });

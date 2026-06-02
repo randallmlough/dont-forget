@@ -652,6 +652,45 @@ describe("PublicHouseholdEntry", () => {
 		);
 	});
 
+	it("uses join-link analytics source when joining from a public Household Join Code route", async () => {
+		const joinByCode = jest.fn(async () => undefined);
+		const previewJoinCode = jest.fn(async () => ({
+			available: true as const,
+			householdName: "River House",
+		}));
+
+		function Harness() {
+			const entry = usePublicHouseholdEntry({
+				kind: "joinCode",
+				secret: "ABCDEFGH",
+				client: {
+					...emptyClient(),
+					previewJoinCode,
+					joinByCode,
+				},
+				reloadSession: mockReloadSession,
+			});
+			return (
+				<PublicHouseholdEntryView
+					state={entry.state}
+					primaryLabel="Join Household"
+					onSubmit={entry.submit}
+				/>
+			);
+		}
+
+		render(<Harness />);
+		await screen.findByText("River House");
+
+		fireEvent.press(screen.getByText("Join Household"));
+
+		await waitFor(() =>
+			expect(joinByCode).toHaveBeenCalledWith("ABCDEFGH", "join_link"),
+		);
+		expect(mockReloadSession).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledWith("/");
+	});
+
 	it("returns to loading when the Invitation token changes", async () => {
 		const nextPreview =
 			deferred<Awaited<ReturnType<HouseholdApiClient["previewInvitation"]>>>();

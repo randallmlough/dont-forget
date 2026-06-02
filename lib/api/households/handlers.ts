@@ -200,6 +200,7 @@ export async function handleJoinByCode(
 				{
 					code: stringField(body, "code"),
 					userId: user.id,
+					source: joinCodeSourceField(body),
 				},
 			);
 			return jsonResponse(result);
@@ -210,6 +211,15 @@ export async function handleJoinByCode(
 			"Join by Household Join Code API failed",
 		);
 	}
+}
+
+function joinCodeSourceField(
+	body: Record<string, unknown>,
+): "manual_code" | "join_link" {
+	const source = body.source;
+	if (source === undefined) return "manual_code";
+	if (source === "manual_code" || source === "join_link") return source;
+	throw new BadRequestError("Invalid Household Join Code source");
 }
 
 function activeHouseholdService(

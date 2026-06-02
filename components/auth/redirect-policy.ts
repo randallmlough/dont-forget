@@ -1,4 +1,5 @@
 import type { Href } from "expo-router";
+import { isSensitiveAttributeKey } from "@/lib/redact";
 
 export type AuthRedirectParams = Record<string, string | string[] | undefined>;
 
@@ -34,7 +35,7 @@ export function authRedirectTarget({
 	if (!checkedCachedSession) return null;
 
 	if (hasCachedSession) {
-		return onAuthPath ? signedInAuthPathTarget(params) : null;
+		return onAuthPath ? "/" : null;
 	}
 
 	if (PUBLIC_AUTH_PRESERVING_PATHS.has(pathname)) return null;
@@ -49,8 +50,11 @@ export function internalNextPath(value: unknown): string | null {
 	if (!next) return null;
 	if (!next.startsWith("/") || next.startsWith("//")) return null;
 	if (next.includes(":")) return null;
-	if (AUTH_PATHS.has(next)) return null;
-	return next;
+	const parsed = parseInternalPath(next);
+	if (!parsed) return null;
+	if (AUTH_PATHS.has(parsed.pathname)) return null;
+	const search = safeSearchParams(parsed.searchParams).toString();
+	return search ? `${parsed.pathname}?${search}` : parsed.pathname;
 }
 
 export function authHrefWithIntent(
@@ -67,8 +71,10 @@ export function authHrefWithIntent(
 
 function signedInAuthPathTarget(params: AuthRedirectParams): Href {
 	const next = internalNextPath(params.next);
-	if (!next || !PUBLIC_AUTH_PRESERVING_PATHS.has(next)) return "/";
-	return targetWithPreservedIntent(next, params);
+	if (!next) return "/";
+	const nextPathname = pathnameFromInternalPath(next);
+	if (!PUBLIC_AUTH_PRESERVING_PATHS.has(nextPathname)) return next as Href;
+	return targetWithPreservedIntent(nextPathname, params);
 }
 
 function signInTarget(pathname: string, params: AuthRedirectParams): Href {
@@ -111,4 +117,29 @@ function firstString(value: unknown): string | null {
 		return first?.trim() ? first : null;
 	}
 	return null;
+}
+
+function pathnameFromInternalPath(path: string): string {
+	const queryIndex = path.indexOf("?");
+	return queryIndex === -1 ? path : path.slice(0, queryIndex);
+}
+
+function parseInternalPath(
+	path: string,
+): { pathname: string; searchParams: URLSearchParams } | null {
+	try {
+		const parsed = new URL(path, "https://app.local");
+		if (parsed.origin !== "https://app.local") return null;
+		return { pathname: parsed.pathname, searchParams: parsed.searchParams };
+	} catch {
+		return null;
+	}
+}
+
+function safeSearchParams(params: URLSearchParams): URLSearchParams {
+	const safe = new URLSearchParams();
+	params.forEach((value, key) => {
+		if (!isSensitiveAttributeKey(key)) safe.append(key, value);
+	});
+	return safe;
 }

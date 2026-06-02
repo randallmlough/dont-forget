@@ -7,44 +7,97 @@ const SENSITIVE_KEYS = new Set([
 	"auth",
 	"apikey",
 	"api_key",
+	"email",
+	"emailaddress",
 	"code",
 	"joincode",
 	"householdjoincode",
 ]);
 const BEARER_TOKEN_RE = /Bearer\s+[A-Za-z0-9_\-.=]+/g;
 const JWT_RE = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
+const QUERY_PARAM_RE = /([?&])([^=&#\s]+)=([^&#\s]*)/g;
 
 export function redactString(value: string): string {
-	return value
+	return redactSensitiveQueryParams(value)
 		.replace(BEARER_TOKEN_RE, "Bearer [REDACTED]")
 		.replace(JWT_RE, "[REDACTED_JWT]");
+}
+
+export function isSensitiveAttributeKey(key: string): boolean {
+	return SENSITIVE_KEYS.has(normalizeAttributeKey(key));
 }
 
 export function redactAttributes(
 	attributes: Record<string, unknown>,
 ): Record<string, unknown> {
+	return redactRecord(attributes);
+}
+
+function redactRecord(
+	attributes: Record<string, unknown>,
+): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(attributes)) {
-		if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+		if (isSensitiveAttributeKey(key)) {
 			out[key] = "[REDACTED]";
 			continue;
 		}
 		if (value instanceof Error) {
-			out.error_message = redactString(value.message);
-			out.error_name = value.name;
-			if (value.stack) out.error_stack = redactString(value.stack);
-			const cause = (value as { cause?: unknown }).cause;
-			if (cause !== undefined) {
-				out.error_cause =
-					cause instanceof Error ? cause.message : String(cause);
-			}
+			appendErrorAttributes(out, value);
 			continue;
 		}
-		if (typeof value === "string") {
-			out[key] = redactString(value);
-			continue;
-		}
-		out[key] = value;
+		out[key] = redactValue(value);
 	}
 	return out;
+}
+
+function redactValue(value: unknown): unknown {
+	if (value instanceof Error) {
+		const out: Record<string, unknown> = {};
+		appendErrorAttributes(out, value);
+		return out;
+	}
+	if (typeof value === "string") return redactString(value);
+	if (Array.isArray(value)) return value.map(redactValue);
+	if (isPlainRecord(value)) return redactRecord(value);
+	return value;
+}
+
+function appendErrorAttributes(out: Record<string, unknown>, error: Error) {
+	out.error_message = redactString(error.message);
+	out.error_name = error.name;
+	if (error.stack) out.error_stack = redactString(error.stack);
+	const cause = (error as { cause?: unknown }).cause;
+	if (cause !== undefined) {
+		out.error_cause = redactValue(
+			cause instanceof Error ? cause.message : String(cause),
+		);
+	}
+}
+
+function redactSensitiveQueryParams(value: string): string {
+	return value.replace(QUERY_PARAM_RE, (match, prefix, key) => {
+		const decodedKey = safeDecodeURIComponent(key);
+		return isSensitiveAttributeKey(decodedKey)
+			? `${prefix}${key}=[REDACTED]`
+			: match;
+	});
+}
+
+function normalizeAttributeKey(key: string): string {
+	return key.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function safeDecodeURIComponent(value: string): string {
+	try {
+		return decodeURIComponent(value.replace(/\+/g, " "));
+	} catch {
+		return value;
+	}
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+	if (typeof value !== "object" || value === null) return false;
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
 }

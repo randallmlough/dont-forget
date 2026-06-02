@@ -11,6 +11,7 @@ describe("redaction", () => {
 		const attributes = redactAttributes({
 			token: "secret-token",
 			code: "ABCDEFGH",
+			email: "avery@example.com",
 			householdJoinCode: "23456789",
 			message: "failed with Bearer secret-token",
 			error: new Error("request failed with eyJabc.def.ghi"),
@@ -19,10 +20,37 @@ describe("redaction", () => {
 		expect(attributes).toMatchObject({
 			token: "[REDACTED]",
 			code: "[REDACTED]",
+			email: "[REDACTED]",
 			householdJoinCode: "[REDACTED]",
 			message: "failed with Bearer [REDACTED]",
 			error_message: "request failed with [REDACTED_JWT]",
 			error_name: "Error",
+		});
+	});
+
+	it("redacts nested sensitive values and bearer params inside next paths", () => {
+		const attributes = redactAttributes({
+			params: {
+				next: "/invitations/accept?token=secret-token&tab=preview",
+				code: "ABCDEFGH",
+			},
+			history: [
+				{
+					next: "/households/join?code=ABCDEFGH",
+				},
+			],
+		});
+
+		expect(attributes).toEqual({
+			params: {
+				next: "/invitations/accept?token=[REDACTED]&tab=preview",
+				code: "[REDACTED]",
+			},
+			history: [
+				{
+					next: "/households/join?code=[REDACTED]",
+				},
+			],
 		});
 	});
 });

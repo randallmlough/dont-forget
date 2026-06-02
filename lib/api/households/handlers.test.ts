@@ -12,7 +12,10 @@ import {
 	type TestDirectoryDb,
 	type TestHouseholdDb,
 } from "@/db/test";
-import { createHouseholdJoinCodeService } from "@/lib/services/household/server";
+import {
+	createHouseholdJoinCodeService,
+	type HouseholdJoinCodeService,
+} from "@/lib/services/household/server";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
@@ -272,6 +275,74 @@ describe("Household API handlers", () => {
 			});
 		} finally {
 			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("passes constrained Household Join Code sources to the service", async () => {
+		const directory = await createTestDirectoryDb();
+		const joinByCode = jest.fn(async () => ({
+			householdJoinCodeId: "hjc_1",
+			householdId: "hh_1",
+			membershipId: "mbr_1",
+			membershipRole: "member" as const,
+			membershipCreated: true,
+			useId: "hjcu_1",
+			activeHouseholdId: "hh_1",
+		}));
+		const service = {
+			getCurrentJoinCode: jest.fn(),
+			previewJoinCode: jest.fn(),
+			joinByCode,
+			regenerateJoinCode: jest.fn(),
+			disableJoinCode: jest.fn(),
+			enableJoinCode: jest.fn(),
+		} as unknown as HouseholdJoinCodeService;
+		const deps: HouseholdApiDeps = {
+			directory: directory.db,
+			authenticate: async (_request, db) =>
+				upsertAuthenticatedUser(
+					{
+						clerkUserId: "user_casey",
+						email: "casey@example.com",
+						firstName: "Casey",
+						lastName: "User",
+						displayName: "Casey User",
+					},
+					db,
+				),
+			createHouseholdJoinCodeService: () => service,
+		};
+
+		try {
+			const joined = await readJsonResponse(
+				await handleJoinByCode(
+					createApiRequest({
+						body: { code: "ABCDEFGH", source: "join_link" },
+					}),
+					deps,
+				),
+			);
+			const invalid = await readJsonResponse(
+				await handleJoinByCode(
+					createApiRequest({
+						body: { code: "ABCDEFGH", source: "visible_code" },
+					}),
+					deps,
+				),
+			);
+
+			expect(joined.status).toBe(200);
+			expect(joinByCode).toHaveBeenCalledWith({
+				code: "ABCDEFGH",
+				userId: expect.any(String),
+				source: "join_link",
+			});
+			expect(invalid).toMatchObject({
+				status: 400,
+				body: { error: "Invalid Household Join Code source" },
+			});
+		} finally {
 			await directory.close();
 		}
 	});

@@ -87,6 +87,7 @@ export type CreateInvitationResponse = z.infer<
 export type HouseholdJoinCode = z.infer<typeof joinCodeSchema>;
 export type InvitationPreview = z.infer<typeof invitationPreviewSchema>;
 export type HouseholdJoinCodePreview = z.infer<typeof joinCodePreviewSchema>;
+export type HouseholdJoinCodeSource = "manual_code" | "join_link";
 
 export type HouseholdApiClient = {
 	listMembers(householdId: string): Promise<HouseholdMember[]>;
@@ -106,7 +107,7 @@ export type HouseholdApiClient = {
 	previewInvitation(token: string): Promise<InvitationPreview>;
 	acceptInvitation(token: string): Promise<void>;
 	previewJoinCode(code: string): Promise<HouseholdJoinCodePreview>;
-	joinByCode(code: string): Promise<void>;
+	joinByCode(code: string, source?: HouseholdJoinCodeSource): Promise<void>;
 };
 
 export function createHouseholdApiClient({
@@ -204,10 +205,10 @@ export function createHouseholdApiClient({
 			);
 			return joinCodePreviewSchema.parse(payload);
 		},
-		async joinByCode(code) {
+		async joinByCode(code, source = "manual_code") {
 			await authed("/api/households/join-code/join", {
 				method: "POST",
-				body: JSON.stringify({ code }),
+				body: JSON.stringify({ code, source }),
 			});
 		},
 	};

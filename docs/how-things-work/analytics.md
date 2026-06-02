@@ -91,10 +91,10 @@ Scope the dependency to the analytics operations the service/store actually need
 
 ## Identity (you almost never call this directly)
 
-`useAnalyticsIdentity()` runs in `app/_layout.tsx` (inside `<ClerkLoaded>`) and auto-syncs the canonical identity to PostHog whenever Clerk's user changes:
+`useAnalyticsIdentity()` runs in `AuthGate` and auto-syncs the canonical
+identity to PostHog whenever Clerk's user changes:
 
 - `distinct_id` = Clerk `user.id` (stable, never changes for a person)
-- `$set: { email, name, avatar_url }` — refreshed on every change
 - `$set_once: { created_at }` — only set the first time the user is identified
 
 You don't call `identify` from sign-in/sign-up code. After `setActive(...)`, Clerk's `useUser()` updates, the effect fires, identity flows to PostHog. Events fired before `setActive` (e.g. `track("user_signed_in", { method: "email" })`) attribute correctly because PostHog aliases the anonymous `distinct_id` to the new identified one when identify fires.
@@ -105,7 +105,8 @@ You don't call `identify` from sign-in/sign-up code. After `setActive(...)`, Cle
 
 ## Where data ends up
 
-- PostHog Persons UI keys on `distinct_id = clerk_user.id`. Search by email via the `email` person property.
+- PostHog Persons UI keys on `distinct_id = clerk_user.id`. User email,
+  display name, and avatar URL are intentionally not synced to analytics.
 - Events appear in the Activity feed within seconds; funnels and insights index over a few minutes.
 - Service name `dont-forget`; environment tag comes from `APP_ENV` (`local`, `test`, `staging`, `production`). Filter dashboards by environment to keep non-production noise out.
 
@@ -113,8 +114,13 @@ You don't call `identify` from sign-in/sign-up code. After `setActive(...)`, Cle
 
 Event properties pass through the same redactor as logs:
 
-- Attribute keys matching `password`, `token`, `secret`, `authorization`, `cookie`, `auth`, `apikey`, `api_key` → `"[REDACTED]"`.
+- Attribute keys matching `password`, `token`, `secret`, `authorization`,
+  `cookie`, `auth`, `apikey`, `api_key`, `email`, or visible Join Code fields
+  → `"[REDACTED]"`.
 - String values containing `Bearer <…>` or JWT-shaped strings → masked.
+- String values containing URL query params such as `token=...` or `code=...`
+  → masked, including nested route intents such as
+  `next=/invitations/accept?token=...`.
 
 The typed event catalog is your first line of defense — if you don't add a `password` property to `EventMap`, you can't fire one. Redaction is the safety net for `screen(...)` properties (route params can carry tokens) and future `identify(traits)` calls.
 
