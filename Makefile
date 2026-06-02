@@ -3,6 +3,8 @@
 # ==================================================================================== #
 
 PNPM ?= pnpm
+APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
+PORT_ARG = $(if $(PORT),--port $(PORT),)
 
 .DEFAULT_GOAL := help
 
@@ -12,17 +14,21 @@ PNPM ?= pnpm
 install: ## Install dependencies *common*
 	@$(PNPM) install
 
+.PHONY: worktree-env
+worktree-env: ## Link or copy local .env.local into this worktree
+	@./script/setup_worktree_env.sh
+
 .PHONY: start
 start: ## Start Expo for normal app development *common*
-	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) start
+	@APP_ENV="$(APP_ENV_VALUE)" NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --localhost $(PORT_ARG)
 
 .PHONY: ios
 ios: ## Run the native iOS target *common*
-	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) ios
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo run:ios $(PORT_ARG)
 
 .PHONY: prebuild
 prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to pass --clean
-	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) expo prebuild --platform ios $(if $(filter --clean,$(MAKECMDGOALS)),--clean,)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo prebuild --platform ios $(if $(filter --clean,$(MAKECMDGOALS)),--clean,)
 
 .PHONY: --clean
 --clean:
@@ -30,7 +36,7 @@ prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to 
 
 .PHONY: storybook
 storybook: ## Start Storybook for the native iOS build *common*
-	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) storybook:start
+	@APP_ENV="$(APP_ENV_VALUE)" STORYBOOK_ENABLED=true NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --dev-client $(PORT_ARG)
 
 .PHONY: verify
 verify: typecheck biome-check eslint-rules lint test-ci ## Run typecheck, Biome, lint, and tests *common*
@@ -42,7 +48,7 @@ ci: verify expo-check expo-config-check audit ## Run the full CI contract *commo
 
 .PHONY: storybook-ios
 storybook-ios: ## Build and run Storybook on iOS
-	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) storybook:ios
+	@APP_ENV="$(APP_ENV_VALUE)" STORYBOOK_ENABLED=true $(PNPM) expo run:ios $(PORT_ARG)
 
 .PHONY: storybook-generate
 storybook-generate: ## Regenerate Storybook story imports
@@ -80,11 +86,11 @@ expo-check: ## Check Expo SDK package compatibility
 
 .PHONY: expo-config-check
 expo-config-check: ## Resolve the public Expo config without printing it
-	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) expo config --type public > /dev/null
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo config --type public > /dev/null
 
 .PHONY: expo-clear
 expo-clear: ## Start Expo with a cleared Metro cache
-	@$(PNPM) expo start --clear
+	@APP_ENV="$(APP_ENV_VALUE)" NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --clear --localhost $(PORT_ARG)
 
 ##@ Tests
 
@@ -130,7 +136,7 @@ db-reseed: ## Reset, migrate, and seed local deterministic development data
 
 .PHONY: expo-config
 expo-config: ## Print the public Expo config
-	@APP_ENV="$(if $(APP_ENV),$(APP_ENV),local)" $(PNPM) expo config --type public
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo config --type public
 
 .PHONY: why
 why: ## Inspect why a package is installed. Usage: make why PKG=<package>

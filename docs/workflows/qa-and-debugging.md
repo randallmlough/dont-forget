@@ -33,9 +33,58 @@ Use the Makefile rather than raw package-manager commands:
 make ios
 ```
 
+When another checkout or worktree already owns Metro's default port, run on an
+alternate port instead of answering Expo's interactive prompt:
+
+```bash
+make start PORT=8090
+make ios PORT=8090
+```
+
 If the app opens on an auth screen, create or use a local/test User only when the scenario needs a signed-in state. After authentication, Home should render the active Household's Current List.
 
 Watch the terminal that launched the app. In development, app diagnostic logs are mirrored to the console through the logger, and native/runtime errors often appear in the same output as Metro logs.
+
+## Codex Worktree QA
+
+Treat Codex worktrees as full local development checkouts. A fresh worktree will
+not have ignored local artifacts such as `node_modules`, `.env.local`, `.expo`,
+or generated native folders.
+
+Before simulator QA in a fresh worktree:
+
+1. Install dependencies with `make install`. If the sandbox cannot reach the npm
+   registry or the pnpm store, request escalation for the same command instead of
+   skipping verification.
+2. Link or copy a real local env file with `make worktree-env`. By default the
+   helper finds another git worktree with `.env.local` and symlinks it. To use an
+   explicit source, run:
+
+   ```bash
+   WORKTREE_ENV_FILE=/path/to/.env.local make worktree-env
+   ```
+
+   To copy instead of symlink:
+
+   ```bash
+   WORKTREE_ENV_MODE=copy WORKTREE_ENV_FILE=/path/to/.env.local make worktree-env
+   ```
+
+3. Use a non-default Metro port when another checkout is already running:
+
+   ```bash
+   make ios PORT=8090
+   ```
+
+4. Request approval for CoreSimulator, Xcode, or RocketSim access when the
+   sandbox blocks those tools. Do not downgrade simulator QA to source-only
+   review just because these tools need approval.
+
+If `.env.local` is unavailable, automated checks such as `make verify` can still
+run after dependencies are installed, but `make start`, `make ios`,
+`make expo-check`, and `make expo-config-check` cannot honestly prove app
+runtime behavior. Record that as an environment blocker rather than using dummy
+Clerk/API values for product QA.
 
 ## cmux, If Available
 

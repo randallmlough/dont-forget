@@ -29,6 +29,17 @@ Each selected environment uses the same secret names, for example `TURSO_DIRECTO
 
 Production secrets must only be present in production operator contexts. Staging and local commands should fail rather than silently falling back to production values.
 
+Fresh git worktrees do not include ignored env files. For local QA, create a
+worktree env file from a trusted local checkout instead of committing secrets:
+
+```bash
+make worktree-env
+```
+
+The helper symlinks the first `.env.local` it finds in another git worktree. Use
+`WORKTREE_ENV_FILE=/path/to/.env.local` to choose a specific source, or
+`WORKTREE_ENV_MODE=copy` when a symlink is not appropriate.
+
 ## Clerk
 
 Clerk only exposes development and production environments. Production uses Clerk production keys. `local`, `test`, and `staging` use Clerk development keys.

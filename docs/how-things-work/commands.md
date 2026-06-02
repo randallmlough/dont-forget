@@ -4,6 +4,14 @@ Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm
 
 App and Storybook make targets default to `APP_ENV=local` unless you pass another environment. Database migrations are the exception: they require an explicit `APP_ENV`.
 
+Expo start and iOS targets accept `PORT=<number>` so parallel worktrees do not
+collide on Metro's default `8081` port:
+
+```bash
+make start PORT=8090
+make ios PORT=8090
+```
+
 <!-- ==================================================================================== -->
 <!-- COMMANDS                                                                              -->
 <!-- ==================================================================================== -->
@@ -13,6 +21,7 @@ App and Storybook make targets default to `APP_ENV=local` unless you pass anothe
 | Command | Description |
 | --- | --- |
 | `make install` | Install dependencies. |
+| `make worktree-env` | Link or copy a local `.env.local` into a fresh worktree. |
 | `make start` | Start the Expo development server for the app. |
 | `make ios` | Build and run the app on iOS. |
 | `make storybook` | Start Storybook for an installed native iOS build/dev client. |
@@ -76,6 +85,7 @@ App and Storybook make targets default to `APP_ENV=local` unless you pass anothe
 | Command | Description |
 | --- | --- |
 | `make help` | Display Makefile targets grouped by section. |
+| `make worktree-env` | Create `.env.local` for a worktree from another checkout or `WORKTREE_ENV_FILE`. Use `WORKTREE_ENV_MODE=copy` to copy instead of symlink. |
 | `make expo-config` | Print the public Expo config after dynamic config resolution. |
 | `make why PKG=<package>` | Inspect why a package is installed. |
 | `make outdated` | Show dependencies with available newer versions. |
