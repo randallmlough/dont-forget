@@ -58,6 +58,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			getToken: expect.any(Function),
 			authReady: true,
 			signedIn: true,
+			activeHouseholdChanged: false,
 		});
 
 		act(() => {
@@ -163,6 +164,11 @@ describe("AuthenticatedAppSessionProvider", () => {
 			screen.getByRole("button", { name: "Reload active Household" }),
 		);
 
+		await waitFor(() =>
+			expect(controller.activate).toHaveBeenLastCalledWith(
+				expect.objectContaining({ activeHouseholdChanged: true }),
+			),
+		);
 		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
 		expect(screen.queryByText("authenticated-app-session:1")).toBeNull();
 

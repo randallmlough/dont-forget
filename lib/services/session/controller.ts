@@ -68,6 +68,7 @@ export type AuthenticatedAppSessionActivation = {
 	getToken: GetSessionToken;
 	authReady: boolean;
 	signedIn: boolean;
+	activeHouseholdChanged?: boolean;
 };
 
 type AuthenticatedAppSessionAuthState = "unknown" | "signedOut" | "signedIn";
@@ -208,6 +209,7 @@ export function createAuthenticatedAppSessionController(
 
 	function startCachedActivationAttempt(
 		run: ActivationRunGuard,
+		options: { allowCachedPublication: boolean },
 	): CachedActivationAttempt {
 		const invalidatedHouseholdIds = new Set<string>();
 		let freshPublished = false;
@@ -215,6 +217,8 @@ export function createAuthenticatedAppSessionController(
 
 		return {
 			promise: (async (): Promise<boolean> => {
+				if (!options.allowCachedPublication) return false;
+
 				const cached = await cache.read().catch(() => null);
 				if (
 					!cached ||
@@ -302,8 +306,13 @@ export function createAuthenticatedAppSessionController(
 		session: SessionBootstrap,
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
+		options: { allowPreviousSession: boolean },
 	) {
-		publishLoadingFromCurrentSession();
+		if (options.allowPreviousSession) {
+			publishLoadingFromCurrentSession();
+		} else {
+			publishLoading();
+		}
 		const opened = await resources.openSessionResource(session);
 		if (!run.isCurrent()) {
 			await publishOpened(opened, session, run.id, {
@@ -326,6 +335,7 @@ export function createAuthenticatedAppSessionController(
 		activation: AuthenticatedAppSessionActivation,
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
+		options: { allowPreviousSession: boolean },
 	) {
 		let invalidatedUnauthorizedCached = false;
 		let attemptedFreshSession: SessionBootstrap | null = null;
@@ -340,11 +350,14 @@ export function createAuthenticatedAppSessionController(
 					cachedAttempt,
 				);
 			if (!run.isCurrent()) return;
-			await publishFreshSessionForRun(session, run, cachedAttempt);
+			await publishFreshSessionForRun(session, run, cachedAttempt, {
+				allowPreviousSession: options.allowPreviousSession,
+			});
 		} catch (error) {
 			await recoverActivationFailure(error, run, cachedAttempt, {
 				invalidatedUnauthorizedCached,
 				attemptedFreshSession,
+				allowPreviousRecovery: options.allowPreviousSession,
 			});
 		}
 	}
@@ -356,6 +369,7 @@ export function createAuthenticatedAppSessionController(
 		options: {
 			invalidatedUnauthorizedCached: boolean;
 			attemptedFreshSession: SessionBootstrap | null;
+			allowPreviousRecovery: boolean;
 		},
 	) {
 		logger.error("authenticated app session activation failed", {
@@ -366,6 +380,7 @@ export function createAuthenticatedAppSessionController(
 		if (publishedCached && run.isCurrent()) {
 			const previousSession = previousSessionFromSnapshot(snapshot);
 			if (
+				options.allowPreviousRecovery &&
 				previousSession &&
 				!options.invalidatedUnauthorizedCached &&
 				sessionMatchesAttemptedActiveHousehold(
@@ -380,6 +395,7 @@ export function createAuthenticatedAppSessionController(
 		} else if (!publishedCached && run.isCurrent()) {
 			const previousSession = previousSessionFromSnapshot(snapshot);
 			if (
+				options.allowPreviousRecovery &&
 				previousSession &&
 				sessionMatchesAttemptedActiveHousehold(
 					previousSession,
@@ -399,20 +415,29 @@ export function createAuthenticatedAppSessionController(
 			const run = startActivationRun();
 			const authState =
 				authenticatedAppSessionAuthStateFromActivation(activation);
+			const allowPreviousSession = activation.activeHouseholdChanged !== true;
 			if (authState === "signedOut") {
 				await handleSignedOutActivation(run);
 				return;
 			}
 
-			publishLoading(previousSessionFromSnapshot(snapshot));
+			publishLoading(
+				allowPreviousSession
+					? previousSessionFromSnapshot(snapshot)
+					: undefined,
+			);
 
-			const cachedAttempt = startCachedActivationAttempt(run);
+			const cachedAttempt = startCachedActivationAttempt(run, {
+				allowCachedPublication: allowPreviousSession,
+			});
 			if (authState === "unknown") {
 				await cachedAttempt.promise;
 				return;
 			}
 
-			await handleSignedInActivation(activation, run, cachedAttempt);
+			await handleSignedInActivation(activation, run, cachedAttempt, {
+				allowPreviousSession,
+			});
 		},
 
 		async dispose() {

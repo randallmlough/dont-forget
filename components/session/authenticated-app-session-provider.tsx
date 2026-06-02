@@ -91,8 +91,14 @@ export function AuthenticatedAppSessionProvider({
 	const [activeHouseholdChangeBoundary, setActiveHouseholdChangeBoundary] =
 		useState<ActiveHouseholdChangeBoundary | null>(null);
 	const [activationRequest, requestActivation] = useReducer(
-		(attempt: number) => attempt + 1,
-		0,
+		(
+			request: AuthenticatedAppSessionActivationRequest,
+			options?: AuthenticatedAppSessionReloadOptions,
+		): AuthenticatedAppSessionActivationRequest => ({
+			attempt: request.attempt + 1,
+			activeHouseholdChanged: options?.activeHouseholdChanged === true,
+		}),
+		{ attempt: 0, activeHouseholdChanged: false },
 	);
 	const [signOutRunningState] = useState(() => ({ running: false }));
 	const getToken = useEffectEvent(() => auth.getToken());
@@ -112,11 +118,12 @@ export function AuthenticatedAppSessionProvider({
 
 	useEffect(() => {
 		if (signOutRunningState.running) return;
-		if (!activationEnabled && activationRequest === 0) return;
+		if (!activationEnabled && activationRequest.attempt === 0) return;
 		void controller.activate({
 			getToken,
 			authReady,
 			signedIn,
+			activeHouseholdChanged: activationRequest.activeHouseholdChanged,
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- getToken is a React Effect Event that supplies the latest token callback without reactivating on token identity changes.
 	}, [
@@ -124,7 +131,8 @@ export function AuthenticatedAppSessionProvider({
 		authReady,
 		signedIn,
 		controller,
-		activationRequest,
+		activationRequest.attempt,
+		activationRequest.activeHouseholdChanged,
 		signOutRunningState,
 	]);
 
@@ -147,7 +155,7 @@ export function AuthenticatedAppSessionProvider({
 					: null,
 			);
 		}
-		requestActivation();
+		requestActivation(options);
 	}
 
 	const value: AuthenticatedAppSessionContextValue = {
@@ -224,6 +232,11 @@ function publicStateFromSnapshot(
 
 type ActiveHouseholdChangeBoundary = {
 	previousResourceKey: string;
+};
+
+type AuthenticatedAppSessionActivationRequest = {
+	attempt: number;
+	activeHouseholdChanged: boolean;
 };
 
 function snapshotReferencesPreviousActiveHousehold(

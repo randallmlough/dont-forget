@@ -174,6 +174,82 @@ describe("createAuthenticatedAppSessionController activation", () => {
 		expect(dataServices.close).not.toHaveBeenCalled();
 	});
 
+	it("does not publish cached Household shell state during active Household change reloads", async () => {
+		const freshSession = h.deferred<h.SessionBootstrap>();
+		const sessionService = h.sessionRuntimeFixture({
+			read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
+			getSession: jest.fn(() => freshSession.promise),
+		});
+		const dataServices = h.sessionDataServicesFixture();
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest.fn().mockReturnValue(dataServices),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		const activation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+			activeHouseholdChanged: true,
+		});
+		await Promise.resolve();
+
+		expect(controller.getSnapshot()).toEqual({ status: "loading" });
+		expect(sessionService.cache.read).not.toHaveBeenCalled();
+
+		freshSession.resolve(h.sessionBootstrapFixture({ householdName: "Fresh" }));
+		await activation;
+
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			session: {
+				resourceKey: "authenticated-app-session:1",
+				activeHousehold: { name: "Fresh" },
+			},
+		});
+	});
+
+	it("does not recover to the previous Household when active Household change reload fails", async () => {
+		const previousDataServices = h.sessionDataServicesFixture();
+		const sessionService = h.sessionRuntimeFixture({
+			getSession: jest
+				.fn()
+				.mockResolvedValueOnce(h.sessionBootstrapFixture())
+				.mockRejectedValueOnce(new Error("offline")),
+		});
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest.fn().mockReturnValue(previousDataServices),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+			activeHouseholdChanged: true,
+		});
+
+		expect(controller.getSnapshot()).toEqual({
+			status: "error",
+			message: "Unable to prepare your Household. Please try again.",
+		});
+		expect(previousDataServices.close).toHaveBeenCalledTimes(1);
+	});
+
 	it("does not read or publish cached Household data when signed out", async () => {
 		const dataServices = h.sessionDataServicesFixture();
 		const syncCoordinator = h.syncCoordinatorFixture();
