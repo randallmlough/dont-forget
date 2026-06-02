@@ -143,6 +143,56 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(screen.getByText("refreshing")).toBeTruthy();
 	});
 
+	it("hides the previous session during active-Household-changing reloads", async () => {
+		const previousSession = appSessionFixture();
+		const controller = authenticatedAppSessionControllerFixture({
+			snapshot: { status: "ready", session: previousSession },
+		});
+		render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
+				<ReloadActiveHouseholdChangeState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		expect(screen.getByText("authenticated-app-session:1")).toBeTruthy();
+
+		fireEvent.press(
+			screen.getByRole("button", { name: "Reload active Household" }),
+		);
+
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+		expect(screen.queryByText("authenticated-app-session:1")).toBeNull();
+
+		act(() => {
+			controller.publish({
+				status: "loading",
+				previous: previousSession,
+				refreshingSession: true,
+			});
+		});
+
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+		expect(screen.queryByText("authenticated-app-session:1")).toBeNull();
+
+		act(() => {
+			controller.publish({
+				status: "ready",
+				session: {
+					...previousSession,
+					activeHousehold: { id: "hh_lake", name: "Lake House" },
+					resourceKey: "authenticated-app-session:2",
+				},
+			});
+		});
+
+		await waitFor(() =>
+			expect(screen.getByText("authenticated-app-session:2")).toBeTruthy(),
+		);
+	});
+
 	it("stops exposing ready session data while loading has no previous session", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		render(
@@ -623,9 +673,24 @@ function RetryState() {
 function ReloadState() {
 	const { reloadSession } = useAuthenticatedAppSession();
 	return (
-		<Pressable accessibilityRole="button" onPress={reloadSession}>
+		<Pressable accessibilityRole="button" onPress={() => reloadSession()}>
 			<Text>Reload</Text>
 		</Pressable>
+	);
+}
+
+function ReloadActiveHouseholdChangeState() {
+	const { state, session, reloadSession } = useAuthenticatedAppSession();
+	return (
+		<>
+			<Text>{session ? session.resourceKey : state.status}</Text>
+			<Pressable
+				accessibilityRole="button"
+				onPress={() => reloadSession({ activeHouseholdChanged: true })}
+			>
+				<Text>Reload active Household</Text>
+			</Pressable>
+		</>
 	);
 }
 

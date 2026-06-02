@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useMemo, useReducer } from "react";
+import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
 import {
 	createHouseholdApiClient,
 	type HouseholdApiClient,
@@ -25,7 +26,7 @@ type Action =
 
 export function useHouseholdSwitch(
 	session: AuthenticatedAppSession,
-	reloadSession: () => void,
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void,
 	clientProp?: HouseholdApiClient,
 ): {
 	state: HouseholdSwitchState;
@@ -56,31 +57,15 @@ export function useHouseholdSwitch(
 			type: "operationStarted",
 			operation: { status: "switchingHousehold", householdId },
 		});
-		try {
-			const syncResult = await session.services.sync.requestSync({
-				reason: "manualRefresh",
-			});
-			if (!syncResult) {
-				dispatch({
-					type: "notice",
-					notice: "Unable to sync this Household before switching. Try again.",
-				});
-				return;
-			}
-		} catch {
-			dispatch({
-				type: "notice",
-				notice: "Unable to sync this Household before switching. Try again.",
-			});
-			return;
-		}
-
-		try {
-			await client.switchHousehold(householdId);
-			reloadSession();
-			router.replace("/");
-		} catch (error) {
-			dispatch({ type: "notice", notice: messageFromError(error) });
+		const result = await switchActiveHouseholdWithSessionBoundary({
+			session,
+			householdId,
+			client,
+			reloadSession,
+			navigateHome: () => router.replace("/"),
+		});
+		if (result.status === "failed") {
+			dispatch({ type: "notice", notice: result.notice });
 		}
 	}
 
@@ -97,7 +82,7 @@ export function useHouseholdSwitch(
 		});
 		try {
 			await client.joinByCode(code);
-			reloadSession();
+			reloadSession({ activeHouseholdChanged: true });
 			router.replace("/");
 		} catch (error) {
 			dispatch({ type: "notice", notice: messageFromError(error) });
@@ -110,6 +95,38 @@ export function useHouseholdSwitch(
 		switchHousehold,
 		joinByCode,
 	};
+}
+
+export async function switchActiveHouseholdWithSessionBoundary({
+	session,
+	householdId,
+	client,
+	reloadSession,
+	navigateHome,
+}: {
+	session: AuthenticatedAppSession;
+	householdId: string;
+	client: Pick<HouseholdApiClient, "switchHousehold">;
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
+	navigateHome: () => void;
+}): Promise<{ status: "switched" } | { status: "failed"; notice: string }> {
+	try {
+		const syncResult = await session.services.sync.requestSync({
+			reason: "manualRefresh",
+		});
+		if (!syncResult) return syncBeforeSwitchFailure();
+	} catch {
+		return syncBeforeSwitchFailure();
+	}
+
+	try {
+		await client.switchHousehold(householdId);
+		reloadSession({ activeHouseholdChanged: true });
+		navigateHome();
+		return { status: "switched" };
+	} catch (error) {
+		return { status: "failed", notice: messageFromError(error) };
+	}
 }
 
 function reducer(
@@ -125,6 +142,13 @@ function reducer(
 
 function operationInProgress(operation: HouseholdSwitchOperation): boolean {
 	return operation.status !== "idle";
+}
+
+function syncBeforeSwitchFailure(): { status: "failed"; notice: string } {
+	return {
+		status: "failed",
+		notice: "Unable to sync this Household before switching. Try again.",
+	};
 }
 
 function messageFromError(error: unknown): string {

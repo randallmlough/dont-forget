@@ -5,6 +5,7 @@ import {
 	type AuthRedirectParams,
 	authHrefWithIntent,
 } from "@/components/auth/redirect-policy";
+import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
 import {
 	createHouseholdApiClient,
 	type HouseholdApiClient,
@@ -61,7 +62,7 @@ export function usePublicHouseholdEntry({
 }: {
 	kind: PublicEntryKind;
 	secret: string | null;
-	reloadSession: () => void;
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
 	client?: HouseholdApiClient;
 }): {
 	state: PublicHouseholdEntryState;
@@ -134,7 +135,7 @@ export function usePublicHouseholdEntry({
 			} else {
 				await client.joinByCode(secret);
 			}
-			reloadSession();
+			reloadSession({ activeHouseholdChanged: true });
 			dispatch({ type: "complete", entryKey, message: "Household joined." });
 			router.replace("/");
 		} catch (error) {

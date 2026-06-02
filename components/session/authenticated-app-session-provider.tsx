@@ -26,11 +26,15 @@ export type AuthenticatedAppSessionState =
 	| { status: "ready"; refreshing: boolean }
 	| { status: "error"; message: string };
 
+export type AuthenticatedAppSessionReloadOptions = {
+	activeHouseholdChanged?: boolean;
+};
+
 export type AuthenticatedAppSessionContextValue = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
 	retry: () => void;
-	reloadSession: () => void;
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
 	signOut: () => Promise<void>;
 };
 
@@ -84,6 +88,8 @@ export function AuthenticatedAppSessionProvider({
 		useState<AuthenticatedAppSessionStateSnapshot>(() =>
 			controller.getSnapshot(),
 		);
+	const [activeHouseholdChangeBoundary, setActiveHouseholdChangeBoundary] =
+		useState<ActiveHouseholdChangeBoundary | null>(null);
 	const [activationRequest, requestActivation] = useReducer(
 		(attempt: number) => attempt + 1,
 		0,
@@ -132,12 +138,20 @@ export function AuthenticatedAppSessionProvider({
 		requestActivation();
 	}
 
-	function reloadSession() {
+	function reloadSession(options?: AuthenticatedAppSessionReloadOptions) {
+		if (options?.activeHouseholdChanged) {
+			const currentSession = currentSessionFromSnapshot(snapshot);
+			setActiveHouseholdChangeBoundary(
+				currentSession
+					? { previousResourceKey: currentSession.resourceKey }
+					: null,
+			);
+		}
 		requestActivation();
 	}
 
 	const value: AuthenticatedAppSessionContextValue = {
-		...publicStateFromSnapshot(snapshot),
+		...publicStateFromSnapshot(snapshot, activeHouseholdChangeBoundary),
 		retry,
 		reloadSession,
 		signOut: signOutFlow.run,
@@ -169,10 +183,21 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 
 function publicStateFromSnapshot(
 	snapshot: AuthenticatedAppSessionStateSnapshot,
+	activeHouseholdChangeBoundary: ActiveHouseholdChangeBoundary | null,
 ): {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
 } {
+	if (
+		activeHouseholdChangeBoundary &&
+		snapshotReferencesPreviousActiveHousehold(
+			snapshot,
+			activeHouseholdChangeBoundary,
+		)
+	) {
+		return { state: { status: "loading" }, session: null };
+	}
+
 	if (snapshot.status === "ready") {
 		return {
 			state: { status: "ready", refreshing: false },
@@ -195,4 +220,31 @@ function publicStateFromSnapshot(
 	}
 
 	return { state: { status: "loading" }, session: null };
+}
+
+type ActiveHouseholdChangeBoundary = {
+	previousResourceKey: string;
+};
+
+function snapshotReferencesPreviousActiveHousehold(
+	snapshot: AuthenticatedAppSessionStateSnapshot,
+	boundary: ActiveHouseholdChangeBoundary,
+): boolean {
+	if (snapshot.status === "ready") {
+		return snapshot.session.resourceKey === boundary.previousResourceKey;
+	}
+	if (snapshot.status === "loading") {
+		return snapshot.previous?.resourceKey === boundary.previousResourceKey;
+	}
+	return false;
+}
+
+function currentSessionFromSnapshot(
+	snapshot: AuthenticatedAppSessionStateSnapshot,
+): AuthenticatedAppSession | undefined {
+	if (snapshot.status === "ready") return snapshot.session;
+	if (snapshot.status === "loading" || snapshot.status === "error") {
+		return snapshot.previous;
+	}
+	return undefined;
 }

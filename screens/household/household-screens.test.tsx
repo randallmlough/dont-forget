@@ -458,6 +458,67 @@ describe("HouseholdSwitch", () => {
 		expect(switchHousehold).not.toHaveBeenCalled();
 	});
 
+	it("syncs, switches, hides the previous Household during reload, and routes Home", async () => {
+		const session = sessionFixture();
+		const switchHousehold = jest.fn(async () => undefined);
+
+		function Harness() {
+			const model = useHouseholdSwitch(session, mockReloadSession, {
+				...emptyClient(),
+				switchHousehold,
+			});
+			return (
+				<PressableText
+					label="Switch"
+					onPress={() => void model.switchHousehold("hh_2")}
+				/>
+			);
+		}
+
+		render(<Harness />);
+		fireEvent.press(screen.getByText("Switch"));
+
+		await waitFor(() => expect(switchHousehold).toHaveBeenCalledWith("hh_2"));
+		expect(session.services.sync.requestSync).toHaveBeenCalledWith({
+			reason: "manualRefresh",
+		});
+		expect(mockReloadSession).toHaveBeenCalledWith({
+			activeHouseholdChanged: true,
+		});
+		expect(mockReplace).toHaveBeenCalledWith("/");
+	});
+
+	it("joins by code and hides the previous Household during reload", async () => {
+		const session = sessionFixture();
+		const joinByCode = jest.fn(async () => undefined);
+
+		function Harness() {
+			const model = useHouseholdSwitch(session, mockReloadSession, {
+				...emptyClient(),
+				joinByCode,
+			});
+			return (
+				<>
+					<PressableText
+						label="Set code"
+						onPress={() => model.setCode("ABCDEFGH")}
+					/>
+					<PressableText label="Join" onPress={() => void model.joinByCode()} />
+				</>
+			);
+		}
+
+		render(<Harness />);
+		fireEvent.press(screen.getByText("Set code"));
+		fireEvent.press(screen.getByText("Join"));
+
+		await waitFor(() => expect(joinByCode).toHaveBeenCalledWith("ABCDEFGH"));
+		expect(mockReloadSession).toHaveBeenCalledWith({
+			activeHouseholdChanged: true,
+		});
+		expect(mockReplace).toHaveBeenCalledWith("/");
+	});
+
 	it("does not join by code while a Household switch is running", async () => {
 		const session = sessionFixture();
 		const sync =
@@ -607,7 +668,11 @@ describe("PublicHouseholdEntry", () => {
 		await waitFor(() =>
 			expect(acceptInvitation).toHaveBeenCalledWith("secret-token"),
 		);
-		await waitFor(() => expect(mockReloadSession).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(mockReloadSession).toHaveBeenCalledWith({
+				activeHouseholdChanged: true,
+			}),
+		);
 		expect(mockReplace).toHaveBeenCalledWith("/");
 	});
 

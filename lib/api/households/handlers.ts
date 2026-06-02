@@ -1,6 +1,7 @@
 import type { DirectoryDb } from "@/db/client";
 import {
 	ActiveHouseholdMembershipRequiredError,
+	type ActiveHouseholdSelection,
 	type ActiveHouseholdService,
 	createActiveHouseholdService,
 	createHouseholdJoinCodeService,
@@ -58,7 +59,9 @@ export async function handleSwitchActiveHousehold(
 				userId: user.id,
 				householdId: stringField(body, "householdId"),
 			});
-			return jsonResponse({ activeHousehold });
+			return jsonResponse({
+				activeHousehold: activeHouseholdResponse(activeHousehold),
+			});
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Switch active Household API failed");
@@ -249,6 +252,15 @@ function productionJoinCodeServiceDeps(
 	return {
 		directory,
 		buildJoinUrl: buildHouseholdJoinUrl,
+	};
+}
+
+function activeHouseholdResponse(selection: ActiveHouseholdSelection) {
+	return {
+		membershipId: selection.membershipId,
+		membershipRole: selection.membershipRole,
+		householdId: selection.householdId,
+		householdName: selection.householdName,
 	};
 }
 

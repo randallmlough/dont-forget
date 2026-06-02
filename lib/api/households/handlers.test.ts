@@ -74,11 +74,22 @@ describe("Household API handlers", () => {
 				status: 200,
 				body: {
 					activeHousehold: {
+						membershipId: scenario.memberships.primaryOwner.id,
 						householdId: scenario.households.primary.id,
+						householdName: scenario.households.primary.name,
 						membershipRole: "owner",
 					},
 				},
 			});
+			const switchedBody = switched.body as {
+				activeHousehold: Record<string, unknown>;
+			};
+			expect(switchedBody.activeHousehold).not.toHaveProperty(
+				"householdTursoDbName",
+			);
+			expect(switchedBody.activeHousehold).not.toHaveProperty(
+				"householdProvisioningCompletedAt",
+			);
 
 			const forbidden = await readJsonResponse(
 				await handleSwitchActiveHousehold(
