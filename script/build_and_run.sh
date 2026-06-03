@@ -14,6 +14,9 @@ Modes:
   start, run     Start the Expo development server
   --ios, ios     Build and run the iOS app
   --help, help   Show this help
+
+Environment:
+  PORT=8090      Run Expo on an alternate Metro port
 USAGE
 }
 
