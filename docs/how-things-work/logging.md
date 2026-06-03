@@ -86,12 +86,12 @@ Don't pre-stringify or pre-flatten errors at the call site — let the adapter d
 The PostHog adapter redacts before sending:
 
 - **Attribute keys** matching `password`, `token`, `secret`, `authorization`, `cookie`, `auth`, `apikey`, `api_key` (case-insensitive) → replaced with `"[REDACTED]"`.
-- **String values and error messages/stacks** containing `Bearer <…>` or JWT-shaped strings (`eyJ…`) → replaced inline.
+- **String values and error messages/stacks** containing `Bearer <…>`, JWT-shaped strings (`eyJ…`), or email-shaped strings → replaced inline.
 
 This is best-effort, not airtight. Still:
 
 - **Don't deliberately log secrets** assuming redaction will catch them. Redaction is a safety net for accidents (e.g. an `Error` from `fetch` that happened to carry an auth header).
-- **Emails are not redacted** — Clerk and PostHog already have the user's email via `posthog.identify`, so logging email is no worse. Don't log email for users you haven't `identify`-d.
+- **Email-shaped strings are redacted in diagnostic messages and attributes.** Don't deliberately log email for users you haven't `identify`-d.
 
 ## Where logs go
 

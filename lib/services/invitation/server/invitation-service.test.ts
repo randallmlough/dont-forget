@@ -39,7 +39,13 @@ describe("createInvitationService", () => {
 			.mockImplementation(() => undefined);
 		const emailSender = {
 			sendInvitationEmail: jest.fn(async () => {
-				throw new Error("resend unavailable");
+				const error = new Error(
+					"resend unavailable for New.Member@Example.COM",
+				);
+				(error as { cause?: unknown }).cause = new Error(
+					"provider rejected new.member@example.com",
+				);
+				throw error;
 			}),
 		};
 
@@ -83,7 +89,8 @@ describe("createInvitationService", () => {
 			expect(consoleError).toHaveBeenCalledWith(
 				"Invitation email delivery failed",
 				expect.objectContaining({
-					error_message: "resend unavailable",
+					error_message: "resend unavailable for [REDACTED_EMAIL]",
+					error_cause: "provider rejected [REDACTED_EMAIL]",
 					error_name: "Error",
 					household_id: PRIMARY_HOUSEHOLD_SEED.household.id,
 					invitation_id: first.invitation.id,
@@ -91,6 +98,9 @@ describe("createInvitationService", () => {
 			);
 			expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
 				"new.member@example.com",
+			);
+			expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+				"New.Member@Example.COM",
 			);
 			expect(first.invitation).toMatchObject({
 				email: "new.member@example.com",

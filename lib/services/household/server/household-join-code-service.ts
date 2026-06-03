@@ -17,7 +17,7 @@ import { createMemberService } from "@/lib/services/member/server";
 import {
 	lockHouseholdLifecycle,
 	lockUserLifecycle,
-} from "@/lib/services/server/lifecycle-lock";
+} from "@/lib/services/shared/server/lifecycle-lock";
 import { createActiveHouseholdService } from "./active-household-service";
 
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";

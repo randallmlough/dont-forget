@@ -13,11 +13,13 @@ const SENSITIVE_KEYS = new Set([
 ]);
 const BEARER_TOKEN_RE = /Bearer\s+[A-Za-z0-9_\-.=]+/g;
 const JWT_RE = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
 export function redactString(value: string): string {
 	return value
 		.replace(BEARER_TOKEN_RE, "Bearer [REDACTED]")
-		.replace(JWT_RE, "[REDACTED_JWT]");
+		.replace(JWT_RE, "[REDACTED_JWT]")
+		.replace(EMAIL_RE, "[REDACTED_EMAIL]");
 }
 
 export function redactAttributes(
@@ -36,7 +38,9 @@ export function redactAttributes(
 			const cause = (value as { cause?: unknown }).cause;
 			if (cause !== undefined) {
 				out.error_cause =
-					cause instanceof Error ? cause.message : String(cause);
+					cause instanceof Error
+						? redactString(cause.message)
+						: redactString(String(cause));
 			}
 			continue;
 		}

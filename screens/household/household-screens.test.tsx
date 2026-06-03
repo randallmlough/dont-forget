@@ -652,6 +652,47 @@ describe("PublicHouseholdEntry", () => {
 		);
 	});
 
+	it("routes signed-out Users to sign-in with Household Join Code intent without previewing", async () => {
+		mockIsSignedIn = false;
+		const joinByCode = jest.fn(async () => undefined);
+		const previewJoinCode = jest.fn(async () => ({
+			available: true as const,
+			householdName: "River House",
+		}));
+
+		function Harness() {
+			const entry = usePublicHouseholdEntry({
+				kind: "joinCode",
+				secret: "ABCDEFGH",
+				client: {
+					...emptyClient(),
+					previewJoinCode,
+					joinByCode,
+				},
+				reloadSession: mockReloadSession,
+			});
+			return (
+				<PublicHouseholdEntryView
+					state={entry.state}
+					primaryLabel="Join Household"
+					onSubmit={entry.submit}
+				/>
+			);
+		}
+
+		render(<Harness />);
+		await screen.findByText("Household");
+
+		fireEvent.press(screen.getByText("Join Household"));
+
+		expect(previewJoinCode).not.toHaveBeenCalled();
+		expect(joinByCode).not.toHaveBeenCalled();
+		expect(mockReloadSession).not.toHaveBeenCalled();
+		expect(mockPush).toHaveBeenCalledWith(
+			"/sign-in?next=%2Fhouseholds%2Fjoin&code=ABCDEFGH",
+		);
+	});
+
 	it("returns to loading when the Invitation token changes", async () => {
 		const nextPreview =
 			deferred<Awaited<ReturnType<HouseholdApiClient["previewInvitation"]>>>();
