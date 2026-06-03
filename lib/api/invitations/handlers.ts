@@ -12,7 +12,6 @@ import {
 	authenticateApiUser,
 	BadRequestError,
 	errorResponse,
-	INVITATION_UNAVAILABLE_MESSAGE,
 	isApiUnauthorizedError,
 	jsonResponse,
 	optionalStringField,
@@ -20,6 +19,8 @@ import {
 	queryStringField,
 	readJsonObject,
 	stringField,
+	unavailableErrorResponse,
+	unavailablePreviewResponse,
 	withDirectory,
 } from "../shared";
 
@@ -69,7 +70,7 @@ export async function handlePreviewInvitation(
 			).previewInvitation(token);
 			return preview.available
 				? jsonResponse(preview)
-				: jsonResponse({ available: false }, 404);
+				: unavailablePreviewResponse();
 		});
 	} catch (error) {
 		return invitationErrorResponse(error, "Preview Invitation API failed");
@@ -178,7 +179,7 @@ function invitationErrorResponse(error: unknown, context: string): Response {
 		return errorResponse(error.message, 400);
 	}
 	if (error instanceof InvitationUnavailableError) {
-		return errorResponse(INVITATION_UNAVAILABLE_MESSAGE, 404);
+		return unavailableErrorResponse("invitation");
 	}
 
 	console.error(context, error);

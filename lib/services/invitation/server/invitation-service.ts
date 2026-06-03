@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
 
 import type { DirectoryDb } from "@/db/client";
 import {
@@ -8,11 +8,14 @@ import {
 	invitations,
 	users,
 } from "@/db/schema/directory";
+import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
+import { redactAttributes } from "@/lib/redact";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createActiveHouseholdService } from "@/lib/services/household/server/active-household-service";
 import { createMemberService } from "@/lib/services/member/server";
+import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOKEN_GENERATION_ATTEMPTS = 5;
@@ -54,6 +57,9 @@ export type InvitationEmailDelivery =
 	| { status: "sent" }
 	| { status: "skipped"; reason: "environment" }
 	| { status: "failed"; message: string };
+
+const INVITATION_EMAIL_DELIVERY_FAILURE_MESSAGE =
+	"Invitation email could not be delivered.";
 
 export type InvitationEmailSender = {
 	sendInvitationEmail(input: {
@@ -448,10 +454,7 @@ async function findOrCreateInvitation(
 	const email = input.email;
 
 	return directory.transaction(async (tx) => {
-		await tx
-			.update(households)
-			.set({ name: sql`${households.name}` })
-			.where(eq(households.id, input.householdId));
+		await lockHouseholdLifecycle(input.householdId, tx);
 
 		const reusable = await findReusablePendingInvitation(
 			{ householdId: input.householdId, email, now: input.now },
@@ -580,9 +583,17 @@ async function deliverInvitationEmail(input: {
 			inviterDisplayName: input.inviterDisplayName,
 		});
 	} catch (error) {
+		console.error(
+			"Invitation email delivery failed",
+			redactAttributes({
+				error: asError(error),
+				household_id: input.invitation.householdId,
+				invitation_id: input.invitation.id,
+			}),
+		);
 		return {
 			status: "failed",
-			message: error instanceof Error ? error.message : "Email delivery failed",
+			message: INVITATION_EMAIL_DELIVERY_FAILURE_MESSAGE,
 		};
 	}
 }

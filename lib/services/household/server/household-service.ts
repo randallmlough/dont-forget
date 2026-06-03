@@ -11,7 +11,7 @@ import type { AppEnv } from "@/lib/env";
 import { createAppId } from "@/lib/ids";
 import type { ActiveMembership } from "@/lib/services/member/server";
 import {
-	createHouseholdJoinCode,
+	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,
 } from "./household-join-code-service";
 
@@ -113,7 +113,7 @@ async function createOwnedHousehold(
 	};
 
 	await directory.insert(households).values(household);
-	await createHouseholdJoinCode(
+	await createInitialHouseholdJoinCode(
 		{
 			householdId,
 			createdByUserId: input.user.id,

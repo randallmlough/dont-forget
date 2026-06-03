@@ -653,7 +653,8 @@ describe("PublicHouseholdEntry", () => {
 		);
 	});
 
-	it("uses join-link analytics source when joining from a public Household Join Code route", async () => {
+	it("routes signed-out Users to sign-in with Household Join Code intent without previewing", async () => {
+		mockIsSignedIn = false;
 		const joinByCode = jest.fn(async () => undefined);
 		const previewJoinCode = jest.fn(async () => ({
 			available: true as const,
@@ -681,6 +682,96 @@ describe("PublicHouseholdEntry", () => {
 		}
 
 		render(<Harness />);
+		await screen.findByText("Household");
+
+		fireEvent.press(screen.getByText("Join Household"));
+
+		expect(previewJoinCode).not.toHaveBeenCalled();
+		expect(joinByCode).not.toHaveBeenCalled();
+		expect(mockReloadSession).not.toHaveBeenCalled();
+		expect(mockPush).toHaveBeenCalledWith(
+			"/sign-in?next=%2Fhouseholds%2Fjoin&code=ABCDEFGH",
+		);
+	});
+
+	it("keeps Household Join Code links loading while auth state is unresolved", async () => {
+		mockIsSignedIn = undefined;
+		const joinByCode = jest.fn(async () => undefined);
+		const previewJoinCode = jest.fn(async () => ({
+			available: true as const,
+			householdName: "River House",
+		}));
+
+		function Harness() {
+			const entry = usePublicHouseholdEntry({
+				kind: "joinCode",
+				secret: "ABCDEFGH",
+				client: {
+					...emptyClient(),
+					previewJoinCode,
+					joinByCode,
+				},
+				reloadSession: mockReloadSession,
+			});
+			return (
+				<PublicHouseholdEntryView
+					state={entry.state}
+					primaryLabel="Join Household"
+					onSubmit={entry.submit}
+				/>
+			);
+		}
+
+		render(<Harness />);
+
+		expect(screen.getByText("Loading Household")).toBeTruthy();
+		await waitFor(() => expect(previewJoinCode).not.toHaveBeenCalled());
+		expect(screen.queryByText("Join Household")).toBeNull();
+		expect(joinByCode).not.toHaveBeenCalled();
+		expect(mockPush).not.toHaveBeenCalled();
+	});
+
+	it("uses join-link analytics source when joining from a public Household Join Code route", async () => {
+		const joinByCode = jest.fn(async () => undefined);
+		let resolvePreview: (
+			preview: Awaited<ReturnType<HouseholdApiClient["previewJoinCode"]>>,
+		) => void = () => undefined;
+		const previewJoinCode = jest.fn(
+			() =>
+				new Promise<Awaited<ReturnType<HouseholdApiClient["previewJoinCode"]>>>(
+					(resolve) => {
+						resolvePreview = resolve;
+					},
+				),
+		);
+
+		function Harness() {
+			const entry = usePublicHouseholdEntry({
+				kind: "joinCode",
+				secret: "ABCDEFGH",
+				client: {
+					...emptyClient(),
+					previewJoinCode,
+					joinByCode,
+				},
+				reloadSession: mockReloadSession,
+			});
+			return (
+				<PublicHouseholdEntryView
+					state={entry.state}
+					primaryLabel="Join Household"
+					onSubmit={entry.submit}
+				/>
+			);
+		}
+
+		render(<Harness />);
+		await act(async () => {
+			resolvePreview({
+				available: true,
+				householdName: "River House",
+			});
+		});
 		await screen.findByText("River House");
 
 		fireEvent.press(screen.getByText("Join Household"));

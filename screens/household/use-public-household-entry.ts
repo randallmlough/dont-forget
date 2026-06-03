@@ -97,6 +97,18 @@ export function usePublicHouseholdEntry({
 			});
 			return;
 		}
+		if (kind === "joinCode" && isSignedIn === undefined) {
+			return;
+		}
+		if (kind === "joinCode" && isSignedIn === false) {
+			dispatch({
+				type: "loaded",
+				entryKey,
+				kind,
+				preview: { available: true, householdName: "Household" },
+			});
+			return;
+		}
 
 		const preview =
 			kind === "invitation"
@@ -119,7 +131,7 @@ export function usePublicHouseholdEntry({
 		return () => {
 			cancelled = true;
 		};
-	}, [client, entryKey, kind, secret]);
+	}, [client, entryKey, isSignedIn, kind, secret]);
 
 	async function submit() {
 		if (!secret || state.status !== "ready") return;
@@ -178,15 +190,27 @@ function reducer(
 				message: unavailableMessage(action.kind),
 			};
 		}
+		const inviterDisplayName =
+			"inviterDisplayName" in action.preview
+				? action.preview.inviterDisplayName
+				: undefined;
+		if (
+			state.entryKey === action.entryKey &&
+			state.status === "ready" &&
+			state.kind === action.kind &&
+			state.householdName === action.preview.householdName &&
+			state.inviterDisplayName === inviterDisplayName &&
+			state.working === false &&
+			state.error === null
+		) {
+			return state;
+		}
 		return {
 			status: "ready",
 			entryKey: action.entryKey,
 			kind: action.kind,
 			householdName: action.preview.householdName,
-			inviterDisplayName:
-				"inviterDisplayName" in action.preview
-					? action.preview.inviterDisplayName
-					: undefined,
+			inviterDisplayName,
 			working: false,
 			error: null,
 		};
