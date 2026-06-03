@@ -124,8 +124,8 @@ export function AuthenticatedAppSessionProvider({
 		}
 		if (
 			snapshot.status === "ready" &&
-			snapshot.session.activeHousehold.id !==
-				activeHouseholdChangeBoundary.previousHouseholdId
+			snapshot.session.resourceKey !==
+				activeHouseholdChangeBoundary.previousResourceKey
 		) {
 			setActiveHouseholdChangeBoundary(null);
 		}
@@ -170,10 +170,7 @@ export function AuthenticatedAppSessionProvider({
 			const currentSession = currentSessionFromSnapshot(snapshot);
 			setActiveHouseholdChangeBoundary(
 				currentSession
-					? {
-							previousHouseholdId: currentSession.activeHousehold.id,
-							previousResourceKey: currentSession.resourceKey,
-						}
+					? { previousResourceKey: currentSession.resourceKey }
 					: null,
 			);
 		}
@@ -253,7 +250,6 @@ function publicStateFromSnapshot(
 }
 
 type ActiveHouseholdChangeBoundary = {
-	previousHouseholdId: string;
 	previousResourceKey: string;
 };
 
@@ -267,16 +263,10 @@ function snapshotReferencesPreviousActiveHousehold(
 	boundary: ActiveHouseholdChangeBoundary,
 ): boolean {
 	if (snapshot.status === "ready") {
-		return (
-			snapshot.session.resourceKey === boundary.previousResourceKey ||
-			snapshot.session.activeHousehold.id === boundary.previousHouseholdId
-		);
+		return snapshot.session.resourceKey === boundary.previousResourceKey;
 	}
 	if (snapshot.status === "loading") {
-		return (
-			snapshot.previous?.resourceKey === boundary.previousResourceKey ||
-			snapshot.previous?.activeHousehold.id === boundary.previousHouseholdId
-		);
+		return snapshot.previous?.resourceKey === boundary.previousResourceKey;
 	}
 	return false;
 }

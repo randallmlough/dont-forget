@@ -244,6 +244,26 @@ describe("AuthenticatedAppSessionProvider", () => {
 				expect.objectContaining({ activeHouseholdChanged: true }),
 			),
 		);
+	});
+
+	it("publishes a fresh same-Household session after an active Household change reload", async () => {
+		const previousSession = appSessionFixture();
+		const controller = authenticatedAppSessionControllerFixture({
+			snapshot: { status: "ready", session: previousSession },
+		});
+		render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
+				<RetryActiveHouseholdChangeState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		fireEvent.press(
+			screen.getByRole("button", { name: "Reload active Household" }),
+		);
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
 
 		act(() => {
 			controller.publish({
@@ -255,10 +275,11 @@ describe("AuthenticatedAppSessionProvider", () => {
 			});
 		});
 
-		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
-		expect(
-			screen.queryByText("hh_avery:authenticated-app-session:2"),
-		).toBeNull();
+		await waitFor(() =>
+			expect(
+				screen.getByText("hh_avery:authenticated-app-session:2"),
+			).toBeTruthy(),
+		);
 	});
 
 	it("stops exposing ready session data while loading has no previous session", async () => {
