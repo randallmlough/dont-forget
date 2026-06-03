@@ -113,6 +113,13 @@ export function AuthenticatedAppSessionProvider({
 	}, [controller]);
 
 	useEffect(() => {
+		if (
+			!activeHouseholdChangeBoundary &&
+			activeHouseholdChangedRef.current &&
+			(snapshot.status === "idle" || snapshot.status === "ready")
+		) {
+			activeHouseholdChangedRef.current = false;
+		}
 		if (!activeHouseholdChangeBoundary) return;
 		if (snapshot.status === "idle") {
 			activeHouseholdChangedRef.current = false;

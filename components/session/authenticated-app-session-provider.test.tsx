@@ -332,6 +332,57 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 	});
 
+	it("clears active Household change mode after a no-boundary reload publishes", async () => {
+		const auth = authFixture();
+		const controller = authenticatedAppSessionControllerFixture({
+			snapshot: { status: "idle" },
+		});
+		const { rerender } = render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={auth}
+				activationEnabled={false}
+			>
+				<ReloadActiveHouseholdChangeState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		fireEvent.press(
+			screen.getByRole("button", { name: "Reload active Household" }),
+		);
+		await waitFor(() =>
+			expect(controller.activate).toHaveBeenLastCalledWith(
+				expect.objectContaining({ activeHouseholdChanged: true }),
+			),
+		);
+
+		act(() => {
+			controller.publish({
+				status: "ready",
+				session: appSessionFixture(),
+			});
+		});
+		await waitFor(() =>
+			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
+		);
+
+		rerender(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={auth}
+				activationEnabled={true}
+			>
+				<ReloadActiveHouseholdChangeState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(controller.activate).toHaveBeenLastCalledWith(
+				expect.objectContaining({ activeHouseholdChanged: false }),
+			),
+		);
+	});
+
 	it("stops exposing ready session data while loading has no previous session", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		render(
