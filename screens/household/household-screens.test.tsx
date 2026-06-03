@@ -8,6 +8,7 @@ import {
 import type { ReactNode } from "react";
 import type { AuthenticatedAppSessionContextValue } from "@/components/session";
 import type { HouseholdApiClient } from "@/lib/client-api/households";
+import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HouseholdSettingsView } from "./household-settings-screen";
 import HouseholdSwitchScreen, {
@@ -650,6 +651,48 @@ describe("PublicHouseholdEntry", () => {
 		expect(mockPush).toHaveBeenCalledWith(
 			"/sign-in?next=%2Finvitations%2Faccept&token=secret-token",
 		);
+	});
+
+	it("uses join-link analytics source when joining from a public Household Join Code route", async () => {
+		const joinByCode = jest.fn(async () => undefined);
+		const previewJoinCode = jest.fn(async () => ({
+			available: true as const,
+			householdName: "River House",
+		}));
+
+		function Harness() {
+			const entry = usePublicHouseholdEntry({
+				kind: "joinCode",
+				secret: "ABCDEFGH",
+				client: {
+					...emptyClient(),
+					previewJoinCode,
+					joinByCode,
+				},
+				reloadSession: mockReloadSession,
+			});
+			return (
+				<PublicHouseholdEntryView
+					state={entry.state}
+					primaryLabel="Join Household"
+					onSubmit={entry.submit}
+				/>
+			);
+		}
+
+		render(<Harness />);
+		await screen.findByText("River House");
+
+		fireEvent.press(screen.getByText("Join Household"));
+
+		await waitFor(() =>
+			expect(joinByCode).toHaveBeenCalledWith(
+				"ABCDEFGH",
+				JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE,
+			),
+		);
+		expect(mockReloadSession).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledWith("/");
 	});
 
 	it("returns to loading when the Invitation token changes", async () => {

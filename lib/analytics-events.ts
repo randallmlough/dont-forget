@@ -1,3 +1,5 @@
+import type { HouseholdJoinCodeSource } from "@/lib/household-join-code-source";
+
 /**
  * Catalog of every product-analytics event the app emits.
  *
@@ -57,7 +59,7 @@ export type EventMap = {
 		household_id: string;
 		user_id: string;
 		membership_created: boolean;
-		source: "manual_code" | "join_link";
+		source: HouseholdJoinCodeSource;
 	};
 	household_join_code_regenerated: {
 		household_id: string;

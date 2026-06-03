@@ -21,7 +21,7 @@ class PostHogAnalyticsAdapter implements AnalyticsAdapter {
 		posthog.capture(event, redactAttributes(properties) as PostHogProperties);
 	}
 	identify(userId: string, traits: UserTraits) {
-		posthog.identify(userId, traits as PostHogProperties);
+		posthog.identify(userId, redactAttributes(traits) as PostHogProperties);
 	}
 	reset() {
 		posthog.reset();
@@ -65,22 +65,14 @@ export function screen(name: string, properties: ScreenProperties = {}): void {
 export function useAnalyticsIdentity(): void {
 	const { user } = useUser();
 	const userId = user?.id;
-	const email = user?.primaryEmailAddress?.emailAddress;
-	const fullName = user?.fullName;
-	const imageUrl = user?.imageUrl;
 	const createdAt = user?.createdAt?.toISOString();
 
 	useEffect(() => {
 		if (!userId) return;
 		adapter.identify(userId, {
-			$set: {
-				email,
-				name: fullName,
-				avatar_url: imageUrl,
-			},
 			$set_once: {
 				created_at: createdAt,
 			},
 		});
-	}, [userId, email, fullName, imageUrl, createdAt]);
+	}, [userId, createdAt]);
 }

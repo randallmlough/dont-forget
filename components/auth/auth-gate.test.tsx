@@ -94,14 +94,16 @@ describe("AuthGate", () => {
 		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
-	it("redirects signed-in auth routes to Home", async () => {
+	it("redirects signed-in auth routes to safe internal route intent", async () => {
 		setMockAuthState({ isLoaded: true, isSignedIn: true });
 
 		render(
 			<AuthGate pathname="/sign-in" params={{ next: "/household/settings" }} />,
 		);
 
-		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+		await waitFor(() =>
+			expect(mockReplace).toHaveBeenCalledWith("/household/settings"),
+		);
 	});
 
 	it("redirects signed-in auth routes to preserved public route intent", async () => {

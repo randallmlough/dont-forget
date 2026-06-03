@@ -17,6 +17,7 @@ import {
 	users,
 } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/test";
+import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import { deferred } from "@/lib/test/async";
 import {
 	createHouseholdJoinCodeService,
@@ -71,7 +72,7 @@ describe("createHouseholdJoinCodeService", () => {
 			const joined = await service.joinByCode({
 				code: "ABCD EFGH",
 				userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
-				source: "join_link",
+				source: JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE,
 			});
 			const existingMemberJoin = await service.joinByCode({
 				code: "ABCDEFGH",
@@ -100,7 +101,7 @@ describe("createHouseholdJoinCodeService", () => {
 				household_id: PRIMARY_HOUSEHOLD_SEED.household.id,
 				user_id: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
 				membership_created: true,
-				source: "join_link",
+				source: JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE,
 			});
 		} finally {
 			dateNow.mockRestore();

@@ -1,5 +1,9 @@
 import Constants from "expo-constants";
 import { z } from "zod";
+import {
+	type HouseholdJoinCodeSource,
+	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
+} from "@/lib/household-join-code-source";
 
 export type ApiGetToken = () => Promise<string | null>;
 
@@ -106,7 +110,7 @@ export type HouseholdApiClient = {
 	previewInvitation(token: string): Promise<InvitationPreview>;
 	acceptInvitation(token: string): Promise<void>;
 	previewJoinCode(code: string): Promise<HouseholdJoinCodePreview>;
-	joinByCode(code: string): Promise<void>;
+	joinByCode(code: string, source?: HouseholdJoinCodeSource): Promise<void>;
 };
 
 export function createHouseholdApiClient({
@@ -204,10 +208,10 @@ export function createHouseholdApiClient({
 			);
 			return joinCodePreviewSchema.parse(payload);
 		},
-		async joinByCode(code) {
+		async joinByCode(code, source = MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE) {
 			await authed("/api/households/join-code/join", {
 				method: "POST",
-				body: JSON.stringify({ code }),
+				body: JSON.stringify({ code, source }),
 			});
 		},
 	};

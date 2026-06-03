@@ -106,8 +106,11 @@ POST /api/households/join-code/join
 ```
 
 ```json
-{ "code": "ABCDEFGH" }
+{ "code": "ABCDEFGH", "source": "manual_code" }
 ```
+
+`source` is optional and defaults to `manual_code`. Public join links send
+`join_link`.
 
 Invitation creation:
 
