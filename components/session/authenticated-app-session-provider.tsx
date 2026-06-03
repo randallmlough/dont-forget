@@ -6,6 +6,7 @@ import {
 	useEffect,
 	useEffectEvent,
 	useReducer,
+	useRef,
 	useState,
 } from "react";
 import { reset, track } from "@/lib/analytics";
@@ -90,15 +91,10 @@ export function AuthenticatedAppSessionProvider({
 		);
 	const [activeHouseholdChangeBoundary, setActiveHouseholdChangeBoundary] =
 		useState<ActiveHouseholdChangeBoundary | null>(null);
+	const activeHouseholdChangedRef = useRef(false);
 	const [activationRequest, requestActivation] = useReducer(
-		(
-			request: AuthenticatedAppSessionActivationRequest,
-			options?: AuthenticatedAppSessionReloadOptions,
-		): AuthenticatedAppSessionActivationRequest => ({
-			attempt: request.attempt + 1,
-			activeHouseholdChanged: options?.activeHouseholdChanged === true,
-		}),
-		{ attempt: 0, activeHouseholdChanged: false },
+		(attempt: number) => attempt + 1,
+		0,
 	);
 	const [signOutRunningState] = useState(() => ({ running: false }));
 	const getToken = useEffectEvent(() => auth.getToken());
@@ -119,6 +115,7 @@ export function AuthenticatedAppSessionProvider({
 	useEffect(() => {
 		if (!activeHouseholdChangeBoundary) return;
 		if (snapshot.status === "idle") {
+			activeHouseholdChangedRef.current = false;
 			setActiveHouseholdChangeBoundary(null);
 			return;
 		}
@@ -127,18 +124,19 @@ export function AuthenticatedAppSessionProvider({
 			snapshot.session.resourceKey !==
 				activeHouseholdChangeBoundary.previousResourceKey
 		) {
+			activeHouseholdChangedRef.current = false;
 			setActiveHouseholdChangeBoundary(null);
 		}
 	}, [activeHouseholdChangeBoundary, snapshot]);
 
 	useEffect(() => {
 		if (signOutRunningState.running) return;
-		if (!activationEnabled && activationRequest.attempt === 0) return;
+		if (!activationEnabled && activationRequest === 0) return;
 		void controller.activate({
 			getToken,
 			authReady,
 			signedIn,
-			activeHouseholdChanged: activationRequest.activeHouseholdChanged,
+			activeHouseholdChanged: activeHouseholdChangedRef.current,
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- getToken is a React Effect Event that supplies the latest token callback without reactivating on token identity changes.
 	}, [
@@ -146,8 +144,7 @@ export function AuthenticatedAppSessionProvider({
 		authReady,
 		signedIn,
 		controller,
-		activationRequest.attempt,
-		activationRequest.activeHouseholdChanged,
+		activationRequest,
 		signOutRunningState,
 	]);
 
@@ -158,7 +155,7 @@ export function AuthenticatedAppSessionProvider({
 	}, [controller]);
 
 	function retry() {
-		requestActivation(
+		requestSessionActivation(
 			activeHouseholdChangeBoundary
 				? { activeHouseholdChanged: true }
 				: undefined,
@@ -174,7 +171,15 @@ export function AuthenticatedAppSessionProvider({
 					: null,
 			);
 		}
-		requestActivation(options);
+		requestSessionActivation(options);
+	}
+
+	function requestSessionActivation(
+		options: AuthenticatedAppSessionReloadOptions | undefined,
+	) {
+		activeHouseholdChangedRef.current =
+			options?.activeHouseholdChanged === true;
+		requestActivation();
 	}
 
 	const value: AuthenticatedAppSessionContextValue = {
@@ -251,11 +256,6 @@ function publicStateFromSnapshot(
 
 type ActiveHouseholdChangeBoundary = {
 	previousResourceKey: string;
-};
-
-type AuthenticatedAppSessionActivationRequest = {
-	attempt: number;
-	activeHouseholdChanged: boolean;
 };
 
 function snapshotReferencesPreviousActiveHousehold(
