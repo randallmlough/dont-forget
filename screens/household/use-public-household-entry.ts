@@ -96,7 +96,10 @@ export function usePublicHouseholdEntry({
 			});
 			return;
 		}
-		if (kind === "joinCode" && !isSignedIn) {
+		if (kind === "joinCode" && isSignedIn === undefined) {
+			return;
+		}
+		if (kind === "joinCode" && isSignedIn === false) {
 			dispatch({
 				type: "loaded",
 				entryKey,
