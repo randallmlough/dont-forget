@@ -199,6 +199,68 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 	});
 
+	it("preserves the active Household change boundary across retry", async () => {
+		const previousSession = appSessionFixture();
+		const controller = authenticatedAppSessionControllerFixture({
+			snapshot: { status: "ready", session: previousSession },
+		});
+		render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
+				<RetryActiveHouseholdChangeState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		expect(
+			screen.getByText("hh_avery:authenticated-app-session:1"),
+		).toBeTruthy();
+
+		fireEvent.press(
+			screen.getByRole("button", { name: "Reload active Household" }),
+		);
+		await waitFor(() =>
+			expect(controller.activate).toHaveBeenLastCalledWith(
+				expect.objectContaining({ activeHouseholdChanged: true }),
+			),
+		);
+
+		act(() => {
+			controller.publish({
+				status: "error",
+				message: "Unable to prepare your Household.",
+			});
+		});
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household."),
+			).toBeTruthy(),
+		);
+
+		fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+		await waitFor(() =>
+			expect(controller.activate).toHaveBeenLastCalledWith(
+				expect.objectContaining({ activeHouseholdChanged: true }),
+			),
+		);
+
+		act(() => {
+			controller.publish({
+				status: "ready",
+				session: {
+					...previousSession,
+					resourceKey: "authenticated-app-session:2",
+				},
+			});
+		});
+
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+		expect(
+			screen.queryByText("hh_avery:authenticated-app-session:2"),
+		).toBeNull();
+	});
+
 	it("stops exposing ready session data while loading has no previous session", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		render(
@@ -695,6 +757,30 @@ function ReloadActiveHouseholdChangeState() {
 				onPress={() => reloadSession({ activeHouseholdChanged: true })}
 			>
 				<Text>Reload active Household</Text>
+			</Pressable>
+		</>
+	);
+}
+
+function RetryActiveHouseholdChangeState() {
+	const { state, session, reloadSession, retry } = useAuthenticatedAppSession();
+	return (
+		<>
+			<Text>
+				{session
+					? `${session.activeHousehold.id}:${session.resourceKey}`
+					: state.status === "error"
+						? state.message
+						: state.status}
+			</Text>
+			<Pressable
+				accessibilityRole="button"
+				onPress={() => reloadSession({ activeHouseholdChanged: true })}
+			>
+				<Text>Reload active Household</Text>
+			</Pressable>
+			<Pressable accessibilityRole="button" onPress={retry}>
+				<Text>Retry</Text>
 			</Pressable>
 		</>
 	);

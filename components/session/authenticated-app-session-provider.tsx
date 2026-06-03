@@ -117,6 +117,21 @@ export function AuthenticatedAppSessionProvider({
 	}, [controller]);
 
 	useEffect(() => {
+		if (!activeHouseholdChangeBoundary) return;
+		if (snapshot.status === "idle") {
+			setActiveHouseholdChangeBoundary(null);
+			return;
+		}
+		if (
+			snapshot.status === "ready" &&
+			snapshot.session.activeHousehold.id !==
+				activeHouseholdChangeBoundary.previousHouseholdId
+		) {
+			setActiveHouseholdChangeBoundary(null);
+		}
+	}, [activeHouseholdChangeBoundary, snapshot]);
+
+	useEffect(() => {
 		if (signOutRunningState.running) return;
 		if (!activationEnabled && activationRequest.attempt === 0) return;
 		void controller.activate({
@@ -143,7 +158,11 @@ export function AuthenticatedAppSessionProvider({
 	}, [controller]);
 
 	function retry() {
-		requestActivation();
+		requestActivation(
+			activeHouseholdChangeBoundary
+				? { activeHouseholdChanged: true }
+				: undefined,
+		);
 	}
 
 	function reloadSession(options?: AuthenticatedAppSessionReloadOptions) {
@@ -151,7 +170,10 @@ export function AuthenticatedAppSessionProvider({
 			const currentSession = currentSessionFromSnapshot(snapshot);
 			setActiveHouseholdChangeBoundary(
 				currentSession
-					? { previousResourceKey: currentSession.resourceKey }
+					? {
+							previousHouseholdId: currentSession.activeHousehold.id,
+							previousResourceKey: currentSession.resourceKey,
+						}
 					: null,
 			);
 		}
@@ -231,6 +253,7 @@ function publicStateFromSnapshot(
 }
 
 type ActiveHouseholdChangeBoundary = {
+	previousHouseholdId: string;
 	previousResourceKey: string;
 };
 
@@ -244,10 +267,16 @@ function snapshotReferencesPreviousActiveHousehold(
 	boundary: ActiveHouseholdChangeBoundary,
 ): boolean {
 	if (snapshot.status === "ready") {
-		return snapshot.session.resourceKey === boundary.previousResourceKey;
+		return (
+			snapshot.session.resourceKey === boundary.previousResourceKey ||
+			snapshot.session.activeHousehold.id === boundary.previousHouseholdId
+		);
 	}
 	if (snapshot.status === "loading") {
-		return snapshot.previous?.resourceKey === boundary.previousResourceKey;
+		return (
+			snapshot.previous?.resourceKey === boundary.previousResourceKey ||
+			snapshot.previous?.activeHousehold.id === boundary.previousHouseholdId
+		);
 	}
 	return false;
 }
