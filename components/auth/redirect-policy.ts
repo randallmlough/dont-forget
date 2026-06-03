@@ -35,7 +35,7 @@ export function authRedirectTarget({
 	if (!checkedCachedSession) return null;
 
 	if (hasCachedSession) {
-		return onAuthPath ? "/" : null;
+		return onAuthPath ? cachedSessionAuthPathTarget(params) : null;
 	}
 
 	if (PUBLIC_AUTH_PRESERVING_PATHS.has(pathname)) return null;
@@ -70,10 +70,23 @@ export function authHrefWithIntent(
 }
 
 function signedInAuthPathTarget(params: AuthRedirectParams): Href {
+	return authPathTarget(params, true);
+}
+
+function cachedSessionAuthPathTarget(params: AuthRedirectParams): Href {
+	return authPathTarget(params, false);
+}
+
+function authPathTarget(
+	params: AuthRedirectParams,
+	allowAnyInternalNext: boolean,
+): Href {
 	const next = internalNextPath(params.next);
 	if (!next) return "/";
 	const nextPathname = pathnameFromInternalPath(next);
-	if (!PUBLIC_AUTH_PRESERVING_PATHS.has(nextPathname)) return next as Href;
+	if (!PUBLIC_AUTH_PRESERVING_PATHS.has(nextPathname)) {
+		return allowAnyInternalNext ? (next as Href) : "/";
+	}
 	return targetWithPreservedIntent(nextPathname, params);
 }
 

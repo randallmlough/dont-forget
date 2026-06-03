@@ -70,6 +70,30 @@ describe("authRedirectTarget", () => {
 		).toBe("/households/join?code=ABCDEFGH");
 	});
 
+	it("preserves public route intent for Users with cached Authenticated App Sessions", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				params: { next: "/invitations/accept", token: "tok_123" },
+				isSignedIn: false,
+				isAuthLoaded: false,
+				checkedCachedSession: true,
+				hasCachedSession: true,
+			}),
+		).toBe("/invitations/accept?token=tok_123");
+
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-up",
+				params: { next: "/households/join", code: "ABCDEFGH" },
+				isSignedIn: false,
+				isAuthLoaded: false,
+				checkedCachedSession: true,
+				hasCachedSession: true,
+			}),
+		).toBe("/households/join?code=ABCDEFGH");
+	});
+
 	it("sends Users with cached Authenticated App Sessions from auth routes to Home", () => {
 		expect(
 			authRedirectTarget({
