@@ -160,6 +160,25 @@ describe("Household API handlers", () => {
 							method: "GET",
 							path: `/api/households/join-code/preview?code=${scenario.joinCodes.active.code}`,
 						}),
+						{
+							directory: directory.db,
+							authenticate: async () => {
+								throw new ApiUnauthorizedError("Missing bearer token");
+							},
+						},
+					),
+				),
+			).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Missing bearer token" },
+			});
+			await expect(
+				readJsonResponse(
+					await handlePreviewJoinCode(
+						createApiRequest({
+							method: "GET",
+							path: `/api/households/join-code/preview?code=${scenario.joinCodes.active.code}`,
+						}),
 						deps,
 					),
 				),
@@ -184,6 +203,22 @@ describe("Household API handlers", () => {
 				status: 404,
 				body: { available: false },
 			});
+			for (const code of [scenario.joinCodes.replaced.code, "NOPE0000"]) {
+				await expect(
+					readJsonResponse(
+						await handlePreviewJoinCode(
+							createApiRequest({
+								method: "GET",
+								path: `/api/households/join-code/preview?code=${code}`,
+							}),
+							deps,
+						),
+					),
+				).resolves.toMatchObject({
+					status: 404,
+					body: { available: false },
+				});
+			}
 
 			const current = await readJsonResponse(
 				await handleGetJoinCode(
@@ -269,6 +304,18 @@ describe("Household API handlers", () => {
 			expect(throttled).toMatchObject({
 				status: 429,
 				body: { error: "Too many attempts. Try again later." },
+			});
+			const unavailableJoin = await readJsonResponse(
+				await handleJoinByCode(
+					createApiRequest({
+						body: { code: scenario.joinCodes.disabled.code },
+					}),
+					householdDeps(directory, scenario.users.cameron.clerkUserId),
+				),
+			);
+			expect(unavailableJoin).toMatchObject({
+				status: 404,
+				body: { error: "This Household code is not available." },
 			});
 		} finally {
 			dateNow.mockRestore();

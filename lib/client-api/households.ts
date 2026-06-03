@@ -198,7 +198,7 @@ export function createHouseholdApiClient({
 			});
 		},
 		async previewJoinCode(code) {
-			const payload = await publicRequest(
+			const payload = await authed(
 				`/api/households/join-code/preview?code=${encodeURIComponent(code)}`,
 				{ allowStatuses: [404] },
 			);

@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { DirectoryDb } from "@/db/client";
 import {
@@ -8,13 +8,16 @@ import {
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
-	users,
 } from "@/db/schema/directory";
 import { runWithSqliteBusyRetry } from "@/db/utils";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createMemberService } from "@/lib/services/member/server";
+import {
+	lockHouseholdLifecycle,
+	lockUserLifecycle,
+} from "@/lib/services/server/lifecycle-lock";
 import { createActiveHouseholdService } from "./active-household-service";
 
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -273,7 +276,7 @@ async function regenerateJoinCode(
 				),
 			);
 
-		const code = await createHouseholdJoinCode(
+		const code = await createInitialHouseholdJoinCode(
 			{
 				householdId: input.householdId,
 				createdByUserId: input.requestedByUserId,
@@ -304,7 +307,7 @@ async function disableJoinCode(
 
 	const disabledCode = await runWithSqliteBusyRetry(() =>
 		directory.transaction(async (tx) => {
-			await lockHouseholdJoinCodeLifecycle(input.householdId, tx);
+			await lockHouseholdLifecycle(input.householdId, tx);
 			const [updated] = await tx
 				.update(householdJoinCodes)
 				.set({ disabledAt: now, disabledByUserId: input.requestedByUserId })
@@ -370,7 +373,11 @@ async function createOrFindEnabledJoinCode(
 	generateCode: HouseholdJoinCodeGenerator,
 ): Promise<{ code: HouseholdJoinCode; created: boolean }> {
 	try {
-		const code = await createHouseholdJoinCode(input, directory, generateCode);
+		const code = await createInitialHouseholdJoinCode(
+			input,
+			directory,
+			generateCode,
+		);
 		return { code, created: true };
 	} catch (error) {
 		if (!isActiveJoinCodeConflict(error)) throw error;
@@ -380,16 +387,6 @@ async function createOrFindEnabledJoinCode(
 
 		throw error;
 	}
-}
-
-async function lockHouseholdJoinCodeLifecycle(
-	householdId: string,
-	directory: HouseholdJoinCodeServiceExecutor,
-) {
-	await directory
-		.update(households)
-		.set({ id: sql`${households.id}` })
-		.where(eq(households.id, householdId));
 }
 
 async function requireActiveHouseholdMember(
@@ -456,7 +453,7 @@ async function findAvailableJoinCode(
 	return row ?? null;
 }
 
-export async function createHouseholdJoinCode(
+export async function createInitialHouseholdJoinCode(
 	input: { householdId: string; createdByUserId: string; now?: number },
 	directory: HouseholdJoinCodeServiceExecutor,
 	generateCode: HouseholdJoinCodeGenerator = generateSecureHouseholdJoinCode,
@@ -513,10 +510,7 @@ async function recordFailedAttemptAndAssert(
 	directory: DirectoryDb,
 ) {
 	await directory.transaction(async (tx) => {
-		await tx
-			.update(users)
-			.set({ id: sql`${users.id}` })
-			.where(eq(users.id, input.userId));
+		await lockUserLifecycle(input.userId, tx);
 
 		const [attempt] = await tx
 			.select()

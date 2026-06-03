@@ -131,6 +131,26 @@ describe("Invitation API handlers", () => {
 				status: 404,
 				body: { available: false },
 			});
+			for (const token of [
+				scenario.invitations.accepted.token,
+				scenario.invitations.expired.token,
+				"missing-token",
+			]) {
+				await expect(
+					readJsonResponse(
+						await handlePreviewInvitation(
+							createApiRequest({
+								method: "GET",
+								path: `/api/invitations/preview?token=${token}`,
+							}),
+							deps,
+						),
+					),
+				).resolves.toMatchObject({
+					status: 404,
+					body: { available: false },
+				});
+			}
 
 			const accepted = await readJsonResponse(
 				await handleAcceptInvitation(
@@ -153,6 +173,23 @@ describe("Invitation API handlers", () => {
 					membershipCreated: true,
 					activeHouseholdId: scenario.household.id,
 				},
+			});
+			await expect(
+				readJsonResponse(
+					await handleAcceptInvitation(
+						createApiRequest({
+							body: { token: scenario.invitations.revoked.token },
+						}),
+						invitationDeps({
+							directory: directory.db,
+							clerkUserId: "user_casey",
+							analytics,
+						}),
+					),
+				),
+			).resolves.toMatchObject({
+				status: 404,
+				body: { error: "This Invitation is no longer available." },
 			});
 
 			const revoked = await readJsonResponse(

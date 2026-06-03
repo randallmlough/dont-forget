@@ -34,6 +34,9 @@ describe("createInvitationService", () => {
 		const directory = await createTestDirectoryDb();
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_010_000);
 		const analytics = { track: jest.fn() };
+		const consoleError = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
 		const emailSender = {
 			sendInvitationEmail: jest.fn(async () => {
 				throw new Error("resend unavailable");
@@ -75,8 +78,20 @@ describe("createInvitationService", () => {
 
 			expect(first.emailDelivery).toEqual({
 				status: "failed",
-				message: "resend unavailable",
+				message: "Invitation email could not be delivered.",
 			});
+			expect(consoleError).toHaveBeenCalledWith(
+				"Invitation email delivery failed",
+				expect.objectContaining({
+					error_message: "resend unavailable",
+					error_name: "Error",
+					household_id: PRIMARY_HOUSEHOLD_SEED.household.id,
+					invitation_id: first.invitation.id,
+				}),
+			);
+			expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+				"new.member@example.com",
+			);
 			expect(first.invitation).toMatchObject({
 				email: "new.member@example.com",
 				acceptUrl: "app://accept/email-token",
@@ -104,6 +119,7 @@ describe("createInvitationService", () => {
 				reused_existing: true,
 			});
 		} finally {
+			consoleError.mockRestore();
 			dateNow.mockRestore();
 			await directory.close();
 		}

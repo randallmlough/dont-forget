@@ -11,6 +11,16 @@ export const HOUSEHOLD_CODE_UNAVAILABLE_MESSAGE =
 export const HOUSEHOLD_CODE_THROTTLED_MESSAGE =
 	"Too many attempts. Try again later.";
 
+const UNAVAILABLE_STATUS = 404;
+const THROTTLED_STATUS = 429;
+
+type UnavailableResource = "invitation" | "householdJoinCode";
+
+const UNAVAILABLE_MESSAGES: Record<UnavailableResource, string> = {
+	invitation: INVITATION_UNAVAILABLE_MESSAGE,
+	householdJoinCode: HOUSEHOLD_CODE_UNAVAILABLE_MESSAGE,
+};
+
 export class BadRequestError extends Error {
 	constructor(message = "Invalid request") {
 		super(message);
@@ -144,6 +154,20 @@ export function jsonResponse(body: unknown, status = 200): Response {
 
 export function errorResponse(message: string, status: number): Response {
 	return jsonResponse({ error: message }, status);
+}
+
+export function unavailablePreviewResponse(): Response {
+	return jsonResponse({ available: false }, UNAVAILABLE_STATUS);
+}
+
+export function unavailableErrorResponse(
+	resource: UnavailableResource,
+): Response {
+	return errorResponse(UNAVAILABLE_MESSAGES[resource], UNAVAILABLE_STATUS);
+}
+
+export function householdJoinCodeThrottledResponse(): Response {
+	return errorResponse(HOUSEHOLD_CODE_THROTTLED_MESSAGE, THROTTLED_STATUS);
 }
 
 export function isApiUnauthorizedError(

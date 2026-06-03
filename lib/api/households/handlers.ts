@@ -21,8 +21,7 @@ import {
 	BadRequestError,
 	booleanField,
 	errorResponse,
-	HOUSEHOLD_CODE_THROTTLED_MESSAGE,
-	HOUSEHOLD_CODE_UNAVAILABLE_MESSAGE,
+	householdJoinCodeThrottledResponse,
 	isApiForbiddenError,
 	isApiUnauthorizedError,
 	jsonResponse,
@@ -30,6 +29,8 @@ import {
 	queryStringField,
 	readJsonObject,
 	stringField,
+	unavailableErrorResponse,
+	unavailablePreviewResponse,
 	withDirectory,
 } from "../shared";
 
@@ -171,6 +172,7 @@ export async function handlePreviewJoinCode(
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
+			await authenticateApiUser(request, directory, deps);
 			const code = queryStringField(request, "code");
 			const preview = await householdJoinCodeService(
 				directory,
@@ -178,7 +180,7 @@ export async function handlePreviewJoinCode(
 			).previewJoinCode(code);
 			return preview.available
 				? jsonResponse(preview)
-				: jsonResponse({ available: false }, 404);
+				: unavailablePreviewResponse();
 		});
 	} catch (error) {
 		return householdErrorResponse(
@@ -269,10 +271,10 @@ function householdErrorResponse(error: unknown, context: string): Response {
 		return errorResponse("Forbidden", 403);
 	}
 	if (error instanceof HouseholdJoinCodeUnavailableError) {
-		return errorResponse(HOUSEHOLD_CODE_UNAVAILABLE_MESSAGE, 404);
+		return unavailableErrorResponse("householdJoinCode");
 	}
 	if (error instanceof HouseholdJoinCodeThrottledError) {
-		return errorResponse(HOUSEHOLD_CODE_THROTTLED_MESSAGE, 429);
+		return householdJoinCodeThrottledResponse();
 	}
 
 	console.error(context, error);
