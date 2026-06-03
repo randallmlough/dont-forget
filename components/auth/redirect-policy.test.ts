@@ -31,7 +31,7 @@ describe("authRedirectTarget", () => {
 		).toBeNull();
 	});
 
-	it("sends signed-in Users from auth routes to Home", () => {
+	it("preserves safe internal next targets for signed-in Users on auth routes", () => {
 		expect(
 			authRedirectTarget({
 				pathname: "/sign-in",
@@ -41,7 +41,7 @@ describe("authRedirectTarget", () => {
 				checkedCachedSession: true,
 				hasCachedSession: false,
 			}),
-		).toBe("/");
+		).toBe("/household/settings");
 	});
 
 	it("preserves public Invitation intent for signed-in Users on auth routes", () => {
@@ -70,6 +70,30 @@ describe("authRedirectTarget", () => {
 		).toBe("/households/join?code=ABCDEFGH");
 	});
 
+	it("preserves public route intent for Users with cached Authenticated App Sessions", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				params: { next: "/invitations/accept", token: "tok_123" },
+				isSignedIn: false,
+				isAuthLoaded: false,
+				checkedCachedSession: true,
+				hasCachedSession: true,
+			}),
+		).toBe("/invitations/accept?token=tok_123");
+
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-up",
+				params: { next: "/households/join", code: "ABCDEFGH" },
+				isSignedIn: false,
+				isAuthLoaded: false,
+				checkedCachedSession: true,
+				hasCachedSession: true,
+			}),
+		).toBe("/households/join?code=ABCDEFGH");
+	});
+
 	it("sends Users with cached Authenticated App Sessions from auth routes to Home", () => {
 		expect(
 			authRedirectTarget({
@@ -87,6 +111,36 @@ describe("authRedirectTarget", () => {
 		expect(internalNextPath("https://example.com")).toBeNull();
 		expect(internalNextPath("//example.com")).toBeNull();
 		expect(internalNextPath("household/settings")).toBeNull();
+	});
+
+	it("strips nested bearer params from next targets", () => {
+		expect(
+			internalNextPath("/invitations/accept?token=tok_123&tab=preview"),
+		).toBe("/invitations/accept?tab=preview");
+		expect(internalNextPath("/households/join?code=ABCDEFGH")).toBe(
+			"/households/join",
+		);
+		expect(internalNextPath("/household/settings?tab=members")).toBe(
+			"/household/settings?tab=members",
+		);
+		expect(
+			internalNextPath(
+				"/household/settings?tab=members&access_token=secret-token&api_key=key-secret",
+			),
+		).toBe("/household/settings?tab=members");
+	});
+
+	it("ignores nested public route secrets when signed-in Users leave auth routes", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				params: { next: "/invitations/accept?token=tok_123" },
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+			}),
+		).toBe("/invitations/accept");
 	});
 
 	it("preserves safe intent when linking between auth screens", () => {

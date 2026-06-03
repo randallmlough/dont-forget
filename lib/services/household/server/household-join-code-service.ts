@@ -10,6 +10,10 @@ import {
 	households,
 } from "@/db/schema/directory";
 import { runWithSqliteBusyRetry } from "@/db/utils";
+import {
+	type HouseholdJoinCodeSource,
+	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
+} from "@/lib/household-join-code-source";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
@@ -78,7 +82,7 @@ export type HouseholdJoinCodePreview =
 export type JoinHouseholdByCodeInput = {
 	code: string;
 	userId: string;
-	source?: "manual_code" | "join_link";
+	source?: HouseholdJoinCodeSource;
 };
 
 export type JoinHouseholdByCodeResult = {
@@ -246,7 +250,7 @@ async function joinByCode(
 		household_id: result.householdId,
 		user_id: input.userId,
 		membership_created: result.membershipCreated,
-		source: input.source ?? "manual_code",
+		source: input.source ?? MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
 	});
 
 	return result;
