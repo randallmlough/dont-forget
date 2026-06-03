@@ -11,6 +11,7 @@ import {
 	type HouseholdJoinCodePreview,
 	type InvitationPreview,
 } from "@/lib/client-api/households";
+import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 
 type PublicEntryKind = "invitation" | "joinCode";
 
@@ -132,7 +133,7 @@ export function usePublicHouseholdEntry({
 			if (kind === "invitation") {
 				await client.acceptInvitation(secret);
 			} else {
-				await client.joinByCode(secret, "join_link");
+				await client.joinByCode(secret, JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE);
 			}
 			reloadSession();
 			dispatch({ type: "complete", entryKey, message: "Household joined." });

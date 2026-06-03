@@ -1,24 +1,5 @@
-const SENSITIVE_KEYS = new Set([
-	"password",
-	"token",
-	"authtoken",
-	"accesstoken",
-	"refreshtoken",
-	"idtoken",
-	"sessiontoken",
-	"bearertoken",
-	"secret",
-	"authorization",
-	"cookie",
-	"auth",
-	"apikey",
-	"api_key",
-	"email",
-	"emailaddress",
-	"code",
-	"joincode",
-	"householdjoincode",
-]);
+import { isSensitiveKey } from "./sensitive-keys";
+
 const BEARER_TOKEN_RE = /Bearer\s+[A-Za-z0-9_\-.=]+/g;
 const JWT_RE = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
 const QUERY_PARAM_RE = /([?&])([^=&#\s]+)=([^&#\s]*)/g;
@@ -30,19 +11,20 @@ export function redactString(value: string): string {
 }
 
 export function isSensitiveAttributeKey(key: string): boolean {
-	const normalized = normalizeAttributeKey(key);
-	return SENSITIVE_KEYS.has(normalized) || normalized.endsWith("token");
+	return isSensitiveKey(key);
 }
 
 export function redactAttributes(
 	attributes: Record<string, unknown>,
 ): Record<string, unknown> {
-	return redactRecord(attributes);
+	return redactRecord(attributes, new WeakSet<object>());
 }
 
 function redactRecord(
 	attributes: Record<string, unknown>,
+	seen: WeakSet<object>,
 ): Record<string, unknown> {
+	seen.add(attributes);
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(attributes)) {
 		if (isSensitiveAttributeKey(key)) {
@@ -50,27 +32,38 @@ function redactRecord(
 			continue;
 		}
 		if (value instanceof Error) {
-			appendErrorAttributes(out, value);
+			appendErrorAttributes(out, value, seen);
 			continue;
 		}
-		out[key] = redactValue(value);
+		out[key] = redactValue(value, seen);
 	}
 	return out;
 }
 
-function redactValue(value: unknown): unknown {
+function redactValue(value: unknown, seen: WeakSet<object>): unknown {
 	if (value instanceof Error) {
 		const out: Record<string, unknown> = {};
-		appendErrorAttributes(out, value);
+		appendErrorAttributes(out, value, seen);
 		return out;
 	}
 	if (typeof value === "string") return redactString(value);
-	if (Array.isArray(value)) return value.map(redactValue);
-	if (isPlainRecord(value)) return redactRecord(value);
+	if (Array.isArray(value)) {
+		if (seen.has(value)) return "[Circular]";
+		seen.add(value);
+		return value.map((item) => redactValue(item, seen));
+	}
+	if (isPlainRecord(value)) {
+		if (seen.has(value)) return "[Circular]";
+		return redactRecord(value, seen);
+	}
 	return value;
 }
 
-function appendErrorAttributes(out: Record<string, unknown>, error: Error) {
+function appendErrorAttributes(
+	out: Record<string, unknown>,
+	error: Error,
+	seen: WeakSet<object>,
+) {
 	out.error_message = redactString(error.message);
 	out.error_name = error.name;
 	if (error.stack) out.error_stack = redactString(error.stack);
@@ -78,6 +71,7 @@ function appendErrorAttributes(out: Record<string, unknown>, error: Error) {
 	if (cause !== undefined) {
 		out.error_cause = redactValue(
 			cause instanceof Error ? cause.message : String(cause),
+			seen,
 		);
 	}
 }
@@ -100,10 +94,6 @@ function redactNestedQueryValue(value: string): string {
 	return decodedRedacted === decoded
 		? rawRedacted
 		: encodeURIComponent(decodedRedacted);
-}
-
-function normalizeAttributeKey(key: string): string {
-	return key.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function safeDecodeURIComponent(value: string): string {

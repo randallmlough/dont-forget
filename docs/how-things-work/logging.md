@@ -154,7 +154,7 @@ Bind a `feature` (or screen) attribute at the top via `.with()`, log the entry/s
 The whole point of the abstraction. Steps, when the day comes:
 
 1. Implement a new class in `lib/logger.ts` matching the `LoggerAdapter` interface (one method: `log(level, message, attributes)`).
-2. Move the redaction helpers (`SENSITIVE_KEYS`, `BEARER_TOKEN_RE`, `JWT_RE`, `redactString`, `normalizeAttributes`) into the new adapter — they are not provider-agnostic, they're "what we want to redact before sending."
+2. Keep the shared sensitive-key policy in `lib/sensitive-keys.ts`; move only provider-specific formatting or transport code into the new adapter.
 3. Replace `new PostHogLoggerAdapter()` on the `logger` singleton.
 4. Decide what to do about user identity binding — `useLogger()` already passes `user_id` via `.with()`, so most providers just need to read it from attributes.
 

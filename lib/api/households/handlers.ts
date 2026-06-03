@@ -1,5 +1,10 @@
 import type { DirectoryDb } from "@/db/client";
 import {
+	type HouseholdJoinCodeSource,
+	isHouseholdJoinCodeSource,
+	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
+} from "@/lib/household-join-code-source";
+import {
 	ActiveHouseholdMembershipRequiredError,
 	type ActiveHouseholdService,
 	createActiveHouseholdService,
@@ -215,10 +220,10 @@ export async function handleJoinByCode(
 
 function joinCodeSourceField(
 	body: Record<string, unknown>,
-): "manual_code" | "join_link" {
+): HouseholdJoinCodeSource {
 	const source = body.source;
-	if (source === undefined) return "manual_code";
-	if (source === "manual_code" || source === "join_link") return source;
+	if (source === undefined) return MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE;
+	if (isHouseholdJoinCodeSource(source)) return source;
 	throw new BadRequestError("Invalid Household Join Code source");
 }
 

@@ -101,7 +101,7 @@ describe("authRedirectTarget", () => {
 		);
 		expect(
 			internalNextPath(
-				"/household/settings?tab=members&access_token=secret-token",
+				"/household/settings?tab=members&access_token=secret-token&api_key=key-secret",
 			),
 		).toBe("/household/settings?tab=members");
 	});

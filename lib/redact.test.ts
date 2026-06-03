@@ -81,4 +81,21 @@ describe("redaction", () => {
 			"/callback?access_token=[REDACTED]&state=ok",
 		);
 	});
+
+	it("redacts circular attribute graphs without throwing", () => {
+		const attributes: Record<string, unknown> = { label: "safe" };
+		const nested: Record<string, unknown> = { token: "nested-secret" };
+		attributes.self = attributes;
+		attributes.nested = nested;
+		nested.parent = attributes;
+
+		expect(redactAttributes(attributes)).toEqual({
+			label: "safe",
+			self: "[Circular]",
+			nested: {
+				token: "[REDACTED]",
+				parent: "[Circular]",
+			},
+		});
+	});
 });

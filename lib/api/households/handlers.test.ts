@@ -12,6 +12,7 @@ import {
 	type TestDirectoryDb,
 	type TestHouseholdDb,
 } from "@/db/test";
+import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import {
 	createHouseholdJoinCodeService,
 	type HouseholdJoinCodeService,
@@ -290,14 +291,14 @@ describe("Household API handlers", () => {
 			useId: "hjcu_1",
 			activeHouseholdId: "hh_1",
 		}));
-		const service = {
+		const service: HouseholdJoinCodeService = {
 			getCurrentJoinCode: jest.fn(),
 			previewJoinCode: jest.fn(),
 			joinByCode,
 			regenerateJoinCode: jest.fn(),
 			disableJoinCode: jest.fn(),
 			enableJoinCode: jest.fn(),
-		} as unknown as HouseholdJoinCodeService;
+		};
 		const deps: HouseholdApiDeps = {
 			directory: directory.db,
 			authenticate: async (_request, db) =>
@@ -318,7 +319,10 @@ describe("Household API handlers", () => {
 			const joined = await readJsonResponse(
 				await handleJoinByCode(
 					createApiRequest({
-						body: { code: "ABCDEFGH", source: "join_link" },
+						body: {
+							code: "ABCDEFGH",
+							source: JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE,
+						},
 					}),
 					deps,
 				),
@@ -336,7 +340,7 @@ describe("Household API handlers", () => {
 			expect(joinByCode).toHaveBeenCalledWith({
 				code: "ABCDEFGH",
 				userId: expect.any(String),
-				source: "join_link",
+				source: JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE,
 			});
 			expect(invalid).toMatchObject({
 				status: 400,
