@@ -86,6 +86,27 @@ export const lightTheme = {
 		thin: 1,
 		thick: 2,
 	},
+	components: {
+		addItemComposer: {
+			colors: {
+				entryBackground: "rgba(255, 255, 255, 0.86)",
+				entryBorder: "rgba(130, 154, 177, 0.38)",
+				trayBackground: "rgba(255, 255, 255, 0.78)",
+				trayBorder: "rgba(130, 154, 177, 0.4)",
+				inputBackground: "rgba(255, 255, 255, 0.74)",
+				inputBorder: "rgba(130, 154, 177, 0.36)",
+				fieldBackground: "rgba(255, 255, 255, 0.58)",
+				pillBackground: "rgba(255, 255, 255, 0.62)",
+				pillBorder: "rgba(130, 154, 177, 0.34)",
+				selectedPillBackground: "rgba(47, 133, 90, 0.12)",
+				selectedPillBorder: "rgba(47, 133, 90, 0.28)",
+			},
+			shadows: {
+				entry: "0 6px 18px rgba(16, 42, 67, 0.12)",
+				tray: "0 8px 28px rgba(16, 42, 67, 0.18)",
+			},
+		},
+	},
 	spacing: (step: number) => step * 4,
 };
 

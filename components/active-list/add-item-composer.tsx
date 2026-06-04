@@ -3,11 +3,10 @@ import type { ComponentProps, RefObject } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
-const PLACEHOLDER_COLOR = "#829AB1";
 
 export type AddItemComposerProps = {
 	isOpen: boolean;
@@ -49,6 +48,8 @@ export function AddItemComposer({
 	onToggleNote,
 }: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
+	const { theme } = useUnistyles();
+	const placeholderColor = theme.colors.textSubtle;
 
 	if (!isOpen) {
 		return (
@@ -102,7 +103,7 @@ export function AddItemComposer({
 							value={name}
 							onChangeText={onNameChange}
 							placeholder="Item name"
-							placeholderTextColor={PLACEHOLDER_COLOR}
+							placeholderTextColor={placeholderColor}
 							returnKeyType="done"
 							onSubmitEditing={onSubmit}
 							style={styles.itemInput}
@@ -129,7 +130,7 @@ export function AddItemComposer({
 							value={quantity}
 							onChangeText={onQuantityChange}
 							placeholder="1, dozen, 1 gallon"
-							placeholderTextColor={PLACEHOLDER_COLOR}
+							placeholderTextColor={placeholderColor}
 							returnKeyType="done"
 							onSubmitEditing={onSubmit}
 							style={styles.quantityInput}
@@ -166,7 +167,7 @@ export function AddItemComposer({
 							value={note}
 							onChangeText={onNoteChange}
 							placeholder="Note"
-							placeholderTextColor={PLACEHOLDER_COLOR}
+							placeholderTextColor={placeholderColor}
 							style={styles.noteInput}
 						/>
 					) : null}
@@ -176,154 +177,158 @@ export function AddItemComposer({
 	);
 }
 
-const styles = StyleSheet.create((theme) => ({
-	overlay: {
-		position: "absolute",
-		top: 0,
-		right: 0,
-		bottom: 0,
-		left: 0,
-		zIndex: 40,
-	},
-	dismissLayer: {
-		position: "absolute",
-		top: 0,
-		right: 0,
-		bottom: 0,
-		left: 0,
-		zIndex: 10,
-	},
-	entryContainer: {
-		position: "relative",
-		zIndex: 20,
-		paddingTop: theme.spacing(2),
-		paddingHorizontal: theme.spacing(4),
-		backgroundColor: theme.colors.background,
-	},
-	entryHost: {
-		minHeight: theme.spacing(11),
-		height: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.spacing(5.5),
-		backgroundColor: "rgba(255, 255, 255, 0.86)",
-		borderWidth: theme.borders.hairline,
-		borderColor: "rgba(130, 154, 177, 0.38)",
-		boxShadow: "0 6px 18px rgba(16, 42, 67, 0.12)",
-		justifyContent: "center",
-	},
-	entryLabel: {
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.callout,
-	},
-	composerHost: {
-		position: "absolute",
-		left: theme.spacing(2.5),
-		right: theme.spacing(2.5),
-		zIndex: 20,
-	},
-	tray: {
-		gap: theme.spacing(2),
-		padding: theme.spacing(2.5),
-		borderRadius: theme.spacing(4),
-		borderCurve: "continuous",
-		overflow: "hidden",
-		backgroundColor: "rgba(255, 255, 255, 0.78)",
-		borderWidth: theme.borders.hairline,
-		borderColor: "rgba(130, 154, 177, 0.4)",
-		boxShadow: "0 8px 28px rgba(16, 42, 67, 0.18)",
-	},
-	primaryRow: {
-		minHeight: theme.spacing(10),
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	itemInput: {
-		flex: 1,
-		minWidth: 0,
-		minHeight: theme.spacing(10),
-		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		backgroundColor: "rgba(255, 255, 255, 0.74)",
-		borderWidth: theme.borders.hairline,
-		borderColor: "rgba(130, 154, 177, 0.36)",
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.body,
-	},
-	submitButton: {
-		width: theme.spacing(9),
-		height: theme.spacing(9),
-		borderRadius: theme.spacing(4.5),
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.primary,
-	},
-	submitButtonDisabled: {
-		backgroundColor: theme.colors.primaryDisabled,
-	},
-	submitLabel: {
-		color: theme.colors.inverseText,
-		fontSize: theme.fontSizes.headline,
-		fontWeight: theme.fontWeights.semibold,
-		lineHeight: theme.spacing(6),
-	},
-	quantityRow: {
-		minHeight: theme.spacing(8),
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	quantityLabel: {
-		width: theme.spacing(17),
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
-	},
-	quantityInput: {
-		flex: 1,
-		minWidth: 0,
-		minHeight: theme.spacing(8),
-		paddingHorizontal: theme.spacing(2.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		backgroundColor: "rgba(255, 255, 255, 0.58)",
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.callout,
-	},
-	pillRow: {
-		minHeight: theme.spacing(8),
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	pill: {
-		maxWidth: "52%",
-		minHeight: theme.spacing(8),
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.spacing(4),
-		backgroundColor: "rgba(255, 255, 255, 0.62)",
-		borderWidth: theme.borders.hairline,
-		borderColor: "rgba(130, 154, 177, 0.34)",
-	},
-	pillSelected: {
-		backgroundColor: "rgba(47, 133, 90, 0.12)",
-		borderColor: "rgba(47, 133, 90, 0.28)",
-	},
-	pillText: {
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
-	},
-	noteInput: {
-		minHeight: theme.spacing(8),
-		paddingHorizontal: theme.spacing(2.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		backgroundColor: "rgba(255, 255, 255, 0.58)",
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.callout,
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
-	},
-}));
+const styles = StyleSheet.create((theme) => {
+	const composer = theme.components.addItemComposer;
+
+	return {
+		overlay: {
+			position: "absolute",
+			top: 0,
+			right: 0,
+			bottom: 0,
+			left: 0,
+			zIndex: 40,
+		},
+		dismissLayer: {
+			position: "absolute",
+			top: 0,
+			right: 0,
+			bottom: 0,
+			left: 0,
+			zIndex: 10,
+		},
+		entryContainer: {
+			position: "relative",
+			zIndex: 20,
+			paddingTop: theme.spacing(2),
+			paddingHorizontal: theme.spacing(4),
+			backgroundColor: theme.colors.background,
+		},
+		entryHost: {
+			minHeight: theme.spacing(11),
+			height: theme.spacing(11),
+			paddingHorizontal: theme.spacing(3.5),
+			borderRadius: theme.spacing(5.5),
+			backgroundColor: composer.colors.entryBackground,
+			borderWidth: theme.borders.hairline,
+			borderColor: composer.colors.entryBorder,
+			boxShadow: composer.shadows.entry,
+			justifyContent: "center",
+		},
+		entryLabel: {
+			color: theme.colors.text,
+			fontSize: theme.fontSizes.callout,
+		},
+		composerHost: {
+			position: "absolute",
+			left: theme.spacing(2.5),
+			right: theme.spacing(2.5),
+			zIndex: 20,
+		},
+		tray: {
+			gap: theme.spacing(2),
+			padding: theme.spacing(2.5),
+			borderRadius: theme.spacing(4),
+			borderCurve: "continuous",
+			overflow: "hidden",
+			backgroundColor: composer.colors.trayBackground,
+			borderWidth: theme.borders.hairline,
+			borderColor: composer.colors.trayBorder,
+			boxShadow: composer.shadows.tray,
+		},
+		primaryRow: {
+			minHeight: theme.spacing(10),
+			flexDirection: "row",
+			alignItems: "center",
+			gap: theme.spacing(2),
+		},
+		itemInput: {
+			flex: 1,
+			minWidth: 0,
+			minHeight: theme.spacing(10),
+			paddingHorizontal: theme.spacing(3),
+			borderRadius: theme.radii.control,
+			borderCurve: "continuous",
+			backgroundColor: composer.colors.inputBackground,
+			borderWidth: theme.borders.hairline,
+			borderColor: composer.colors.inputBorder,
+			color: theme.colors.text,
+			fontSize: theme.fontSizes.body,
+		},
+		submitButton: {
+			width: theme.spacing(9),
+			height: theme.spacing(9),
+			borderRadius: theme.spacing(4.5),
+			alignItems: "center",
+			justifyContent: "center",
+			backgroundColor: theme.colors.primary,
+		},
+		submitButtonDisabled: {
+			backgroundColor: theme.colors.primaryDisabled,
+		},
+		submitLabel: {
+			color: theme.colors.inverseText,
+			fontSize: theme.fontSizes.headline,
+			fontWeight: theme.fontWeights.semibold,
+			lineHeight: theme.spacing(6),
+		},
+		quantityRow: {
+			minHeight: theme.spacing(8),
+			flexDirection: "row",
+			alignItems: "center",
+			gap: theme.spacing(2),
+		},
+		quantityLabel: {
+			width: theme.spacing(17),
+			...theme.typography.captionStrong,
+			color: theme.colors.textMuted,
+		},
+		quantityInput: {
+			flex: 1,
+			minWidth: 0,
+			minHeight: theme.spacing(8),
+			paddingHorizontal: theme.spacing(2.5),
+			borderRadius: theme.radii.control,
+			borderCurve: "continuous",
+			backgroundColor: composer.colors.fieldBackground,
+			color: theme.colors.text,
+			fontSize: theme.fontSizes.callout,
+		},
+		pillRow: {
+			minHeight: theme.spacing(8),
+			flexDirection: "row",
+			alignItems: "center",
+			gap: theme.spacing(2),
+		},
+		pill: {
+			maxWidth: "52%",
+			minHeight: theme.spacing(8),
+			justifyContent: "center",
+			paddingHorizontal: theme.spacing(3),
+			borderRadius: theme.spacing(4),
+			backgroundColor: composer.colors.pillBackground,
+			borderWidth: theme.borders.hairline,
+			borderColor: composer.colors.pillBorder,
+		},
+		pillSelected: {
+			backgroundColor: composer.colors.selectedPillBackground,
+			borderColor: composer.colors.selectedPillBorder,
+		},
+		pillText: {
+			...theme.typography.captionStrong,
+			color: theme.colors.textMuted,
+		},
+		noteInput: {
+			minHeight: theme.spacing(8),
+			paddingHorizontal: theme.spacing(2.5),
+			borderRadius: theme.radii.control,
+			borderCurve: "continuous",
+			backgroundColor: composer.colors.fieldBackground,
+			color: theme.colors.text,
+			fontSize: theme.fontSizes.callout,
+		},
+		pressed: {
+			opacity: theme.opacities.pressed,
+		},
+	};
+});
