@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { useRef, useState } from "react";
-import { Text, type TextInput, View } from "react-native";
+import { useState } from "react";
+import { Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -75,7 +75,6 @@ function AddItemComposerStory() {
 }
 
 function FocusedAddItemComposerStory() {
-	const itemInputRef = useRef<TextInput>(null);
 	const [name, setName] = useState("");
 	const [quantity, setQuantity] = useState("");
 	const [note, setNote] = useState("");
@@ -100,7 +99,6 @@ function FocusedAddItemComposerStory() {
 						keyboardHeight: STORY_KEYBOARD_HEIGHT,
 						animatedStyle: styles.visibleComposer,
 					}}
-					itemInputRef={itemInputRef}
 					actions={{
 						open: () => undefined,
 						dismiss: () => undefined,

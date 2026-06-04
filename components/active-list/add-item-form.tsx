@@ -1,5 +1,5 @@
-import { useEffect, useReducer, useRef } from "react";
-import { Keyboard, type TextInput } from "react-native";
+import { useEffect, useReducer } from "react";
+import { Keyboard } from "react-native";
 import {
 	Easing,
 	useAnimatedStyle,
@@ -34,7 +34,6 @@ type ComposerAction =
 
 export function ActiveListAddItemForm() {
 	const { actions, state } = useActiveList();
-	const itemInputRef = useRef<TextInput>(null);
 	const visibility = useSharedValue(0);
 	const [composer, dispatchComposer] = useReducer(
 		composerReducer,
@@ -77,9 +76,6 @@ export function ActiveListAddItemForm() {
 				easing: Easing.out(Easing.cubic),
 			}),
 		);
-		if (!composer.isOpen) return;
-
-		itemInputRef.current?.focus();
 	}, [composer.isOpen, visibility]);
 
 	function openComposer() {
@@ -132,7 +128,6 @@ export function ActiveListAddItemForm() {
 				keyboardHeight: composer.keyboardHeight,
 				animatedStyle: composerAnimatedStyle,
 			}}
-			itemInputRef={itemInputRef}
 			actions={{
 				open: openComposer,
 				dismiss: dismissComposer,

@@ -1,5 +1,5 @@
 import { BlurView } from "expo-blur";
-import type { ComponentProps, RefObject } from "react";
+import type { ComponentProps } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,7 +28,6 @@ const COMPOSER_SHADOWS = {
 export type AddItemComposerProps = {
 	draft: AddItemComposerDraft;
 	ui: AddItemComposerUiState;
-	itemInputRef: RefObject<TextInput | null>;
 	actions: AddItemComposerActions;
 };
 
@@ -57,12 +56,7 @@ export type AddItemComposerActions = {
 	toggleNote: () => void;
 };
 
-export function AddItemComposer({
-	draft,
-	ui,
-	itemInputRef,
-	actions,
-}: AddItemComposerProps) {
+export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
 	const placeholderColor = theme.colors.textSubtle;
@@ -114,8 +108,8 @@ export function AddItemComposer({
 				<BlurView intensity={34} tint="light" style={styles.tray}>
 					<View style={styles.primaryRow}>
 						<TextInput
-							ref={itemInputRef}
 							accessibilityLabel="Item name"
+							autoFocus
 							value={draft.name}
 							onChangeText={actions.changeName}
 							placeholder="Item name"
