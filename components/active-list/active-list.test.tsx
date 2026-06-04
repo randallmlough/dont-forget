@@ -270,6 +270,10 @@ describe("ActiveList", () => {
 			screen.getByText("This List is empty.", { includeHiddenElements: true }),
 		).toBeTruthy();
 		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"active list reload after add failure failed",
+			{ error: expect.any(Error) },
+		);
 	});
 
 	it("shows pending and offline sync without discarding local Item changes", async () => {

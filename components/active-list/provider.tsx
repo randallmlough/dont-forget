@@ -147,7 +147,10 @@ export function ActiveListProvider({
 			requestLocalWriteSync();
 		} catch (error) {
 			dispatchIfMounted({ type: "itemAddFailed", pendingItemId: item.id });
-			await loadList().catch(() => {
+			await loadList().catch((reloadError) => {
+				logger.error("active list reload after add failure failed", {
+					error: reloadError,
+				});
 				dispatchIfMounted({ type: "itemAddReloadFailed" });
 			});
 			throw error;
