@@ -318,10 +318,15 @@ describe("ActiveList", () => {
 		expect(coordinator.getStatus).toHaveBeenCalled();
 	});
 
-	it("requests local-write sync after adding an Item", async () => {
+	it("requests local-write sync without reloading outside the sync status transition", async () => {
 		const coordinator = controllableSyncCoordinator("synced");
+		const load = jest.fn(async () => emptyList);
 
-		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
+		renderActiveList(
+			emptyList,
+			memoryListActions(emptyList, { load }),
+			coordinator,
+		);
 
 		openAddItemComposer();
 		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
@@ -334,6 +339,7 @@ describe("ActiveList", () => {
 				reason: "localWrite",
 			}),
 		);
+		expect(load).not.toHaveBeenCalled();
 	});
 
 	it("requests manual sync before refreshing the List view", async () => {

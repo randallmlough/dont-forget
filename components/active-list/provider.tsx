@@ -98,9 +98,6 @@ export function ActiveListProvider({
 	function requestLocalWriteSync() {
 		void syncCoordinator
 			.requestSync({ reason: "localWrite" })
-			.then(async (result) => {
-				if (mounted.current && result?.changed) await loadList();
-			})
 			.catch(() => undefined);
 	}
 
