@@ -1,11 +1,5 @@
 import { useEffect, useReducer } from "react";
 import { Keyboard } from "react-native";
-import {
-	Easing,
-	useAnimatedStyle,
-	useSharedValue,
-	withTiming,
-} from "react-native-reanimated";
 import { AddItemComposer } from "@/components/add-item-composer";
 import { useActiveList } from "./context";
 
@@ -34,7 +28,6 @@ type ComposerAction =
 
 export function ActiveListAddItemForm() {
 	const { actions, state } = useActiveList();
-	const visibility = useSharedValue(0);
 	const [composer, dispatchComposer] = useReducer(
 		composerReducer,
 		undefined,
@@ -51,12 +44,6 @@ export function ActiveListAddItemForm() {
 					type: "keyboardShown",
 					height: event.endCoordinates.height,
 				});
-				visibility.set(
-					withTiming(1, {
-						duration: Math.min(event.duration, 220),
-						easing: Easing.out(Easing.cubic),
-					}),
-				);
 			},
 		);
 		const hideSubscription = Keyboard.addListener("keyboardWillHide", () => {
@@ -67,16 +54,7 @@ export function ActiveListAddItemForm() {
 			showSubscription.remove();
 			hideSubscription.remove();
 		};
-	}, [visibility]);
-
-	useEffect(() => {
-		visibility.set(
-			withTiming(composer.isOpen ? 1 : 0, {
-				duration: 160,
-				easing: Easing.out(Easing.cubic),
-			}),
-		);
-	}, [composer.isOpen, visibility]);
+	}, []);
 
 	function openComposer() {
 		dispatchComposer({ type: "opened" });
@@ -104,15 +82,6 @@ export function ActiveListAddItemForm() {
 		}
 	}
 
-	const composerAnimatedStyle = useAnimatedStyle(() => {
-		const currentVisibility = visibility.get();
-
-		return {
-			opacity: currentVisibility,
-			transform: [{ translateY: (1 - currentVisibility) * 10 }],
-		};
-	});
-
 	return (
 		<AddItemComposer
 			draft={{
@@ -126,7 +95,7 @@ export function ActiveListAddItemForm() {
 				canSubmit,
 				listName: state.listName,
 				keyboardHeight: composer.keyboardHeight,
-				animatedStyle: composerAnimatedStyle,
+				shouldFocusNameInput: composer.isOpen,
 			}}
 			actions={{
 				open: openComposer,

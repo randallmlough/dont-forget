@@ -1,7 +1,12 @@
 import { BlurView } from "expo-blur";
-import type { ComponentProps } from "react";
+import { useEffect } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import Animated from "react-native-reanimated";
+import Animated, {
+	Easing,
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -43,7 +48,7 @@ export type AddItemComposerUiState = {
 	canSubmit: boolean;
 	listName: string;
 	keyboardHeight: number;
-	animatedStyle: ComponentProps<typeof Animated.View>["style"];
+	shouldFocusNameInput: boolean;
 };
 
 export type AddItemComposerActions = {
@@ -60,6 +65,25 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
 	const placeholderColor = theme.colors.textSubtle;
+	const visibility = useSharedValue(0);
+
+	useEffect(() => {
+		visibility.set(
+			withTiming(ui.isOpen ? 1 : 0, {
+				duration: 160,
+				easing: Easing.out(Easing.cubic),
+			}),
+		);
+	}, [ui.isOpen, visibility]);
+
+	const animatedStyle = useAnimatedStyle(() => {
+		const currentVisibility = visibility.get();
+
+		return {
+			opacity: currentVisibility,
+			transform: [{ translateY: (1 - currentVisibility) * 10 }],
+		};
+	});
 
 	if (!ui.isOpen) {
 		return (
@@ -98,7 +122,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 			<Animated.View
 				style={[
 					styles.composerHost,
-					ui.animatedStyle,
+					animatedStyle,
 					{
 						bottom:
 							Math.max(ui.keyboardHeight, insets.bottom) + TRAY_KEYBOARD_GAP,
@@ -109,7 +133,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					<View style={styles.primaryRow}>
 						<TextInput
 							accessibilityLabel="Item name"
-							autoFocus
+							autoFocus={ui.shouldFocusNameInput}
 							value={draft.name}
 							onChangeText={actions.changeName}
 							placeholder="Item name"

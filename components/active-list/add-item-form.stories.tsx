@@ -97,7 +97,7 @@ function FocusedAddItemComposerStory() {
 						canSubmit,
 						listName: "Groceries",
 						keyboardHeight: STORY_KEYBOARD_HEIGHT,
-						animatedStyle: styles.visibleComposer,
+						shouldFocusNameInput: false,
 					}}
 					actions={{
 						open: () => undefined,
@@ -171,10 +171,6 @@ const styles = StyleSheet.create((theme) => ({
 	canvas: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
-	},
-	visibleComposer: {
-		opacity: 1,
-		transform: [{ translateY: 0 }],
 	},
 	keyboard: {
 		position: "absolute",
