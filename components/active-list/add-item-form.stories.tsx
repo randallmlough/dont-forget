@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Text, type TextInput, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -9,6 +10,7 @@ import {
 	type ActiveListSyncCoordinator,
 	type AddActiveListItemInput,
 } from "@/components/active-list";
+import { AddItemComposer } from "./add-item-composer";
 
 const emptyList: ActiveListInitialState = {
 	householdName: "Avery",
@@ -31,15 +33,10 @@ export const Default: Story = {
 };
 
 export const Focused: Story = {
-	render: () => <AddItemComposerStory initialComposerOpen />,
+	render: () => <FocusedAddItemComposerStory />,
 };
 
-function AddItemComposerStory({
-	initialComposerOpen = false,
-}: {
-	initialComposerOpen?: boolean;
-}) {
-	const storyKey = initialComposerOpen ? "focused" : "default";
+function AddItemComposerStory() {
 	const actions = storyActions(emptyList);
 	const syncCoordinator = storySyncCoordinator();
 
@@ -50,7 +47,7 @@ function AddItemComposerStory({
 				insets: { top: 47, right: 0, bottom: 34, left: 0 },
 			}}
 		>
-			<View key={storyKey} style={styles.canvas}>
+			<View style={styles.canvas}>
 				<ActiveList.Provider
 					initialState={emptyList}
 					currentMemberName="Avery Chen"
@@ -62,15 +59,50 @@ function AddItemComposerStory({
 					<ActiveList.Screen>
 						<ActiveList.Header />
 						<ActiveList.Items />
-						<ActiveList.AddItemForm
-							initialComposerOpen={initialComposerOpen}
-							keyboardHeightOverride={
-								initialComposerOpen ? STORY_KEYBOARD_HEIGHT : undefined
-							}
-						/>
+						<ActiveList.AddItemForm />
 					</ActiveList.Screen>
-					{initialComposerOpen ? <IOSKeyboardPreview /> : null}
 				</ActiveList.Provider>
+			</View>
+		</SafeAreaProvider>
+	);
+}
+
+function FocusedAddItemComposerStory() {
+	const itemInputRef = useRef<TextInput>(null);
+	const [name, setName] = useState("");
+	const [quantity, setQuantity] = useState("");
+	const [note, setNote] = useState("");
+	const [isNoteOpen, setIsNoteOpen] = useState(false);
+	const canSubmit = name.trim().length > 0;
+
+	return (
+		<SafeAreaProvider
+			initialMetrics={{
+				frame: { x: 0, y: 0, width: 390, height: 844 },
+				insets: { top: 47, right: 0, bottom: 34, left: 0 },
+			}}
+		>
+			<View style={styles.canvas}>
+				<AddItemComposer
+					isOpen
+					name={name}
+					quantity={quantity}
+					note={note}
+					isNoteOpen={isNoteOpen}
+					canSubmit={canSubmit}
+					listName="Groceries"
+					keyboardHeight={STORY_KEYBOARD_HEIGHT}
+					itemInputRef={itemInputRef}
+					animatedStyle={styles.visibleComposer}
+					onOpen={() => undefined}
+					onDismiss={() => undefined}
+					onSubmit={() => undefined}
+					onNameChange={setName}
+					onQuantityChange={setQuantity}
+					onNoteChange={setNote}
+					onToggleNote={() => setIsNoteOpen((current) => !current)}
+				/>
+				<IOSKeyboardPreview />
 			</View>
 		</SafeAreaProvider>
 	);
@@ -186,6 +218,10 @@ const styles = StyleSheet.create((theme) => ({
 	canvas: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
+	},
+	visibleComposer: {
+		opacity: 1,
+		transform: [{ translateY: 0 }],
 	},
 	keyboard: {
 		position: "absolute",

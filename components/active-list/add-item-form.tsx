@@ -32,28 +32,18 @@ type ComposerAction =
 	| { type: "submitSucceeded" }
 	| { type: "submitFailed" };
 
-export type ActiveListAddItemFormProps = {
-	initialComposerOpen?: boolean;
-	keyboardHeightOverride?: number;
-};
-
-export function ActiveListAddItemForm({
-	initialComposerOpen = false,
-	keyboardHeightOverride,
-}: ActiveListAddItemFormProps) {
+export function ActiveListAddItemForm() {
 	const { actions, state } = useActiveList();
 	const itemInputRef = useRef<TextInput>(null);
-	const openingComposerRef = useRef(initialComposerOpen);
-	const visibility = useSharedValue(initialComposerOpen ? 1 : 0);
+	const openingComposerRef = useRef(false);
+	const visibility = useSharedValue(0);
 	const [composer, dispatchComposer] = useReducer(
 		composerReducer,
-		initialComposerOpen,
+		undefined,
 		initialComposerState,
 	);
 	const trimmedName = composer.name.trim();
 	const canSubmit = trimmedName.length > 0 && !composer.isSubmitting;
-	const effectiveKeyboardHeight =
-		keyboardHeightOverride ?? composer.keyboardHeight;
 
 	useEffect(() => {
 		const showSubscription = Keyboard.addListener(
@@ -160,7 +150,7 @@ export function ActiveListAddItemForm({
 			isNoteOpen={composer.isNoteOpen}
 			canSubmit={canSubmit}
 			listName={state.listName}
-			keyboardHeight={effectiveKeyboardHeight}
+			keyboardHeight={composer.keyboardHeight}
 			itemInputRef={itemInputRef}
 			animatedStyle={composerAnimatedStyle}
 			onOpen={openComposer}
@@ -176,9 +166,9 @@ export function ActiveListAddItemForm({
 	);
 }
 
-function initialComposerState(initialComposerOpen: boolean): ComposerState {
+function initialComposerState(): ComposerState {
 	return {
-		isOpen: initialComposerOpen,
+		isOpen: false,
 		keyboardHeight: 0,
 		name: "",
 		quantity: "",

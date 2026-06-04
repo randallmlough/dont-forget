@@ -5,7 +5,6 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import type { ComponentProps } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -106,13 +105,9 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
 
-	it("can mount with the add Item composer already focused", () => {
-		renderActiveList(
-			emptyList,
-			memoryListActions(emptyList),
-			passiveSyncCoordinator(),
-			{ initialComposerOpen: true, keyboardHeightOverride: 302 },
-		);
+	it("opens the add Item composer", () => {
+		renderActiveList(emptyList);
+		openAddItemComposer();
 
 		expect(screen.getByLabelText("Item name")).toBeTruthy();
 		expect(screen.getByLabelText("Submit Item")).toBeTruthy();
@@ -441,7 +436,6 @@ function renderActiveList(
 	initialState: ActiveListInitialState,
 	actions = memoryListActions(initialState),
 	syncCoordinator = passiveSyncCoordinator(),
-	addItemFormProps: ComponentProps<typeof ActiveList.AddItemForm> = {},
 ) {
 	return render(
 		<SafeAreaProvider
@@ -461,7 +455,7 @@ function renderActiveList(
 				<ActiveList.Screen>
 					<ActiveList.Header />
 					<ActiveList.Items />
-					<ActiveList.AddItemForm {...addItemFormProps} />
+					<ActiveList.AddItemForm />
 				</ActiveList.Screen>
 			</ActiveList.Provider>
 		</SafeAreaProvider>,
