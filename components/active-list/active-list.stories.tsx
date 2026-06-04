@@ -10,44 +10,9 @@ import {
 import {
 	createActiveListMemoryActions,
 	createPassiveActiveListSyncCoordinator,
-} from "./__fixtures__/memory-actions";
-
-const emptyList: ActiveListInitialState = {
-	householdName: "Avery",
-	listName: "Groceries",
-	items: [],
-};
-
-const populatedList: ActiveListInitialState = {
-	householdName: "Avery",
-	listName: "Groceries",
-	items: [
-		{
-			id: "item-1",
-			name: "Milk",
-			quantity: null,
-			notes: null,
-			checked: false,
-			checkedByMemberName: null,
-		},
-		{
-			id: "item-2",
-			name: "Apples",
-			quantity: "1 bag",
-			notes: null,
-			checked: true,
-			checkedByMemberName: "Avery Chen",
-		},
-		{
-			id: "item-3",
-			name: "Paper towels",
-			quantity: null,
-			notes: "Recycled if available",
-			checked: false,
-			checkedByMemberName: null,
-		},
-	],
-};
+	emptyActiveListState,
+	populatedActiveListState,
+} from "@/components/active-list/test-support";
 
 const meta = {
 	title: "Active List",
@@ -59,11 +24,11 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = {
-	render: () => <ActiveListStory initialState={emptyList} />,
+	render: () => <ActiveListStory initialState={emptyActiveListState} />,
 };
 
 export const WithItems: Story = {
-	render: () => <ActiveListStory initialState={populatedList} />,
+	render: () => <ActiveListStory initialState={populatedActiveListState} />,
 };
 
 function ActiveListStory({

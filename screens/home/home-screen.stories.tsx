@@ -7,48 +7,15 @@ import type {
 	ActiveListItem,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
-import { createActiveListMemoryActions } from "@/components/active-list/__fixtures__/memory-actions";
+import {
+	createActiveListMemoryActions,
+	emptyActiveListState,
+	populatedActiveListState,
+} from "@/components/active-list/test-support";
 import type { Item, ItemService } from "@/lib/services/item";
 import type { ListService } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeScreenView } from "@/screens/home/home-screen";
-
-const emptyHomeList: ActiveListInitialState = {
-	householdName: "Avery",
-	listName: "Groceries",
-	items: [],
-};
-
-const populatedHomeList: ActiveListInitialState = {
-	householdName: "Avery",
-	listName: "Groceries",
-	items: [
-		{
-			id: "item-1",
-			name: "Coffee",
-			quantity: null,
-			notes: null,
-			checked: false,
-			checkedByMemberName: null,
-		},
-		{
-			id: "item-2",
-			name: "Eggs",
-			quantity: "1 dozen",
-			notes: null,
-			checked: true,
-			checkedByMemberName: "Avery Chen",
-		},
-		{
-			id: "item-3",
-			name: "Spinach",
-			quantity: null,
-			notes: "Baby spinach",
-			checked: false,
-			checkedByMemberName: null,
-		},
-	],
-};
 
 const meta = {
 	title: "Home/HomeScreen",
@@ -72,7 +39,7 @@ type Story = StoryObj<typeof meta>;
 export const EmptyList: Story = {
 	args: {
 		state: { status: "ready", refreshing: false },
-		session: readySession(emptyHomeList),
+		session: readySession(emptyActiveListState),
 		onSignOut: noop,
 	},
 };
@@ -80,7 +47,7 @@ export const EmptyList: Story = {
 export const WithItems: Story = {
 	args: {
 		state: { status: "ready", refreshing: false },
-		session: readySession(populatedHomeList),
+		session: readySession(populatedActiveListState),
 		onSignOut: noop,
 	},
 };
@@ -182,7 +149,10 @@ function storyServices(initialList: ActiveListInitialState): {
 					notes: input.notes,
 				});
 				const state = await actions.load();
-				return activeListStoryItemToItem(item, state.items.indexOf(item));
+				return activeListStoryItemToItem(
+					item,
+					state.items.findIndex((stateItem) => stateItem.id === item.id),
+				);
 			},
 			async setItemChecked({ itemId, checked }) {
 				await actions.setItemChecked(itemId, checked);

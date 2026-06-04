@@ -4,20 +4,12 @@ import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
-import {
-	ActiveList,
-	type ActiveListInitialState,
-} from "@/components/active-list";
+import { ActiveList } from "@/components/active-list";
 import {
 	createActiveListMemoryActions,
 	createPassiveActiveListSyncCoordinator,
-} from "./__fixtures__/memory-actions";
-
-const emptyList: ActiveListInitialState = {
-	householdName: "Avery",
-	listName: "Groceries",
-	items: [],
-};
+	emptyActiveListState,
+} from "@/components/active-list/test-support";
 
 const meta = {
 	title: "Active List/Add Item Composer",
@@ -34,7 +26,7 @@ export const Default: Story = {
 
 function AddItemComposerStory() {
 	const [actions] = useState(() =>
-		createActiveListMemoryActions(emptyList, {
+		createActiveListMemoryActions(emptyActiveListState, {
 			itemIdPrefix: "story-item",
 			checkedByMemberName: "Avery Chen",
 		}),
@@ -50,7 +42,7 @@ function AddItemComposerStory() {
 		>
 			<View style={styles.canvas}>
 				<ActiveList.Provider
-					initialState={emptyList}
+					initialState={emptyActiveListState}
 					currentMemberName="Avery Chen"
 					onLoadList={actions.load}
 					onAddItem={actions.addItem}

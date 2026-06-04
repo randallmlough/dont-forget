@@ -2,7 +2,44 @@ import type {
 	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 	AddActiveListItemInput,
-} from "../types";
+} from "./types";
+
+export const emptyActiveListState: ActiveListInitialState = {
+	householdName: "Avery",
+	listName: "Groceries",
+	items: [],
+};
+
+export const populatedActiveListState: ActiveListInitialState = {
+	householdName: "Avery",
+	listName: "Groceries",
+	items: [
+		{
+			id: "item-1",
+			name: "Milk",
+			quantity: null,
+			notes: null,
+			checked: false,
+			checkedByMemberName: null,
+		},
+		{
+			id: "item-2",
+			name: "Apples",
+			quantity: "1 bag",
+			notes: null,
+			checked: true,
+			checkedByMemberName: "Avery Chen",
+		},
+		{
+			id: "item-3",
+			name: "Paper towels",
+			quantity: null,
+			notes: "Recycled if available",
+			checked: false,
+			checkedByMemberName: null,
+		},
+	],
+};
 
 export type ActiveListMemoryActions = {
 	load: () => Promise<ActiveListInitialState>;

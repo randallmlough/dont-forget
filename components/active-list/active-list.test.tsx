@@ -13,13 +13,13 @@ import {
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
-import { useLogger } from "@/lib/logger";
-import { deferred } from "@/lib/test/async";
-import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 import {
 	type ActiveListMemoryActions,
 	createActiveListMemoryActions,
-} from "./__fixtures__/memory-actions";
+} from "@/components/active-list/test-support";
+import { useLogger } from "@/lib/logger";
+import { deferred } from "@/lib/test/async";
+import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 
 let mockLogger: MockLogger;
 
