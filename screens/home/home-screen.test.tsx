@@ -6,6 +6,8 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { eq } from "drizzle-orm";
+import type { PropsWithChildren, ReactElement } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
 import {
 	type PrimaryHouseholdScenario,
@@ -70,7 +72,7 @@ describe("HomeScreen", () => {
 			...noopProviderActions,
 		});
 
-		render(<HomeScreen />);
+		renderWithSafeArea(<HomeScreen />);
 
 		expect(screen.getByText("Preparing your Household")).toBeTruthy();
 	});
@@ -84,7 +86,7 @@ describe("HomeScreen", () => {
 		});
 
 		try {
-			render(<HomeScreen />);
+			renderWithSafeArea(<HomeScreen />);
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy(), {
 				timeout: 5_000,
@@ -109,7 +111,7 @@ describe("HomeScreen", () => {
 			signOut,
 		});
 
-		render(<HomeScreen />);
+		renderWithSafeArea(<HomeScreen />);
 
 		fireEvent.press(screen.getByText("Try again"));
 		fireEvent.press(screen.getByText("Sign out"));
@@ -129,7 +131,7 @@ it("remounts Active List when the session resource changes", async () => {
 	});
 
 	try {
-		const { rerender } = render(
+		const { rerender } = renderWithSafeArea(
 			<HomeScreenView
 				state={{ status: "ready", refreshing: false }}
 				session={firstHarness.session}
@@ -156,7 +158,7 @@ describe("HomeScreenView", () => {
 	it("shows Authenticated App Session loading and retryable error states", () => {
 		const retry = jest.fn();
 
-		const { rerender } = render(
+		const { rerender } = renderWithSafeArea(
 			<HomeScreenView state={{ status: "loading" }} session={null} />,
 		);
 		expect(screen.getByText("Preparing your Household")).toBeTruthy();
@@ -180,7 +182,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness();
 
 		try {
-			render(
+			renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -210,7 +212,7 @@ describe("HomeScreenView", () => {
 		);
 
 		try {
-			render(
+			renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -229,7 +231,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness({ failNextListRead: true });
 
 		try {
-			render(
+			renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -252,7 +254,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness();
 
 		try {
-			render(
+			renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -270,7 +272,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness();
 
 		try {
-			render(
+			renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -278,12 +280,10 @@ describe("HomeScreenView", () => {
 			);
 			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
 
-			fireEvent.changeText(
-				screen.getByPlaceholderText("Add an Item"),
-				"Yogurt",
-			);
+			openAddItemComposer();
+			fireEvent.changeText(screen.getByLabelText("Item name"), "Yogurt");
 			await act(async () => {
-				fireEvent.press(screen.getByText("Add"));
+				fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
 			await waitFor(() => expect(screen.getByText("Yogurt")).toBeTruthy());
 			await act(async () => {
@@ -329,7 +329,7 @@ describe("HomeScreenView", () => {
 		});
 
 		try {
-			const { rerender } = render(
+			const { rerender } = renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={staleHarness.session}
@@ -507,4 +507,25 @@ function passiveSyncCoordinator(): AuthenticatedAppSession["services"]["sync"] {
 		subscribe: () => ({ remove() {} }),
 		requestSync: async () => null,
 	};
+}
+
+function renderWithSafeArea(ui: ReactElement) {
+	return render(ui, { wrapper: TestSafeAreaProvider });
+}
+
+function TestSafeAreaProvider({ children }: PropsWithChildren) {
+	return (
+		<SafeAreaProvider
+			initialMetrics={{
+				frame: { x: 0, y: 0, width: 390, height: 844 },
+				insets: { top: 47, right: 0, bottom: 34, left: 0 },
+			}}
+		>
+			{children}
+		</SafeAreaProvider>
+	);
+}
+
+function openAddItemComposer() {
+	fireEvent.press(screen.getByLabelText("Add Item"));
 }

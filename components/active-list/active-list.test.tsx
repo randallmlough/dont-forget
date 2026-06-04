@@ -5,6 +5,8 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
+import type { ComponentProps } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
 	ActiveList,
@@ -56,11 +58,19 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Groceries")).toBeTruthy();
 		expect(screen.getByText("No Items yet")).toBeTruthy();
 		expect(screen.getByText("This List is empty.")).toBeTruthy();
+		expect(screen.getByLabelText("Add Item")).toBeTruthy();
+		expect(screen.queryByLabelText("Submit Item")).toBeNull();
 
-		const input = screen.getByPlaceholderText("Add an Item");
+		openAddItemComposer();
+		expect(screen.getByLabelText("Quantity")).toBeTruthy();
+		expect(screen.getByLabelText("Add note")).toBeTruthy();
+		expect(screen.getByLabelText("Selected List: Groceries")).toBeTruthy();
+
+		const input = screen.getByLabelText("Item name");
 		fireEvent.changeText(input, " Milk ");
+		fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
 		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
+			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() => {
@@ -72,7 +82,8 @@ describe("ActiveList", () => {
 		});
 		expect(screen.getByText("0 of 1 Items checked")).toBeTruthy();
 		expect(screen.queryByText("This List is empty.")).toBeNull();
-		expect(input.props.value).toBe("");
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+		expect(screen.getByLabelText("Add Item")).toBeTruthy();
 
 		await act(async () => {
 			fireEvent.press(screen.getByRole("checkbox", { name: "Milk" }));
@@ -89,6 +100,57 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
 
+	it("can mount with the add Item composer already focused", () => {
+		renderActiveList(
+			emptyList,
+			memoryListActions(emptyList),
+			passiveSyncCoordinator(),
+			{ initialComposerOpen: true, keyboardHeightOverride: 302 },
+		);
+
+		expect(screen.getByLabelText("Item name")).toBeTruthy();
+		expect(screen.getByLabelText("Submit Item")).toBeTruthy();
+		expect(screen.getByLabelText("Quantity")).toBeTruthy();
+		expect(screen.getByLabelText("Add note")).toBeTruthy();
+		expect(screen.getByLabelText("Selected List: Groceries")).toBeTruthy();
+		expect(screen.queryByLabelText("Add Item")).toBeNull();
+	});
+
+	it("dismisses the composer without clearing an open draft", () => {
+		renderActiveList(emptyList);
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		fireEvent.changeText(screen.getByLabelText("Quantity"), "1, 1 dozen");
+		fireEvent.press(screen.getByLabelText("Dismiss add Item composer"));
+
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+
+		openAddItemComposer();
+		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+		expect(screen.getByLabelText("Quantity").props.value).toBe("1, 1 dozen");
+	});
+
+	it("clears composer fields after submit", async () => {
+		renderActiveList(emptyList);
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		fireEvent.changeText(screen.getByLabelText("Quantity"), "dozen");
+		fireEvent.press(screen.getByLabelText("Add note"));
+		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+
+		await act(async () => {
+			fireEvent.press(screen.getByLabelText("Submit Item"));
+		});
+
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		openAddItemComposer();
+		expect(screen.getByLabelText("Item name").props.value).toBe("");
+		expect(screen.getByLabelText("Quantity").props.value).toBe("");
+		expect(screen.queryByLabelText("Item note")).toBeNull();
+	});
+
 	it("shows pending and offline sync without discarding local Item changes", async () => {
 		const syncAfterWrite = deferred<{ changed: boolean }>();
 		const coordinator = controllableSyncCoordinator("synced");
@@ -101,9 +163,10 @@ describe("ActiveList", () => {
 
 		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
 
-		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
+			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
@@ -146,9 +209,10 @@ describe("ActiveList", () => {
 
 		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
 
-		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
+			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() =>
@@ -313,9 +377,10 @@ describe("ActiveList", () => {
 			coordinator,
 		);
 
-		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
+			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 		await waitFor(() =>
 			expect(coordinator.requestSync).toHaveBeenCalledTimes(1),
@@ -335,23 +400,35 @@ function renderActiveList(
 	initialState: ActiveListInitialState,
 	actions = memoryListActions(initialState),
 	syncCoordinator = passiveSyncCoordinator(),
+	addItemFormProps: ComponentProps<typeof ActiveList.AddItemForm> = {},
 ) {
 	return render(
-		<ActiveList.Provider
-			initialState={initialState}
-			currentMemberName="Avery Chen"
-			onLoadList={actions.load}
-			onAddItem={actions.addItem}
-			onSetItemChecked={actions.setItemChecked}
-			syncCoordinator={syncCoordinator}
+		<SafeAreaProvider
+			initialMetrics={{
+				frame: { x: 0, y: 0, width: 390, height: 844 },
+				insets: { top: 47, right: 0, bottom: 34, left: 0 },
+			}}
 		>
-			<ActiveList.Screen>
-				<ActiveList.Header />
-				<ActiveList.Items />
-				<ActiveList.AddItemForm />
-			</ActiveList.Screen>
-		</ActiveList.Provider>,
+			<ActiveList.Provider
+				initialState={initialState}
+				currentMemberName="Avery Chen"
+				onLoadList={actions.load}
+				onAddItem={actions.addItem}
+				onSetItemChecked={actions.setItemChecked}
+				syncCoordinator={syncCoordinator}
+			>
+				<ActiveList.Screen>
+					<ActiveList.Header />
+					<ActiveList.Items />
+					<ActiveList.AddItemForm {...addItemFormProps} />
+				</ActiveList.Screen>
+			</ActiveList.Provider>
+		</SafeAreaProvider>,
 	);
+}
+
+function openAddItemComposer() {
+	fireEvent.press(screen.getByLabelText("Add Item"));
 }
 
 function passiveSyncCoordinator(
