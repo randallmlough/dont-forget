@@ -10,7 +10,7 @@ import {
 	type ActiveListSyncCoordinator,
 	type AddActiveListItemInput,
 } from "@/components/active-list";
-import { AddItemComposer } from "./add-item-composer";
+import { AddItemComposer } from "@/components/add-item-composer";
 
 const emptyList: ActiveListInitialState = {
 	householdName: "Avery",
@@ -84,23 +84,25 @@ function FocusedAddItemComposerStory() {
 		>
 			<View style={styles.canvas}>
 				<AddItemComposer
-					isOpen
-					name={name}
-					quantity={quantity}
-					note={note}
-					isNoteOpen={isNoteOpen}
-					canSubmit={canSubmit}
-					listName="Groceries"
-					keyboardHeight={STORY_KEYBOARD_HEIGHT}
-					itemInputRef={itemInputRef}
-					animatedStyle={styles.visibleComposer}
-					onOpen={() => undefined}
-					onDismiss={() => undefined}
-					onSubmit={() => undefined}
-					onNameChange={setName}
-					onQuantityChange={setQuantity}
-					onNoteChange={setNote}
-					onToggleNote={() => setIsNoteOpen((current) => !current)}
+					draft={{ name, quantity, note }}
+					ui={{
+						isOpen: true,
+						isNoteOpen,
+						canSubmit,
+						listName: "Groceries",
+						keyboardHeight: STORY_KEYBOARD_HEIGHT,
+						itemInputRef,
+						animatedStyle: styles.visibleComposer,
+					}}
+					actions={{
+						open: () => undefined,
+						dismiss: () => undefined,
+						submit: () => undefined,
+						changeName: setName,
+						changeQuantity: setQuantity,
+						changeNote: setNote,
+						toggleNote: () => setIsNoteOpen((current) => !current),
+					}}
 				/>
 				<IOSKeyboardPreview />
 			</View>

@@ -9,49 +9,43 @@ const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
 
 export type AddItemComposerProps = {
-	isOpen: boolean;
+	draft: AddItemComposerDraft;
+	ui: AddItemComposerUiState;
+	actions: AddItemComposerActions;
+};
+
+export type AddItemComposerDraft = {
 	name: string;
 	quantity: string;
 	note: string;
+};
+
+export type AddItemComposerUiState = {
+	isOpen: boolean;
 	isNoteOpen: boolean;
 	canSubmit: boolean;
 	listName: string;
 	keyboardHeight: number;
 	itemInputRef: RefObject<TextInput | null>;
 	animatedStyle: ComponentProps<typeof Animated.View>["style"];
-	onOpen: () => void;
-	onDismiss: () => void;
-	onSubmit: () => void;
-	onNameChange: (value: string) => void;
-	onQuantityChange: (value: string) => void;
-	onNoteChange: (value: string) => void;
-	onToggleNote: () => void;
 };
 
-export function AddItemComposer({
-	isOpen,
-	name,
-	quantity,
-	note,
-	isNoteOpen,
-	canSubmit,
-	listName,
-	keyboardHeight,
-	itemInputRef,
-	animatedStyle,
-	onOpen,
-	onDismiss,
-	onSubmit,
-	onNameChange,
-	onQuantityChange,
-	onNoteChange,
-	onToggleNote,
-}: AddItemComposerProps) {
+export type AddItemComposerActions = {
+	open: () => void;
+	dismiss: () => void;
+	submit: () => void;
+	changeName: (value: string) => void;
+	changeQuantity: (value: string) => void;
+	changeNote: (value: string) => void;
+	toggleNote: () => void;
+};
+
+export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
 	const placeholderColor = theme.colors.textSubtle;
 
-	if (!isOpen) {
+	if (!ui.isOpen) {
 		return (
 			<View
 				collapsable={false}
@@ -63,14 +57,14 @@ export function AddItemComposer({
 				<Pressable
 					accessibilityLabel="Add Item"
 					accessibilityRole="button"
-					onPress={onOpen}
+					onPress={actions.open}
 					style={({ pressed }) => [
 						styles.entryHost,
 						pressed ? styles.pressed : undefined,
 					]}
 				>
 					<Text style={styles.entryLabel}>
-						{name.trim() ? name.trim() : "Add Item"}
+						{draft.name.trim() ? draft.name.trim() : "Add Item"}
 					</Text>
 				</Pressable>
 			</View>
@@ -82,41 +76,42 @@ export function AddItemComposer({
 			<Pressable
 				accessibilityLabel="Dismiss add Item composer"
 				accessibilityRole="button"
-				onPress={onDismiss}
+				onPress={actions.dismiss}
 				style={styles.dismissLayer}
 			/>
 			<Animated.View
 				style={[
 					styles.composerHost,
-					animatedStyle,
+					ui.animatedStyle,
 					{
-						bottom: Math.max(keyboardHeight, insets.bottom) + TRAY_KEYBOARD_GAP,
+						bottom:
+							Math.max(ui.keyboardHeight, insets.bottom) + TRAY_KEYBOARD_GAP,
 					},
 				]}
 			>
 				<BlurView intensity={34} tint="light" style={styles.tray}>
 					<View style={styles.primaryRow}>
 						<TextInput
-							ref={itemInputRef}
+							ref={ui.itemInputRef}
 							accessibilityLabel="Item name"
-							value={name}
-							onChangeText={onNameChange}
+							value={draft.name}
+							onChangeText={actions.changeName}
 							placeholder="Item name"
 							placeholderTextColor={placeholderColor}
 							returnKeyType="done"
-							onSubmitEditing={onSubmit}
+							onSubmitEditing={actions.submit}
 							style={styles.itemInput}
 						/>
 						<Pressable
 							accessibilityLabel="Submit Item"
 							accessibilityRole="button"
-							accessibilityState={{ disabled: !canSubmit }}
-							disabled={!canSubmit}
-							onPress={onSubmit}
+							accessibilityState={{ disabled: !ui.canSubmit }}
+							disabled={!ui.canSubmit}
+							onPress={actions.submit}
 							style={({ pressed }) => [
 								styles.submitButton,
-								!canSubmit ? styles.submitButtonDisabled : undefined,
-								pressed && canSubmit ? styles.pressed : undefined,
+								!ui.canSubmit ? styles.submitButtonDisabled : undefined,
+								pressed && ui.canSubmit ? styles.pressed : undefined,
 							]}
 						>
 							<Text style={styles.submitLabel}>+</Text>
@@ -126,12 +121,12 @@ export function AddItemComposer({
 						<Text style={styles.quantityLabel}>Quantity</Text>
 						<TextInput
 							accessibilityLabel="Quantity"
-							value={quantity}
-							onChangeText={onQuantityChange}
+							value={draft.quantity}
+							onChangeText={actions.changeQuantity}
 							placeholder="1, dozen, 1 gallon"
 							placeholderTextColor={placeholderColor}
 							returnKeyType="done"
-							onSubmitEditing={onSubmit}
+							onSubmitEditing={actions.submit}
 							style={styles.quantityInput}
 						/>
 					</View>
@@ -139,32 +134,32 @@ export function AddItemComposer({
 						<Pressable
 							accessibilityLabel="Add note"
 							accessibilityRole="button"
-							accessibilityState={{ selected: isNoteOpen }}
-							onPress={onToggleNote}
+							accessibilityState={{ selected: ui.isNoteOpen }}
+							onPress={actions.toggleNote}
 							style={({ pressed }) => [
 								styles.pill,
-								isNoteOpen ? styles.pillSelected : undefined,
+								ui.isNoteOpen ? styles.pillSelected : undefined,
 								pressed ? styles.pressed : undefined,
 							]}
 						>
 							<Text style={styles.pillText}>
-								{isNoteOpen ? "Note" : "Add note"}
+								{ui.isNoteOpen ? "Note" : "Add note"}
 							</Text>
 						</Pressable>
 						<View
-							accessibilityLabel={`Selected List: ${listName}`}
+							accessibilityLabel={`Selected List: ${ui.listName}`}
 							style={styles.pill}
 						>
 							<Text numberOfLines={1} style={styles.pillText}>
-								{listName}
+								{ui.listName}
 							</Text>
 						</View>
 					</View>
-					{isNoteOpen ? (
+					{ui.isNoteOpen ? (
 						<TextInput
 							accessibilityLabel="Item note"
-							value={note}
-							onChangeText={onNoteChange}
+							value={draft.note}
+							onChangeText={actions.changeNote}
 							placeholder="Note"
 							placeholderTextColor={placeholderColor}
 							style={styles.noteInput}

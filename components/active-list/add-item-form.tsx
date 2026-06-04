@@ -6,7 +6,7 @@ import {
 	useSharedValue,
 	withTiming,
 } from "react-native-reanimated";
-import { AddItemComposer } from "./add-item-composer";
+import { AddItemComposer } from "@/components/add-item-composer";
 import { useActiveList } from "./context";
 
 type ComposerState = {
@@ -125,25 +125,30 @@ export function ActiveListAddItemForm() {
 
 	return (
 		<AddItemComposer
-			isOpen={composer.isOpen}
-			name={composer.name}
-			quantity={composer.quantity}
-			note={composer.note}
-			isNoteOpen={composer.isNoteOpen}
-			canSubmit={canSubmit}
-			listName={state.listName}
-			keyboardHeight={composer.keyboardHeight}
-			itemInputRef={itemInputRef}
-			animatedStyle={composerAnimatedStyle}
-			onOpen={openComposer}
-			onDismiss={dismissComposer}
-			onSubmit={submit}
-			onNameChange={(value) => dispatchComposer({ type: "nameChanged", value })}
-			onQuantityChange={(value) =>
-				dispatchComposer({ type: "quantityChanged", value })
-			}
-			onNoteChange={(value) => dispatchComposer({ type: "noteChanged", value })}
-			onToggleNote={() => dispatchComposer({ type: "noteToggled" })}
+			draft={{
+				name: composer.name,
+				quantity: composer.quantity,
+				note: composer.note,
+			}}
+			ui={{
+				isOpen: composer.isOpen,
+				isNoteOpen: composer.isNoteOpen,
+				canSubmit,
+				listName: state.listName,
+				keyboardHeight: composer.keyboardHeight,
+				itemInputRef,
+				animatedStyle: composerAnimatedStyle,
+			}}
+			actions={{
+				open: openComposer,
+				dismiss: dismissComposer,
+				submit,
+				changeName: (value) => dispatchComposer({ type: "nameChanged", value }),
+				changeQuantity: (value) =>
+					dispatchComposer({ type: "quantityChanged", value }),
+				changeNote: (value) => dispatchComposer({ type: "noteChanged", value }),
+				toggleNote: () => dispatchComposer({ type: "noteToggled" }),
+			}}
 		/>
 	);
 }
