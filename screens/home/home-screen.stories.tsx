@@ -4,9 +4,11 @@ import { StyleSheet } from "react-native-unistyles";
 
 import type {
 	ActiveListInitialState,
+	ActiveListItem,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
-import type { ItemService } from "@/lib/services/item";
+import { createActiveListMemoryActions } from "@/components/active-list/__fixtures__/memory-actions";
+import type { Item, ItemService } from "@/lib/services/item";
 import type { ListService } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeScreenView } from "@/screens/home/home-screen";
@@ -149,12 +151,15 @@ function storyServices(initialList: ActiveListInitialState): {
 	lists: ListService;
 	items: ItemService;
 } {
-	let state = initialList;
-	let nextItem = initialList.items.length + 1;
+	const actions = createActiveListMemoryActions(initialList, {
+		itemIdPrefix: "story-item",
+		checkedByMemberName: "Avery Chen",
+	});
 
 	return {
 		lists: {
 			async getList() {
+				const state = await actions.load();
 				return {
 					id: "lst_default_groceries",
 					householdId: "hh_story",
@@ -167,65 +172,42 @@ function storyServices(initialList: ActiveListInitialState): {
 		},
 		items: {
 			async listItems() {
-				return state.items.map((item, position) => ({
-					id: item.id,
-					householdId: "hh_story",
-					listId: "lst_default_groceries",
-					name: item.name,
-					quantity: item.quantity,
-					notes: item.notes,
-					checked: item.checked,
-					checkedByUserId: item.checked ? "usr_avery" : null,
-					position,
-					createdByUserId: "usr_avery",
-					createdAt: 1,
-					updatedAt: 1,
-				}));
+				const state = await actions.load();
+				return state.items.map(activeListStoryItemToItem);
 			},
-			async addItem({ name, quantity, notes }) {
-				const item = {
-					id: `story-item-${nextItem}`,
-					householdId: "hh_story",
-					listId: "lst_default_groceries",
-					name,
-					quantity: quantity?.trim() || null,
-					notes: notes?.trim() || null,
-					checked: false,
-					checkedByUserId: null,
-					position: nextItem,
-					createdByUserId: "usr_avery",
-					createdAt: 1,
-					updatedAt: 1,
-				};
-				nextItem += 1;
-				state = {
-					...state,
-					items: [
-						...state.items,
-						{
-							...item,
-							notes: item.notes,
-							checkedByMemberName: null,
-						},
-					],
-				};
-				return item;
+			async addItem(input) {
+				const item = await actions.addItem({
+					name: input.name,
+					quantity: input.quantity,
+					notes: input.notes,
+				});
+				const state = await actions.load();
+				return activeListStoryItemToItem(item, state.items.indexOf(item));
 			},
 			async setItemChecked({ itemId, checked }) {
-				state = {
-					...state,
-					items: state.items.map((item) =>
-						item.id === itemId
-							? {
-									...item,
-									checked,
-									checkedByMemberName: checked ? "Avery Chen" : null,
-								}
-							: item,
-					),
-				};
+				await actions.setItemChecked(itemId, checked);
 			},
 		},
+	};
+}
+
+function activeListStoryItemToItem(
+	item: ActiveListItem,
+	position: number,
+): Item {
+	return {
+		id: item.id,
+		householdId: "hh_story",
+		listId: "lst_default_groceries",
+		name: item.name,
+		quantity: item.quantity,
+		notes: item.notes,
+		checked: item.checked,
+		checkedByUserId: item.checked ? "usr_avery" : null,
+		position,
+		createdByUserId: "usr_avery",
+		createdAt: 1,
+		updatedAt: 1,
 	};
 }
 
