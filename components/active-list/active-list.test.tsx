@@ -157,6 +157,37 @@ describe("ActiveList", () => {
 		expect(screen.queryByLabelText("Item note")).toBeNull();
 	});
 
+	it("keeps the composer draft open when adding an Item fails", async () => {
+		const actions = memoryListActions(emptyList, {
+			addItem: jest.fn().mockRejectedValue(new Error("write failed")),
+		});
+		renderActiveList(emptyList, actions);
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
+		fireEvent.press(screen.getByLabelText("Add note"));
+		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+
+		await act(async () => {
+			fireEvent.press(screen.getByLabelText("Submit Item"));
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to save that Item. The List was refreshed."),
+			).toBeTruthy(),
+		);
+		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+		expect(screen.getByLabelText("Quantity").props.value).toBe("1 gallon");
+		expect(screen.getByLabelText("Item note").props.value).toBe(
+			"Organic if easy",
+		);
+		expect(
+			screen.getByLabelText("Submit Item").props.accessibilityState,
+		).toEqual({ disabled: false });
+	});
+
 	it("shows pending and offline sync without discarding local Item changes", async () => {
 		const syncAfterWrite = deferred<{ changed: boolean }>();
 		const coordinator = controllableSyncCoordinator("synced");

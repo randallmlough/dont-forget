@@ -147,9 +147,10 @@ export function ActiveListProvider({
 				item: persistedItem,
 			});
 			requestLocalWriteSync();
-		} catch {
+		} catch (error) {
 			dispatchIfMounted({ type: "itemAddFailed" });
 			await loadList().catch(() => undefined);
+			throw error;
 		}
 	}
 

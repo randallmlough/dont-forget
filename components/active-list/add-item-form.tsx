@@ -112,13 +112,18 @@ export function ActiveListAddItemForm({
 		if (!canSubmit) return;
 
 		setIsSubmitting(true);
-		await actions.addItem({ name: trimmedName, quantity, note });
-		setName("");
-		setQuantity("");
-		setNote("");
-		setIsNoteOpen(false);
+		try {
+			await actions.addItem({ name: trimmedName, quantity, note });
+			setName("");
+			setQuantity("");
+			setNote("");
+			setIsNoteOpen(false);
+			dismissComposer();
+		} catch {
+			setIsSubmitting(false);
+			return;
+		}
 		setIsSubmitting(false);
-		dismissComposer();
 	}
 
 	const composerAnimatedStyle = useAnimatedStyle(() => {
