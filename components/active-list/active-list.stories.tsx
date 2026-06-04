@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { useMemo } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -69,8 +68,8 @@ function ActiveListStory({
 }: {
 	initialState: ActiveListInitialState;
 }) {
-	const actions = useMemo(() => storyActions(initialState), [initialState]);
-	const syncCoordinator = useMemo(() => storySyncCoordinator(), []);
+	const actions = storyActions(initialState);
+	const syncCoordinator = storySyncCoordinator();
 
 	return (
 		<View style={styles.canvas}>

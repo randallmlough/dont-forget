@@ -5,19 +5,8 @@ import {
 } from "@/components/active-list/active-list-state";
 
 describe("activeListReducer", () => {
-	it("accepts coordinator-owned sync status changes", () => {
-		const model = initialActiveListModel(listFixture(), "synced");
-
-		expect(
-			activeListReducer(model, {
-				type: "syncStatusChanged",
-				syncState: "pending",
-			}),
-		).toMatchObject({ syncState: "pending" });
-	});
-
 	it("tracks refresh request, success, and failure", () => {
-		const model = initialActiveListModel(listFixture(), "synced");
+		const model = initialActiveListModel(listFixture());
 		const refreshing = activeListReducer(model, { type: "refreshRequested" });
 
 		expect(refreshing).toMatchObject({
@@ -45,7 +34,7 @@ describe("activeListReducer", () => {
 	});
 
 	it("adds an Item optimistically and replaces it after persistence", () => {
-		const model = initialActiveListModel(listFixture(), "synced");
+		const model = initialActiveListModel(listFixture());
 		const optimistic = activeListReducer(model, {
 			type: "itemAddedOptimistically",
 			item: {
@@ -79,20 +68,17 @@ describe("activeListReducer", () => {
 	});
 
 	it("records add failure while preserving the visible List for refresh handoff", () => {
-		const model = activeListReducer(
-			initialActiveListModel(listFixture(), "synced"),
-			{
-				type: "itemAddedOptimistically",
-				item: {
-					id: "pending-item-2",
-					name: "Eggs",
-					quantity: null,
-					note: null,
-					checked: false,
-					checkedByMemberName: null,
-				},
+		const model = activeListReducer(initialActiveListModel(listFixture()), {
+			type: "itemAddedOptimistically",
+			item: {
+				id: "pending-item-2",
+				name: "Eggs",
+				quantity: null,
+				note: null,
+				checked: false,
+				checkedByMemberName: null,
 			},
-		);
+		});
 
 		expect(activeListReducer(model, { type: "itemAddFailed" })).toMatchObject({
 			list: model.list,
@@ -101,7 +87,7 @@ describe("activeListReducer", () => {
 	});
 
 	it("toggles an Item optimistically and clears errors after persistence", () => {
-		const model = initialActiveListModel(listFixture(), "synced");
+		const model = initialActiveListModel(listFixture());
 		const toggled = activeListReducer(model, {
 			type: "itemToggledOptimistically",
 			itemId: "itm_milk",
@@ -122,15 +108,12 @@ describe("activeListReducer", () => {
 	});
 
 	it("records toggle failure while preserving the visible List for refresh handoff", () => {
-		const model = activeListReducer(
-			initialActiveListModel(listFixture(), "synced"),
-			{
-				type: "itemToggledOptimistically",
-				itemId: "itm_milk",
-				checked: true,
-				checkedByMemberName: "Avery Chen",
-			},
-		);
+		const model = activeListReducer(initialActiveListModel(listFixture()), {
+			type: "itemToggledOptimistically",
+			itemId: "itm_milk",
+			checked: true,
+			checkedByMemberName: "Avery Chen",
+		});
 
 		expect(
 			activeListReducer(model, { type: "itemToggleFailed" }),

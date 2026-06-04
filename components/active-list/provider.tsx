@@ -4,6 +4,7 @@ import {
 	useEffectEvent,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import { useLogger } from "@/lib/logger";
 import {
@@ -38,12 +39,21 @@ export function ActiveListProvider({
 	children,
 }: ActiveListProviderProps) {
 	const logger = useLogger();
+	const syncState = useSyncExternalStore(
+		(onStoreChange: () => void) => {
+			const subscription = syncCoordinator.subscribe(onStoreChange);
+			return () => subscription.remove();
+		},
+		() => syncCoordinator.getStatus(),
+		() => syncCoordinator.getStatus(),
+	);
 	const [model, setModel] = useState(() =>
-		initialActiveListModel(initialState, syncCoordinator.getStatus()),
+		initialActiveListModel(initialState),
 	);
 	const mounted = useRef(true);
 	const nextItemNumber = useRef(initialState.items.length + 1);
 	const modelRef = useRef(model);
+	const observedSyncState = useRef(syncState);
 
 	useEffect(() => {
 		mounted.current = true;
@@ -51,6 +61,10 @@ export function ActiveListProvider({
 			mounted.current = false;
 		};
 	}, []);
+
+	useEffect(() => {
+		observedSyncState.current = syncState;
+	}, [syncState]);
 
 	function dispatchIfMounted(transition: ActiveListTransition) {
 		if (!mounted.current) return;
@@ -68,11 +82,11 @@ export function ActiveListProvider({
 		await loadList();
 	});
 
-	const syncStatusChanged = useEffectEvent(
+	const syncTransitioned = useEffectEvent(
 		(syncState: ReturnType<ActiveListSyncCoordinator["getStatus"]>) => {
-			const previousSyncState = modelRef.current.syncState;
+			const previousSyncState = observedSyncState.current;
+			observedSyncState.current = syncState;
 			const isManualRefresh = modelRef.current.isRefreshing;
-			dispatchIfMounted({ type: "syncStatusChanged", syncState });
 			if (
 				previousSyncState === "pending" &&
 				syncState === "synced" &&
@@ -86,12 +100,11 @@ export function ActiveListProvider({
 	);
 
 	useEffect(() => {
-		const subscription = syncCoordinator.subscribe(syncStatusChanged);
-		syncStatusChanged(syncCoordinator.getStatus());
+		const subscription = syncCoordinator.subscribe(syncTransitioned);
 		return () => {
 			subscription.remove();
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- syncStatusChanged is a React Effect Event; resubscribe only when the coordinator changes.
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- syncTransitioned is a React Effect Event; resubscribe only when the coordinator changes.
 	}, [syncCoordinator]);
 
 	function requestLocalWriteSync() {
@@ -185,7 +198,7 @@ export function ActiveListProvider({
 			currentMemberName,
 			errorMessage: model.errorMessage,
 			isRefreshing: model.isRefreshing,
-			syncState: model.syncState,
+			syncState,
 		},
 	};
 
