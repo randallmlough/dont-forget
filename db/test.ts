@@ -14,6 +14,10 @@ type TestClient = {
 	close: () => Promise<void>;
 };
 
+type TestDbMigrationOptions = {
+	throughMigration?: string;
+};
+
 export type TestDirectoryDb = TestClient & {
 	db: ReturnType<typeof directoryDb>;
 };
@@ -33,10 +37,13 @@ export async function createTestDirectoryDb(): Promise<TestDirectoryDb> {
 	};
 }
 
-export async function createTestHouseholdDb(): Promise<TestHouseholdDb> {
+export async function createTestHouseholdDb(
+	options: TestDbMigrationOptions = {},
+): Promise<TestHouseholdDb> {
 	const testClient = await createMigratedTestClient(
 		"household.db",
 		HOUSEHOLD_MIGRATIONS,
+		options,
 	);
 	return {
 		...testClient,
@@ -47,6 +54,7 @@ export async function createTestHouseholdDb(): Promise<TestHouseholdDb> {
 async function createMigratedTestClient(
 	filename: string,
 	migrationsFolder: string,
+	options: TestDbMigrationOptions = {},
 ): Promise<TestClient> {
 	const directory = await mkdtemp(path.join(tmpdir(), "dont-forget-test-"));
 	const dbPath = path.join(directory, filename);
@@ -55,7 +63,11 @@ async function createMigratedTestClient(
 	await client.execute("PRAGMA foreign_keys = ON");
 	await client.execute("PRAGMA busy_timeout = 5000");
 	await client.execute("PRAGMA journal_mode = WAL");
-	await applyMigrations(client, path.join(process.cwd(), migrationsFolder));
+	await applyMigrations(
+		client,
+		path.join(process.cwd(), migrationsFolder),
+		options,
+	);
 
 	return {
 		client,
@@ -67,9 +79,16 @@ async function createMigratedTestClient(
 	};
 }
 
-async function applyMigrations(client: Client, migrationsFolder: string) {
+async function applyMigrations(
+	client: Client,
+	migrationsFolder: string,
+	options: TestDbMigrationOptions,
+) {
 	const files = (await readdir(migrationsFolder))
 		.filter((file) => file.endsWith(".sql"))
+		.filter(
+			(file) => !options.throughMigration || file <= options.throughMigration,
+		)
 		.sort();
 
 	for (const file of files) {
