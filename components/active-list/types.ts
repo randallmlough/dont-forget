@@ -9,7 +9,7 @@ export type ActiveListItem = {
 	id: string;
 	name: string;
 	quantity: string | null;
-	note: string | null;
+	notes: string | null;
 	checked: boolean;
 	checkedByMemberName?: string | null;
 };
@@ -17,13 +17,13 @@ export type ActiveListItem = {
 export type AddActiveListItemDraft = {
 	name: string;
 	quantity: string;
-	note: string;
+	notes: string;
 };
 
 export type AddActiveListItemInput = {
 	name: string;
 	quantity: string | null;
-	note: string | null;
+	notes: string | null;
 };
 
 export type ActiveListState = {

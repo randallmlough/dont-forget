@@ -35,7 +35,7 @@ export function createActiveListMemoryActions(
 				id: `${itemIdPrefix}-${nextItem}`,
 				name: input.name,
 				quantity: input.quantity,
-				note: input.note,
+				notes: input.notes,
 				checked: false,
 				checkedByMemberName: null,
 			};

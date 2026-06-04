@@ -49,7 +49,7 @@ export function useHomeCurrentList(
 			userId: session.activeMember.userId,
 			name: input.name,
 			quantity: input.quantity,
-			notes: input.note,
+			notes: input.notes,
 		});
 		return activeListItemFromItem(item, memberNamesFromSession(session));
 	}
@@ -223,7 +223,7 @@ function activeListItemFromItem(
 		id: item.id,
 		name: item.name,
 		quantity: item.quantity,
-		note: item.notes,
+		notes: item.notes,
 		checked: item.checked,
 		checkedByMemberName:
 			item.checked && item.checkedByUserId

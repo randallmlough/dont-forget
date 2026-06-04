@@ -8,7 +8,7 @@ type ComposerState = {
 	keyboardHeight: number;
 	name: string;
 	quantity: string;
-	note: string;
+	notes: string;
 	isNoteOpen: boolean;
 	isSubmitting: boolean;
 };
@@ -20,7 +20,7 @@ type ComposerAction =
 	| { type: "keyboardHidden" }
 	| { type: "nameChanged"; value: string }
 	| { type: "quantityChanged"; value: string }
-	| { type: "noteChanged"; value: string }
+	| { type: "notesChanged"; value: string }
 	| { type: "noteToggled" }
 	| { type: "submitStarted" }
 	| { type: "submitSucceeded" }
@@ -73,7 +73,7 @@ export function ActiveListAddItemForm() {
 			await actions.addItem({
 				name: trimmedName,
 				quantity: composer.quantity,
-				note: composer.note,
+				notes: composer.notes,
 			});
 			dispatchComposer({ type: "submitSucceeded" });
 			dismissComposer();
@@ -87,7 +87,7 @@ export function ActiveListAddItemForm() {
 			draft={{
 				name: composer.name,
 				quantity: composer.quantity,
-				note: composer.note,
+				notes: composer.notes,
 			}}
 			ui={{
 				isOpen: composer.isOpen,
@@ -105,7 +105,8 @@ export function ActiveListAddItemForm() {
 				changeName: (value) => dispatchComposer({ type: "nameChanged", value }),
 				changeQuantity: (value) =>
 					dispatchComposer({ type: "quantityChanged", value }),
-				changeNote: (value) => dispatchComposer({ type: "noteChanged", value }),
+				changeNotes: (value) =>
+					dispatchComposer({ type: "notesChanged", value }),
 				toggleNote: () => dispatchComposer({ type: "noteToggled" }),
 			}}
 		/>
@@ -118,7 +119,7 @@ function initialComposerState(): ComposerState {
 		keyboardHeight: 0,
 		name: "",
 		quantity: "",
-		note: "",
+		notes: "",
 		isNoteOpen: false,
 		isSubmitting: false,
 	};
@@ -141,11 +142,11 @@ function composerReducer(
 			return { ...state, name: action.value };
 		case "quantityChanged":
 			return { ...state, quantity: action.value };
-		case "noteChanged":
-			return { ...state, note: action.value };
+		case "notesChanged":
+			return { ...state, notes: action.value };
 		case "noteToggled":
 			return state.isNoteOpen
-				? { ...state, isNoteOpen: false, note: "" }
+				? { ...state, isNoteOpen: false, notes: "" }
 				: { ...state, isNoteOpen: true };
 		case "submitStarted":
 			return { ...state, isSubmitting: true };
@@ -154,7 +155,7 @@ function composerReducer(
 				...state,
 				name: "",
 				quantity: "",
-				note: "",
+				notes: "",
 				isNoteOpen: false,
 				isSubmitting: false,
 			};

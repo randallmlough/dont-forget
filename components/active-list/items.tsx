@@ -98,7 +98,7 @@ function renderItem({ item }: ListRenderItemInfo<ActiveListItem>) {
 }
 
 function itemDetailText(item: ActiveListItem): string | null {
-	const parts = [item.quantity, item.note].filter((part) => part);
+	const parts = [item.quantity, item.notes].filter((part) => part);
 	return parts.length > 0 ? parts.join(" - ") : null;
 }
 

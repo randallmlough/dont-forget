@@ -119,13 +119,13 @@ export function ActiveListProvider({
 		const name = input.name.trim();
 		if (!name) return;
 		const quantity = nullableTrimmed(input.quantity);
-		const note = nullableTrimmed(input.note);
+		const notes = nullableTrimmed(input.notes);
 
 		const item: ActiveListItem = {
 			id: `pending-item-${nextItemNumber.current}`,
 			name,
 			quantity,
-			note,
+			notes,
 			checked: false,
 			checkedByMemberName: null,
 		};
@@ -137,7 +137,7 @@ export function ActiveListProvider({
 			const persistedItem = await onAddItem({
 				name,
 				quantity,
-				note,
+				notes,
 			});
 			dispatchIfMounted({
 				type: "itemAddPersisted",

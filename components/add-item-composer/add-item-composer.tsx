@@ -39,7 +39,7 @@ export type AddItemComposerProps = {
 export type AddItemComposerDraft = {
 	name: string;
 	quantity: string;
-	note: string;
+	notes: string;
 };
 
 export type AddItemComposerUiState = {
@@ -58,7 +58,7 @@ export type AddItemComposerActions = {
 	submit: () => void;
 	changeName: (value: string) => void;
 	changeQuantity: (value: string) => void;
-	changeNote: (value: string) => void;
+	changeNotes: (value: string) => void;
 	toggleNote: () => void;
 };
 
@@ -209,8 +209,8 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					{ui.isNoteOpen ? (
 						<TextInput
 							accessibilityLabel="Item note"
-							value={draft.note}
-							onChangeText={actions.changeNote}
+							value={draft.notes}
+							onChangeText={actions.changeNotes}
 							placeholder="Note"
 							placeholderTextColor={placeholderColor}
 							style={styles.noteInput}

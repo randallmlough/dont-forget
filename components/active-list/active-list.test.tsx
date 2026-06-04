@@ -217,7 +217,7 @@ describe("ActiveList", () => {
 				id: "test-item-1",
 				name: input.name,
 				quantity: input.quantity,
-				note: input.note,
+				notes: input.notes,
 				checked: false,
 				checkedByMemberName: null,
 			}),
@@ -238,7 +238,7 @@ describe("ActiveList", () => {
 			expect(addItem).toHaveBeenCalledWith({
 				name: "Milk",
 				quantity: null,
-				note: null,
+				notes: null,
 			}),
 		);
 		expect(screen.queryByText("Organic if easy")).toBeNull();
@@ -369,7 +369,7 @@ describe("ActiveList", () => {
 						id: "test-item-remote",
 						name: "Remote Apples",
 						quantity: null,
-						note: null,
+						notes: null,
 						checked: false,
 						checkedByMemberName: null,
 					},
@@ -409,7 +409,7 @@ describe("ActiveList", () => {
 					id: "test-item-remote",
 					name: "Remote Apples",
 					quantity: null,
-					note: null,
+					notes: null,
 					checked: false,
 					checkedByMemberName: null,
 				},

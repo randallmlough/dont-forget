@@ -77,7 +77,7 @@ function AddItemComposerStory() {
 function FocusedAddItemComposerStory() {
 	const [name, setName] = useState("");
 	const [quantity, setQuantity] = useState("");
-	const [note, setNote] = useState("");
+	const [notes, setNotes] = useState("");
 	const [isNoteOpen, setIsNoteOpen] = useState(false);
 	const canSubmit = name.trim().length > 0;
 
@@ -90,7 +90,7 @@ function FocusedAddItemComposerStory() {
 		>
 			<View style={styles.canvas}>
 				<AddItemComposer
-					draft={{ name, quantity, note }}
+					draft={{ name, quantity, notes }}
 					ui={{
 						isOpen: true,
 						isNoteOpen,
@@ -106,7 +106,7 @@ function FocusedAddItemComposerStory() {
 						submit: () => undefined,
 						changeName: setName,
 						changeQuantity: setQuantity,
-						changeNote: setNote,
+						changeNotes: setNotes,
 						toggleNote: () => setIsNoteOpen((current) => !current),
 					}}
 				/>
