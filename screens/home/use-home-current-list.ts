@@ -2,13 +2,14 @@ import { useEffect, useReducer } from "react";
 import type {
 	ActiveListInitialState,
 	ActiveListItem,
+	AddActiveListItemInput,
 } from "@/components/active-list";
 import type { Item } from "@/lib/services/item";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 
 export type HomeCurrentListActions = {
 	loadList: () => Promise<ActiveListInitialState>;
-	addItem: (name: string) => Promise<ActiveListItem>;
+	addItem: (input: AddActiveListItemInput) => Promise<ActiveListItem>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -40,11 +41,15 @@ export function useHomeCurrentList(
 		return loadCurrentList(session, listId);
 	}
 
-	async function addItem(name: string): Promise<ActiveListItem> {
+	async function addItem(
+		input: AddActiveListItemInput,
+	): Promise<ActiveListItem> {
 		const item = await session.services.items.addItem({
 			listId,
 			userId: session.activeMember.userId,
-			name,
+			name: input.name,
+			quantity: input.quantity,
+			notes: input.note,
 		});
 		return activeListItemFromItem(item, memberNamesFromSession(session));
 	}
@@ -217,6 +222,8 @@ function activeListItemFromItem(
 	return {
 		id: item.id,
 		name: item.name,
+		quantity: item.quantity,
+		note: item.notes,
 		checked: item.checked,
 		checkedByMemberName:
 			item.checked && item.checkedByUserId

@@ -7,6 +7,7 @@ import {
 	ActiveList,
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
+	type AddActiveListItemInput,
 } from "@/components/active-list";
 
 const emptyList: ActiveListInitialState = {
@@ -139,7 +140,9 @@ function storySyncCoordinator(): ActiveListSyncCoordinator {
 
 function storyActions(initialState: ActiveListInitialState): {
 	load: () => Promise<ActiveListInitialState>;
-	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
+	addItem: (
+		input: AddActiveListItemInput,
+	) => Promise<ActiveListInitialState["items"][number]>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 } {
 	let state = initialState;
@@ -149,10 +152,12 @@ function storyActions(initialState: ActiveListInitialState): {
 		async load() {
 			return state;
 		},
-		async addItem(name) {
+		async addItem(input) {
 			const item = {
 				id: `story-item-${nextItem}`,
-				name,
+				name: input.name,
+				quantity: input.quantity.trim() || null,
+				note: input.note.trim() || null,
 				checked: false,
 				checkedByMemberName: null,
 			};

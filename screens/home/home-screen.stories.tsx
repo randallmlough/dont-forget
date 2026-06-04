@@ -21,16 +21,27 @@ const populatedHomeList: ActiveListInitialState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [
-		{ id: "item-1", name: "Coffee", checked: false, checkedByMemberName: null },
+		{
+			id: "item-1",
+			name: "Coffee",
+			quantity: null,
+			note: null,
+			checked: false,
+			checkedByMemberName: null,
+		},
 		{
 			id: "item-2",
 			name: "Eggs",
+			quantity: "1 dozen",
+			note: null,
 			checked: true,
 			checkedByMemberName: "Avery Chen",
 		},
 		{
 			id: "item-3",
 			name: "Spinach",
+			quantity: null,
+			note: "Baby spinach",
 			checked: false,
 			checkedByMemberName: null,
 		},
@@ -161,6 +172,8 @@ function storyServices(initialList: ActiveListInitialState): {
 					householdId: "hh_story",
 					listId: "lst_default_groceries",
 					name: item.name,
+					quantity: item.quantity,
+					notes: item.note,
 					checked: item.checked,
 					checkedByUserId: item.checked ? "usr_avery" : null,
 					position,
@@ -169,12 +182,14 @@ function storyServices(initialList: ActiveListInitialState): {
 					updatedAt: 1,
 				}));
 			},
-			async addItem({ name }) {
+			async addItem({ name, quantity, notes }) {
 				const item = {
 					id: `story-item-${nextItem}`,
 					householdId: "hh_story",
 					listId: "lst_default_groceries",
 					name,
+					quantity: quantity?.trim() || null,
+					notes: notes?.trim() || null,
 					checked: false,
 					checkedByUserId: null,
 					position: nextItem,
@@ -185,7 +200,14 @@ function storyServices(initialList: ActiveListInitialState): {
 				nextItem += 1;
 				state = {
 					...state,
-					items: [...state.items, { ...item, checkedByMemberName: null }],
+					items: [
+						...state.items,
+						{
+							...item,
+							note: item.notes,
+							checkedByMemberName: null,
+						},
+					],
 				};
 				return item;
 			},

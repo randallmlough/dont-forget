@@ -47,6 +47,8 @@ describe("test database migrations", () => {
 				id: "item_1",
 				listId: "list_1",
 				name: "Milk",
+				quantity: "1 gallon",
+				notes: "Organic if easy",
 				position: 0,
 				createdByUserId: "usr_1",
 			});
@@ -70,7 +72,13 @@ describe("test database migrations", () => {
 				{ householdId: "household_1", role: "owner" },
 			]);
 			expect(itemRows).toMatchObject([
-				{ id: "item_1", listId: "list_1", name: "Milk" },
+				{
+					id: "item_1",
+					listId: "list_1",
+					name: "Milk",
+					quantity: "1 gallon",
+					notes: "Organic if easy",
+				},
 			]);
 			expect(checkRows).toEqual([
 				{

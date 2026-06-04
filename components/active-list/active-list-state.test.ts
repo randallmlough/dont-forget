@@ -51,6 +51,8 @@ describe("activeListReducer", () => {
 			item: {
 				id: "pending-item-2",
 				name: "Eggs",
+				quantity: "1 dozen",
+				note: "Free range",
 				checked: false,
 				checkedByMemberName: null,
 			},
@@ -65,6 +67,8 @@ describe("activeListReducer", () => {
 			item: {
 				id: "itm_eggs",
 				name: "Eggs",
+				quantity: "1 dozen",
+				note: "Free range",
 				checked: false,
 				checkedByMemberName: null,
 			},
@@ -82,6 +86,8 @@ describe("activeListReducer", () => {
 				item: {
 					id: "pending-item-2",
 					name: "Eggs",
+					quantity: null,
+					note: null,
 					checked: false,
 					checkedByMemberName: null,
 				},
@@ -145,6 +151,8 @@ function listFixture(
 			{
 				id: "itm_milk",
 				name: "Milk",
+				quantity: null,
+				note: null,
 				checked: false,
 				checkedByMemberName: null,
 			},

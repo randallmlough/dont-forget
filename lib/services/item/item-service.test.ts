@@ -165,6 +165,8 @@ describe("createItemService", () => {
 				listId: "lst_weekend",
 				userId: "usr_avery",
 				name: "  Milk  ",
+				quantity: "  1 gallon  ",
+				notes: "  Organic if easy  ",
 			});
 			const row = await household.db.query.items.findFirst({
 				where: (table, { eq }) => eq(table.id, item.id),
@@ -176,6 +178,8 @@ describe("createItemService", () => {
 				householdId: "hh_avery",
 				listId: "lst_weekend",
 				name: "Milk",
+				quantity: "1 gallon",
+				notes: "Organic if easy",
 				checked: false,
 				checkedByUserId: null,
 				position: 0,
@@ -187,6 +191,8 @@ describe("createItemService", () => {
 				id: item.id,
 				listId: "lst_weekend",
 				name: "Milk",
+				quantity: "1 gallon",
+				notes: "Organic if easy",
 				position: 0,
 				createdByUserId: "usr_avery",
 				createdAt: 8_000_000_000_000,
@@ -198,6 +204,43 @@ describe("createItemService", () => {
 				item_id: item.id,
 				user_id: "usr_avery",
 			});
+		} finally {
+			await household.close();
+		}
+	});
+
+	it("stores blank Item quantity and notes as null", async () => {
+		const household = await createTestHouseholdDb();
+
+		try {
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+				}),
+			);
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics: createMockAnalytics(),
+			});
+
+			const item = await service.addItem({
+				listId: "lst_weekend",
+				userId: "usr_avery",
+				name: "Milk",
+				quantity: "   ",
+				notes: "",
+			});
+
+			expect(item).toMatchObject({ quantity: null, notes: null });
+			await expect(
+				service.listItems({ listId: "lst_weekend" }),
+			).resolves.toEqual([
+				expect.objectContaining({ quantity: null, notes: null }),
+			]);
 		} finally {
 			await household.close();
 		}

@@ -30,6 +30,7 @@ export function ActiveListItems() {
 
 function ItemRow({ item }: { item: ActiveListItem }) {
 	const { actions } = useActiveList();
+	const detailText = itemDetailText(item);
 
 	function toggle() {
 		void actions.toggleItem(item.id);
@@ -62,6 +63,7 @@ function ItemRow({ item }: { item: ActiveListItem }) {
 				>
 					{item.name}
 				</Text>
+				{detailText ? <Text style={styles.itemMeta}>{detailText}</Text> : null}
 				{item.checkedByMemberName ? (
 					<Text style={styles.itemMeta}>
 						Checked by {item.checkedByMemberName}
@@ -93,6 +95,11 @@ function keyExtractor(item: ActiveListItem) {
 
 function renderItem({ item }: ListRenderItemInfo<ActiveListItem>) {
 	return <ItemRow item={item} />;
+}
+
+function itemDetailText(item: ActiveListItem): string | null {
+	const parts = [item.quantity, item.note].filter((part) => part);
+	return parts.length > 0 ? parts.join(" - ") : null;
 }
 
 const styles = StyleSheet.create((theme) => ({

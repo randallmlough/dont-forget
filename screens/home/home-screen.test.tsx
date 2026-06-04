@@ -282,10 +282,14 @@ describe("HomeScreenView", () => {
 
 			openAddItemComposer();
 			fireEvent.changeText(screen.getByLabelText("Item name"), "Yogurt");
+			fireEvent.changeText(screen.getByLabelText("Quantity"), "half carton");
+			fireEvent.press(screen.getByLabelText("Add note"));
+			fireEvent.changeText(screen.getByLabelText("Item note"), "Plain Greek");
 			await act(async () => {
 				fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
 			await waitFor(() => expect(screen.getByText("Yogurt")).toBeTruthy());
+			expect(screen.getByText("half carton - Plain Greek")).toBeTruthy();
 			await act(async () => {
 				fireEvent.press(screen.getByRole("checkbox", { name: "Yogurt" }));
 			});
@@ -298,6 +302,8 @@ describe("HomeScreenView", () => {
 			expect(persistedItem).toMatchObject({
 				listId: DEFAULT_LIST_ID,
 				name: "Yogurt",
+				quantity: "half carton",
+				notes: "Plain Greek",
 				createdByUserId: harness.scenario.users.avery.id,
 			});
 			await expect(

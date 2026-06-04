@@ -33,6 +33,7 @@ export const items = sqliteTable(
 			.notNull()
 			.references(() => lists.id),
 		name: text("name").notNull(),
+		quantity: text("quantity"),
 		notes: text("notes"),
 		position: real("position").notNull(),
 		createdByUserId: text("created_by_user_id").notNull(),

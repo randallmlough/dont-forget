@@ -8,8 +8,16 @@ import type {
 export type ActiveListItem = {
 	id: string;
 	name: string;
+	quantity: string | null;
+	note: string | null;
 	checked: boolean;
 	checkedByMemberName?: string | null;
+};
+
+export type AddActiveListItemInput = {
+	name: string;
+	quantity: string;
+	note: string;
 };
 
 export type ActiveListState = {
@@ -32,7 +40,7 @@ export type ActiveListSyncCoordinator = Pick<
 >;
 
 export type ActiveListActions = {
-	addItem: (name: string) => Promise<void>;
+	addItem: (input: AddActiveListItemInput) => Promise<void>;
 	toggleItem: (itemId: string) => Promise<void>;
 	refresh: () => Promise<void>;
 };

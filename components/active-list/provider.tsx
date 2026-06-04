@@ -16,13 +16,14 @@ import type {
 	ActiveListInitialState,
 	ActiveListItem,
 	ActiveListSyncCoordinator,
+	AddActiveListItemInput,
 } from "./types";
 
 export type ActiveListProviderProps = PropsWithChildren<{
 	initialState: ActiveListInitialState;
 	currentMemberName: string;
 	onLoadList: () => Promise<ActiveListInitialState>;
-	onAddItem: (name: string) => Promise<ActiveListItem>;
+	onAddItem: (input: AddActiveListItemInput) => Promise<ActiveListItem>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	syncCoordinator: ActiveListSyncCoordinator;
 }>;
@@ -116,13 +117,17 @@ export function ActiveListProvider({
 		}
 	}
 
-	async function addItem(rawName: string) {
-		const name = rawName.trim();
+	async function addItem(input: AddActiveListItemInput) {
+		const name = input.name.trim();
 		if (!name) return;
+		const quantity = nullableTrimmed(input.quantity);
+		const note = nullableTrimmed(input.note);
 
 		const item: ActiveListItem = {
 			id: `pending-item-${nextItemNumber.current}`,
 			name,
+			quantity,
+			note,
 			checked: false,
 			checkedByMemberName: null,
 		};
@@ -131,7 +136,11 @@ export function ActiveListProvider({
 		dispatchIfMounted({ type: "itemAddedOptimistically", item });
 
 		try {
-			const persistedItem = await onAddItem(name);
+			const persistedItem = await onAddItem({
+				name,
+				quantity: quantity ?? "",
+				note: note ?? "",
+			});
 			dispatchIfMounted({
 				type: "itemAddPersisted",
 				pendingItemId: item.id,
@@ -184,4 +193,9 @@ export function ActiveListProvider({
 			{children}
 		</ActiveListContext.Provider>
 	);
+}
+
+function nullableTrimmed(value: string): string | null {
+	const trimmed = value.trim();
+	return trimmed ? trimmed : null;
 }

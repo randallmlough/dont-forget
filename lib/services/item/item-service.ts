@@ -14,6 +14,8 @@ export type Item = {
 	householdId: string;
 	listId: string;
 	name: string;
+	quantity: string | null;
+	notes: string | null;
 	checked: boolean;
 	checkedByUserId: string | null;
 	position: number;
@@ -30,6 +32,8 @@ export type AddItemInput = {
 	listId: string;
 	userId: string;
 	name: string;
+	quantity?: string | null;
+	notes?: string | null;
 };
 
 export type SetItemCheckedInput = {
@@ -56,6 +60,8 @@ const itemRowSchema = z.object({
 	id: z.string(),
 	list_id: z.string(),
 	name: z.string(),
+	quantity: z.string().nullable().optional(),
+	notes: z.string().nullable().optional(),
 	checked_by_user_id: z.string().nullable().optional(),
 	checked_at: sqlNumberSchema.nullable().optional(),
 	position: sqlNumberSchema,
@@ -83,6 +89,8 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
               i.id,
               i.list_id,
               i.name,
+              i.quantity,
+              i.notes,
               c.user_id AS checked_by_user_id,
               c.checked_at AS checked_at,
               i.position,
@@ -117,6 +125,8 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 			if (!name) {
 				throw new Error("Item name is required");
 			}
+			const quantity = nullableTrimmed(input.quantity);
+			const notes = nullableTrimmed(input.notes);
 
 			try {
 				const now = nextItemServiceTimestamp();
@@ -129,12 +139,16 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
               id,
               list_id,
               name,
+              quantity,
+              notes,
               position,
               created_by_user_id,
               created_at,
 	              updated_at
 	            )
 	            SELECT
+	              ?,
+	              ?,
 	              ?,
 	              ?,
 	              ?,
@@ -145,7 +159,17 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 	            FROM items
 	            WHERE list_id = ? AND deleted_at IS NULL
 	          `,
-					args: [id, input.listId, name, input.userId, now, now, input.listId],
+					args: [
+						id,
+						input.listId,
+						name,
+						quantity,
+						notes,
+						input.userId,
+						now,
+						now,
+						input.listId,
+					],
 				});
 				const position = await insertedItemPosition(deps.store, id);
 
@@ -154,6 +178,8 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 					householdId: deps.householdId,
 					listId: input.listId,
 					name,
+					quantity,
+					notes,
 					checked: false,
 					checkedByUserId: null,
 					position,
@@ -246,6 +272,8 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 		householdId,
 		listId: parsed.list_id,
 		name: parsed.name,
+		quantity: parsed.quantity ?? null,
+		notes: parsed.notes ?? null,
 		checked,
 		checkedByUserId:
 			checked && parsed.checked_by_user_id ? parsed.checked_by_user_id : null,
@@ -254,6 +282,11 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 		createdAt: parsed.created_at,
 		updatedAt: parsed.updated_at,
 	};
+}
+
+function nullableTrimmed(value: string | null | undefined): string | null {
+	const trimmed = value?.trim() ?? "";
+	return trimmed ? trimmed : null;
 }
 
 function randomUuid(): string {

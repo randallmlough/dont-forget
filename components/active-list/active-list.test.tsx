@@ -12,6 +12,7 @@ import {
 	ActiveList,
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
+	type AddActiveListItemInput,
 } from "@/components/active-list";
 import { useLogger } from "@/lib/logger";
 import { deferred } from "@/lib/test/async";
@@ -41,7 +42,9 @@ const emptyList: ActiveListInitialState = {
 
 type MemoryListActions = {
 	load: () => Promise<ActiveListInitialState>;
-	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
+	addItem: (
+		input: AddActiveListItemInput,
+	) => Promise<ActiveListInitialState["items"][number]>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -69,6 +72,8 @@ describe("ActiveList", () => {
 		const input = screen.getByLabelText("Item name");
 		fireEvent.changeText(input, " Milk ");
 		fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
+		fireEvent.press(screen.getByLabelText("Add note"));
+		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
 		await act(async () => {
 			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
@@ -81,6 +86,7 @@ describe("ActiveList", () => {
 			});
 		});
 		expect(screen.getByText("0 of 1 Items checked")).toBeTruthy();
+		expect(screen.getByText("1 gallon - Organic if easy")).toBeTruthy();
 		expect(screen.queryByText("This List is empty.")).toBeNull();
 		expect(screen.queryByLabelText("Item name")).toBeNull();
 		expect(screen.getByLabelText("Add Item")).toBeTruthy();
@@ -241,6 +247,8 @@ describe("ActiveList", () => {
 					{
 						id: "test-item-remote",
 						name: "Remote Apples",
+						quantity: null,
+						note: null,
 						checked: false,
 						checkedByMemberName: null,
 					},
@@ -279,6 +287,8 @@ describe("ActiveList", () => {
 				{
 					id: "test-item-remote",
 					name: "Remote Apples",
+					quantity: null,
+					note: null,
 					checked: false,
 					checkedByMemberName: null,
 				},
@@ -505,10 +515,12 @@ function memoryListActions(
 		async load() {
 			return state;
 		},
-		async addItem(name) {
+		async addItem(input) {
 			const item = {
 				id: `test-item-${nextItem}`,
-				name,
+				name: input.name,
+				quantity: input.quantity.trim() || null,
+				note: input.note.trim() || null,
 				checked: false,
 				checkedByMemberName: null,
 			};

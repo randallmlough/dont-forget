@@ -7,6 +7,7 @@ import {
 	ActiveList,
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
+	type AddActiveListItemInput,
 } from "@/components/active-list";
 
 const emptyList: ActiveListInitialState = {
@@ -19,16 +20,27 @@ const populatedList: ActiveListInitialState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [
-		{ id: "item-1", name: "Milk", checked: false, checkedByMemberName: null },
+		{
+			id: "item-1",
+			name: "Milk",
+			quantity: null,
+			note: null,
+			checked: false,
+			checkedByMemberName: null,
+		},
 		{
 			id: "item-2",
 			name: "Apples",
+			quantity: "1 bag",
+			note: null,
 			checked: true,
 			checkedByMemberName: "Avery Chen",
 		},
 		{
 			id: "item-3",
 			name: "Paper towels",
+			quantity: null,
+			note: "Recycled if available",
 			checked: false,
 			checkedByMemberName: null,
 		},
@@ -92,7 +104,9 @@ function storySyncCoordinator(): ActiveListSyncCoordinator {
 
 function storyActions(initialState: ActiveListInitialState): {
 	load: () => Promise<ActiveListInitialState>;
-	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
+	addItem: (
+		input: AddActiveListItemInput,
+	) => Promise<ActiveListInitialState["items"][number]>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 } {
 	let state = initialState;
@@ -102,10 +116,12 @@ function storyActions(initialState: ActiveListInitialState): {
 		async load() {
 			return state;
 		},
-		async addItem(name) {
+		async addItem(input) {
 			const item = {
 				id: `story-item-${nextItem}`,
-				name,
+				name: input.name,
+				quantity: input.quantity.trim() || null,
+				note: input.note.trim() || null,
 				checked: false,
 				checkedByMemberName: null,
 			};
