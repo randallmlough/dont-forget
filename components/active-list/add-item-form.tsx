@@ -1,5 +1,5 @@
 import { BlurView } from "expo-blur";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import Animated, {
 	Easing,
@@ -15,6 +15,29 @@ const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
 const PLACEHOLDER_COLOR = "#829AB1";
 
+type ComposerState = {
+	isOpen: boolean;
+	keyboardHeight: number;
+	name: string;
+	quantity: string;
+	note: string;
+	isNoteOpen: boolean;
+	isSubmitting: boolean;
+};
+
+type ComposerAction =
+	| { type: "opened" }
+	| { type: "dismissed" }
+	| { type: "keyboardShown"; height: number }
+	| { type: "keyboardHidden" }
+	| { type: "nameChanged"; value: string }
+	| { type: "quantityChanged"; value: string }
+	| { type: "noteChanged"; value: string }
+	| { type: "noteToggled" }
+	| { type: "submitStarted" }
+	| { type: "submitSucceeded" }
+	| { type: "submitFailed" };
+
 export type ActiveListAddItemFormProps = {
 	initialComposerOpen?: boolean;
 	keyboardHeightOverride?: number;
@@ -29,23 +52,25 @@ export function ActiveListAddItemForm({
 	const itemInputRef = useRef<TextInput>(null);
 	const openingComposerRef = useRef(initialComposerOpen);
 	const visibility = useSharedValue(initialComposerOpen ? 1 : 0);
-	const [isComposerOpen, setIsComposerOpen] = useState(initialComposerOpen);
-	const [keyboardHeight, setKeyboardHeight] = useState(0);
-	const [name, setName] = useState("");
-	const [quantity, setQuantity] = useState("");
-	const [note, setNote] = useState("");
-	const [isNoteOpen, setIsNoteOpen] = useState(false);
-	const [isSubmitting, setIsSubmitting] = useState(false);
-	const trimmedName = name.trim();
-	const canSubmit = trimmedName.length > 0 && !isSubmitting;
-	const effectiveKeyboardHeight = keyboardHeightOverride ?? keyboardHeight;
+	const [composer, dispatchComposer] = useReducer(
+		composerReducer,
+		initialComposerOpen,
+		initialComposerState,
+	);
+	const trimmedName = composer.name.trim();
+	const canSubmit = trimmedName.length > 0 && !composer.isSubmitting;
+	const effectiveKeyboardHeight =
+		keyboardHeightOverride ?? composer.keyboardHeight;
 
 	useEffect(() => {
 		const showSubscription = Keyboard.addListener(
 			"keyboardWillShow",
 			(event) => {
 				openingComposerRef.current = false;
-				setKeyboardHeight(event.endCoordinates.height);
+				dispatchComposer({
+					type: "keyboardShown",
+					height: event.endCoordinates.height,
+				});
 				visibility.set(
 					withTiming(1, {
 						duration: Math.min(event.duration, 220),
@@ -58,14 +83,13 @@ export function ActiveListAddItemForm({
 			"keyboardWillHide",
 			(event) => {
 				if (openingComposerRef.current) return;
-				setKeyboardHeight(0);
+				dispatchComposer({ type: "keyboardHidden" });
 				visibility.set(
 					withTiming(0, {
 						duration: Math.min(event.duration, 220),
 						easing: Easing.out(Easing.cubic),
 					}),
 				);
-				setIsComposerOpen(false);
 			},
 		);
 
@@ -77,12 +101,12 @@ export function ActiveListAddItemForm({
 
 	useEffect(() => {
 		visibility.set(
-			withTiming(isComposerOpen ? 1 : 0, {
+			withTiming(composer.isOpen ? 1 : 0, {
 				duration: 160,
 				easing: Easing.out(Easing.cubic),
 			}),
 		);
-		if (!isComposerOpen) return;
+		if (!composer.isOpen) return;
 
 		const focusTimer = setTimeout(() => {
 			itemInputRef.current?.focus();
@@ -95,35 +119,34 @@ export function ActiveListAddItemForm({
 			clearTimeout(focusTimer);
 			clearTimeout(openingGuardTimer);
 		};
-	}, [isComposerOpen, visibility]);
+	}, [composer.isOpen, visibility]);
 
 	function openComposer() {
 		openingComposerRef.current = true;
-		setIsComposerOpen(true);
+		dispatchComposer({ type: "opened" });
 	}
 
 	function dismissComposer() {
 		openingComposerRef.current = false;
-		setIsComposerOpen(false);
+		dispatchComposer({ type: "dismissed" });
 		Keyboard.dismiss();
 	}
 
 	async function submit() {
 		if (!canSubmit) return;
 
-		setIsSubmitting(true);
+		dispatchComposer({ type: "submitStarted" });
 		try {
-			await actions.addItem({ name: trimmedName, quantity, note });
-			setName("");
-			setQuantity("");
-			setNote("");
-			setIsNoteOpen(false);
+			await actions.addItem({
+				name: trimmedName,
+				quantity: composer.quantity,
+				note: composer.note,
+			});
+			dispatchComposer({ type: "submitSucceeded" });
 			dismissComposer();
 		} catch {
-			setIsSubmitting(false);
-			return;
+			dispatchComposer({ type: "submitFailed" });
 		}
-		setIsSubmitting(false);
 	}
 
 	const composerAnimatedStyle = useAnimatedStyle(() => {
@@ -135,7 +158,7 @@ export function ActiveListAddItemForm({
 		};
 	});
 
-	if (!isComposerOpen) {
+	if (!composer.isOpen) {
 		return (
 			<View
 				collapsable={false}
@@ -154,7 +177,7 @@ export function ActiveListAddItemForm({
 					]}
 				>
 					<Text style={styles.entryLabel}>
-						{name.trim() ? name.trim() : "Add Item"}
+						{composer.name.trim() ? composer.name.trim() : "Add Item"}
 					</Text>
 				</Pressable>
 			</View>
@@ -183,8 +206,10 @@ export function ActiveListAddItemForm({
 							ref={itemInputRef}
 							accessibilityLabel="Item name"
 							autoFocus
-							value={name}
-							onChangeText={setName}
+							value={composer.name}
+							onChangeText={(value) =>
+								dispatchComposer({ type: "nameChanged", value })
+							}
 							placeholder="Item name"
 							placeholderTextColor={PLACEHOLDER_COLOR}
 							returnKeyType="done"
@@ -210,8 +235,10 @@ export function ActiveListAddItemForm({
 						<Text style={styles.quantityLabel}>Quantity</Text>
 						<TextInput
 							accessibilityLabel="Quantity"
-							value={quantity}
-							onChangeText={setQuantity}
+							value={composer.quantity}
+							onChangeText={(value) =>
+								dispatchComposer({ type: "quantityChanged", value })
+							}
 							placeholder="1, dozen, 1 gallon"
 							placeholderTextColor={PLACEHOLDER_COLOR}
 							returnKeyType="done"
@@ -223,15 +250,15 @@ export function ActiveListAddItemForm({
 						<Pressable
 							accessibilityLabel="Add note"
 							accessibilityRole="button"
-							onPress={() => setIsNoteOpen((current) => !current)}
+							onPress={() => dispatchComposer({ type: "noteToggled" })}
 							style={({ pressed }) => [
 								styles.pill,
-								isNoteOpen ? styles.pillSelected : undefined,
+								composer.isNoteOpen ? styles.pillSelected : undefined,
 								pressed ? styles.pressed : undefined,
 							]}
 						>
 							<Text style={styles.pillText}>
-								{isNoteOpen ? "Note" : "Add note"}
+								{composer.isNoteOpen ? "Note" : "Add note"}
 							</Text>
 						</Pressable>
 						<View
@@ -243,11 +270,13 @@ export function ActiveListAddItemForm({
 							</Text>
 						</View>
 					</View>
-					{isNoteOpen ? (
+					{composer.isNoteOpen ? (
 						<TextInput
 							accessibilityLabel="Item note"
-							value={note}
-							onChangeText={setNote}
+							value={composer.note}
+							onChangeText={(value) =>
+								dispatchComposer({ type: "noteChanged", value })
+							}
 							placeholder="Note"
 							placeholderTextColor={PLACEHOLDER_COLOR}
 							style={styles.noteInput}
@@ -257,6 +286,55 @@ export function ActiveListAddItemForm({
 			</Animated.View>
 		</View>
 	);
+}
+
+function initialComposerState(initialComposerOpen: boolean): ComposerState {
+	return {
+		isOpen: initialComposerOpen,
+		keyboardHeight: 0,
+		name: "",
+		quantity: "",
+		note: "",
+		isNoteOpen: false,
+		isSubmitting: false,
+	};
+}
+
+function composerReducer(
+	state: ComposerState,
+	action: ComposerAction,
+): ComposerState {
+	switch (action.type) {
+		case "opened":
+			return { ...state, isOpen: true };
+		case "dismissed":
+			return { ...state, isOpen: false, isSubmitting: false };
+		case "keyboardShown":
+			return { ...state, keyboardHeight: action.height };
+		case "keyboardHidden":
+			return { ...state, isOpen: false, keyboardHeight: 0 };
+		case "nameChanged":
+			return { ...state, name: action.value };
+		case "quantityChanged":
+			return { ...state, quantity: action.value };
+		case "noteChanged":
+			return { ...state, note: action.value };
+		case "noteToggled":
+			return { ...state, isNoteOpen: !state.isNoteOpen };
+		case "submitStarted":
+			return { ...state, isSubmitting: true };
+		case "submitSucceeded":
+			return {
+				...state,
+				name: "",
+				quantity: "",
+				note: "",
+				isNoteOpen: false,
+				isSubmitting: false,
+			};
+		case "submitFailed":
+			return { ...state, isSubmitting: false };
+	}
 }
 
 const styles = StyleSheet.create((theme) => ({
