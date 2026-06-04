@@ -384,6 +384,8 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Milk",
+				quantity: null,
+				notes: null,
 			}),
 		).rejects.toMatchObject({
 			code: "stale_authenticated_app_session_resource",
@@ -453,6 +455,8 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Milk",
+				quantity: null,
+				notes: null,
 			}),
 		).rejects.toMatchObject({
 			code: "stale_authenticated_app_session_resource",
@@ -728,6 +732,8 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Cached milk",
+				quantity: null,
+				notes: null,
 			}),
 		).resolves.toMatchObject({ name: "Cached milk" });
 		expect(sessionService.cache.deleteLocalData).not.toHaveBeenCalled();

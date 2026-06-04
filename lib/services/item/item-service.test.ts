@@ -285,6 +285,8 @@ describe("createItemService", () => {
 					listId: "lst_weekend",
 					userId: "usr_avery",
 					name: "Milk",
+					quantity: null,
+					notes: null,
 				}),
 			).resolves.toMatchObject({ position: 3 });
 		} finally {
@@ -311,6 +313,8 @@ describe("createItemService", () => {
 				listId: "lst_weekend",
 				userId: "usr_avery",
 				name: "Milk",
+				quantity: null,
+				notes: null,
 			}),
 		).resolves.toMatchObject({ position: 4 });
 
@@ -336,6 +340,8 @@ describe("createItemService", () => {
 				listId: "lst_weekend",
 				userId: "usr_avery",
 				name: "   ",
+				quantity: null,
+				notes: null,
 			}),
 		).rejects.toThrow("Item name is required");
 		expect(execute).not.toHaveBeenCalled();
@@ -371,11 +377,15 @@ describe("createItemService", () => {
 				listId: "lst_weekend",
 				userId: "usr_avery",
 				name: "Milk",
+				quantity: null,
+				notes: null,
 			});
 			const eggs = await service.addItem({
 				listId: "lst_weekend",
 				userId: "usr_avery",
 				name: "Eggs",
+				quantity: null,
+				notes: null,
 			});
 			await service.setItemChecked({
 				listId: "lst_weekend",
@@ -504,6 +514,8 @@ describe("createItemService", () => {
 				listId: "lst_weekend",
 				userId: "usr_avery",
 				name: "Milk",
+				quantity: null,
+				notes: null,
 			});
 
 			await service.setItemChecked({

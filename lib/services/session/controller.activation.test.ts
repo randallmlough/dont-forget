@@ -167,6 +167,8 @@ describe("createAuthenticatedAppSessionController activation", () => {
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Cached eggs",
+				quantity: null,
+				notes: null,
 			}),
 		).resolves.toMatchObject({ name: "Cached eggs" });
 		expect(syncCoordinator.start).not.toHaveBeenCalled();

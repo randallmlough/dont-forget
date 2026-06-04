@@ -32,8 +32,8 @@ export type AddItemInput = {
 	listId: string;
 	userId: string;
 	name: string;
-	quantity?: string | null;
-	notes?: string | null;
+	quantity: string | null;
+	notes: string | null;
 };
 
 export type SetItemCheckedInput = {
