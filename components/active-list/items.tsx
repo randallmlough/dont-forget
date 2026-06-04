@@ -5,12 +5,16 @@ import {
 	Text,
 	View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useActiveList } from "./context";
 import type { ActiveListItem } from "./types";
 
+const COMPOSER_SCROLL_CLEARANCE = 128;
+
 export function ActiveListItems() {
 	const { state } = useActiveList();
+	const insets = useSafeAreaInsets();
 
 	return (
 		<FlatList
@@ -22,6 +26,7 @@ export function ActiveListItems() {
 			keyboardShouldPersistTaps="handled"
 			contentContainerStyle={[
 				styles.itemsContent,
+				{ paddingBottom: insets.bottom + COMPOSER_SCROLL_CLEARANCE },
 				state.items.length === 0 ? styles.emptyItemsContent : undefined,
 			]}
 		/>

@@ -5,7 +5,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import { Keyboard } from "react-native";
+import { FlatList, Keyboard } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -122,6 +122,17 @@ describe("ActiveList", () => {
 		expect(screen.getByLabelText("Add note")).toBeTruthy();
 		expect(screen.getByLabelText("Selected List: Groceries")).toBeTruthy();
 		expect(screen.queryByLabelText("Add Item")).toBeNull();
+	});
+
+	it("reserves bottom scroll space for the add Item composer", () => {
+		const rendered = renderActiveList(emptyList);
+		const list = rendered.UNSAFE_getByType(FlatList);
+
+		expect(list.props.contentContainerStyle).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ paddingBottom: 34 + 128 }),
+			]),
+		);
 	});
 
 	it("dismisses the composer without clearing an open draft", () => {
