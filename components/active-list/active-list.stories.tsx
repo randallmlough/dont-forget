@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -68,8 +69,8 @@ function ActiveListStory({
 }: {
 	initialState: ActiveListInitialState;
 }) {
-	const actions = storyActions(initialState);
-	const syncCoordinator = storySyncCoordinator();
+	const [actions] = useState(() => storyActions(initialState));
+	const [syncCoordinator] = useState(storySyncCoordinator);
 
 	return (
 		<View style={styles.canvas}>
@@ -119,8 +120,8 @@ function storyActions(initialState: ActiveListInitialState): {
 			const item = {
 				id: `story-item-${nextItem}`,
 				name: input.name,
-				quantity: input.quantity.trim() || null,
-				note: input.note.trim() || null,
+				quantity: input.quantity,
+				note: input.note,
 				checked: false,
 				checkedByMemberName: null,
 			};

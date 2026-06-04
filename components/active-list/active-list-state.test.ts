@@ -67,7 +67,7 @@ describe("activeListReducer", () => {
 		expect(persisted.list.items[1]).toMatchObject({ id: "itm_eggs" });
 	});
 
-	it("records add failure while preserving the visible List for refresh handoff", () => {
+	it("records add failure while removing the optimistic Item", () => {
 		const model = activeListReducer(initialActiveListModel(listFixture()), {
 			type: "itemAddedOptimistically",
 			item: {
@@ -80,9 +80,28 @@ describe("activeListReducer", () => {
 			},
 		});
 
-		expect(activeListReducer(model, { type: "itemAddFailed" })).toMatchObject({
-			list: model.list,
+		expect(
+			activeListReducer(model, {
+				type: "itemAddFailed",
+				pendingItemId: "pending-item-2",
+			}),
+		).toMatchObject({
+			list: {
+				...model.list,
+				items: [model.list.items[0]],
+			},
 			errorMessage: "Unable to save that Item. The List was refreshed.",
+		});
+	});
+
+	it("reports when add failure reload also fails", () => {
+		const model = initialActiveListModel(listFixture());
+
+		expect(
+			activeListReducer(model, { type: "itemAddReloadFailed" }),
+		).toMatchObject({
+			errorMessage:
+				"Unable to save that Item. The List could not be refreshed.",
 		});
 	});
 

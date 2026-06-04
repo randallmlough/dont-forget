@@ -17,6 +17,7 @@ import type {
 	ActiveListInitialState,
 	ActiveListItem,
 	ActiveListSyncCoordinator,
+	AddActiveListItemDraft,
 	AddActiveListItemInput,
 } from "./types";
 
@@ -53,7 +54,7 @@ export function ActiveListProvider({
 	const mounted = useRef(true);
 	const nextItemNumber = useRef(initialState.items.length + 1);
 	const modelRef = useRef(model);
-	const observedSyncState = useRef(syncState);
+	const previousSyncState = useRef(syncState);
 
 	useEffect(() => {
 		mounted.current = true;
@@ -61,10 +62,6 @@ export function ActiveListProvider({
 			mounted.current = false;
 		};
 	}, []);
-
-	useEffect(() => {
-		observedSyncState.current = syncState;
-	}, [syncState]);
 
 	function dispatchIfMounted(transition: ActiveListTransition) {
 		if (!mounted.current) return;
@@ -79,33 +76,24 @@ export function ActiveListProvider({
 	}
 
 	const reloadListAfterSync = useEffectEvent(async () => {
-		await loadList();
+		await loadList().catch((error) => {
+			logger.error("active list reload after sync failed", { error });
+		});
 	});
 
-	const syncTransitioned = useEffectEvent(
-		(syncState: ReturnType<ActiveListSyncCoordinator["getStatus"]>) => {
-			const previousSyncState = observedSyncState.current;
-			observedSyncState.current = syncState;
-			const isManualRefresh = modelRef.current.isRefreshing;
-			if (
-				previousSyncState === "pending" &&
-				syncState === "synced" &&
-				!isManualRefresh
-			) {
-				void reloadListAfterSync().catch((error) => {
-					logger.error("active list reload after sync failed", { error });
-				});
-			}
-		},
-	);
-
 	useEffect(() => {
-		const subscription = syncCoordinator.subscribe(syncTransitioned);
-		return () => {
-			subscription.remove();
-		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- syncTransitioned is a React Effect Event; resubscribe only when the coordinator changes.
-	}, [syncCoordinator]);
+		const lastSyncState = previousSyncState.current;
+		previousSyncState.current = syncState;
+
+		if (
+			lastSyncState === "pending" &&
+			syncState === "synced" &&
+			!modelRef.current.isRefreshing
+		) {
+			void reloadListAfterSync();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- reloadListAfterSync is a React Effect Event; syncState is the reactive input.
+	}, [syncState]);
 
 	function requestLocalWriteSync() {
 		void syncCoordinator
@@ -130,7 +118,7 @@ export function ActiveListProvider({
 		}
 	}
 
-	async function addItem(input: AddActiveListItemInput) {
+	async function addItem(input: AddActiveListItemDraft) {
 		const name = input.name.trim();
 		if (!name) return;
 		const quantity = nullableTrimmed(input.quantity);
@@ -151,8 +139,8 @@ export function ActiveListProvider({
 		try {
 			const persistedItem = await onAddItem({
 				name,
-				quantity: quantity ?? "",
-				note: note ?? "",
+				quantity,
+				note,
 			});
 			dispatchIfMounted({
 				type: "itemAddPersisted",
@@ -161,8 +149,10 @@ export function ActiveListProvider({
 			});
 			requestLocalWriteSync();
 		} catch (error) {
-			dispatchIfMounted({ type: "itemAddFailed" });
-			await loadList().catch(() => undefined);
+			dispatchIfMounted({ type: "itemAddFailed", pendingItemId: item.id });
+			await loadList().catch(() => {
+				dispatchIfMounted({ type: "itemAddReloadFailed" });
+			});
 			throw error;
 		}
 	}

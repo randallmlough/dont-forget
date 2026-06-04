@@ -90,7 +90,7 @@ export function AddItemComposer({
 					styles.composerHost,
 					animatedStyle,
 					{
-						bottom: keyboardHeight + TRAY_KEYBOARD_GAP,
+						bottom: Math.max(keyboardHeight, insets.bottom) + TRAY_KEYBOARD_GAP,
 					},
 				]}
 			>
@@ -99,7 +99,6 @@ export function AddItemComposer({
 						<TextInput
 							ref={itemInputRef}
 							accessibilityLabel="Item name"
-							autoFocus
 							value={name}
 							onChangeText={onNameChange}
 							placeholder="Item name"

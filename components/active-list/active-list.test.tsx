@@ -5,6 +5,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
+import { Keyboard } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -140,6 +141,25 @@ describe("ActiveList", () => {
 		expect(screen.getByLabelText("Quantity").props.value).toBe("1, 1 dozen");
 	});
 
+	it("keeps the composer open when the keyboard hides", () => {
+		const keyboard = captureKeyboardListeners();
+		try {
+			renderActiveList(emptyList);
+
+			openAddItemComposer();
+			fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+
+			act(() => {
+				keyboard.emit("keyboardWillHide");
+			});
+
+			expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+			expect(screen.getByLabelText("Submit Item")).toBeTruthy();
+		} finally {
+			keyboard.restore();
+		}
+	});
+
 	it("clears composer fields after submit", async () => {
 		renderActiveList(emptyList);
 
@@ -189,6 +209,63 @@ describe("ActiveList", () => {
 		expect(
 			screen.getByLabelText("Submit Item").props.accessibilityState,
 		).toEqual({ disabled: false });
+	});
+
+	it("does not submit a note after the note field is toggled off", async () => {
+		const addItem = jest.fn(async (input: AddActiveListItemInput) => ({
+			id: "test-item-1",
+			name: input.name,
+			quantity: input.quantity,
+			note: input.note,
+			checked: false,
+			checkedByMemberName: null,
+		}));
+		renderActiveList(emptyList, memoryListActions(emptyList, { addItem }));
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		fireEvent.press(screen.getByLabelText("Add note"));
+		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+		fireEvent.press(screen.getByLabelText("Add note"));
+
+		await act(async () => {
+			fireEvent.press(screen.getByLabelText("Submit Item"));
+		});
+
+		await waitFor(() =>
+			expect(addItem).toHaveBeenCalledWith({
+				name: "Milk",
+				quantity: null,
+				note: null,
+			}),
+		);
+		expect(screen.queryByText("Organic if easy")).toBeNull();
+	});
+
+	it("removes the optimistic Item when add and reload both fail", async () => {
+		const actions = memoryListActions(emptyList, {
+			addItem: jest.fn().mockRejectedValue(new Error("write failed")),
+			load: jest.fn().mockRejectedValue(new Error("reload failed")),
+		});
+		renderActiveList(emptyList, actions);
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+
+		await act(async () => {
+			fireEvent.press(screen.getByLabelText("Submit Item"));
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"Unable to save that Item. The List could not be refreshed.",
+				),
+			).toBeTruthy(),
+		);
+		expect(screen.queryByRole("checkbox", { name: "Milk" })).toBeNull();
+		expect(screen.getByText("This List is empty.")).toBeTruthy();
+		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
 	});
 
 	it("shows pending and offline sync without discarding local Item changes", async () => {
@@ -331,6 +408,10 @@ describe("ActiveList", () => {
 
 		await act(async () => {
 			coordinator.emit("pending");
+		});
+		await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
+
+		await act(async () => {
 			coordinator.emit("synced");
 			await Promise.resolve();
 		});
@@ -474,6 +555,38 @@ function openAddItemComposer() {
 	fireEvent.press(screen.getByLabelText("Add Item"));
 }
 
+function captureKeyboardListeners() {
+	const addListener = Keyboard.addListener.bind(Keyboard);
+	const listeners = new Map<
+		string,
+		(event: { duration: number; endCoordinates: { height: number } }) => void
+	>();
+	const spy = jest
+		.spyOn(Keyboard, "addListener")
+		.mockImplementation((eventName, listener) => {
+			listeners.set(
+				eventName,
+				listener as (event: {
+					duration: number;
+					endCoordinates: { height: number };
+				}) => void,
+			);
+			return addListener(eventName, listener);
+		});
+
+	return {
+		emit(eventName: string) {
+			listeners.get(eventName)?.({
+				duration: 0,
+				endCoordinates: { height: 0 },
+			});
+		},
+		restore() {
+			spy.mockRestore();
+		},
+	};
+}
+
 function passiveSyncCoordinator(
 	status: ReturnType<ActiveListSyncCoordinator["getStatus"]> = "synced",
 ): ActiveListSyncCoordinator {
@@ -552,8 +665,8 @@ function memoryListActions(
 			const item = {
 				id: `test-item-${nextItem}`,
 				name: input.name,
-				quantity: input.quantity.trim() || null,
-				note: input.note.trim() || null,
+				quantity: input.quantity,
+				note: input.note,
 				checked: false,
 				checkedByMemberName: null,
 			};

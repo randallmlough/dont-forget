@@ -12,7 +12,8 @@ export type ActiveListTransition =
 	| { type: "refreshFailed" }
 	| { type: "itemAddedOptimistically"; item: ActiveListItem }
 	| { type: "itemAddPersisted"; pendingItemId: string; item: ActiveListItem }
-	| { type: "itemAddFailed" }
+	| { type: "itemAddFailed"; pendingItemId: string }
+	| { type: "itemAddReloadFailed" }
 	| {
 			type: "itemToggledOptimistically";
 			itemId: string;
@@ -66,7 +67,19 @@ export function activeListReducer(
 		case "itemAddFailed":
 			return {
 				...model,
+				list: {
+					...model.list,
+					items: model.list.items.filter(
+						(item) => item.id !== transition.pendingItemId,
+					),
+				},
 				errorMessage: "Unable to save that Item. The List was refreshed.",
+			};
+		case "itemAddReloadFailed":
+			return {
+				...model,
+				errorMessage:
+					"Unable to save that Item. The List could not be refreshed.",
 			};
 		case "itemToggledOptimistically":
 			return {

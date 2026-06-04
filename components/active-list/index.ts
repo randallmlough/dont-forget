@@ -15,6 +15,7 @@ export type {
 	ActiveListSyncOptions,
 	ActiveListSyncResult,
 	ActiveListSyncState,
+	AddActiveListItemDraft,
 	AddActiveListItemInput,
 } from "./types";
 

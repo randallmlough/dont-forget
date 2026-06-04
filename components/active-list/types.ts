@@ -14,10 +14,16 @@ export type ActiveListItem = {
 	checkedByMemberName?: string | null;
 };
 
-export type AddActiveListItemInput = {
+export type AddActiveListItemDraft = {
 	name: string;
 	quantity: string;
 	note: string;
+};
+
+export type AddActiveListItemInput = {
+	name: string;
+	quantity: string | null;
+	note: string | null;
 };
 
 export type ActiveListState = {
@@ -40,7 +46,7 @@ export type ActiveListSyncCoordinator = Pick<
 >;
 
 export type ActiveListActions = {
-	addItem: (input: AddActiveListItemInput) => Promise<void>;
+	addItem: (input: AddActiveListItemDraft) => Promise<void>;
 	toggleItem: (itemId: string) => Promise<void>;
 	refresh: () => Promise<void>;
 };

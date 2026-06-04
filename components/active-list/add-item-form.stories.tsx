@@ -37,8 +37,8 @@ export const Focused: Story = {
 };
 
 function AddItemComposerStory() {
-	const actions = storyActions(emptyList);
-	const syncCoordinator = storySyncCoordinator();
+	const [actions] = useState(() => storyActions(emptyList));
+	const [syncCoordinator] = useState(storySyncCoordinator);
 
 	return (
 		<SafeAreaProvider
@@ -188,8 +188,8 @@ function storyActions(initialState: ActiveListInitialState): {
 			const item = {
 				id: `story-item-${nextItem}`,
 				name: input.name,
-				quantity: input.quantity.trim() || null,
-				note: input.note.trim() || null,
+				quantity: input.quantity,
+				note: input.note,
 				checked: false,
 				checkedByMemberName: null,
 			};

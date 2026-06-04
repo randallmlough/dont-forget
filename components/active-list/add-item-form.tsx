@@ -35,7 +35,6 @@ type ComposerAction =
 export function ActiveListAddItemForm() {
 	const { actions, state } = useActiveList();
 	const itemInputRef = useRef<TextInput>(null);
-	const openingComposerRef = useRef(false);
 	const visibility = useSharedValue(0);
 	const [composer, dispatchComposer] = useReducer(
 		composerReducer,
@@ -49,7 +48,6 @@ export function ActiveListAddItemForm() {
 		const showSubscription = Keyboard.addListener(
 			"keyboardWillShow",
 			(event) => {
-				openingComposerRef.current = false;
 				dispatchComposer({
 					type: "keyboardShown",
 					height: event.endCoordinates.height,
@@ -62,19 +60,9 @@ export function ActiveListAddItemForm() {
 				);
 			},
 		);
-		const hideSubscription = Keyboard.addListener(
-			"keyboardWillHide",
-			(event) => {
-				if (openingComposerRef.current) return;
-				dispatchComposer({ type: "keyboardHidden" });
-				visibility.set(
-					withTiming(0, {
-						duration: Math.min(event.duration, 220),
-						easing: Easing.out(Easing.cubic),
-					}),
-				);
-			},
-		);
+		const hideSubscription = Keyboard.addListener("keyboardWillHide", () => {
+			dispatchComposer({ type: "keyboardHidden" });
+		});
 
 		return () => {
 			showSubscription.remove();
@@ -94,23 +82,17 @@ export function ActiveListAddItemForm() {
 		const focusTimer = setTimeout(() => {
 			itemInputRef.current?.focus();
 		}, 40);
-		const openingGuardTimer = setTimeout(() => {
-			openingComposerRef.current = false;
-		}, 650);
 
 		return () => {
 			clearTimeout(focusTimer);
-			clearTimeout(openingGuardTimer);
 		};
 	}, [composer.isOpen, visibility]);
 
 	function openComposer() {
-		openingComposerRef.current = true;
 		dispatchComposer({ type: "opened" });
 	}
 
 	function dismissComposer() {
-		openingComposerRef.current = false;
 		dispatchComposer({ type: "dismissed" });
 		Keyboard.dismiss();
 	}
@@ -190,7 +172,7 @@ function composerReducer(
 		case "keyboardShown":
 			return { ...state, keyboardHeight: action.height };
 		case "keyboardHidden":
-			return { ...state, isOpen: false, keyboardHeight: 0 };
+			return { ...state, keyboardHeight: 0 };
 		case "nameChanged":
 			return { ...state, name: action.value };
 		case "quantityChanged":
@@ -198,7 +180,9 @@ function composerReducer(
 		case "noteChanged":
 			return { ...state, note: action.value };
 		case "noteToggled":
-			return { ...state, isNoteOpen: !state.isNoteOpen };
+			return state.isNoteOpen
+				? { ...state, isNoteOpen: false, note: "" }
+				: { ...state, isNoteOpen: true };
 		case "submitStarted":
 			return { ...state, isSubmitting: true };
 		case "submitSucceeded":
