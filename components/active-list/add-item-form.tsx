@@ -79,13 +79,7 @@ export function ActiveListAddItemForm() {
 		);
 		if (!composer.isOpen) return;
 
-		const focusTimer = setTimeout(() => {
-			itemInputRef.current?.focus();
-		}, 40);
-
-		return () => {
-			clearTimeout(focusTimer);
-		};
+		itemInputRef.current?.focus();
 	}, [composer.isOpen, visibility]);
 
 	function openComposer() {
