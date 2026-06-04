@@ -129,7 +129,6 @@ export function ActiveListAddItemForm({
 		return (
 			<View
 				collapsable={false}
-				onTouchStart={openComposer}
 				style={[
 					styles.entryContainer,
 					{ paddingBottom: insets.bottom + ENTRY_BOTTOM_GAP },
@@ -139,7 +138,6 @@ export function ActiveListAddItemForm({
 					accessibilityLabel="Add Item"
 					accessibilityRole="button"
 					onPress={openComposer}
-					onTouchStart={openComposer}
 					style={({ pressed }) => [
 						styles.entryHost,
 						pressed ? styles.pressed : undefined,
@@ -295,6 +293,7 @@ const styles = StyleSheet.create((theme) => ({
 		position: "absolute",
 		left: theme.spacing(2.5),
 		right: theme.spacing(2.5),
+		zIndex: 20,
 	},
 	tray: {
 		gap: theme.spacing(2),
