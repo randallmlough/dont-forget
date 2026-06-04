@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
-import { useEffect } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import Animated, {
 	Easing,
 	useAnimatedStyle,
@@ -48,8 +48,6 @@ export type AddItemComposerUiState = {
 	canSubmit: boolean;
 	listName: string;
 	errorMessage: string | null;
-	keyboardHeight: number;
-	shouldFocusNameInput: boolean;
 };
 
 export type AddItemComposerActions = {
@@ -67,6 +65,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const { theme } = useUnistyles();
 	const placeholderColor = theme.colors.textSubtle;
 	const visibility = useSharedValue(0);
+	const [keyboardHeight, setKeyboardHeight] = useState(0);
 
 	useEffect(() => {
 		visibility.set(
@@ -77,6 +76,23 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 		);
 	}, [ui.isOpen, visibility]);
 
+	useEffect(() => {
+		const showSubscription = Keyboard.addListener(
+			"keyboardWillShow",
+			(event) => {
+				setKeyboardHeight(event.endCoordinates.height);
+			},
+		);
+		const hideSubscription = Keyboard.addListener("keyboardWillHide", () => {
+			setKeyboardHeight(0);
+		});
+
+		return () => {
+			showSubscription.remove();
+			hideSubscription.remove();
+		};
+	}, []);
+
 	const animatedStyle = useAnimatedStyle(() => {
 		const currentVisibility = visibility.get();
 
@@ -85,6 +101,11 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 			transform: [{ translateY: (1 - currentVisibility) * 10 }],
 		};
 	});
+
+	function dismissComposer() {
+		Keyboard.dismiss();
+		actions.dismiss();
+	}
 
 	if (!ui.isOpen) {
 		return (
@@ -122,7 +143,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 			<Pressable
 				accessibilityLabel="Dismiss add Item composer"
 				accessibilityRole="button"
-				onPress={actions.dismiss}
+				onPress={dismissComposer}
 				style={styles.dismissLayer}
 			/>
 			<Animated.View
@@ -130,8 +151,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					styles.composerHost,
 					animatedStyle,
 					{
-						bottom:
-							Math.max(ui.keyboardHeight, insets.bottom) + TRAY_KEYBOARD_GAP,
+						bottom: Math.max(keyboardHeight, insets.bottom) + TRAY_KEYBOARD_GAP,
 					},
 				]}
 			>
@@ -139,7 +159,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					<View style={styles.primaryRow}>
 						<TextInput
 							accessibilityLabel="Item name"
-							autoFocus={ui.shouldFocusNameInput}
+							autoFocus
 							value={draft.name}
 							onChangeText={actions.changeName}
 							placeholder="Item name"

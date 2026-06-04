@@ -1,11 +1,9 @@
-import { useEffect, useReducer } from "react";
-import { Keyboard } from "react-native";
+import { useReducer } from "react";
 import { AddItemComposer } from "@/components/add-item-composer";
 import { useActiveList } from "./context";
 
 type ComposerState = {
 	isOpen: boolean;
-	keyboardHeight: number;
 	name: string;
 	quantity: string;
 	notes: string;
@@ -16,8 +14,6 @@ type ComposerState = {
 type ComposerAction =
 	| { type: "opened" }
 	| { type: "dismissed" }
-	| { type: "keyboardShown"; height: number }
-	| { type: "keyboardHidden" }
 	| { type: "nameChanged"; value: string }
 	| { type: "quantityChanged"; value: string }
 	| { type: "notesChanged"; value: string }
@@ -36,33 +32,12 @@ export function ActiveListAddItemForm() {
 	const trimmedName = composer.name.trim();
 	const canSubmit = trimmedName.length > 0 && !composer.isSubmitting;
 
-	useEffect(() => {
-		const showSubscription = Keyboard.addListener(
-			"keyboardWillShow",
-			(event) => {
-				dispatchComposer({
-					type: "keyboardShown",
-					height: event.endCoordinates.height,
-				});
-			},
-		);
-		const hideSubscription = Keyboard.addListener("keyboardWillHide", () => {
-			dispatchComposer({ type: "keyboardHidden" });
-		});
-
-		return () => {
-			showSubscription.remove();
-			hideSubscription.remove();
-		};
-	}, []);
-
 	function openComposer() {
 		dispatchComposer({ type: "opened" });
 	}
 
 	function dismissComposer() {
 		dispatchComposer({ type: "dismissed" });
-		Keyboard.dismiss();
 	}
 
 	async function submit() {
@@ -95,8 +70,6 @@ export function ActiveListAddItemForm() {
 				canSubmit,
 				listName: state.listName,
 				errorMessage: meta.errorMessage,
-				keyboardHeight: composer.keyboardHeight,
-				shouldFocusNameInput: composer.isOpen,
 			}}
 			actions={{
 				open: openComposer,
@@ -116,7 +89,6 @@ export function ActiveListAddItemForm() {
 function initialComposerState(): ComposerState {
 	return {
 		isOpen: false,
-		keyboardHeight: 0,
 		name: "",
 		quantity: "",
 		notes: "",
@@ -134,10 +106,6 @@ function composerReducer(
 			return { ...state, isOpen: true };
 		case "dismissed":
 			return { ...state, isOpen: false, isSubmitting: false };
-		case "keyboardShown":
-			return { ...state, keyboardHeight: action.height };
-		case "keyboardHidden":
-			return { ...state, keyboardHeight: 0 };
 		case "nameChanged":
 			return { ...state, name: action.value };
 		case "quantityChanged":
