@@ -13,20 +13,17 @@ import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "../lib/env";
 import { tokenCache } from "../lib/token-cache";
 import { view } from "./storybook.requires";
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const envPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const publishableKey = envPublishableKey ?? "pk_test_storybook";
 const appEnv = readAppEnvFromExpoExtra(Constants.expoConfig?.extra);
 
-if (!publishableKey) {
-	throw new Error(
-		"Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in env. Copy .env.example to .env.local and fill it in with APP_ENV=local.",
+if (envPublishableKey) {
+	validateClerkKeyForEnv(
+		appEnv,
+		"EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
+		envPublishableKey,
 	);
 }
-
-validateClerkKeyForEnv(
-	appEnv,
-	"EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
-	publishableKey,
-);
 
 const StorybookUI = view.getStorybookUI({
 	storage: {
