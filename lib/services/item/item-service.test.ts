@@ -200,7 +200,7 @@ describe("createItemService", () => {
 		}
 	});
 
-	it("adds Items to a previous local Household schema without quantity", async () => {
+	it("adds Items without quantity to a previous local Household schema", async () => {
 		const household = await createTestHouseholdDb({
 			throughMigration: "0000_dear_exodus.sql",
 		});
@@ -224,7 +224,7 @@ describe("createItemService", () => {
 				listId: "lst_weekend",
 				userId: "usr_avery",
 				name: "Milk",
-				quantity: "1 gallon",
+				quantity: null,
 				notes: "Organic if easy",
 			});
 			const rows = await household.client.execute({
@@ -241,6 +241,47 @@ describe("createItemService", () => {
 			expect(rows.rows).toEqual([
 				{ name: "Milk", notes: "Organic if easy", position: 0 },
 			]);
+		} finally {
+			await household.close();
+		}
+	});
+
+	it("rejects quantity-bearing Items on a previous local Household schema", async () => {
+		const household = await createTestHouseholdDb({
+			throughMigration: "0000_dear_exodus.sql",
+		});
+
+		try {
+			await household.client.execute({
+				sql: `
+					INSERT INTO lists (id, name, created_by_user_id)
+					VALUES (?, ?, ?)
+				`,
+				args: ["lst_weekend", "Weekend Groceries", "usr_avery"],
+			});
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics: createMockAnalytics(),
+			});
+
+			await expect(
+				service.addItem({
+					listId: "lst_weekend",
+					userId: "usr_avery",
+					name: "Milk",
+					quantity: "1 gallon",
+					notes: "Organic if easy",
+				}),
+			).rejects.toThrow(
+				"Item quantity cannot be saved until the Household schema is updated",
+			);
+
+			const rows = await household.client.execute({
+				sql: "SELECT id FROM items",
+			});
+			expect(rows.rows).toEqual([]);
 		} finally {
 			await household.close();
 		}

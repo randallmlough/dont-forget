@@ -131,6 +131,11 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 
 			try {
 				const schema = await readItemsSchema(deps.store);
+				if (!schema.hasQuantity && quantity !== null) {
+					throw new Error(
+						"Item quantity cannot be saved until the Household schema is updated",
+					);
+				}
 				const now = nextItemServiceTimestamp();
 				const id = createAppId("itm", randomUuid);
 
