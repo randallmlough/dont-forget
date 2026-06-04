@@ -66,12 +66,18 @@ describe("ActiveList", () => {
 		openAddItemComposer();
 		expect(screen.getByLabelText("Quantity")).toBeTruthy();
 		expect(screen.getByLabelText("Add note")).toBeTruthy();
+		expect(screen.getByLabelText("Add note").props.accessibilityState).toEqual({
+			selected: false,
+		});
 		expect(screen.getByLabelText("Selected List: Groceries")).toBeTruthy();
 
 		const input = screen.getByLabelText("Item name");
 		fireEvent.changeText(input, " Milk ");
 		fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
 		fireEvent.press(screen.getByLabelText("Add note"));
+		expect(screen.getByLabelText("Add note").props.accessibilityState).toEqual({
+			selected: true,
+		});
 		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
 		await act(async () => {
 			fireEvent.press(screen.getByLabelText("Submit Item"));
@@ -123,7 +129,9 @@ describe("ActiveList", () => {
 		openAddItemComposer();
 		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		fireEvent.changeText(screen.getByLabelText("Quantity"), "1, 1 dozen");
-		fireEvent.press(screen.getByLabelText("Dismiss add Item composer"));
+		fireEvent.press(
+			screen.getByRole("button", { name: "Dismiss add Item composer" }),
+		);
 
 		expect(screen.queryByLabelText("Item name")).toBeNull();
 

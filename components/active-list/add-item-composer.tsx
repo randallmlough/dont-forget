@@ -80,6 +80,7 @@ export function AddItemComposer({
 		<View pointerEvents="box-none" style={styles.overlay}>
 			<Pressable
 				accessibilityLabel="Dismiss add Item composer"
+				accessibilityRole="button"
 				onPress={onDismiss}
 				style={styles.dismissLayer}
 			/>
@@ -138,6 +139,7 @@ export function AddItemComposer({
 						<Pressable
 							accessibilityLabel="Add note"
 							accessibilityRole="button"
+							accessibilityState={{ selected: isNoteOpen }}
 							onPress={onToggleNote}
 							style={({ pressed }) => [
 								styles.pill,
