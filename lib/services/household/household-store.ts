@@ -122,6 +122,12 @@ export async function openHouseholdStore(
 		log.error("household store connect failed", { error: asError(error) });
 		throw error;
 	}
+	try {
+		await ensureLocalHouseholdSchema(database);
+	} catch (error) {
+		log.error("household store migration failed", { error: asError(error) });
+		throw error;
+	}
 
 	async function close() {
 		if (closed) return;
@@ -247,6 +253,18 @@ async function runNativeSyncOperation<T>(
 		return await operation();
 	} catch (error) {
 		throw nativeSyncInterruptedError(error) ?? error;
+	}
+}
+
+async function ensureLocalHouseholdSchema(
+	database: TursoDatabase,
+): Promise<void> {
+	const rows = await database.all("PRAGMA table_info(items)");
+	if (rows.length === 0) return;
+
+	const columns = new Set(rows.map((row) => String(row.name)));
+	if (!columns.has("quantity")) {
+		await database.run("ALTER TABLE items ADD quantity text");
 	}
 }
 

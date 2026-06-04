@@ -82,7 +82,6 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 	return {
 		async listItems(input) {
 			try {
-				const schema = await readItemsSchema(deps.store);
 				const result = await deps.store.execute({
 					kind: "read",
 					sql: `
@@ -90,7 +89,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
               i.id,
               i.list_id,
               i.name,
-              ${schema.hasQuantity ? "i.quantity" : "NULL"} AS quantity,
+              i.quantity,
               i.notes,
               c.user_id AS checked_by_user_id,
               c.checked_at AS checked_at,
@@ -130,28 +129,46 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 			const notes = nullableTrimmed(input.notes);
 
 			try {
-				const schema = await readItemsSchema(deps.store);
-				if (!schema.hasQuantity && quantity !== null) {
-					throw new Error(
-						"Item quantity cannot be saved until the Household schema is updated",
-					);
-				}
 				const now = nextItemServiceTimestamp();
 				const id = createAppId("itm", randomUuid);
-
 				await deps.store.execute({
 					kind: "write",
-					sql: addItemSql(schema),
-					args: addItemArgs({
+					sql: `
+            INSERT INTO items (
+              id,
+              list_id,
+              name,
+              quantity,
+              notes,
+              position,
+              created_by_user_id,
+              created_at,
+              updated_at
+            )
+            SELECT
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              COALESCE(MAX(position), -1) + 1,
+              ?,
+              ?,
+              ?
+            FROM items
+            WHERE list_id = ? AND deleted_at IS NULL
+          `,
+					args: [
 						id,
-						listId: input.listId,
+						input.listId,
 						name,
 						quantity,
 						notes,
-						userId: input.userId,
+						input.userId,
 						now,
-						schema,
-					}),
+						now,
+						input.listId,
+					],
 				});
 				const position = await insertedItemPosition(deps.store, id);
 
@@ -160,7 +177,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 					householdId: deps.householdId,
 					listId: input.listId,
 					name,
-					quantity: schema.hasQuantity ? quantity : null,
+					quantity,
 					notes,
 					checked: false,
 					checkedByUserId: null,
@@ -264,111 +281,6 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 		createdAt: parsed.created_at,
 		updatedAt: parsed.updated_at,
 	};
-}
-
-type ItemsSchema = {
-	hasQuantity: boolean;
-};
-
-async function readItemsSchema(
-	store: HouseholdStoreExecutor,
-): Promise<ItemsSchema> {
-	const result = await store.execute({
-		kind: "read",
-		sql: "PRAGMA table_info(items)",
-	});
-	const columns = new Set(result.rows.map((row) => String(row.name)));
-	return { hasQuantity: columns.has("quantity") };
-}
-
-type AddItemSqlInput = {
-	id: string;
-	listId: string;
-	name: string;
-	quantity: string | null;
-	notes: string | null;
-	userId: string;
-	now: number;
-	schema: ItemsSchema;
-};
-
-function addItemSql(schema: ItemsSchema): string {
-	return schema.hasQuantity
-		? `
-        INSERT INTO items (
-          id,
-          list_id,
-          name,
-          quantity,
-          notes,
-          position,
-          created_by_user_id,
-          created_at,
-          updated_at
-        )
-        SELECT
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          COALESCE(MAX(position), -1) + 1,
-          ?,
-          ?,
-          ?
-        FROM items
-        WHERE list_id = ? AND deleted_at IS NULL
-      `
-		: `
-        INSERT INTO items (
-          id,
-          list_id,
-          name,
-          notes,
-          position,
-          created_by_user_id,
-          created_at,
-          updated_at
-        )
-        SELECT
-          ?,
-          ?,
-          ?,
-          ?,
-          COALESCE(MAX(position), -1) + 1,
-          ?,
-          ?,
-          ?
-        FROM items
-        WHERE list_id = ? AND deleted_at IS NULL
-      `;
-}
-
-function addItemArgs(input: AddItemSqlInput) {
-	if (input.schema.hasQuantity) {
-		return [
-			input.id,
-			input.listId,
-			input.name,
-			input.quantity,
-			input.notes,
-			input.userId,
-			input.now,
-			input.now,
-			input.listId,
-		];
-	}
-
-	return [
-		input.id,
-		input.listId,
-		input.name,
-		input.notes,
-		input.userId,
-		input.now,
-		input.now,
-		input.listId,
-	];
 }
 
 function nullableTrimmed(value: string | null | undefined): string | null {

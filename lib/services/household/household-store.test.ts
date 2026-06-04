@@ -27,12 +27,14 @@ describe("openHouseholdStore", () => {
 	let instances: MockTursoDatabase[];
 	let runtime: TursoHouseholdStoreRuntime;
 	let fileSystem: { deleteFilesWithPrefix: jest.Mock<Promise<void>, [string]> };
+	let nextTableInfoRows: Record<string, unknown>[];
 
 	beforeEach(() => {
 		defaultScopedLogger = createMockLogger();
 		defaultScopedLogger.with.mockReturnValue(defaultScopedLogger);
 		jest.mocked(defaultLogger.with).mockReturnValue(defaultScopedLogger);
 		instances = [];
+		nextTableInfoRows = [];
 		runtime = {
 			Database: class extends MockTursoDatabase {
 				constructor(
@@ -41,6 +43,7 @@ describe("openHouseholdStore", () => {
 					>[0],
 				) {
 					super(options);
+					this.tableInfoRows = nextTableInfoRows;
 					instances.push(this);
 				}
 			},
@@ -71,6 +74,23 @@ describe("openHouseholdStore", () => {
 		expect(nativeDb.connect).toHaveBeenCalledTimes(1);
 		expect(store.path).toBe("/documents/household-hh_avery.db");
 		expect(store.syncAuthorized).toBe(true);
+	});
+
+	it("migrates a cached local Household schema before exposing the store", async () => {
+		nextTableInfoRows = [
+			{ name: "id" },
+			{ name: "list_id" },
+			{ name: "name" },
+			{ name: "notes" },
+		];
+
+		await openHouseholdStore(configFixture(), { runtime, fileSystem });
+		const nativeDb = onlyInstance(instances);
+
+		expect(nativeDb.all).toHaveBeenCalledWith("PRAGMA table_info(items)");
+		expect(nativeDb.run).toHaveBeenCalledWith(
+			"ALTER TABLE items ADD quantity text",
+		);
 	});
 
 	it("opens cached local store data without remote sync credentials", async () => {
@@ -165,6 +185,7 @@ describe("openHouseholdStore", () => {
 			fileSystem,
 		});
 		const nativeDb = onlyInstance(instances);
+		nativeDb.calls = [];
 		const push = deferred<void>();
 		nativeDb.push.mockImplementationOnce(async () => {
 			nativeDb.calls.push("push");
@@ -296,14 +317,18 @@ describe("openHouseholdStore", () => {
 
 class MockTursoDatabase {
 	allRows: Record<string, unknown>[] = [];
+	tableInfoRows: Record<string, unknown>[] = [];
 	runResult = { changes: 0, lastInsertRowid: 0 };
 	pullResult = false;
 	pullResults: boolean[] = [];
 	calls: string[] = [];
 
 	connect = jest.fn(async () => undefined);
-	all = jest.fn(async () => {
+	all = jest.fn(async (sql: string) => {
 		this.calls.push("all");
+		if (sql === "PRAGMA table_info(items)") {
+			return this.tableInfoRows;
+		}
 		return this.allRows;
 	});
 	run = jest.fn(async () => {
