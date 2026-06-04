@@ -10,7 +10,7 @@ import {
 import {
 	createActiveListMemoryActions,
 	createPassiveActiveListSyncCoordinator,
-} from "./memory-actions";
+} from "./__fixtures__/memory-actions";
 
 const emptyList: ActiveListInitialState = {
 	householdName: "Avery",

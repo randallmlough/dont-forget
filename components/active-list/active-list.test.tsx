@@ -19,7 +19,7 @@ import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 import {
 	type ActiveListMemoryActions,
 	createActiveListMemoryActions,
-} from "./memory-actions";
+} from "./__fixtures__/memory-actions";
 
 let mockLogger: MockLogger;
 

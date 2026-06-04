@@ -2,7 +2,7 @@ import type {
 	ActiveListInitialState,
 	ActiveListSyncCoordinator,
 	AddActiveListItemInput,
-} from "./types";
+} from "../types";
 
 export type ActiveListMemoryActions = {
 	load: () => Promise<ActiveListInitialState>;
