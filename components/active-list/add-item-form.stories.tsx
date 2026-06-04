@@ -7,10 +7,12 @@ import { StyleSheet } from "react-native-unistyles";
 import {
 	ActiveList,
 	type ActiveListInitialState,
-	type ActiveListSyncCoordinator,
-	type AddActiveListItemInput,
 } from "@/components/active-list";
 import { AddItemComposer } from "@/components/add-item-composer";
+import {
+	createActiveListMemoryActions,
+	createPassiveActiveListSyncCoordinator,
+} from "./memory-actions";
 
 const emptyList: ActiveListInitialState = {
 	householdName: "Avery",
@@ -37,8 +39,13 @@ export const Focused: Story = {
 };
 
 function AddItemComposerStory() {
-	const [actions] = useState(() => storyActions(emptyList));
-	const [syncCoordinator] = useState(storySyncCoordinator);
+	const [actions] = useState(() =>
+		createActiveListMemoryActions(emptyList, {
+			itemIdPrefix: "story-item",
+			checkedByMemberName: "Avery Chen",
+		}),
+	);
+	const [syncCoordinator] = useState(createPassiveActiveListSyncCoordinator);
 
 	return (
 		<SafeAreaProvider
@@ -160,60 +167,6 @@ function KeyPreview({
 			<Text style={styles.keyText}>{label}</Text>
 		</View>
 	);
-}
-
-function storySyncCoordinator(): ActiveListSyncCoordinator {
-	return {
-		getStatus: () => "synced",
-		subscribe: () => ({ remove() {} }),
-		async requestSync() {
-			return { changed: false };
-		},
-	};
-}
-
-function storyActions(initialState: ActiveListInitialState): {
-	load: () => Promise<ActiveListInitialState>;
-	addItem: (
-		input: AddActiveListItemInput,
-	) => Promise<ActiveListInitialState["items"][number]>;
-	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-} {
-	let state = initialState;
-	let nextItem = initialState.items.length + 1;
-
-	return {
-		async load() {
-			return state;
-		},
-		async addItem(input) {
-			const item = {
-				id: `story-item-${nextItem}`,
-				name: input.name,
-				quantity: input.quantity,
-				note: input.note,
-				checked: false,
-				checkedByMemberName: null,
-			};
-			nextItem += 1;
-			state = { ...state, items: [...state.items, item] };
-			return item;
-		},
-		async setItemChecked(itemId, checked) {
-			state = {
-				...state,
-				items: state.items.map((item) =>
-					item.id === itemId
-						? {
-								...item,
-								checked,
-								checkedByMemberName: checked ? "Avery Chen" : null,
-							}
-						: item,
-				),
-			};
-		},
-	};
 }
 
 const styles = StyleSheet.create((theme) => ({

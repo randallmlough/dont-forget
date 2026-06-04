@@ -12,11 +12,14 @@ import {
 	ActiveList,
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
-	type AddActiveListItemInput,
 } from "@/components/active-list";
 import { useLogger } from "@/lib/logger";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
+import {
+	type ActiveListMemoryActions,
+	createActiveListMemoryActions,
+} from "./memory-actions";
 
 let mockLogger: MockLogger;
 
@@ -38,14 +41,6 @@ const emptyList: ActiveListInitialState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [],
-};
-
-type MemoryListActions = {
-	load: () => Promise<ActiveListInitialState>;
-	addItem: (
-		input: AddActiveListItemInput,
-	) => Promise<ActiveListInitialState["items"][number]>;
-	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
 type TestSyncCoordinator = Omit<ActiveListSyncCoordinator, "requestSync"> & {
@@ -212,14 +207,16 @@ describe("ActiveList", () => {
 	});
 
 	it("does not submit a note after the note field is toggled off", async () => {
-		const addItem = jest.fn(async (input: AddActiveListItemInput) => ({
-			id: "test-item-1",
-			name: input.name,
-			quantity: input.quantity,
-			note: input.note,
-			checked: false,
-			checkedByMemberName: null,
-		}));
+		const addItem: ActiveListMemoryActions["addItem"] = jest.fn(
+			async (input) => ({
+				id: "test-item-1",
+				name: input.name,
+				quantity: input.quantity,
+				note: input.note,
+				checked: false,
+				checkedByMemberName: null,
+			}),
+		);
 		renderActiveList(emptyList, memoryListActions(emptyList, { addItem }));
 
 		openAddItemComposer();
@@ -652,42 +649,13 @@ function controllableSyncCoordinator(
 
 function memoryListActions(
 	initialState: ActiveListInitialState,
-	overrides: Partial<MemoryListActions> = {},
-): MemoryListActions {
-	let state = initialState;
-	let nextItem = initialState.items.length + 1;
-
+	overrides: Partial<ActiveListMemoryActions> = {},
+): ActiveListMemoryActions {
 	return {
-		async load() {
-			return state;
-		},
-		async addItem(input) {
-			const item = {
-				id: `test-item-${nextItem}`,
-				name: input.name,
-				quantity: input.quantity,
-				note: input.note,
-				checked: false,
-				checkedByMemberName: null,
-			};
-			nextItem += 1;
-			state = { ...state, items: [...state.items, item] };
-			return item;
-		},
-		async setItemChecked(itemId, checked) {
-			state = {
-				...state,
-				items: state.items.map((item) =>
-					item.id === itemId
-						? {
-								...item,
-								checked,
-								checkedByMemberName: checked ? "Avery Chen" : null,
-							}
-						: item,
-				),
-			};
-		},
+		...createActiveListMemoryActions(initialState, {
+			itemIdPrefix: "test-item",
+			checkedByMemberName: "Avery Chen",
+		}),
 		...overrides,
 	};
 }
