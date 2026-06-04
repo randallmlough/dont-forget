@@ -130,9 +130,9 @@ export function ActiveListAddItemForm() {
 				canSubmit,
 				listName: state.listName,
 				keyboardHeight: composer.keyboardHeight,
-				itemInputRef,
 				animatedStyle: composerAnimatedStyle,
 			}}
+			itemInputRef={itemInputRef}
 			actions={{
 				open: openComposer,
 				dismiss: dismissComposer,

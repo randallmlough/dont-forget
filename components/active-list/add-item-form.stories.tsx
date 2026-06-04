@@ -98,9 +98,9 @@ function FocusedAddItemComposerStory() {
 						canSubmit,
 						listName: "Groceries",
 						keyboardHeight: STORY_KEYBOARD_HEIGHT,
-						itemInputRef,
 						animatedStyle: styles.visibleComposer,
 					}}
+					itemInputRef={itemInputRef}
 					actions={{
 						open: () => undefined,
 						dismiss: () => undefined,

@@ -28,6 +28,7 @@ const COMPOSER_SHADOWS = {
 export type AddItemComposerProps = {
 	draft: AddItemComposerDraft;
 	ui: AddItemComposerUiState;
+	itemInputRef: RefObject<TextInput | null>;
 	actions: AddItemComposerActions;
 };
 
@@ -43,7 +44,6 @@ export type AddItemComposerUiState = {
 	canSubmit: boolean;
 	listName: string;
 	keyboardHeight: number;
-	itemInputRef: RefObject<TextInput | null>;
 	animatedStyle: ComponentProps<typeof Animated.View>["style"];
 };
 
@@ -57,7 +57,12 @@ export type AddItemComposerActions = {
 	toggleNote: () => void;
 };
 
-export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
+export function AddItemComposer({
+	draft,
+	ui,
+	itemInputRef,
+	actions,
+}: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
 	const placeholderColor = theme.colors.textSubtle;
@@ -109,7 +114,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 				<BlurView intensity={34} tint="light" style={styles.tray}>
 					<View style={styles.primaryRow}>
 						<TextInput
-							ref={ui.itemInputRef}
+							ref={itemInputRef}
 							accessibilityLabel="Item name"
 							value={draft.name}
 							onChangeText={actions.changeName}
