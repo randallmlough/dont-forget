@@ -1,14 +1,12 @@
 import { BlurView } from "expo-blur";
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-	Animated,
+import { useEffect, useRef, useState } from "react";
+import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
+import Animated, {
 	Easing,
-	Keyboard,
-	Pressable,
-	Text,
-	TextInput,
-	View,
-} from "react-native";
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useActiveList } from "./context";
@@ -30,7 +28,7 @@ export function ActiveListAddItemForm({
 	const insets = useSafeAreaInsets();
 	const itemInputRef = useRef<TextInput>(null);
 	const openingComposerRef = useRef(initialComposerOpen);
-	const visibility = useRef(new Animated.Value(0)).current;
+	const visibility = useSharedValue(initialComposerOpen ? 1 : 0);
 	const [isComposerOpen, setIsComposerOpen] = useState(initialComposerOpen);
 	const [keyboardHeight, setKeyboardHeight] = useState(0);
 	const [name, setName] = useState("");
@@ -42,25 +40,18 @@ export function ActiveListAddItemForm({
 	const canSubmit = trimmedName.length > 0 && !isSubmitting;
 	const effectiveKeyboardHeight = keyboardHeightOverride ?? keyboardHeight;
 
-	const animateVisibility = useCallback(
-		(toValue: 0 | 1, duration = 160) => {
-			Animated.timing(visibility, {
-				toValue,
-				duration: Math.min(duration, 220),
-				easing: Easing.out(Easing.cubic),
-				useNativeDriver: true,
-			}).start();
-		},
-		[visibility],
-	);
-
 	useEffect(() => {
 		const showSubscription = Keyboard.addListener(
 			"keyboardWillShow",
 			(event) => {
 				openingComposerRef.current = false;
 				setKeyboardHeight(event.endCoordinates.height);
-				animateVisibility(1, event.duration);
+				visibility.set(
+					withTiming(1, {
+						duration: Math.min(event.duration, 220),
+						easing: Easing.out(Easing.cubic),
+					}),
+				);
 			},
 		);
 		const hideSubscription = Keyboard.addListener(
@@ -68,7 +59,12 @@ export function ActiveListAddItemForm({
 			(event) => {
 				if (openingComposerRef.current) return;
 				setKeyboardHeight(0);
-				animateVisibility(0, event.duration);
+				visibility.set(
+					withTiming(0, {
+						duration: Math.min(event.duration, 220),
+						easing: Easing.out(Easing.cubic),
+					}),
+				);
 				setIsComposerOpen(false);
 			},
 		);
@@ -77,10 +73,15 @@ export function ActiveListAddItemForm({
 			showSubscription.remove();
 			hideSubscription.remove();
 		};
-	}, [animateVisibility]);
+	}, [visibility]);
 
 	useEffect(() => {
-		animateVisibility(isComposerOpen ? 1 : 0);
+		visibility.set(
+			withTiming(isComposerOpen ? 1 : 0, {
+				duration: 160,
+				easing: Easing.out(Easing.cubic),
+			}),
+		);
 		if (!isComposerOpen) return;
 
 		const focusTimer = setTimeout(() => {
@@ -94,7 +95,7 @@ export function ActiveListAddItemForm({
 			clearTimeout(focusTimer);
 			clearTimeout(openingGuardTimer);
 		};
-	}, [animateVisibility, isComposerOpen]);
+	}, [isComposerOpen, visibility]);
 
 	function openComposer() {
 		openingComposerRef.current = true;
@@ -120,9 +121,13 @@ export function ActiveListAddItemForm({
 		dismissComposer();
 	}
 
-	const trayTranslateY = visibility.interpolate({
-		inputRange: [0, 1],
-		outputRange: [10, 0],
+	const composerAnimatedStyle = useAnimatedStyle(() => {
+		const currentVisibility = visibility.get();
+
+		return {
+			opacity: currentVisibility,
+			transform: [{ translateY: (1 - currentVisibility) * 10 }],
+		};
 	});
 
 	if (!isComposerOpen) {
@@ -161,10 +166,9 @@ export function ActiveListAddItemForm({
 			<Animated.View
 				style={[
 					styles.composerHost,
+					composerAnimatedStyle,
 					{
 						bottom: effectiveKeyboardHeight + TRAY_KEYBOARD_GAP,
-						opacity: visibility,
-						transform: [{ translateY: trayTranslateY }],
 					},
 				]}
 			>

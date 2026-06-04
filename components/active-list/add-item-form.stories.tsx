@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
@@ -40,8 +39,8 @@ function AddItemComposerStory({
 	initialComposerOpen?: boolean;
 }) {
 	const storyKey = initialComposerOpen ? "focused" : "default";
-	const actions = useMemo(() => storyActions(emptyList), []);
-	const syncCoordinator = useMemo(() => storySyncCoordinator(), []);
+	const actions = storyActions(emptyList);
+	const syncCoordinator = storySyncCoordinator();
 
 	return (
 		<SafeAreaProvider
