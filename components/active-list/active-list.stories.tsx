@@ -13,6 +13,7 @@ import {
 	emptyActiveListState,
 	populatedActiveListState,
 } from "@/components/active-list/test-support";
+import type { Logger } from "@/lib/logger";
 
 const meta = {
 	title: "Active List",
@@ -53,6 +54,7 @@ function ActiveListStory({
 				onAddItem={actions.addItem}
 				onSetItemChecked={actions.setItemChecked}
 				syncCoordinator={syncCoordinator}
+				logger={storybookLogger}
 			>
 				<ActiveList.Screen>
 					<ActiveList.Header />
@@ -70,3 +72,13 @@ const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.background,
 	},
 }));
+
+const storybookLogger: Logger = {
+	debug() {},
+	info() {},
+	warn() {},
+	error() {},
+	with() {
+		return storybookLogger;
+	},
+};

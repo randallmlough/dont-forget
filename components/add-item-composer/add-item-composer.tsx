@@ -12,6 +12,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
+export const ADD_ITEM_COMPOSER_SCROLL_CLEARANCE = 128;
 const COMPOSER_COLORS = {
 	entryBackground: "rgba(255, 255, 255, 0.86)",
 	entryBorder: "rgba(130, 154, 177, 0.38)",
@@ -65,7 +66,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const { theme } = useUnistyles();
 	const placeholderColor = theme.colors.textSubtle;
 	const visibility = useSharedValue(0);
-	const [keyboardHeight, setKeyboardHeight] = useState(0);
+	const keyboardHeight = useKeyboardHeight();
 
 	useEffect(() => {
 		visibility.set(
@@ -75,23 +76,6 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 			}),
 		);
 	}, [ui.isOpen, visibility]);
-
-	useEffect(() => {
-		const showSubscription = Keyboard.addListener(
-			"keyboardWillShow",
-			(event) => {
-				setKeyboardHeight(event.endCoordinates.height);
-			},
-		);
-		const hideSubscription = Keyboard.addListener("keyboardWillHide", () => {
-			setKeyboardHeight(0);
-		});
-
-		return () => {
-			showSubscription.remove();
-			hideSubscription.remove();
-		};
-	}, []);
 
 	const animatedStyle = useAnimatedStyle(() => {
 		const currentVisibility = visibility.get();
@@ -240,6 +224,38 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 			</Animated.View>
 		</View>
 	);
+}
+
+export function useAddItemComposerScrollInset(): number {
+	const insets = useSafeAreaInsets();
+	const keyboardHeight = useKeyboardHeight();
+
+	return (
+		Math.max(keyboardHeight, insets.bottom) + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE
+	);
+}
+
+function useKeyboardHeight(): number {
+	const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+	useEffect(() => {
+		const showSubscription = Keyboard.addListener(
+			"keyboardWillShow",
+			(event) => {
+				setKeyboardHeight(event.endCoordinates.height);
+			},
+		);
+		const hideSubscription = Keyboard.addListener("keyboardWillHide", () => {
+			setKeyboardHeight(0);
+		});
+
+		return () => {
+			showSubscription.remove();
+			hideSubscription.remove();
+		};
+	}, []);
+
+	return keyboardHeight;
 }
 
 const styles = StyleSheet.create((theme) => ({

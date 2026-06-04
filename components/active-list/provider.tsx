@@ -6,7 +6,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { useLogger } from "@/lib/logger";
+import { type Logger, useLogger } from "@/lib/logger";
 import {
 	type ActiveListTransition,
 	activeListReducer,
@@ -28,18 +28,44 @@ export type ActiveListProviderProps = PropsWithChildren<{
 	onAddItem: (input: AddActiveListItemInput) => Promise<ActiveListItem>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	syncCoordinator: ActiveListSyncCoordinator;
+	logger?: Logger;
 }>;
 
 export function ActiveListProvider({
+	logger,
+	...props
+}: ActiveListProviderProps) {
+	if (logger) {
+		return <ActiveListProviderContent {...props} logger={logger} />;
+	}
+
+	return <ActiveListProviderWithLogger {...props} />;
+}
+
+type ActiveListProviderContentProps = Omit<
+	ActiveListProviderProps,
+	"logger"
+> & {
+	logger: Logger;
+};
+
+function ActiveListProviderWithLogger(
+	props: Omit<ActiveListProviderProps, "logger">,
+) {
+	const logger = useLogger();
+	return <ActiveListProviderContent {...props} logger={logger} />;
+}
+
+function ActiveListProviderContent({
 	initialState,
 	currentMemberName,
 	onLoadList,
 	onAddItem,
 	onSetItemChecked,
 	syncCoordinator,
+	logger,
 	children,
-}: ActiveListProviderProps) {
-	const logger = useLogger();
+}: ActiveListProviderContentProps) {
 	const syncState = useSyncExternalStore(
 		(onStoreChange: () => void) => {
 			const subscription = syncCoordinator.subscribe(onStoreChange);

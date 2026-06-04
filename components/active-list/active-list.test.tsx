@@ -17,6 +17,7 @@ import {
 	type ActiveListMemoryActions,
 	createActiveListMemoryActions,
 } from "@/components/active-list/test-support";
+import { ADD_ITEM_COMPOSER_SCROLL_CLEARANCE } from "@/components/add-item-composer";
 import { useLogger } from "@/lib/logger";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
@@ -130,9 +131,33 @@ describe("ActiveList", () => {
 
 		expect(list.props.contentContainerStyle).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ paddingBottom: 34 + 128 }),
+				expect.objectContaining({
+					paddingBottom: 34 + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE,
+				}),
 			]),
 		);
+	});
+
+	it("reserves keyboard-aware bottom scroll space while composing", () => {
+		const keyboard = captureKeyboardListeners();
+		try {
+			const rendered = renderActiveList(emptyList);
+
+			act(() => {
+				keyboard.emit("keyboardWillShow", 320);
+			});
+
+			const list = rendered.UNSAFE_getByType(FlatList);
+			expect(list.props.contentContainerStyle).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						paddingBottom: 320 + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE,
+					}),
+				]),
+			);
+		} finally {
+			keyboard.restore();
+		}
 	});
 
 	it("dismisses the composer without clearing an open draft", () => {
@@ -584,27 +609,33 @@ function captureKeyboardListeners() {
 	const addListener = Keyboard.addListener.bind(Keyboard);
 	const listeners = new Map<
 		string,
-		(event: { duration: number; endCoordinates: { height: number } }) => void
+		((event: {
+			duration: number;
+			endCoordinates: { height: number };
+		}) => void)[]
 	>();
 	const spy = jest
 		.spyOn(Keyboard, "addListener")
 		.mockImplementation((eventName, listener) => {
-			listeners.set(
-				eventName,
+			const eventListeners = listeners.get(eventName) ?? [];
+			eventListeners.push(
 				listener as (event: {
 					duration: number;
 					endCoordinates: { height: number };
 				}) => void,
 			);
+			listeners.set(eventName, eventListeners);
 			return addListener(eventName, listener);
 		});
 
 	return {
-		emit(eventName: string) {
-			listeners.get(eventName)?.({
-				duration: 0,
-				endCoordinates: { height: 0 },
-			});
+		emit(eventName: string, height = 0) {
+			for (const listener of listeners.get(eventName) ?? []) {
+				listener({
+					duration: 0,
+					endCoordinates: { height },
+				});
+			}
 		},
 		restore() {
 			spy.mockRestore();
