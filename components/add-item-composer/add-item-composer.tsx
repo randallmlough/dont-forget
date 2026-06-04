@@ -47,6 +47,7 @@ export type AddItemComposerUiState = {
 	isNoteOpen: boolean;
 	canSubmit: boolean;
 	listName: string;
+	errorMessage: string | null;
 	keyboardHeight: number;
 	shouldFocusNameInput: boolean;
 };
@@ -112,7 +113,12 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	}
 
 	return (
-		<View pointerEvents="box-none" style={styles.overlay}>
+		<View
+			accessibilityLabel="Add Item composer"
+			accessibilityViewIsModal
+			pointerEvents="box-none"
+			style={styles.overlay}
+		>
 			<Pressable
 				accessibilityLabel="Dismiss add Item composer"
 				accessibilityRole="button"
@@ -157,6 +163,11 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 							<Text style={styles.submitLabel}>+</Text>
 						</Pressable>
 					</View>
+					{ui.errorMessage ? (
+						<Text accessibilityRole="alert" style={styles.errorMessage}>
+							{ui.errorMessage}
+						</Text>
+					) : null}
 					<View style={styles.quantityRow}>
 						<Text style={styles.quantityLabel}>Quantity</Text>
 						<TextInput
@@ -302,6 +313,10 @@ const styles = StyleSheet.create((theme) => ({
 		fontSize: theme.fontSizes.headline,
 		fontWeight: theme.fontWeights.semibold,
 		lineHeight: theme.spacing(6),
+	},
+	errorMessage: {
+		...theme.typography.captionStrong,
+		color: theme.colors.destructive,
 	},
 	quantityRow: {
 		minHeight: theme.spacing(8),

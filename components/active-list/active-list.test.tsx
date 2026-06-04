@@ -55,7 +55,9 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Avery")).toBeTruthy();
 		expect(screen.getByText("Groceries")).toBeTruthy();
 		expect(screen.getByText("No Items yet")).toBeTruthy();
-		expect(screen.getByText("This List is empty.")).toBeTruthy();
+		expect(
+			screen.getByText("This List is empty.", { includeHiddenElements: true }),
+		).toBeTruthy();
 		expect(screen.getByLabelText("Add Item")).toBeTruthy();
 		expect(screen.queryByLabelText("Submit Item")).toBeNull();
 
@@ -112,6 +114,9 @@ describe("ActiveList", () => {
 		openAddItemComposer();
 
 		expect(screen.getByLabelText("Item name")).toBeTruthy();
+		expect(screen.getByLabelText("Add Item composer").props).toMatchObject({
+			accessibilityViewIsModal: true,
+		});
 		expect(screen.getByLabelText("Submit Item")).toBeTruthy();
 		expect(screen.getByLabelText("Quantity")).toBeTruthy();
 		expect(screen.getByLabelText("Add note")).toBeTruthy();
@@ -261,7 +266,9 @@ describe("ActiveList", () => {
 			).toBeTruthy(),
 		);
 		expect(screen.queryByRole("checkbox", { name: "Milk" })).toBeNull();
-		expect(screen.getByText("This List is empty.")).toBeTruthy();
+		expect(
+			screen.getByText("This List is empty.", { includeHiddenElements: true }),
+		).toBeTruthy();
 		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
 	});
 

@@ -27,7 +27,7 @@ type ComposerAction =
 	| { type: "submitFailed" };
 
 export function ActiveListAddItemForm() {
-	const { actions, state } = useActiveList();
+	const { actions, meta, state } = useActiveList();
 	const [composer, dispatchComposer] = useReducer(
 		composerReducer,
 		undefined,
@@ -94,6 +94,7 @@ export function ActiveListAddItemForm() {
 				isNoteOpen: composer.isNoteOpen,
 				canSubmit,
 				listName: state.listName,
+				errorMessage: meta.errorMessage,
 				keyboardHeight: composer.keyboardHeight,
 				shouldFocusNameInput: composer.isOpen,
 			}}

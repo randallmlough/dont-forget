@@ -96,6 +96,7 @@ function FocusedAddItemComposerStory() {
 						isNoteOpen,
 						canSubmit,
 						listName: "Groceries",
+						errorMessage: null,
 						keyboardHeight: STORY_KEYBOARD_HEIGHT,
 						shouldFocusNameInput: false,
 					}}
