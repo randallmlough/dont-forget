@@ -87,7 +87,9 @@ async function applyMigrations(
 	const files = (await readdir(migrationsFolder))
 		.filter((file) => file.endsWith(".sql"))
 		.filter(
-			(file) => !options.throughMigration || file <= options.throughMigration,
+			(file) =>
+				!options.throughMigration ||
+				migrationAtOrBefore(file, options.throughMigration),
 		)
 		.sort();
 
@@ -102,4 +104,8 @@ async function applyMigrations(
 			await client.execute(statement);
 		}
 	}
+}
+
+export function migrationAtOrBefore(file: string, target: string): boolean {
+	return file <= target;
 }
