@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Implementation Notes: {{FEATURE_NAME}}</title>
+  </head>
+  <body>
+    <h1>Implementation Notes: {{FEATURE_NAME}}</h1>
+
+    <section>
+      <h2>Overview</h2>
+      <p>Feature-level orchestration notes. Detailed worker progress remains in each task-level <code>implementation-notes.html</code>.</p>
+
+      <h3>Setup</h3>
+      <dl>
+        <dt>Feature</dt>
+        <dd>{{FEATURE_NAME}}</dd>
+
+        <dt>Feature State</dt>
+        <dd><code>{{STATE_PATH}}</code></dd>
+
+        <dt>Branch</dt>
+        <dd><code>{{BRANCH}}</code></dd>
+
+        <dt>Started At</dt>
+        <dd>Not started.</dd>
+
+        <dt>Source Material</dt>
+        <dd><code>{{PRD_PATH}}</code></dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Worker</h2>
+
+      <h3>Status</h3>
+      <p>Ready for implementation orchestration.</p>
+
+      <h3>What Currently Exists</h3>
+      <p>The feature scaffold exists. Use <code>state.json</code> to select the next task.</p>
+
+      <h3>Implementation Progress</h3>
+      <ul>
+        <li>{{CREATED_AT}}: Orchestrator created this feature-level implementation note.</li>
+      </ul>
+
+      <h3>Design Decisions</h3>
+      <ul>
+        <li><code>state.json</code> is the machine-readable orchestration ledger.</li>
+      </ul>
+
+      <h3>Deviations From Spec</h3>
+      <p>None recorded.</p>
+
+      <h3>Tradeoffs Considered</h3>
+      <ul>
+        <li>Keep final cross-task evidence here and detailed task evidence in task-level notes.</li>
+      </ul>
+
+      <h3>Open Questions</h3>
+      <p>None recorded.</p>
+
+      <h3>Verification</h3>
+      <p>Pending feature implementation.</p>
+    </section>
+
+    <section>
+      <h2>Reviewers</h2>
+
+      <h3>Status</h3>
+      <p>Not requested.</p>
+
+      <h3>Code Review Agents Requested</h3>
+      <ul>
+        <li>None yet. Request review after all task-level gates are complete.</li>
+      </ul>
+
+      <h3>Score</h3>
+      <p>Not scored.</p>
+
+      <h3>Findings</h3>
+      <ul>
+        <li>None yet.</li>
+      </ul>
+
+      <h3>Decisions</h3>
+      <ul>
+        <li>No feature-level review decisions yet.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Post Implementation Checklist</h2>
+      <ul>
+        <li>Pending: every task in <code>state.json</code> is marked <code>complete</code>.</li>
+        <li>Pending: every task's machine-readable completion evidence is complete or explicitly deferred with rationale.</li>
+        <li>Pending: feature behavior still matches the PRD.</li>
+        <li>Pending: final feature-level review is approved or approved with follow-up.</li>
+      </ul>
+    </section>
+  </body>
+</html>

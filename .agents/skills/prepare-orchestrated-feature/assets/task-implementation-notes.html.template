@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Implementation Notes: {{TASK_NAME}}</title>
+  </head>
+  <body>
+    <h1>Implementation Notes: {{TASK_NAME}}</h1>
+
+    <section>
+      <h2>Overview</h2>
+      <p>{{OVERVIEW}}</p>
+
+      <h3>Setup</h3>
+      <dl>
+        <dt>Task</dt>
+        <dd>{{TASK_NAME}}</dd>
+
+        <dt>Feature</dt>
+        <dd>{{FEATURE_NAME}}</dd>
+
+        <dt>Branch</dt>
+        <dd><code>{{BRANCH}}</code></dd>
+
+        <dt>Started At</dt>
+        <dd>Not started.</dd>
+
+        <dt>Task Type</dt>
+        <dd>{{TASK_TYPE}}</dd>
+
+        <dt>Source Material</dt>
+        <dd><code>{{PRD_PATH}}</code>, <code>task.md</code>, <code>QA.md</code>, and <code>plan.md</code>.</dd>
+
+        <dt>Primary Files</dt>
+        <dd>{{PRIMARY_FILES}}</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Worker</h2>
+
+      <h3>Status</h3>
+      <p>Not started.</p>
+
+      <h3>What Currently Exists</h3>
+      <p>{{BASELINE}}</p>
+
+      <h3>Implementation Progress</h3>
+      <ul>
+        <li>{{CREATED_AT}}: Orchestrator created this implementation-note handoff.</li>
+      </ul>
+
+      <h3>Design Decisions</h3>
+      <ul>
+        <li>{{DESIGN_DECISION}}</li>
+      </ul>
+
+      <h3>Deviations From Spec</h3>
+      <p>None recorded.</p>
+
+      <h3>Tradeoffs Considered</h3>
+      <ul>
+        <li>{{TRADEOFF}}</li>
+      </ul>
+
+      <h3>Open Questions</h3>
+      <p>None recorded.</p>
+
+      <h3>Verification</h3>
+      <p>Pending implementation.</p>
+    </section>
+
+    <section>
+      <h2>Reviewers</h2>
+
+      <h3>Status</h3>
+      <p>Not requested.</p>
+
+      <h3>Code Review Agents Requested</h3>
+      <ul>
+        <li>None yet. Request <code>code-review</code> after the worker marks this task ready for review.</li>
+      </ul>
+
+      <h3>Score</h3>
+      <p>Not scored.</p>
+
+      <h3>Findings</h3>
+      <ul>
+        <li>None yet.</li>
+      </ul>
+
+      <h3>Decisions</h3>
+      <ul>
+        <li>No review decisions yet.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Post Implementation Checklist</h2>
+      <ul>
+        <li>Pending: task acceptance criteria are implemented and verified.</li>
+        <li>Pending: QA matrix evidence is recorded.</li>
+        <li>Pending: all requested review changes are addressed or explicitly deferred with rationale.</li>
+      </ul>
+    </section>
+  </body>
+</html>

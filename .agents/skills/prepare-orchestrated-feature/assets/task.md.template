@@ -1,0 +1,27 @@
+# {{TASK_NAME}}
+
+Type: {{TASK_TYPE}}
+
+Source PRD: `{{PRD_PATH}}`
+
+Source discussion: `{{DISCUSSION_PATH}}`
+
+## Context
+
+{{CONTEXT}}
+
+## What To Build
+
+{{WHAT_TO_BUILD}}
+
+## Acceptance Criteria
+
+- [ ] {{ACCEPTANCE_CRITERION}}
+
+## Blocked By
+
+{{BLOCKED_BY}}
+
+## User Stories Covered
+
+{{USER_STORIES}}

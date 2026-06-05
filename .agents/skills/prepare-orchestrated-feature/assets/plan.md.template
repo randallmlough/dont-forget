@@ -1,0 +1,25 @@
+# {{TASK_NAME}} Plan
+
+## Goal
+
+{{GOAL}}
+
+## Assumptions
+
+- {{ASSUMPTION}}
+
+## Implementation Plan
+
+1. {{IMPLEMENTATION_STEP}}
+
+## Test Plan
+
+- {{TEST_PLAN_ITEM}}
+
+## Risks/Checks
+
+- {{RISK_OR_CHECK}}
+
+## Done Criteria
+
+- {{DONE_CRITERION}}

@@ -1,0 +1,13 @@
+# QA Matrix: {{TASK_NAME}}
+
+## Automated Tests
+
+| Area | Scenario | Expected Result | Evidence |
+| --- | --- | --- | --- |
+| {{AREA}} | {{SCENARIO}} | {{EXPECTED_RESULT}} | {{EVIDENCE}} |
+
+## Manual QA
+
+| Area | Scenario | Expected Result |
+| --- | --- | --- |
+| {{AREA}} | {{SCENARIO}} | {{EXPECTED_RESULT}} |
