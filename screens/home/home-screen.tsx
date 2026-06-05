@@ -44,7 +44,7 @@ export function HomeScreenView({
 	const displayMemberName = homeSessionMemberName(session);
 
 	return (
-		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
+		<SafeAreaView edges={["top"]} style={styles.root}>
 			<View style={styles.memberBar}>
 				<View style={styles.memberTextGroup}>
 					<Text style={styles.memberLabel}>Signed in</Text>

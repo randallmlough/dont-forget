@@ -165,6 +165,7 @@ describe("openHouseholdStore", () => {
 			fileSystem,
 		});
 		const nativeDb = onlyInstance(instances);
+		nativeDb.calls = [];
 		const push = deferred<void>();
 		nativeDb.push.mockImplementationOnce(async () => {
 			nativeDb.calls.push("push");

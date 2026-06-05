@@ -76,6 +76,8 @@ describe("createSessionDataServices", () => {
 				listId: harness.scenario.ids.groceriesListId,
 				userId: harness.scenario.users.avery.id,
 				name: "Eggs",
+				quantity: null,
+				notes: null,
 			});
 			await harness.services.items.setItemChecked({
 				listId: harness.scenario.ids.groceriesListId,

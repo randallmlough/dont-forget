@@ -9,9 +9,22 @@ import {
 	users,
 } from "@/db/schema/directory";
 import { itemChecks, items, lists } from "@/db/schema/household";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import {
+	createTestDirectoryDb,
+	createTestHouseholdDb,
+	migrationAtOrBefore,
+} from "@/db/test";
 
 describe("test database migrations", () => {
+	it("orders migration filenames by zero-padded migration prefix", () => {
+		expect(
+			migrationAtOrBefore("0000_dear_exodus.sql", "0001_add_quantity.sql"),
+		).toBe(true);
+		expect(
+			migrationAtOrBefore("0002_future_change.sql", "0001_add_quantity.sql"),
+		).toBe(false);
+	});
+
 	it("applies directory and Household migrations to isolated local databases", async () => {
 		const directory = await createTestDirectoryDb();
 		const household = await createTestHouseholdDb();
@@ -47,6 +60,8 @@ describe("test database migrations", () => {
 				id: "item_1",
 				listId: "list_1",
 				name: "Milk",
+				quantity: "1 gallon",
+				notes: "Organic if easy",
 				position: 0,
 				createdByUserId: "usr_1",
 			});
@@ -70,7 +85,13 @@ describe("test database migrations", () => {
 				{ householdId: "household_1", role: "owner" },
 			]);
 			expect(itemRows).toMatchObject([
-				{ id: "item_1", listId: "list_1", name: "Milk" },
+				{
+					id: "item_1",
+					listId: "list_1",
+					name: "Milk",
+					quantity: "1 gallon",
+					notes: "Organic if easy",
+				},
 			]);
 			expect(checkRows).toEqual([
 				{

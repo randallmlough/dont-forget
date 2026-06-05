@@ -1,39 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { useMemo } from "react";
+import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import {
 	ActiveList,
 	type ActiveListInitialState,
-	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
-
-const emptyList: ActiveListInitialState = {
-	householdName: "Avery",
-	listName: "Groceries",
-	items: [],
-};
-
-const populatedList: ActiveListInitialState = {
-	householdName: "Avery",
-	listName: "Groceries",
-	items: [
-		{ id: "item-1", name: "Milk", checked: false, checkedByMemberName: null },
-		{
-			id: "item-2",
-			name: "Apples",
-			checked: true,
-			checkedByMemberName: "Avery Chen",
-		},
-		{
-			id: "item-3",
-			name: "Paper towels",
-			checked: false,
-			checkedByMemberName: null,
-		},
-	],
-};
+import {
+	createActiveListMemoryActions,
+	createPassiveActiveListSyncCoordinator,
+	emptyActiveListState,
+	populatedActiveListState,
+} from "@/components/active-list/test-support";
+import type { Logger } from "@/lib/logger";
 
 const meta = {
 	title: "Active List",
@@ -45,11 +25,11 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = {
-	render: () => <ActiveListStory initialState={emptyList} />,
+	render: () => <ActiveListStory initialState={emptyActiveListState} />,
 };
 
 export const WithItems: Story = {
-	render: () => <ActiveListStory initialState={populatedList} />,
+	render: () => <ActiveListStory initialState={populatedActiveListState} />,
 };
 
 function ActiveListStory({
@@ -57,8 +37,13 @@ function ActiveListStory({
 }: {
 	initialState: ActiveListInitialState;
 }) {
-	const actions = useMemo(() => storyActions(initialState), [initialState]);
-	const syncCoordinator = useMemo(() => storySyncCoordinator(), []);
+	const [actions] = useState(() =>
+		createActiveListMemoryActions(initialState, {
+			itemIdPrefix: "story-item",
+			checkedByMemberName: "Avery Chen",
+		}),
+	);
+	const [syncCoordinator] = useState(createPassiveActiveListSyncCoordinator);
 
 	return (
 		<View style={styles.canvas}>
@@ -69,6 +54,7 @@ function ActiveListStory({
 				onAddItem={actions.addItem}
 				onSetItemChecked={actions.setItemChecked}
 				syncCoordinator={syncCoordinator}
+				logger={storybookLogger}
 			>
 				<ActiveList.Screen>
 					<ActiveList.Header />
@@ -80,59 +66,19 @@ function ActiveListStory({
 	);
 }
 
-function storySyncCoordinator(): ActiveListSyncCoordinator {
-	return {
-		getStatus: () => "synced",
-		subscribe: () => ({ remove() {} }),
-		async requestSync() {
-			return { changed: false };
-		},
-	};
-}
-
-function storyActions(initialState: ActiveListInitialState): {
-	load: () => Promise<ActiveListInitialState>;
-	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
-	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-} {
-	let state = initialState;
-	let nextItem = initialState.items.length + 1;
-
-	return {
-		async load() {
-			return state;
-		},
-		async addItem(name) {
-			const item = {
-				id: `story-item-${nextItem}`,
-				name,
-				checked: false,
-				checkedByMemberName: null,
-			};
-			nextItem += 1;
-			state = { ...state, items: [...state.items, item] };
-			return item;
-		},
-		async setItemChecked(itemId, checked) {
-			state = {
-				...state,
-				items: state.items.map((item) =>
-					item.id === itemId
-						? {
-								...item,
-								checked,
-								checkedByMemberName: checked ? "Avery Chen" : null,
-							}
-						: item,
-				),
-			};
-		},
-	};
-}
-
 const styles = StyleSheet.create((theme) => ({
 	canvas: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
 	},
 }));
+
+const storybookLogger: Logger = {
+	debug() {},
+	info() {},
+	warn() {},
+	error() {},
+	with() {
+		return storybookLogger;
+	},
+};

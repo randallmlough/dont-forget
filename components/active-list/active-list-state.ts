@@ -1,24 +1,19 @@
-import type {
-	ActiveListItem,
-	ActiveListState,
-	ActiveListSyncState,
-} from "./types";
+import type { ActiveListItem, ActiveListState } from "./types";
 
 export type ActiveListModel = {
 	list: ActiveListState;
 	errorMessage: string | null;
 	isRefreshing: boolean;
-	syncState: ActiveListSyncState;
 };
 
 export type ActiveListTransition =
 	| { type: "listLoaded"; list: ActiveListState }
-	| { type: "syncStatusChanged"; syncState: ActiveListSyncState }
 	| { type: "refreshRequested" }
 	| { type: "refreshFailed" }
 	| { type: "itemAddedOptimistically"; item: ActiveListItem }
 	| { type: "itemAddPersisted"; pendingItemId: string; item: ActiveListItem }
-	| { type: "itemAddFailed" }
+	| { type: "itemAddFailed"; pendingItemId: string }
+	| { type: "itemAddReloadFailed" }
 	| {
 			type: "itemToggledOptimistically";
 			itemId: string;
@@ -30,13 +25,11 @@ export type ActiveListTransition =
 
 export function initialActiveListModel(
 	initialList: ActiveListState,
-	syncState: ActiveListSyncState,
 ): ActiveListModel {
 	return {
 		list: initialList,
 		errorMessage: null,
 		isRefreshing: false,
-		syncState,
 	};
 }
 
@@ -47,8 +40,6 @@ export function activeListReducer(
 	switch (transition.type) {
 		case "listLoaded":
 			return { ...model, list: transition.list, isRefreshing: false };
-		case "syncStatusChanged":
-			return { ...model, syncState: transition.syncState };
 		case "refreshRequested":
 			return { ...model, errorMessage: null, isRefreshing: true };
 		case "refreshFailed":
@@ -76,7 +67,19 @@ export function activeListReducer(
 		case "itemAddFailed":
 			return {
 				...model,
+				list: {
+					...model.list,
+					items: model.list.items.filter(
+						(item) => item.id !== transition.pendingItemId,
+					),
+				},
 				errorMessage: "Unable to save that Item. The List was refreshed.",
+			};
+		case "itemAddReloadFailed":
+			return {
+				...model,
+				errorMessage:
+					"Unable to save that Item. The List could not be refreshed.",
 			};
 		case "itemToggledOptimistically":
 			return {

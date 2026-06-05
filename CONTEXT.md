@@ -29,7 +29,7 @@ The List a Member is currently viewing or editing within the Authenticated App S
 _Avoid_: only list, singleton list
 
 **Item**:
-A line on a List — typically something to buy. Has a name, a checked/unchecked state, and an order within the List. Checked state is recorded per User within the Item's Household.
+A line on a List — typically something to buy. Has a name, optional freeform quantity text, optional notes, a checked/unchecked state, and an order within the List. Checked state is recorded per User within the Item's Household.
 _Avoid_: entry, todo, task
 
 **Invitation**:

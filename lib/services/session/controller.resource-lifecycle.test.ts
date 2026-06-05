@@ -312,6 +312,8 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Cached eggs",
+				quantity: null,
+				notes: null,
 			}),
 		).resolves.toBeUndefined();
 
@@ -402,6 +404,8 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Cached eggs",
+				quantity: null,
+				notes: null,
 			}),
 		).resolves.toBeUndefined();
 
@@ -462,11 +466,15 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			listId: "lst_default_groceries",
 			userId: "usr_avery",
 			name: "Fresh milk",
+			quantity: null,
+			notes: null,
 		});
 		expect(freshDataServices.items.addItem).toHaveBeenCalledWith({
 			listId: "lst_default_groceries",
 			userId: "usr_avery",
 			name: "Fresh milk",
+			quantity: null,
+			notes: null,
 		});
 		expect(cachedDataServices.items.addItem).not.toHaveBeenCalled();
 		expect(final.session.services.sync).toEqual({
@@ -540,6 +548,8 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			listId: "lst_default_groceries",
 			userId: "usr_avery",
 			name: "Milk",
+			quantity: null,
+			notes: null,
 		});
 		freshSession.resolve(h.sessionBootstrapFixture({ householdName: "Fresh" }));
 		await h.waitForAsync(() =>
@@ -556,6 +566,8 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Eggs",
+				quantity: null,
+				notes: null,
 			}),
 		).rejects.toMatchObject({
 			code: "stale_authenticated_app_session_resource",
@@ -627,6 +639,8 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			listId: "lst_default_groceries",
 			userId: "usr_avery",
 			name: "Milk",
+			quantity: null,
+			notes: null,
 		});
 		const disposal = controller.dispose();
 
@@ -637,6 +651,8 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 				listId: "lst_default_groceries",
 				userId: "usr_avery",
 				name: "Eggs",
+				quantity: null,
+				notes: null,
 			}),
 		).rejects.toMatchObject({
 			code: "stale_authenticated_app_session_resource",

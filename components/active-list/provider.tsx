@@ -4,8 +4,9 @@ import {
 	useEffectEvent,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
-import { useLogger } from "@/lib/logger";
+import { type Logger, useLogger } from "@/lib/logger";
 import {
 	type ActiveListTransition,
 	activeListReducer,
@@ -16,33 +17,70 @@ import type {
 	ActiveListInitialState,
 	ActiveListItem,
 	ActiveListSyncCoordinator,
+	AddActiveListItemDraft,
+	AddActiveListItemInput,
 } from "./types";
 
 export type ActiveListProviderProps = PropsWithChildren<{
 	initialState: ActiveListInitialState;
 	currentMemberName: string;
 	onLoadList: () => Promise<ActiveListInitialState>;
-	onAddItem: (name: string) => Promise<ActiveListItem>;
+	onAddItem: (input: AddActiveListItemInput) => Promise<ActiveListItem>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	syncCoordinator: ActiveListSyncCoordinator;
+	logger?: Logger;
 }>;
 
 export function ActiveListProvider({
+	logger,
+	...props
+}: ActiveListProviderProps) {
+	if (logger) {
+		return <ActiveListProviderContent {...props} logger={logger} />;
+	}
+
+	return <ActiveListProviderWithLogger {...props} />;
+}
+
+type ActiveListProviderContentProps = Omit<
+	ActiveListProviderProps,
+	"logger"
+> & {
+	logger: Logger;
+};
+
+function ActiveListProviderWithLogger(
+	props: Omit<ActiveListProviderProps, "logger">,
+) {
+	const logger = useLogger();
+	return <ActiveListProviderContent {...props} logger={logger} />;
+}
+
+function ActiveListProviderContent({
 	initialState,
 	currentMemberName,
 	onLoadList,
 	onAddItem,
 	onSetItemChecked,
 	syncCoordinator,
+	logger,
 	children,
-}: ActiveListProviderProps) {
-	const logger = useLogger();
+}: ActiveListProviderContentProps) {
+	const syncState = useSyncExternalStore(
+		(onStoreChange: () => void) => {
+			const subscription = syncCoordinator.subscribe(onStoreChange);
+			return () => subscription.remove();
+		},
+		() => syncCoordinator.getStatus(),
+		() => syncCoordinator.getStatus(),
+	);
 	const [model, setModel] = useState(() =>
-		initialActiveListModel(initialState, syncCoordinator.getStatus()),
+		initialActiveListModel(initialState),
 	);
 	const mounted = useRef(true);
 	const nextItemNumber = useRef(initialState.items.length + 1);
 	const modelRef = useRef(model);
+	const previousSyncState = useRef(syncState);
 
 	useEffect(() => {
 		mounted.current = true;
@@ -64,41 +102,28 @@ export function ActiveListProvider({
 	}
 
 	const reloadListAfterSync = useEffectEvent(async () => {
-		await loadList();
+		await loadList().catch((error) => {
+			logger.error("active list reload after sync failed", { error });
+		});
 	});
 
-	const syncStatusChanged = useEffectEvent(
-		(syncState: ReturnType<ActiveListSyncCoordinator["getStatus"]>) => {
-			const previousSyncState = modelRef.current.syncState;
-			const isManualRefresh = modelRef.current.isRefreshing;
-			dispatchIfMounted({ type: "syncStatusChanged", syncState });
-			if (
-				previousSyncState === "pending" &&
-				syncState === "synced" &&
-				!isManualRefresh
-			) {
-				void reloadListAfterSync().catch((error) => {
-					logger.error("active list reload after sync failed", { error });
-				});
-			}
-		},
-	);
-
 	useEffect(() => {
-		const subscription = syncCoordinator.subscribe(syncStatusChanged);
-		syncStatusChanged(syncCoordinator.getStatus());
-		return () => {
-			subscription.remove();
-		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- syncStatusChanged is a React Effect Event; resubscribe only when the coordinator changes.
-	}, [syncCoordinator]);
+		const lastSyncState = previousSyncState.current;
+		previousSyncState.current = syncState;
+
+		if (
+			lastSyncState === "pending" &&
+			syncState === "synced" &&
+			!modelRef.current.isRefreshing
+		) {
+			void reloadListAfterSync();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- reloadListAfterSync is a React Effect Event; syncState is the reactive input.
+	}, [syncState]);
 
 	function requestLocalWriteSync() {
 		void syncCoordinator
 			.requestSync({ reason: "localWrite" })
-			.then(async (result) => {
-				if (mounted.current && result?.changed) await loadList();
-			})
 			.catch(() => undefined);
 	}
 
@@ -116,13 +141,17 @@ export function ActiveListProvider({
 		}
 	}
 
-	async function addItem(rawName: string) {
-		const name = rawName.trim();
+	async function addItem(input: AddActiveListItemDraft) {
+		const name = input.name.trim();
 		if (!name) return;
+		const quantity = nullableTrimmed(input.quantity);
+		const notes = nullableTrimmed(input.notes);
 
 		const item: ActiveListItem = {
 			id: `pending-item-${nextItemNumber.current}`,
 			name,
+			quantity,
+			notes,
 			checked: false,
 			checkedByMemberName: null,
 		};
@@ -131,16 +160,26 @@ export function ActiveListProvider({
 		dispatchIfMounted({ type: "itemAddedOptimistically", item });
 
 		try {
-			const persistedItem = await onAddItem(name);
+			const persistedItem = await onAddItem({
+				name,
+				quantity,
+				notes,
+			});
 			dispatchIfMounted({
 				type: "itemAddPersisted",
 				pendingItemId: item.id,
 				item: persistedItem,
 			});
 			requestLocalWriteSync();
-		} catch {
-			dispatchIfMounted({ type: "itemAddFailed" });
-			await loadList().catch(() => undefined);
+		} catch (error) {
+			dispatchIfMounted({ type: "itemAddFailed", pendingItemId: item.id });
+			await loadList().catch((reloadError) => {
+				logger.error("active list reload after add failure failed", {
+					error: reloadError,
+				});
+				dispatchIfMounted({ type: "itemAddReloadFailed" });
+			});
+			throw error;
 		}
 	}
 
@@ -175,7 +214,7 @@ export function ActiveListProvider({
 			currentMemberName,
 			errorMessage: model.errorMessage,
 			isRefreshing: model.isRefreshing,
-			syncState: model.syncState,
+			syncState,
 		},
 	};
 
@@ -184,4 +223,9 @@ export function ActiveListProvider({
 			{children}
 		</ActiveListContext.Provider>
 	);
+}
+
+function nullableTrimmed(value: string): string | null {
+	const trimmed = value.trim();
+	return trimmed ? trimmed : null;
 }

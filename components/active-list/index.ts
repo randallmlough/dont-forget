@@ -15,6 +15,8 @@ export type {
 	ActiveListSyncOptions,
 	ActiveListSyncResult,
 	ActiveListSyncState,
+	AddActiveListItemDraft,
+	AddActiveListItemInput,
 } from "./types";
 
 export const ActiveList = {

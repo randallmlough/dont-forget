@@ -1,87 +1,133 @@
-import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { useReducer } from "react";
+import { AddItemComposer } from "@/components/add-item-composer";
 import { useActiveList } from "./context";
 
-export function ActiveListAddItemForm() {
-	const { actions } = useActiveList();
-	const [name, setName] = useState("");
-	const trimmedName = name.trim();
-	const canSubmit = trimmedName.length > 0;
+type ComposerState = {
+	isOpen: boolean;
+	name: string;
+	quantity: string;
+	notes: string;
+	isNoteOpen: boolean;
+	isSubmitting: boolean;
+};
 
-	function submit() {
+type ComposerAction =
+	| { type: "opened" }
+	| { type: "dismissed" }
+	| { type: "nameChanged"; value: string }
+	| { type: "quantityChanged"; value: string }
+	| { type: "notesChanged"; value: string }
+	| { type: "noteToggled" }
+	| { type: "submitStarted" }
+	| { type: "submitSucceeded" }
+	| { type: "submitFailed" };
+
+export function ActiveListAddItemForm() {
+	const { actions, meta, state } = useActiveList();
+	const [composer, dispatchComposer] = useReducer(
+		composerReducer,
+		undefined,
+		initialComposerState,
+	);
+	const trimmedName = composer.name.trim();
+	const canSubmit = trimmedName.length > 0 && !composer.isSubmitting;
+
+	function openComposer() {
+		dispatchComposer({ type: "opened" });
+	}
+
+	function dismissComposer() {
+		dispatchComposer({ type: "dismissed" });
+	}
+
+	async function submit() {
 		if (!canSubmit) return;
-		void actions.addItem(trimmedName);
-		setName("");
+
+		dispatchComposer({ type: "submitStarted" });
+		try {
+			await actions.addItem({
+				name: trimmedName,
+				quantity: composer.quantity,
+				notes: composer.notes,
+			});
+			dispatchComposer({ type: "submitSucceeded" });
+			dismissComposer();
+		} catch {
+			dispatchComposer({ type: "submitFailed" });
+		}
 	}
 
 	return (
-		<View style={styles.addForm}>
-			<TextInput
-				accessibilityLabel="Item name"
-				value={name}
-				onChangeText={setName}
-				placeholder="Add an Item"
-				returnKeyType="done"
-				onSubmitEditing={submit}
-				style={styles.input}
-			/>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityState={{ disabled: !canSubmit }}
-				disabled={!canSubmit}
-				onPress={submit}
-				style={({ pressed }) => [
-					styles.addButton,
-					!canSubmit ? styles.addButtonDisabled : undefined,
-					pressed && canSubmit ? styles.addButtonPressed : undefined,
-				]}
-			>
-				<Text style={styles.addButtonLabel}>Add</Text>
-			</Pressable>
-		</View>
+		<AddItemComposer
+			draft={{
+				name: composer.name,
+				quantity: composer.quantity,
+				notes: composer.notes,
+			}}
+			ui={{
+				isOpen: composer.isOpen,
+				isNoteOpen: composer.isNoteOpen,
+				canSubmit,
+				listName: state.listName,
+				errorMessage: meta.errorMessage,
+			}}
+			actions={{
+				open: openComposer,
+				dismiss: dismissComposer,
+				submit,
+				changeName: (value) => dispatchComposer({ type: "nameChanged", value }),
+				changeQuantity: (value) =>
+					dispatchComposer({ type: "quantityChanged", value }),
+				changeNotes: (value) =>
+					dispatchComposer({ type: "notesChanged", value }),
+				toggleNote: () => dispatchComposer({ type: "noteToggled" }),
+			}}
+		/>
 	);
 }
 
-const styles = StyleSheet.create((theme) => ({
-	addForm: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2.5),
-		padding: theme.spacing(4),
-		backgroundColor: theme.colors.surface,
-		borderTopWidth: theme.borders.hairline,
-		borderTopColor: theme.colors.border,
-	},
-	input: {
-		flex: 1,
-		minHeight: theme.spacing(12),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.inputBorder,
-		paddingHorizontal: theme.spacing(3.5),
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.body,
-		backgroundColor: theme.colors.surface,
-	},
-	addButton: {
-		minWidth: theme.spacing(18),
-		height: theme.spacing(12),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.primary,
-	},
-	addButtonDisabled: {
-		backgroundColor: theme.colors.primaryDisabled,
-	},
-	addButtonPressed: {
-		opacity: theme.opacities.pressed,
-	},
-	addButtonLabel: {
-		...theme.typography.controlLabel,
-		color: theme.colors.inverseText,
-	},
-}));
+function initialComposerState(): ComposerState {
+	return {
+		isOpen: false,
+		name: "",
+		quantity: "",
+		notes: "",
+		isNoteOpen: false,
+		isSubmitting: false,
+	};
+}
+
+function composerReducer(
+	state: ComposerState,
+	action: ComposerAction,
+): ComposerState {
+	switch (action.type) {
+		case "opened":
+			return { ...state, isOpen: true };
+		case "dismissed":
+			return { ...state, isOpen: false, isSubmitting: false };
+		case "nameChanged":
+			return { ...state, name: action.value };
+		case "quantityChanged":
+			return { ...state, quantity: action.value };
+		case "notesChanged":
+			return { ...state, notes: action.value };
+		case "noteToggled":
+			return state.isNoteOpen
+				? { ...state, isNoteOpen: false, notes: "" }
+				: { ...state, isNoteOpen: true };
+		case "submitStarted":
+			return { ...state, isSubmitting: true };
+		case "submitSucceeded":
+			return {
+				...state,
+				name: "",
+				quantity: "",
+				notes: "",
+				isNoteOpen: false,
+				isSubmitting: false,
+			};
+		case "submitFailed":
+			return { ...state, isSubmitting: false };
+	}
+}

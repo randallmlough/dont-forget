@@ -6,11 +6,13 @@ import {
 	View,
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { useAddItemComposerScrollInset } from "@/components/add-item-composer";
 import { useActiveList } from "./context";
 import type { ActiveListItem } from "./types";
 
 export function ActiveListItems() {
 	const { state } = useActiveList();
+	const bottomScrollInset = useAddItemComposerScrollInset();
 
 	return (
 		<FlatList
@@ -22,6 +24,7 @@ export function ActiveListItems() {
 			keyboardShouldPersistTaps="handled"
 			contentContainerStyle={[
 				styles.itemsContent,
+				{ paddingBottom: bottomScrollInset },
 				state.items.length === 0 ? styles.emptyItemsContent : undefined,
 			]}
 		/>
@@ -30,6 +33,7 @@ export function ActiveListItems() {
 
 function ItemRow({ item }: { item: ActiveListItem }) {
 	const { actions } = useActiveList();
+	const detailText = itemDetailText(item);
 
 	function toggle() {
 		void actions.toggleItem(item.id);
@@ -62,6 +66,7 @@ function ItemRow({ item }: { item: ActiveListItem }) {
 				>
 					{item.name}
 				</Text>
+				{detailText ? <Text style={styles.itemMeta}>{detailText}</Text> : null}
 				{item.checkedByMemberName ? (
 					<Text style={styles.itemMeta}>
 						Checked by {item.checkedByMemberName}
@@ -93,6 +98,11 @@ function keyExtractor(item: ActiveListItem) {
 
 function renderItem({ item }: ListRenderItemInfo<ActiveListItem>) {
 	return <ItemRow item={item} />;
+}
+
+function itemDetailText(item: ActiveListItem): string | null {
+	const parts = [item.quantity, item.notes].filter((part) => part);
+	return parts.length > 0 ? parts.join(" - ") : null;
 }
 
 const styles = StyleSheet.create((theme) => ({

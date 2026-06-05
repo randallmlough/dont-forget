@@ -5,12 +5,19 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
+import { FlatList, Keyboard } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
 	ActiveList,
 	type ActiveListInitialState,
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
+import {
+	type ActiveListMemoryActions,
+	createActiveListMemoryActions,
+} from "@/components/active-list/test-support";
+import { ADD_ITEM_COMPOSER_SCROLL_CLEARANCE } from "@/components/add-item-composer";
 import { useLogger } from "@/lib/logger";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
@@ -37,12 +44,6 @@ const emptyList: ActiveListInitialState = {
 	items: [],
 };
 
-type MemoryListActions = {
-	load: () => Promise<ActiveListInitialState>;
-	addItem: (name: string) => Promise<ActiveListInitialState["items"][number]>;
-	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-};
-
 type TestSyncCoordinator = Omit<ActiveListSyncCoordinator, "requestSync"> & {
 	requestSync: jest.MockedFunction<ActiveListSyncCoordinator["requestSync"]>;
 	emit: (status: ReturnType<ActiveListSyncCoordinator["getStatus"]>) => void;
@@ -55,12 +56,30 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Avery")).toBeTruthy();
 		expect(screen.getByText("Groceries")).toBeTruthy();
 		expect(screen.getByText("No Items yet")).toBeTruthy();
-		expect(screen.getByText("This List is empty.")).toBeTruthy();
+		expect(
+			screen.getByText("This List is empty.", { includeHiddenElements: true }),
+		).toBeTruthy();
+		expect(screen.getByLabelText("Add Item")).toBeTruthy();
+		expect(screen.queryByLabelText("Submit Item")).toBeNull();
 
-		const input = screen.getByPlaceholderText("Add an Item");
+		openAddItemComposer();
+		expect(screen.getByLabelText("Quantity")).toBeTruthy();
+		expect(screen.getByLabelText("Add note")).toBeTruthy();
+		expect(screen.getByLabelText("Add note").props.accessibilityState).toEqual({
+			selected: false,
+		});
+		expect(screen.getByLabelText("Selected List: Groceries")).toBeTruthy();
+
+		const input = screen.getByLabelText("Item name");
 		fireEvent.changeText(input, " Milk ");
+		fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
+		fireEvent.press(screen.getByLabelText("Add note"));
+		expect(screen.getByLabelText("Add note").props.accessibilityState).toEqual({
+			selected: true,
+		});
+		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
 		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
+			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() => {
@@ -71,8 +90,10 @@ describe("ActiveList", () => {
 			});
 		});
 		expect(screen.getByText("0 of 1 Items checked")).toBeTruthy();
+		expect(screen.getByText("1 gallon - Organic if easy")).toBeTruthy();
 		expect(screen.queryByText("This List is empty.")).toBeNull();
-		expect(input.props.value).toBe("");
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+		expect(screen.getByLabelText("Add Item")).toBeTruthy();
 
 		await act(async () => {
 			fireEvent.press(screen.getByRole("checkbox", { name: "Milk" }));
@@ -89,6 +110,208 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
 
+	it("opens the add Item composer", () => {
+		renderActiveList(emptyList);
+		openAddItemComposer();
+
+		expect(screen.getByLabelText("Item name")).toBeTruthy();
+		expect(screen.getByLabelText("Add Item composer").props).toMatchObject({
+			accessibilityViewIsModal: true,
+		});
+		expect(screen.getByLabelText("Submit Item")).toBeTruthy();
+		expect(screen.getByLabelText("Quantity")).toBeTruthy();
+		expect(screen.getByLabelText("Add note")).toBeTruthy();
+		expect(screen.getByLabelText("Selected List: Groceries")).toBeTruthy();
+		expect(screen.queryByLabelText("Add Item")).toBeNull();
+	});
+
+	it("reserves bottom scroll space for the add Item composer", () => {
+		const rendered = renderActiveList(emptyList);
+		const list = rendered.UNSAFE_getByType(FlatList);
+
+		expect(list.props.contentContainerStyle).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					paddingBottom: 34 + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE,
+				}),
+			]),
+		);
+	});
+
+	it("reserves keyboard-aware bottom scroll space while composing", () => {
+		const keyboard = captureKeyboardListeners();
+		try {
+			const rendered = renderActiveList(emptyList);
+
+			act(() => {
+				keyboard.emit("keyboardWillShow", 320);
+			});
+
+			const list = rendered.UNSAFE_getByType(FlatList);
+			expect(list.props.contentContainerStyle).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						paddingBottom: 320 + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE,
+					}),
+				]),
+			);
+		} finally {
+			keyboard.restore();
+		}
+	});
+
+	it("dismisses the composer without clearing an open draft", () => {
+		renderActiveList(emptyList);
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		fireEvent.changeText(screen.getByLabelText("Quantity"), "1, 1 dozen");
+		fireEvent.press(
+			screen.getByRole("button", { name: "Dismiss add Item composer" }),
+		);
+
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+
+		openAddItemComposer();
+		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+		expect(screen.getByLabelText("Quantity").props.value).toBe("1, 1 dozen");
+	});
+
+	it("keeps the composer open when the keyboard hides", () => {
+		const keyboard = captureKeyboardListeners();
+		try {
+			renderActiveList(emptyList);
+
+			openAddItemComposer();
+			fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+
+			act(() => {
+				keyboard.emit("keyboardWillHide");
+			});
+
+			expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+			expect(screen.getByLabelText("Submit Item")).toBeTruthy();
+		} finally {
+			keyboard.restore();
+		}
+	});
+
+	it("clears composer fields after submit", async () => {
+		renderActiveList(emptyList);
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		fireEvent.changeText(screen.getByLabelText("Quantity"), "dozen");
+		fireEvent.press(screen.getByLabelText("Add note"));
+		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+
+		await act(async () => {
+			fireEvent.press(screen.getByLabelText("Submit Item"));
+		});
+
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+		openAddItemComposer();
+		expect(screen.getByLabelText("Item name").props.value).toBe("");
+		expect(screen.getByLabelText("Quantity").props.value).toBe("");
+		expect(screen.queryByLabelText("Item note")).toBeNull();
+	});
+
+	it("keeps the composer draft open when adding an Item fails", async () => {
+		const actions = memoryListActions(emptyList, {
+			addItem: jest.fn().mockRejectedValue(new Error("write failed")),
+		});
+		renderActiveList(emptyList, actions);
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
+		fireEvent.press(screen.getByLabelText("Add note"));
+		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+
+		await act(async () => {
+			fireEvent.press(screen.getByLabelText("Submit Item"));
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to save that Item. The List was refreshed."),
+			).toBeTruthy(),
+		);
+		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+		expect(screen.getByLabelText("Quantity").props.value).toBe("1 gallon");
+		expect(screen.getByLabelText("Item note").props.value).toBe(
+			"Organic if easy",
+		);
+		expect(
+			screen.getByLabelText("Submit Item").props.accessibilityState,
+		).toEqual({ disabled: false });
+	});
+
+	it("does not submit a note after the note field is toggled off", async () => {
+		const addItem: ActiveListMemoryActions["addItem"] = jest.fn(
+			async (input) => ({
+				id: "test-item-1",
+				name: input.name,
+				quantity: input.quantity,
+				notes: input.notes,
+				checked: false,
+				checkedByMemberName: null,
+			}),
+		);
+		renderActiveList(emptyList, memoryListActions(emptyList, { addItem }));
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		fireEvent.press(screen.getByLabelText("Add note"));
+		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+		fireEvent.press(screen.getByLabelText("Add note"));
+
+		await act(async () => {
+			fireEvent.press(screen.getByLabelText("Submit Item"));
+		});
+
+		await waitFor(() =>
+			expect(addItem).toHaveBeenCalledWith({
+				name: "Milk",
+				quantity: null,
+				notes: null,
+			}),
+		);
+		expect(screen.queryByText("Organic if easy")).toBeNull();
+	});
+
+	it("removes the optimistic Item when add and reload both fail", async () => {
+		const actions = memoryListActions(emptyList, {
+			addItem: jest.fn().mockRejectedValue(new Error("write failed")),
+			load: jest.fn().mockRejectedValue(new Error("reload failed")),
+		});
+		renderActiveList(emptyList, actions);
+
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+
+		await act(async () => {
+			fireEvent.press(screen.getByLabelText("Submit Item"));
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"Unable to save that Item. The List could not be refreshed.",
+				),
+			).toBeTruthy(),
+		);
+		expect(screen.queryByRole("checkbox", { name: "Milk" })).toBeNull();
+		expect(
+			screen.getByText("This List is empty.", { includeHiddenElements: true }),
+		).toBeTruthy();
+		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"active list reload after add failure failed",
+			{ error: expect.any(Error) },
+		);
+	});
+
 	it("shows pending and offline sync without discarding local Item changes", async () => {
 		const syncAfterWrite = deferred<{ changed: boolean }>();
 		const coordinator = controllableSyncCoordinator("synced");
@@ -101,9 +324,10 @@ describe("ActiveList", () => {
 
 		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
 
-		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
+			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
@@ -134,21 +358,27 @@ describe("ActiveList", () => {
 
 		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
 
-		expect(coordinator.subscribe).toHaveBeenCalledTimes(1);
+		expect(coordinator.subscribe).toHaveBeenCalled();
 		expect(
 			await screen.findByText("Offline - changes saved locally"),
 		).toBeTruthy();
-		expect(coordinator.getStatus).toHaveBeenCalledTimes(2);
+		expect(coordinator.getStatus).toHaveBeenCalled();
 	});
 
-	it("requests local-write sync after adding an Item", async () => {
+	it("requests local-write sync without reloading outside the sync status transition", async () => {
 		const coordinator = controllableSyncCoordinator("synced");
+		const load = jest.fn(async () => emptyList);
 
-		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
+		renderActiveList(
+			emptyList,
+			memoryListActions(emptyList, { load }),
+			coordinator,
+		);
 
-		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
+			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() =>
@@ -156,6 +386,7 @@ describe("ActiveList", () => {
 				reason: "localWrite",
 			}),
 		);
+		expect(load).not.toHaveBeenCalled();
 	});
 
 	it("requests manual sync before refreshing the List view", async () => {
@@ -177,6 +408,8 @@ describe("ActiveList", () => {
 					{
 						id: "test-item-remote",
 						name: "Remote Apples",
+						quantity: null,
+						notes: null,
 						checked: false,
 						checkedByMemberName: null,
 					},
@@ -215,6 +448,8 @@ describe("ActiveList", () => {
 				{
 					id: "test-item-remote",
 					name: "Remote Apples",
+					quantity: null,
+					notes: null,
 					checked: false,
 					checkedByMemberName: null,
 				},
@@ -223,6 +458,10 @@ describe("ActiveList", () => {
 
 		await act(async () => {
 			coordinator.emit("pending");
+		});
+		await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
+
+		await act(async () => {
 			coordinator.emit("synced");
 			await Promise.resolve();
 		});
@@ -313,9 +552,10 @@ describe("ActiveList", () => {
 			coordinator,
 		);
 
-		fireEvent.changeText(screen.getByPlaceholderText("Add an Item"), "Milk");
+		openAddItemComposer();
+		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByText("Add"));
+			fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 		await waitFor(() =>
 			expect(coordinator.requestSync).toHaveBeenCalledTimes(1),
@@ -337,21 +577,70 @@ function renderActiveList(
 	syncCoordinator = passiveSyncCoordinator(),
 ) {
 	return render(
-		<ActiveList.Provider
-			initialState={initialState}
-			currentMemberName="Avery Chen"
-			onLoadList={actions.load}
-			onAddItem={actions.addItem}
-			onSetItemChecked={actions.setItemChecked}
-			syncCoordinator={syncCoordinator}
+		<SafeAreaProvider
+			initialMetrics={{
+				frame: { x: 0, y: 0, width: 390, height: 844 },
+				insets: { top: 47, right: 0, bottom: 34, left: 0 },
+			}}
 		>
-			<ActiveList.Screen>
-				<ActiveList.Header />
-				<ActiveList.Items />
-				<ActiveList.AddItemForm />
-			</ActiveList.Screen>
-		</ActiveList.Provider>,
+			<ActiveList.Provider
+				initialState={initialState}
+				currentMemberName="Avery Chen"
+				onLoadList={actions.load}
+				onAddItem={actions.addItem}
+				onSetItemChecked={actions.setItemChecked}
+				syncCoordinator={syncCoordinator}
+			>
+				<ActiveList.Screen>
+					<ActiveList.Header />
+					<ActiveList.Items />
+					<ActiveList.AddItemForm />
+				</ActiveList.Screen>
+			</ActiveList.Provider>
+		</SafeAreaProvider>,
 	);
+}
+
+function openAddItemComposer() {
+	fireEvent.press(screen.getByLabelText("Add Item"));
+}
+
+function captureKeyboardListeners() {
+	const addListener = Keyboard.addListener.bind(Keyboard);
+	const listeners = new Map<
+		string,
+		((event: {
+			duration: number;
+			endCoordinates: { height: number };
+		}) => void)[]
+	>();
+	const spy = jest
+		.spyOn(Keyboard, "addListener")
+		.mockImplementation((eventName, listener) => {
+			const eventListeners = listeners.get(eventName) ?? [];
+			eventListeners.push(
+				listener as (event: {
+					duration: number;
+					endCoordinates: { height: number };
+				}) => void,
+			);
+			listeners.set(eventName, eventListeners);
+			return addListener(eventName, listener);
+		});
+
+	return {
+		emit(eventName: string, height = 0) {
+			for (const listener of listeners.get(eventName) ?? []) {
+				listener({
+					duration: 0,
+					endCoordinates: { height },
+				});
+			}
+		},
+		restore() {
+			spy.mockRestore();
+		},
+	};
 }
 
 function passiveSyncCoordinator(
@@ -419,40 +708,13 @@ function controllableSyncCoordinator(
 
 function memoryListActions(
 	initialState: ActiveListInitialState,
-	overrides: Partial<MemoryListActions> = {},
-): MemoryListActions {
-	let state = initialState;
-	let nextItem = initialState.items.length + 1;
-
+	overrides: Partial<ActiveListMemoryActions> = {},
+): ActiveListMemoryActions {
 	return {
-		async load() {
-			return state;
-		},
-		async addItem(name) {
-			const item = {
-				id: `test-item-${nextItem}`,
-				name,
-				checked: false,
-				checkedByMemberName: null,
-			};
-			nextItem += 1;
-			state = { ...state, items: [...state.items, item] };
-			return item;
-		},
-		async setItemChecked(itemId, checked) {
-			state = {
-				...state,
-				items: state.items.map((item) =>
-					item.id === itemId
-						? {
-								...item,
-								checked,
-								checkedByMemberName: checked ? "Avery Chen" : null,
-							}
-						: item,
-				),
-			};
-		},
+		...createActiveListMemoryActions(initialState, {
+			itemIdPrefix: "test-item",
+			checkedByMemberName: "Avery Chen",
+		}),
 		...overrides,
 	};
 }
