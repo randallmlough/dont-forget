@@ -615,5 +615,70 @@ function listFromRow(row: Record<string, unknown>, householdId: string): List {
 		createdByUserId: parsed.created_by_user_id,
 		createdAt: parsed.created_at,
 		updatedAt: parsed.updated_at,
+		archived: parsed.archived_at !== null,
+		archivedAt: parsed.archived_at,
 	};
+}
+
+function listSummaryFromRow(
+	row: Record<string, unknown>,
+	householdId: string,
+): ListSummary {
+	const parsed = listSummaryRowSchema.parse(row);
+	const itemCount = parsed.item_count;
+	const checkedItemCount = parsed.checked_item_count;
+
+	return {
+		id: parsed.id,
+		householdId,
+		name: parsed.name,
+		createdByUserId: parsed.created_by_user_id,
+		createdAt: parsed.created_at,
+		updatedAt: parsed.updated_at,
+		archived: parsed.archived_at !== null,
+		archivedAt: parsed.archived_at,
+		lastActivityAt: parsed.last_activity_at,
+		uncheckedItemCount: itemCount - checkedItemCount,
+		checkedItemCount,
+	};
+}
+
+function listSummaryOrderBy(sort: ListSortMode): string {
+	if (sort === "name") {
+		return "LOWER(l.name) ASC, l.created_at ASC, l.id ASC";
+	}
+
+	if (sort === "createdAt") {
+		return "l.created_at DESC, l.id ASC";
+	}
+
+	return "last_activity_at DESC, l.created_at ASC, l.id ASC";
+}
+
+let lastListServiceTimestamp: number | null = null;
+
+function randomUuid(): string {
+	return globalThis.crypto?.randomUUID?.() ?? Crypto.randomUUID();
+}
+
+function nextListServiceTimestamp(): number {
+	lastListServiceTimestamp = nextMonotonicTimestamp(
+		Date.now(),
+		lastListServiceTimestamp,
+	);
+	return lastListServiceTimestamp;
+}
+
+function nextMonotonicTimestamp(
+	rawTimestamp: number,
+	previousTimestamp: number | null,
+): number {
+	const timestamp = Math.trunc(rawTimestamp);
+	if (!Number.isFinite(timestamp)) {
+		throw new Error("Timestamp source must return a finite number");
+	}
+
+	return previousTimestamp === null || timestamp > previousTimestamp
+		? timestamp
+		: previousTimestamp + 1;
 }
