@@ -281,6 +281,48 @@ describe("createItemService", () => {
 		}
 	});
 
+	it("rejects adding Items to archived or deleted Lists", async () => {
+		const household = await createTestHouseholdDb();
+
+		try {
+			await household.db.insert(lists).values([
+				listFixture({
+					id: "lst_archived",
+					name: "Archived",
+					createdByUserId: "usr_avery",
+					archivedAt: 1_700_000_000_100,
+				}),
+				listFixture({
+					id: "lst_deleted",
+					name: "Deleted",
+					createdByUserId: "usr_avery",
+					deletedAt: 1_700_000_000_200,
+				}),
+			]);
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics: createMockAnalytics(),
+			});
+			const input = {
+				userId: "usr_avery",
+				name: "Milk",
+				quantity: null,
+				notes: null,
+			};
+
+			await expect(
+				service.addItem({ ...input, listId: "lst_archived" }),
+			).rejects.toThrow("List is not writable");
+			await expect(
+				service.addItem({ ...input, listId: "lst_deleted" }),
+			).rejects.toThrow("List is not writable");
+		} finally {
+			await household.close();
+		}
+	});
+
 	it("rejects quantity-bearing Items on a previous local Household schema", async () => {
 		const household = await createTestHouseholdDb({
 			throughMigration: "0000_dear_exodus.sql",
@@ -683,6 +725,106 @@ describe("createItemService", () => {
 		} finally {
 			await household.close();
 		}
+	});
+
+	it("rejects checked state changes for archived or deleted Lists", async () => {
+		const household = await createTestHouseholdDb();
+		const analytics = createMockAnalytics();
+
+		try {
+			await household.db.insert(lists).values([
+				listFixture({
+					id: "lst_archived",
+					name: "Archived",
+					createdByUserId: "usr_avery",
+					archivedAt: 1_700_000_000_100,
+				}),
+				listFixture({
+					id: "lst_deleted",
+					name: "Deleted",
+					createdByUserId: "usr_avery",
+					deletedAt: 1_700_000_000_200,
+				}),
+			]);
+			await household.db.insert(items).values([
+				itemFixture({
+					id: "itm_archived",
+					listId: "lst_archived",
+					name: "Archived milk",
+					position: 0,
+					createdByUserId: "usr_avery",
+				}),
+				itemFixture({
+					id: "itm_deleted",
+					listId: "lst_deleted",
+					name: "Deleted milk",
+					position: 0,
+					createdByUserId: "usr_avery",
+				}),
+			]);
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics,
+			});
+
+			await expect(
+				service.setItemChecked({
+					listId: "lst_archived",
+					itemId: "itm_archived",
+					userId: "usr_avery",
+					checked: true,
+				}),
+			).rejects.toThrow("List is not writable");
+			await expect(
+				service.setItemChecked({
+					listId: "lst_deleted",
+					itemId: "itm_deleted",
+					userId: "usr_avery",
+					checked: true,
+				}),
+			).rejects.toThrow("List is not writable");
+			expect(analytics.track).not.toHaveBeenCalled();
+		} finally {
+			await household.close();
+		}
+	});
+
+	it("writes checked state through an active parent List predicate", async () => {
+		const analytics = createMockAnalytics();
+		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
+			if (statement.sql.includes("PRAGMA table_info(lists)")) {
+				return { rows: [{ name: "archived_at" }], rowsAffected: 0 };
+			}
+			if (statement.sql.includes("INSERT INTO item_checks")) {
+				return { rows: [], rowsAffected: 1 };
+			}
+			return { rows: [], rowsAffected: 0 };
+		});
+		const service = createItemService({
+			householdId: "hh_avery",
+			store: { execute },
+			logger: testLogger,
+			analytics,
+		});
+
+		await expect(
+			service.setItemChecked({
+				listId: "lst_weekend",
+				itemId: "itm_milk",
+				userId: "usr_avery",
+				checked: true,
+			}),
+		).resolves.toBeUndefined();
+
+		const writeStatement = execute.mock.calls
+			.map((call) => call[0])
+			.find((statement) => statement.sql.includes("INSERT INTO item_checks"));
+		expect(writeStatement?.sql).toContain("FROM items i");
+		expect(writeStatement?.sql).toContain("JOIN lists l");
+		expect(writeStatement?.sql).toContain("l.deleted_at IS NULL");
+		expect(writeStatement?.sql).toContain("l.archived_at IS NULL");
 	});
 
 	it("unchecks an Item for the active User and derives the unchecked state", async () => {
