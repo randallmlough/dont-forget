@@ -1,0 +1,39 @@
+name: Staging TestFlight
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  cancel_in_progress: true
+  group: ${{ workflow.filename }}-${{ github.ref }}
+
+jobs:
+  deploy_api:
+    name: Deploy staging API
+    type: deploy
+    environment: preview
+    env:
+      APP_ENV: staging
+    params:
+      alias: staging
+
+  build_ios:
+    name: Build staging iOS
+    needs: [deploy_api]
+    type: build
+    environment: preview
+    env:
+      APP_ENV: staging
+    params:
+      platform: ios
+      profile: staging
+      message: Staging TestFlight
+
+  submit_ios:
+    name: Submit staging iOS
+    needs: [build_ios]
+    type: submit
+    environment: preview
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}
+      profile: staging
