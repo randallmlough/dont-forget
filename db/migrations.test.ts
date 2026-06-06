@@ -1,3 +1,5 @@
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import { asc, eq } from "drizzle-orm";
 
 import {
@@ -23,6 +25,48 @@ describe("test database migrations", () => {
 		expect(
 			migrationAtOrBefore("0002_future_change.sql", "0001_add_quantity.sql"),
 		).toBe(false);
+	});
+
+	it("keeps migration chunks compatible with remote libSQL", async () => {
+		const multiStatementChunks: {
+			file: string;
+			statementCount: number;
+			sql: string;
+		}[] = [];
+
+		for (const folder of [
+			"db/migrations/directory",
+			"db/migrations/household",
+		]) {
+			const files = (await readdir(folder))
+				.filter((file) => file.endsWith(".sql"))
+				.sort();
+
+			for (const file of files) {
+				const sql = await readFile(path.join(folder, file), "utf8");
+				const chunks = sql
+					.split("--> statement-breakpoint")
+					.map((statement) => statement.trim())
+					.filter(Boolean);
+
+				for (const chunk of chunks) {
+					const statementCount = chunk
+						.split(";")
+						.map((statement) => statement.trim())
+						.filter(Boolean).length;
+
+					if (statementCount > 1) {
+						multiStatementChunks.push({
+							file: path.join(folder, file),
+							statementCount,
+							sql: chunk,
+						});
+					}
+				}
+			}
+		}
+
+		expect(multiStatementChunks).toEqual([]);
 	});
 
 	it("applies directory and Household migrations to isolated local databases", async () => {

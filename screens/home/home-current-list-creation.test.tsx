@@ -267,7 +267,7 @@ describe("Home Current List creation", () => {
 			fireEvent.press(screen.getByRole("button", { name: "Create List" }));
 			fireEvent.changeText(screen.getByLabelText("List name"), "Weekend");
 			await act(async () => {
-				fireEvent(screen.getByLabelText("List name"), "submitEditing");
+				fireEvent.press(screen.getByRole("button", { name: "Create" }));
 			});
 
 			await waitFor(() => expect(screen.getByText("Weekend")).toBeTruthy());

@@ -405,7 +405,7 @@ export function ListSwitcher({
 						<View
 							accessibilityLabel="List switcher"
 							accessibilityViewIsModal
-							style={styles.sheet}
+							style={[styles.sheet, styles.flexSheet]}
 						>
 							{sheetState.mode === "create" ? (
 								<ListNameForm
@@ -501,7 +501,7 @@ export function ListSwitcher({
 											placeholder="Search Lists"
 											returnKeyType="search"
 											multiline={false}
-											style={styles.input}
+											style={[styles.input, styles.searchInput]}
 											value={searchText}
 										/>
 										{searchText ? (

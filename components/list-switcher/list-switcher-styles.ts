@@ -16,6 +16,9 @@ export const styles = StyleSheet.create((theme) => ({
 		borderTopRightRadius: theme.radii.card,
 		gap: theme.spacing(4),
 	},
+	flexSheet: {
+		flex: 1,
+	},
 	createForm: {
 		gap: theme.spacing(4),
 	},
@@ -214,7 +217,6 @@ export const styles = StyleSheet.create((theme) => ({
 	},
 	input: {
 		minHeight: theme.spacing(12),
-		flex: 1,
 		paddingHorizontal: theme.spacing(3.5),
 		paddingVertical: theme.spacing(2.5),
 		borderRadius: theme.radii.control,
@@ -224,6 +226,9 @@ export const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.background,
 		...theme.typography.body,
 		color: theme.colors.text,
+	},
+	searchInput: {
+		flex: 1,
 	},
 	validationText: {
 		...theme.typography.caption,
