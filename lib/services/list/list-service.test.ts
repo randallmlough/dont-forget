@@ -275,12 +275,17 @@ describe("createListService", () => {
 			await expect(
 				service.getList({ listId: scenario.lists.groceries.id }),
 			).resolves.toEqual({
-				id: scenario.lists.groceries.id,
-				householdId: scenario.household.id,
-				name: scenario.lists.groceries.name,
-				createdByUserId: scenario.users.avery.id,
-				createdAt: scenario.lists.groceries.createdAt,
-				updatedAt: scenario.lists.groceries.updatedAt,
+				status: "available",
+				list: {
+					id: scenario.lists.groceries.id,
+					householdId: scenario.household.id,
+					name: scenario.lists.groceries.name,
+					createdByUserId: scenario.users.avery.id,
+					createdAt: scenario.lists.groceries.createdAt,
+					updatedAt: scenario.lists.groceries.updatedAt,
+					archived: false,
+					archivedAt: null,
+				},
 			});
 		} finally {
 			await directory.close();
