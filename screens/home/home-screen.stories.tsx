@@ -389,6 +389,62 @@ function storyServices(
 	};
 }
 
+function storyListSummary(overrides: Partial<ListSummary> = {}): ListSummary {
+	return {
+		id: "lst_default_groceries",
+		householdId: "hh_story",
+		name: "Groceries",
+		createdByUserId: "usr_avery",
+		createdAt: 1,
+		updatedAt: 1,
+		archived: false,
+		archivedAt: null,
+		lastActivityAt: 1,
+		uncheckedItemCount: 0,
+		checkedItemCount: 0,
+		...overrides,
+	};
+}
+
+function SelectionSeededHomeStory({
+	selectedListId,
+	session,
+}: {
+	selectedListId: string;
+	session: AuthenticatedAppSession;
+}) {
+	const [ready, setReady] = useState(false);
+
+	useEffect(() => {
+		let cancelled = false;
+		currentListSelectionStore
+			.writeSelection({
+				userId: session.user.id,
+				householdId: session.activeHousehold.id,
+				listId: selectedListId,
+			})
+			.then(() => {
+				if (!cancelled) setReady(true);
+			});
+		return () => {
+			cancelled = true;
+			void currentListSelectionStore.clearSelection({
+				userId: session.user.id,
+				householdId: session.activeHousehold.id,
+			});
+		};
+	}, [selectedListId, session]);
+
+	if (!ready) return null;
+	return (
+		<HomeScreenView
+			state={{ status: "ready", refreshing: false }}
+			session={session}
+			onSignOut={noop}
+		/>
+	);
+}
+
 function activeListStoryItemToItem(
 	item: ActiveListItem,
 	position: number,
