@@ -839,7 +839,14 @@ describe("PublicHouseholdEntry", () => {
 
 function sessionFixture(): AuthenticatedAppSession {
 	const lists: AuthenticatedAppSession["services"]["lists"] = {
+		archiveList: jest.fn(),
+		createList: jest.fn(),
+		deleteList: jest.fn(),
 		getList: jest.fn(),
+		listLists: jest.fn(),
+		listActiveLists: jest.fn(),
+		renameList: jest.fn(),
+		unarchiveList: jest.fn(),
 	};
 	const items: AuthenticatedAppSession["services"]["items"] = {
 		listItems: jest.fn(),

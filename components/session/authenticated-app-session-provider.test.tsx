@@ -671,7 +671,14 @@ function appSessionFixture(): AuthenticatedAppSession {
 		resourceKey: "authenticated-app-session:1",
 		services: {
 			lists: {
+				archiveList: unusedSessionService,
+				createList: unusedSessionService,
+				deleteList: unusedSessionService,
 				getList: unusedSessionService,
+				listLists: unusedSessionService,
+				listActiveLists: unusedSessionService,
+				renameList: unusedSessionService,
+				unarchiveList: unusedSessionService,
 			},
 			items: {
 				listItems: unusedSessionService,

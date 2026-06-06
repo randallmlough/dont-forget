@@ -94,7 +94,15 @@ export function createSessionResourceLease(
 	return {
 		services: {
 			lists: {
+				archiveList: (input) => run(() => services.lists.archiveList(input)),
+				createList: (input) => run(() => services.lists.createList(input)),
+				deleteList: (input) => run(() => services.lists.deleteList(input)),
 				getList: (input) => run(() => services.lists.getList(input)),
+				listLists: (input) => run(() => services.lists.listLists(input)),
+				listActiveLists: () => run(() => services.lists.listActiveLists()),
+				renameList: (input) => run(() => services.lists.renameList(input)),
+				unarchiveList: (input) =>
+					run(() => services.lists.unarchiveList(input)),
 			},
 			items: {
 				listItems: (input) => run(() => services.items.listItems(input)),

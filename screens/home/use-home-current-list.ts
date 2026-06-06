@@ -90,10 +90,9 @@ export function useHomeCurrentList(
 
 		return () => {
 			cancelled = true;
+			operations.cancelAll();
 		};
-	}, [loadAttempt, loadKey, listId, session]);
-
-	const actions = { addItem, loadList, setItemChecked };
+	}, [loadAttempt, loadKey, operations, session]);
 
 	return {
 		state: homeCurrentListStateFromResource(resource, loadKey, actions),
@@ -178,56 +177,44 @@ function homeCurrentListStateFromResource(
 		return { status: "error", message: resource.message };
 	}
 
-	return { status: "ready", initialList: resource.initialList, actions };
-}
-
-async function loadCurrentList(
-	session: AuthenticatedAppSession,
-	listId: string,
-): Promise<ActiveListInitialState> {
-	const [list, items] = await Promise.all([
-		session.services.lists.getList({ listId }),
-		session.services.items.listItems({ listId }),
-	]);
-	const memberNames = memberNamesFromSession(session);
-
-	return {
-		householdName: session.activeHousehold.name,
-		listName: list.name,
-		items: items.map((item) => activeListItemFromItem(item, memberNames)),
-	};
-}
-
-function memberNamesFromSession(
-	session: AuthenticatedAppSession,
-): Map<string, string | null> {
-	const names = new Map<string, string | null>();
-	for (const member of session.members) {
-		names.set(member.userId, member.displayName);
+	if (resource.status === "zero-active") {
+		return {
+			status: "zero-active",
+			hasArchivedLists: resource.hasArchivedLists,
+			isCreating: resource.isCreating,
+			actions: {
+				createList: actions.createList,
+				unarchiveList: actions.unarchiveList,
+			},
+		};
 	}
-	names.set(
-		session.activeMember.userId,
-		session.activeMember.displayName ??
-			session.user.displayName ??
-			session.user.email ??
-			"Member",
-	);
-	return names;
-}
 
-function activeListItemFromItem(
-	item: Item,
-	memberNames: Map<string, string | null>,
-): ActiveListItem {
+	if (resource.status === "deleted-current") {
+		return {
+			status: "deleted-current",
+			activeLists: resource.activeLists,
+			hasArchivedLists: resource.hasArchivedLists,
+			isCreating: resource.isCreating,
+			isSwitching: resource.isSwitching,
+			actions: {
+				createList: actions.createList,
+				deleteList: actions.deleteList,
+				loadListSummaries: actions.loadListSummaries,
+				selectList: actions.selectList,
+				unarchiveList: actions.unarchiveList,
+			},
+		};
+	}
+
 	return {
-		id: item.id,
-		name: item.name,
-		quantity: item.quantity,
-		notes: item.notes,
-		checked: item.checked,
-		checkedByMemberName:
-			item.checked && item.checkedByUserId
-				? (memberNames.get(item.checkedByUserId) ?? null)
-				: null,
+		status: "ready",
+		activeLists: resource.activeLists,
+		currentList: resource.currentList,
+		hasArchivedLists: resource.hasArchivedLists,
+		initialList: resource.initialList,
+		isCreating: resource.isCreating,
+		isRenaming: resource.isRenaming,
+		isSwitching: resource.isSwitching,
+		actions,
 	};
 }

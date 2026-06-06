@@ -108,13 +108,16 @@ function readySession(
 		],
 		resourceKey: `story:${initialList.householdName}:${initialList.listName}`,
 		services: {
-			...storyServices(initialList),
+			...storyServices(initialList, options),
 			sync: storySyncCoordinator(),
 		},
 	};
 }
 
-function storyServices(initialList: ActiveListInitialState): {
+function storyServices(
+	initialList: ActiveListInitialState,
+	options: ReadySessionOptions = {},
+): {
 	lists: ListService;
 	items: ItemService;
 } {
@@ -122,19 +125,128 @@ function storyServices(initialList: ActiveListInitialState): {
 		itemIdPrefix: "story-item",
 		checkedByMemberName: "Avery Chen",
 	});
+	let storyListName = initialList.listName;
+	async function getStoryList() {
+		const state = await actions.load();
+		return storyListSummary({
+			id: "lst_default_groceries",
+			name: storyListName || state.listName,
+			updatedAt: 1,
+			lastActivityAt: 1,
+			uncheckedItemCount: state.items.filter((item) => !item.checked).length,
+			checkedItemCount: state.items.filter((item) => item.checked).length,
+		});
+	}
+
+	async function activeLists() {
+		return options.activeLists ?? [await getStoryList()];
+	}
+
+	async function archivedLists() {
+		return options.archivedLists ?? [];
+	}
+
+	async function allLists() {
+		return [...(await activeLists()), ...(await archivedLists())];
+	}
 
 	return {
 		lists: {
-			async getList() {
-				const state = await actions.load();
+			async archiveList(input) {
+				if (input.listId !== (await getStoryList()).id) {
+					return { status: "missing", listId: input.listId };
+				}
+				return { status: "unchanged", list: await getStoryList() };
+			},
+			async createList(input) {
+				const name = input.name.trim();
+				if (!name) {
+					return {
+						status: "invalid",
+						error: { code: "empty-name", name },
+					};
+				}
+				if (name.length > 80) {
+					return {
+						status: "invalid",
+						error: { code: "name-too-long", name, maxLength: 80 },
+					};
+				}
+				storyListName = name;
+				return { status: "created", list: await getStoryList() };
+			},
+			async deleteList(input) {
+				if (input.listId !== (await getStoryList()).id) {
+					return { status: "missing", listId: input.listId };
+				}
 				return {
-					id: "lst_default_groceries",
-					householdId: "hh_story",
-					name: state.listName,
-					createdByUserId: "usr_avery",
-					createdAt: 1,
+					status: "deleted",
+					listId: input.listId,
+					deletedAt: 1,
 					updatedAt: 1,
 				};
+			},
+			async getList(input) {
+				if (options.deletedListIds?.includes(input.listId)) {
+					return {
+						status: "deleted",
+						listId: input.listId,
+						deletedAt: 1,
+						updatedAt: 1,
+					};
+				}
+				const list = (await allLists()).find(
+					(entry) => entry.id === input.listId,
+				);
+				if (!list) {
+					return { status: "missing", listId: input.listId };
+				}
+				return { status: "available", list };
+			},
+			async listLists(input) {
+				if (input?.archive === "archived") {
+					return archivedLists();
+				}
+				const lists = await activeLists();
+				const searchText = input?.searchText?.trim().toLowerCase();
+				if (searchText) {
+					return lists.filter((list) =>
+						list.name.toLowerCase().includes(searchText),
+					);
+				}
+				return lists;
+			},
+			async listActiveLists() {
+				return activeLists();
+			},
+			async renameList(input) {
+				const name = input.name.trim();
+				if (!name) {
+					return {
+						status: "invalid",
+						error: { code: "empty-name", name },
+					};
+				}
+				if (name.length > 80) {
+					return {
+						status: "invalid",
+						error: { code: "name-too-long", name, maxLength: 80 },
+					};
+				}
+				if (input.listId !== (await getStoryList()).id) {
+					return { status: "missing", listId: input.listId };
+				}
+				if (name === storyListName) {
+					return { status: "unchanged", list: await getStoryList() };
+				}
+				storyListName = name;
+				return { status: "renamed", list: await getStoryList() };
+			},
+			async unarchiveList(input) {
+				if (input.listId !== (await getStoryList()).id) {
+					return { status: "missing", listId: input.listId };
+				}
+				return { status: "unchanged", list: await getStoryList() };
 			},
 		},
 		items: {

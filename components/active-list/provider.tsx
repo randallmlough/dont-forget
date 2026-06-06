@@ -28,6 +28,7 @@ export type ActiveListProviderProps = PropsWithChildren<{
 	onAddItem: (input: AddActiveListItemInput) => Promise<ActiveListItem>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	syncCoordinator: ActiveListSyncCoordinator;
+	readOnly?: boolean;
 	logger?: Logger;
 }>;
 
@@ -63,6 +64,7 @@ function ActiveListProviderContent({
 	onAddItem,
 	onSetItemChecked,
 	syncCoordinator,
+	readOnly = false,
 	logger,
 	children,
 }: ActiveListProviderContentProps) {
@@ -142,6 +144,7 @@ function ActiveListProviderContent({
 	}
 
 	async function addItem(input: AddActiveListItemDraft) {
+		if (readOnly) return;
 		const name = input.name.trim();
 		if (!name) return;
 		const quantity = nullableTrimmed(input.quantity);
@@ -184,6 +187,7 @@ function ActiveListProviderContent({
 	}
 
 	async function toggleItem(itemId: string) {
+		if (readOnly) return;
 		const target = modelRef.current.list.items.find(
 			(item) => item.id === itemId,
 		);

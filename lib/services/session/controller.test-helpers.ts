@@ -154,12 +154,64 @@ function pickCacheOverrides(
 
 function controllerListServiceBoundary(): ListService {
 	return {
+		archiveList: jest
+			.fn<
+				ReturnType<ListService["archiveList"]>,
+				Parameters<ListService["archiveList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not archive List data"),
+			),
+		createList: jest
+			.fn<
+				ReturnType<ListService["createList"]>,
+				Parameters<ListService["createList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not create List data"),
+			),
+		deleteList: jest
+			.fn<
+				ReturnType<ListService["deleteList"]>,
+				Parameters<ListService["deleteList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not delete List data"),
+			),
 		getList: jest
 			.fn<
 				ReturnType<ListService["getList"]>,
 				Parameters<ListService["getList"]>
 			>()
 			.mockRejectedValue(new Error("Controller tests must not read List data")),
+		listLists: jest
+			.fn<
+				ReturnType<ListService["listLists"]>,
+				Parameters<ListService["listLists"]>
+			>()
+			.mockRejectedValue(new Error("Controller tests must not read List data")),
+		listActiveLists: jest
+			.fn<
+				ReturnType<ListService["listActiveLists"]>,
+				Parameters<ListService["listActiveLists"]>
+			>()
+			.mockRejectedValue(new Error("Controller tests must not read List data")),
+		renameList: jest
+			.fn<
+				ReturnType<ListService["renameList"]>,
+				Parameters<ListService["renameList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not rename List data"),
+			),
+		unarchiveList: jest
+			.fn<
+				ReturnType<ListService["unarchiveList"]>,
+				Parameters<ListService["unarchiveList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not unarchive List data"),
+			),
 	};
 }
 

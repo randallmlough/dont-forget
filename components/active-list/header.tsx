@@ -3,8 +3,15 @@ import { StyleSheet } from "react-native-unistyles";
 import { useActiveList } from "./context";
 import type { ActiveListSyncState } from "./types";
 
-export function ActiveListHeader() {
+export function ActiveListHeader({
+	currentListName,
+	onOpenListSwitcher,
+}: {
+	currentListName?: string;
+	onOpenListSwitcher?: () => void;
+}) {
 	const { actions, meta, state } = useActiveList();
+	const listName = currentListName ?? state.listName;
 	const itemCount = state.items.length;
 	const checkedCount = state.items.filter((item) => item.checked).length;
 	const progressLabel =
@@ -30,7 +37,24 @@ export function ActiveListHeader() {
 					</Text>
 				</Pressable>
 			</View>
-			<Text style={styles.listName}>{state.listName}</Text>
+			{onOpenListSwitcher ? (
+				<Pressable
+					accessibilityHint="Opens List switcher"
+					accessibilityLabel={`Current List, ${listName}`}
+					accessibilityRole="button"
+					onPress={onOpenListSwitcher}
+					style={({ pressed }) => [
+						styles.listNameButton,
+						pressed ? styles.listNameButtonPressed : undefined,
+					]}
+				>
+					<Text ellipsizeMode="tail" style={styles.listName} numberOfLines={1}>
+						{listName}
+					</Text>
+				</Pressable>
+			) : (
+				<Text style={styles.listName}>{listName}</Text>
+			)}
 			<Text style={styles.progressLabel}>{progressLabel}</Text>
 			<Text style={[styles.syncStatus, syncStatusStyle(meta.syncState)]}>
 				{syncStatusLabel(meta.syncState)}
@@ -112,6 +136,13 @@ const styles = StyleSheet.create((theme) => ({
 	listName: {
 		...theme.typography.largeTitle,
 		color: theme.colors.text,
+	},
+	listNameButton: {
+		alignSelf: "flex-start",
+		maxWidth: "100%",
+	},
+	listNameButtonPressed: {
+		opacity: theme.opacities.pressed,
 	},
 	progressLabel: {
 		...theme.typography.callout,

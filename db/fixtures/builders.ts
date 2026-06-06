@@ -214,6 +214,7 @@ export function listFixture(overrides: Partial<NewList> = {}): NewList {
 		createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
 		createdAt: now,
 		updatedAt: now,
+		archivedAt: null,
 		deletedAt: null,
 		...overrides,
 	};

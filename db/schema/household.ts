@@ -20,9 +20,13 @@ export const lists = sqliteTable(
 		updatedAt: integer("updated_at")
 			.notNull()
 			.default(sql`(unixepoch() * 1000)`),
+		archivedAt: integer("archived_at"),
 		deletedAt: integer("deleted_at"),
 	},
-	(t) => [index("lists_deleted_idx").on(t.deletedAt)],
+	(t) => [
+		index("lists_archived_idx").on(t.archivedAt),
+		index("lists_deleted_idx").on(t.deletedAt),
+	],
 );
 
 export const items = sqliteTable(

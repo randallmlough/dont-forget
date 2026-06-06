@@ -32,20 +32,26 @@ export function ActiveListItems() {
 }
 
 function ItemRow({ item }: { item: ActiveListItem }) {
-	const { actions } = useActiveList();
+	const { actions, meta } = useActiveList();
 	const detailText = itemDetailText(item);
 
 	function toggle() {
+		if (meta.readOnly) return;
 		void actions.toggleItem(item.id);
 	}
 
 	return (
 		<Pressable
 			accessibilityRole="checkbox"
-			accessibilityState={{ checked: item.checked }}
+			accessibilityState={{
+				checked: item.checked,
+				...(meta.readOnly ? { disabled: true } : {}),
+			}}
+			disabled={meta.readOnly || undefined}
 			onPress={toggle}
 			style={({ pressed }) => [
 				styles.itemRow,
+				meta.readOnly ? styles.itemRowDisabled : undefined,
 				pressed ? styles.itemRowPressed : undefined,
 			]}
 		>
@@ -148,6 +154,9 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	itemRowPressed: {
 		opacity: theme.opacities.pressed,
+	},
+	itemRowDisabled: {
+		opacity: theme.opacities.disabled,
 	},
 	checkbox: {
 		width: theme.spacing(6),

@@ -74,8 +74,11 @@ describe("createListService", () => {
 								created_by_user_id: "usr_avery",
 								created_at: "1700000000000",
 								updated_at: "1700000000100",
+								archived_at: null,
+								deleted_at: null,
 							},
 						],
+						rowsAffected: 0,
 					};
 				},
 			},

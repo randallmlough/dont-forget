@@ -15,6 +15,13 @@
       "when": 1780551476897,
       "tag": "0001_brainy_pride",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780675200000,
+      "tag": "0002_add_list_archived_at",
+      "breakpoints": true
     }
   ]
 }

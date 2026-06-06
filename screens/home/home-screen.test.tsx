@@ -79,7 +79,7 @@ describe("HomeScreen", () => {
 
 	it("renders provider-derived ready state", async () => {
 		const harness = await createHomeSessionHarness();
-		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+		mockUseAuthenticatedAppSession.mockReturnValue({
 			state: { status: "ready", refreshing: false },
 			session: harness.session,
 			...noopProviderActions,
@@ -100,7 +100,7 @@ describe("HomeScreen", () => {
 	it("wires retry and sign out actions from the provider", () => {
 		const retry = jest.fn();
 		const signOut = jest.fn(async () => undefined);
-		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+		mockUseAuthenticatedAppSession.mockReturnValue({
 			state: {
 				status: "error",
 				message: "Unable to prepare your Household. Please try again.",

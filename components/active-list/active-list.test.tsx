@@ -50,6 +50,22 @@ type TestSyncCoordinator = Omit<ActiveListSyncCoordinator, "requestSync"> & {
 };
 
 describe("ActiveList", () => {
+	it("exposes the Current List header as a single-line switcher button", () => {
+		const onOpenListSwitcher = jest.fn();
+		renderActiveList(emptyList, undefined, undefined, onOpenListSwitcher);
+
+		const headerButton = screen.getByRole("button", {
+			name: "Current List, Groceries",
+		});
+		expect(headerButton.props.accessibilityHint).toBe("Opens List switcher");
+		expect(screen.getByText("Groceries").props.numberOfLines).toBe(1);
+		expect(screen.getByText("Groceries").props.ellipsizeMode).toBe("tail");
+
+		fireEvent.press(headerButton);
+
+		expect(onOpenListSwitcher).toHaveBeenCalledTimes(1);
+	});
+
 	it("adds and checks an Item for the current Member", async () => {
 		renderActiveList(emptyList);
 
@@ -575,6 +591,7 @@ function renderActiveList(
 	initialState: ActiveListInitialState,
 	actions = memoryListActions(initialState),
 	syncCoordinator = passiveSyncCoordinator(),
+	onOpenListSwitcher?: () => void,
 ) {
 	return render(
 		<SafeAreaProvider
@@ -592,7 +609,7 @@ function renderActiveList(
 				syncCoordinator={syncCoordinator}
 			>
 				<ActiveList.Screen>
-					<ActiveList.Header />
+					<ActiveList.Header onOpenListSwitcher={onOpenListSwitcher} />
 					<ActiveList.Items />
 					<ActiveList.AddItemForm />
 				</ActiveList.Screen>

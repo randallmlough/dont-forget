@@ -766,6 +766,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 
 		expect(createDataServices).toHaveBeenCalledWith({
 			householdId: session.activeHousehold.id,
+			userId: session.user.id,
 			database: session.householdDatabase,
 			logger: householdLogger,
 		});

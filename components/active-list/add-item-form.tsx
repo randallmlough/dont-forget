@@ -32,6 +32,10 @@ export function ActiveListAddItemForm() {
 	const trimmedName = composer.name.trim();
 	const canSubmit = trimmedName.length > 0 && !composer.isSubmitting;
 
+	if (meta.readOnly) {
+		return null;
+	}
+
 	function openComposer() {
 		dispatchComposer({ type: "opened" });
 	}

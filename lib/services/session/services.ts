@@ -19,6 +19,7 @@ type SessionStore = HouseholdStoreExecutor & {
 
 export type SessionDataServicesConfig = {
 	householdId: string;
+	userId: string;
 	database: HouseholdDatabaseConfig;
 	logger: Logger;
 };
@@ -56,6 +57,7 @@ export async function createSessionDataServices(
 	let closed = false;
 	const lists = createListService({
 		householdId: config.householdId,
+		authenticatedUserId: config.userId,
 		store,
 		logger: log,
 	});

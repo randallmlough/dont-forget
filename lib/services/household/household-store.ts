@@ -15,7 +15,7 @@ export type HouseholdSqlStatement = {
 export type HouseholdSqlResult = {
 	rows: Record<string, unknown>[];
 	rowsAffected: number;
-	lastInsertRowId: number | null;
+	lastInsertRowId?: number | null;
 };
 
 export type HouseholdStore = {
@@ -30,9 +30,7 @@ export type HouseholdStore = {
 };
 
 export type HouseholdStoreExecutor = {
-	execute: (
-		statement: HouseholdSqlStatement,
-	) => Promise<{ rows: Record<string, unknown>[] }>;
+	execute: (statement: HouseholdSqlStatement) => Promise<HouseholdSqlResult>;
 };
 
 export type HouseholdDatabaseConfig = {

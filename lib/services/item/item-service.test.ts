@@ -141,6 +141,41 @@ describe("createItemService", () => {
 		}
 	});
 
+	it("does not list Items for a deleted List", async () => {
+		const household = await createTestHouseholdDb();
+
+		try {
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_deleted",
+					name: "Deleted Groceries",
+					createdByUserId: "usr_avery",
+					deletedAt: 1_700_000_000_200,
+				}),
+			);
+			await household.db.insert(items).values(
+				itemFixture({
+					id: "itm_deleted_parent",
+					listId: "lst_deleted",
+					name: "Hidden",
+					position: 0,
+					createdByUserId: "usr_avery",
+				}),
+			);
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+			});
+
+			await expect(
+				service.listItems({ listId: "lst_deleted" }),
+			).resolves.toEqual([]);
+		} finally {
+			await household.close();
+		}
+	});
+
 	it("lists Items from a previous local Household schema without quantity", async () => {
 		const household = await createTestHouseholdDb({
 			throughMigration: "0000_dear_exodus.sql",
@@ -442,10 +477,19 @@ describe("createItemService", () => {
 
 	it("allocates Item position inside the insert statement", async () => {
 		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			if (statement.sql.includes("SELECT position FROM items")) {
-				return { rows: [{ position: 4 }] };
+			if (statement.sql.includes("PRAGMA table_info(items)")) {
+				return { rows: [{ name: "quantity" }], rowsAffected: 0 };
 			}
-			return { rows: [] };
+			if (statement.sql.includes("PRAGMA table_info(lists)")) {
+				return { rows: [{ name: "archived_at" }], rowsAffected: 0 };
+			}
+			if (statement.sql.includes("INSERT INTO items")) {
+				return { rows: [], rowsAffected: 1 };
+			}
+			if (statement.sql.includes("SELECT position FROM items")) {
+				return { rows: [{ position: 4 }], rowsAffected: 0 };
+			}
+			return { rows: [], rowsAffected: 0 };
 		});
 		const service = createItemService({
 			householdId: "hh_avery",
@@ -469,13 +513,20 @@ describe("createItemService", () => {
 			.find((statement) => statement.sql.includes("INSERT INTO items"));
 		const firstSql = insertStatement?.sql;
 		expect(firstSql).toContain("INSERT INTO items");
-		expect(firstSql).toContain("COALESCE(MAX(position), -1) + 1");
+		expect(firstSql).toContain("COALESCE(MAX(i.position), -1) + 1");
+		expect(firstSql).toContain("FROM lists l");
+		expect(firstSql).toContain("l.deleted_at IS NULL");
+		expect(firstSql).toContain("l.archived_at IS NULL");
 		expect(firstSql).not.toMatch(/^\s*SELECT COALESCE\(MAX\(position\)/);
 	});
 
 	it("rejects empty Item names before writing", async () => {
 		const analytics = createMockAnalytics();
-		const execute = jest.fn(async () => ({ rows: [] }));
+		const execute = jest.fn(async () => ({
+			rows: [],
+			rowsAffected: 0,
+			lastInsertRowId: null,
+		}));
 		const service = createItemService({
 			householdId: "hh_avery",
 			store: { execute },

@@ -55,5 +55,6 @@ export type ActiveListMeta = {
 	currentMemberName: string;
 	errorMessage: string | null;
 	isRefreshing: boolean;
+	readOnly: boolean;
 	syncState: ActiveListSyncState;
 };

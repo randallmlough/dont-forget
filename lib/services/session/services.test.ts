@@ -241,15 +241,20 @@ async function createSeededServicesHarness() {
 
 function storeFixture(
 	overrides: {
-		execute?: (statement: HouseholdSqlStatement) => Promise<{
-			rows: Record<string, unknown>[];
-		}>;
+		execute?: (statement: HouseholdSqlStatement) => Promise<HouseholdSqlResult>;
 		syncAuthorized?: boolean;
 	} = {},
 ) {
 	return {
 		syncAuthorized: overrides.syncAuthorized ?? true,
-		execute: jest.fn(overrides.execute ?? (async () => ({ rows: [] }))),
+		execute: jest.fn(
+			overrides.execute ??
+				(async () => ({
+					rows: [],
+					rowsAffected: 0,
+					lastInsertRowId: null,
+				})),
+		),
 		pull: jest.fn(async () => ({ changed: false })),
 		push: jest.fn(async () => undefined),
 		sync: jest.fn(async () => ({ changed: false })),

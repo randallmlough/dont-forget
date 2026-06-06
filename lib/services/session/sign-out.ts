@@ -1,5 +1,6 @@
 import { reset, track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
+import { currentListSelectionStore } from "@/lib/local-storage/current-list-selection";
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
 import type { ServiceResetAnalytics } from "@/lib/services/analytics";
@@ -31,6 +32,7 @@ export type AuthenticatedAppSessionSignOutDeps = {
 	getAuth: () => AuthenticatedAppSessionSignOutAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearSignedOutSessionData?: typeof defaultClearSignedOutSessionData;
+	clearCurrentListSelectionsForUser?: (userId: string) => Promise<void>;
 	logger?: Logger;
 	runningState?: AuthenticatedAppSessionSignOutRunningState;
 };
@@ -45,6 +47,7 @@ export function createAuthenticatedAppSessionSignOut({
 	getAuth,
 	analytics = defaultAnalytics,
 	clearSignedOutSessionData = defaultClearSignedOutSessionData,
+	clearCurrentListSelectionsForUser = currentListSelectionStore.clearSignedOutSelectionsForUser,
 	logger = defaultLogger,
 	runningState,
 }: AuthenticatedAppSessionSignOutDeps): AuthenticatedAppSessionSignOut {
@@ -57,6 +60,7 @@ export function createAuthenticatedAppSessionSignOut({
 
 		analytics.track("user_signed_out", {});
 		analytics.reset();
+		const signedOutUserId = userIdFromSnapshot(controller.getSnapshot());
 
 		let disposal: AuthenticatedAppSessionDisposal = {
 			householdIdsForLocalDataDeletion: [],
@@ -72,13 +76,22 @@ export function createAuthenticatedAppSessionSignOut({
 				});
 			});
 
-		try {
-			await clearSignedOutSessionData(
-				disposal.householdIdsForLocalDataDeletion,
+		let cleanupError: unknown = null;
+		await clearSignedOutSessionData(
+			disposal.householdIdsForLocalDataDeletion,
+		).catch((error) => {
+			cleanupError = error;
+		});
+		if (signedOutUserId) {
+			await clearCurrentListSelectionsForUser(signedOutUserId).catch(
+				(error) => {
+					cleanupError ??= error;
+				},
 			);
-		} catch (error) {
+		}
+		if (cleanupError) {
 			logger.error("authenticated app session sign-out local cleanup failed", {
-				error: asError(error),
+				error: asError(cleanupError),
 			});
 		}
 
@@ -109,4 +122,18 @@ export function createAuthenticatedAppSessionSignOut({
 		isRunning: () => state.running,
 		run,
 	};
+}
+
+function userIdFromSnapshot(
+	snapshot: ReturnType<AuthenticatedAppSessionController["getSnapshot"]>,
+): string | null {
+	switch (snapshot.status) {
+		case "ready":
+			return snapshot.session.user.id;
+		case "loading":
+		case "error":
+			return snapshot.previous?.user.id ?? null;
+		default:
+			return null;
+	}
 }

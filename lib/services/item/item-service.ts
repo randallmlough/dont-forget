@@ -99,6 +99,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
               i.created_at,
               i.updated_at
             FROM items i
+            INNER JOIN lists l ON l.id = i.list_id AND l.deleted_at IS NULL
             LEFT JOIN item_checks c ON c.rowid = (
               SELECT c2.rowid
               FROM item_checks c2

@@ -73,6 +73,43 @@ jest.mock("expo-apple-authentication", () => {
 	};
 });
 
+jest.mock("@expo/ui/swift-ui", () => {
+	const React = jest.requireActual<typeof import("react")>("react");
+	const { View } =
+		jest.requireActual<typeof import("react-native")>("react-native");
+
+	return {
+		BottomSheet: ({
+			children,
+			isPresented,
+		}: {
+			children: React.ReactNode;
+			isPresented: boolean;
+		}) => (isPresented ? React.createElement(View, null, children) : null),
+		Group: ({ children }: { children: React.ReactNode }) =>
+			React.createElement(View, null, children),
+		Host: ({ children }: { children: React.ReactNode }) =>
+			React.createElement(View, null, children),
+		RNHostView: ({ children }: { children: React.ReactNode }) =>
+			React.createElement(View, null, children),
+	};
+});
+
+jest.mock("@expo/ui/swift-ui/modifiers", () => ({
+	interactiveDismissDisabled: jest.fn((isDisabled = true) => ({
+		type: "interactiveDismissDisabled",
+		isDisabled,
+	})),
+	presentationDetents: jest.fn((detents) => ({
+		type: "presentationDetents",
+		detents,
+	})),
+	presentationDragIndicator: jest.fn((visibility) => ({
+		type: "presentationDragIndicator",
+		visibility,
+	})),
+}));
+
 jest.mock("expo-crypto", () => ({
 	randomUUID: jest.fn(() => "test-nonce"),
 }));
