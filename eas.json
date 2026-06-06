@@ -27,7 +27,25 @@
     }
   },
   "submit": {
-    "staging": {},
-    "production": {}
+    "staging": {
+      "ios": {
+        "ascAppId": "6777340620",
+        "appleTeamId": "D64V4GPNLJ",
+        "bundleIdentifier": "com.dont-forget.app.staging",
+        "sku": "com.dont-forget.app.staging",
+        "appName": "Don't Forget Staging",
+        "language": "en-US"
+      }
+    },
+    "production": {
+      "ios": {
+        "ascAppId": "6777340566",
+        "appleTeamId": "D64V4GPNLJ",
+        "bundleIdentifier": "com.dont-forget.app",
+        "sku": "com.dont-forget.app",
+        "appName": "Don't Forget",
+        "language": "en-US"
+      }
+    }
   }
 }
