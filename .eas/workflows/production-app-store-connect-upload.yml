@@ -1,4 +1,4 @@
-name: Production TestFlight
+name: Production App Store Connect Upload
 
 on:
   workflow_dispatch: {}
@@ -32,7 +32,7 @@ jobs:
     params:
       platform: ios
       profile: production
-      message: Production TestFlight
+      message: Production App Store Connect upload
 
   submit_ios:
     name: Submit production iOS

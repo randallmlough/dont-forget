@@ -1,4 +1,4 @@
-name: Staging TestFlight
+name: Staging App Store Connect Upload
 
 on:
   workflow_dispatch: {}
@@ -27,7 +27,7 @@ jobs:
     params:
       platform: ios
       profile: staging
-      message: Staging TestFlight
+      message: Staging App Store Connect upload
 
   submit_ios:
     name: Submit staging iOS
