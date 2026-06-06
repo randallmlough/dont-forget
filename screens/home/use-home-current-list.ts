@@ -4,12 +4,58 @@ import type {
 	ActiveListItem,
 	AddActiveListItemInput,
 } from "@/components/active-list";
-import type { Item } from "@/lib/services/item";
+import type {
+	ArchiveListResult,
+	CreateListResult,
+	DeleteListResult,
+	ListListsInput,
+	ListSummary,
+	RenameListResult,
+	UnarchiveListResult,
+} from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { createHomeCurrentListController } from "./home-current-list-controller";
+import { resolveAndLoadCurrentList } from "./home-current-list-lifecycle";
+import { useHomeCurrentListOperations } from "./use-home-current-list-operations";
+
+export type HomeCreateListResult =
+	| { status: "created" }
+	| Extract<CreateListResult, { status: "invalid" }>
+	| { status: "failed" };
+
+export type HomeRenameListResult =
+	| { status: "renamed" }
+	| { status: "unchanged" }
+	| Extract<RenameListResult, { status: "invalid" | "missing" | "deleted" }>
+	| { status: "failed" };
+
+export type HomeArchiveListResult =
+	| { status: "archived" }
+	| { status: "unchanged" }
+	| Extract<ArchiveListResult, { status: "missing" | "deleted" }>
+	| { status: "failed" };
+
+export type HomeUnarchiveListResult =
+	| { status: "unarchived" }
+	| { status: "unchanged" }
+	| Extract<UnarchiveListResult, { status: "missing" | "deleted" }>
+	| { status: "failed" };
+
+export type HomeDeleteListResult =
+	| { status: "deleted" }
+	| Extract<DeleteListResult, { status: "already-deleted" | "missing" }>
+	| { status: "failed" };
 
 export type HomeCurrentListActions = {
+	archiveList: (listId: string) => Promise<HomeArchiveListResult>;
+	createList: (name: string) => Promise<HomeCreateListResult>;
+	deleteList: (listId: string) => Promise<HomeDeleteListResult>;
+	renameList: (listId: string, name: string) => Promise<HomeRenameListResult>;
+	unarchiveList: (listId: string) => Promise<HomeUnarchiveListResult>;
 	loadList: () => Promise<ActiveListInitialState>;
+	loadListSummaries: (input: ListListsInput) => Promise<ListSummary[]>;
 	addItem: (input: AddActiveListItemInput) => Promise<ActiveListItem>;
+	selectList: (listId: string) => Promise<boolean>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -17,63 +63,97 @@ export type HomeCurrentListState =
 	| { status: "loading" }
 	| { status: "error"; message: string }
 	| {
+			status: "zero-active";
+			hasArchivedLists: boolean;
+			isCreating: boolean;
+			actions: Pick<HomeCurrentListActions, "createList" | "unarchiveList">;
+	  }
+	| {
+			status: "deleted-current";
+			activeLists: ListSummary[];
+			hasArchivedLists: boolean;
+			isCreating: boolean;
+			isSwitching: boolean;
+			actions: Pick<
+				HomeCurrentListActions,
+				| "createList"
+				| "deleteList"
+				| "loadListSummaries"
+				| "selectList"
+				| "unarchiveList"
+			>;
+	  }
+	| {
 			status: "ready";
+			activeLists: ListSummary[];
+			currentList: ListSummary;
+			hasArchivedLists: boolean;
 			initialList: ActiveListInitialState;
+			isCreating: boolean;
+			isRenaming: boolean;
+			isSwitching: boolean;
 			actions: HomeCurrentListActions;
 	  };
 
-export function useHomeCurrentList(
-	session: AuthenticatedAppSession,
-	listId: string,
-): {
+export function useHomeCurrentList(session: AuthenticatedAppSession): {
 	state: HomeCurrentListState;
 	retry: () => void;
 } {
-	const loadKey = `${session.resourceKey}:${listId}`;
+	const loadKey = session.resourceKey;
 	const [resource, dispatch] = useReducer(
 		homeCurrentListReducer,
 		loadKey,
 		initialHomeCurrentListResource,
 	);
+	const operations = useHomeCurrentListOperations();
 	const loadAttempt = resource.loadKey === loadKey ? resource.attempt : 0;
-
-	async function loadList(): Promise<ActiveListInitialState> {
-		return loadCurrentList(session, listId);
-	}
-
-	async function addItem(
-		input: AddActiveListItemInput,
-	): Promise<ActiveListItem> {
-		const item = await session.services.items.addItem({
-			listId,
-			userId: session.activeMember.userId,
-			name: input.name,
-			quantity: input.quantity,
-			notes: input.notes,
-		});
-		return activeListItemFromItem(item, memberNamesFromSession(session));
-	}
-
-	async function setItemChecked(itemId: string, checked: boolean) {
-		await session.services.items.setItemChecked({
-			listId,
-			itemId,
-			userId: session.activeMember.userId,
-			checked,
-		});
-	}
+	const actions = createHomeCurrentListController({
+		session,
+		resource,
+		loadKey,
+		loadAttempt,
+		operations,
+		dispatch,
+	});
 
 	useEffect(() => {
+		operations.markMounted();
 		let cancelled = false;
 
-		loadCurrentList(session, listId)
-			.then((initialList) => {
+		resolveAndLoadCurrentList(session)
+			.then((resolved) => {
 				if (!cancelled) {
+					if (resolved.status === "zero-active") {
+						dispatch({
+							type: "zeroActive",
+							loadKey,
+							attempt: loadAttempt,
+							hasArchivedLists: resolved.hasArchivedLists,
+						});
+						return;
+					}
+					if (resolved.status === "deleted-current") {
+						dispatch({
+							type: "deletedCurrent",
+							loadKey,
+							attempt: loadAttempt,
+							activeLists: resolved.activeLists,
+							hasArchivedLists: resolved.hasArchivedLists,
+						});
+						return;
+					}
+
 					dispatch({
-						type: "listLoaded",
+						type: "listReady",
 						loadKey,
 						attempt: loadAttempt,
-						initialList,
+						activeLists: resolved.activeLists,
+						currentList: resolved.currentList,
+						hasArchivedLists: resolved.hasArchivedLists,
+						initialList: resolved.initialList,
+						isCreating: false,
+						isRenaming: false,
+						isSwitching: false,
 					});
 				}
 			})

@@ -39,8 +39,11 @@ describe("createSessionDataServices", () => {
 					listId: harness.scenario.ids.groceriesListId,
 				}),
 			).resolves.toMatchObject({
-				id: harness.scenario.ids.groceriesListId,
-				name: "Groceries",
+				status: "available",
+				list: {
+					id: harness.scenario.ids.groceriesListId,
+					name: "Groceries",
+				},
 			});
 			await expect(
 				harness.services.items.listItems({
