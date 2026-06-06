@@ -1,0 +1,59 @@
+{
+	"cli": {
+		"version": ">= 20.1.0",
+		"appVersionSource": "remote"
+	},
+	"build": {
+		"development": {
+			"developmentClient": true,
+			"distribution": "internal",
+			"environment": "development",
+			"env": {
+				"APP_ENV": "local"
+			}
+		},
+		"preview": {
+			"distribution": "internal",
+			"environment": "preview",
+			"env": {
+				"APP_ENV": "staging"
+			}
+		},
+		"staging": {
+			"extends": "production",
+			"environment": "preview",
+			"env": {
+				"APP_ENV": "staging"
+			}
+		},
+		"production": {
+			"autoIncrement": true,
+			"environment": "production",
+			"env": {
+				"APP_ENV": "production"
+			}
+		}
+	},
+	"submit": {
+		"staging": {
+			"ios": {
+				"ascAppId": "6777340620",
+				"appleTeamId": "D64V4GPNLJ",
+				"bundleIdentifier": "com.dont-forget.app.staging",
+				"sku": "com.dont-forget.app.staging",
+				"appName": "Don't Forget Staging",
+				"language": "en-US"
+			}
+		},
+		"production": {
+			"ios": {
+				"ascAppId": "6777340566",
+				"appleTeamId": "D64V4GPNLJ",
+				"bundleIdentifier": "com.dont-forget.app",
+				"sku": "com.dont-forget.app",
+				"appName": "Don't Forget",
+				"language": "en-US"
+			}
+		}
+	}
+}
