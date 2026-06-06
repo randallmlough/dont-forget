@@ -288,13 +288,77 @@ function homeCurrentListReducer(
 		return state;
 	}
 
-	if (action.type === "listLoaded") {
+	if (action.type === "switchStarted" || action.type === "switchFinished") {
+		if (state.status !== "ready" && state.status !== "deleted-current") {
+			return state;
+		}
+		return {
+			...state,
+			isSwitching: action.type === "switchStarted",
+		};
+	}
+
+	if (action.type === "createStarted" || action.type === "createFinished") {
+		if (
+			state.status !== "ready" &&
+			state.status !== "zero-active" &&
+			state.status !== "deleted-current"
+		) {
+			return state;
+		}
+		return {
+			...state,
+			isCreating: action.type === "createStarted",
+		};
+	}
+
+	if (action.type === "renameStarted" || action.type === "renameFinished") {
+		if (state.status !== "ready") return state;
+		return {
+			...state,
+			isRenaming: action.type === "renameStarted",
+		};
+	}
+
+	if (action.type === "zeroActive") {
+		return {
+			status: "zero-active",
+			loadKey: action.loadKey,
+			attempt: action.attempt,
+			hasArchivedLists: action.hasArchivedLists,
+			isCreating: false,
+		};
+	}
+
+	if (action.type === "deletedCurrent") {
+		return {
+			status: "deleted-current",
+			loadKey: action.loadKey,
+			attempt: action.attempt,
+			activeLists: action.activeLists,
+			hasArchivedLists: action.hasArchivedLists,
+			isCreating: false,
+			isSwitching: false,
+		};
+	}
+
+	if (action.type === "listReady") {
 		return {
 			status: "ready",
 			loadKey: action.loadKey,
 			attempt: action.attempt,
+			activeLists: action.activeLists,
+			currentList: action.currentList,
+			hasArchivedLists: action.hasArchivedLists,
 			initialList: action.initialList,
+			isCreating: action.isCreating,
+			isRenaming: action.isRenaming,
+			isSwitching: action.isSwitching,
 		};
+	}
+
+	if (action.type !== "listLoadFailed") {
+		return state;
 	}
 
 	return {
