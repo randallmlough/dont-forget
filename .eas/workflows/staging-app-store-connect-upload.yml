@@ -34,6 +34,8 @@ jobs:
     needs: [build_ios]
     type: submit
     environment: preview
+    env:
+      APP_ENV: staging
     params:
       build_id: ${{ needs.build_ios.outputs.build_id }}
       profile: staging
