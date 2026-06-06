@@ -131,17 +131,20 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 			const notes = nullableTrimmed(input.notes);
 
 			try {
-				const schema = await readItemsSchema(deps.store);
-				if (!schema.hasQuantity && quantity !== null) {
+				const [itemsSchema, listsSchema] = await Promise.all([
+					readItemsSchema(deps.store),
+					readListsSchema(deps.store),
+				]);
+				if (!itemsSchema.hasQuantity && quantity !== null) {
 					throw new Error(
 						"Item quantity cannot be saved until the Household schema is updated",
 					);
 				}
 				const now = nextItemServiceTimestamp();
 				const id = createAppId("itm", randomUuid);
-				await deps.store.execute({
+				const insertResult = await deps.store.execute({
 					kind: "write",
-					sql: addItemSql(schema),
+					sql: addItemSql(itemsSchema, listsSchema),
 					args: addItemArgs({
 						id,
 						listId: input.listId,
@@ -150,9 +153,12 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 						notes,
 						userId: input.userId,
 						now,
-						schema,
+						schema: itemsSchema,
 					}),
 				});
+				if (insertResult.rowsAffected === 0) {
+					throw new Error("List is not writable");
+				}
 				const position = await insertedItemPosition(deps.store, id);
 
 				const item = {
@@ -160,7 +166,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 					householdId: deps.householdId,
 					listId: input.listId,
 					name,
-					quantity: schema.hasQuantity ? quantity : null,
+					quantity: itemsSchema.hasQuantity ? quantity : null,
 					notes,
 					checked: false,
 					checkedByUserId: null,
@@ -187,32 +193,23 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		},
 		async setItemChecked(input) {
 			try {
+				const listsSchema = await readListsSchema(deps.store);
 				const now = nextItemServiceTimestamp();
-				const itemResult = await deps.store.execute({
-					kind: "read",
-					sql: `
-            SELECT id
-            FROM items
-            WHERE id = ? AND list_id = ? AND deleted_at IS NULL
-            LIMIT 1
-          `,
-					args: [input.itemId, input.listId],
+				const writeResult = await deps.store.execute({
+					kind: "write",
+					sql: setItemCheckedSql(listsSchema),
+					args: [
+						input.userId,
+						input.checked ? now : null,
+						now,
+						input.itemId,
+						input.listId,
+					],
 				});
-				if (!itemResult.rows[0]) {
+				if (writeResult.rowsAffected === 0) {
+					await ensureListWritable(deps.store, input.listId, listsSchema);
 					throw new Error("Item not found in List");
 				}
-
-				await deps.store.execute({
-					kind: "write",
-					sql: `
-            INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(item_id, user_id) DO UPDATE SET
-              checked_at = excluded.checked_at,
-              updated_at = excluded.updated_at
-					`,
-					args: [input.itemId, input.userId, input.checked ? now : null, now],
-				});
 				analytics.track("item_checked_state_changed", {
 					household_id: deps.householdId,
 					list_id: input.listId,
@@ -270,6 +267,10 @@ type ItemsSchema = {
 	hasQuantity: boolean;
 };
 
+type ListsSchema = {
+	hasArchivedAt: boolean;
+};
+
 async function readItemsSchema(
 	store: HouseholdStoreExecutor,
 ): Promise<ItemsSchema> {
@@ -279,6 +280,40 @@ async function readItemsSchema(
 	});
 	const columns = new Set(result.rows.map((row) => String(row.name)));
 	return { hasQuantity: columns.has("quantity") };
+}
+
+async function readListsSchema(
+	store: HouseholdStoreExecutor,
+): Promise<ListsSchema> {
+	const result = await store.execute({
+		kind: "read",
+		sql: "PRAGMA table_info(lists)",
+	});
+	const columns = new Set(result.rows.map((row) => String(row.name)));
+	return { hasArchivedAt: columns.has("archived_at") };
+}
+
+async function ensureListWritable(
+	store: HouseholdStoreExecutor,
+	listId: string,
+	schema: ListsSchema,
+) {
+	const archivedPredicate = schema.hasArchivedAt
+		? "AND archived_at IS NULL"
+		: "";
+	const result = await store.execute({
+		kind: "read",
+		sql: `
+			SELECT id
+			FROM lists
+			WHERE id = ? AND deleted_at IS NULL ${archivedPredicate}
+			LIMIT 1
+		`,
+		args: [listId],
+	});
+	if (!result.rows[0]) {
+		throw new Error("List is not writable");
+	}
 }
 
 type AddItemSqlInput = {
@@ -292,8 +327,14 @@ type AddItemSqlInput = {
 	schema: ItemsSchema;
 };
 
-function addItemSql(schema: ItemsSchema): string {
-	return schema.hasQuantity
+function addItemSql(
+	itemsSchema: ItemsSchema,
+	listsSchema: ListsSchema,
+): string {
+	const archivedPredicate = listsSchema.hasArchivedAt
+		? "AND l.archived_at IS NULL"
+		: "";
+	return itemsSchema.hasQuantity
 		? `
         INSERT INTO items (
           id,
@@ -312,12 +353,14 @@ function addItemSql(schema: ItemsSchema): string {
           ?,
           ?,
           ?,
-          COALESCE(MAX(position), -1) + 1,
+          COALESCE(MAX(i.position), -1) + 1,
           ?,
           ?,
           ?
-        FROM items
-        WHERE list_id = ? AND deleted_at IS NULL
+        FROM lists l
+        LEFT JOIN items i ON i.list_id = l.id AND i.deleted_at IS NULL
+        WHERE l.id = ? AND l.deleted_at IS NULL ${archivedPredicate}
+        GROUP BY l.id
       `
 		: `
         INSERT INTO items (
@@ -335,13 +378,36 @@ function addItemSql(schema: ItemsSchema): string {
           ?,
           ?,
           ?,
-          COALESCE(MAX(position), -1) + 1,
+          COALESCE(MAX(i.position), -1) + 1,
           ?,
           ?,
           ?
-        FROM items
-        WHERE list_id = ? AND deleted_at IS NULL
+        FROM lists l
+        LEFT JOIN items i ON i.list_id = l.id AND i.deleted_at IS NULL
+        WHERE l.id = ? AND l.deleted_at IS NULL ${archivedPredicate}
+        GROUP BY l.id
       `;
+}
+
+function setItemCheckedSql(schema: ListsSchema): string {
+	const archivedPredicate = schema.hasArchivedAt
+		? "AND l.archived_at IS NULL"
+		: "";
+	return `
+		INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
+		SELECT i.id, ?, ?, ?
+		FROM items i
+		JOIN lists l ON l.id = i.list_id
+		WHERE
+			i.id = ?
+			AND i.list_id = ?
+			AND i.deleted_at IS NULL
+			AND l.deleted_at IS NULL
+			${archivedPredicate}
+		ON CONFLICT(item_id, user_id) DO UPDATE SET
+			checked_at = excluded.checked_at,
+			updated_at = excluded.updated_at
+	`;
 }
 
 function addItemArgs(input: AddItemSqlInput) {

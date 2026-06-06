@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -12,8 +13,9 @@ import {
 	emptyActiveListState,
 	populatedActiveListState,
 } from "@/components/active-list/test-support";
+import { currentListSelectionStore } from "@/lib/local-storage/current-list-selection";
 import type { Item, ItemService } from "@/lib/services/item";
-import type { ListService } from "@/lib/services/list";
+import type { ListService, ListSummary } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeScreenView } from "@/screens/home/home-screen";
 
@@ -52,6 +54,113 @@ export const WithItems: Story = {
 	},
 };
 
+export const ZeroActive: Story = {
+	args: {
+		state: { status: "ready", refreshing: false },
+		session: readySession(emptyActiveListState, {
+			activeLists: [],
+			archivedLists: [],
+		}),
+		onSignOut: noop,
+	},
+};
+
+export const ZeroActiveWithArchivedLists: Story = {
+	args: {
+		state: { status: "ready", refreshing: false },
+		session: readySession(emptyActiveListState, {
+			activeLists: [],
+			archivedLists: [
+				storyListSummary({
+					id: "lst_archived",
+					name: "Archived Camping",
+					archived: true,
+					archivedAt: 1_700_000_000_000,
+				}),
+			],
+		}),
+		onSignOut: noop,
+	},
+};
+
+export const ArchivedCurrentList: Story = {
+	args: {
+		state: { status: "ready", refreshing: false },
+		session: null,
+		onSignOut: noop,
+	},
+	render: () => {
+		const session = readySession(
+			{
+				...populatedActiveListState,
+				listName: "Archived Camping",
+			},
+			{
+				activeLists: [],
+				archivedLists: [
+					storyListSummary({
+						id: "lst_archived",
+						name: "Archived Camping",
+						archived: true,
+						archivedAt: 1_700_000_000_000,
+					}),
+				],
+			},
+		);
+		return (
+			<SelectionSeededHomeStory
+				selectedListId="lst_archived"
+				session={session}
+			/>
+		);
+	},
+};
+
+export const DeletedCurrentList: Story = {
+	args: {
+		state: { status: "ready", refreshing: false },
+		session: null,
+		onSignOut: noop,
+	},
+	render: () => {
+		const session = readySession(emptyActiveListState, {
+			activeLists: [storyListSummary({ id: "lst_weekend", name: "Weekend" })],
+			deletedListIds: ["lst_deleted"],
+		});
+		return (
+			<SelectionSeededHomeStory
+				selectedListId="lst_deleted"
+				session={session}
+			/>
+		);
+	},
+};
+
+export const DuplicateListNames: Story = {
+	args: {
+		state: { status: "ready", refreshing: false },
+		session: readySession(populatedActiveListState, {
+			activeLists: [
+				storyListSummary({ id: "lst_groceries", name: "Costco" }),
+				storyListSummary({ id: "lst_costco_duplicate", name: "Costco" }),
+			],
+		}),
+		onSignOut: noop,
+	},
+};
+
+export const LongCurrentListName: Story = {
+	args: {
+		state: { status: "ready", refreshing: false },
+		session: readySession({
+			...populatedActiveListState,
+			listName:
+				"Saturday warehouse run for the whole Household with backup pantry staples and birthday supplies",
+		}),
+		onSignOut: noop,
+	},
+};
+
 export const Loading: Story = {
 	args: {
 		state: { status: "loading" },
@@ -74,8 +183,15 @@ export const AuthenticatedAppSessionError: Story = {
 
 function noop() {}
 
+type ReadySessionOptions = {
+	activeLists?: ListSummary[];
+	archivedLists?: ListSummary[];
+	deletedListIds?: string[];
+};
+
 function readySession(
 	initialList: ActiveListInitialState,
+	options: ReadySessionOptions = {},
 ): AuthenticatedAppSession {
 	return {
 		user: {

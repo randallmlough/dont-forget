@@ -100,23 +100,84 @@ export function useHomeCurrentList(
 	};
 }
 
-type HomeCurrentListResource =
+export type HomeCurrentListResource =
 	| { status: "loading"; loadKey: string; attempt: number }
 	| { status: "error"; loadKey: string; attempt: number; message: string }
+	| {
+			status: "zero-active";
+			loadKey: string;
+			attempt: number;
+			hasArchivedLists: boolean;
+			isCreating: boolean;
+	  }
+	| {
+			status: "deleted-current";
+			loadKey: string;
+			attempt: number;
+			activeLists: ListSummary[];
+			hasArchivedLists: boolean;
+			isCreating: boolean;
+			isSwitching: boolean;
+	  }
 	| {
 			status: "ready";
 			loadKey: string;
 			attempt: number;
+			activeLists: ListSummary[];
+			currentList: ListSummary;
+			hasArchivedLists: boolean;
 			initialList: ActiveListInitialState;
+			isCreating: boolean;
+			isRenaming: boolean;
+			isSwitching: boolean;
 	  };
 
-type HomeCurrentListResourceAction =
+export type HomeCurrentListResourceAction =
 	| { type: "retryRequested"; loadKey: string }
 	| {
-			type: "listLoaded";
+			type: "listReady";
 			loadKey: string;
 			attempt: number;
+			activeLists: ListSummary[];
+			currentList: ListSummary;
+			hasArchivedLists: boolean;
 			initialList: ActiveListInitialState;
+			isCreating: boolean;
+			isRenaming: boolean;
+			isSwitching: boolean;
+	  }
+	| {
+			type: "deletedCurrent";
+			loadKey: string;
+			attempt: number;
+			activeLists: ListSummary[];
+			hasArchivedLists: boolean;
+	  }
+	| {
+			type: "createStarted" | "createFinished";
+			loadKey: string;
+			attempt: number;
+	  }
+	| {
+			type: "renameStarted" | "renameFinished";
+			loadKey: string;
+			attempt: number;
+	  }
+	| {
+			type: "switchStarted";
+			loadKey: string;
+			attempt: number;
+	  }
+	| {
+			type: "switchFinished";
+			loadKey: string;
+			attempt: number;
+	  }
+	| {
+			type: "zeroActive";
+			loadKey: string;
+			attempt: number;
+			hasArchivedLists: boolean;
 	  }
 	| {
 			type: "listLoadFailed";

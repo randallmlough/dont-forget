@@ -213,11 +213,16 @@ function ActiveListProviderContent({
 
 	const value = {
 		state: model.list,
-		actions: { addItem, refresh, toggleItem },
+		actions: {
+			addItem,
+			refresh,
+			toggleItem,
+		},
 		meta: {
 			currentMemberName,
 			errorMessage: model.errorMessage,
 			isRefreshing: model.isRefreshing,
+			readOnly,
 			syncState,
 		},
 	};

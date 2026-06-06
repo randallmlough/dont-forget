@@ -1,8 +1,11 @@
 import { eq } from "drizzle-orm";
 import { seedPrimaryHouseholdScenario } from "@/db/fixtures";
-import { itemChecks, items } from "@/db/schema/household";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
-import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import type {
+	HouseholdSqlResult,
+	HouseholdSqlStatement,
+} from "@/lib/services/household/household-store";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 import { createSessionDataServices } from "./services";
@@ -109,6 +112,37 @@ describe("createSessionDataServices", () => {
 		}
 	});
 
+	it("binds List creation to the authenticated app-owned User ID", async () => {
+		const harness = await createSeededServicesHarness();
+		const callerInputWithOverride: {
+			name: string;
+			createdByUserId: string;
+		} = {
+			name: "Costco",
+			createdByUserId: "usr_mallory",
+		};
+
+		try {
+			const result = await harness.services.lists.createList(
+				callerInputWithOverride,
+			);
+
+			if (result.status !== "created") {
+				throw new Error("Expected List creation to succeed");
+			}
+			expect(result.list.createdByUserId).toBe(harness.scenario.users.avery.id);
+			await expect(
+				harness.household.db.query.lists.findFirst({
+					where: eq(lists.id, result.list.id),
+				}),
+			).resolves.toMatchObject({
+				createdByUserId: harness.scenario.users.avery.id,
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
 	it("creates services only after the HouseholdStore opens", async () => {
 		const store = storeFixture();
 		const openedStore = deferred<ReturnType<typeof storeFixture>>();
@@ -116,6 +150,7 @@ describe("createSessionDataServices", () => {
 		const servicesPromise = createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
@@ -145,6 +180,7 @@ describe("createSessionDataServices", () => {
 		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
@@ -161,6 +197,7 @@ describe("createSessionDataServices", () => {
 		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
@@ -182,6 +219,7 @@ describe("createSessionDataServices", () => {
 		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
@@ -196,6 +234,7 @@ describe("createSessionDataServices", () => {
 		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example" },
 				logger,
 			},
@@ -221,6 +260,7 @@ async function createSeededServicesHarness() {
 	const services = await createSessionDataServices(
 		{
 			householdId: scenario.household.id,
+			userId: scenario.users.avery.id,
 			database: { url: "libsql://example", authToken: "secret" },
 			logger,
 		},

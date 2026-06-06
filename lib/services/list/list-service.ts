@@ -19,28 +19,124 @@ export type List = {
 	createdByUserId: string;
 	createdAt: number;
 	updatedAt: number;
+	archived: boolean;
+	archivedAt: number | null;
 };
 
 export type GetListInput = {
 	listId: string;
 };
 
+export type GetListResult =
+	| { status: "available"; list: List }
+	| { status: "missing"; listId: string }
+	| { status: "deleted"; listId: string; deletedAt: number; updatedAt: number };
+
+export type ListSummary = List & {
+	archived: boolean;
+	archivedAt: number | null;
+	lastActivityAt: number;
+	uncheckedItemCount: number;
+	checkedItemCount: number;
+};
+
+export type ListArchiveStatus = "active" | "archived" | "all";
+
+export type ListSortMode = "recentActivity" | "name" | "createdAt";
+
+export type ListListsInput = {
+	archive?: ListArchiveStatus;
+	searchText?: string;
+	createdByUserId?: string;
+	sort?: ListSortMode;
+};
+
+export const LIST_NAME_MAX_LENGTH = 80;
+
+export type CreateListInput = {
+	name: string;
+};
+
+export type ListNameValidationError =
+	| { code: "empty-name"; name: string }
+	| {
+			code: "name-too-long";
+			name: string;
+			maxLength: typeof LIST_NAME_MAX_LENGTH;
+	  };
+
+export type CreateListValidationError = ListNameValidationError;
+
+export type CreateListResult =
+	| { status: "created"; list: List }
+	| { status: "invalid"; error: CreateListValidationError };
+
+export type RenameListInput = {
+	listId: string;
+	name: string;
+};
+
+export type RenameListValidationError = ListNameValidationError;
+
+export type RenameListResult =
+	| { status: "renamed"; list: List }
+	| { status: "unchanged"; list: List }
+	| { status: "invalid"; error: RenameListValidationError }
+	| { status: "missing"; listId: string }
+	| { status: "deleted"; listId: string; deletedAt: number; updatedAt: number };
+
+export type ArchiveListInput = {
+	listId: string;
+};
+
+export type ArchiveListResult =
+	| { status: "archived"; list: List }
+	| { status: "unchanged"; list: List }
+	| { status: "missing"; listId: string }
+	| { status: "deleted"; listId: string; deletedAt: number; updatedAt: number };
+
+export type UnarchiveListInput = {
+	listId: string;
+};
+
+export type UnarchiveListResult =
+	| { status: "unarchived"; list: List }
+	| { status: "unchanged"; list: List }
+	| { status: "missing"; listId: string }
+	| { status: "deleted"; listId: string; deletedAt: number; updatedAt: number };
+
+export type DeleteListInput = {
+	listId: string;
+};
+
+export type DeleteListResult =
+	| { status: "deleted"; listId: string; deletedAt: number; updatedAt: number }
+	| {
+			status: "already-deleted";
+			listId: string;
+			deletedAt: number;
+			updatedAt: number;
+	  }
+	| { status: "missing"; listId: string };
+
 export type ListService = {
-	getList(input: GetListInput): Promise<List>;
+	createList(input: CreateListInput): Promise<CreateListResult>;
+	getList(input: GetListInput): Promise<GetListResult>;
+	listLists(input?: ListListsInput): Promise<ListSummary[]>;
+	listActiveLists(): Promise<ListSummary[]>;
+	renameList(input: RenameListInput): Promise<RenameListResult>;
+	archiveList(input: ArchiveListInput): Promise<ArchiveListResult>;
+	unarchiveList(input: UnarchiveListInput): Promise<UnarchiveListResult>;
+	deleteList(input: DeleteListInput): Promise<DeleteListResult>;
 };
 
 export type ListServiceDeps = {
 	householdId: string;
+	authenticatedUserId: string;
 	store: HouseholdStoreExecutor;
 	logger?: Logger;
+	analytics?: ServiceAnalytics;
 };
-
-export class ListNotFoundError extends Error {
-	constructor(listId: string) {
-		super(`List not found: ${listId}`);
-		this.name = "ListNotFoundError";
-	}
-}
 
 const listRowSchema = z.object({
 	id: z.string(),
@@ -48,6 +144,17 @@ const listRowSchema = z.object({
 	created_by_user_id: z.string(),
 	created_at: sqlNumberSchema,
 	updated_at: sqlNumberSchema,
+	archived_at: sqlNumberSchema.nullable(),
+});
+
+const listLifecycleRowSchema = listRowSchema.extend({
+	deleted_at: sqlNumberSchema.nullable(),
+});
+
+const listSummaryRowSchema = listLifecycleRowSchema.extend({
+	last_activity_at: sqlNumberSchema,
+	item_count: sqlNumberSchema,
+	checked_item_count: sqlNumberSchema,
 });
 
 export function createListService(deps: ListServiceDeps): ListService {
