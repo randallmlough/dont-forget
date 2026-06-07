@@ -8,10 +8,11 @@ docs/.local/features/<feature-name>/state.json
 
 Required top-level keys:
 
-- `schemaVersion`: currently `2`.
-- `feature`: feature metadata, source docs, implementation notes path, progress, review, and verification.
+- `schemaVersion`: currently `3`.
+- `feature`: feature metadata, source docs, markdown ledger/report paths, progress, review, and verification.
 - `orchestration`: allowed statuses, legal transitions, update rules, task completion gate, and feature completion gate.
-- `parallelization`: ordered waves of task IDs.
+- `sequencing`: ordered task IDs with `mode: "sequential"`.
+- `processEvents`: feature-level orchestration events.
 - `tasks`: task ledger entries.
 
 Source document rules:
@@ -26,20 +27,24 @@ Each task must include:
 - `type`
 - `status`
 - `order`
-- `parallelGroup`
-- `canBeParallelized`
 - `dependencies`
 - `blocks`
 - `touches`
 - `conflictAreas`
 - `recommendedReviewAgents`
+- `paths.state`
 - `paths.task`
 - `paths.qa`
 - `paths.plan`
-- `paths.implementationNotes`
+- `paths.workerNotes`
+- `paths.reviewNotes`
+- `paths.verificationNotes`
+- `paths.report`
 - `progress`
 - `review`
 - `verification`
+- `agentLifecycle`
+- `processEvents`
 - `completionEvidence`
 
 Each `completionEvidence` item must include:
@@ -80,9 +85,27 @@ Gate coverage rule:
 
 When a task is `complete`, it must include one `completionEvidence` item for every `orchestration.taskCompletionGate[].id`. Each gate evidence item must be `passed`, `not_applicable`, or `deferred` with rationale in `notes`.
 
-Parallelization rule:
+Sequential execution rule:
 
-Every task must appear in exactly one `parallelization.waves[].taskIds` entry. A wave's `parallelGroup` must match each included task's `parallelGroup`, and waves with multiple tasks should set `canRunInParallel` to `true`.
+Every task must appear in `sequencing.taskIds` exactly once, and the order must match task `order`. `sequencing.mode` must be `sequential`. Parallel task execution is intentionally disabled.
+
+Artifact rule:
+
+Workers and reviewers write markdown ledgers:
+
+- `worker-notes.md`
+- `review-notes.md`
+- `verification.md`
+
+`report.html` is generated or refreshed by the orchestrator. Workers and reviewers should not hand-edit it.
+
+Task-local state rule:
+
+Each task folder includes a task-local `state.json`. The feature orchestrator owns the feature-level state file. A delegated task orchestrator owns only its task-local state and note files. Feature state stores roll-up status and dependency sequencing; task state stores detailed task lifecycle, review, verification, and agent lifecycle.
+
+Legacy compatibility:
+
+The validator still accepts schema v2 feature states that use `implementation-notes.html` and `parallelization`, but new scaffolds should use schema v3.
 
 Empty scaffold rule:
 

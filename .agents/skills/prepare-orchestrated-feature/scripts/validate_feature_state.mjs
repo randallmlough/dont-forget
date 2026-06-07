@@ -4,8 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SKILL_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const VALID_SCHEMA_VERSION = 2;
-const REQUIRED_TASK_PATHS = ["task", "qa", "plan", "implementationNotes"];
+const VALID_SCHEMA_VERSIONS = new Set([2, 3]);
+const LEGACY_TASK_PATHS = ["task", "qa", "plan", "implementationNotes"];
+const TASK_PATHS = ["state", "task", "qa", "plan", "workerNotes", "reviewNotes", "verificationNotes", "report"];
 const COMPLETE_EVIDENCE_STATUSES = new Set(["passed", "not_applicable", "deferred"]);
 const COMPLETE_REVIEW_STATUSES = new Set(["approved", "approved_with_follow_up"]);
 
@@ -172,6 +173,32 @@ function validateParallelWaves(state, ids, diagnostics) {
   }
 }
 
+function validateSequentialTasks(state, ids, diagnostics) {
+  const sequencing = state.sequencing;
+  if (!sequencing) {
+    diagnostics.push(fail("schema v3 state must include sequencing"));
+    return;
+  }
+
+  if (sequencing.mode !== "sequential") {
+    diagnostics.push(fail(`sequencing.mode must be sequential, found ${sequencing.mode}`));
+  }
+
+  if (!Array.isArray(sequencing.taskIds)) {
+    diagnostics.push(fail("sequencing.taskIds must be an array"));
+    return;
+  }
+
+  const sortedTaskIds = [...state.tasks].sort((left, right) => left.order - right.order).map((task) => task.id);
+  if (JSON.stringify(sequencing.taskIds) !== JSON.stringify(sortedTaskIds)) {
+    diagnostics.push(fail("sequencing.taskIds must match task order"));
+  }
+
+  for (const taskId of sequencing.taskIds) {
+    if (!ids.has(taskId)) diagnostics.push(fail(`sequencing references unknown task ${taskId}`));
+  }
+}
+
 function validate(featureRootArg, options = {}) {
   const featureRoot = path.resolve(REPO_ROOT, featureRootArg);
   const diagnostics = [];
@@ -190,15 +217,20 @@ function validate(featureRootArg, options = {}) {
   const state = loadJson(statePath, diagnostics);
   if (!state) return diagnostics;
 
-  if (state.schemaVersion !== VALID_SCHEMA_VERSION) {
-    diagnostics.push(fail(`Expected schemaVersion ${VALID_SCHEMA_VERSION}, found ${state.schemaVersion}`));
+  if (!VALID_SCHEMA_VERSIONS.has(state.schemaVersion)) {
+    diagnostics.push(fail(`Expected schemaVersion ${[...VALID_SCHEMA_VERSIONS].join(" or ")}, found ${state.schemaVersion}`));
   }
+
+  const schemaVersion = state.schemaVersion;
 
   validateSourceDocuments(state, diagnostics);
 
-  const featureNotesPath = state.feature?.paths?.implementationNotes;
-  if (!featureNotesPath || !existsSync(resolveRepoPath(featureNotesPath))) {
-    diagnostics.push(fail(`Missing feature implementation notes: ${featureNotesPath}`));
+  const featurePathKeys = schemaVersion >= 3 ? ["workerNotes", "reviewNotes", "verificationNotes", "report"] : ["implementationNotes"];
+  for (const key of featurePathKeys) {
+    const featurePath = state.feature?.paths?.[key];
+    if (!featurePath || !existsSync(resolveRepoPath(featurePath))) {
+      diagnostics.push(fail(`Missing feature path ${key}: ${featurePath}`));
+    }
   }
 
   const statusValues = new Set(state.orchestration?.statusValues ?? []);
@@ -248,7 +280,8 @@ function validate(featureRootArg, options = {}) {
     if (orders.has(task.order)) diagnostics.push(fail(`Duplicate task order ${task.order}`));
     orders.add(task.order);
 
-    for (const key of REQUIRED_TASK_PATHS) {
+    const requiredTaskPaths = schemaVersion >= 3 ? TASK_PATHS : LEGACY_TASK_PATHS;
+    for (const key of requiredTaskPaths) {
       const value = task.paths?.[key];
       if (!value) {
         diagnostics.push(fail(`${task.id} missing path ${key}`));
@@ -256,6 +289,19 @@ function validate(featureRootArg, options = {}) {
       }
       if (!existsSync(resolveRepoPath(value))) {
         diagnostics.push(fail(`${task.id} missing path ${key}: ${value}`));
+      }
+    }
+
+    if (schemaVersion >= 3) {
+      if (task.canBeParallelized === true || task.parallelGroup !== undefined) {
+        diagnostics.push(warn(`${task.id} contains legacy parallel fields; new schema v3 orchestration is sequential`));
+      }
+      const taskState = task.paths?.state && existsSync(resolveRepoPath(task.paths.state)) ? loadJson(resolveRepoPath(task.paths.state), diagnostics) : null;
+      if (taskState) {
+        if (taskState.taskId !== task.id) diagnostics.push(fail(`${task.id} task-local state has taskId ${taskState.taskId}`));
+        if (taskState.featureId && taskState.featureId !== state.feature?.id) {
+          diagnostics.push(fail(`${task.id} task-local state has featureId ${taskState.featureId}, expected ${state.feature?.id}`));
+        }
       }
     }
 
@@ -339,11 +385,20 @@ function validate(featureRootArg, options = {}) {
     diagnostics.push(warn("No ready task found, but feature is not complete"));
   }
 
+  if (schemaVersion >= 3 && state.tasks.filter((task) => task.status === "ready").length > 1) {
+    diagnostics.push(fail("schema v3 sequential state cannot have more than one ready task"));
+  }
+
   if (state.feature?.progress?.currentTaskId && readyTasks.length > 0 && state.feature.progress.currentTaskId !== readyTasks[0].id) {
     diagnostics.push(warn(`feature.progress.currentTaskId is ${state.feature.progress.currentTaskId}, but next ready task is ${readyTasks[0].id}`));
   }
 
-  validateParallelWaves(state, ids, diagnostics);
+  if (schemaVersion >= 3) {
+    validateSequentialTasks(state, ids, diagnostics);
+    if (state.parallelization) diagnostics.push(warn("schema v3 ignores parallelization; remove it from new scaffolds"));
+  } else {
+    validateParallelWaves(state, ids, diagnostics);
+  }
 
   if (state.feature?.status === "complete") {
     const incompleteTasks = state.tasks.filter((task) => task.status !== "complete");

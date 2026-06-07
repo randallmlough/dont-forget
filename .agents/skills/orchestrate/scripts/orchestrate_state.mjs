@@ -19,6 +19,9 @@ const MUTATING_COMMANDS = new Set([
   "resolve-finding",
   "approve-task",
   "record-evidence",
+  "record-event",
+  "close-agent",
+  "import-task-result",
   "complete-task",
   "request-feature-review",
   "start-feature-review",
@@ -119,26 +122,36 @@ function dependenciesComplete(state, task) {
   return (task.dependencies ?? []).every((dependencyId) => taskById(state, dependencyId).status === "complete");
 }
 
+function nextSequentialCandidate(state) {
+  const task = [...state.tasks].sort((left, right) => left.order - right.order).find((candidate) => candidate.status !== "complete");
+  if (!task) return null;
+  if (!["ready", "not_started"].includes(task.status)) return null;
+  if (!dependenciesComplete(state, task)) return null;
+  return task;
+}
+
 function refreshReadyTasks(state, timestamp) {
   for (const task of state.tasks) {
-    if (task.status === "not_started" && dependenciesComplete(state, task)) {
-      task.status = "ready";
+    if (task.status === "ready") {
+      task.status = "not_started";
       task.progress.lastUpdatedAt = timestamp;
     }
+  }
+
+  const nextTask = nextSequentialCandidate(state);
+  if (nextTask && nextTask.status === "not_started") {
+    nextTask.status = "ready";
+    nextTask.progress.lastUpdatedAt = timestamp;
   }
 }
 
 function nextReadyTaskId(state) {
-  const readyTask = [...state.tasks]
-    .filter((task) => task.status === "ready" && dependenciesComplete(state, task))
-    .sort((left, right) => left.order - right.order)[0];
-  return readyTask?.id ?? null;
+  return nextSequentialCandidate(state)?.id ?? null;
 }
 
 function computedReadyTasks(state) {
-  return state.tasks
-    .filter((task) => ["ready", "not_started"].includes(task.status) && dependenciesComplete(state, task))
-    .sort((left, right) => left.order - right.order);
+  const task = nextSequentialCandidate(state);
+  return task ? [task] : [];
 }
 
 function touchFeature(state, timestamp) {
@@ -197,6 +210,54 @@ function makeEvidenceEntry(options, timestamp) {
   return entry;
 }
 
+function makeProcessEvent(options, timestamp, taskId = null) {
+  const entry = {
+    type: options.type ?? "event",
+    taskId,
+    recordedAt: timestamp,
+    notes: options.notes ?? null
+  };
+
+  for (const key of ["agent", "command", "result", "reason"]) {
+    if (options[key]) entry[key] = options[key];
+  }
+
+  return entry;
+}
+
+function ensureAgentLifecycle(task) {
+  task.agentLifecycle ??= { openAgents: [], closedAgents: [] };
+  task.agentLifecycle.openAgents ??= [];
+  task.agentLifecycle.closedAgents ??= [];
+  return task.agentLifecycle;
+}
+
+function openAgent(task, agentId, role, timestamp) {
+  if (!agentId) return;
+  const lifecycle = ensureAgentLifecycle(task);
+  if (!lifecycle.openAgents.some((agent) => agent.id === agentId)) {
+    lifecycle.openAgents.push({ id: agentId, role, openedAt: timestamp });
+  }
+}
+
+function closeAgent(task, agentId, reason, timestamp) {
+  const lifecycle = ensureAgentLifecycle(task);
+  lifecycle.openAgents = lifecycle.openAgents.filter((agent) => agent.id !== agentId);
+  lifecycle.closedAgents.push({ id: agentId, reason, closedAt: timestamp });
+}
+
+function recordProcessEvent(state, options, timestamp, taskId = null) {
+  state.processEvents ??= [];
+  state.processEvents.push(makeProcessEvent(options, timestamp, taskId));
+}
+
+function taskLocalStatePath(statePath, task) {
+  const explicit = task.paths?.state;
+  if (explicit) return path.resolve(REPO_ROOT, explicit);
+  if (task.paths?.task) return path.join(path.dirname(path.resolve(REPO_ROOT, task.paths.task)), "state.json");
+  return path.join(path.dirname(statePath), "tasks", task.id, "state.json");
+}
+
 function summarize(state) {
   const readyTasks = computedReadyTasks(state);
   return {
@@ -225,7 +286,7 @@ function appendDecision(review, decision, timestamp) {
   review.decisions.push({ decision, recordedAt: timestamp });
 }
 
-function applyCommand(state, command, options) {
+function applyCommand(state, command, options, statePath) {
   const timestamp = now();
   let task = null;
 
@@ -237,11 +298,16 @@ function applyCommand(state, command, options) {
       task = taskById(state, requireTask(options));
       assertTransition(task, ["ready", "not_started"]);
       if (!dependenciesComplete(state, task)) throw new Error(`${task.id} dependencies are not complete`);
+      const nextTask = nextSequentialCandidate(state);
+      if (nextTask?.id !== task.id) {
+        throw new Error(`${task.id} is not the next sequential task; next task is ${nextTask?.id ?? "none"}`);
+      }
       task.status = "in_progress";
       task.progress.assignedTo = options["assigned-to"] ?? task.progress.assignedTo ?? null;
       task.progress.startedAt ??= timestamp;
       task.progress.currentAttempt = (task.progress.currentAttempt ?? 0) + 1;
       task.progress.blockedReason = null;
+      openAgent(task, options["assigned-to"], "worker", timestamp);
       touchTask(task, timestamp);
       state.feature.status = "in_progress";
       state.feature.progress.startedAt ??= timestamp;
@@ -289,6 +355,7 @@ function applyCommand(state, command, options) {
       assertTransition(task, ["ready_for_review"]);
       task.status = "review_in_progress";
       task.review.status = "in_progress";
+      openAgent(task, options.agent, "reviewer", timestamp);
       touchTask(task, timestamp);
       touchFeature(state, timestamp);
       return { changed: true, taskId: task.id, timestamp };
@@ -320,6 +387,7 @@ function applyCommand(state, command, options) {
       assertTransition(task, ["changes_requested"]);
       task.status = "review_fixes_in_progress";
       task.progress.assignedTo = options["assigned-to"] ?? task.progress.assignedTo ?? null;
+      openAgent(task, options["assigned-to"], "review-fix-worker", timestamp);
       touchTask(task, timestamp);
       touchFeature(state, timestamp);
       return { changed: true, taskId: task.id, timestamp };
@@ -335,6 +403,50 @@ function applyCommand(state, command, options) {
       finding.resolvedAt = timestamp;
       task.review.resolutionEvidence ??= [];
       task.review.resolutionEvidence.push(makeEvidenceEntry(options, timestamp));
+      touchTask(task, timestamp);
+      touchFeature(state, timestamp);
+      return { changed: true, taskId: task.id, timestamp };
+    }
+
+    case "record-event": {
+      const taskId = options.task ?? null;
+      if (taskId) taskById(state, taskId);
+      recordProcessEvent(state, options, timestamp, taskId);
+      if (taskId) {
+        task = taskById(state, taskId);
+        task.processEvents ??= [];
+        task.processEvents.push(makeProcessEvent(options, timestamp, taskId));
+        touchTask(task, timestamp);
+      }
+      touchFeature(state, timestamp);
+      return { changed: true, taskId, timestamp };
+    }
+
+    case "close-agent": {
+      task = taskById(state, requireTask(options));
+      const agentId = requireOption(options, "agent");
+      const reason = requireOption(options, "reason");
+      closeAgent(task, agentId, reason, timestamp);
+      recordProcessEvent(state, { ...options, type: options.type ?? "agent_closed", reason }, timestamp, task.id);
+      touchTask(task, timestamp);
+      touchFeature(state, timestamp);
+      return { changed: true, taskId: task.id, timestamp };
+    }
+
+    case "import-task-result": {
+      task = taskById(state, requireTask(options));
+      const localPath = taskLocalStatePath(statePath, task);
+      if (!existsSync(localPath)) throw new Error(`${task.id} is missing task-local state: ${repoRelative(localPath)}`);
+      const taskState = JSON.parse(readFileSync(localPath, "utf8"));
+      task.delegatedState = {
+        status: taskState.status ?? null,
+        attempt: taskState.attempt ?? null,
+        review: taskState.review ?? null,
+        verification: taskState.verification ?? null,
+        agentLifecycle: taskState.agentLifecycle ?? null,
+        importedAt: timestamp
+      };
+      recordProcessEvent(state, { type: "task_result_imported", notes: `Imported ${repoRelative(localPath)}` }, timestamp, task.id);
       touchTask(task, timestamp);
       touchFeature(state, timestamp);
       return { changed: true, taskId: task.id, timestamp };
@@ -483,7 +595,7 @@ function main() {
   const { statePath, command, options } = parseArgs(process.argv.slice(2));
   const { raw, state } = loadState(statePath);
   const mutation = MUTATING_COMMANDS.has(command);
-  const result = applyCommand(state, command, options);
+  const result = applyCommand(state, command, options, statePath);
   const commitResult = mutation ? commit(statePath, raw, state, options["dry-run"] ?? false) : { validation: runValidator(statePath) };
 
   console.log(

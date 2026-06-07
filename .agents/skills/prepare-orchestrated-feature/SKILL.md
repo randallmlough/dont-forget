@@ -1,6 +1,6 @@
 ---
 name: prepare-orchestrated-feature
-description: Use when creating or validating the local feature-prep scaffold for an orchestrator agent: docs/.local/features/<feature>/PRD.md, task folders, QA plans, implementation notes, state.json, dependency graph, completion evidence, and final handoff validation.
+description: Use when creating or validating the local feature-prep scaffold for an orchestrator agent: docs/.local/features/<feature>/PRD.md, sequential task folders, QA plans, markdown ledgers, task-local state, feature state, completion evidence, and final handoff validation.
 ---
 
 # Prepare Orchestrated Feature
@@ -29,11 +29,18 @@ Create or verify:
 ```text
 docs/.local/features/<feature-name>/PRD.md
 docs/.local/features/<feature-name>/state.json
-docs/.local/features/<feature-name>/implementation-notes.html
+docs/.local/features/<feature-name>/worker-notes.md
+docs/.local/features/<feature-name>/review-notes.md
+docs/.local/features/<feature-name>/verification.md
+docs/.local/features/<feature-name>/report.html
+docs/.local/features/<feature-name>/tasks/<task-name>/state.json
 docs/.local/features/<feature-name>/tasks/<task-name>/task.md
 docs/.local/features/<feature-name>/tasks/<task-name>/QA.md
 docs/.local/features/<feature-name>/tasks/<task-name>/plan.md
-docs/.local/features/<feature-name>/tasks/<task-name>/implementation-notes.html
+docs/.local/features/<feature-name>/tasks/<task-name>/worker-notes.md
+docs/.local/features/<feature-name>/tasks/<task-name>/review-notes.md
+docs/.local/features/<feature-name>/tasks/<task-name>/verification.md
+docs/.local/features/<feature-name>/tasks/<task-name>/report.html
 ```
 
 ## Workflow
@@ -42,10 +49,11 @@ docs/.local/features/<feature-name>/tasks/<task-name>/implementation-notes.html
 2. Decide task boundaries as independently grabbable vertical slices.
 3. Create or verify the feature folder under `docs/.local/features/<feature-name>/`.
 4. Create task folders and required task artifacts.
-5. Create feature-level `implementation-notes.html`.
-6. Create schema v2 `state.json` with task order, dependencies, parallel groups, conflict areas, progress fields, review fields, verification fields, and structured `completionEvidence`.
-7. Validate the scaffold with `scripts/validate_feature_state.mjs`; scaffold creation also runs this validation after writing.
-8. Report the next ready task and any warnings.
+5. Create feature-level markdown ledgers and `report.html`.
+6. Create schema v3 feature `state.json` with sequential task order, dependencies, conflict areas, progress fields, review fields, verification fields, process events, and structured `completionEvidence`.
+7. Create task-local `state.json` files for delegated task orchestrators.
+8. Validate the scaffold with `scripts/validate_feature_state.mjs`; scaffold creation also runs this validation after writing.
+9. Report the next ready task and any warnings.
 
 ## Scripts
 
@@ -61,15 +69,18 @@ node .agents/skills/prepare-orchestrated-feature/scripts/validate_feature_state.
 ## Rules
 
 - `state.json` is the machine-readable orchestration ledger.
+- Feature-level `state.json` owns feature progress, sequencing, and dependency roll-up.
+- Task-level `state.json` owns delegated task progress and agent lifecycle.
 - Human-readable task docs provide execution context; they are not the completion source of truth.
 - Every task must have structured `completionEvidence` with stable IDs.
 - Dependencies must reference real task IDs and must not form a cycle.
-- Exactly one initial ready task is preferred unless parallel first tasks are intentional.
-- Parallel waves must match task `parallelGroup` values and include every task exactly once.
+- Exactly one initial ready task is required.
+- Parallel task execution is disabled. Every task runs in sequence.
 - Do not mark tasks complete during prep.
 - A completed task must include passing, not-applicable, or deferred-with-rationale evidence for each task completion gate.
 - The PRD source document must exist; a provided discussion source should exist.
 - Keep generated text concrete enough for handoff, but let the implementing worker update final evidence.
+- Workers and reviewers write markdown ledgers. `report.html` is generated or refreshed by the orchestrator, not hand-maintained by workers.
 
 ## References
 

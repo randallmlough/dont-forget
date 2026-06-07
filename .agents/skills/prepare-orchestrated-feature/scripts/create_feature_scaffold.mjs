@@ -28,10 +28,10 @@ const TASK_COMPLETION_GATE = [
   { id: "acceptance-criteria", description: "Task implementation satisfies task.md acceptance criteria." },
   { id: "qa-matrix", description: "QA.md checks are completed or explicitly documented as not applicable." },
   { id: "plan-done-criteria", description: "plan.md done criteria are completed or explicitly documented as superseded with rationale." },
-  { id: "worker-notes", description: "implementation-notes.html Worker status is Complete." },
-  { id: "review-notes", description: "implementation-notes.html Reviewers status is Approved or Approved with follow-up." },
+  { id: "worker-notes", description: "worker-notes.md contains a useful final worker report and GitButler hygiene status." },
+  { id: "review-notes", description: "review-notes.md records requested changes, fix responses, and approval." },
   { id: "review-findings", description: "Review findings are resolved or explicitly deferred with rationale." },
-  { id: "verification-evidence", description: "Relevant verification evidence is recorded in machine-readable fields." }
+  { id: "verification-evidence", description: "verification.md and machine-readable fields record relevant verification evidence." }
 ];
 
 function parseArgs(argv) {
@@ -158,8 +158,6 @@ function loadTasks(featureRoot, tasksFile) {
       type: task.type ?? "AFK",
       dependencies: task.dependencies ?? [],
       order: task.order,
-      parallelGroup: task.parallelGroup,
-      canBeParallelized: task.canBeParallelized ?? false,
       touches: task.touches ?? [],
       conflictAreas: task.conflictAreas ?? [],
       completionEvidence: task.completionEvidence
@@ -260,28 +258,40 @@ function makeCompletionEvidence(task) {
   return evidence;
 }
 
-function makeParallelWaves(tasks) {
-  const byGroup = new Map();
-  for (const task of tasks) {
-    const group = task.parallelGroup;
-    if (!byGroup.has(group)) byGroup.set(group, []);
-    byGroup.get(group).push(task);
-  }
-
-  return [...byGroup.entries()]
-    .sort(([left], [right]) => left - right)
-    .map(([parallelGroup, groupTasks]) => {
-      const sortedTasks = groupTasks.sort((left, right) => left.order - right.order);
-      return {
-        parallelGroup,
-        canRunInParallel: sortedTasks.length > 1 || sortedTasks.some((task) => task.canBeParallelized ?? false),
-        taskIds: sortedTasks.map((task) => task.id),
-        notes:
-          sortedTasks.length > 1
-            ? "Generated from shared parallelGroup; orchestrator must confirm conflictAreas remain compatible before running in parallel."
-            : "Generated during scaffold prep; orchestrator may merge compatible groups after reviewing conflictAreas."
-      };
-    });
+function makeTaskLocalState({ task, featureSlug, createdAt, featureRoot, firstTaskId }) {
+  return {
+    schemaVersion: 1,
+    featureId: featureSlug,
+    taskId: task.id,
+    status: task.id === firstTaskId ? "ready" : "not_started",
+    attempt: 0,
+    owner: "task-orchestrator",
+    dependencies: task.dependencies ?? [],
+    blockers: [],
+    paths: {
+      task: `${repoRelative(featureRoot)}/tasks/${task.id}/task.md`,
+      qa: `${repoRelative(featureRoot)}/tasks/${task.id}/QA.md`,
+      plan: `${repoRelative(featureRoot)}/tasks/${task.id}/plan.md`,
+      workerNotes: `${repoRelative(featureRoot)}/tasks/${task.id}/worker-notes.md`,
+      reviewNotes: `${repoRelative(featureRoot)}/tasks/${task.id}/review-notes.md`,
+      verificationNotes: `${repoRelative(featureRoot)}/tasks/${task.id}/verification.md`,
+      report: `${repoRelative(featureRoot)}/tasks/${task.id}/report.html`
+    },
+    review: {
+      status: "not_requested",
+      openFindings: 0
+    },
+    verification: {
+      status: "pending",
+      lastRun: null
+    },
+    agentLifecycle: {
+      openAgents: [],
+      closedAgents: []
+    },
+    processEvents: [],
+    updatedAt: createdAt
+  };
 }
 
 function validateScaffold(featureRoot, allowEmpty) {
@@ -305,13 +315,12 @@ function makeState({ featureName, featureSlug, branch, createdAt, prdPath, discu
   const sorted = sortTasks(tasks);
   const withOrder = sorted.map((task, index) => ({
     ...task,
-    order: task.order ?? index + 1,
-    parallelGroup: task.parallelGroup ?? index + 1
+    order: task.order ?? index + 1
   }));
   const firstTaskId = withOrder.find((task) => (task.dependencies ?? []).length === 0)?.id ?? null;
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     feature: {
       id: featureSlug,
       name: featureName,
@@ -324,7 +333,10 @@ function makeState({ featureName, featureSlug, branch, createdAt, prdPath, discu
         discussion: discussionPath
       },
       paths: {
-        implementationNotes: `${repoRelative(featureRoot)}/implementation-notes.html`
+        workerNotes: `${repoRelative(featureRoot)}/worker-notes.md`,
+        reviewNotes: `${repoRelative(featureRoot)}/review-notes.md`,
+        verificationNotes: `${repoRelative(featureRoot)}/verification.md`,
+        report: `${repoRelative(featureRoot)}/report.html`
       },
       progress: {
         currentTaskId: firstTaskId,
@@ -348,7 +360,7 @@ function makeState({ featureName, featureSlug, branch, createdAt, prdPath, discu
     },
     orchestration: {
       purpose:
-        "Drive every task in this feature to implementation, review, verification, and final completion with an auditable dependency graph and machine-readable evidence.",
+        "Drive every task in this feature sequentially to implementation, review, verification, and final completion with auditable state and human-readable markdown ledgers.",
       statusValues: [
         "not_started",
         "ready",
@@ -377,16 +389,17 @@ function makeState({ featureName, featureSlug, branch, createdAt, prdPath, discu
       },
       selectionRules: [
         "A task is ready when every dependency has status complete.",
-        "Prefer the lowest order ready task unless parallel capacity is intentionally available.",
-        "Tasks in the same parallelGroup can run at the same time after their dependencies are complete and their conflictAreas do not overlap in a way that would create coordination risk.",
+        "Run tasks sequentially. Only the lowest-order incomplete dependency-ready task may be started.",
+        "Do not launch workers for multiple tasks at the same time.",
         "Do not start HITL tasks until all AFK implementation tasks are complete.",
         "Do not mark a task complete until every completionEvidence item is passed, not_applicable, or deferred with rationale."
       ],
       updateRules: [
         "When work starts, set task.status to in_progress, increment progress.currentAttempt, set progress.startedAt when empty, and set progress.lastUpdatedAt.",
-        "When implementation is ready for review, set task.status to ready_for_review, update implementation-notes.html Worker status, and attach verification evidence gathered so far.",
+        "When implementation is ready for review, set task.status to ready_for_review, update worker-notes.md, and attach verification evidence gathered so far.",
+        "After receiving worker or reviewer reports, copy useful output into durable notes/state and close the completed agent thread.",
         "When reviewers approve, set task.status to approved and review.status to approved or approved_with_follow_up.",
-        "When all completion gates pass, set task.status to complete, set progress.completedAt, update implementation-notes.html, and refresh feature.progress.currentTaskId."
+        "When all completion gates pass, set task.status to complete, set progress.completedAt, refresh report.html, and advance feature.progress.currentTaskId to the next sequential task."
       ],
       taskCompletionGate: TASK_COMPLETION_GATE,
       featureCompletionGate: [
@@ -396,27 +409,32 @@ function makeState({ featureName, featureSlug, branch, createdAt, prdPath, discu
         { id: "final-verification", description: "Final feature-wide verification has been run and recorded by the orchestrator." }
       ]
     },
-    parallelization: {
-      waves: makeParallelWaves(withOrder)
+    sequencing: {
+      mode: "sequential",
+      taskIds: withOrder.map((task) => task.id),
+      notes: "Parallel task execution is intentionally disabled until the orchestration process is trusted."
     },
+    processEvents: [],
     tasks: withOrder.map((task) => ({
       id: task.id,
       name: task.name,
       type: task.type ?? "AFK",
       status: task.id === firstTaskId ? "ready" : "not_started",
       order: task.order,
-      parallelGroup: task.parallelGroup,
-      canBeParallelized: task.canBeParallelized ?? false,
       dependencies: task.dependencies ?? [],
       blocks: blocksFor(withOrder, task.id),
       touches: task.touches ?? [],
       conflictAreas: task.conflictAreas ?? [],
       recommendedReviewAgents: ["code-review"],
       paths: {
+        state: `${repoRelative(featureRoot)}/tasks/${task.id}/state.json`,
         task: `${repoRelative(featureRoot)}/tasks/${task.id}/task.md`,
         qa: `${repoRelative(featureRoot)}/tasks/${task.id}/QA.md`,
         plan: `${repoRelative(featureRoot)}/tasks/${task.id}/plan.md`,
-        implementationNotes: `${repoRelative(featureRoot)}/tasks/${task.id}/implementation-notes.html`
+        workerNotes: `${repoRelative(featureRoot)}/tasks/${task.id}/worker-notes.md`,
+        reviewNotes: `${repoRelative(featureRoot)}/tasks/${task.id}/review-notes.md`,
+        verificationNotes: `${repoRelative(featureRoot)}/tasks/${task.id}/verification.md`,
+        report: `${repoRelative(featureRoot)}/tasks/${task.id}/report.html`
       },
       progress: {
         assignedTo: null,
@@ -442,6 +460,11 @@ function makeState({ featureName, featureSlug, branch, createdAt, prdPath, discu
         simulator: [],
         notes: []
       },
+      agentLifecycle: {
+        openAgents: [],
+        closedAgents: []
+      },
+      processEvents: [],
       completionEvidence: makeCompletionEvidence(task)
     }))
   };
@@ -470,18 +493,23 @@ function main() {
   }
 
   const sortedTasks = sortTasks(tasks);
+  const orderedTasks = sortedTasks.map((task, index) => ({ ...task, order: task.order ?? index + 1 }));
+  const firstTaskId = orderedTasks.find((task) => (task.dependencies ?? []).length === 0)?.id ?? null;
 
   mkdirSync(featureRoot, { recursive: true });
   mkdirSync(path.join(featureRoot, "tasks"), { recursive: true });
-  for (const task of tasks) {
+  for (const task of orderedTasks) {
     const taskDir = path.join(featureRoot, "tasks", task.id);
     const values = {
+      NAME: task.name,
       TASK_NAME: task.name,
       TASK_TYPE: task.type ?? "AFK",
       FEATURE_NAME: featureName,
+      FEATURE_SLUG: featureSlug,
       BRANCH: branch,
       PRD_PATH: prdPath,
       DISCUSSION_PATH: discussionPath,
+      STATE_PATH: `${repoRelative(featureRoot)}/tasks/${task.id}/state.json`,
       CONTEXT: "Fill in task context.",
       WHAT_TO_BUILD: "Fill in implementation scope.",
       ACCEPTANCE_CRITERION: "Fill in acceptance criterion.",
@@ -508,9 +536,19 @@ function main() {
     writeIfMissing(path.join(taskDir, "task.md"), render(readTemplate("task.md.template"), values), args.force, created, skipped);
     writeIfMissing(path.join(taskDir, "QA.md"), render(readTemplate("QA.md.template"), values), args.force, created, skipped);
     writeIfMissing(path.join(taskDir, "plan.md"), render(readTemplate("plan.md.template"), values), args.force, created, skipped);
+    writeIfMissing(path.join(taskDir, "worker-notes.md"), render(readTemplate("worker-notes.md.template"), values), args.force, created, skipped);
+    writeIfMissing(path.join(taskDir, "review-notes.md"), render(readTemplate("review-notes.md.template"), values), args.force, created, skipped);
+    writeIfMissing(path.join(taskDir, "verification.md"), render(readTemplate("verification.md.template"), values), args.force, created, skipped);
     writeIfMissing(
-      path.join(taskDir, "implementation-notes.html"),
-      render(readTemplate("task-implementation-notes.html.template"), values),
+      path.join(taskDir, "report.html"),
+      render(readTemplate("report.html.template"), values),
+      args.force,
+      created,
+      skipped
+    );
+    writeIfMissing(
+      path.join(taskDir, "state.json"),
+      `${JSON.stringify(makeTaskLocalState({ task, featureSlug, createdAt, featureRoot, firstTaskId }), null, 2)}\n`,
       args.force,
       created,
       skipped
@@ -518,6 +556,7 @@ function main() {
   }
 
   const featureValues = {
+    NAME: featureName,
     FEATURE_NAME: featureName,
     FEATURE_SLUG: featureSlug,
     FEATURE_ROOT: repoRelative(featureRoot),
@@ -526,12 +565,33 @@ function main() {
     PRD_PATH: prdPath,
     DISCUSSION_PATH: discussionPath,
     CREATED_AT: createdAt,
-    CURRENT_TASK_ID: sortedTasks.find((task) => (task.dependencies ?? []).length === 0)?.id ?? ""
+    CURRENT_TASK_ID: firstTaskId ?? ""
   };
 
   writeIfMissing(
-    path.join(featureRoot, "implementation-notes.html"),
-    render(readTemplate("feature-implementation-notes.html.template"), featureValues),
+    path.join(featureRoot, "worker-notes.md"),
+    render(readTemplate("worker-notes.md.template"), featureValues),
+    args.force,
+    created,
+    skipped
+  );
+  writeIfMissing(
+    path.join(featureRoot, "review-notes.md"),
+    render(readTemplate("review-notes.md.template"), featureValues),
+    args.force,
+    created,
+    skipped
+  );
+  writeIfMissing(
+    path.join(featureRoot, "verification.md"),
+    render(readTemplate("verification.md.template"), featureValues),
+    args.force,
+    created,
+    skipped
+  );
+  writeIfMissing(
+    path.join(featureRoot, "report.html"),
+    render(readTemplate("report.html.template"), featureValues),
     args.force,
     created,
     skipped

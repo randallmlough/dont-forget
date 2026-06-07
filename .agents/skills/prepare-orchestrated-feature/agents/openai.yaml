@@ -1,4 +1,4 @@
 interface:
   display_name: "Prepare Orchestrated Feature"
-  short_description: "Scaffold orchestrator-ready feature work"
-  default_prompt: "Use $prepare-orchestrated-feature to create the local feature scaffold, task docs, state.json, and validation handoff."
+  short_description: "Scaffold sequential orchestrator-ready feature work"
+  default_prompt: "Use $prepare-orchestrated-feature to create the local sequential feature scaffold, task docs, task-local state files, markdown ledgers, feature state.json, and validation handoff."

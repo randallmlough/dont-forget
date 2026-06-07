@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Report: {{NAME}}</title>
+  </head>
+  <body>
+    <h1>Report: {{NAME}}</h1>
+    <p>Generated report placeholder. Refresh this report after task or feature completion by summarizing state and markdown ledgers.</p>
+    <dl>
+      <dt>State</dt>
+      <dd><code>{{STATE_PATH}}</code></dd>
+      <dt>Created</dt>
+      <dd>{{CREATED_AT}}</dd>
+    </dl>
+  </body>
+</html>

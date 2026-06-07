@@ -1,4 +1,4 @@
 interface:
   display_name: "Orchestrate"
-  short_description: "Drive feature tasks through workers"
-  default_prompt: "Use $orchestrate to drive this feature from state.json through worker delegation, review, verification, and final completion."
+  short_description: "Drive feature tasks sequentially through workers"
+  default_prompt: "Use $orchestrate to drive this feature from state.json through sequential worker delegation, review, verification, agent cleanup, and final completion."

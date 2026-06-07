@@ -14,7 +14,7 @@ Add `--dry-run` to preview a mutation without writing.
 inspect
 ```
 
-Prints feature status, next ready task, and task counts.
+Prints feature status, the single next ready task, and task counts. Orchestration is sequential; if multiple tasks are technically dependency-ready, the lowest-order incomplete task is the only task that should be started.
 
 ## Task Lifecycle
 
@@ -23,7 +23,7 @@ start-task --task <task-id> --assigned-to <worker-id>
 block-task --task <task-id> --reason "<reason>"
 unblock-task --task <task-id>
 ready-for-review --task <task-id>
-start-review --task <task-id>
+start-review --task <task-id> [--agent <reviewer-id>]
 changes-requested --task <task-id> --finding "<finding>" [--finding-id <id>] [--agent <reviewer>]
 start-review-fixes --task <task-id> --assigned-to <worker-id>
 resolve-finding --task <task-id> --finding-id <id> --resolution "<resolution>" [--status resolved|deferred]
@@ -48,6 +48,27 @@ record-evidence --task <task-id> --evidence-id <gate-id> --status deferred --not
 ```
 
 Evidence status must be one of the values listed in `state.orchestration.evidenceStatusValues`.
+
+## Process Events And Agents
+
+```bash
+record-event --type reviewer_usage_limit --notes "<notes>"
+record-event --task <task-id> --type worker_returned --agent <agent-id> --notes "<notes>"
+record-event --task <task-id> --type hitl_unavailable --command "xcrun simctl list devices booted" --result failed --notes "<notes>"
+close-agent --task <task-id> --agent <agent-id> --reason "Report recorded"
+```
+
+Use `record-event` for orchestration process facts that should survive thread compaction: reviewer/tool failure, manager intervention, HITL infrastructure unavailable, GitButler parser/dependency-lock issue, agent-cap pressure, and completed agents closed by the orchestrator.
+
+Use `close-agent` after worker and reviewer reports have been copied into durable task artifacts. It removes the agent from task-local open agent tracking and records a close event.
+
+## Task Result Import
+
+```bash
+import-task-result --task <task-id>
+```
+
+Imports compact status, review, verification, and agent lifecycle fields from `tasks/<task-id>/state.json` into the feature roll-up task entry. The feature orchestrator remains responsible for review/evidence gates and final completion.
 
 ## Feature Lifecycle
 

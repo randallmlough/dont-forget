@@ -1,0 +1,21 @@
+# Verification: {{NAME}}
+
+Status: Pending
+
+Created: {{CREATED_AT}}
+
+## Automated Checks
+
+- Pending.
+
+## Manual QA
+
+- Pending.
+
+## HITL Or Simulator QA
+
+- Pending.
+
+## Deferred Evidence
+
+- None.

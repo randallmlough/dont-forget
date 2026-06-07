@@ -1,0 +1,38 @@
+# Worker Notes: {{NAME}}
+
+Status: Not started
+
+Created: {{CREATED_AT}}
+
+## Progress
+
+- {{CREATED_AT}}: Scaffold created.
+
+## Changed Files
+
+- None yet.
+
+## Decisions
+
+- None yet.
+
+## Deviations And Risks
+
+- None yet.
+
+## Lifecycle Checks
+
+- Session/resource replacement: Pending.
+- Stale target between read/write: Pending.
+- Out-of-order operations: Pending.
+- Stale async persistence/analytics/UI update: Pending.
+- Rollback preserves unrelated data: Pending.
+- Repeated workflow branches centralized: Pending.
+
+## GitButler Hygiene
+
+- Pending `but status -fv`.
+
+## Final Worker Report
+
+Pending.
