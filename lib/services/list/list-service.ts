@@ -192,15 +192,23 @@ export function createListService(deps: ListServiceDeps): ListService {
 				}
 
 				const now = listServiceTimestamp();
-				await deps.store.execute({
+				const updateResult = await deps.store.execute({
 					kind: "write",
 					sql: `
-            UPDATE lists
-            SET name = ?, updated_at = ?
+	            UPDATE lists
+	            SET name = ?, updated_at = ?
             WHERE id = ? AND deleted_at IS NULL
-          `,
+						`,
 					args: [name.name, now, input.listId],
 				});
+				if (updateResult.rowsAffected === 0) {
+					const latest = resultFromLifecycleRow(
+						await readListLifecycleRow(deps.store, input.listId),
+						deps.householdId,
+						input.listId,
+					);
+					return { ...latest, didWrite: false };
+				}
 				const list = {
 					...lifecycle.list,
 					name: name.name,
@@ -235,15 +243,22 @@ export function createListService(deps: ListServiceDeps): ListService {
 				}
 
 				const now = listServiceTimestamp();
-				await deps.store.execute({
+				const updateResult = await deps.store.execute({
 					kind: "write",
 					sql: `
-            UPDATE lists
-            SET deleted_at = ?, updated_at = ?
+	            UPDATE lists
+	            SET deleted_at = ?, updated_at = ?
             WHERE id = ? AND deleted_at IS NULL
-          `,
+						`,
 					args: [now, now, input.listId],
 				});
+				if (updateResult.rowsAffected === 0) {
+					return deleteResultFromLifecycleRow(
+						await readListLifecycleRow(deps.store, input.listId),
+						deps.householdId,
+						input.listId,
+					);
+				}
 				analytics.track(
 					"list_deleted",
 					analyticsProperties(deps, input.listId),
@@ -322,6 +337,18 @@ function resultFromLifecycleRow(
 	}
 
 	return { status: "available", list: listFromRow(row, householdId) };
+}
+
+function deleteResultFromLifecycleRow(
+	row: Record<string, unknown> | null,
+	householdId: string,
+	listId: string,
+): DeleteListResult {
+	const lifecycle = resultFromLifecycleRow(row, householdId, listId);
+	if (lifecycle.status === "available") {
+		throw new Error("List delete did not affect the expected row");
+	}
+	return { ...lifecycle, didWrite: false };
 }
 
 function validateListName(

@@ -8,7 +8,10 @@ import {
 } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
-import type { HouseholdSqlStatement } from "@/lib/services/household";
+import type {
+	HouseholdSqlResult,
+	HouseholdSqlStatement,
+} from "@/lib/services/household";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 
 import { createListService } from "./list-service";
@@ -220,6 +223,8 @@ describe("createListService", () => {
 								deleted_at: null,
 							},
 						],
+						rowsAffected: 0,
+						lastInsertRowId: null,
 					};
 				},
 			},
@@ -350,6 +355,57 @@ describe("createListService", () => {
 		}
 	});
 
+	it("returns the reread deleted result when a rename guarded update affects no rows", async () => {
+		const store = storeFixture();
+		const analytics = analyticsFixture();
+		store.execute
+			.mockResolvedValueOnce({
+				rows: [listRow({ id: "lst_rename_race", name: "Groceries" })],
+				rowsAffected: 0,
+				lastInsertRowId: null,
+			})
+			.mockResolvedValueOnce({
+				rows: [],
+				rowsAffected: 0,
+				lastInsertRowId: null,
+			})
+			.mockResolvedValueOnce({
+				rows: [
+					listRow({
+						id: "lst_rename_race",
+						name: "Groceries",
+						updated_at: 1_700_000_000_500,
+						deleted_at: 1_700_000_000_400,
+					}),
+				],
+				rowsAffected: 0,
+				lastInsertRowId: null,
+			});
+		const service = createListService({
+			householdId,
+			userId: signedInUserId,
+			store,
+			logger: testLogger,
+			analytics,
+		});
+
+		await expect(
+			service.renameList({
+				listId: "lst_rename_race",
+				name: "Weekend Groceries",
+			}),
+		).resolves.toEqual({
+			status: "deleted",
+			listId: "lst_rename_race",
+			deletedAt: 1_700_000_000_400,
+			updatedAt: 1_700_000_000_500,
+			didWrite: false,
+		});
+		expect(store.execute).toHaveBeenCalledTimes(3);
+		expect(store.execute.mock.calls[1]?.[0]).toMatchObject({ kind: "write" });
+		expect(analytics.track).not.toHaveBeenCalled();
+	});
+
 	it("returns typed rename results for invalid, deleted, and missing Lists without writes", async () => {
 		const harness = await createHarness();
 		const analytics = analyticsFixture();
@@ -449,6 +505,45 @@ describe("createListService", () => {
 		} finally {
 			await harness.close();
 		}
+	});
+
+	it("returns the reread missing result when a delete guarded update affects no rows", async () => {
+		const store = storeFixture();
+		const analytics = analyticsFixture();
+		store.execute
+			.mockResolvedValueOnce({
+				rows: [listRow({ id: "lst_delete_race", name: "Groceries" })],
+				rowsAffected: 0,
+				lastInsertRowId: null,
+			})
+			.mockResolvedValueOnce({
+				rows: [],
+				rowsAffected: 0,
+				lastInsertRowId: null,
+			})
+			.mockResolvedValueOnce({
+				rows: [],
+				rowsAffected: 0,
+				lastInsertRowId: null,
+			});
+		const service = createListService({
+			householdId,
+			userId: signedInUserId,
+			store,
+			logger: testLogger,
+			analytics,
+		});
+
+		await expect(
+			service.deleteList({ listId: "lst_delete_race" }),
+		).resolves.toEqual({
+			status: "missing",
+			listId: "lst_delete_race",
+			didWrite: false,
+		});
+		expect(store.execute).toHaveBeenCalledTimes(3);
+		expect(store.execute.mock.calls[1]?.[0]).toMatchObject({ kind: "write" });
+		expect(analytics.track).not.toHaveBeenCalled();
 	});
 
 	it("soft-deletes archived non-deleted Lists", async () => {
@@ -571,9 +666,21 @@ function analyticsFixture(): ServiceAnalytics & {
 
 function storeFixture() {
 	return {
-		execute: jest.fn<
-			Promise<{ rows: Record<string, unknown>[] }>,
-			[HouseholdSqlStatement]
-		>(async () => ({ rows: [] })),
+		execute: jest.fn<Promise<HouseholdSqlResult>, [HouseholdSqlStatement]>(
+			async () => ({ rows: [], rowsAffected: 0, lastInsertRowId: null }),
+		),
+	};
+}
+
+function listRow(overrides: Partial<Record<string, unknown>> = {}) {
+	return {
+		id: "lst_fixture",
+		name: "Groceries",
+		created_by_user_id: "usr_avery",
+		created_at: 1_700_000_000_000,
+		updated_at: 1_700_000_000_100,
+		archived_at: null,
+		deleted_at: null,
+		...overrides,
 	};
 }

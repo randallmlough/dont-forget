@@ -443,9 +443,9 @@ describe("createItemService", () => {
 	it("allocates Item position inside the insert statement", async () => {
 		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
 			if (statement.sql.includes("SELECT position FROM items")) {
-				return { rows: [{ position: 4 }] };
+				return { rows: [{ position: 4 }], rowsAffected: 0 };
 			}
-			return { rows: [] };
+			return { rows: [], rowsAffected: 1 };
 		});
 		const service = createItemService({
 			householdId: "hh_avery",
@@ -475,7 +475,7 @@ describe("createItemService", () => {
 
 	it("rejects empty Item names before writing", async () => {
 		const analytics = createMockAnalytics();
-		const execute = jest.fn(async () => ({ rows: [] }));
+		const execute = jest.fn(async () => ({ rows: [], rowsAffected: 0 }));
 		const service = createItemService({
 			householdId: "hh_avery",
 			store: { execute },

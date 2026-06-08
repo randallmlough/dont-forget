@@ -2,7 +2,10 @@ import { eq } from "drizzle-orm";
 import { seedPrimaryHouseholdScenario } from "@/db/fixtures";
 import { itemChecks, items } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
-import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import type {
+	HouseholdSqlStatement,
+	HouseholdStoreExecutorResult,
+} from "@/lib/services/household/household-store";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 import { createSessionDataServices } from "./services";
@@ -250,15 +253,18 @@ async function createSeededServicesHarness() {
 
 function storeFixture(
 	overrides: {
-		execute?: (statement: HouseholdSqlStatement) => Promise<{
-			rows: Record<string, unknown>[];
-		}>;
+		execute?: (
+			statement: HouseholdSqlStatement,
+		) => Promise<HouseholdStoreExecutorResult>;
 		syncAuthorized?: boolean;
 	} = {},
 ) {
 	return {
 		syncAuthorized: overrides.syncAuthorized ?? true,
-		execute: jest.fn(overrides.execute ?? (async () => ({ rows: [] }))),
+		execute: jest.fn(
+			overrides.execute ??
+				(async () => ({ rows: [], rowsAffected: 0, lastInsertRowId: null })),
+		),
 		pull: jest.fn(async () => ({ changed: false })),
 		push: jest.fn(async () => undefined),
 		sync: jest.fn(async () => ({ changed: false })),

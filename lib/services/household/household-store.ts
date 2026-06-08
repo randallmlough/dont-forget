@@ -18,6 +18,11 @@ export type HouseholdSqlResult = {
 	lastInsertRowId: number | null;
 };
 
+export type HouseholdStoreExecutorResult = Pick<
+	HouseholdSqlResult,
+	"rows" | "rowsAffected"
+>;
+
 export type HouseholdStore = {
 	path: string;
 	syncAuthorized: boolean;
@@ -32,7 +37,7 @@ export type HouseholdStore = {
 export type HouseholdStoreExecutor = {
 	execute: (
 		statement: HouseholdSqlStatement,
-	) => Promise<{ rows: Record<string, unknown>[] }>;
+	) => Promise<HouseholdStoreExecutorResult>;
 };
 
 export type HouseholdDatabaseConfig = {
