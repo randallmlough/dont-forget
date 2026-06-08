@@ -447,6 +447,55 @@ describe("HomeScreenView", () => {
 		}
 	});
 
+	it("re-resolves when the post-resolution active List load returns archived", async () => {
+		const harness = await createHomeSessionHarness();
+		const originalGetList = harness.session.services.lists.getList;
+		let groceriesReadCount = 0;
+		mockAsyncStorage.getItem.mockResolvedValue(
+			currentListSelectionPayload(harness, harness.scenario.lists.groceries.id),
+		);
+		harness.session.services.lists.getList = async (input) => {
+			const result = await originalGetList(input);
+			if (
+				input.listId === harness.scenario.lists.groceries.id &&
+				result.status === "available"
+			) {
+				groceriesReadCount += 1;
+				if (groceriesReadCount === 2) {
+					return {
+						status: "available",
+						list: {
+							...result.list,
+							name: "Archived Groceries",
+							archived: true,
+							archivedAt: 1_700_000_001_001,
+						},
+					};
+				}
+			}
+
+			return result;
+		};
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+			expect(screen.queryByText("List unavailable")).toBeNull();
+			expect(screen.queryByText("Archived Groceries")).toBeNull();
+			expect(screen.queryByText("Groceries")).toBeNull();
+			expect(mockAsyncStorage.removeItem).toHaveBeenCalledTimes(1);
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+		} finally {
+			await harness.close();
+		}
+	});
+
 	it("renders zero-active when the post-resolution active List load returns deleted and no fallback remains", async () => {
 		const harness = await createHomeSessionHarness();
 		await harness.household.db

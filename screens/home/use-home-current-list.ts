@@ -235,7 +235,7 @@ type HomeCurrentListLoadResult =
 	| {
 			status: "unavailable";
 			listId: string;
-			reason: Exclude<GetListResult["status"], "available">;
+			reason: Exclude<GetListResult["status"], "available"> | "archived";
 	  };
 
 async function loadCurrentListForHome(
@@ -248,6 +248,9 @@ async function loadCurrentListForHome(
 	]);
 	if (listResult.status !== "available") {
 		return { status: "unavailable", listId, reason: listResult.status };
+	}
+	if (listResult.list.archived) {
+		return { status: "unavailable", listId, reason: "archived" };
 	}
 	const memberNames = memberNamesFromSession(session);
 

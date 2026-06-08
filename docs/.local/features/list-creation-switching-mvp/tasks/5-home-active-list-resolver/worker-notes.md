@@ -106,3 +106,38 @@ Update it continuously with assumptions, decisions, discoveries, commands run, t
 - `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` -> passed after the lint refactor, 20 tests.
 - `make typecheck` -> passed after the lint refactor.
 - `make verify` -> passed. Includes `tsc --noEmit`, `biome ci .`, custom ESLint rule tests, `eslint .`, and full Jest. Jest result: 51 suites, 356 tests. Expected PostHog missing-token warnings appeared in existing analytics/API tests.
+
+## 2026-06-08 Review Round 2 Fix Worker
+
+### Scope
+
+- Fixing only the round 2 adversarial review blocker: an `available` archived List returned by the post-resolution Home load must not mount as the active Home List.
+- Keeping the fix in the existing Home-owned post-load unavailable path; no `ListService`, local storage, or Authenticated App Session provider changes planned.
+- Did not edit `state.json`.
+
+### Starting Context
+
+- Confirmed repo path: `/Users/randy/Dev/personal/dont-forget-wt/list-creation-switching-mvp`.
+- Confirmed current `HEAD`: `85116c4e Fix Home stale list re-resolution`.
+- Initial tracked `git status --short` was clean.
+- Read required docs: `AGENTS.md`, `CONTEXT.md`, Task 5 `README.md`, `state.json`, `worker-notes.md`, `qa-notes.md`, `reviewer-notes.md`, and `orchestrator-notes.md`.
+
+### Plan
+
+1. Inspect current Home resolver/load implementation and focused tests.
+2. Classify post-resolution `available` archived metadata as unavailable/stale for Home.
+3. Add regression coverage for second `getList()` returning an archived available List and falling back without mounting it.
+4. Run focused Home tests, `make typecheck`, and `make verify`.
+5. Commit with standard git only.
+
+### Implementation
+
+- `useHomeCurrentList` now classifies post-resolution `getList()` results with `status: "available"` and `list.archived === true` as `unavailable`.
+- The existing `HomeCurrentListResolver` post-load unavailable callback handles that result by adding the List ID to the bounded in-memory exclusion list and re-running the Home-owned resolver.
+- Added a focused regression where Groceries resolves first, the second `getList()` returns an archived available Groceries result, and Home falls back to Pharmacy without rendering the archived List or retryable `List unavailable`.
+
+### Commands Run
+
+- `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` -> passed, 21 tests.
+- `make typecheck` -> passed.
+- `make verify` -> passed. Includes `tsc --noEmit`, `biome ci .`, custom ESLint rule tests, `eslint .`, and full Jest. Jest result: 51 suites, 357 tests. Expected PostHog missing-token warnings appeared in existing analytics/API tests.
