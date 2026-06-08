@@ -179,11 +179,34 @@ export async function seedPrimaryHouseholdScenario(
 		createdAt: now + 2,
 	});
 	const groceries = listFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.list.id,
-		name: PRIMARY_HOUSEHOLD_SEED.list.name,
+		id: PRIMARY_HOUSEHOLD_SEED.lists.groceries.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.groceries.name,
 		createdByUserId: avery.id,
 		createdAt: now,
 		updatedAt: now,
+	});
+	const hardware = listFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.lists.hardware.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.hardware.name,
+		createdByUserId: blake.id,
+		createdAt: now + 1,
+		updatedAt: now + 1,
+	});
+	const pharmacy = listFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.lists.pharmacy.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.pharmacy.name,
+		createdByUserId: avery.id,
+		createdAt: now + 2,
+		updatedAt: now + 2,
+	});
+	const archivedCamping = listFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.lists.archivedCamping.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.archivedCamping.name,
+		createdByUserId: blake.id,
+		createdAt: now + 3,
+		updatedAt: now + 4,
+		archivedAt: now + 4,
+		deletedAt: null,
 	});
 	const uncheckedItem = itemFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.items.unchecked.id,
@@ -250,7 +273,9 @@ export async function seedPrimaryHouseholdScenario(
 			.where(eq(users.id, blake.id));
 	});
 	await input.household.transaction(async (tx) => {
-		await tx.insert(lists).values(groceries);
+		await tx
+			.insert(lists)
+			.values([groceries, hardware, pharmacy, archivedCamping]);
 		await tx
 			.insert(items)
 			.values([
@@ -271,7 +296,7 @@ export async function seedPrimaryHouseholdScenario(
 		members: { avery: averyMembership, blake: blakeMembership },
 		memberships: { avery: averyMembership, blake: blakeMembership },
 		joinCodes: { active: joinCode },
-		lists: { groceries },
+		lists: { groceries, hardware, pharmacy, archivedCamping },
 		items: {
 			unchecked: uncheckedItem,
 			checkedByAvery: checkedByAveryItem,
@@ -284,6 +309,9 @@ export async function seedPrimaryHouseholdScenario(
 			blakeUserId: blake.id,
 			householdId: household.id,
 			groceriesListId: groceries.id,
+			hardwareListId: hardware.id,
+			pharmacyListId: pharmacy.id,
+			archivedCampingListId: archivedCamping.id,
 		},
 	};
 }

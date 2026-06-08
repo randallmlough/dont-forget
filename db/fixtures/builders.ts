@@ -83,6 +83,12 @@ export const PRIMARY_HOUSEHOLD_SEED = {
 		blake: { id: "hjcu_blake" },
 		cameron: { id: "hjcu_cameron" },
 	},
+	lists: {
+		groceries: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
+		hardware: { id: "lst_seed_hardware", name: "Hardware Store" },
+		pharmacy: { id: "lst_seed_pharmacy", name: "Pharmacy" },
+		archivedCamping: { id: "lst_seed_archived_camping", name: "Camping" },
+	},
 	list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
 	items: {
 		unchecked: { id: "itm_seed_milk", name: "Milk" },
@@ -214,6 +220,7 @@ export function listFixture(overrides: Partial<NewList> = {}): NewList {
 		createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
 		createdAt: now,
 		updatedAt: now,
+		archivedAt: null,
 		deletedAt: null,
 		...overrides,
 	};

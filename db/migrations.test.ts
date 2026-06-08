@@ -78,11 +78,19 @@ describe("test database migrations", () => {
 				})
 				.from(households)
 				.innerJoin(memberships, eq(memberships.householdId, households.id));
+			const listRows = await household.db.select().from(lists);
 			const itemRows = await household.db.select().from(items);
 			const checkRows = await household.db.select().from(itemChecks);
 
 			expect(directoryRows).toEqual([
 				{ householdId: "household_1", role: "owner" },
+			]);
+			expect(listRows).toEqual([
+				expect.objectContaining({
+					id: "list_1",
+					name: "Groceries",
+					archivedAt: null,
+				}),
 			]);
 			expect(itemRows).toMatchObject([
 				{

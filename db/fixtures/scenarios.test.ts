@@ -9,6 +9,7 @@ import {
 	memberships,
 	users,
 } from "@/db/schema/directory";
+import { lists } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
 import {
 	householdFixture,
@@ -103,6 +104,46 @@ describe("database fixture scenarios", () => {
 					householdId: scenario.household.id,
 				}),
 			]);
+			expect(scenario.lists.groceries.id).toBe(PRIMARY_HOUSEHOLD_SEED.list.id);
+
+			const listRows = await household.db.select().from(lists);
+			const activeLists = listRows.filter(
+				(list) => list.archivedAt === null && list.deletedAt === null,
+			);
+			const archivedLists = listRows.filter(
+				(list) => list.archivedAt !== null && list.deletedAt === null,
+			);
+
+			expect(activeLists).toHaveLength(3);
+			expect(archivedLists).toHaveLength(1);
+			expect(listRows).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: scenario.lists.groceries.id,
+						name: "Groceries",
+						archivedAt: null,
+						deletedAt: null,
+					}),
+					expect.objectContaining({
+						id: scenario.lists.hardware.id,
+						name: "Hardware Store",
+						archivedAt: null,
+						deletedAt: null,
+					}),
+					expect.objectContaining({
+						id: scenario.lists.pharmacy.id,
+						name: "Pharmacy",
+						archivedAt: null,
+						deletedAt: null,
+					}),
+					expect.objectContaining({
+						id: scenario.lists.archivedCamping.id,
+						name: "Camping",
+						archivedAt: expect.any(Number),
+						deletedAt: null,
+					}),
+				]),
+			);
 		} finally {
 			await household.close();
 			await directory.close();

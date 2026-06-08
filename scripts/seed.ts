@@ -1,4 +1,4 @@
-import { inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import {
 	directoryClient,
@@ -43,7 +43,19 @@ export async function seedLocalDatabases(): Promise<void> {
 		console.log(
 			`[seed] Users: ${scenario.users.avery.email}, ${scenario.users.blake.email}`,
 		);
-		console.log(`[seed] List: ${scenario.lists.groceries.name}`);
+		console.log(
+			`[seed] Lists: ${Object.values(scenario.lists)
+				.map((list) => {
+					const state =
+						list.deletedAt !== null
+							? "deleted"
+							: list.archivedAt !== null
+								? "archived"
+								: "active";
+					return `${list.name} (${list.id}, ${state})`;
+				})
+				.join(", ")}`,
+		);
 	} finally {
 		await householdClientInstance.close();
 		await directoryClientInstance.close();
@@ -81,6 +93,19 @@ async function assertSeedDataDoesNotExist({
 	const itemIds = Object.values(PRIMARY_HOUSEHOLD_SEED.items).map(
 		(item) => item.id,
 	);
+	const listIds = Object.values(PRIMARY_HOUSEHOLD_SEED.lists).map(
+		(list) => list.id,
+	);
+	const itemCheckKeys = [
+		{
+			itemId: PRIMARY_HOUSEHOLD_SEED.items.checkedByAvery.id,
+			userId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+		},
+		{
+			itemId: PRIMARY_HOUSEHOLD_SEED.items.checkedByBlake.id,
+			userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
+		},
+	];
 
 	const [existingUsers, existingHouseholds, existingMemberships] =
 		await Promise.all([
@@ -113,15 +138,24 @@ async function assertSeedDataDoesNotExist({
 		household
 			.select({ id: lists.id })
 			.from(lists)
-			.where(inArray(lists.id, [PRIMARY_HOUSEHOLD_SEED.list.id])),
+			.where(inArray(lists.id, listIds)),
 		household
 			.select({ id: items.id })
 			.from(items)
 			.where(inArray(items.id, itemIds)),
 		household
-			.select({ itemId: itemChecks.itemId })
+			.select({ itemId: itemChecks.itemId, userId: itemChecks.userId })
 			.from(itemChecks)
-			.where(inArray(itemChecks.itemId, itemIds)),
+			.where(
+				or(
+					...itemCheckKeys.map((key) =>
+						and(
+							eq(itemChecks.itemId, key.itemId),
+							eq(itemChecks.userId, key.userId),
+						),
+					),
+				),
+			),
 	]);
 
 	const conflicts = [

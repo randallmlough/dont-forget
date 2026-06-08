@@ -15,6 +15,13 @@
       "when": 1780551476897,
       "tag": "0001_brainy_pride",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780901626934,
+      "tag": "0002_steep_ultron",
+      "breakpoints": true
     }
   ]
 }
