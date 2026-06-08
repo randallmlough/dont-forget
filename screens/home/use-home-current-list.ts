@@ -185,15 +185,18 @@ async function loadCurrentList(
 	session: AuthenticatedAppSession,
 	listId: string,
 ): Promise<ActiveListInitialState> {
-	const [list, items] = await Promise.all([
+	const [listResult, items] = await Promise.all([
 		session.services.lists.getList({ listId }),
 		session.services.items.listItems({ listId }),
 	]);
+	if (listResult.status !== "available") {
+		throw new Error("List is not available");
+	}
 	const memberNames = memberNamesFromSession(session);
 
 	return {
 		householdName: session.activeHousehold.name,
-		listName: list.name,
+		listName: listResult.list.name,
 		items: items.map((item) => activeListItemFromItem(item, memberNames)),
 	};
 }

@@ -412,6 +412,7 @@ async function createHomeSessionHarness(
 	const dataServices = await createSessionDataServices(
 		{
 			householdId: scenario.household.id,
+			userId: scenario.users.avery.id,
 			database: { url: "libsql://example", authToken: "secret" },
 			logger: testLogger,
 		},
