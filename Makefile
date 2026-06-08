@@ -17,7 +17,7 @@ install: ## Install dependencies *common*
 	@$(PNPM) install
 
 .PHONY: worktree-env
-worktree-env: ## Link or copy local .env.local into this worktree
+worktree-env: ## Link or copy local .env.local and docs/.local into this worktree
 	@./script/setup_worktree_env.sh
 
 .PHONY: start

@@ -36,9 +36,11 @@ worktree env file from a trusted local checkout instead of committing secrets:
 make worktree-env
 ```
 
-The helper symlinks the first `.env.local` it finds in another git worktree. Use
-`WORKTREE_ENV_FILE=/path/to/.env.local` to choose a specific source, or
-`WORKTREE_ENV_MODE=copy` when a symlink is not appropriate.
+The helper symlinks the first `.env.local` it finds in another git worktree and
+symlinks `docs/.local` from another worktree when this worktree is missing it.
+Use `WORKTREE_ENV_FILE=/path/to/.env.local` to choose a specific env source,
+`WORKTREE_LOCAL_DOCS_DIR=/path/to/docs/.local` to choose a specific local docs
+source, or `WORKTREE_ENV_MODE=copy` when symlinks are not appropriate.
 
 ## Clerk
 

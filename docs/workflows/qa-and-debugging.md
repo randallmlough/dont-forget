@@ -56,18 +56,24 @@ Before simulator QA in a fresh worktree:
 1. Install dependencies with `make install`. If the sandbox cannot reach the npm
    registry or the pnpm store, request escalation for the same command instead of
    skipping verification.
-2. Link or copy a real local env file with `make worktree-env`. By default the
-   helper finds another git worktree with `.env.local` and symlinks it. To use an
-   explicit source, run:
+2. Set up local worktree files with `make worktree-env`. By default the helper
+   finds another git worktree with `.env.local` and `docs/.local`, then symlinks
+   them when this worktree is missing them. To use an explicit env source, run:
 
    ```bash
    WORKTREE_ENV_FILE=/path/to/.env.local make worktree-env
    ```
 
-   To copy instead of symlink:
+   To copy both local artifacts instead of symlinking:
 
    ```bash
    WORKTREE_ENV_MODE=copy WORKTREE_ENV_FILE=/path/to/.env.local make worktree-env
+   ```
+
+   To choose a specific local docs source:
+
+   ```bash
+   WORKTREE_LOCAL_DOCS_DIR=/path/to/docs/.local make worktree-env
    ```
 
 3. Use a non-default Metro port when another checkout is already running:

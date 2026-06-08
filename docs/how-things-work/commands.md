@@ -21,7 +21,7 @@ make ios PORT=8090
 | Command | Description |
 | --- | --- |
 | `make install` | Install dependencies. |
-| `make worktree-env` | Link or copy a local `.env.local` into a fresh worktree. |
+| `make worktree-env` | Link or copy local `.env.local` and `docs/.local` into a fresh worktree. |
 | `make start` | Start the Expo development server for the app. |
 | `make ios` | Build and run the app on iOS. |
 | `make storybook` | Start Storybook for an installed native iOS build/dev client. |
@@ -85,7 +85,7 @@ make ios PORT=8090
 | Command | Description |
 | --- | --- |
 | `make help` | Display Makefile targets grouped by section. |
-| `make worktree-env` | Create `.env.local` for a worktree from another checkout or `WORKTREE_ENV_FILE`. Use `WORKTREE_ENV_MODE=copy` to copy instead of symlink. |
+| `make worktree-env` | Link or copy `.env.local` and `docs/.local` for a worktree from another checkout. Use `WORKTREE_ENV_FILE` or `WORKTREE_LOCAL_DOCS_DIR` to choose explicit sources. |
 | `make expo-config` | Print the public Expo config after dynamic config resolution. |
 | `make why PKG=<package>` | Inspect why a package is installed. |
 | `make outdated` | Show dependencies with available newer versions. |
