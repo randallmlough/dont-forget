@@ -5,6 +5,8 @@
 PNPM ?= pnpm
 APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
 PORT_ARG = $(if $(PORT),--port $(PORT),)
+PORT_API_BASE_URL = $(if $(PORT),$(if $(EXPO_PUBLIC_API_BASE_URL),$(EXPO_PUBLIC_API_BASE_URL),http://localhost:$(PORT)),)
+API_BASE_URL_ENV = $(if $(PORT_API_BASE_URL),EXPO_PUBLIC_API_BASE_URL="$(PORT_API_BASE_URL)",)
 
 .DEFAULT_GOAL := help
 
@@ -20,11 +22,11 @@ worktree-env: ## Link or copy local .env.local into this worktree
 
 .PHONY: start
 start: ## Start Expo for normal app development *common*
-	@APP_ENV="$(APP_ENV_VALUE)" NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --localhost $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(API_BASE_URL_ENV) NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --localhost $(PORT_ARG)
 
 .PHONY: ios
 ios: ## Run the native iOS target *common*
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo run:ios $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(API_BASE_URL_ENV) $(PNPM) expo run:ios $(PORT_ARG)
 
 .PHONY: prebuild
 prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to pass --clean
@@ -36,7 +38,7 @@ prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to 
 
 .PHONY: storybook
 storybook: ## Start Storybook for the native iOS build *common*
-	@APP_ENV="$(APP_ENV_VALUE)" STORYBOOK_ENABLED=true NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --dev-client $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(API_BASE_URL_ENV) STORYBOOK_ENABLED=true NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --dev-client $(PORT_ARG)
 
 .PHONY: verify
 verify: typecheck biome-check eslint-rules lint test-ci ## Run typecheck, Biome, lint, and tests *common*
@@ -48,7 +50,7 @@ ci: verify expo-check expo-config-check audit ## Run the full CI contract *commo
 
 .PHONY: storybook-ios
 storybook-ios: ## Build and run Storybook on iOS
-	@APP_ENV="$(APP_ENV_VALUE)" STORYBOOK_ENABLED=true $(PNPM) expo run:ios $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(API_BASE_URL_ENV) STORYBOOK_ENABLED=true $(PNPM) expo run:ios $(PORT_ARG)
 
 .PHONY: storybook-generate
 storybook-generate: ## Regenerate Storybook story imports
@@ -90,7 +92,7 @@ expo-config-check: ## Resolve the public Expo config without printing it
 
 .PHONY: expo-clear
 expo-clear: ## Start Expo with a cleared Metro cache
-	@APP_ENV="$(APP_ENV_VALUE)" NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --clear --localhost $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(API_BASE_URL_ENV) NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --clear --localhost $(PORT_ARG)
 
 ##@ Tests
 
