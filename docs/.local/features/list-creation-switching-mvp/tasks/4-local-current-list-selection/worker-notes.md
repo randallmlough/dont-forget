@@ -101,3 +101,9 @@ Update it continuously with assumptions, decisions, discoveries, commands run, t
   - `make typecheck` passed after import cleanup.
   - `make verify` passed after import cleanup: Biome, custom ESLint rule tests, ESLint, and Jest. Jest result: 51 suites, 347 tests.
 - No `state.json` changes were made.
+
+## 2026-06-08 - Review Round 2 Docs Fix
+
+- Read review round 2 findings in `reviewer-notes.md`.
+- Updated `docs/adr/0012-authenticated-app-session-controller.md` so its centralized sign-out order includes clearing local Current List selections for the signed-out app User after signed-out session cache/local Household DB cleanup and before Clerk `signOut()`.
+- Scope stayed documentation-only. No source, tests, or `state.json` changes were made.
