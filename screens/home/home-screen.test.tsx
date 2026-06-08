@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
 	act,
 	fireEvent,
@@ -16,12 +17,12 @@ import {
 import { items, lists } from "@/db/schema/household";
 import type { TestDirectoryDb, TestHouseholdDb } from "@/db/test";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
-import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionDataServices } from "@/lib/services/session/services";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
+import { homeActiveListBoundaryKey } from "./home-current-list";
 
 jest.mock("@/components/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
@@ -44,6 +45,7 @@ jest.mock("@/lib/logger", () =>
 );
 
 const testLogger = createMockLogger();
+const mockAsyncStorage = jest.mocked(AsyncStorage);
 testLogger.with.mockReturnValue(testLogger);
 const noopProviderActions = {
 	retry() {},
@@ -54,6 +56,15 @@ const noopProviderActions = {
 const { default: HomeScreen, HomeScreenView } = jest.requireActual<
 	typeof import("@/screens/home/home-screen")
 >("@/screens/home/home-screen");
+
+beforeEach(() => {
+	mockAsyncStorage.getItem.mockReset();
+	mockAsyncStorage.setItem.mockReset();
+	mockAsyncStorage.removeItem.mockReset();
+	mockAsyncStorage.getItem.mockResolvedValue(null);
+	mockAsyncStorage.setItem.mockResolvedValue(undefined);
+	mockAsyncStorage.removeItem.mockResolvedValue(undefined);
+});
 
 describe("HomeScreen", () => {
 	beforeEach(() => {
@@ -250,7 +261,30 @@ describe("HomeScreenView", () => {
 		}
 	});
 
-	it("loads the default List from the seeded Household DB after authenticated app session context exists", async () => {
+	it("renders the stored valid active Current List selection", async () => {
+		const harness = await createHomeSessionHarness();
+		mockAsyncStorage.getItem.mockResolvedValue(
+			currentListSelectionPayload(harness, harness.scenario.lists.pharmacy.id),
+		);
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+			expect(screen.queryByText("Groceries")).toBeNull();
+			expect(mockAsyncStorage.removeItem).not.toHaveBeenCalled();
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("falls back in memory to the most recently active List when no selection is stored", async () => {
 		const harness = await createHomeSessionHarness();
 
 		try {
@@ -262,14 +296,18 @@ describe("HomeScreenView", () => {
 			);
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
-			expect(harness.scenario.lists.groceries.id).toBe(DEFAULT_LIST_ID);
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+			expect(mockAsyncStorage.removeItem).not.toHaveBeenCalled();
 		} finally {
 			await harness.close();
 		}
 	});
 
-	it("persists Item add and checked state through seeded session services", async () => {
+	it("clears an invalid stored selection and does not persist the fallback", async () => {
 		const harness = await createHomeSessionHarness();
+		mockAsyncStorage.getItem.mockResolvedValue(
+			currentListSelectionPayload(harness, "lst_missing"),
+		);
 
 		try {
 			renderWithSafeArea(
@@ -278,7 +316,162 @@ describe("HomeScreenView", () => {
 					session={harness.session}
 				/>,
 			);
-			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+
+			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+			expect(mockAsyncStorage.removeItem).toHaveBeenCalledTimes(1);
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("falls back from an archived stored selection", async () => {
+		const archivedHarness = await createHomeSessionHarness();
+		mockAsyncStorage.getItem.mockResolvedValue(
+			currentListSelectionPayload(
+				archivedHarness,
+				archivedHarness.scenario.lists.archivedCamping.id,
+			),
+		);
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={archivedHarness.session}
+				/>,
+			);
+
+			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+			expect(screen.queryByText("Camping")).toBeNull();
+			expect(mockAsyncStorage.removeItem).toHaveBeenCalledTimes(1);
+		} finally {
+			await archivedHarness.close();
+		}
+	});
+
+	it("falls back from a deleted stored selection", async () => {
+		const deletedHarness = await createHomeSessionHarness();
+		await deletedHarness.household.db
+			.update(lists)
+			.set({ deletedAt: 1_700_000_000_999 })
+			.where(eq(lists.id, deletedHarness.scenario.lists.pharmacy.id));
+		mockAsyncStorage.getItem.mockResolvedValue(
+			currentListSelectionPayload(
+				deletedHarness,
+				deletedHarness.scenario.lists.pharmacy.id,
+			),
+		);
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={deletedHarness.session}
+				/>,
+			);
+
+			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+			expect(screen.queryByText("Pharmacy")).toBeNull();
+			expect(mockAsyncStorage.removeItem).toHaveBeenCalledTimes(1);
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+		} finally {
+			await deletedHarness.close();
+		}
+	});
+
+	it("excludes a stale active candidate and resolves the next active List", async () => {
+		const harness = await createHomeSessionHarness();
+		const originalGetList = harness.session.services.lists.getList;
+		let shouldReturnStaleGroceries = true;
+		harness.session.services.lists.getList = async (input) => {
+			if (
+				input.listId === harness.scenario.lists.groceries.id &&
+				shouldReturnStaleGroceries
+			) {
+				shouldReturnStaleGroceries = false;
+				return { status: "missing", listId: input.listId };
+			}
+
+			return originalGetList(input);
+		};
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+			expect(screen.queryByText("Groceries")).toBeNull();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("renders a display-only zero-active state without Active List UI", async () => {
+		const harness = await createHomeSessionHarness();
+		await harness.household.db
+			.update(lists)
+			.set({ archivedAt: 1_700_000_001_000 });
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() =>
+				expect(screen.getByText("No active Lists")).toBeTruthy(),
+			);
+			expect(
+				screen.getByText("Create a List to start adding Items."),
+			).toBeTruthy();
+			expect(screen.getByText("Avery Chen")).toBeTruthy();
+			expect(screen.queryByText("Groceries")).toBeNull();
+			expect(screen.queryByText("Refresh")).toBeNull();
+			expect(screen.queryByText("Synced")).toBeNull();
+			expect(screen.queryByLabelText("Add Item")).toBeNull();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("uses session resource key and resolved List ID for the Active List boundary key", async () => {
+		const harness = await createHomeSessionHarness({
+			resourceKey: "authenticated-app-session:test-key",
+		});
+
+		try {
+			expect(
+				homeActiveListBoundaryKey(
+					harness.session,
+					harness.scenario.lists.pharmacy.id,
+				),
+			).toBe("authenticated-app-session:test-key:lst_seed_pharmacy");
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("persists Item add and checked state against the resolved List", async () => {
+		const harness = await createHomeSessionHarness();
+		mockAsyncStorage.getItem.mockResolvedValue(
+			currentListSelectionPayload(harness, harness.scenario.lists.pharmacy.id),
+		);
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
 			openAddItemComposer();
 			fireEvent.changeText(screen.getByLabelText("Item name"), "Yogurt");
@@ -300,7 +493,7 @@ describe("HomeScreenView", () => {
 			expect(persistedItem).toBeDefined();
 			if (!persistedItem) throw new Error("Expected persisted Item");
 			expect(persistedItem).toMatchObject({
-				listId: DEFAULT_LIST_ID,
+				listId: harness.scenario.lists.pharmacy.id,
 				name: "Yogurt",
 				quantity: "half carton",
 				notes: "Plain Greek",
@@ -518,6 +711,15 @@ function passiveSyncCoordinator(): AuthenticatedAppSession["services"]["sync"] {
 
 function renderWithSafeArea(ui: ReactElement) {
 	return render(ui, { wrapper: TestSafeAreaProvider });
+}
+
+function currentListSelectionPayload(
+	harness: HomeSessionHarness,
+	listId: string,
+): string {
+	return JSON.stringify({
+		[harness.scenario.household.id]: listId,
+	});
 }
 
 function TestSafeAreaProvider({ children }: PropsWithChildren) {

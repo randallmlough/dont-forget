@@ -1,8 +1,8 @@
 import { ActivityIndicator } from "react-native";
 import { ActiveList } from "@/components/active-list";
-import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeRetryButton, HomeStatus } from "./home-status";
+import { useHomeActiveListResolver } from "./use-home-active-list-resolver";
 import { useHomeCurrentList } from "./use-home-current-list";
 
 export function HomeCurrentList({
@@ -11,18 +11,68 @@ export function HomeCurrentList({
 	session: AuthenticatedAppSession;
 }) {
 	return (
-		<HomeCurrentListResource key={session.resourceKey} session={session} />
+		<HomeCurrentListResolver key={session.resourceKey} session={session} />
+	);
+}
+
+function HomeCurrentListResolver({
+	session,
+}: {
+	session: AuthenticatedAppSession;
+}) {
+	const resolver = useHomeActiveListResolver(session);
+	const resolveState = resolver.state;
+
+	if (resolveState.status === "loading") {
+		return (
+			<HomeStatus
+				title="Preparing your Household"
+				body="Loading your Household List."
+			>
+				<ActivityIndicator />
+			</HomeStatus>
+		);
+	}
+
+	if (resolveState.status === "error") {
+		return (
+			<HomeStatus title="List unavailable" body={resolveState.message}>
+				<HomeRetryButton onPress={resolver.retry} />
+			</HomeStatus>
+		);
+	}
+
+	if (resolveState.status === "zeroActive") {
+		return (
+			<HomeStatus
+				title="No active Lists"
+				body="Create a List to start adding Items."
+			>
+				{null}
+			</HomeStatus>
+		);
+	}
+
+	return (
+		<HomeCurrentListResource
+			key={homeActiveListBoundaryKey(session, resolveState.listId)}
+			session={session}
+			listId={resolveState.listId}
+		/>
 	);
 }
 
 function HomeCurrentListResource({
 	session,
+	listId,
 }: {
 	session: AuthenticatedAppSession;
+	listId: string;
 }) {
 	const currentMemberName = homeSessionMemberName(session);
-	const list = useHomeCurrentList(session, DEFAULT_LIST_ID);
+	const list = useHomeCurrentList(session, listId);
 	const loadState = list.state;
+	const boundaryKey = homeActiveListBoundaryKey(session, listId);
 
 	if (loadState.status === "loading") {
 		return (
@@ -45,6 +95,7 @@ function HomeCurrentListResource({
 
 	return (
 		<ActiveList.Provider
+			key={boundaryKey}
 			initialState={loadState.initialList}
 			currentMemberName={currentMemberName}
 			onLoadList={loadState.actions.loadList}
@@ -59,6 +110,13 @@ function HomeCurrentListResource({
 			</ActiveList.Screen>
 		</ActiveList.Provider>
 	);
+}
+
+export function homeActiveListBoundaryKey(
+	session: Pick<AuthenticatedAppSession, "resourceKey">,
+	listId: string,
+): string {
+	return `${session.resourceKey}:${listId}`;
 }
 
 export function homeSessionMemberName(
