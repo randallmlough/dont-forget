@@ -690,7 +690,12 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 			signedIn: true,
 		});
 
-		await expect(controller.dispose()).rejects.toThrow("stop failed");
+		await expect(controller.dispose()).rejects.toMatchObject({
+			disposal: {
+				householdIdsForLocalDataDeletion: ["hh_avery"],
+				signedOutUserId: "usr_avery",
+			},
+		});
 		expect(dataServices.close).toHaveBeenCalledTimes(1);
 	});
 

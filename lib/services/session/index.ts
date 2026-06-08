@@ -5,6 +5,7 @@ export {
 	type AuthenticatedAppSessionController,
 	type AuthenticatedAppSessionControllerDeps,
 	type AuthenticatedAppSessionDisposal,
+	AuthenticatedAppSessionDisposalError,
 	type AuthenticatedAppSessionServices,
 	type AuthenticatedAppSessionStateSnapshot,
 	type AuthenticatedAppSessionSync,

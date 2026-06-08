@@ -5,10 +5,11 @@ import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
 import type { ServiceResetAnalytics } from "@/lib/services/analytics";
 import { clearSignedOutSessionData as defaultClearSignedOutSessionData } from "./cache";
-import type {
-	AuthenticatedAppSessionActivation,
-	AuthenticatedAppSessionController,
-	AuthenticatedAppSessionDisposal,
+import {
+	type AuthenticatedAppSessionActivation,
+	type AuthenticatedAppSessionController,
+	type AuthenticatedAppSessionDisposal,
+	AuthenticatedAppSessionDisposalError,
 } from "./controller";
 
 export type AuthenticatedAppSessionSignOutAuth =
@@ -71,6 +72,9 @@ export function createAuthenticatedAppSessionSignOut({
 				disposal = nextDisposal;
 			})
 			.catch((error) => {
+				if (error instanceof AuthenticatedAppSessionDisposalError) {
+					disposal = error.disposal;
+				}
 				logger.error("authenticated app session sign-out dispose failed", {
 					error: asError(error),
 				});

@@ -66,7 +66,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** keep auth routing effects separate from cache probes and native SDK warmup effects.
 - **Must** derive effective auth and cache state from authoritative auth readiness state instead of storing duplicate signed-in or signed-out booleans.
 - **Must** call `setActive(...)` after successful Clerk auth attempts.
-- **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose authenticated app session resources, clear local Household cache/DB files when that path exists, then call `signOut()`.
+- **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose authenticated app session resources, clear local Household cache/DB files when that path exists, clear local Current List selections for the signed-out app User, then call `signOut()`.
 - **Should** use `useEffectEvent` when an effect needs the latest callback without reactivating provider lifecycle.
 - **Should** extract root effect logic into named hooks when it has branching, cleanup, or testable behavior.
 - **Should** keep route membership checks inside the redirect effect when the result is only used for navigation synchronization.

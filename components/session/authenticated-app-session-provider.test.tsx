@@ -11,11 +11,12 @@ import {
 	createCurrentListSelectionStore,
 } from "@/lib/local-storage";
 import { useLogger } from "@/lib/logger";
-import type {
-	AuthenticatedAppSession,
-	AuthenticatedAppSessionActivation,
-	AuthenticatedAppSessionController,
-	AuthenticatedAppSessionStateSnapshot,
+import {
+	type AuthenticatedAppSession,
+	type AuthenticatedAppSessionActivation,
+	type AuthenticatedAppSessionController,
+	AuthenticatedAppSessionDisposalError,
+	type AuthenticatedAppSessionStateSnapshot,
 } from "@/lib/services/session";
 import { deferred } from "@/lib/test/async";
 import { createMockAnalytics } from "@/lib/test/mocks/analytics";
@@ -417,6 +418,57 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(mockLogger.error).toHaveBeenCalledWith(
 			"authenticated app session sign-out dispose failed",
 			{ error: expect.any(Error) },
+		);
+	});
+
+	it("clears Current List selections before Clerk sign out when controller disposal fails after a ready session", async () => {
+		const order: string[] = [];
+		const controller = authenticatedAppSessionControllerFixture({
+			snapshot: { status: "ready", session: appSessionFixture() },
+		});
+		controller.dispose.mockImplementation(async () => {
+			order.push("dispose");
+			throw new AuthenticatedAppSessionDisposalError(
+				new Error("dispose failed"),
+				{
+					householdIdsForLocalDataDeletion: ["hh_avery"],
+					signedOutUserId: "usr_avery",
+				},
+			);
+		});
+		const auth = authFixture({
+			signOut: jest.fn(async () => {
+				order.push("clerk");
+			}),
+		});
+		const clearSignedOutData = jest.fn(async () => {
+			order.push("clear");
+		});
+		const clearCurrentListSelectionsForUser = jest.fn(async () => {
+			order.push("clearCurrentList");
+		});
+
+		render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={auth}
+				analytics={createMockAnalytics()}
+				clearSignedOutSessionData={clearSignedOutData}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+			>
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(clearSignedOutData).toHaveBeenCalledWith(["hh_avery"]);
+		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledWith("usr_avery");
+		expect(order).toEqual(["dispose", "clear", "clearCurrentList", "clerk"]);
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session sign-out dispose failed",
+			{ error: expect.any(AuthenticatedAppSessionDisposalError) },
 		);
 	});
 

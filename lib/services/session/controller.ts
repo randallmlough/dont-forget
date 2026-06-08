@@ -102,6 +102,17 @@ export type AuthenticatedAppSessionDisposal = {
 	signedOutUserId: string | null;
 };
 
+export class AuthenticatedAppSessionDisposalError extends Error {
+	readonly disposal: AuthenticatedAppSessionDisposal;
+
+	constructor(error: unknown, disposal: AuthenticatedAppSessionDisposal) {
+		const cause = asError(error);
+		super(cause.message);
+		this.name = "AuthenticatedAppSessionDisposalError";
+		this.disposal = disposal;
+	}
+}
+
 export type AuthenticatedAppSessionControllerDeps = {
 	bootstrap?: SessionBootstrapService;
 	cache?: SessionCache;
@@ -433,7 +444,10 @@ export function createAuthenticatedAppSessionController(
 					result.status === "rejected",
 			);
 			if (rejected) {
-				throw rejected.reason;
+				throw new AuthenticatedAppSessionDisposalError(
+					rejected.reason,
+					disposal,
+				);
 			}
 			return disposal;
 		},

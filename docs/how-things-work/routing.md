@@ -58,13 +58,18 @@ track("user_signed_out", {});
 reset();
 const disposal = await authenticatedAppSessionController.dispose();
 await clearSignedOutSessionData(disposal.householdIdsForLocalDataDeletion);
+if (disposal.signedOutUserId) {
+  await clearCurrentListSelectionsForUser(disposal.signedOutUserId);
+}
 await signOut();
 ```
 
 Cached Authenticated App Session metadata clearing and local Household DB file deletion
 remain separate operations so authenticated app session resources can be stopped and
-closed before destructive local cleanup. Controller disposal and local cleanup
-failures are logged and do not block Clerk sign-out.
+closed before destructive local cleanup. Current List selection cleanup runs after
+signed-out session data cleanup and before Clerk sign-out. Controller disposal,
+local cleanup, and Current List selection cleanup failures are logged and do not
+block Clerk sign-out.
 
 ## Adding Routes
 

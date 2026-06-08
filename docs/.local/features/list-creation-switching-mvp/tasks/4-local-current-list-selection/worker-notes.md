@@ -75,3 +75,29 @@ Update it continuously with assumptions, decisions, discoveries, commands run, t
 - No `state.json` changes were made.
 - No List existence/archive/delete/fallback/zero-active behavior was added.
 - No Home, resolver, ListService consumption, switching analytics, or Task 5 behavior was introduced.
+
+## 2026-06-08 - Review Round 1 Fixes
+
+- Read review round 1 findings in `reviewer-notes.md`.
+- Review-fix assumptions:
+  - The signed-out app `User.id` should remain sourced from the controller's prior Authenticated App Session snapshot, as chosen in the initial implementation.
+  - A controller disposal cleanup failure should not erase already-captured disposal metadata needed by sign-out cleanup.
+  - Fix scope is only the disposal-failure Current List cleanup path, regression coverage, and stale sign-out order docs.
+- Planned edits:
+  - Preserve `AuthenticatedAppSessionDisposal` on controller disposal failure so sign-out can still clear Current List selections for the signed-out app User.
+  - Add a regression test where controller disposal rejects after a ready session and Current List cleanup for `usr_avery` still runs before Clerk `signOut()`.
+  - Update `docs/how-things-work/routing.md` and `docs/code-standards/architecture.md` to include Current List selection cleanup after signed-out session data cleanup and before Clerk `signOut()`.
+- Implemented:
+  - Added `AuthenticatedAppSessionDisposalError`, carrying the already-captured `AuthenticatedAppSessionDisposal` when controller cleanup rejects.
+  - `createAuthenticatedAppSessionSignOut` now recovers disposal metadata from that error, logs the disposal failure, continues signed-out session data cleanup, clears Current List selections for the signed-out app User, and still calls Clerk `signOut()`.
+  - Added provider regression coverage for disposal failure after a prior ready session, asserting `clearCurrentListSelectionsForUser("usr_avery")` runs before Clerk `signOut()`.
+  - Tightened controller lifecycle coverage so disposal rejection preserves `householdIdsForLocalDataDeletion` and `signedOutUserId`.
+  - Updated stale sign-out order docs in `docs/how-things-work/routing.md` and `docs/code-standards/architecture.md`.
+- Verification:
+  - `pnpm exec jest --runInBand --runTestsByPath components/session/authenticated-app-session-provider.test.tsx lib/services/session/controller.resource-lifecycle.test.ts` passed: 2 suites, 40 tests.
+  - `pnpm exec jest --runInBand --runTestsByPath lib/local-storage/current-list-selection.test.ts` passed: 1 suite, 7 tests.
+  - First `make verify` attempt failed at Biome import/export ordering only; ran `pnpm exec biome check --write components/session/authenticated-app-session-provider.test.tsx lib/services/session/index.ts lib/services/session/sign-out.ts`.
+  - `pnpm exec jest --runInBand --runTestsByPath components/session/authenticated-app-session-provider.test.tsx lib/services/session/controller.resource-lifecycle.test.ts lib/local-storage/current-list-selection.test.ts` passed after import cleanup: 3 suites, 47 tests.
+  - `make typecheck` passed after import cleanup.
+  - `make verify` passed after import cleanup: Biome, custom ESLint rule tests, ESLint, and Jest. Jest result: 51 suites, 347 tests.
+- No `state.json` changes were made.
