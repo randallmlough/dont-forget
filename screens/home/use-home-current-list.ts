@@ -5,6 +5,7 @@ import type {
 	AddActiveListItemInput,
 } from "@/components/active-list";
 import type { Item } from "@/lib/services/item";
+import type { GetListResult } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 
 export type HomeCurrentListActions = {
@@ -16,15 +17,21 @@ export type HomeCurrentListActions = {
 export type HomeCurrentListState =
 	| { status: "loading" }
 	| { status: "error"; message: string }
+	| { status: "unavailable"; listId: string }
 	| {
 			status: "ready";
 			initialList: ActiveListInitialState;
 			actions: HomeCurrentListActions;
 	  };
 
+export type HomeCurrentListOptions = {
+	onUnavailable?: (listId: string) => void;
+};
+
 export function useHomeCurrentList(
 	session: AuthenticatedAppSession,
 	listId: string,
+	options: HomeCurrentListOptions = {},
 ): {
 	state: HomeCurrentListState;
 	retry: () => void;
@@ -36,6 +43,7 @@ export function useHomeCurrentList(
 		initialHomeCurrentListResource,
 	);
 	const loadAttempt = resource.loadKey === loadKey ? resource.attempt : 0;
+	const { onUnavailable } = options;
 
 	async function loadList(): Promise<ActiveListInitialState> {
 		return loadCurrentList(session, listId);
@@ -66,15 +74,25 @@ export function useHomeCurrentList(
 	useEffect(() => {
 		let cancelled = false;
 
-		loadCurrentList(session, listId)
-			.then((initialList) => {
+		loadCurrentListForHome(session, listId)
+			.then((result) => {
 				if (!cancelled) {
-					dispatch({
-						type: "listLoaded",
-						loadKey,
-						attempt: loadAttempt,
-						initialList,
-					});
+					if (result.status === "unavailable") {
+						onUnavailable?.(result.listId);
+						dispatch({
+							type: "listUnavailable",
+							loadKey,
+							attempt: loadAttempt,
+							listId: result.listId,
+						});
+					} else {
+						dispatch({
+							type: "listLoaded",
+							loadKey,
+							attempt: loadAttempt,
+							initialList: result.initialList,
+						});
+					}
 				}
 			})
 			.catch(() => {
@@ -91,7 +109,7 @@ export function useHomeCurrentList(
 		return () => {
 			cancelled = true;
 		};
-	}, [loadAttempt, loadKey, listId, session]);
+	}, [loadAttempt, loadKey, listId, onUnavailable, session]);
 
 	const actions = { addItem, loadList, setItemChecked };
 
@@ -104,6 +122,7 @@ export function useHomeCurrentList(
 type HomeCurrentListResource =
 	| { status: "loading"; loadKey: string; attempt: number }
 	| { status: "error"; loadKey: string; attempt: number; message: string }
+	| { status: "unavailable"; loadKey: string; attempt: number; listId: string }
 	| {
 			status: "ready";
 			loadKey: string;
@@ -118,6 +137,12 @@ type HomeCurrentListResourceAction =
 			loadKey: string;
 			attempt: number;
 			initialList: ActiveListInitialState;
+	  }
+	| {
+			type: "listUnavailable";
+			loadKey: string;
+			attempt: number;
+			listId: string;
 	  }
 	| {
 			type: "listLoadFailed";
@@ -157,6 +182,15 @@ function homeCurrentListReducer(
 		};
 	}
 
+	if (action.type === "listUnavailable") {
+		return {
+			status: "unavailable",
+			loadKey: action.loadKey,
+			attempt: action.attempt,
+			listId: action.listId,
+		};
+	}
+
 	return {
 		status: "error",
 		loadKey: action.loadKey,
@@ -178,6 +212,10 @@ function homeCurrentListStateFromResource(
 		return { status: "error", message: resource.message };
 	}
 
+	if (resource.status === "unavailable") {
+		return { status: "unavailable", listId: resource.listId };
+	}
+
 	return { status: "ready", initialList: resource.initialList, actions };
 }
 
@@ -185,19 +223,41 @@ async function loadCurrentList(
 	session: AuthenticatedAppSession,
 	listId: string,
 ): Promise<ActiveListInitialState> {
+	const result = await loadCurrentListForHome(session, listId);
+	if (result.status === "unavailable") {
+		throw new Error("List is not available");
+	}
+	return result.initialList;
+}
+
+type HomeCurrentListLoadResult =
+	| { status: "ready"; initialList: ActiveListInitialState }
+	| {
+			status: "unavailable";
+			listId: string;
+			reason: Exclude<GetListResult["status"], "available">;
+	  };
+
+async function loadCurrentListForHome(
+	session: AuthenticatedAppSession,
+	listId: string,
+): Promise<HomeCurrentListLoadResult> {
 	const [listResult, items] = await Promise.all([
 		session.services.lists.getList({ listId }),
 		session.services.items.listItems({ listId }),
 	]);
 	if (listResult.status !== "available") {
-		throw new Error("List is not available");
+		return { status: "unavailable", listId, reason: listResult.status };
 	}
 	const memberNames = memberNamesFromSession(session);
 
 	return {
-		householdName: session.activeHousehold.name,
-		listName: listResult.list.name,
-		items: items.map((item) => activeListItemFromItem(item, memberNames)),
+		status: "ready",
+		initialList: {
+			householdName: session.activeHousehold.name,
+			listName: listResult.list.name,
+			items: items.map((item) => activeListItemFromItem(item, memberNames)),
+		},
 	};
 }
 

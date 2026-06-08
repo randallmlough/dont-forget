@@ -411,6 +411,91 @@ describe("HomeScreenView", () => {
 		}
 	});
 
+	it("re-resolves when the post-resolution active List load returns missing", async () => {
+		const harness = await createHomeSessionHarness();
+		const originalGetList = harness.session.services.lists.getList;
+		let groceriesReadCount = 0;
+		mockAsyncStorage.getItem.mockResolvedValue(
+			currentListSelectionPayload(harness, harness.scenario.lists.groceries.id),
+		);
+		harness.session.services.lists.getList = async (input) => {
+			if (input.listId === harness.scenario.lists.groceries.id) {
+				groceriesReadCount += 1;
+				if (groceriesReadCount === 2) {
+					return { status: "missing", listId: input.listId };
+				}
+			}
+
+			return originalGetList(input);
+		};
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+			expect(screen.queryByText("List unavailable")).toBeNull();
+			expect(screen.queryByText("Groceries")).toBeNull();
+			expect(mockAsyncStorage.removeItem).toHaveBeenCalledTimes(1);
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("renders zero-active when the post-resolution active List load returns deleted and no fallback remains", async () => {
+		const harness = await createHomeSessionHarness();
+		await harness.household.db
+			.update(lists)
+			.set({ archivedAt: 1_700_000_001_000 })
+			.where(eq(lists.id, harness.scenario.lists.pharmacy.id));
+		await harness.household.db
+			.update(lists)
+			.set({ archivedAt: 1_700_000_001_000 })
+			.where(eq(lists.id, harness.scenario.lists.hardware.id));
+		const originalGetList = harness.session.services.lists.getList;
+		let groceriesReadCount = 0;
+		harness.session.services.lists.getList = async (input) => {
+			if (input.listId === harness.scenario.lists.groceries.id) {
+				groceriesReadCount += 1;
+				if (groceriesReadCount === 2) {
+					return {
+						status: "deleted",
+						listId: input.listId,
+						deletedAt: 1_700_000_001_001,
+						updatedAt: 1_700_000_001_001,
+					};
+				}
+			}
+
+			return originalGetList(input);
+		};
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() =>
+				expect(screen.getByText("No active Lists")).toBeTruthy(),
+			);
+			expect(
+				screen.getByText("Create a List to start adding Items."),
+			).toBeTruthy();
+			expect(screen.queryByText("List unavailable")).toBeNull();
+			expect(screen.queryByText("Groceries")).toBeNull();
+		} finally {
+			await harness.close();
+		}
+	});
+
 	it("renders a display-only zero-active state without Active List UI", async () => {
 		const harness = await createHomeSessionHarness();
 		await harness.household.db

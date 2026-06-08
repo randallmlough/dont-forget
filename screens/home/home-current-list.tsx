@@ -1,8 +1,9 @@
+import { useCallback, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { ActiveList } from "@/components/active-list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeRetryButton, HomeStatus } from "./home-status";
-import { useHomeActiveListResolver } from "./use-home-active-list-resolver";
+import { useHomeActiveListResolverWithExclusions } from "./use-home-active-list-resolver";
 import { useHomeCurrentList } from "./use-home-current-list";
 
 export function HomeCurrentList({
@@ -20,7 +21,18 @@ function HomeCurrentListResolver({
 }: {
 	session: AuthenticatedAppSession;
 }) {
-	const resolver = useHomeActiveListResolver(session);
+	const [postLoadExcludedListIds, setPostLoadExcludedListIds] = useState<
+		string[]
+	>([]);
+	const resolver = useHomeActiveListResolverWithExclusions(
+		session,
+		postLoadExcludedListIds,
+	);
+	const excludePostLoadUnavailableList = useCallback((listId: string) => {
+		setPostLoadExcludedListIds((current) =>
+			current.includes(listId) ? current : [...current, listId],
+		);
+	}, []);
 	const resolveState = resolver.state;
 
 	if (resolveState.status === "loading") {
@@ -58,6 +70,7 @@ function HomeCurrentListResolver({
 			key={homeActiveListBoundaryKey(session, resolveState.listId)}
 			session={session}
 			listId={resolveState.listId}
+			onListUnavailable={excludePostLoadUnavailableList}
 		/>
 	);
 }
@@ -65,16 +78,31 @@ function HomeCurrentListResolver({
 function HomeCurrentListResource({
 	session,
 	listId,
+	onListUnavailable,
 }: {
 	session: AuthenticatedAppSession;
 	listId: string;
+	onListUnavailable: (listId: string) => void;
 }) {
 	const currentMemberName = homeSessionMemberName(session);
-	const list = useHomeCurrentList(session, listId);
+	const list = useHomeCurrentList(session, listId, {
+		onUnavailable: onListUnavailable,
+	});
 	const loadState = list.state;
 	const boundaryKey = homeActiveListBoundaryKey(session, listId);
 
 	if (loadState.status === "loading") {
+		return (
+			<HomeStatus
+				title="Preparing your Household"
+				body="Loading your Household List."
+			>
+				<ActivityIndicator />
+			</HomeStatus>
+		);
+	}
+
+	if (loadState.status === "unavailable") {
 		return (
 			<HomeStatus
 				title="Preparing your Household"

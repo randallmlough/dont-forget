@@ -77,3 +77,32 @@ Update it continuously with assumptions, decisions, discoveries, commands run, t
   - Zero-active renders the temporary display-only `No active Lists` state with no actions.
   - Active List boundary key is `session.resourceKey + resolvedListId` via `homeActiveListBoundaryKey`.
 - Updated `screens/home/home-screen.stories.tsx` so Storybook service doubles implement `listLists()` for resolver loading.
+
+## 2026-06-08 Review Round 1 Fix Worker
+
+### Scope
+
+- Fixed only the blocking review finding: typed `missing`/`deleted` lifecycle results from the post-resolution `useHomeCurrentList` load no longer render retryable `List unavailable`.
+- Preserved Home resolver ownership; no changes moved lifecycle fallback into `ListService`, local storage, or the Authenticated App Session provider.
+- Did not edit `state.json`.
+- Did not add switcher, create, rename, archive, delete, restore, switching analytics, Task 6, or Task 7 behavior.
+
+### Implementation
+
+- `useHomeCurrentList` now preserves typed post-resolution `getList()` lifecycle results as `unavailable` state and only keeps thrown failures on the retryable error path.
+- `HomeCurrentListResolver` keeps an in-memory exclusion list for Lists that became unavailable during the final Home load, then re-runs the Home-owned resolver against the remaining active candidates.
+- Stored selection for a post-load unavailable List is cleared on the re-resolution pass; automatic fallback remains in memory only.
+- Added focused regressions where candidate A resolves first, then the post-resolution Home load returns:
+  - `missing`, causing Home to resolve candidate B without `List unavailable`.
+  - `deleted`, causing Home to render zero-active when no fallback remains, without `List unavailable`.
+
+### Commands Run
+
+- `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` -> failed once while tightening the zero-active setup because Hardware Store was still active; archived the remaining fallback candidate in test setup.
+- `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` -> passed, 20 tests.
+- `pnpm exec biome check --write screens/home/home-current-list.tsx screens/home/use-home-active-list-resolver.ts screens/home/use-home-current-list.ts screens/home/home-screen.test.tsx` -> passed.
+- `make typecheck` -> passed.
+- `make verify` -> failed once on `dont-forget/no-screen-use-effect` after the first implementation placed an effect in `home-current-list.tsx`; moved the unavailable callback into `useHomeCurrentList`.
+- `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` -> passed after the lint refactor, 20 tests.
+- `make typecheck` -> passed after the lint refactor.
+- `make verify` -> passed. Includes `tsc --noEmit`, `biome ci .`, custom ESLint rule tests, `eslint .`, and full Jest. Jest result: 51 suites, 356 tests. Expected PostHog missing-token warnings appeared in existing analytics/API tests.

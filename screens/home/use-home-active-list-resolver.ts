@@ -6,6 +6,8 @@ import {
 import type { ListSummary } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 
+const emptyExcludedListIds: string[] = [];
+
 export type HomeActiveListResolverState =
 	| { status: "loading" }
 	| { status: "active"; listId: string }
@@ -13,6 +15,16 @@ export type HomeActiveListResolverState =
 	| { status: "error"; message: string };
 
 export function useHomeActiveListResolver(session: AuthenticatedAppSession): {
+	state: HomeActiveListResolverState;
+	retry: () => void;
+} {
+	return useHomeActiveListResolverWithExclusions(session, emptyExcludedListIds);
+}
+
+export function useHomeActiveListResolverWithExclusions(
+	session: AuthenticatedAppSession,
+	excludedListIds: string[],
+): {
 	state: HomeActiveListResolverState;
 	retry: () => void;
 } {
@@ -27,7 +39,7 @@ export function useHomeActiveListResolver(session: AuthenticatedAppSession): {
 	useEffect(() => {
 		let cancelled = false;
 
-		resolveHomeActiveList(session)
+		resolveHomeActiveList(session, excludedListIds)
 			.then((state) => {
 				if (!cancelled) {
 					dispatch({
@@ -52,7 +64,7 @@ export function useHomeActiveListResolver(session: AuthenticatedAppSession): {
 		return () => {
 			cancelled = true;
 		};
-	}, [loadAttempt, loadKey, session]);
+	}, [excludedListIds, loadAttempt, loadKey, session]);
 
 	return {
 		state: homeActiveListResolverStateFromResource(resource, loadKey),
@@ -134,6 +146,7 @@ function homeActiveListResolverStateFromResource(
 
 async function resolveHomeActiveList(
 	session: AuthenticatedAppSession,
+	excludedListIds: string[],
 ): Promise<Exclude<HomeActiveListResolverState, { status: "loading" }>> {
 	const userId = session.user.id;
 	const householdId = session.activeHousehold.id;
@@ -145,10 +158,13 @@ async function resolveHomeActiveList(
 		}),
 	]);
 	const activeListIds = new Set(activeLists.map((list) => list.id));
-	const excludedListIds = new Set<string>();
+	const excludedListIdSet = new Set(excludedListIds);
 
 	if (storedListId) {
-		if (!activeListIds.has(storedListId)) {
+		if (
+			!activeListIds.has(storedListId) ||
+			excludedListIdSet.has(storedListId)
+		) {
 			await clearCurrentListSelection(userId, householdId);
 		} else {
 			const storedCandidate = await resolveCandidate(session, storedListId);
@@ -156,12 +172,12 @@ async function resolveHomeActiveList(
 				return storedCandidate;
 			}
 
-			excludedListIds.add(storedListId);
+			excludedListIdSet.add(storedListId);
 			await clearCurrentListSelection(userId, householdId);
 		}
 	}
 
-	return resolveFallbackCandidate(session, activeLists, excludedListIds);
+	return resolveFallbackCandidate(session, activeLists, excludedListIdSet);
 }
 
 async function resolveFallbackCandidate(
