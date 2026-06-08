@@ -144,6 +144,9 @@ function storyServices(initialList: ActiveListInitialState): {
 					},
 				};
 			},
+			async listLists() {
+				throw new Error("Story List summary loading is not implemented");
+			},
 			async renameList() {
 				throw new Error("Story List rename is not implemented");
 			},

@@ -841,6 +841,7 @@ function sessionFixture(): AuthenticatedAppSession {
 	const lists: AuthenticatedAppSession["services"]["lists"] = {
 		createList: jest.fn(),
 		getList: jest.fn(),
+		listLists: jest.fn(),
 		renameList: jest.fn(),
 		deleteList: jest.fn(),
 	};

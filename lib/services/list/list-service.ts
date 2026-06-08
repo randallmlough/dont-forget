@@ -7,7 +7,10 @@ import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
-import type { HouseholdStoreExecutor } from "@/lib/services/household";
+import type {
+	HouseholdSqlValue,
+	HouseholdStoreExecutor,
+} from "@/lib/services/household";
 
 export type List = {
 	id: string;
@@ -28,6 +31,27 @@ export type CreateListInput = {
 
 export type GetListInput = {
 	listId: string;
+};
+
+export type ListListsInput = {
+	archive?: "active" | "archived" | "all";
+	sort?: "recentActivity" | "name" | "createdAt";
+	searchText?: string;
+	createdByUserId?: string;
+};
+
+export type ListSummary = {
+	id: string;
+	householdId: string;
+	name: string;
+	createdByUserId: string;
+	createdAt: number;
+	updatedAt: number;
+	archived: boolean;
+	archivedAt: number | null;
+	lastActivityAt: number;
+	uncheckedItemCount: number;
+	checkedItemCount: number;
 };
 
 export type RenameListInput = {
@@ -81,6 +105,7 @@ export type DeleteListResult =
 export type ListService = {
 	createList(input: CreateListInput): Promise<CreateListResult>;
 	getList(input: GetListInput): Promise<GetListResult>;
+	listLists(input?: ListListsInput): Promise<ListSummary[]>;
 	renameList(input: RenameListInput): Promise<RenameListResult>;
 	deleteList(input: DeleteListInput): Promise<DeleteListResult>;
 };
@@ -101,6 +126,12 @@ const listRowSchema = z.object({
 	updated_at: sqlNumberSchema,
 	archived_at: sqlNumberSchema.nullable(),
 	deleted_at: sqlNumberSchema.nullable(),
+});
+
+const listSummaryRowSchema = listRowSchema.omit({ deleted_at: true }).extend({
+	last_activity_at: sqlNumberSchema,
+	unchecked_item_count: sqlNumberSchema,
+	checked_item_count: sqlNumberSchema,
 });
 
 export function createListService(deps: ListServiceDeps): ListService {
@@ -165,6 +196,23 @@ export function createListService(deps: ListServiceDeps): ListService {
 					error: asError(error),
 					list_id: input.listId,
 				});
+				throw error;
+			}
+		},
+		async listLists(input = {}) {
+			try {
+				const query = listListsQuery(input);
+				const result = await deps.store.execute({
+					kind: "read",
+					sql: query.sql,
+					args: query.args,
+				});
+
+				return result.rows.map((row) =>
+					listSummaryFromRow(row, deps.householdId),
+				);
+			} catch (error) {
+				log.error("list summaries load failed", { error: asError(error) });
 				throw error;
 			}
 		},
@@ -294,6 +342,122 @@ function listFromRow(row: Record<string, unknown>, householdId: string): List {
 		archived: parsed.archived_at !== null,
 		archivedAt: parsed.archived_at,
 	};
+}
+
+function listSummaryFromRow(
+	row: Record<string, unknown>,
+	householdId: string,
+): ListSummary {
+	const parsed = listSummaryRowSchema.parse(row);
+
+	return {
+		id: parsed.id,
+		householdId,
+		name: parsed.name,
+		createdByUserId: parsed.created_by_user_id,
+		createdAt: parsed.created_at,
+		updatedAt: parsed.updated_at,
+		archived: parsed.archived_at !== null,
+		archivedAt: parsed.archived_at,
+		lastActivityAt: parsed.last_activity_at,
+		uncheckedItemCount: parsed.unchecked_item_count,
+		checkedItemCount: parsed.checked_item_count,
+	};
+}
+
+function listListsQuery(input: ListListsInput): {
+	sql: string;
+	args: HouseholdSqlValue[];
+} {
+	const where = ["l.deleted_at IS NULL"];
+	const args: HouseholdSqlValue[] = [];
+
+	switch (input.archive ?? "active") {
+		case "active":
+			where.push("l.archived_at IS NULL");
+			break;
+		case "archived":
+			where.push("l.archived_at IS NOT NULL");
+			break;
+		case "all":
+			break;
+	}
+
+	const searchText = input.searchText?.trim();
+	if (searchText) {
+		where.push("LOWER(l.name) LIKE LOWER(?) ESCAPE '\\'");
+		args.push(`%${escapeSqlLike(searchText)}%`);
+	}
+
+	if (input.createdByUserId) {
+		where.push("l.created_by_user_id = ?");
+		args.push(input.createdByUserId);
+	}
+
+	return {
+		sql: `
+      SELECT
+        l.id,
+        l.name,
+        l.created_by_user_id,
+        l.created_at,
+        l.updated_at,
+        l.archived_at,
+        MAX(
+          l.updated_at,
+          COALESCE(MAX(i.updated_at), l.updated_at),
+          COALESCE(MAX(c.updated_at), l.updated_at)
+        ) AS last_activity_at,
+        COALESCE(SUM(
+          CASE
+            WHEN i.id IS NOT NULL AND c.checked_at IS NULL THEN 1
+            ELSE 0
+          END
+        ), 0) AS unchecked_item_count,
+        COALESCE(SUM(
+          CASE
+            WHEN i.id IS NOT NULL AND c.checked_at IS NOT NULL THEN 1
+            ELSE 0
+          END
+        ), 0) AS checked_item_count
+      FROM lists l
+      LEFT JOIN items i
+        ON i.list_id = l.id
+        AND i.deleted_at IS NULL
+      LEFT JOIN item_checks c ON c.rowid = (
+        SELECT c2.rowid
+        FROM item_checks c2
+        WHERE c2.item_id = i.id
+        ORDER BY c2.updated_at DESC, c2.user_id DESC
+        LIMIT 1
+      )
+      WHERE ${where.join(" AND ")}
+      GROUP BY
+        l.id,
+        l.name,
+        l.created_by_user_id,
+        l.created_at,
+        l.updated_at,
+        l.archived_at
+      ${listListsOrderBy(input.sort ?? "recentActivity")}
+    `,
+		args,
+	};
+}
+
+function listListsOrderBy(sort: NonNullable<ListListsInput["sort"]>): string {
+	switch (sort) {
+		case "recentActivity":
+			return "ORDER BY last_activity_at DESC, l.created_at ASC, l.id ASC";
+		case "name":
+			return "ORDER BY LOWER(l.name) ASC, l.created_at ASC, l.id ASC";
+		case "createdAt":
+			return "ORDER BY l.created_at DESC, l.id ASC";
+	}
+}
+
+function escapeSqlLike(value: string): string {
+	return value.replace(/[\\%_]/g, "\\$&");
 }
 
 async function readListLifecycleRow(

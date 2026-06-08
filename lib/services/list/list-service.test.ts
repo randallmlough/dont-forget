@@ -1,9 +1,12 @@
 import { eq } from "drizzle-orm";
 
-import { itemFixture, listFixture } from "@/db/fixtures";
+import { itemCheckFixture, itemFixture, listFixture } from "@/db/fixtures";
 import {
 	lists as householdLists,
+	itemChecks,
 	items,
+	type NewItem,
+	type NewItemCheck,
 	type NewList,
 } from "@/db/schema/household";
 import { createTestHouseholdDb } from "@/db/test";
@@ -240,6 +243,459 @@ describe("createListService", () => {
 				}),
 			}),
 		);
+	});
+
+	it("lists active non-deleted List summaries by recent activity by default", async () => {
+		const harness = await createHarness();
+
+		try {
+			await harness.insertList(
+				listFixture({
+					id: "lst_active_old",
+					name: "Pantry",
+					createdAt: 1_700_000_000_000,
+					updatedAt: 1_700_000_000_100,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_active_recent",
+					name: "Groceries",
+					createdAt: 1_700_000_000_200,
+					updatedAt: 1_700_000_000_500,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_archived",
+					name: "Camping",
+					createdAt: 1_700_000_000_300,
+					updatedAt: 1_700_000_000_900,
+					archivedAt: 1_700_000_000_900,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_deleted",
+					name: "Deleted",
+					createdAt: 1_700_000_000_400,
+					updatedAt: 1_700_000_001_000,
+					deletedAt: 1_700_000_001_000,
+				}),
+			);
+
+			await expect(harness.service().listLists()).resolves.toEqual([
+				{
+					id: "lst_active_recent",
+					householdId,
+					name: "Groceries",
+					createdByUserId: "usr_avery",
+					createdAt: 1_700_000_000_200,
+					updatedAt: 1_700_000_000_500,
+					archived: false,
+					archivedAt: null,
+					lastActivityAt: 1_700_000_000_500,
+					uncheckedItemCount: 0,
+					checkedItemCount: 0,
+				},
+				expect.objectContaining({
+					id: "lst_active_old",
+					archived: false,
+					lastActivityAt: 1_700_000_000_100,
+				}),
+			]);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("supports archived and all archive modes while excluding deleted Lists", async () => {
+		const harness = await createHarness();
+
+		try {
+			await harness.insertList(
+				listFixture({
+					id: "lst_active",
+					name: "Active",
+					createdAt: 1_700_000_000_000,
+					updatedAt: 1_700_000_000_100,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_archived",
+					name: "Archived",
+					createdAt: 1_700_000_000_200,
+					updatedAt: 1_700_000_000_300,
+					archivedAt: 1_700_000_000_300,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_deleted_archived",
+					name: "Deleted Archived",
+					createdAt: 1_700_000_000_400,
+					updatedAt: 1_700_000_000_500,
+					archivedAt: 1_700_000_000_450,
+					deletedAt: 1_700_000_000_500,
+				}),
+			);
+
+			await expect(
+				harness.service().listLists({ archive: "archived" }),
+			).resolves.toEqual([
+				expect.objectContaining({
+					id: "lst_archived",
+					archived: true,
+					archivedAt: 1_700_000_000_300,
+				}),
+			]);
+			await expect(
+				harness.service().listLists({ archive: "all" }),
+			).resolves.toEqual([
+				expect.objectContaining({ id: "lst_archived" }),
+				expect.objectContaining({ id: "lst_active" }),
+			]);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("filters List summaries by trimmed case-insensitive search with literal LIKE characters", async () => {
+		const harness = await createHarness();
+
+		try {
+			await harness.insertList(
+				listFixture({ id: "lst_market", name: "Weekly MARKET" }),
+			);
+			await harness.insertList(
+				listFixture({ id: "lst_percent", name: "50% off" }),
+			);
+			await harness.insertList(
+				listFixture({ id: "lst_percent_control", name: "50X off" }),
+			);
+			await harness.insertList(
+				listFixture({ id: "lst_underscore", name: "milk_tea" }),
+			);
+			await harness.insertList(
+				listFixture({ id: "lst_underscore_control", name: "milkXtea" }),
+			);
+
+			await expect(
+				harness.service().listLists({ searchText: " market " }),
+			).resolves.toEqual([expect.objectContaining({ id: "lst_market" })]);
+			await expect(
+				harness.service().listLists({ searchText: "%" }),
+			).resolves.toEqual([expect.objectContaining({ id: "lst_percent" })]);
+			await expect(
+				harness.service().listLists({ searchText: "_" }),
+			).resolves.toEqual([expect.objectContaining({ id: "lst_underscore" })]);
+			await expect(
+				harness.service().listLists({ searchText: "   " }),
+			).resolves.toHaveLength(5);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("filters List summaries by creator User ID without directory reads", async () => {
+		const harness = await createHarness();
+
+		try {
+			await harness.insertList(
+				listFixture({
+					id: "lst_avery",
+					name: "Avery",
+					createdByUserId: "usr_avery",
+					updatedAt: 1_700_000_000_100,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_blake",
+					name: "Blake",
+					createdByUserId: "usr_blake",
+					updatedAt: 1_700_000_000_200,
+				}),
+			);
+
+			await expect(
+				harness.service().listLists({ createdByUserId: "usr_blake" }),
+			).resolves.toEqual([
+				expect.objectContaining({
+					id: "lst_blake",
+					createdByUserId: "usr_blake",
+				}),
+			]);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("counts checked and unchecked Items using latest check row tie semantics", async () => {
+		const harness = await createHarness();
+
+		try {
+			await harness.insertList(
+				listFixture({
+					id: "lst_counts",
+					name: "Counts",
+					updatedAt: 1_700_000_000_000,
+				}),
+			);
+			await harness.insertItems([
+				itemFixture({
+					id: "itm_no_check",
+					listId: "lst_counts",
+					updatedAt: 1_700_000_000_010,
+				}),
+				itemFixture({
+					id: "itm_checked",
+					listId: "lst_counts",
+					updatedAt: 1_700_000_000_020,
+				}),
+				itemFixture({
+					id: "itm_unchecked_latest",
+					listId: "lst_counts",
+					updatedAt: 1_700_000_000_030,
+				}),
+				itemFixture({
+					id: "itm_tie_checked",
+					listId: "lst_counts",
+					updatedAt: 1_700_000_000_040,
+				}),
+			]);
+			await harness.insertItemChecks([
+				itemCheckFixture({
+					itemId: "itm_checked",
+					userId: "usr_avery",
+					checkedAt: 1_700_000_000_100,
+					updatedAt: 1_700_000_000_100,
+				}),
+				itemCheckFixture({
+					itemId: "itm_checked",
+					userId: "usr_blake",
+					checkedAt: null,
+					updatedAt: 1_700_000_000_090,
+				}),
+				itemCheckFixture({
+					itemId: "itm_unchecked_latest",
+					userId: "usr_avery",
+					checkedAt: 1_700_000_000_100,
+					updatedAt: 1_700_000_000_100,
+				}),
+				itemCheckFixture({
+					itemId: "itm_unchecked_latest",
+					userId: "usr_blake",
+					checkedAt: null,
+					updatedAt: 1_700_000_000_110,
+				}),
+				itemCheckFixture({
+					itemId: "itm_tie_checked",
+					userId: "usr_avery",
+					checkedAt: null,
+					updatedAt: 1_700_000_000_120,
+				}),
+				itemCheckFixture({
+					itemId: "itm_tie_checked",
+					userId: "usr_blake",
+					checkedAt: 1_700_000_000_120,
+					updatedAt: 1_700_000_000_120,
+				}),
+			]);
+
+			await expect(harness.service().listLists()).resolves.toEqual([
+				expect.objectContaining({
+					id: "lst_counts",
+					uncheckedItemCount: 2,
+					checkedItemCount: 2,
+					lastActivityAt: 1_700_000_000_120,
+				}),
+			]);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("excludes tombstoned Items from counts and last activity", async () => {
+		const harness = await createHarness();
+
+		try {
+			await harness.insertList(
+				listFixture({
+					id: "lst_tombstones",
+					name: "Tombstones",
+					updatedAt: 1_700_000_000_100,
+				}),
+			);
+			await harness.insertItem(
+				itemFixture({
+					id: "itm_deleted",
+					listId: "lst_tombstones",
+					updatedAt: 1_700_000_000_500,
+					deletedAt: 1_700_000_000_550,
+				}),
+			);
+			await harness.insertItemCheck(
+				itemCheckFixture({
+					itemId: "itm_deleted",
+					userId: "usr_avery",
+					checkedAt: 1_700_000_000_600,
+					updatedAt: 1_700_000_000_600,
+				}),
+			);
+
+			await expect(harness.service().listLists()).resolves.toEqual([
+				expect.objectContaining({
+					id: "lst_tombstones",
+					uncheckedItemCount: 0,
+					checkedItemCount: 0,
+					lastActivityAt: 1_700_000_000_100,
+				}),
+			]);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("sorts recent activity from List, Item, and check timestamps with tie-breakers", async () => {
+		const harness = await createHarness();
+
+		try {
+			await harness.insertList(
+				listFixture({
+					id: "lst_list_activity",
+					name: "List",
+					createdAt: 1_700_000_000_100,
+					updatedAt: 1_700_000_000_300,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_item_activity",
+					name: "Item",
+					createdAt: 1_700_000_000_200,
+					updatedAt: 1_700_000_000_100,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_check_activity",
+					name: "Check",
+					createdAt: 1_700_000_000_300,
+					updatedAt: 1_700_000_000_100,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_tie_a",
+					name: "Tie A",
+					createdAt: 1_700_000_000_050,
+					updatedAt: 1_700_000_000_300,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_tie_b",
+					name: "Tie B",
+					createdAt: 1_700_000_000_100,
+					updatedAt: 1_700_000_000_300,
+				}),
+			);
+			await harness.insertItem(
+				itemFixture({
+					id: "itm_recent",
+					listId: "lst_item_activity",
+					updatedAt: 1_700_000_000_500,
+				}),
+			);
+			await harness.insertItem(
+				itemFixture({
+					id: "itm_checked_recent",
+					listId: "lst_check_activity",
+					updatedAt: 1_700_000_000_200,
+				}),
+			);
+			await harness.insertItemCheck(
+				itemCheckFixture({
+					itemId: "itm_checked_recent",
+					updatedAt: 1_700_000_000_700,
+					checkedAt: 1_700_000_000_700,
+				}),
+			);
+
+			await expect(
+				harness.service().listLists({ sort: "recentActivity" }),
+			).resolves.toEqual([
+				expect.objectContaining({
+					id: "lst_check_activity",
+					lastActivityAt: 1_700_000_000_700,
+				}),
+				expect.objectContaining({
+					id: "lst_item_activity",
+					lastActivityAt: 1_700_000_000_500,
+				}),
+				expect.objectContaining({ id: "lst_tie_a" }),
+				expect.objectContaining({ id: "lst_list_activity" }),
+				expect.objectContaining({ id: "lst_tie_b" }),
+			]);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("sorts by name and createdAt with documented tie-breakers", async () => {
+		const harness = await createHarness();
+
+		try {
+			await harness.insertList(
+				listFixture({
+					id: "lst_banana",
+					name: "banana",
+					createdAt: 1_700_000_000_300,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_apple_later",
+					name: "Apple",
+					createdAt: 1_700_000_000_500,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_apple_b",
+					name: "apple",
+					createdAt: 1_700_000_000_400,
+				}),
+			);
+			await harness.insertList(
+				listFixture({
+					id: "lst_apple_a",
+					name: "apple",
+					createdAt: 1_700_000_000_400,
+				}),
+			);
+
+			await expect(
+				harness.service().listLists({ sort: "name" }),
+			).resolves.toEqual([
+				expect.objectContaining({ id: "lst_apple_a" }),
+				expect.objectContaining({ id: "lst_apple_b" }),
+				expect.objectContaining({ id: "lst_apple_later" }),
+				expect.objectContaining({ id: "lst_banana" }),
+			]);
+			await expect(
+				harness.service().listLists({ sort: "createdAt" }),
+			).resolves.toEqual([
+				expect.objectContaining({ id: "lst_apple_later" }),
+				expect.objectContaining({ id: "lst_apple_a" }),
+				expect.objectContaining({ id: "lst_apple_b" }),
+				expect.objectContaining({ id: "lst_banana" }),
+			]);
+		} finally {
+			await harness.close();
+		}
 	});
 
 	it("renames an active List after validation and tracks only successful writes", async () => {
@@ -646,6 +1102,18 @@ async function createHarness() {
 		},
 		insertList(value: NewList) {
 			return household.db.insert(householdLists).values(value);
+		},
+		insertItem(value: NewItem) {
+			return household.db.insert(items).values(value);
+		},
+		insertItems(values: NewItem[]) {
+			return household.db.insert(items).values(values);
+		},
+		insertItemCheck(value: NewItemCheck) {
+			return household.db.insert(itemChecks).values(value);
+		},
+		insertItemChecks(values: NewItemCheck[]) {
+			return household.db.insert(itemChecks).values(values);
 		},
 		findList(listId: string) {
 			return household.db.query.lists.findFirst({

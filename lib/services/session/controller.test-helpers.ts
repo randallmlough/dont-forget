@@ -168,6 +168,14 @@ function controllerListServiceBoundary(): ListService {
 				Parameters<ListService["getList"]>
 			>()
 			.mockRejectedValue(new Error("Controller tests must not read List data")),
+		listLists: jest
+			.fn<
+				ReturnType<ListService["listLists"]>,
+				Parameters<ListService["listLists"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not read List summaries"),
+			),
 		renameList: jest
 			.fn<
 				ReturnType<ListService["renameList"]>,
