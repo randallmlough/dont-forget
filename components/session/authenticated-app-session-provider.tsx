@@ -9,6 +9,7 @@ import {
 	useState,
 } from "react";
 import { reset, track } from "@/lib/analytics";
+import { clearUserCurrentListSelections } from "@/lib/local-storage";
 import { useLogger } from "@/lib/logger";
 import {
 	type AuthenticatedAppSession,
@@ -43,6 +44,7 @@ type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	auth?: AuthenticatedAppSessionProviderAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearSignedOutSessionData?: typeof clearSignedOutSessionData;
+	clearCurrentListSelectionsForUser?: typeof clearUserCurrentListSelections;
 	activationEnabled?: boolean;
 }>;
 
@@ -61,6 +63,8 @@ export function AuthenticatedAppSessionProvider({
 	analytics = defaultAnalytics,
 	clearSignedOutSessionData:
 		clearSignedOutSessionDataProp = clearSignedOutSessionData,
+	clearCurrentListSelectionsForUser:
+		clearCurrentListSelectionsForUserProp = clearUserCurrentListSelections,
 	activationEnabled = true,
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
@@ -95,6 +99,7 @@ export function AuthenticatedAppSessionProvider({
 		getAuth: () => auth,
 		analytics,
 		clearSignedOutSessionData: clearSignedOutSessionDataProp,
+		clearCurrentListSelectionsForUser: clearCurrentListSelectionsForUserProp,
 		logger,
 		runningState: signOutRunningState,
 	});

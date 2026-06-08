@@ -6,6 +6,10 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
+import {
+	type CurrentListSelectionStorage,
+	createCurrentListSelectionStore,
+} from "@/lib/local-storage";
 import { useLogger } from "@/lib/logger";
 import type {
 	AuthenticatedAppSession,
@@ -224,7 +228,10 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		controller.dispose.mockImplementation(async () => {
 			order.push("dispose");
-			return { householdIdsForLocalDataDeletion: [] };
+			return {
+				householdIdsForLocalDataDeletion: [],
+				signedOutUserId: "usr_avery",
+			};
 		});
 		const auth = authFixture({
 			signOut: jest.fn(async () => {
@@ -237,6 +244,9 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const clearSignedOutData = jest.fn(async () => {
 			order.push("clear");
 		});
+		const clearCurrentListSelectionsForUser = jest.fn(async () => {
+			order.push("clearCurrentList");
+		});
 
 		render(
 			<AuthenticatedAppSessionProvider
@@ -244,6 +254,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				analytics={analytics}
 				clearSignedOutSessionData={clearSignedOutData}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -252,24 +263,39 @@ describe("AuthenticatedAppSessionProvider", () => {
 		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
-		expect(order).toEqual(["track", "reset", "dispose", "clear", "clerk"]);
+		expect(order).toEqual([
+			"track",
+			"reset",
+			"dispose",
+			"clear",
+			"clearCurrentList",
+			"clerk",
+		]);
 		expect(analytics.track).toHaveBeenCalledWith("user_signed_out", {});
 		expect(clearSignedOutData).toHaveBeenCalledWith([]);
+		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledWith("usr_avery");
 	});
 
 	it("uses the latest sign-out dependencies after provider rerender", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
+		controller.dispose.mockResolvedValue({
+			householdIdsForLocalDataDeletion: [],
+			signedOutUserId: "usr_avery",
+		});
 		const auth = authFixture();
 		const firstAnalytics = { track: jest.fn(), reset: jest.fn() };
 		const nextAnalytics = { track: jest.fn(), reset: jest.fn() };
 		const firstClearSignedOutData = jest.fn(async () => undefined);
 		const nextClearSignedOutData = jest.fn(async () => undefined);
+		const firstClearCurrentListSelections = jest.fn(async () => undefined);
+		const nextClearCurrentListSelections = jest.fn(async () => undefined);
 		const { rerender } = render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={firstAnalytics}
 				clearSignedOutSessionData={firstClearSignedOutData}
+				clearCurrentListSelectionsForUser={firstClearCurrentListSelections}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -281,6 +307,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				analytics={nextAnalytics}
 				clearSignedOutSessionData={nextClearSignedOutData}
+				clearCurrentListSelectionsForUser={nextClearCurrentListSelections}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -292,15 +319,18 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(firstAnalytics.track).not.toHaveBeenCalled();
 		expect(firstAnalytics.reset).not.toHaveBeenCalled();
 		expect(firstClearSignedOutData).not.toHaveBeenCalled();
+		expect(firstClearCurrentListSelections).not.toHaveBeenCalled();
 		expect(nextAnalytics.track).toHaveBeenCalledWith("user_signed_out", {});
 		expect(nextAnalytics.reset).toHaveBeenCalledTimes(1);
 		expect(nextClearSignedOutData).toHaveBeenCalledWith([]);
+		expect(nextClearCurrentListSelections).toHaveBeenCalledWith("usr_avery");
 	});
 
 	it("passes disposed Household IDs to signed-out cleanup", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		controller.dispose.mockResolvedValue({
 			householdIdsForLocalDataDeletion: ["hh_active"],
+			signedOutUserId: null,
 		});
 		const clearSignedOutData = jest.fn(async () => undefined);
 
@@ -319,6 +349,50 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() =>
 			expect(clearSignedOutData).toHaveBeenCalledWith(["hh_active"]),
 		);
+	});
+
+	it("clears Current List selections for the signed-out app User only", async () => {
+		const storage = currentListSelectionMemoryStorage();
+		const currentListSelections = createCurrentListSelectionStore({ storage });
+		await currentListSelections.setCurrentListSelection(
+			"usr_avery",
+			"hh_shared",
+			"list_avery",
+		);
+		await currentListSelections.setCurrentListSelection(
+			"usr_blake",
+			"hh_shared",
+			"list_blake",
+		);
+		const controller = authenticatedAppSessionControllerFixture();
+		controller.dispose.mockResolvedValue({
+			householdIdsForLocalDataDeletion: [],
+			signedOutUserId: "usr_avery",
+		});
+
+		render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+				analytics={createMockAnalytics()}
+				clearSignedOutSessionData={jest.fn(async () => undefined)}
+				clearCurrentListSelectionsForUser={
+					currentListSelections.clearUserCurrentListSelections
+				}
+			>
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(controller.dispose).toHaveBeenCalledTimes(1));
+
+		await expect(
+			currentListSelections.getCurrentListSelection("usr_avery", "hh_shared"),
+		).resolves.toBeNull();
+		await expect(
+			currentListSelections.getCurrentListSelection("usr_blake", "hh_shared"),
+		).resolves.toBe("list_blake");
 	});
 
 	it("continues Clerk sign out when controller disposal fails", async () => {
@@ -473,6 +547,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		const disposed = deferred<{
 			householdIdsForLocalDataDeletion: string[];
+			signedOutUserId: string | null;
 		}>();
 		controller.dispose.mockImplementation(() => disposed.promise);
 		const clearSignedOutData = jest.fn(async () => undefined);
@@ -493,7 +568,10 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(controller.dispose).toHaveBeenCalledTimes(1));
 		expect(clearSignedOutData).not.toHaveBeenCalled();
 		expect(auth.signOut).not.toHaveBeenCalled();
-		disposed.resolve({ householdIdsForLocalDataDeletion: [] });
+		disposed.resolve({
+			householdIdsForLocalDataDeletion: [],
+			signedOutUserId: null,
+		});
 		await waitFor(() => expect(clearSignedOutData).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 	});
@@ -543,6 +621,37 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		expect(mockLogger.error).toHaveBeenCalledWith(
 			"authenticated app session sign-out local cleanup failed",
+			{ error: expect.any(Error) },
+		);
+	});
+
+	it("logs Current List selection cleanup failure and still calls Clerk sign out", async () => {
+		const auth = authFixture();
+		const controller = authenticatedAppSessionControllerFixture();
+		controller.dispose.mockResolvedValue({
+			householdIdsForLocalDataDeletion: [],
+			signedOutUserId: "usr_avery",
+		});
+
+		render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={auth}
+				analytics={createMockAnalytics()}
+				clearSignedOutSessionData={jest.fn(async () => undefined)}
+				clearCurrentListSelectionsForUser={jest.fn(async () => {
+					throw new Error("current list cleanup failed");
+				})}
+			>
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session sign-out current list selection cleanup failed",
 			{ error: expect.any(Error) },
 		);
 	});
@@ -695,6 +804,22 @@ async function unusedSessionService(): Promise<never> {
 	throw new Error("Provider tests must not call session data services");
 }
 
+function currentListSelectionMemoryStorage(): CurrentListSelectionStorage {
+	const values = new Map<string, string>();
+
+	return {
+		async getItem(key) {
+			return values.get(key) ?? null;
+		},
+		async setItem(key, value) {
+			values.set(key, value);
+		},
+		async removeItem(key) {
+			values.delete(key);
+		},
+	};
+}
+
 function authenticatedAppSessionControllerFixture({
 	snapshot = { status: "loading" },
 }: {
@@ -714,7 +839,10 @@ function authenticatedAppSessionControllerFixture({
 		dispose: jest.fn<
 			ReturnType<AuthenticatedAppSessionController["dispose"]>,
 			Parameters<AuthenticatedAppSessionController["dispose"]>
-		>(async () => ({ householdIdsForLocalDataDeletion: [] })),
+		>(async () => ({
+			householdIdsForLocalDataDeletion: [],
+			signedOutUserId: null,
+		})),
 		getSnapshot: jest.fn<
 			ReturnType<AuthenticatedAppSessionController["getSnapshot"]>,
 			Parameters<AuthenticatedAppSessionController["getSnapshot"]>

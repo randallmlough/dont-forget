@@ -80,6 +80,7 @@ The Authenticated App Session sign-out module owns sign-out order. The provider 
 2. Reset analytics identity.
 3. Dispose the Authenticated App Session controller.
 4. Clear signed-out session data for the disposed Household IDs, including cached metadata and local Household DB files.
-5. Call Clerk `signOut()`.
+5. Clear local Current List selections for the signed-out app User.
+6. Call Clerk `signOut()`.
 
 If Clerk sign-out fails after local cleanup, the sign-out module attempts to reactivate the controller with the latest auth inputs so the app can recover a valid signed-in session.

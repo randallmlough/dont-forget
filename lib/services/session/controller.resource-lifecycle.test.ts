@@ -18,6 +18,7 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		});
 		await expect(controller.dispose()).resolves.toEqual({
 			householdIdsForLocalDataDeletion: ["hh_avery"],
+			signedOutUserId: "usr_avery",
 		});
 
 		expect(controller.getSnapshot()).toEqual({ status: "idle" });

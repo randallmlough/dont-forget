@@ -99,6 +99,7 @@ export type AuthenticatedAppSessionController = {
 
 export type AuthenticatedAppSessionDisposal = {
 	householdIdsForLocalDataDeletion: string[];
+	signedOutUserId: string | null;
 };
 
 export type AuthenticatedAppSessionControllerDeps = {
@@ -418,6 +419,7 @@ export function createAuthenticatedAppSessionController(
 		async dispose() {
 			const disposal = {
 				householdIdsForLocalDataDeletion: resources.getHouseholdIds(),
+				signedOutUserId: previousSessionFromSnapshot(snapshot)?.user.id ?? null,
 			};
 			activationRun += 1;
 			publish({ status: "idle" });

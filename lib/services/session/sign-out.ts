@@ -1,5 +1,6 @@
 import { reset, track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
+import { clearUserCurrentListSelections as defaultClearCurrentListSelectionsForUser } from "@/lib/local-storage";
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
 import type { ServiceResetAnalytics } from "@/lib/services/analytics";
@@ -31,6 +32,7 @@ export type AuthenticatedAppSessionSignOutDeps = {
 	getAuth: () => AuthenticatedAppSessionSignOutAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearSignedOutSessionData?: typeof defaultClearSignedOutSessionData;
+	clearCurrentListSelectionsForUser?: typeof defaultClearCurrentListSelectionsForUser;
 	logger?: Logger;
 	runningState?: AuthenticatedAppSessionSignOutRunningState;
 };
@@ -45,6 +47,7 @@ export function createAuthenticatedAppSessionSignOut({
 	getAuth,
 	analytics = defaultAnalytics,
 	clearSignedOutSessionData = defaultClearSignedOutSessionData,
+	clearCurrentListSelectionsForUser = defaultClearCurrentListSelectionsForUser,
 	logger = defaultLogger,
 	runningState,
 }: AuthenticatedAppSessionSignOutDeps): AuthenticatedAppSessionSignOut {
@@ -60,6 +63,7 @@ export function createAuthenticatedAppSessionSignOut({
 
 		let disposal: AuthenticatedAppSessionDisposal = {
 			householdIdsForLocalDataDeletion: [],
+			signedOutUserId: null,
 		};
 		await controller
 			.dispose()
@@ -80,6 +84,17 @@ export function createAuthenticatedAppSessionSignOut({
 			logger.error("authenticated app session sign-out local cleanup failed", {
 				error: asError(error),
 			});
+		}
+
+		if (disposal.signedOutUserId) {
+			try {
+				await clearCurrentListSelectionsForUser(disposal.signedOutUserId);
+			} catch (error) {
+				logger.error(
+					"authenticated app session sign-out current list selection cleanup failed",
+					{ error: asError(error) },
+				);
+			}
 		}
 
 		try {
