@@ -1,5 +1,7 @@
 import { BottomSheet, Group, RNHostView } from "@expo/ui/swift-ui";
 import {
+	background,
+	containerRelativeFrame,
 	presentationDetents,
 	presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
@@ -12,9 +14,9 @@ import {
 	View,
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-
 import type { ListSummary } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { lightTheme } from "@/lib/unistyles/unistyles";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeListSwitcher } from "./use-home-list-switcher";
 
@@ -59,6 +61,8 @@ export function HomeListSwitcherSheet({
 				modifiers={[
 					presentationDetents(["medium", "large"]),
 					presentationDragIndicator("visible"),
+					containerRelativeFrame({ axes: "vertical", alignment: "top" }),
+					background(lightTheme.colors.background),
 				]}
 			>
 				<RNHostView>

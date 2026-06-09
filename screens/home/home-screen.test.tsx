@@ -1,3 +1,7 @@
+import {
+	background,
+	containerRelativeFrame,
+} from "@expo/ui/swift-ui/modifiers";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
 	act,
@@ -25,6 +29,7 @@ import { createSessionDataServices } from "@/lib/services/session/services";
 import { deferred } from "@/lib/test/async";
 import { analyticsMocks } from "@/lib/test/mocks/analytics";
 import { createMockLogger } from "@/lib/test/mocks/logger";
+import { lightTheme } from "@/lib/unistyles/unistyles";
 import { homeActiveListBoundaryKey } from "./home-current-list";
 
 jest.mock("@/components/session", () => ({
@@ -93,6 +98,8 @@ jest.mock("@expo/ui/swift-ui", () => {
 });
 
 jest.mock("@expo/ui/swift-ui/modifiers", () => ({
+	background: jest.fn(() => ({ type: "background" })),
+	containerRelativeFrame: jest.fn(() => ({ type: "containerRelativeFrame" })),
 	presentationDetents: jest.fn(() => ({ type: "presentationDetents" })),
 	presentationDragIndicator: jest.fn(() => ({
 		type: "presentationDragIndicator",
@@ -716,6 +723,11 @@ describe("HomeScreenView", () => {
 
 			await openCurrentListSwitcher();
 			expect(screen.getByLabelText("List switcher sheet")).toBeTruthy();
+			expect(containerRelativeFrame).toHaveBeenCalledWith({
+				axes: "vertical",
+				alignment: "top",
+			});
+			expect(background).toHaveBeenCalledWith(lightTheme.colors.background);
 
 			fireEvent.press(screen.getByLabelText("Dismiss List switcher"));
 
