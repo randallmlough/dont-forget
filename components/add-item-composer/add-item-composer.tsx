@@ -65,6 +65,8 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const placeholderColor = theme.colors.textSubtle;
 	const visibility = useSharedValue(0);
 	const keyboardHeight = useKeyboardHeight();
+	const composerBottomOffset =
+		keyboardHeight > 0 ? TRAY_KEYBOARD_GAP : insets.bottom + TRAY_KEYBOARD_GAP;
 
 	useEffect(() => {
 		visibility.set(
@@ -128,11 +130,12 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 				style={styles.dismissLayer}
 			/>
 			<Animated.View
+				testID="add-item-composer-host"
 				style={[
 					styles.composerHost,
 					animatedStyle,
 					{
-						bottom: Math.max(keyboardHeight, insets.bottom) + TRAY_KEYBOARD_GAP,
+						bottom: composerBottomOffset,
 					},
 				]}
 			>

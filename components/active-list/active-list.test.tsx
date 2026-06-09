@@ -186,6 +186,25 @@ describe("ActiveList", () => {
 		}
 	});
 
+	it("keeps the open add Item composer directly above the keyboard", () => {
+		const keyboard = captureKeyboardListeners();
+		try {
+			renderActiveList(emptyList);
+
+			openAddItemComposer();
+			act(() => {
+				keyboard.emit("keyboardWillShow", 320);
+			});
+
+			const composerHostStyle = ReactNativeStyleSheet.flatten(
+				screen.getByTestId("add-item-composer-host").props.style,
+			);
+			expect(composerHostStyle.bottom).toBe(6);
+		} finally {
+			keyboard.restore();
+		}
+	});
+
 	it("dismisses the composer without clearing an open draft", () => {
 		renderActiveList(emptyList);
 
