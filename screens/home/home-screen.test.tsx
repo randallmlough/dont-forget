@@ -119,6 +119,7 @@ beforeEach(() => {
 	mockAsyncStorage.getItem.mockResolvedValue(null);
 	mockAsyncStorage.setItem.mockResolvedValue(undefined);
 	mockAsyncStorage.removeItem.mockResolvedValue(undefined);
+	analyticsMocks.track.mockReset();
 });
 
 describe("HomeScreen", () => {
@@ -860,6 +861,446 @@ describe("HomeScreenView", () => {
 				expect.anything(),
 			);
 			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("creates a List from the switcher, persists selection before Home updates, and does not emit list_switched", async () => {
+		const harness = await createHomeSessionHarness();
+		const getList = jest.spyOn(harness.session.services.lists, "getList");
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByText("Create List"));
+			fireEvent.changeText(screen.getByLabelText("List name"), "Market");
+			await act(async () => {
+				const createButtons = screen.getAllByText("Create List");
+				fireEvent.press(createButtons[createButtons.length - 1]);
+			});
+
+			await waitFor(() => expect(screen.getByText("Market")).toBeTruthy());
+			expect(screen.getByText("No Items yet")).toBeTruthy();
+			expect(screen.queryByLabelText("List switcher sheet")).toBeNull();
+
+			const createdList = await harness.household.db.query.lists.findFirst({
+				where: (table, { eq: equals }) => equals(table.name, "Market"),
+			});
+			expect(createdList).toBeDefined();
+			if (!createdList) throw new Error("Expected created List");
+			expect(mockAsyncStorage.setItem).toHaveBeenCalledWith(
+				`dont-forget:current-list-selection:v1:${harness.scenario.users.avery.id}`,
+				JSON.stringify({
+					[harness.scenario.household.id]: createdList.id,
+				}),
+			);
+			const createdListReadIndex = getList.mock.calls.findIndex(
+				([input]) => input.listId === createdList.id,
+			);
+			expect(createdListReadIndex).toBeGreaterThanOrEqual(0);
+			expect(mockAsyncStorage.setItem.mock.invocationCallOrder[0]).toBeLessThan(
+				getList.mock.invocationCallOrder[createdListReadIndex],
+			);
+			expect(harness.requestSync).toHaveBeenCalledTimes(1);
+			expect(harness.requestSync).toHaveBeenCalledWith({
+				reason: "localWrite",
+			});
+			expect(analyticsMocks.track).toHaveBeenCalledWith("list_created", {
+				household_id: harness.scenario.household.id,
+				list_id: createdList.id,
+				user_id: harness.scenario.users.avery.id,
+			});
+			expect(
+				analyticsMocks.track.mock.calls.filter(
+					([event]) => event === "list_created",
+				),
+			).toHaveLength(1);
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_switched",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("creates a List from zero-active Home and recovers the Current List", async () => {
+		const harness = await createHomeSessionHarness();
+		await harness.household.db
+			.update(lists)
+			.set({ archivedAt: 1_700_000_001_000 });
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() =>
+				expect(screen.getByText("No active Lists")).toBeTruthy(),
+			);
+			fireEvent.press(screen.getByText("Create List"));
+			fireEvent.changeText(screen.getByLabelText("List name"), "Market");
+			await act(async () => {
+				const createButtons = screen.getAllByText("Create List");
+				fireEvent.press(createButtons[createButtons.length - 1]);
+			});
+
+			await waitFor(() => expect(screen.getByText("Market")).toBeTruthy());
+			expect(screen.queryByText("No active Lists")).toBeNull();
+			expect(mockAsyncStorage.setItem).toHaveBeenCalledTimes(1);
+			expect(harness.requestSync).toHaveBeenCalledWith({
+				reason: "localWrite",
+			});
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_switched",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("rejects invalid rename names without requesting sync", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Rename List Groceries"));
+			fireEvent.changeText(screen.getByLabelText("List name"), "   ");
+			await act(async () => {
+				fireEvent.press(screen.getByText("Rename"));
+			});
+			expect(screen.getByText("Enter a List name.")).toBeTruthy();
+
+			fireEvent.changeText(screen.getByLabelText("List name"), "a".repeat(81));
+			await act(async () => {
+				fireEvent.press(screen.getByText("Rename"));
+			});
+			expect(
+				screen.getByText("List names must be 80 characters or fewer."),
+			).toBeTruthy();
+			expect(harness.requestSync).not.toHaveBeenCalled();
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_renamed",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("treats unchanged trimmed rename as a no-op with no sync request", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Rename List Groceries"));
+			fireEvent.changeText(screen.getByLabelText("List name"), " Groceries ");
+			await act(async () => {
+				fireEvent.press(screen.getByText("Rename"));
+			});
+
+			await waitFor(() =>
+				expect(
+					screen.getByLabelText("Groceries, 1 unchecked, 2 checked, current"),
+				).toBeTruthy(),
+			);
+			expect(harness.requestSync).not.toHaveBeenCalled();
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_renamed",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("renames the current List and updates the Home header", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Rename List Groceries"));
+			fireEvent.changeText(screen.getByLabelText("List name"), "Market");
+			await act(async () => {
+				fireEvent.press(screen.getByText("Rename"));
+			});
+
+			await waitFor(() =>
+				expect(screen.getByLabelText("Current List Market")).toBeTruthy(),
+			);
+			expect(screen.queryByLabelText("Current List Groceries")).toBeNull();
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+			expect(harness.requestSync).toHaveBeenCalledWith({
+				reason: "localWrite",
+			});
+			expect(
+				analyticsMocks.track.mock.calls.filter(
+					([event]) => event === "list_renamed",
+				),
+			).toHaveLength(1);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("renames a non-current List and refreshes switcher rows", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Rename List Pharmacy"));
+			fireEvent.changeText(screen.getByLabelText("List name"), "Supplements");
+			await act(async () => {
+				fireEvent.press(screen.getByText("Rename"));
+			});
+
+			await waitFor(() =>
+				expect(
+					screen.getByLabelText("Supplements, 0 unchecked, 0 checked"),
+				).toBeTruthy(),
+			);
+			expect(screen.getByLabelText("Current List Groceries")).toBeTruthy();
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+			expect(harness.requestSync).toHaveBeenCalledWith({
+				reason: "localWrite",
+			});
+			expect(
+				analyticsMocks.track.mock.calls.filter(
+					([event]) => event === "list_renamed",
+				),
+			).toHaveLength(1);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("shows a scoped lifecycle message when rename target is missing", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Rename List Pharmacy"));
+			await harness.household.db
+				.delete(lists)
+				.where(eq(lists.id, harness.scenario.lists.pharmacy.id));
+			fireEvent.changeText(screen.getByLabelText("List name"), "Supplements");
+			await act(async () => {
+				fireEvent.press(screen.getByText("Rename"));
+			});
+
+			expect(
+				screen.getByText("This List is no longer available."),
+			).toBeTruthy();
+			expect(harness.requestSync).not.toHaveBeenCalled();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("deletes a non-current List, preserves Current List, and refreshes rows", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Delete List Pharmacy"));
+			await act(async () => {
+				fireEvent.press(screen.getByLabelText("Confirm Delete List Pharmacy"));
+			});
+
+			await waitFor(() => expect(screen.queryByText("Pharmacy")).toBeNull());
+			expect(screen.getByLabelText("Current List Groceries")).toBeTruthy();
+			expect(screen.getByLabelText("List switcher sheet")).toBeTruthy();
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+			expect(harness.requestSync).toHaveBeenCalledWith({
+				reason: "localWrite",
+			});
+			expect(
+				analyticsMocks.track.mock.calls.filter(
+					([event]) => event === "list_deleted",
+				),
+			).toHaveLength(1);
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_switched",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("deletes the current List and persists the active fallback without list_switched", async () => {
+		const harness = await createHomeSessionHarness();
+		const activeLists = await harness.session.services.lists.listLists({
+			archive: "active",
+			sort: "recentActivity",
+		});
+		const fallback = activeLists.find(
+			(summary) => summary.id !== harness.scenario.lists.groceries.id,
+		);
+		if (!fallback) throw new Error("Expected fallback List");
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Delete List Groceries"));
+			await act(async () => {
+				fireEvent.press(screen.getByLabelText("Confirm Delete List Groceries"));
+			});
+
+			await waitFor(() => expect(screen.getByText(fallback.name)).toBeTruthy());
+			expect(screen.queryByLabelText("List switcher sheet")).toBeNull();
+			expect(mockAsyncStorage.setItem).toHaveBeenCalledWith(
+				`dont-forget:current-list-selection:v1:${harness.scenario.users.avery.id}`,
+				JSON.stringify({
+					[harness.scenario.household.id]: fallback.id,
+				}),
+			);
+			expect(harness.requestSync).toHaveBeenCalledWith({
+				reason: "localWrite",
+			});
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_switched",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("deletes the last active current List, clears selection, and renders zero-active", async () => {
+		const harness = await createHomeSessionHarness();
+		await harness.household.db
+			.update(lists)
+			.set({ archivedAt: 1_700_000_001_000 })
+			.where(eq(lists.id, harness.scenario.lists.pharmacy.id));
+		await harness.household.db
+			.update(lists)
+			.set({ archivedAt: 1_700_000_001_000 })
+			.where(eq(lists.id, harness.scenario.lists.hardware.id));
+		mockAsyncStorage.getItem.mockResolvedValue(
+			currentListSelectionPayload(harness, harness.scenario.lists.groceries.id),
+		);
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Delete List Groceries"));
+			await act(async () => {
+				fireEvent.press(screen.getByLabelText("Confirm Delete List Groceries"));
+			});
+
+			await waitFor(() =>
+				expect(screen.getByText("No active Lists")).toBeTruthy(),
+			);
+			expect(screen.getByText("Create List")).toBeTruthy();
+			expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith(
+				`dont-forget:current-list-selection:v1:${harness.scenario.users.avery.id}`,
+			);
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+			expect(harness.requestSync).toHaveBeenCalledWith({
+				reason: "localWrite",
+			});
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_switched",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("does not request sync for an already-deleted delete no-op", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Delete List Pharmacy"));
+			await harness.household.db
+				.update(lists)
+				.set({ deletedAt: 1_700_000_002_000 })
+				.where(eq(lists.id, harness.scenario.lists.pharmacy.id));
+			await act(async () => {
+				fireEvent.press(screen.getByLabelText("Confirm Delete List Pharmacy"));
+			});
+
+			expect(screen.getByText("This List was already deleted.")).toBeTruthy();
+			expect(harness.requestSync).not.toHaveBeenCalled();
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_deleted",
+				expect.anything(),
+			);
 		} finally {
 			await harness.close();
 		}

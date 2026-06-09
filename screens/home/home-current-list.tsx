@@ -1,6 +1,7 @@
 import { Host } from "@expo/ui/swift-ui";
 import { useCallback, useState } from "react";
-import { ActivityIndicator } from "react-native";
+import { ActivityIndicator, Pressable, Text } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { ActiveList } from "@/components/active-list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeListSwitcherSheet } from "./home-list-switcher";
@@ -27,6 +28,7 @@ function HomeCurrentListResolver({
 		string[]
 	>([]);
 	const [selectedListId, setSelectedListId] = useState<string | null>(null);
+	const [currentListRevision, setCurrentListRevision] = useState(0);
 	const resolver = useHomeActiveListResolverWithExclusions(
 		session,
 		postLoadExcludedListIds,
@@ -36,6 +38,16 @@ function HomeCurrentListResolver({
 		setPostLoadExcludedListIds((current) =>
 			current.includes(listId) ? current : [...current, listId],
 		);
+	}, []);
+	const handleCurrentListDeletedWithoutFallback = useCallback(
+		(listId: string) => {
+			setSelectedListId(null);
+			excludePostLoadUnavailableList(listId);
+		},
+		[excludePostLoadUnavailableList],
+	);
+	const refreshCurrentList = useCallback(() => {
+		setCurrentListRevision((revision) => revision + 1);
 	}, []);
 	const resolveState = resolver.state;
 
@@ -60,34 +72,83 @@ function HomeCurrentListResolver({
 
 	if (resolveState.status === "zeroActive") {
 		return (
-			<HomeStatus
-				title="No active Lists"
-				body="Create a List to start adding Items."
-			>
-				{null}
-			</HomeStatus>
+			<HomeZeroActiveList
+				session={session}
+				onListSelected={setSelectedListId}
+			/>
 		);
 	}
 
 	return (
 		<HomeCurrentListResource
 			key={homeActiveListBoundaryKey(session, resolveState.listId)}
+			currentListRevision={currentListRevision}
 			session={session}
 			listId={resolveState.listId}
+			onCurrentListDeletedWithoutFallback={
+				handleCurrentListDeletedWithoutFallback
+			}
+			onCurrentListRenamed={refreshCurrentList}
 			onListUnavailable={excludePostLoadUnavailableList}
 			onListSelected={setSelectedListId}
 		/>
 	);
 }
 
+function HomeZeroActiveList({
+	session,
+	onListSelected,
+}: {
+	session: AuthenticatedAppSession;
+	onListSelected: (listId: string) => void;
+}) {
+	const [isSwitcherPresented, setIsSwitcherPresented] = useState(false);
+
+	return (
+		<Host style={styles.host}>
+			<HomeStatus
+				title="No active Lists"
+				body="Create a List to start adding Items."
+			>
+				<Pressable
+					accessibilityRole="button"
+					onPress={() => setIsSwitcherPresented(true)}
+					style={({ pressed }) => [
+						styles.createButton,
+						pressed ? styles.buttonPressed : undefined,
+					]}
+				>
+					<Text style={styles.createButtonLabel}>Create List</Text>
+				</Pressable>
+			</HomeStatus>
+			<HomeListSwitcherSheet
+				currentListId={null}
+				initialMode="create"
+				isPresented={isSwitcherPresented}
+				onCurrentListDeletedWithoutFallback={() => {}}
+				onCurrentListRenamed={() => {}}
+				onIsPresentedChange={setIsSwitcherPresented}
+				onListSelected={onListSelected}
+				session={session}
+			/>
+		</Host>
+	);
+}
+
 function HomeCurrentListResource({
 	session,
 	listId,
+	currentListRevision,
+	onCurrentListDeletedWithoutFallback,
+	onCurrentListRenamed,
 	onListUnavailable,
 	onListSelected,
 }: {
 	session: AuthenticatedAppSession;
 	listId: string;
+	currentListRevision: number;
+	onCurrentListDeletedWithoutFallback: (listId: string) => void;
+	onCurrentListRenamed: () => void;
 	onListUnavailable: (listId: string) => void;
 	onListSelected: (listId: string) => void;
 }) {
@@ -95,9 +156,11 @@ function HomeCurrentListResource({
 	const [isSwitcherPresented, setIsSwitcherPresented] = useState(false);
 	const list = useHomeCurrentList(session, listId, {
 		onUnavailable: onListUnavailable,
+		refreshKey: currentListRevision,
 	});
 	const loadState = list.state;
 	const boundaryKey = homeActiveListBoundaryKey(session, listId);
+	const providerKey = `${boundaryKey}:${currentListRevision}`;
 
 	if (loadState.status === "loading") {
 		return (
@@ -132,7 +195,7 @@ function HomeCurrentListResource({
 	return (
 		<Host style={styles.host}>
 			<ActiveList.Provider
-				key={boundaryKey}
+				key={providerKey}
 				initialState={loadState.initialList}
 				currentMemberName={currentMemberName}
 				onLoadList={loadState.actions.loadList}
@@ -150,7 +213,12 @@ function HomeCurrentListResource({
 			</ActiveList.Provider>
 			<HomeListSwitcherSheet
 				currentListId={listId}
+				initialMode="switcher"
 				isPresented={isSwitcherPresented}
+				onCurrentListDeletedWithoutFallback={
+					onCurrentListDeletedWithoutFallback
+				}
+				onCurrentListRenamed={onCurrentListRenamed}
 				onIsPresentedChange={setIsSwitcherPresented}
 				onListSelected={onListSelected}
 				session={session}
@@ -178,6 +246,25 @@ export function homeSessionMemberName(
 	);
 }
 
-const styles = {
-	host: { flex: 1 },
-};
+const styles = StyleSheet.create((theme) => ({
+	host: {
+		flex: 1,
+	},
+	createButton: {
+		minHeight: theme.spacing(11),
+		paddingHorizontal: theme.spacing(4),
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: theme.colors.primary,
+	},
+	buttonPressed: {
+		opacity: theme.opacities.pressed,
+	},
+	createButtonLabel: {
+		...theme.typography.callout,
+		color: theme.colors.inverseText,
+		fontWeight: theme.fontWeights.bold,
+	},
+}));

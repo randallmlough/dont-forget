@@ -26,6 +26,7 @@ export type HomeCurrentListState =
 
 export type HomeCurrentListOptions = {
 	onUnavailable?: (listId: string) => void;
+	refreshKey?: number;
 };
 
 export function useHomeCurrentList(
@@ -36,7 +37,7 @@ export function useHomeCurrentList(
 	state: HomeCurrentListState;
 	retry: () => void;
 } {
-	const loadKey = `${session.resourceKey}:${listId}`;
+	const loadKey = `${session.resourceKey}:${listId}:${options.refreshKey ?? 0}`;
 	const [resource, dispatch] = useReducer(
 		homeCurrentListReducer,
 		loadKey,
