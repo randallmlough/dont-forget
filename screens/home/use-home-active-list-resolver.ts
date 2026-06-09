@@ -24,6 +24,7 @@ export function useHomeActiveListResolver(session: AuthenticatedAppSession): {
 export function useHomeActiveListResolverWithExclusions(
 	session: AuthenticatedAppSession,
 	excludedListIds: string[],
+	preferredListId: string | null = null,
 ): {
 	state: HomeActiveListResolverState;
 	retry: () => void;
@@ -39,7 +40,7 @@ export function useHomeActiveListResolverWithExclusions(
 	useEffect(() => {
 		let cancelled = false;
 
-		resolveHomeActiveList(session, excludedListIds)
+		resolveHomeActiveList(session, excludedListIds, preferredListId)
 			.then((state) => {
 				if (!cancelled) {
 					dispatch({
@@ -64,7 +65,7 @@ export function useHomeActiveListResolverWithExclusions(
 		return () => {
 			cancelled = true;
 		};
-	}, [excludedListIds, loadAttempt, loadKey, session]);
+	}, [excludedListIds, loadAttempt, loadKey, preferredListId, session]);
 
 	return {
 		state: homeActiveListResolverStateFromResource(resource, loadKey),
@@ -147,6 +148,7 @@ function homeActiveListResolverStateFromResource(
 async function resolveHomeActiveList(
 	session: AuthenticatedAppSession,
 	excludedListIds: string[],
+	preferredListId: string | null,
 ): Promise<Exclude<HomeActiveListResolverState, { status: "loading" }>> {
 	const userId = session.user.id;
 	const householdId = session.activeHousehold.id;
@@ -160,19 +162,21 @@ async function resolveHomeActiveList(
 	const activeListIds = new Set(activeLists.map((list) => list.id));
 	const excludedListIdSet = new Set(excludedListIds);
 
-	if (storedListId) {
+	const selectedListId = preferredListId ?? storedListId;
+
+	if (selectedListId) {
 		if (
-			!activeListIds.has(storedListId) ||
-			excludedListIdSet.has(storedListId)
+			!activeListIds.has(selectedListId) ||
+			excludedListIdSet.has(selectedListId)
 		) {
 			await clearCurrentListSelection(userId, householdId);
 		} else {
-			const storedCandidate = await resolveCandidate(session, storedListId);
+			const storedCandidate = await resolveCandidate(session, selectedListId);
 			if (storedCandidate.status === "active") {
 				return storedCandidate;
 			}
 
-			excludedListIdSet.add(storedListId);
+			excludedListIdSet.add(selectedListId);
 			await clearCurrentListSelection(userId, householdId);
 		}
 	}

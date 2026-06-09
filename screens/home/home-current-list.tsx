@@ -1,7 +1,9 @@
+import { Host } from "@expo/ui/swift-ui";
 import { useCallback, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { ActiveList } from "@/components/active-list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { HomeListSwitcherSheet } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeActiveListResolverWithExclusions } from "./use-home-active-list-resolver";
 import { useHomeCurrentList } from "./use-home-current-list";
@@ -24,9 +26,11 @@ function HomeCurrentListResolver({
 	const [postLoadExcludedListIds, setPostLoadExcludedListIds] = useState<
 		string[]
 	>([]);
+	const [selectedListId, setSelectedListId] = useState<string | null>(null);
 	const resolver = useHomeActiveListResolverWithExclusions(
 		session,
 		postLoadExcludedListIds,
+		selectedListId,
 	);
 	const excludePostLoadUnavailableList = useCallback((listId: string) => {
 		setPostLoadExcludedListIds((current) =>
@@ -71,6 +75,7 @@ function HomeCurrentListResolver({
 			session={session}
 			listId={resolveState.listId}
 			onListUnavailable={excludePostLoadUnavailableList}
+			onListSelected={setSelectedListId}
 		/>
 	);
 }
@@ -79,12 +84,15 @@ function HomeCurrentListResource({
 	session,
 	listId,
 	onListUnavailable,
+	onListSelected,
 }: {
 	session: AuthenticatedAppSession;
 	listId: string;
 	onListUnavailable: (listId: string) => void;
+	onListSelected: (listId: string) => void;
 }) {
 	const currentMemberName = homeSessionMemberName(session);
+	const [isSwitcherPresented, setIsSwitcherPresented] = useState(false);
 	const list = useHomeCurrentList(session, listId, {
 		onUnavailable: onListUnavailable,
 	});
@@ -122,21 +130,32 @@ function HomeCurrentListResource({
 	}
 
 	return (
-		<ActiveList.Provider
-			key={boundaryKey}
-			initialState={loadState.initialList}
-			currentMemberName={currentMemberName}
-			onLoadList={loadState.actions.loadList}
-			onAddItem={loadState.actions.addItem}
-			onSetItemChecked={loadState.actions.setItemChecked}
-			syncCoordinator={session.services.sync}
-		>
-			<ActiveList.Screen>
-				<ActiveList.Header />
-				<ActiveList.Items />
-				<ActiveList.AddItemForm />
-			</ActiveList.Screen>
-		</ActiveList.Provider>
+		<Host style={styles.host}>
+			<ActiveList.Provider
+				key={boundaryKey}
+				initialState={loadState.initialList}
+				currentMemberName={currentMemberName}
+				onLoadList={loadState.actions.loadList}
+				onAddItem={loadState.actions.addItem}
+				onSetItemChecked={loadState.actions.setItemChecked}
+				syncCoordinator={session.services.sync}
+			>
+				<ActiveList.Screen>
+					<ActiveList.Header
+						onPressCurrentList={() => setIsSwitcherPresented(true)}
+					/>
+					<ActiveList.Items />
+					<ActiveList.AddItemForm />
+				</ActiveList.Screen>
+			</ActiveList.Provider>
+			<HomeListSwitcherSheet
+				currentListId={listId}
+				isPresented={isSwitcherPresented}
+				onIsPresentedChange={setIsSwitcherPresented}
+				onListSelected={onListSelected}
+				session={session}
+			/>
+		</Host>
 	);
 }
 
@@ -158,3 +177,7 @@ export function homeSessionMemberName(
 		"Member"
 	);
 }
+
+const styles = {
+	host: { flex: 1 },
+};

@@ -3,7 +3,13 @@ import { StyleSheet } from "react-native-unistyles";
 import { useActiveList } from "./context";
 import type { ActiveListSyncState } from "./types";
 
-export function ActiveListHeader() {
+export type ActiveListHeaderProps = {
+	onPressCurrentList?: () => void;
+};
+
+export function ActiveListHeader({
+	onPressCurrentList,
+}: ActiveListHeaderProps) {
 	const { actions, meta, state } = useActiveList();
 	const itemCount = state.items.length;
 	const checkedCount = state.items.filter((item) => item.checked).length;
@@ -11,6 +17,12 @@ export function ActiveListHeader() {
 		itemCount === 0
 			? "No Items yet"
 			: `${checkedCount} of ${itemCount} Items checked`;
+	const listDetails = (
+		<>
+			<Text style={styles.listName}>{state.listName}</Text>
+			<Text style={styles.progressLabel}>{progressLabel}</Text>
+		</>
+	);
 
 	return (
 		<View style={styles.header}>
@@ -30,8 +42,21 @@ export function ActiveListHeader() {
 					</Text>
 				</Pressable>
 			</View>
-			<Text style={styles.listName}>{state.listName}</Text>
-			<Text style={styles.progressLabel}>{progressLabel}</Text>
+			{onPressCurrentList ? (
+				<Pressable
+					accessibilityLabel={`Current List ${state.listName}`}
+					accessibilityRole="button"
+					onPress={onPressCurrentList}
+					style={({ pressed }) => [
+						styles.listButton,
+						pressed ? styles.listButtonPressed : undefined,
+					]}
+				>
+					{listDetails}
+				</Pressable>
+			) : (
+				listDetails
+			)}
 			<Text style={[styles.syncStatus, syncStatusStyle(meta.syncState)]}>
 				{syncStatusLabel(meta.syncState)}
 			</Text>
@@ -108,6 +133,13 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.caption,
 		color: theme.colors.text,
 		fontWeight: theme.fontWeights.bold,
+	},
+	listButton: {
+		alignItems: "flex-start",
+		gap: theme.spacing(1),
+	},
+	listButtonPressed: {
+		opacity: theme.opacities.pressed,
 	},
 	listName: {
 		...theme.typography.largeTitle,

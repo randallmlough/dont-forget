@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react-native";
 import { eq } from "drizzle-orm";
 import type { PropsWithChildren, ReactElement } from "react";
+import type { StyleProp, ViewStyle } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
 import {
@@ -17,10 +18,12 @@ import {
 import { items, lists } from "@/db/schema/household";
 import type { TestDirectoryDb, TestHouseholdDb } from "@/db/test";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionDataServices } from "@/lib/services/session/services";
 import { deferred } from "@/lib/test/async";
+import { analyticsMocks } from "@/lib/test/mocks/analytics";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 import { homeActiveListBoundaryKey } from "./home-current-list";
 
@@ -43,6 +46,58 @@ jest.mock("@/lib/logger", () =>
 		)
 		.createMockLoggerModule(),
 );
+
+jest.mock("@expo/ui/swift-ui", () => {
+	const React = jest.requireActual<typeof import("react")>("react");
+	const { Pressable, Text, View } =
+		jest.requireActual<typeof import("react-native")>("react-native");
+
+	return {
+		BottomSheet: ({
+			children,
+			isPresented,
+			onIsPresentedChange,
+		}: {
+			children: React.ReactNode;
+			isPresented: boolean;
+			onIsPresentedChange: (isPresented: boolean) => void;
+		}) =>
+			isPresented
+				? React.createElement(
+						View,
+						{ accessibilityLabel: "List switcher sheet" },
+						React.createElement(
+							Pressable,
+							{
+								accessibilityLabel: "Dismiss List switcher",
+								accessibilityRole: "button",
+								onPress: () => onIsPresentedChange(false),
+							},
+							React.createElement(Text, null, "Dismiss"),
+						),
+						children,
+					)
+				: null,
+		Group: ({ children }: { children: React.ReactNode }) =>
+			React.createElement(React.Fragment, null, children),
+		Host: ({
+			children,
+			style,
+		}: {
+			children: React.ReactNode;
+			style?: StyleProp<ViewStyle>;
+		}) => React.createElement(View, { style }, children),
+		RNHostView: ({ children }: { children: React.ReactNode }) =>
+			React.createElement(View, null, children),
+	};
+});
+
+jest.mock("@expo/ui/swift-ui/modifiers", () => ({
+	presentationDetents: jest.fn(() => ({ type: "presentationDetents" })),
+	presentationDragIndicator: jest.fn(() => ({
+		type: "presentationDragIndicator",
+	})),
+}));
 
 const testLogger = createMockLogger();
 const mockAsyncStorage = jest.mocked(AsyncStorage);
@@ -647,6 +702,169 @@ describe("HomeScreenView", () => {
 		}
 	});
 
+	it("opens and dismisses the active List switcher from the Current List header", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			expect(screen.getByLabelText("List switcher sheet")).toBeTruthy();
+
+			fireEvent.press(screen.getByLabelText("Dismiss List switcher"));
+
+			await waitFor(() =>
+				expect(screen.queryByLabelText("List switcher sheet")).toBeNull(),
+			);
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_switched",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("loads active switcher summaries with current row indication and no searchText", async () => {
+		const harness = await createHomeSessionHarness();
+		const listLists = jest.spyOn(harness.session.services.lists, "listLists");
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+
+			expect(
+				screen.getByLabelText("Groceries, 1 unchecked, 2 checked, current"),
+			).toBeTruthy();
+			expect(screen.getByText("Current")).toBeTruthy();
+			expect(
+				screen.getByLabelText("Pharmacy, 0 unchecked, 0 checked"),
+			).toBeTruthy();
+			expect(
+				screen.getByLabelText("Hardware Store, 0 unchecked, 0 checked"),
+			).toBeTruthy();
+			expect(screen.queryByText("Camping")).toBeNull();
+			expect(listLists).toHaveBeenCalledWith({
+				archive: "active",
+				sort: "recentActivity",
+			});
+			expect(
+				listLists.mock.calls.every(
+					([input]) =>
+						input !== undefined &&
+						input?.archive === "active" &&
+						input.sort === "recentActivity" &&
+						!("searchText" in input),
+				),
+			).toBe(true);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("does nothing when the current List row is tapped", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(
+				screen.getByLabelText("Groceries, 1 unchecked, 2 checked, current"),
+			);
+
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_switched",
+				expect.anything(),
+			);
+			expect(harness.requestSync).not.toHaveBeenCalled();
+			expect(screen.getByLabelText("List switcher sheet")).toBeTruthy();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("persists a non-current switch before typed analytics, closes, and renders the selected List", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			await act(async () => {
+				fireEvent.press(
+					screen.getByLabelText("Pharmacy, 0 unchecked, 0 checked"),
+				);
+			});
+
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+			expect(screen.queryByText("Groceries")).toBeNull();
+			expect(screen.queryByLabelText("List switcher sheet")).toBeNull();
+			expect(mockAsyncStorage.setItem).toHaveBeenCalledWith(
+				`dont-forget:current-list-selection:v1:${harness.scenario.users.avery.id}`,
+				JSON.stringify({
+					[harness.scenario.household.id]: harness.scenario.lists.pharmacy.id,
+				}),
+			);
+			expect(analyticsMocks.track).toHaveBeenCalledWith("list_switched", {
+				household_id: harness.scenario.household.id,
+				list_id: harness.scenario.lists.pharmacy.id,
+				user_id: harness.scenario.users.avery.id,
+			});
+			expect(mockAsyncStorage.setItem.mock.invocationCallOrder[0]).toBeLessThan(
+				analyticsMocks.track.mock.invocationCallOrder[0],
+			);
+			expect(harness.requestSync).not.toHaveBeenCalled();
+			expect(harness.scenario.lists.groceries.id).toBe(DEFAULT_LIST_ID);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("does not emit list_switched for fallback Current List resolution", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+			expect(analyticsMocks.track).not.toHaveBeenCalledWith(
+				"list_switched",
+				expect.anything(),
+			);
+			expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+		} finally {
+			await harness.close();
+		}
+	});
+
 	it("ignores stale List loads after the session resource changes", async () => {
 		const staleListRead = deferred<void>();
 		const freshListRead = deferred<void>();
@@ -701,6 +919,9 @@ type HomeSessionHarness = {
 	scenario: PrimaryHouseholdScenario;
 	session: AuthenticatedAppSession;
 	listReadCount: () => number;
+	requestSync: jest.MockedFunction<
+		AuthenticatedAppSession["services"]["sync"]["requestSync"]
+	>;
 	close: () => Promise<void>;
 };
 
@@ -751,6 +972,7 @@ async function createHomeSessionHarness(
 			},
 		},
 	);
+	const syncCoordinator = passiveSyncCoordinator();
 	const session: AuthenticatedAppSession = {
 		user: {
 			id: scenario.users.avery.id,
@@ -793,7 +1015,7 @@ async function createHomeSessionHarness(
 		services: {
 			lists: dataServices.lists,
 			items: dataServices.items,
-			sync: passiveSyncCoordinator(),
+			sync: syncCoordinator,
 		},
 	};
 
@@ -803,6 +1025,7 @@ async function createHomeSessionHarness(
 		scenario,
 		session,
 		listReadCount: () => listReadCount,
+		requestSync: syncCoordinator.requestSync,
 		async close() {
 			await dataServices.close();
 			await directory.close();
@@ -835,11 +1058,20 @@ function isListRead(statement: HouseholdSqlStatement): boolean {
 	return statement.kind === "read" && /FROM\s+lists/i.test(statement.sql);
 }
 
-function passiveSyncCoordinator(): AuthenticatedAppSession["services"]["sync"] {
+function passiveSyncCoordinator(): AuthenticatedAppSession["services"]["sync"] & {
+	requestSync: jest.MockedFunction<
+		AuthenticatedAppSession["services"]["sync"]["requestSync"]
+	>;
+} {
+	const requestSync = jest.fn<
+		ReturnType<AuthenticatedAppSession["services"]["sync"]["requestSync"]>,
+		Parameters<AuthenticatedAppSession["services"]["sync"]["requestSync"]>
+	>(async () => null);
+
 	return {
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),
-		requestSync: async () => null,
+		requestSync,
 	};
 }
 
@@ -871,4 +1103,14 @@ function TestSafeAreaProvider({ children }: PropsWithChildren) {
 
 function openAddItemComposer() {
 	fireEvent.press(screen.getByLabelText("Add Item"));
+}
+
+async function openCurrentListSwitcher() {
+	await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+	fireEvent.press(screen.getByLabelText("Current List Groceries"));
+	await waitFor(() =>
+		expect(
+			screen.getByLabelText("Groceries, 1 unchecked, 2 checked, current"),
+		).toBeTruthy(),
+	);
 }

@@ -55,6 +55,11 @@ export type EventMap = {
 		list_id: string;
 		user_id: string;
 	};
+	list_switched: {
+		household_id: string;
+		list_id: string;
+		user_id: string;
+	};
 	invitation_accepted: {
 		household_id: string;
 		user_id: string;
