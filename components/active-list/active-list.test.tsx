@@ -5,7 +5,11 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import { FlatList, Keyboard } from "react-native";
+import {
+	FlatList,
+	Keyboard,
+	StyleSheet as ReactNativeStyleSheet,
+} from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -17,7 +21,6 @@ import {
 	type ActiveListMemoryActions,
 	createActiveListMemoryActions,
 } from "@/components/active-list/test-support";
-import { ADD_ITEM_COMPOSER_SCROLL_CLEARANCE } from "@/components/add-item-composer";
 import { useLogger } from "@/lib/logger";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
@@ -125,20 +128,46 @@ describe("ActiveList", () => {
 		expect(screen.queryByLabelText("Add Item")).toBeNull();
 	});
 
-	it("reserves bottom scroll space for the add Item composer", () => {
+	it("does not add bottom padding for the floating add Item composer", () => {
+		const rendered = renderActiveList(emptyList);
+		const list = rendered.UNSAFE_getByType(FlatList);
+		const contentStyle = ReactNativeStyleSheet.flatten(
+			list.props.contentContainerStyle,
+		);
+
+		expect(contentStyle.paddingBottom).toBeUndefined();
+	});
+
+	it("floats the closed add Item composer without an opaque parent background", () => {
+		renderActiveList(emptyList);
+		const entryContainerStyle = ReactNativeStyleSheet.flatten(
+			screen.getByTestId("add-item-entry-container").props.style,
+		);
+
+		expect(entryContainerStyle).toEqual(
+			expect.objectContaining({
+				position: "absolute",
+				left: 0,
+				right: 0,
+				bottom: 0,
+			}),
+		);
+		expect(entryContainerStyle.paddingBottom).toBeUndefined();
+		expect(entryContainerStyle.backgroundColor).toBeUndefined();
+	});
+
+	it("stretches the Item list above the bottom add Item composer", () => {
 		const rendered = renderActiveList(emptyList);
 		const list = rendered.UNSAFE_getByType(FlatList);
 
-		expect(list.props.contentContainerStyle).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({
-					paddingBottom: 34 + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE,
-				}),
-			]),
+		expect(list.props.style).toEqual(
+			expect.objectContaining({
+				flex: 1,
+			}),
 		);
 	});
 
-	it("reserves keyboard-aware bottom scroll space while composing", () => {
+	it("does not add keyboard bottom padding to the Item list", () => {
 		const keyboard = captureKeyboardListeners();
 		try {
 			const rendered = renderActiveList(emptyList);
@@ -148,13 +177,10 @@ describe("ActiveList", () => {
 			});
 
 			const list = rendered.UNSAFE_getByType(FlatList);
-			expect(list.props.contentContainerStyle).toEqual(
-				expect.arrayContaining([
-					expect.objectContaining({
-						paddingBottom: 320 + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE,
-					}),
-				]),
+			const contentStyle = ReactNativeStyleSheet.flatten(
+				list.props.contentContainerStyle,
 			);
+			expect(contentStyle.paddingBottom).toBeUndefined();
 		} finally {
 			keyboard.restore();
 		}

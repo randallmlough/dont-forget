@@ -6,17 +6,16 @@ import {
 	View,
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { useAddItemComposerScrollInset } from "@/components/add-item-composer";
 import { useActiveList } from "./context";
 import type { ActiveListItem } from "./types";
 
 export function ActiveListItems() {
 	const { state } = useActiveList();
-	const bottomScrollInset = useAddItemComposerScrollInset();
 
 	return (
 		<FlatList
 			data={state.items}
+			style={styles.items}
 			keyExtractor={keyExtractor}
 			renderItem={renderItem}
 			ItemSeparatorComponent={ItemSeparator}
@@ -24,7 +23,6 @@ export function ActiveListItems() {
 			keyboardShouldPersistTaps="handled"
 			contentContainerStyle={[
 				styles.itemsContent,
-				{ paddingBottom: bottomScrollInset },
 				state.items.length === 0 ? styles.emptyItemsContent : undefined,
 			]}
 		/>
@@ -106,6 +104,9 @@ function itemDetailText(item: ActiveListItem): string | null {
 }
 
 const styles = StyleSheet.create((theme) => ({
+	items: {
+		flex: 1,
+	},
 	itemsContent: {
 		padding: theme.spacing(5),
 	},

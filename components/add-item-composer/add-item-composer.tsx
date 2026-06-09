@@ -10,9 +10,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
-const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
-export const ADD_ITEM_COMPOSER_SCROLL_CLEARANCE = 128;
 const COMPOSER_COLORS = {
 	entryBackground: "rgba(255, 255, 255, 0.86)",
 	entryBorder: "rgba(130, 154, 177, 0.38)",
@@ -95,10 +93,9 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 		return (
 			<View
 				collapsable={false}
-				style={[
-					styles.entryContainer,
-					{ paddingBottom: insets.bottom + ENTRY_BOTTOM_GAP },
-				]}
+				pointerEvents="box-none"
+				testID="add-item-entry-container"
+				style={styles.entryContainer}
 			>
 				<Pressable
 					accessibilityLabel="Add Item"
@@ -226,15 +223,6 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	);
 }
 
-export function useAddItemComposerScrollInset(): number {
-	const insets = useSafeAreaInsets();
-	const keyboardHeight = useKeyboardHeight();
-
-	return (
-		Math.max(keyboardHeight, insets.bottom) + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE
-	);
-}
-
 function useKeyboardHeight(): number {
 	const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -276,11 +264,12 @@ const styles = StyleSheet.create((theme) => ({
 		zIndex: 10,
 	},
 	entryContainer: {
-		position: "relative",
+		position: "absolute",
+		left: 0,
+		right: 0,
+		bottom: 0,
 		zIndex: 20,
-		paddingTop: theme.spacing(2),
 		paddingHorizontal: theme.spacing(4),
-		backgroundColor: theme.colors.background,
 	},
 	entryHost: {
 		minHeight: theme.spacing(11),

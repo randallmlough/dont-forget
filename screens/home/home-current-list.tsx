@@ -1,6 +1,6 @@
-import { Host } from "@expo/ui/swift-ui";
+import { Host, RNHostView } from "@expo/ui/swift-ui";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, Text } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ActiveList } from "@/components/active-list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
@@ -194,23 +194,27 @@ function HomeCurrentListResource({
 
 	return (
 		<Host style={styles.host}>
-			<ActiveList.Provider
-				key={providerKey}
-				initialState={loadState.initialList}
-				currentMemberName={currentMemberName}
-				onLoadList={loadState.actions.loadList}
-				onAddItem={loadState.actions.addItem}
-				onSetItemChecked={loadState.actions.setItemChecked}
-				syncCoordinator={session.services.sync}
-			>
-				<ActiveList.Screen>
-					<ActiveList.Header
-						onPressCurrentList={() => setIsSwitcherPresented(true)}
-					/>
-					<ActiveList.Items />
-					<ActiveList.AddItemForm />
-				</ActiveList.Screen>
-			</ActiveList.Provider>
+			<RNHostView>
+				<View style={styles.hostContent}>
+					<ActiveList.Provider
+						key={providerKey}
+						initialState={loadState.initialList}
+						currentMemberName={currentMemberName}
+						onLoadList={loadState.actions.loadList}
+						onAddItem={loadState.actions.addItem}
+						onSetItemChecked={loadState.actions.setItemChecked}
+						syncCoordinator={session.services.sync}
+					>
+						<ActiveList.Screen>
+							<ActiveList.Header
+								onPressCurrentList={() => setIsSwitcherPresented(true)}
+							/>
+							<ActiveList.Items />
+							<ActiveList.AddItemForm />
+						</ActiveList.Screen>
+					</ActiveList.Provider>
+				</View>
+			</RNHostView>
 			<HomeListSwitcherSheet
 				currentListId={listId}
 				initialMode="switcher"
@@ -248,6 +252,9 @@ export function homeSessionMemberName(
 
 const styles = StyleSheet.create((theme) => ({
 	host: {
+		flex: 1,
+	},
+	hostContent: {
 		flex: 1,
 	},
 	createButton: {
