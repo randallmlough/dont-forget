@@ -1,10 +1,3 @@
-import { BottomSheet, Group, RNHostView } from "@expo/ui/swift-ui";
-import {
-	background,
-	containerRelativeFrame,
-	presentationDetents,
-	presentationDragIndicator,
-} from "@expo/ui/swift-ui/modifiers";
 import {
 	ActivityIndicator,
 	Pressable,
@@ -14,9 +7,9 @@ import {
 	View,
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import type { ListSummary } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
-import { lightTheme } from "@/lib/unistyles/unistyles";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeListSwitcher } from "./use-home-list-switcher";
 
@@ -57,88 +50,77 @@ export function HomeListSwitcherSheet({
 			isPresented={isPresented}
 			onIsPresentedChange={onIsPresentedChange}
 		>
-			<Group
-				modifiers={[
-					presentationDetents(["medium", "large"]),
-					presentationDragIndicator("visible"),
-					containerRelativeFrame({ axes: "vertical", alignment: "top" }),
-					background(lightTheme.colors.background),
-				]}
-			>
-				<RNHostView>
-					<View style={styles.sheet}>
-						{switcher.mode.name === "create" ? (
-							<ListNameForm
-								actionLabel="Create List"
-								draftName={switcher.mode.draftName}
-								isSubmitting={switcher.mode.isSubmitting}
-								message={switcher.mode.message}
-								onBack={currentListId ? switcher.backToSwitcher : undefined}
-								onChangeName={switcher.setDraftName}
-								onSubmit={switcher.createList}
-								title="Create List"
+			<View style={styles.sheet}>
+				{switcher.mode.name === "create" ? (
+					<ListNameForm
+						actionLabel="Create List"
+						draftName={switcher.mode.draftName}
+						isSubmitting={switcher.mode.isSubmitting}
+						message={switcher.mode.message}
+						onBack={currentListId ? switcher.backToSwitcher : undefined}
+						onChangeName={switcher.setDraftName}
+						onSubmit={switcher.createList}
+						title="Create List"
+					/>
+				) : switcher.mode.name === "rename" ? (
+					<ListNameForm
+						actionLabel="Rename"
+						draftName={switcher.mode.draftName}
+						isSubmitting={switcher.mode.isSubmitting}
+						message={switcher.mode.message}
+						onBack={switcher.backToSwitcher}
+						onChangeName={switcher.setDraftName}
+						onSubmit={switcher.renameList}
+						title={`Rename ${switcher.mode.summary.name}`}
+					/>
+				) : switcher.mode.name === "confirmDelete" ? (
+					<ConfirmDelete
+						isSubmitting={switcher.mode.isSubmitting}
+						message={switcher.mode.message}
+						onBack={switcher.backToSwitcher}
+						onDelete={switcher.deleteList}
+						summary={switcher.mode.summary}
+					/>
+				) : switcher.state.status === "loading" ? (
+					<HomeStatus title="Loading Lists" body="Preparing active Lists.">
+						<ActivityIndicator />
+					</HomeStatus>
+				) : switcher.state.status === "error" ? (
+					<HomeStatus
+						title="Lists unavailable"
+						body="Unable to load active Lists. Please try again."
+					>
+						<HomeRetryButton onPress={switcher.retry} />
+					</HomeStatus>
+				) : (
+					<ScrollView
+						contentContainerStyle={styles.listContent}
+						style={styles.list}
+					>
+						<Pressable
+							accessibilityRole="button"
+							onPress={switcher.openCreate}
+							style={({ pressed }) => [
+								styles.primaryButton,
+								pressed ? styles.buttonPressed : undefined,
+							]}
+						>
+							<Text style={styles.primaryButtonLabel}>Create List</Text>
+						</Pressable>
+						{switcher.state.summaries.map((summary) => (
+							<ListSwitcherRow
+								current={summary.id === currentListId}
+								key={summary.id}
+								onDelete={switcher.openDelete}
+								onPress={switcher.selectList}
+								onRename={switcher.openRename}
+								summary={summary}
+								switching={switcher.switchingListId === summary.id}
 							/>
-						) : switcher.mode.name === "rename" ? (
-							<ListNameForm
-								actionLabel="Rename"
-								draftName={switcher.mode.draftName}
-								isSubmitting={switcher.mode.isSubmitting}
-								message={switcher.mode.message}
-								onBack={switcher.backToSwitcher}
-								onChangeName={switcher.setDraftName}
-								onSubmit={switcher.renameList}
-								title={`Rename ${switcher.mode.summary.name}`}
-							/>
-						) : switcher.mode.name === "confirmDelete" ? (
-							<ConfirmDelete
-								isSubmitting={switcher.mode.isSubmitting}
-								message={switcher.mode.message}
-								onBack={switcher.backToSwitcher}
-								onDelete={switcher.deleteList}
-								summary={switcher.mode.summary}
-							/>
-						) : switcher.state.status === "loading" ? (
-							<HomeStatus title="Loading Lists" body="Preparing active Lists.">
-								<ActivityIndicator />
-							</HomeStatus>
-						) : switcher.state.status === "error" ? (
-							<HomeStatus
-								title="Lists unavailable"
-								body="Unable to load active Lists. Please try again."
-							>
-								<HomeRetryButton onPress={switcher.retry} />
-							</HomeStatus>
-						) : (
-							<ScrollView
-								contentContainerStyle={styles.listContent}
-								style={styles.list}
-							>
-								<Pressable
-									accessibilityRole="button"
-									onPress={switcher.openCreate}
-									style={({ pressed }) => [
-										styles.primaryButton,
-										pressed ? styles.buttonPressed : undefined,
-									]}
-								>
-									<Text style={styles.primaryButtonLabel}>Create List</Text>
-								</Pressable>
-								{switcher.state.summaries.map((summary) => (
-									<ListSwitcherRow
-										current={summary.id === currentListId}
-										key={summary.id}
-										onDelete={switcher.openDelete}
-										onPress={switcher.selectList}
-										onRename={switcher.openRename}
-										summary={summary}
-										switching={switcher.switchingListId === summary.id}
-									/>
-								))}
-							</ScrollView>
-						)}
-					</View>
-				</RNHostView>
-			</Group>
+						))}
+					</ScrollView>
+				)}
+			</View>
 		</BottomSheet>
 	);
 }
