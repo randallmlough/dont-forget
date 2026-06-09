@@ -1226,6 +1226,64 @@ describe("HomeScreenView", () => {
 		}
 	});
 
+	it("does not log a stale active List reload failure when current delete sync completes", async () => {
+		const syncAfterWrite = deferred<void>();
+		const syncCoordinator = controllableHomeSyncCoordinator("synced");
+		syncCoordinator.requestSync.mockImplementationOnce(async () => {
+			syncCoordinator.emit("pending");
+			await syncAfterWrite.promise;
+			syncCoordinator.emit("synced");
+			return { changed: true };
+		});
+		const harness = await createHomeSessionHarness({ syncCoordinator });
+		const getList = jest.spyOn(harness.session.services.lists, "getList");
+		const activeLists = await harness.session.services.lists.listLists({
+			archive: "active",
+			sort: "recentActivity",
+		});
+		const fallback = activeLists.find(
+			(summary) => summary.id !== harness.scenario.lists.groceries.id,
+		);
+		if (!fallback) throw new Error("Expected fallback List");
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await openCurrentListSwitcher();
+			fireEvent.press(screen.getByLabelText("Delete List Groceries"));
+			await act(async () => {
+				fireEvent.press(screen.getByLabelText("Confirm Delete List Groceries"));
+			});
+
+			await waitFor(() => expect(screen.getByText(fallback.name)).toBeTruthy());
+			await waitFor(() => expect(harness.requestSync).toHaveBeenCalledTimes(1));
+			const fallbackReadIndex = getList.mock.calls.findIndex(
+				([input]) => input.listId === fallback.id,
+			);
+			expect(fallbackReadIndex).toBeGreaterThanOrEqual(0);
+			expect(getList.mock.invocationCallOrder[fallbackReadIndex]).toBeLessThan(
+				harness.requestSync.mock.invocationCallOrder[0],
+			);
+
+			await act(async () => {
+				syncAfterWrite.resolve();
+				await syncAfterWrite.promise;
+			});
+
+			expect(testLogger.error).not.toHaveBeenCalledWith(
+				"active list reload after sync failed",
+				expect.anything(),
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+
 	it("deletes the last active current List, clears selection, and renders zero-active", async () => {
 		const harness = await createHomeSessionHarness();
 		await harness.household.db
@@ -1371,6 +1429,7 @@ type HomeSessionHarnessOptions = {
 	listName?: string;
 	listReadGate?: Promise<void>;
 	resourceKey?: string;
+	syncCoordinator?: HomeTestSyncCoordinator;
 	uncheckedItemName?: string;
 };
 
@@ -1413,7 +1472,7 @@ async function createHomeSessionHarness(
 			},
 		},
 	);
-	const syncCoordinator = passiveSyncCoordinator();
+	const syncCoordinator = options.syncCoordinator ?? passiveSyncCoordinator();
 	const session: AuthenticatedAppSession = {
 		user: {
 			id: scenario.users.avery.id,
@@ -1513,6 +1572,55 @@ function passiveSyncCoordinator(): AuthenticatedAppSession["services"]["sync"] &
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),
 		requestSync,
+	};
+}
+
+type HomeTestSyncCoordinator = AuthenticatedAppSession["services"]["sync"] & {
+	requestSync: jest.MockedFunction<
+		AuthenticatedAppSession["services"]["sync"]["requestSync"]
+	>;
+	emit: (
+		status: ReturnType<
+			AuthenticatedAppSession["services"]["sync"]["getStatus"]
+		>,
+	) => void;
+};
+
+function controllableHomeSyncCoordinator(
+	initialStatus: ReturnType<
+		AuthenticatedAppSession["services"]["sync"]["getStatus"]
+	>,
+): HomeTestSyncCoordinator {
+	let status = initialStatus;
+	const listeners = new Set<
+		(
+			status: ReturnType<
+				AuthenticatedAppSession["services"]["sync"]["getStatus"]
+			>,
+		) => void
+	>();
+	const requestSync = jest.fn<
+		ReturnType<AuthenticatedAppSession["services"]["sync"]["requestSync"]>,
+		Parameters<AuthenticatedAppSession["services"]["sync"]["requestSync"]>
+	>(async () => null);
+
+	return {
+		getStatus: () => status,
+		subscribe(listener) {
+			listeners.add(listener);
+			return {
+				remove() {
+					listeners.delete(listener);
+				},
+			};
+		},
+		requestSync,
+		emit(nextStatus) {
+			status = nextStatus;
+			for (const listener of listeners) {
+				listener(status);
+			}
+		},
 	};
 }
 

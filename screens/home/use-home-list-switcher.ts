@@ -340,7 +340,13 @@ export function useHomeListSwitcher({
 			}
 
 			if (result.didWrite) {
-				await requestLocalWriteSync();
+				if (mode.summary.id === currentListId) {
+					requestLocalWriteSyncAfterCurrentListTransition(
+						requestLocalWriteSync,
+					);
+				} else {
+					await requestLocalWriteSync();
+				}
 			}
 		} catch {
 			setMode({
@@ -401,4 +407,12 @@ function listNameValidationMessage(reason: "required" | "tooLong"): string {
 		case "tooLong":
 			return "List names must be 80 characters or fewer.";
 	}
+}
+
+function requestLocalWriteSyncAfterCurrentListTransition(
+	requestLocalWriteSync: () => Promise<void>,
+): void {
+	setTimeout(() => {
+		void requestLocalWriteSync().catch(() => undefined);
+	}, 0);
 }

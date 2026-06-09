@@ -40,3 +40,28 @@ Update it continuously with assumptions, decisions, discoveries, commands run, t
   - `make typecheck` - passed.
   - `make verify` - passed: typecheck, Biome, local ESLint rule tests, ESLint, and all Jest suites (`51` suites, `374` tests). Existing PostHog missing-token warnings appeared during tests.
 - Did not perform QA review or simulator/manual QA; this worker handoff is ready for the QA phase.
+
+## 2026-06-09T04:08:00Z
+
+- Started recovery worker attempt 2 for QA finding on current-delete fallback reload noise.
+- Read required recovery context: `AGENTS.md`, `CONTEXT.md`, task README, `state.json`, `worker-notes.md`, `qa-notes.md`, and `orchestrator-notes.md`.
+- Read relevant feature/system docs: feature README, `docs/how-things-work/authenticated-app-session.md`, `docs/how-things-work/sync-coordinator.md`, `docs/how-things-work/services.md`, ADR-0011, ADR-0012, `docs/code-standards/testing.md`, and workflow docs for feature development / QA.
+- Initial diagnosis target: expected user-initiated current-List delete fallback should not surface `active list reload after sync failed` / `Error: List is not available` while the UI is transitioning to the fallback List or zero-active state.
+
+## 2026-06-09T04:18:00Z
+
+- Reproduced the implementation ordering bug with a focused Home/switcher regression test: before the fix, `requestSync({ reason: "localWrite" })` was invoked before the fallback List read started after deleting the Current List.
+- Root cause: current-delete fallback updated Home selection state and closed the sheet, but then awaited the local-write sync hint in the same destructive action. A fast `pending -> synced` transition could still be observed by the old `ActiveList.Provider`, causing it to reload the just-deleted List and log/toast `active list reload after sync failed`.
+- Implemented a narrow fix in `useHomeListSwitcher`: current-List delete still requests `localWrite` only after a `didWrite === true` service result, but schedules that sync hint after the Current List transition so the deleted List provider can unmount before sync completion reloads visible List rows.
+- Inspected sync-unavailable behavior in `lib/services/sync/sync-coordinator.ts` and local-write policy tests. No extra CRUD implementation change appears needed: known-offline `localWrite` requests resolve without remote sync, and typed network interruptions transition to offline without error logging while local List writes remain committed.
+- Command run: `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx --testNamePattern "stale active List reload"` - failed before the implementation change, passed after the fix.
+
+## 2026-06-09T04:27:00Z
+
+- Final recovery verification:
+  - `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` - passed, 1 suite / 38 tests.
+  - `make typecheck` - passed.
+  - First `make verify` rerun failed only on Biome formatting for touched TypeScript files.
+  - `pnpm exec biome check --write screens/home/home-screen.test.tsx screens/home/use-home-list-switcher.ts` - fixed formatting.
+  - `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` - passed after formatting, 1 suite / 38 tests.
+  - `make verify` - passed: typecheck, Biome, local ESLint rule tests, ESLint, and all Jest suites (`51` suites, `375` tests). Existing PostHog missing-token warnings appeared during tests.
