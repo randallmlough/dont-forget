@@ -361,6 +361,91 @@ describe("createListService", () => {
 		}
 	});
 
+	it("loads and creates Lists from a previous local Household schema without archive columns", async () => {
+		jest.spyOn(Date, "now").mockReturnValue(1_700_000_001_000);
+		const household = await createTestHouseholdDb({
+			throughMigration: "0001_brainy_pride.sql",
+		});
+		const service = createListService({
+			householdId,
+			userId: signedInUserId,
+			store: { execute: household.client.execute.bind(household.client) },
+			logger: testLogger,
+			analytics: analyticsFixture(),
+		});
+
+		try {
+			await household.client.execute({
+				sql: `
+					INSERT INTO lists (
+						id,
+						name,
+						created_by_user_id,
+						created_at,
+						updated_at,
+						deleted_at
+					)
+					VALUES (?, ?, ?, ?, ?, NULL)
+				`,
+				args: [
+					"lst_weekend",
+					"Weekend Groceries",
+					"usr_avery",
+					1_700_000_000_000,
+					1_700_000_000_100,
+				],
+			});
+
+			await expect(service.getList({ listId: "lst_weekend" })).resolves.toEqual(
+				{
+					status: "available",
+					list: expect.objectContaining({
+						id: "lst_weekend",
+						archived: false,
+						archivedAt: null,
+					}),
+				},
+			);
+			await expect(
+				service.listLists({ archive: "active", sort: "recentActivity" }),
+			).resolves.toEqual([
+				expect.objectContaining({
+					id: "lst_weekend",
+					archived: false,
+					archivedAt: null,
+				}),
+			]);
+			await expect(service.listLists({ archive: "archived" })).resolves.toEqual(
+				[],
+			);
+
+			const created = await service.createList({ name: "Hardware Store" });
+
+			expect(created).toEqual({
+				status: "available",
+				didWrite: true,
+				list: expect.objectContaining({
+					name: "Hardware Store",
+					archived: false,
+					archivedAt: null,
+				}),
+			});
+			if (created.status !== "available") {
+				throw new Error("Expected created List");
+			}
+			await expect(
+				household.client.execute({
+					sql: "SELECT name, deleted_at FROM lists WHERE id = ? LIMIT 1",
+					args: [created.list.id],
+				}),
+			).resolves.toMatchObject({
+				rows: [{ name: "Hardware Store", deleted_at: null }],
+			});
+		} finally {
+			await household.close();
+		}
+	});
+
 	it("filters List summaries by trimmed case-insensitive search with literal LIKE characters", async () => {
 		const harness = await createHarness();
 
@@ -815,6 +900,7 @@ describe("createListService", () => {
 		const store = storeFixture();
 		const analytics = analyticsFixture();
 		store.execute
+			.mockResolvedValueOnce(listsSchemaResult())
 			.mockResolvedValueOnce({
 				rows: [listRow({ id: "lst_rename_race", name: "Groceries" })],
 				rowsAffected: 0,
@@ -825,6 +911,7 @@ describe("createListService", () => {
 				rowsAffected: 0,
 				lastInsertRowId: null,
 			})
+			.mockResolvedValueOnce(listsSchemaResult())
 			.mockResolvedValueOnce({
 				rows: [
 					listRow({
@@ -857,8 +944,8 @@ describe("createListService", () => {
 			updatedAt: 1_700_000_000_500,
 			didWrite: false,
 		});
-		expect(store.execute).toHaveBeenCalledTimes(3);
-		expect(store.execute.mock.calls[1]?.[0]).toMatchObject({ kind: "write" });
+		expect(store.execute).toHaveBeenCalledTimes(5);
+		expect(store.execute.mock.calls[2]?.[0]).toMatchObject({ kind: "write" });
 		expect(analytics.track).not.toHaveBeenCalled();
 	});
 
@@ -967,6 +1054,7 @@ describe("createListService", () => {
 		const store = storeFixture();
 		const analytics = analyticsFixture();
 		store.execute
+			.mockResolvedValueOnce(listsSchemaResult())
 			.mockResolvedValueOnce({
 				rows: [listRow({ id: "lst_delete_race", name: "Groceries" })],
 				rowsAffected: 0,
@@ -977,6 +1065,7 @@ describe("createListService", () => {
 				rowsAffected: 0,
 				lastInsertRowId: null,
 			})
+			.mockResolvedValueOnce(listsSchemaResult())
 			.mockResolvedValueOnce({
 				rows: [],
 				rowsAffected: 0,
@@ -997,8 +1086,8 @@ describe("createListService", () => {
 			listId: "lst_delete_race",
 			didWrite: false,
 		});
-		expect(store.execute).toHaveBeenCalledTimes(3);
-		expect(store.execute.mock.calls[1]?.[0]).toMatchObject({ kind: "write" });
+		expect(store.execute).toHaveBeenCalledTimes(5);
+		expect(store.execute.mock.calls[2]?.[0]).toMatchObject({ kind: "write" });
 		expect(analytics.track).not.toHaveBeenCalled();
 	});
 
@@ -1137,6 +1226,22 @@ function storeFixture() {
 		execute: jest.fn<Promise<HouseholdSqlResult>, [HouseholdSqlStatement]>(
 			async () => ({ rows: [], rowsAffected: 0, lastInsertRowId: null }),
 		),
+	};
+}
+
+function listsSchemaResult(): HouseholdSqlResult {
+	return {
+		rows: [
+			{ name: "id" },
+			{ name: "name" },
+			{ name: "created_by_user_id" },
+			{ name: "created_at" },
+			{ name: "updated_at" },
+			{ name: "archived_at" },
+			{ name: "deleted_at" },
+		],
+		rowsAffected: 0,
+		lastInsertRowId: null,
 	};
 }
 

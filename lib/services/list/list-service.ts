@@ -149,22 +149,12 @@ export function createListService(deps: ListServiceDeps): ListService {
 			}
 
 			try {
+				const schema = await readListsSchema(deps.store);
 				const now = listServiceTimestamp();
 				const id = createAppId("lst", randomUuid);
 				await deps.store.execute({
 					kind: "write",
-					sql: `
-            INSERT INTO lists (
-              id,
-              name,
-              created_by_user_id,
-              created_at,
-              updated_at,
-              archived_at,
-              deleted_at
-            )
-            VALUES (?, ?, ?, ?, ?, NULL, NULL)
-          `,
+					sql: createListSql(schema),
 					args: [id, name.name, deps.userId, now, now],
 				});
 				const list: List = {
@@ -201,7 +191,8 @@ export function createListService(deps: ListServiceDeps): ListService {
 		},
 		async listLists(input = {}) {
 			try {
-				const query = listListsQuery(input);
+				const schema = await readListsSchema(deps.store);
+				const query = listListsQuery(input, schema);
 				const result = await deps.store.execute({
 					kind: "read",
 					sql: query.sql,
@@ -365,19 +356,32 @@ function listSummaryFromRow(
 	};
 }
 
-function listListsQuery(input: ListListsInput): {
+function listListsQuery(
+	input: ListListsInput,
+	schema: ListsSchema,
+): {
 	sql: string;
 	args: HouseholdSqlValue[];
 } {
 	const where = ["l.deleted_at IS NULL"];
 	const args: HouseholdSqlValue[] = [];
+	const archivedAtSelection = schema.hasArchivedAt
+		? "l.archived_at"
+		: "NULL AS archived_at";
+	const archivedAtGroupBy = schema.hasArchivedAt
+		? ",\n        l.archived_at"
+		: "";
 
 	switch (input.archive ?? "active") {
 		case "active":
-			where.push("l.archived_at IS NULL");
+			if (schema.hasArchivedAt) where.push("l.archived_at IS NULL");
 			break;
 		case "archived":
-			where.push("l.archived_at IS NOT NULL");
+			if (schema.hasArchivedAt) {
+				where.push("l.archived_at IS NOT NULL");
+			} else {
+				where.push("0 = 1");
+			}
 			break;
 		case "all":
 			break;
@@ -402,7 +406,7 @@ function listListsQuery(input: ListListsInput): {
         l.created_by_user_id,
         l.created_at,
         l.updated_at,
-        l.archived_at,
+        ${archivedAtSelection},
         MAX(
           l.updated_at,
           COALESCE(MAX(i.updated_at), l.updated_at),
@@ -437,8 +441,7 @@ function listListsQuery(input: ListListsInput): {
         l.name,
         l.created_by_user_id,
         l.created_at,
-        l.updated_at,
-        l.archived_at
+        l.updated_at${archivedAtGroupBy}
       ${listListsOrderBy(input.sort ?? "recentActivity")}
     `,
 		args,
@@ -464,6 +467,7 @@ async function readListLifecycleRow(
 	store: HouseholdStoreExecutor,
 	listId: string,
 ): Promise<Record<string, unknown> | null> {
+	const schema = await readListsSchema(store);
 	const result = await store.execute({
 		kind: "read",
 		sql: `
@@ -473,7 +477,7 @@ async function readListLifecycleRow(
         created_by_user_id,
         created_at,
         updated_at,
-        archived_at,
+        ${schema.hasArchivedAt ? "archived_at" : "NULL AS archived_at"},
         deleted_at
       FROM lists
       WHERE id = ?
@@ -482,6 +486,48 @@ async function readListLifecycleRow(
 		args: [listId],
 	});
 	return result.rows[0] ?? null;
+}
+
+type ListsSchema = {
+	hasArchivedAt: boolean;
+};
+
+async function readListsSchema(
+	store: HouseholdStoreExecutor,
+): Promise<ListsSchema> {
+	const result = await store.execute({
+		kind: "read",
+		sql: "PRAGMA table_info(lists)",
+	});
+	const columns = new Set(result.rows.map((row) => String(row.name)));
+	return { hasArchivedAt: columns.has("archived_at") };
+}
+
+function createListSql(schema: ListsSchema): string {
+	return schema.hasArchivedAt
+		? `
+        INSERT INTO lists (
+          id,
+          name,
+          created_by_user_id,
+          created_at,
+          updated_at,
+          archived_at,
+          deleted_at
+        )
+        VALUES (?, ?, ?, ?, ?, NULL, NULL)
+      `
+		: `
+        INSERT INTO lists (
+          id,
+          name,
+          created_by_user_id,
+          created_at,
+          updated_at,
+          deleted_at
+        )
+        VALUES (?, ?, ?, ?, ?, NULL)
+      `;
 }
 
 function resultFromLifecycleRow(

@@ -36,3 +36,53 @@ Update it continuously with assumptions, decisions, discoveries, commands run, t
   - `make typecheck` - passed.
   - `make verify` - passed: typecheck, Biome, local ESLint rule tests, ESLint, and all Jest suites (`51` suites, `362` tests). Existing PostHog missing-token console warnings appeared during tests.
 - Did not perform live iOS Simulator QA; that remains for the required QA phase.
+
+## 2026-06-09T01:40:00Z
+
+- Started worker attempt 2 after QA failed live iOS Simulator verification.
+- Read required task context again: `AGENTS.md`, `CONTEXT.md`, task README, `state.json`, `worker-notes.md`, `qa-notes.md`, `reviewer-notes.md`, and `orchestrator-notes.md`.
+- Confirmed current scope is implementation-worker recovery only: fix the runtime blockers needed for QA, do not mutate `state.json`, do not perform QA/review, and use standard `git` only.
+- Working hypotheses:
+  - The `archived_at` runtime error likely comes from Task 3 summary code assuming a newer Household schema than the live local/synced Household DB files currently installed in the Simulator.
+  - The seeded multi-List Household issue likely needs either a documented setup path, a seed login/session path, or a live dev reset path so QA can reach `hh_avery`.
+
+## 2026-06-09T01:52:00Z
+
+- Searched `CONTEXT.md`, `docs/`, and source for `archived_at`, `listLists`, `hh_avery`, seed, live env, and migration guidance.
+- Key documentation finding: `docs/adr/0003-schema-migration-fanout.md` says the app does not run bundled Household migrations against synced local Household DBs and app code must tolerate the previous local schema until sync brings down newer DDL.
+- Source finding: `db/migrations/household/0002_steep_ultron.sql` adds `lists.archived_at`; `lib/services/list/list-service.ts` used `archived_at` unconditionally in `createList`, `getList`, and `listLists`.
+- Source precedent: `lib/services/item/item-service.ts` already probes `PRAGMA table_info(items)` so `quantity` works against pre-`0001` local schemas.
+- Implemented the same schema-capability pattern for Lists:
+  - `readListsSchema()` probes `PRAGMA table_info(lists)`.
+  - Previous local schema without `archived_at` treats every non-deleted List as active and returns `archivedAt: null`.
+  - `archive: "archived"` returns no rows until the schema has archive state.
+  - `createList()` omits `archived_at` when the local schema does not have the column.
+- Added a ListService regression test using `createTestHouseholdDb({ throughMigration: "0001_brainy_pride.sql" })` to cover `getList`, `listLists({ archive: "active" })`, `listLists({ archive: "archived" })`, and `createList` on the previous local schema.
+- Ran `pnpm exec jest --runInBand --runTestsByPath lib/services/list/list-service.test.ts`:
+  - First run failed because two existing mocked race tests did not account for the new `PRAGMA table_info(lists)` reads.
+  - Updated those tests to model the schema reads explicitly and assert the guarded write call at the new index.
+  - Second run passed: 1 suite / 24 tests.
+
+## 2026-06-09T02:04:00Z
+
+- Investigated the seeded multi-List Household live setup blocker.
+- Source finding: `PRIMARY_HOUSEHOLD_SEED` intentionally uses synthetic Clerk IDs (`user_avery`, `user_blake`), so a real Clerk development user like QA's `jun7@email.com` will bootstrap into first-run Household creation unless it is joined to the seeded Household.
+- Source finding: the deterministic seed also creates reusable Household Join Code `ABCDEFGH` for `hh_avery`, and the public route `app/households/join.tsx` uses `HouseholdJoinScreen`.
+- Source finding: `joinByCode()` creates/reuses a plain Member Membership for the signed-in User, sets `users.active_household_id` to the joined Household, and reloads the Authenticated App Session through `usePublicHouseholdEntry`.
+- Live QA setup path for the next QA agent:
+  - Ensure local seed data exists with `make db-reseed APP_ENV=local CONFIRM_DB_RESET=local` when a destructive local reset is acceptable, or `make db-seed APP_ENV=local` if the migrated deterministic seed DB already exists and no seed rows exist.
+  - Sign in with any real Clerk development User.
+  - Open the local app deep link `dontforget-local://households/join?code=ABCDEFGH` (local scheme comes from `app.config.ts`).
+  - Tap `Join Household`; the active Household should become seeded `hh_avery` / `Avery`, which has active Lists `Groceries`, `Hardware Store`, and `Pharmacy`, plus archived `Camping`.
+
+## 2026-06-09T02:16:00Z
+
+- Verification commands:
+  - `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` - passed, 1 suite / 26 tests.
+  - `make typecheck` - passed.
+  - First `make verify` attempt failed at Biome formatting for `lib/services/list/list-service.ts` and `lib/services/list/list-service.test.ts`; no test/type errors.
+  - `pnpm exec biome check --write lib/services/list/list-service.ts lib/services/list/list-service.test.ts` - fixed formatting only.
+  - `pnpm exec jest --runInBand --runTestsByPath lib/services/list/list-service.test.ts` - passed, 1 suite / 24 tests.
+  - `pnpm exec jest --runInBand --runTestsByPath screens/home/home-screen.test.tsx` - passed again, 1 suite / 26 tests.
+  - `make verify` - passed: typecheck, Biome, local ESLint rule tests, ESLint, and all Jest suites (`51` suites, `363` tests). Existing PostHog missing-token warnings appeared during tests.
+- Residual risk: I did not perform live iOS Simulator QA in this implementation-worker phase. The next QA pass should use the documented join-code path above to enter seeded `hh_avery` before verifying multi-row scrolling, switching, and restart persistence.
