@@ -46,15 +46,19 @@ The coordinator receives foreground/background state through an app-owned adapte
 
 Automatic retry and reconnect catch-up work only runs while the app is active. If the network becomes online while the app is inactive or backgrounded, the coordinator records the network state but waits for the normal foreground catch-up path before starting remote sync work.
 
+The retry timer runs whenever the coordinator is started and the app is foreground-active, regardless of network status. It stops only on background/inactive transitions and `stop()`. Each tick self-gates: it refreshes network state and skips remote sync while the refreshed state is `offline`. Network events never stop or start the timer, so no platform event sequence can leave the cadence dead while the app is in use, and the per-tick network refresh doubles as a polling fallback for NetInfo events that never arrive.
+
 ## Network Status
 
 The coordinator receives device connectivity through an app-owned, app-wide network adapter rather than importing a platform network package directly into UI, data-source, HouseholdStore, or domain service code.
 
-The adapter exposes three app-level states:
+The adapter exposes three app-level states, decided by NetInfo's `isConnected` alone:
 
-- `online`: the device is connected and internet reachability is not known to be false.
-- `offline`: the device is disconnected or internet reachability is known to be false.
-- `unknown`: connectivity has not resolved yet or cannot be determined.
+- `online`: the device reports an active connection (`isConnected: true`).
+- `offline`: the device reports no connection (`isConnected: false`).
+- `unknown`: connectivity has not resolved yet or cannot be determined (`isConnected: null`).
+
+NetInfo's `isInternetReachable` flag is deliberately ignored: its reachability probe lags or never confirms after reconnect on iOS, which previously stranded devices in `offline` with every recovery trigger re-blocked. The sync attempt itself is the authoritative reachability probe — if Turso is unreachable, the attempt fails as a classified interruption and status returns to `offline`. The adapter logs every status transition with the raw NetInfo fields for field diagnostics.
 
 The production adapter is backed by `@react-native-community/netinfo`, but tests should use fake adapters. The adapter starts as `unknown` and updates from platform events; authenticated app session controller activation does not wait for an async connectivity fetch.
 
