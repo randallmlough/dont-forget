@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator } from "react-native";
+import { ActivityIndicator, Pressable, Text } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { ActiveList } from "@/components/active-list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeListSwitcher } from "./home-list-switcher";
@@ -46,12 +47,35 @@ function HomeCurrentListResource({
 	}
 
 	if (loadState.status === "zeroActive") {
-		// Temporary display-only zero-active state; the create flow lands later.
 		return (
-			<HomeStatus
-				title="No active Lists"
-				body="Create a List to start adding Items."
-			/>
+			<>
+				<HomeStatus
+					title="No active Lists"
+					body="Create a List to start adding Items."
+				>
+					<Pressable
+						accessibilityRole="button"
+						onPress={() => setSwitcherOpen(true)}
+						style={({ pressed }) => [
+							styles.createButton,
+							pressed ? styles.createButtonPressed : undefined,
+						]}
+					>
+						<Text style={styles.createButtonLabel}>Create List</Text>
+					</Pressable>
+				</HomeStatus>
+				{switcherOpen ? (
+					<HomeListSwitcher
+						session={session}
+						currentListId={null}
+						initialMode="create"
+						onDismiss={() => setSwitcherOpen(false)}
+						// A successful create persists the selection, then re-resolution
+						// renders the new empty Current List.
+						onSwitched={list.retry}
+					/>
+				) : null}
+			</>
 		);
 	}
 
@@ -97,3 +121,23 @@ export function homeSessionMemberName(
 		"Member"
 	);
 }
+
+const styles = StyleSheet.create((theme) => ({
+	createButton: {
+		minHeight: theme.spacing(11),
+		paddingHorizontal: theme.spacing(4),
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: theme.colors.primary,
+	},
+	createButtonPressed: {
+		opacity: theme.opacities.pressed,
+	},
+	createButtonLabel: {
+		...theme.typography.callout,
+		color: theme.colors.inverseText,
+		fontWeight: theme.fontWeights.bold,
+	},
+}));

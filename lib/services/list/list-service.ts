@@ -124,6 +124,13 @@ const listRowSchema = z.object({
 
 type ListRow = z.infer<typeof listRowSchema>;
 
+// The real Household store always reports rowsAffected on writes; parse it
+// loudly so a lifecycle race (row deleted between the pre-read and the
+// guarded UPDATE) can be reclassified instead of silently miscounted.
+const writeResultSchema = z.object({
+	rowsAffected: sqlNumberSchema,
+});
+
 const listSummaryRowSchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -264,11 +271,17 @@ export function createListService(deps: ListServiceDeps): ListService {
 				}
 
 				const now = nextListServiceTimestamp();
-				await deps.store.execute({
+				// `AND deleted_at IS NULL` guards the read-then-write race: a delete
+				// interleaved after the pre-read must not resurrect or rename the
+				// tombstoned row (rowsAffected reclassifies the lost race below).
+				const writeResult = await deps.store.execute({
 					kind: "write",
-					sql: "UPDATE lists SET name = ?, updated_at = ? WHERE id = ?",
+					sql: "UPDATE lists SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
 					args: [validated.name, now, input.listId],
 				});
+				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
+					return reclassifyLostWrite(deps.store, input.listId);
+				}
 				analytics.track("list_renamed", {
 					household_id: deps.householdId,
 					list_id: input.listId,
@@ -309,11 +322,16 @@ export function createListService(deps: ListServiceDeps): ListService {
 				}
 
 				const now = nextListServiceTimestamp();
-				await deps.store.execute({
+				// `AND deleted_at IS NULL` keeps a concurrent delete from churning the
+				// tombstone timestamps; a lost race reclassifies below.
+				const writeResult = await deps.store.execute({
 					kind: "write",
-					sql: "UPDATE lists SET deleted_at = ?, updated_at = ? WHERE id = ?",
+					sql: "UPDATE lists SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
 					args: [now, now, input.listId],
 				});
+				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
+					return reclassifyLostWrite(deps.store, input.listId);
+				}
 				analytics.track("list_deleted", {
 					household_id: deps.householdId,
 					list_id: input.listId,
@@ -400,6 +418,39 @@ export function createListService(deps: ListServiceDeps): ListService {
 			}
 		},
 	};
+}
+
+/**
+ * A guarded lifecycle UPDATE (`AND deleted_at IS NULL`) matched no row: the
+ * List was deleted (or vanished) between the pre-read and the write. Re-read
+ * and return the typed lifecycle result; no write happened, so callers emit
+ * no analytics for it.
+ */
+async function reclassifyLostWrite(
+	store: HouseholdStoreExecutor,
+	listId: string,
+): Promise<
+	| {
+			status: "deleted";
+			listId: string;
+			deletedAt: number;
+			updatedAt: number;
+			didWrite: false;
+	  }
+	| { status: "missing"; listId: string; didWrite: false }
+> {
+	const row = await readListRow(store, listId);
+	if (row?.deleted_at != null) {
+		return {
+			status: "deleted",
+			listId,
+			deletedAt: row.deleted_at,
+			updatedAt: row.updated_at,
+			didWrite: false,
+		};
+	}
+
+	return { status: "missing", listId, didWrite: false };
 }
 
 async function readListRow(

@@ -644,6 +644,74 @@ describe("createListService", () => {
 				await household.close();
 			}
 		});
+
+		it("reclassifies a rename as deleted when a delete interleaves between the pre-read and the write", async () => {
+			const household = await createTestHouseholdDb();
+
+			try {
+				await household.db
+					.insert(lists)
+					.values(
+						listFixture({ id: "lst_trip", name: "Trip", updatedAt: 100 }),
+					);
+				const analytics = createMockAnalytics();
+				// Rival writer on a plain pass-through store: its delete runs to
+				// completion inside the victim rename's write step.
+				const rival = serviceFor(household, { analytics });
+				const execute = household.client.execute.bind(household.client);
+				let interleaved = false;
+				const service = createListService({
+					householdId: "hh_avery",
+					userId: "usr_avery",
+					store: {
+						async execute(statement: HouseholdSqlStatement) {
+							if (
+								!interleaved &&
+								statement.kind === "write" &&
+								/SET name/.test(statement.sql)
+							) {
+								interleaved = true;
+								await rival.deleteList({ listId: "lst_trip" });
+							}
+							return execute(statement);
+						},
+					},
+					logger: testLogger,
+					analytics,
+				});
+
+				const result = await service.renameList({
+					listId: "lst_trip",
+					name: "Road Trip",
+				});
+
+				expect(interleaved).toBe(true);
+				const row = await household.db.query.lists.findFirst({
+					where: eq(lists.id, "lst_trip"),
+				});
+				// The tombstoned row is untouched by the rename: name preserved and
+				// updated_at never regresses below deleted_at.
+				expect(row).toMatchObject({ name: "Trip" });
+				expect(row?.deletedAt).not.toBeNull();
+				expect(row?.updatedAt).toBe(row?.deletedAt);
+				expect(result).toEqual({
+					status: "deleted",
+					listId: "lst_trip",
+					deletedAt: row?.deletedAt,
+					updatedAt: row?.updatedAt,
+					didWrite: false,
+				});
+				// Only the rival's delete emits analytics; the lost rename is silent.
+				expect(analytics.track).toHaveBeenCalledTimes(1);
+				expect(analytics.track).toHaveBeenCalledWith("list_deleted", {
+					household_id: "hh_avery",
+					list_id: "lst_trip",
+					user_id: "usr_avery",
+				});
+			} finally {
+				await household.close();
+			}
+		});
 	});
 
 	describe("deleteList", () => {
@@ -817,6 +885,63 @@ describe("createListService", () => {
 				await household.close();
 			}
 		});
+
+		it("reclassifies a delete as a no-op when a rival delete interleaves between the pre-read and the write", async () => {
+			const household = await createTestHouseholdDb();
+
+			try {
+				await household.db
+					.insert(lists)
+					.values(
+						listFixture({ id: "lst_trip", name: "Trip", updatedAt: 100 }),
+					);
+				const analytics = createMockAnalytics();
+				const rival = serviceFor(household, { analytics });
+				const execute = household.client.execute.bind(household.client);
+				let interleaved = false;
+				const service = createListService({
+					householdId: "hh_avery",
+					userId: "usr_avery",
+					store: {
+						async execute(statement: HouseholdSqlStatement) {
+							if (
+								!interleaved &&
+								statement.kind === "write" &&
+								/SET deleted_at/.test(statement.sql)
+							) {
+								interleaved = true;
+								await rival.deleteList({ listId: "lst_trip" });
+							}
+							return execute(statement);
+						},
+					},
+					logger: testLogger,
+					analytics,
+				});
+
+				const result = await service.deleteList({ listId: "lst_trip" });
+
+				expect(interleaved).toBe(true);
+				const row = await household.db.query.lists.findFirst({
+					where: eq(lists.id, "lst_trip"),
+				});
+				// The rival's tombstone timestamps stand; the lost delete churns
+				// nothing and reports the existing tombstone without didWrite.
+				expect(row?.deletedAt).not.toBeNull();
+				expect(row?.updatedAt).toBe(row?.deletedAt);
+				expect(result).toEqual({
+					status: "deleted",
+					listId: "lst_trip",
+					deletedAt: row?.deletedAt,
+					updatedAt: row?.updatedAt,
+					didWrite: false,
+				});
+				// list_deleted fires exactly once — from the rival's winning write.
+				expect(analytics.track).toHaveBeenCalledTimes(1);
+			} finally {
+				await household.close();
+			}
+		});
 	});
 
 	describe("listLists", () => {
@@ -909,6 +1034,39 @@ describe("createListService", () => {
 						uncheckedItemCount: 0,
 						checkedItemCount: 0,
 					},
+				]);
+			} finally {
+				await directory.close();
+				await household.close();
+			}
+		});
+
+		it("excludes an archived List that is also deleted from archive: archived", async () => {
+			const directory = await createTestDirectoryDb();
+			const household = await createTestHouseholdDb();
+
+			try {
+				const scenario = await seedPrimaryHouseholdScenario({
+					directory: directory.db,
+					household: household.db,
+				});
+				// Archived AND soft-deleted: deletion wins over archive filtering.
+				await household.db.insert(lists).values(
+					listFixture({
+						id: "lst_archived_deleted",
+						name: "Archived Deleted",
+						createdAt: now + 5,
+						updatedAt: now + 90,
+						archivedAt: now + 80,
+						deletedAt: now + 90,
+					}),
+				);
+				const service = serviceFor(household);
+
+				const summaries = await service.listLists({ archive: "archived" });
+
+				expect(summaries.map((summary) => summary.id)).toEqual([
+					scenario.lists.archived.id,
 				]);
 			} finally {
 				await directory.close();

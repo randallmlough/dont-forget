@@ -586,6 +586,98 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		);
 	});
 
+	it("waits for an accepted createList write before closing a retired resource", async () => {
+		const events: string[] = [];
+		const newList = {
+			id: "lst_new",
+			householdId: "hh_avery",
+			name: "Weekend",
+			createdByUserId: "usr_avery",
+			createdAt: 1,
+			updatedAt: 1,
+			archived: false,
+			archivedAt: null,
+		};
+		const write = h.deferred<{
+			status: "available";
+			list: typeof newList;
+			didWrite: true;
+		}>();
+		const cachedDataServices = h.sessionDataServicesFixture({
+			syncAuthorized: false,
+			createList: jest.fn(() =>
+				write.promise.then((result) => {
+					events.push("write:cached");
+					return result;
+				}),
+			),
+			close: jest.fn(async () => {
+				events.push("close:cached");
+			}),
+		});
+		const freshDataServices = h.sessionDataServicesFixture({});
+		const cachedCoordinator = h.syncCoordinatorFixture();
+		cachedCoordinator.stop = jest.fn(async () => {
+			events.push("stop:cached");
+		});
+		const freshSession = h.deferred<h.SessionBootstrap>();
+		const controller = h.createAuthenticatedAppSessionController({
+			...h.sessionRuntimeFixture({
+				read: jest.fn().mockResolvedValue(h.cachedSessionBootstrapFixture()),
+				getSession: jest.fn(() => freshSession.promise),
+			}).deps,
+			createDataServices: jest.fn(async (config) =>
+				config.database.authToken ? freshDataServices : cachedDataServices,
+			),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValueOnce(cachedCoordinator)
+				.mockReturnValueOnce(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		const activation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		await h.waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "ready",
+				session: { resourceKey: "authenticated-app-session:1" },
+			}),
+		);
+		const cachedSnapshot = controller.getSnapshot();
+		if (cachedSnapshot.status !== "ready")
+			throw new Error("Expected ready snapshot");
+
+		const createList = cachedSnapshot.session.services.lists.createList({
+			name: "Weekend",
+		});
+		freshSession.resolve(h.sessionBootstrapFixture({ householdName: "Fresh" }));
+		await h.waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "ready",
+				session: { resourceKey: "authenticated-app-session:2" },
+			}),
+		);
+
+		expect(cachedDataServices.close).not.toHaveBeenCalled();
+		expect(cachedCoordinator.stop).not.toHaveBeenCalled();
+		await expect(
+			cachedSnapshot.session.services.lists.createList({ name: "Camping" }),
+		).rejects.toMatchObject({
+			code: "stale_authenticated_app_session_resource",
+		});
+		write.resolve({ status: "available", list: newList, didWrite: true });
+		await expect(createList).resolves.toMatchObject({ status: "available" });
+		await activation;
+		expect(events).toEqual(["write:cached", "stop:cached", "close:cached"]);
+		await h.waitForAsync(() =>
+			expect(cachedDataServices.close).toHaveBeenCalledTimes(1),
+		);
+	});
+
 	it("closes the active resource when disposed after Household shell activation", async () => {
 		const dataServices = h.sessionDataServicesFixture();
 		const controller = h.createAuthenticatedAppSessionController({
