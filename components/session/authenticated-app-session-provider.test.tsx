@@ -675,6 +675,7 @@ function appSessionFixture(): AuthenticatedAppSession {
 				getList: unusedSessionService,
 				renameList: unusedSessionService,
 				deleteList: unusedSessionService,
+				listLists: unusedSessionService,
 			},
 			items: {
 				listItems: unusedSessionService,

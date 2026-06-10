@@ -7,9 +7,11 @@ export {
 	type GetListInput,
 	type GetListResult,
 	type List,
+	type ListListsInput,
 	type ListNameValidationError,
 	type ListService,
 	type ListServiceDeps,
+	type ListSummary,
 	type RenameListInput,
 	type RenameListResult,
 } from "./list-service";

@@ -150,6 +150,9 @@ function storyServices(initialList: ActiveListInitialState): {
 			async deleteList() {
 				throw new Error("Story Lists must not be deleted");
 			},
+			async listLists() {
+				throw new Error("Story Lists must not be listed");
+			},
 		},
 		items: {
 			async listItems() {

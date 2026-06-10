@@ -184,6 +184,12 @@ function controllerListServiceBoundary(): ListService {
 			.mockRejectedValue(
 				new Error("Controller tests must not write List data"),
 			),
+		listLists: jest
+			.fn<
+				ReturnType<ListService["listLists"]>,
+				Parameters<ListService["listLists"]>
+			>()
+			.mockRejectedValue(new Error("Controller tests must not read List data")),
 	};
 }
 
