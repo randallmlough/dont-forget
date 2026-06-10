@@ -185,15 +185,20 @@ async function loadCurrentList(
 	session: AuthenticatedAppSession,
 	listId: string,
 ): Promise<ActiveListInitialState> {
-	const [list, items] = await Promise.all([
+	const [listResult, items] = await Promise.all([
 		session.services.lists.getList({ listId }),
 		session.services.items.listItems({ listId }),
 	]);
+	// Home unwraps `available`; `missing` and `deleted` intentionally keep the
+	// generic load-error behavior until the Home resolver task.
+	if (listResult.status !== "available") {
+		throw new Error(`Current List is not available: ${listResult.status}`);
+	}
 	const memberNames = memberNamesFromSession(session);
 
 	return {
 		householdName: session.activeHousehold.name,
-		listName: list.name,
+		listName: listResult.list.name,
 		items: items.map((item) => activeListItemFromItem(item, memberNames)),
 	};
 }

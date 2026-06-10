@@ -125,16 +125,30 @@ function storyServices(initialList: ActiveListInitialState): {
 
 	return {
 		lists: {
+			async createList() {
+				throw new Error("Story Lists must not be created");
+			},
 			async getList() {
 				const state = await actions.load();
 				return {
-					id: "lst_default_groceries",
-					householdId: "hh_story",
-					name: state.listName,
-					createdByUserId: "usr_avery",
-					createdAt: 1,
-					updatedAt: 1,
+					status: "available",
+					list: {
+						id: "lst_default_groceries",
+						householdId: "hh_story",
+						name: state.listName,
+						createdByUserId: "usr_avery",
+						createdAt: 1,
+						updatedAt: 1,
+						archived: false,
+						archivedAt: null,
+					},
 				};
+			},
+			async renameList() {
+				throw new Error("Story Lists must not be renamed");
+			},
+			async deleteList() {
+				throw new Error("Story Lists must not be deleted");
 			},
 		},
 		items: {

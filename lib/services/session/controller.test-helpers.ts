@@ -154,12 +154,36 @@ function pickCacheOverrides(
 
 function controllerListServiceBoundary(): ListService {
 	return {
+		createList: jest
+			.fn<
+				ReturnType<ListService["createList"]>,
+				Parameters<ListService["createList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not write List data"),
+			),
 		getList: jest
 			.fn<
 				ReturnType<ListService["getList"]>,
 				Parameters<ListService["getList"]>
 			>()
 			.mockRejectedValue(new Error("Controller tests must not read List data")),
+		renameList: jest
+			.fn<
+				ReturnType<ListService["renameList"]>,
+				Parameters<ListService["renameList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not write List data"),
+			),
+		deleteList: jest
+			.fn<
+				ReturnType<ListService["deleteList"]>,
+				Parameters<ListService["deleteList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not write List data"),
+			),
 	};
 }
 

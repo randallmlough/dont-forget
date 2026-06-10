@@ -1,8 +1,15 @@
 export {
+	type CreateListInput,
+	type CreateListResult,
 	createListService,
+	type DeleteListInput,
+	type DeleteListResult,
 	type GetListInput,
+	type GetListResult,
 	type List,
-	ListNotFoundError,
+	type ListNameValidationError,
 	type ListService,
 	type ListServiceDeps,
+	type RenameListInput,
+	type RenameListResult,
 } from "./list-service";

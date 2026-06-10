@@ -36,8 +36,11 @@ describe("createSessionDataServices", () => {
 					listId: harness.scenario.ids.groceriesListId,
 				}),
 			).resolves.toMatchObject({
-				id: harness.scenario.ids.groceriesListId,
-				name: "Groceries",
+				status: "available",
+				list: {
+					id: harness.scenario.ids.groceriesListId,
+					name: "Groceries",
+				},
 			});
 			await expect(
 				harness.services.items.listItems({
@@ -116,6 +119,7 @@ describe("createSessionDataServices", () => {
 		const servicesPromise = createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
@@ -145,6 +149,7 @@ describe("createSessionDataServices", () => {
 		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
@@ -161,6 +166,7 @@ describe("createSessionDataServices", () => {
 		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
@@ -182,6 +188,7 @@ describe("createSessionDataServices", () => {
 		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example", authToken: "secret" },
 				logger,
 			},
@@ -196,6 +203,7 @@ describe("createSessionDataServices", () => {
 		const services = await createSessionDataServices(
 			{
 				householdId: "hh_avery",
+				userId: "usr_avery",
 				database: { url: "libsql://example" },
 				logger,
 			},
@@ -221,6 +229,7 @@ async function createSeededServicesHarness() {
 	const services = await createSessionDataServices(
 		{
 			householdId: scenario.household.id,
+			userId: scenario.users.avery.id,
 			database: { url: "libsql://example", authToken: "secret" },
 			logger,
 		},
