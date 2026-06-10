@@ -1,6 +1,5 @@
 import { ActivityIndicator } from "react-native";
 import { ActiveList } from "@/components/active-list";
-import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";
@@ -21,7 +20,7 @@ function HomeCurrentListResource({
 	session: AuthenticatedAppSession;
 }) {
 	const currentMemberName = homeSessionMemberName(session);
-	const list = useHomeCurrentList(session, DEFAULT_LIST_ID);
+	const list = useHomeCurrentList(session);
 	const loadState = list.state;
 
 	if (loadState.status === "loading") {
@@ -43,8 +42,19 @@ function HomeCurrentListResource({
 		);
 	}
 
+	if (loadState.status === "zeroActive") {
+		// Temporary display-only zero-active state; the create flow lands later.
+		return (
+			<HomeStatus
+				title="No active Lists"
+				body="Create a List to start adding Items."
+			/>
+		);
+	}
+
 	return (
 		<ActiveList.Provider
+			key={`${session.resourceKey}:${loadState.listId}`}
 			initialState={loadState.initialList}
 			currentMemberName={currentMemberName}
 			onLoadList={loadState.actions.loadList}

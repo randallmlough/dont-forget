@@ -9,7 +9,7 @@ export function HomeStatus({
 }: {
 	title: string;
 	body: string;
-	children: ReactNode;
+	children?: ReactNode;
 }) {
 	return (
 		<View style={styles.statusRoot}>

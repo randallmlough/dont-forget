@@ -151,7 +151,23 @@ function storyServices(initialList: ActiveListInitialState): {
 				throw new Error("Story Lists must not be deleted");
 			},
 			async listLists() {
-				throw new Error("Story Lists must not be listed");
+				const state = await actions.load();
+				return [
+					{
+						id: "lst_default_groceries",
+						householdId: "hh_story",
+						name: state.listName,
+						createdByUserId: "usr_avery",
+						createdAt: 1,
+						updatedAt: 1,
+						archived: false,
+						archivedAt: null,
+						lastActivityAt: 1,
+						uncheckedItemCount: state.items.filter((item) => !item.checked)
+							.length,
+						checkedItemCount: state.items.filter((item) => item.checked).length,
+					},
+				];
 			},
 		},
 		items: {
