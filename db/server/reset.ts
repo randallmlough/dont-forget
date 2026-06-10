@@ -1,5 +1,14 @@
 import { asc } from "drizzle-orm";
-
+import {
+	householdJoinCodeAttempts,
+	householdJoinCodes,
+	householdJoinCodeUses,
+	households,
+	invitations,
+	memberships,
+	users,
+} from "@/db/schema/directory";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	type AppEnv,
 	assertProductionConfirmation,
@@ -15,16 +24,6 @@ import {
 	householdDb,
 	householdDbUrl,
 } from "./client";
-import {
-	householdJoinCodeAttempts,
-	householdJoinCodes,
-	householdJoinCodeUses,
-	households,
-	invitations,
-	memberships,
-	users,
-} from "./schema/directory";
-import { itemChecks, items, lists } from "./schema/household";
 
 type ResetConfirmationSource = Record<string, string | undefined>;
 

@@ -13,12 +13,6 @@ export {
 	createSyncCoordinator,
 	type SyncCoordinatorDeps,
 } from "./sync-coordinator";
-export {
-	isSyncInterruptedError,
-	nativeSyncInterruptedError,
-	SyncInterruptedError,
-	type SyncInterruptionReason,
-} from "./sync-errors";
 export type {
 	SyncCoordinator,
 	SyncMode,

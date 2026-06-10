@@ -3,6 +3,7 @@ const {
 	filenameFromContext,
 	importSource,
 	isAppApiFile,
+	isInsideFunction,
 	isTestFile,
 	normalizePath,
 } = require("./path-utils");
@@ -102,19 +103,4 @@ function isLibApiFile(filename) {
 
 function isAppSafeDomainIndex(filename) {
 	return /\/lib\/services\/[^/]+\/index\.ts$/.test(filename);
-}
-
-function isInsideFunction(node) {
-	let current = node.parent;
-	while (current) {
-		if (
-			current.type === "FunctionDeclaration" ||
-			current.type === "FunctionExpression" ||
-			current.type === "ArrowFunctionExpression"
-		) {
-			return true;
-		}
-		current = current.parent;
-	}
-	return false;
 }

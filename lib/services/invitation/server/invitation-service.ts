@@ -1,13 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
-
-import type { DirectoryDb } from "@/db/client";
 import {
 	households,
 	type Invitation,
 	invitations,
 	users,
 } from "@/db/schema/directory";
+import type { DirectoryDb } from "@/db/server/client";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { redactAttributes } from "@/lib/redact";

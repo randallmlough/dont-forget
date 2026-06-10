@@ -1,6 +1,10 @@
-import { householdClient, householdDb, householdDbUrl } from "@/db/client";
-import { migrateHouseholdDb } from "@/db/household-migrations";
 import { lists } from "@/db/schema/household";
+import {
+	householdClient,
+	householdDb,
+	householdDbUrl,
+} from "@/db/server/client";
+import { migrateHouseholdDb } from "@/db/server/household-migrations";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { createTursoPlatformClient } from "./turso-platform";

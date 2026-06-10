@@ -1,8 +1,9 @@
+import type { SyncResult } from "@/db/household-store";
 import type { SyncStatusSubscription } from "./subscription";
 
-export type SyncResult = {
-	changed: boolean;
-};
+// Re-exported because SyncResult is also coordinator vocabulary: app-facing
+// code may only consume it through the service layer, never from @/db.
+export type { SyncResult };
 
 export type SyncStatus = "synced" | "pending" | "offline" | "failed";
 

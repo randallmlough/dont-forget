@@ -1,4 +1,4 @@
-import { deleteLocalHouseholdStoreData } from "@/lib/services/household/household-store";
+import { deleteLocalHouseholdStoreData } from "@/db/household-store";
 import { createMockAnalytics } from "@/lib/test/mocks/analytics";
 import {
 	cachedSessionBootstrapFixture,
@@ -14,7 +14,7 @@ jest.mock("@/lib/analytics", () =>
 	jest.requireActual("@/lib/test/mocks/analytics"),
 );
 
-jest.mock("@/lib/services/household/household-store", () => ({
+jest.mock("@/db/household-store", () => ({
 	deleteLocalHouseholdStoreData: jest.fn(async () => undefined),
 }));
 

@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { z } from "zod";
+import { deleteLocalHouseholdStoreData } from "@/db/household-store";
 import { track } from "@/lib/analytics";
 import { bootstrapResponseSchema } from "@/lib/bootstrap";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
-import { deleteLocalHouseholdStoreData } from "@/lib/services/household/household-store";
 import { type SessionBootstrap, sessionAnalyticsProperties } from "./bootstrap";
 
 export const SESSION_CACHE_KEY = "dont-forget:authenticated-app-session:v1";

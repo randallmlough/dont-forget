@@ -1,7 +1,11 @@
-import { itemCheckFixture, itemFixture, listFixture } from "@/db/fixtures";
+import type { HouseholdSqlStatement } from "@/db/household-store";
 import { itemChecks, items, lists } from "@/db/schema/household";
-import { createTestHouseholdDb } from "@/db/test";
-import type { HouseholdSqlStatement } from "@/lib/services/household";
+import {
+	itemCheckFixture,
+	itemFixture,
+	listFixture,
+} from "@/db/server/fixtures";
+import { createTestHouseholdDb } from "@/db/server/test";
 import { createMockAnalytics } from "@/lib/test/mocks/analytics";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 

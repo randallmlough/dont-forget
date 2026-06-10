@@ -5,7 +5,7 @@ import {
 	createTestDirectoryDb,
 	createTestHouseholdDb,
 	type TestHouseholdDb,
-} from "@/db/test";
+} from "@/db/server/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import { createHouseholdProvisioningService } from "@/lib/services/household/server";

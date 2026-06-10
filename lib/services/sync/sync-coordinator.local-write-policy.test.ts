@@ -1,3 +1,4 @@
+import { SyncInterruptedError } from "@/db/household-store";
 import type { SyncResult } from "./sync-coordinator";
 import {
 	createCoordinator,
@@ -6,7 +7,6 @@ import {
 	refreshableNetworkStatus,
 	stopActiveCoordinators,
 } from "./sync-coordinator.test-helpers";
-import { SyncInterruptedError } from "./sync-errors";
 
 describe("createSyncCoordinator local write policy", () => {
 	afterEach(stopActiveCoordinators);

@@ -1,13 +1,5 @@
 import { createClient } from "@libsql/client/node";
 import { eq } from "drizzle-orm";
-import { type DirectoryDb, directoryDb } from "@/db/client";
-import {
-	householdFixture,
-	householdJoinCodeFixture,
-	membershipFixture,
-	PRIMARY_HOUSEHOLD_SEED,
-	userFixture,
-} from "@/db/fixtures";
 import {
 	householdJoinCodeAttempts,
 	householdJoinCodes,
@@ -16,7 +8,15 @@ import {
 	memberships,
 	users,
 } from "@/db/schema/directory";
-import { createTestDirectoryDb } from "@/db/test";
+import { type DirectoryDb, directoryDb } from "@/db/server/client";
+import {
+	householdFixture,
+	householdJoinCodeFixture,
+	membershipFixture,
+	PRIMARY_HOUSEHOLD_SEED,
+	userFixture,
+} from "@/db/server/fixtures";
+import { createTestDirectoryDb } from "@/db/server/test";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import { deferred } from "@/lib/test/async";
 import {

@@ -67,7 +67,7 @@ Database integration tests mirror production topology:
 
 The `test` environment means automated tests only. It is not a persistent cloud environment; staging is the persistent pre-production environment.
 
-Use helpers from `db/test.ts`. They create temp local libSQL files and apply SQL from:
+Use helpers from `db/server/test.ts`. They create temp local libSQL files and apply SQL from:
 
 - `db/migrations/directory/*.sql`
 - `db/migrations/household/*.sql`
@@ -76,12 +76,12 @@ Do not use `pnpm db:migrate` in tests. That command is for intentionally applyin
 
 ## Database Fixtures And Scenarios
 
-`db/fixtures/` is the shared persistence fixture layer. It contains:
+`db/server/fixtures/` is the shared persistence fixture layer. It contains:
 
 - low-level Drizzle insert-shaped builders for User, Household, Membership/Member, Invitation, Household Join Code, Household Join Code use/attempt, List, Item, and `item_checks` rows;
 - scenario helpers that seed caller-provided directory and Household DB handles and return the inserted records/IDs.
 
-`db/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, sync coordinators, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
+`db/server/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, sync coordinators, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
 
 The first canonical scenario is `seedPrimaryHouseholdScenario`:
 
@@ -111,8 +111,8 @@ make db-reseed APP_ENV=local CONFIRM_DB_RESET=local
 
 - `lib/test/setup.ts` configures global Jest setup and native/SDK mocks.
 - `lib/test/mocks/` contains reusable mock modules and fixtures, including observability helpers such as analytics module mocks and logger injection fixtures.
-- `db/test.ts` owns local temp DB helpers.
-- Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `db/test.ts` for test suites.
+- `db/server/test.ts` owns local temp DB helpers.
+- Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `db/server/test.ts` for test suites.
 - Screen flow tests live next to the screen they exercise, e.g. `screens/auth/sign-in-screen.test.tsx`.
 - Non-route modules colocate tests next to source, e.g. `lib/redact.test.ts`.
 

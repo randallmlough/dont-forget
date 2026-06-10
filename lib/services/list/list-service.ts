@@ -1,9 +1,8 @@
 import { z } from "zod";
-
+import type { HouseholdStoreExecutor } from "@/db/household-store";
 import { sqlNumberSchema } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import type { HouseholdStoreExecutor } from "@/lib/services/household";
 
 export type List = {
 	id: string;

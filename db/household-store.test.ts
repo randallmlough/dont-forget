@@ -1,11 +1,11 @@
-import { logger as defaultLogger } from "@/lib/logger";
 import {
 	deleteLocalHouseholdStoreData,
 	householdStoreFilename,
 	openHouseholdStore,
+	SyncInterruptedError,
 	type TursoHouseholdStoreRuntime,
-} from "@/lib/services/household/household-store";
-import { SyncInterruptedError } from "@/lib/services/sync";
+} from "@/db/household-store";
+import { logger as defaultLogger } from "@/lib/logger";
 import { deferred } from "@/lib/test/async";
 import {
 	createMockLogger,

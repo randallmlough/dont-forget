@@ -1,3 +1,4 @@
+import { SyncInterruptedError } from "@/db/household-store";
 import type { SyncResult, SyncStatus } from "./sync-coordinator";
 import {
 	actTicks,
@@ -13,7 +14,6 @@ import {
 	refreshableNetworkStatus,
 	stopActiveCoordinators,
 } from "./sync-coordinator.test-helpers";
-import { SyncInterruptedError } from "./sync-errors";
 
 describe("createSyncCoordinator", () => {
 	afterEach(stopActiveCoordinators);

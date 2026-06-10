@@ -4,13 +4,13 @@ import path from "node:path";
 import { createClient } from "@libsql/client/node";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import { createTestHouseholdDb } from "@/db/test";
-import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import {
 	EXPECTED_HOUSEHOLD_SCHEMA_VERSION,
 	ensureHouseholdSchemaReady,
-} from "@/lib/services/household/household-schema";
-import type { HouseholdStoreExecutor } from "@/lib/services/household/household-store";
+} from "@/db/household-schema";
+import type { HouseholdStoreExecutor } from "@/db/household-store";
+import { createTestHouseholdDb } from "@/db/server/test";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import { loggerFixture } from "@/lib/test/mocks/logger";
 
 const EXPECTED = EXPECTED_HOUSEHOLD_SCHEMA_VERSION;

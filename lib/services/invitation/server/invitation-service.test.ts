@@ -1,19 +1,19 @@
 import { eq } from "drizzle-orm";
-import type { DirectoryDb } from "@/db/client";
-import {
-	householdFixture,
-	invitationFixture,
-	membershipFixture,
-	PRIMARY_HOUSEHOLD_SEED,
-	userFixture,
-} from "@/db/fixtures";
 import {
 	households,
 	invitations,
 	memberships,
 	users,
 } from "@/db/schema/directory";
-import { createTestDirectoryDb } from "@/db/test";
+import type { DirectoryDb } from "@/db/server/client";
+import {
+	householdFixture,
+	invitationFixture,
+	membershipFixture,
+	PRIMARY_HOUSEHOLD_SEED,
+	userFixture,
+} from "@/db/server/fixtures";
+import { createTestDirectoryDb } from "@/db/server/test";
 import {
 	createInvitationService,
 	InvitationInvalidEmailError,

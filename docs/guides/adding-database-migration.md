@@ -27,10 +27,10 @@ Inspect the current schema and migration setup:
 - `db/schema/household.ts`
 - `db/drizzle/directory.config.ts`
 - `db/drizzle/household.config.ts`
-- `db/generate.ts`
-- `db/migrate.ts`
-- `db/household-migrations.ts`
-- `db/migrations.test.ts`
+- `db/server/generate.ts`
+- `db/server/migrate.ts`
+- `db/server/household-migrations.ts`
+- `db/server/migrations.test.ts`
 
 ## Files and naming
 
@@ -84,7 +84,7 @@ db/drizzle/household.config.ts
    make db-generate
    ```
 
-   This runs `db/generate.ts`, which discovers each `db/drizzle/*.config.ts` file and runs drizzle-kit for both partitions.
+   This runs `db/server/generate.ts`, which discovers each `db/drizzle/*.config.ts` file and runs drizzle-kit for both partitions.
 
 5. **Inspect generated SQL and metadata.**
    - Confirm the migration appears under the expected partition directory.
@@ -93,7 +93,7 @@ db/drizzle/household.config.ts
    - For Household schema changes, remember the server-migrated Turso Household DB remains the schema authority; the app does not run bundled local Household migrations.
 
 6. **Update migration tests when the schema contract changes.**
-   - `db/migrations.test.ts` should continue proving both directory and Household migrations apply to isolated local DBs.
+   - `db/server/migrations.test.ts` should continue proving both directory and Household migrations apply to isolated local DBs.
    - Add focused expectations for new required columns, relationships, indexes, or defaults when useful.
 
 7. **Update services/tests that depend on the schema.**
@@ -116,7 +116,7 @@ db/drizzle/household.config.ts
 Focused migration proof:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath db/migrations.test.ts
+pnpm exec jest --runInBand --runTestsByPath db/server/migrations.test.ts
 ```
 
 If service behavior changes, run the focused service tests too:

@@ -1,6 +1,9 @@
-import { listFixture, seedPrimaryHouseholdScenario } from "@/db/fixtures";
 import { lists } from "@/db/schema/household";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import {
+	listFixture,
+	seedPrimaryHouseholdScenario,
+} from "@/db/server/fixtures";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 
 import { createListService, ListNotFoundError } from "./list-service";
