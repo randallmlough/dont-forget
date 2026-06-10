@@ -1,7 +1,6 @@
 import { eq, sql } from "drizzle-orm";
-
-import type { DirectoryDb } from "@/db/client";
 import { households, users } from "@/db/schema/directory";
+import type { DirectoryDb } from "@/db/server/client";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]

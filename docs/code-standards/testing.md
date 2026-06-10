@@ -46,9 +46,9 @@ See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 
 ## Test Organization And Shared Fixtures
 
-- **Must** move reusable cross-feature test fixtures into a domain-owned shared fixture folder, such as `db/fixtures/`, instead of duplicating fixture builders across test files.
-- **Must** keep `db/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and Household DBs.
-- **Must** not return services, providers, sync coordinators, app sessions, or UI model objects from `db/fixtures/`.
+- **Must** move reusable cross-feature test fixtures into a domain-owned shared fixture folder, such as `db/server/fixtures/`, instead of duplicating fixture builders across test files.
+- **Must** keep `db/server/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and Household DBs.
+- **Must** not return services, providers, sync coordinators, app sessions, or UI model objects from `db/server/fixtures/`.
 - **Should** keep shared fixtures domain-shaped and product-language-first: Household, Member, User, List, Item, and Invitation.
 - **Should** allow narrow overrides for test-specific facts while preserving realistic defaults.
 - **Should** split large test files by behavior theme when a single file starts covering several independent concerns.

@@ -1,4 +1,4 @@
-import type { DirectoryDb } from "@/db/client";
+import type { DirectoryDb } from "@/db/server/client";
 import {
 	createInvitationService,
 	InvitationInvalidEmailError,

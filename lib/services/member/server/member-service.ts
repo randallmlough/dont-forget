@@ -1,6 +1,4 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-
-import type { DirectoryDb } from "@/db/client";
 import {
 	households,
 	type Membership,
@@ -8,6 +6,7 @@ import {
 	type User,
 	users,
 } from "@/db/schema/directory";
+import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
 
 type DirectoryTransaction = Parameters<

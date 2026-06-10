@@ -1,5 +1,5 @@
+import { isSyncInterruptedError } from "@/db/household-store";
 import type { SyncNetworkStatus } from "./network-status";
-import { isSyncInterruptedError } from "./sync-errors";
 import type { SyncOptions, SyncRequestReason, SyncStatus } from "./sync-types";
 
 export type SyncCoordinatorPolicyState = {

@@ -32,6 +32,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** not import or export `./server` from an app-safe `lib/services/<domain>/index.ts`.
 - **Must** keep `app/api/**` server-service imports dynamic inside request handlers until a better Expo API Route bundling solution is proven.
 - **Must** enforce server-service import boundaries with the repo ESLint rule.
+- **Must** keep server-only db infrastructure (libsql clients, Drizzle directory/Household client factories, migrations, reset, test seeding) under `db/server/` and enforce the `@/db/server` import boundary with the repo ESLint rule. The `db/` root is app-safe.
 - **Must** keep SQL and DB-client access inside service implementations. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
 - **Must** inject logger and analytics dependencies into services and stores that need observability instead of forcing those modules to mock global singletons in tests or non-app processes.
 - **Must** keep reusable component contracts UI-facing. Compose services into component data sources at the owning controller or feature boundary; screens should consume those boundaries instead of opening Household data resources directly.
@@ -39,7 +40,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** generate IDs inside services for newly-created domain records. Service callers and normal tests must not inject or prescribe IDs.
 - **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
-- **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. Do not name this `*-db-service`.
+- **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. It is owned by the db layer at `db/household-store.ts` (ADR-0013). Do not name this `*-db-service`.
 - **Should** keep List and Item services separate; route-owned List loading should call them by explicit List ID after authenticated app session context exists.
 - **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to the Authenticated App Session controller and sync coordinator.
 

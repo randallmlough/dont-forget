@@ -34,7 +34,7 @@ Ship the smallest vertical slice that satisfies the requested behavior, with tes
 5. Use domain-shaped names and avoid generic group/team/account/todo/task language.
 6. Remove only unused code created by the change; do not opportunistically refactor adjacent code.
 
-Use focused unit tests only for pure helpers, narrow adapters, or precise race-control cases where an integration harness would hide the assertion. For database-backed behavior, seed temp libSQL with `db/fixtures/` builders/scenarios instead of mocking query results.
+Use focused unit tests only for pure helpers, narrow adapters, or precise race-control cases where an integration harness would hide the assertion. For database-backed behavior, seed temp libSQL with `db/server/fixtures/` builders/scenarios instead of mocking query results.
 
 ## Native UI Checks
 

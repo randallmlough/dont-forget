@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { householdJoinCodes, households, users } from "@/db/schema/directory";
-import { createTestDirectoryDb } from "@/db/test";
+import { createTestDirectoryDb } from "@/db/server/test";
 import {
 	createHouseholdService,
 	householdDatabaseName,

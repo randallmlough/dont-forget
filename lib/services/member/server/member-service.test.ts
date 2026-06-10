@@ -1,5 +1,5 @@
 import { households, memberships, users } from "@/db/schema/directory";
-import { createTestDirectoryDb } from "@/db/test";
+import { createTestDirectoryDb } from "@/db/server/test";
 import { createMemberService } from "./member-service";
 
 describe("createMemberService", () => {

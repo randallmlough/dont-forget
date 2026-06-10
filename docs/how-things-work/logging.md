@@ -126,7 +126,7 @@ Bind domain context with `.with(...)` inside the service or store so every subse
 - **Don't call `posthog.logger.*` directly.** Go through `lib/logger.ts` so the swap-out path stays clean and redaction is enforced.
 - **Don't import `logger` from `lib/posthog.ts`.** The PostHog client must finish constructing before the logger module loads. The boostrap warn in `posthog.ts` stays on `console.warn` for that reason.
 - **Don't require service/store tests to mock `@/lib/logger` when a dependency can be injected.** Use `lib/test/mocks/logger.ts` for reusable logger fixtures.
-- **Don't use the logger from `db/migrate.ts`** or other Node CLIs. Those are operator-facing tools; their stdout *is* the UX. They keep `console.*`.
+- **Don't use the logger from `db/server/migrate.ts`** or other Node CLIs. Those are operator-facing tools; their stdout *is* the UX. They keep `console.*`.
 - **Don't add new levels.** If you find yourself wanting `trace` or `fatal`, write `debug` or `error` instead. Adding levels touches the interface, the adapter, and every adapter you'd ever swap to.
 
 ## Adding a new feature? Suggested logging baseline

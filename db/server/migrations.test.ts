@@ -13,7 +13,7 @@ import {
 	createTestDirectoryDb,
 	createTestHouseholdDb,
 	migrationAtOrBefore,
-} from "@/db/test";
+} from "@/db/server/test";
 
 describe("test database migrations", () => {
 	it("orders migration filenames by zero-padded migration prefix", () => {

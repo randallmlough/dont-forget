@@ -1,6 +1,6 @@
 import { POST } from "@/app/api/bootstrap+api";
 
-jest.mock("@/db/client", () => {
+jest.mock("@/db/server/client", () => {
 	throw new Error("server DB client imported during route registration");
 });
 

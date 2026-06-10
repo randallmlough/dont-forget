@@ -1,12 +1,11 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-
-import type { DirectoryDb } from "@/db/client";
 import {
 	type Household,
 	households,
 	type Membership,
 	type User,
 } from "@/db/schema/directory";
+import type { DirectoryDb } from "@/db/server/client";
 import type { AppEnv } from "@/lib/env";
 import { createAppId } from "@/lib/ids";
 import type { ActiveMembership } from "@/lib/services/member/server";

@@ -1,3 +1,4 @@
+import { isSyncInterruptedError, type SyncResult } from "@/db/household-store";
 import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
 
@@ -21,12 +22,10 @@ import {
 	syncOptionsForReason,
 	takeQueuedFollowUpReason,
 } from "./sync-coordinator-policy";
-import { isSyncInterruptedError } from "./sync-errors";
 import type {
 	SyncCoordinator,
 	SyncOperation,
 	SyncRequestReason,
-	SyncResult,
 	SyncStatus,
 } from "./sync-types";
 

@@ -9,15 +9,15 @@ import { eq } from "drizzle-orm";
 import type { PropsWithChildren, ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
+import type { HouseholdSqlStatement } from "@/db/household-store";
+import { items, lists } from "@/db/schema/household";
 import {
 	type PrimaryHouseholdScenario,
 	seedPrimaryHouseholdScenario,
-} from "@/db/fixtures";
-import { items, lists } from "@/db/schema/household";
-import type { TestDirectoryDb, TestHouseholdDb } from "@/db/test";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+} from "@/db/server/fixtures";
+import type { TestDirectoryDb, TestHouseholdDb } from "@/db/server/test";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
-import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionDataServices } from "@/lib/services/session/services";
 import { deferred } from "@/lib/test/async";

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { type Client, createClient } from "@libsql/client/node";
 
-import { directoryDb, householdDb } from "@/db/client";
+import { directoryDb, householdDb } from "@/db/server/client";
 
 const DIRECTORY_MIGRATIONS = "db/migrations/directory";
 const HOUSEHOLD_MIGRATIONS = "db/migrations/household";

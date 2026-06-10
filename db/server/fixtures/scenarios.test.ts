@@ -9,7 +9,7 @@ import {
 	memberships,
 	users,
 } from "@/db/schema/directory";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import {
 	householdFixture,
 	householdJoinCodeAttemptFixture,

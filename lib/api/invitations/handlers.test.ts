@@ -1,8 +1,8 @@
 import {
 	PRIMARY_HOUSEHOLD_SEED,
 	seedInvitationVariantsScenario,
-} from "@/db/fixtures";
-import { createTestDirectoryDb } from "@/db/test";
+} from "@/db/server/fixtures";
+import { createTestDirectoryDb } from "@/db/server/test";
 import { createInvitationService } from "@/lib/services/invitation/server";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";

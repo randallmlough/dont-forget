@@ -12,10 +12,10 @@ ruleTester.run("no-db-imports-outside-services", rule, {
 	valid: [
 		{
 			filename: "/repo/lib/services/item/item-service.ts",
-			code: `import { openHouseholdStore } from "@/lib/services/household";`,
+			code: `import { openHouseholdStore } from "@/db/household-store";`,
 		},
 		{
-			filename: "/repo/lib/services/household/household-store.ts",
+			filename: "/repo/db/household-store.ts",
 			code: `const runtime = await import("@tursodatabase/sync-react-native");`,
 		},
 		{
@@ -24,7 +24,7 @@ ruleTester.run("no-db-imports-outside-services", rule, {
 		},
 		{
 			filename: "/repo/app/api/bootstrap+api.ts",
-			code: `const db = await import("@/db/client");`,
+			code: `const db = await import("@/db/server/client");`,
 		},
 		{
 			filename: "/repo/screens/home/home-screen.test.tsx",

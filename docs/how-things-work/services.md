@@ -1,6 +1,6 @@
 # Services
 
-Services are the primary entrypoint for querying and mutating product data in Don't Forget. They are organized by domain first, with the signed-in app runtime isolated under `lib/services/session/`. See [ADR-0011](../adr/0011-domain-first-service-layer.md) and [`docs/code-standards/architecture.md`](../code-standards/architecture.md).
+Services are the primary entrypoint for querying and mutating product data in Don't Forget. They are organized by domain first, with the signed-in app runtime isolated under `lib/services/session/`. See [ADR-0011](../adr/0011-domain-first-service-layer.md), [ADR-0013](../adr/0013-db-layer-owns-data-store-infrastructure.md), and [`docs/code-standards/architecture.md`](../code-standards/architecture.md).
 
 ## Folder Shape
 
@@ -11,8 +11,6 @@ lib/services/
   auth/
     index.ts
   household/
-    index.ts
-    household-store.ts
     server/
       index.ts
       household-provisioning-service.ts
@@ -52,6 +50,7 @@ Rules:
 - `lib/services/<domain>/server/index.ts` and `lib/services/session/server/index.ts` may export server-only APIs for API routes and server tests.
 - There is no root `lib/services/index.ts` barrel.
 - Top-level `lib/app/` and `lib/server/` are legacy locations. Do not add new data-access modules there.
+- Data-store infrastructure is not a service and lives in the db layer (see ADR-0013): the `db/` root is app-safe (`db/schema/`, `db/utils.ts`, `db/household-store.ts`); everything touching `@libsql/client`, operator config, migrations, reset, or test seeding lives under `db/server/`.
 
 ## Runtime Boundary
 
@@ -65,6 +64,7 @@ App-safe services must not import:
 - `@libsql/client` server/HTTP entrypoints
 - Drizzle directory DB clients
 - anything under `lib/services/**/server/**`
+- anything under `db/server/`
 
 Server services live under `server/` because they may use secrets, Clerk server APIs, Turso platform APIs, Drizzle, and directory DB clients.
 
@@ -73,7 +73,7 @@ Expo API Routes must keep server imports lazy inside request handlers:
 ```ts
 export async function POST(request: Request): Promise<Response> {
   const [{ directoryClient }, authServer, sessionServer] = await Promise.all([
-    import("@/db/client"),
+    import("@/db/server/client"),
     import("@/lib/services/auth/server"),
     import("@/lib/services/session/server"),
   ]);
@@ -128,7 +128,7 @@ Service methods should emit informative product tracking after successful operat
 
 ## HouseholdStore
 
-`HouseholdStore` is the app-owned infrastructure seam around the local synced Household data file. It is not a service and should not be named `*-db-service`.
+`HouseholdStore` is the app-owned infrastructure seam around the local synced Household data file. It is not a service and should not be named `*-db-service`. It lives in the db layer at `db/household-store.ts` (see ADR-0013), not under `lib/services/`, and also owns the store's sync contract: `SyncResult`, `SyncInterruptedError`, and the native sync-error classification. `SyncResult` is re-exported through `lib/services/sync` because app-facing code may only consume types through the service layer, never from `@/db`.
 
 Initial shape should stay minimal:
 
