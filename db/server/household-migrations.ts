@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import { readTursoMigrationConfig, type TursoMigrationConfig } from "@/lib/env";
 import { householdClient, householdDbUrl } from "./client";
 
@@ -15,7 +15,10 @@ export async function migrateHouseholdDb(
 		config.platformGroupToken,
 	);
 	try {
-		await migrate(drizzle(client), { migrationsFolder: HOUSEHOLD_MIGRATIONS });
+		await migrate(drizzle(client), {
+			migrationsFolder: HOUSEHOLD_MIGRATIONS,
+			migrationsTable: DRIZZLE_MIGRATIONS_TABLE,
+		});
 	} finally {
 		await client.close();
 	}

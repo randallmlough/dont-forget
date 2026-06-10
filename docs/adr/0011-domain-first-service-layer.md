@@ -40,7 +40,7 @@ We will organize data access through a domain-first service layer under `lib/ser
   export function createItemService(deps: ItemServiceDeps): ItemService;
   ```
 
-- `HouseholdStore` is the app-owned infrastructure seam for the local synced Household data store. It is not a service and should not be named `*-db-service`. _Placement superseded by [ADR-0013](0013-db-layer-owns-data-store-infrastructure.md): `HouseholdStore` lives in the db layer at `db/household-store.ts`, not under `lib/services/household/`._
+- `HouseholdStore` is the app-owned infrastructure seam for the local synced Household data store. It is not a service and should not be named `*-db-service`. _Placement superseded by [ADR-0014](0014-db-layer-owns-data-store-infrastructure.md): `HouseholdStore` lives in the db layer at `db/household-store.ts`, not under `lib/services/household/`._
 - Services own SQL directly for now. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
 - Server services may use Drizzle/directory DB infrastructure directly. App-safe services may use `HouseholdStore`; they must not import server/operator secrets, `@clerk/backend`, Turso Platform clients, or `@libsql/client` server entrypoints.
 - List and Item are separate service folders. Route-owned List loading composes them into UI state by explicit List ID after authenticated app session context exists.
@@ -76,7 +76,7 @@ lib/services/session/
     bootstrap.ts
 
 lib/services/household/
-  household-store.ts  # moved to db/household-store.ts by ADR-0013
+  household-store.ts  # moved to db/household-store.ts by ADR-0014
   server/
     household-provisioning-service.ts
     household-service.ts

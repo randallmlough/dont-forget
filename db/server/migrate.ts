@@ -2,6 +2,7 @@ import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { households } from "@/db/schema/directory";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import {
 	assertProductionConfirmation,
 	readTursoMigrationConfig,
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
 		console.log("[directory] migrating…");
 		await migrate(drizzle(directory), {
 			migrationsFolder: DIRECTORY_MIGRATIONS,
+			migrationsTable: DRIZZLE_MIGRATIONS_TABLE,
 		});
 		console.log("[directory] done");
 

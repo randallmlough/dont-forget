@@ -93,6 +93,24 @@ export function useHomeCurrentList(
 		};
 	}, [loadAttempt, loadKey, listId, session]);
 
+	// A failed load can be caused by state a sync later repairs (e.g. a stale
+	// replica schema healed by the next pull), so retry automatically when a
+	// sync completes while the List is in an error state.
+	const failed = resource.loadKey === loadKey && resource.status === "error";
+	useEffect(() => {
+		if (!failed) return;
+
+		const subscription = session.services.sync.subscribe((status) => {
+			if (status === "synced") {
+				dispatch({ type: "retryRequested", loadKey });
+			}
+		});
+
+		return () => {
+			subscription.remove();
+		};
+	}, [failed, loadKey, session]);
+
 	const actions = { addItem, loadList, setItemChecked };
 
 	return {

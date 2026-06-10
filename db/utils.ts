@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+/**
+ * Migration tracking table shared by every migrator invocation and by the
+ * schema staleness gate (ADR-0013), which reads it on local replicas. Always
+ * pass this to `migrate()` so a drizzle-orm default change cannot silently
+ * split the writer and the reader onto different tables.
+ */
+export const DRIZZLE_MIGRATIONS_TABLE = "__drizzle_migrations";
+
 export type EnqueueDatabaseOperation = <T>(
 	operation: () => Promise<T>,
 ) => Promise<T>;

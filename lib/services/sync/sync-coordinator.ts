@@ -94,7 +94,6 @@ export function createSyncCoordinator({
 		if (state.stopped) return { refreshedNetworkStatus, skip: true };
 
 		if (state.currentNetworkStatus === "offline") {
-			stopRetryTimer();
 			setStatus("offline");
 			return { refreshedNetworkStatus, skip: true };
 		}
@@ -260,25 +259,22 @@ export function createSyncCoordinator({
 		state.currentNetworkStatus = nextNetworkStatus;
 
 		if (nextNetworkStatus === "offline") {
-			stopRetryTimer();
 			setStatus("offline");
 			return;
 		}
 
 		if (nextNetworkStatus === "online" && previousNetworkStatus !== "online") {
-			startRetryTimer();
 			if (!isActiveAppState(appState.getCurrentState())) return;
 			void requestSync({ reason: "networkReconnect" });
 		}
 	}
 
+	// The timer runs whenever the coordinator is started and the app is
+	// foreground-active, regardless of network status: each tick self-gates
+	// through shouldSkipForOffline(), and its network refresh doubles as a
+	// polling fallback for NetInfo events that never arrive.
 	function startRetryTimer() {
-		state.currentNetworkStatus = networkStatus.getCurrentStatus();
-		if (
-			retryInterval ||
-			state.currentNetworkStatus === "offline" ||
-			!isActiveAppState(appState.getCurrentState())
-		) {
+		if (retryInterval || !isActiveAppState(appState.getCurrentState())) {
 			return;
 		}
 
@@ -325,11 +321,10 @@ export function createSyncCoordinator({
 			);
 
 			if (isActiveAppState(appState.getCurrentState())) {
+				startRetryTimer();
 				state.currentNetworkStatus = networkStatus.getCurrentStatus();
 				if (state.currentNetworkStatus === "offline") {
 					setStatus("offline");
-				} else {
-					startRetryTimer();
 				}
 				if (!inFlight && state.currentNetworkStatus === "offline") {
 					void requestSync({ reason: "retry" });

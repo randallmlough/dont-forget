@@ -40,6 +40,39 @@ The helper symlinks the first `.env.local` it finds in another git worktree. Use
 `WORKTREE_ENV_FILE=/path/to/.env.local` to choose a specific source, or
 `WORKTREE_ENV_MODE=copy` when a symlink is not appropriate.
 
+### Per-worktree database isolation
+
+All worktrees share the local environment's databases by default. That is safe
+for migration-free branches, but parallel efforts that each carry a Household
+or directory migration must not share databases: Drizzle applies migrations by
+latest `created_at`, so divergent migration sets from two branches either
+union onto the shared DBs or get silently skipped (see
+`docs/adr/0013-household-schema-staleness-gate.md`).
+
+Give a migration-bearing worktree its own directory DB:
+
+```bash
+make worktree-db
+```
+
+This creates `df-local-wt-<worktree>-dir` in the existing local group, migrates
+it, converts a symlinked `.env.local` into a private copy, and rewrites
+`TURSO_DIRECTORY_URL`/`TURSO_DIRECTORY_AUTH_TOKEN` (originals kept as
+comments). Create fresh accounts in that worktree; their Households provision
+into isolated Household DBs and local replicas. The minted directory token
+expires after 30 days; for a worktree that lives longer, destroy and recreate
+the worktree DB.
+
+Tear it down when the branch is done:
+
+```bash
+make worktree-db-destroy
+```
+
+This deletes the worktree directory DB plus every Household DB it recorded and
+restores the original `.env.local` values. It refuses to run against databases
+not named `df-local-wt-*`.
+
 ## Clerk
 
 Clerk only exposes development and production environments. Production uses Clerk production keys. `local`, `test`, and `staging` use Clerk development keys.

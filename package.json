@@ -22,6 +22,8 @@
 		"db:reset": "tsx db/server/reset.ts",
 		"db:seed": "tsx scripts/seed.ts",
 		"db:reseed": "tsx scripts/reseed.ts",
+		"worktree:db": "tsx scripts/worktree-db.ts",
+		"worktree:db:destroy": "tsx scripts/worktree-db-destroy.ts",
 		"doctor": "npx react-doctor@latest"
 	},
 	"dependencies": {
@@ -102,7 +104,8 @@
 	"private": true,
 	"pnpm": {
 		"overrides": {
-			"js-cookie": "3.0.7"
+			"js-cookie": "3.0.7",
+			"shell-quote": ">=1.8.4"
 		}
 	}
 }

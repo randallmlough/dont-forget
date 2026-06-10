@@ -16,7 +16,7 @@ module.exports = {
 		},
 		messages: {
 			noUpwardImport:
-				"The db layer must not import from lib/services or lib/api. Keep db/ self-contained; service-layer vocabulary that depends on db types imports downward from @/db instead. See ADR-0013.",
+				"The db layer must not import from lib/services or lib/api. Keep db/ self-contained; service-layer vocabulary that depends on db types imports downward from @/db instead. See ADR-0014.",
 		},
 		schema: [],
 	},

@@ -18,6 +18,14 @@ install: ## Install dependencies *common*
 worktree-env: ## Link or copy local .env.local into this worktree
 	@./script/setup_worktree_env.sh
 
+.PHONY: worktree-db
+worktree-db: ## Create an isolated per-worktree directory DB and point .env.local at it
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) worktree:db
+
+.PHONY: worktree-db-destroy
+worktree-db-destroy: ## Delete this worktree's directory DB plus its Household DBs and restore .env.local
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) worktree:db:destroy
+
 .PHONY: start
 start: ## Start Expo for normal app development *common*
 	@APP_ENV="$(APP_ENV_VALUE)" NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --localhost $(PORT_ARG)

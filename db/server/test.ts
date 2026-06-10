@@ -4,6 +4,7 @@ import path from "node:path";
 import { type Client, createClient } from "@libsql/client/node";
 
 import { directoryDb, householdDb } from "@/db/server/client";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 
 const DIRECTORY_MIGRATIONS = "db/migrations/directory";
 const HOUSEHOLD_MIGRATIONS = "db/migrations/household";
@@ -92,6 +93,14 @@ async function applyMigrations(
 				migrationAtOrBefore(file, options.throughMigration),
 		)
 		.sort();
+	const journal = await readMigrationJournal(migrationsFolder);
+
+	// Mirror the real migrator's tracking table so test DBs report the same
+	// schema version a server-migrated DB would (the schema staleness gate
+	// reads max(created_at); drizzle writes the journal `when` there).
+	await client.execute(
+		`CREATE TABLE IF NOT EXISTS ${DRIZZLE_MIGRATIONS_TABLE} (id INTEGER PRIMARY KEY AUTOINCREMENT, hash text NOT NULL, created_at numeric)`,
+	);
 
 	for (const file of files) {
 		const sql = await readFile(path.join(migrationsFolder, file), "utf8");
@@ -103,7 +112,26 @@ async function applyMigrations(
 		for (const statement of statements) {
 			await client.execute(statement);
 		}
+
+		const tag = file.replace(/\.sql$/, "");
+		const entry = journal.get(tag);
+		if (!entry) {
+			throw new Error(`Migration ${file} has no journal entry`);
+		}
+		await client.execute({
+			sql: `INSERT INTO ${DRIZZLE_MIGRATIONS_TABLE} (hash, created_at) VALUES (?, ?)`,
+			args: [tag, entry.when],
+		});
 	}
+}
+
+async function readMigrationJournal(
+	migrationsFolder: string,
+): Promise<Map<string, { when: number }>> {
+	const journal = JSON.parse(
+		await readFile(path.join(migrationsFolder, "meta/_journal.json"), "utf8"),
+	) as { entries: { tag: string; when: number }[] };
+	return new Map(journal.entries.map((entry) => [entry.tag, entry]));
 }
 
 export function migrationAtOrBefore(file: string, target: string): boolean {
