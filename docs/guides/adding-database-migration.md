@@ -103,6 +103,8 @@ db/drizzle/household.config.ts
 8. **Apply migrations only when intentionally operating on a configured environment.**
    - Local/staging/production application is a separate operational step from generation.
    - Production requires explicit confirmation.
+   - Migrate the remote databases before running app code built against the new schema. Existing devices heal at session open: the schema staleness gate awaits one sync when the local replica is behind the app's bundled journal (`docs/adr/0013-household-schema-staleness-gate.md`).
+   - When parallel branches each carry a migration, isolate this worktree's databases first with `make worktree-db` (see `docs/how-things-work/environments.md`).
 
    ```bash
    make db-migrate APP_ENV=staging

@@ -10,6 +10,17 @@ jest.mock("@react-native-community/netinfo", () => ({
 	},
 }));
 
+const mockLoggerInfo = jest.fn();
+
+jest.mock("@/lib/logger", () => {
+	const { createMockLogger } = jest.requireActual<
+		typeof import("@/lib/test/mocks/logger")
+	>("@/lib/test/mocks/logger");
+	const logger = createMockLogger();
+	logger.info = mockLoggerInfo;
+	return { logger };
+});
+
 describe("getDefaultSyncNetworkStatusAdapter", () => {
 	beforeEach(() => {
 		jest.resetModules();
@@ -43,20 +54,17 @@ describe("getDefaultSyncNetworkStatusAdapter", () => {
 		expect(adapter.getCurrentStatus()).toBe("online");
 
 		emitNetInfoState(netInfoListener, {
-			isConnected: true,
-			isInternetReachable: false,
-		});
-		expect(adapter.getCurrentStatus()).toBe("offline");
-
-		emitNetInfoState(netInfoListener, {
 			isConnected: false,
 			isInternetReachable: true,
 		});
 		expect(adapter.getCurrentStatus()).toBe("offline");
 
+		// Connected-but-unreachable stays online: NetInfo's reachability probe
+		// lags or lies after reconnect, and the sync attempt itself is the
+		// authoritative reachability check.
 		emitNetInfoState(netInfoListener, {
 			isConnected: true,
-			isInternetReachable: null,
+			isInternetReachable: false,
 		});
 		expect(adapter.getCurrentStatus()).toBe("online");
 
@@ -65,6 +73,39 @@ describe("getDefaultSyncNetworkStatusAdapter", () => {
 			isInternetReachable: null,
 		});
 		expect(adapter.getCurrentStatus()).toBe("unknown");
+
+		emitNetInfoState(netInfoListener, {
+			isConnected: true,
+			isInternetReachable: null,
+		});
+		expect(adapter.getCurrentStatus()).toBe("online");
+	});
+
+	it("logs each network status transition with the raw NetInfo fields", () => {
+		let netInfoListener: NetInfoListener | null = null;
+		mockAddEventListener.mockImplementation((listener: NetInfoListener) => {
+			netInfoListener = listener;
+			return mockNetInfoRemove;
+		});
+		const { getDefaultSyncNetworkStatusAdapter } = loadNetworkStatusModule();
+		getDefaultSyncNetworkStatusAdapter();
+
+		emitNetInfoState(netInfoListener, {
+			isConnected: true,
+			isInternetReachable: false,
+		});
+		emitNetInfoState(netInfoListener, {
+			isConnected: true,
+			isInternetReachable: true,
+		});
+
+		expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+		expect(mockLoggerInfo).toHaveBeenCalledWith("sync network status changed", {
+			previousStatus: "unknown",
+			nextStatus: "online",
+			isConnected: true,
+			isInternetReachable: false,
+		});
 	});
 
 	it("notifies subscribers and removes listeners", () => {

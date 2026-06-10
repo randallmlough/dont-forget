@@ -27,6 +27,7 @@ import type { HouseholdSqlStatement } from "@/lib/services/household/household-s
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionResourceLease } from "@/lib/services/session/resource-lease";
 import { createSessionDataServices } from "@/lib/services/session/services";
+import type { SyncStatus } from "@/lib/services/sync";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 
@@ -313,6 +314,45 @@ describe("HomeScreenView", () => {
 				expect(screen.getByText("List unavailable")).toBeTruthy(),
 			);
 			fireEvent.press(screen.getByText("Try again"));
+
+			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+			expect(harness.listReadCount()).toBeGreaterThanOrEqual(2);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("reloads a failed List automatically when a sync completes", async () => {
+		const harness = await createHomeSessionHarness({ failNextListRead: true });
+		const syncListeners = new Set<(status: SyncStatus) => void>();
+		harness.session.services.sync = {
+			getStatus: () => "synced",
+			subscribe: (listener) => {
+				syncListeners.add(listener);
+				return {
+					remove() {
+						syncListeners.delete(listener);
+					},
+				};
+			},
+			requestSync: async () => null,
+		};
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() =>
+				expect(screen.getByText("List unavailable")).toBeTruthy(),
+			);
+
+			act(() => {
+				for (const listener of syncListeners) listener("synced");
+			});
 
 			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
 			expect(harness.listReadCount()).toBeGreaterThanOrEqual(2);

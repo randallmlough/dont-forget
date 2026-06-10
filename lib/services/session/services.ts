@@ -1,5 +1,6 @@
 import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
+import { ensureHouseholdSchemaReady } from "@/lib/services/household/household-schema";
 import {
 	type HouseholdDatabaseConfig,
 	type HouseholdStoreExecutor,
@@ -54,6 +55,18 @@ export async function createSessionDataServices(
 	const syncAuthorized = Boolean(
 		store.syncAuthorized && store.push && store.sync,
 	);
+	// The gate intentionally runs before the session resource is published and
+	// before the Sync Coordinator exists (resource-manager starts it after
+	// publish), so it syncs through the store directly; the store's operation
+	// queue serializes it against everything that follows.
+	if (syncAuthorized && store.sync) {
+		const storeSync = store.sync;
+		await ensureHouseholdSchemaReady({
+			store,
+			sync: () => storeSync(),
+			logger: log,
+		});
+	}
 	let closed = false;
 	const lists = createListService({
 		householdId: config.householdId,
