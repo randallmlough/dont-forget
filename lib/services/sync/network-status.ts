@@ -1,5 +1,7 @@
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 
+import { logger } from "@/lib/logger";
+
 import type { SyncStatusSubscription } from "./subscription";
 
 export type SyncNetworkStatus = "online" | "offline" | "unknown";
@@ -23,9 +25,18 @@ function createNetInfoSyncNetworkStatusAdapter(): SyncNetworkStatusAdapter {
 	const listeners = new Set<(status: SyncNetworkStatus) => void>();
 	let currentStatus: SyncNetworkStatus = "unknown";
 
-	function applyNetworkStatus(nextStatus: SyncNetworkStatus) {
+	function applyNetworkStatus(
+		netInfoState: Pick<NetInfoState, "isConnected" | "isInternetReachable">,
+	) {
+		const nextStatus = syncNetworkStatusFromNetInfo(netInfoState);
 		if (nextStatus === currentStatus) return;
 
+		logger.info("sync network status changed", {
+			previousStatus: currentStatus,
+			nextStatus,
+			isConnected: netInfoState.isConnected,
+			isInternetReachable: netInfoState.isInternetReachable,
+		});
 		currentStatus = nextStatus;
 		for (const listener of listeners) {
 			listener(currentStatus);
@@ -33,7 +44,7 @@ function createNetInfoSyncNetworkStatusAdapter(): SyncNetworkStatusAdapter {
 	}
 
 	NetInfo.addEventListener((state) => {
-		applyNetworkStatus(syncNetworkStatusFromNetInfo(state));
+		applyNetworkStatus(state);
 	});
 
 	return {
@@ -42,7 +53,7 @@ function createNetInfoSyncNetworkStatusAdapter(): SyncNetworkStatusAdapter {
 		},
 		async refreshCurrentStatus() {
 			const state = await NetInfo.refresh();
-			applyNetworkStatus(syncNetworkStatusFromNetInfo(state));
+			applyNetworkStatus(state);
 			return currentStatus;
 		},
 		subscribe(listener) {
@@ -56,10 +67,13 @@ function createNetInfoSyncNetworkStatusAdapter(): SyncNetworkStatusAdapter {
 	};
 }
 
+// isConnected alone decides: NetInfo's isInternetReachable probe lags or lies
+// after reconnect (post-2026-06 stranding incident), and the sync attempt
+// itself is the authoritative reachability check.
 function syncNetworkStatusFromNetInfo(
-	state: Pick<NetInfoState, "isConnected" | "isInternetReachable">,
+	state: Pick<NetInfoState, "isConnected">,
 ): SyncNetworkStatus {
-	if (state.isConnected === false || state.isInternetReachable === false) {
+	if (state.isConnected === false) {
 		return "offline";
 	}
 
