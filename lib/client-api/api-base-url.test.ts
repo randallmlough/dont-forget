@@ -7,36 +7,57 @@ jest.mock("expo-constants", () => ({
 	default: { expoConfig: null },
 }));
 
-function setExpoConfig(config: {
-	hostUri?: string;
-	extra?: Record<string, unknown>;
-}) {
+const mockGetDevServer = jest.fn();
+jest.mock("react-native/Libraries/Core/Devtools/getDevServer", () => ({
+	__esModule: true,
+	default: () => mockGetDevServer(),
+}));
+
+function setExpoConfig(config: { extra?: Record<string, unknown> }) {
 	(Constants as { expoConfig: unknown }).expoConfig = config;
 }
 
 describe("readApiBaseUrl", () => {
-	it("derives the local API base URL from the dev server hostUri", () => {
-		setExpoConfig({
-			hostUri: "192.168.0.32:8090",
-			extra: { appEnv: "local" },
+	it("derives the local API base URL from the dev server the bundle loaded from", () => {
+		setExpoConfig({ extra: { appEnv: "local" } });
+		mockGetDevServer.mockReturnValue({
+			url: "http://192.168.0.32:8090/",
+			bundleLoadedFromServer: true,
 		});
 
 		expect(readApiBaseUrl()).toBe("http://192.168.0.32:8090");
 	});
 
+	it("preserves the scheme of tunneled HTTPS dev-server origins", () => {
+		setExpoConfig({ extra: { appEnv: "local" } });
+		mockGetDevServer.mockReturnValue({
+			url: "https://abc-xyz.exp.direct/",
+			bundleLoadedFromServer: true,
+		});
+
+		expect(readApiBaseUrl()).toBe("https://abc-xyz.exp.direct");
+	});
+
 	it("ignores a configured URL in local builds so the dev server stays the single source", () => {
 		setExpoConfig({
-			hostUri: "localhost:8090",
 			extra: { appEnv: "local", apiBaseUrl: "http://localhost:8081" },
+		});
+		mockGetDevServer.mockReturnValue({
+			url: "http://localhost:8090/",
+			bundleLoadedFromServer: true,
 		});
 
 		expect(readApiBaseUrl()).toBe("http://localhost:8090");
 	});
 
-	it("throws when a local build has no dev server hostUri", () => {
+	it("throws when a local bundle was not loaded from a dev server", () => {
 		setExpoConfig({ extra: { appEnv: "local" } });
+		mockGetDevServer.mockReturnValue({
+			url: "http://localhost:8081/",
+			bundleLoadedFromServer: false,
+		});
 
-		expect(() => readApiBaseUrl()).toThrow("hostUri");
+		expect(() => readApiBaseUrl()).toThrow("not loaded from one");
 	});
 
 	it("reads the configured URL for deployed builds and strips a trailing slash", () => {
