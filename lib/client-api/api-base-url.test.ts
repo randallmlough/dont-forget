@@ -18,6 +18,10 @@ function setExpoConfig(config: { extra?: Record<string, unknown> }) {
 }
 
 describe("readApiBaseUrl", () => {
+	beforeEach(() => {
+		mockGetDevServer.mockReset();
+	});
+
 	it("derives the local API base URL from the dev server the bundle loaded from", () => {
 		setExpoConfig({ extra: { appEnv: "local" } });
 		mockGetDevServer.mockReturnValue({
@@ -58,6 +62,22 @@ describe("readApiBaseUrl", () => {
 		});
 
 		expect(() => readApiBaseUrl()).toThrow("not loaded from one");
+	});
+
+	it("uses the configured URL when the mocked config has no appEnv, even if the shell exports APP_ENV=local", () => {
+		// Component tests mock expo-constants with only an apiBaseUrl; the
+		// test runner's inherited shell env must not flip them into the
+		// dev-server branch.
+		const previous = process.env.APP_ENV;
+		process.env.APP_ENV = "local";
+		try {
+			setExpoConfig({ extra: { apiBaseUrl: "https://api.example" } });
+
+			expect(readApiBaseUrl()).toBe("https://api.example");
+			expect(mockGetDevServer).not.toHaveBeenCalled();
+		} finally {
+			process.env.APP_ENV = previous;
+		}
 	});
 
 	it("reads the configured URL for deployed builds and strips a trailing slash", () => {

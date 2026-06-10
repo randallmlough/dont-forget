@@ -5,8 +5,6 @@ import Constants from "expo-constants";
 // tunnel origins (e.g. `expo start --tunnel` via exp.direct).
 import getDevServer from "react-native/Libraries/Core/Devtools/getDevServer";
 
-import { readAppEnvFromExpoExtra } from "@/lib/env";
-
 /**
  * Resolve the base URL for the app's own API routes.
  *
@@ -23,9 +21,13 @@ import { readAppEnvFromExpoExtra } from "@/lib/env";
  */
 export function readApiBaseUrl(): string {
 	const extra = Constants.expoConfig?.extra;
-	const appEnv = readAppEnvFromExpoExtra(extra);
 
-	if (appEnv === "local") {
+	// Gate on the EXPLICIT appEnv baked into the Expo config (app.config.ts
+	// always sets extra.appEnv in real builds). Deliberately no process.env
+	// fallback: the shell environment a test runner happens to inherit (e.g.
+	// APP_ENV=local) must not flip API clients into the dev-server branch
+	// when a test mocks expo-constants with only an apiBaseUrl.
+	if (extra?.appEnv === "local") {
 		const devServer = getDevServer();
 		if (!devServer.bundleLoadedFromServer) {
 			throw new Error(
