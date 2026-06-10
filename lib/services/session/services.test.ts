@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { seedPrimaryHouseholdScenario } from "@/db/fixtures";
 import { itemChecks, items } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import { EXPECTED_HOUSEHOLD_SCHEMA_VERSION } from "@/lib/services/household/household-schema";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
@@ -139,6 +140,46 @@ describe("createSessionDataServices", () => {
 		});
 	});
 
+	it("syncs before services are exposed when the local schema is behind the build", async () => {
+		let version = EXPECTED_HOUSEHOLD_SCHEMA_VERSION - 1;
+		const store = storeFixture({
+			execute: async (statement) =>
+				statement.sql.includes("__drizzle_migrations")
+					? { rows: [{ version }] }
+					: { rows: [] },
+		});
+		store.sync.mockImplementation(async () => {
+			version = EXPECTED_HOUSEHOLD_SCHEMA_VERSION;
+			return { changed: true };
+		});
+
+		await createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ store },
+		);
+
+		expect(store.sync).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not sync at open when the local schema matches the build", async () => {
+		const store = storeFixture();
+
+		await createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ store },
+		);
+
+		expect(store.sync).not.toHaveBeenCalled();
+	});
+
 	it("uses native sync result for full sync", async () => {
 		const store = storeFixture();
 		store.sync.mockResolvedValueOnce({ changed: true });
@@ -245,11 +286,20 @@ function storeFixture(
 			rows: Record<string, unknown>[];
 		}>;
 		syncAuthorized?: boolean;
+		schemaVersion?: number;
 	} = {},
 ) {
+	const schemaVersion =
+		overrides.schemaVersion ?? EXPECTED_HOUSEHOLD_SCHEMA_VERSION;
+	const execute =
+		overrides.execute ??
+		(async (statement: HouseholdSqlStatement) =>
+			statement.sql.includes("__drizzle_migrations")
+				? { rows: [{ version: schemaVersion }] }
+				: { rows: [] });
 	return {
 		syncAuthorized: overrides.syncAuthorized ?? true,
-		execute: jest.fn(overrides.execute ?? (async () => ({ rows: [] }))),
+		execute: jest.fn(execute),
 		pull: jest.fn(async () => ({ changed: false })),
 		push: jest.fn(async () => undefined),
 		sync: jest.fn(async () => ({ changed: false })),

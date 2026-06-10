@@ -192,6 +192,9 @@ importers:
       '@testing-library/react-native':
         specifier: ^13.3.3
         version: 13.3.3(jest@29.7.0(@types/node@25.6.0)(babel-plugin-macros@3.1.0))(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)(utf-8-validate@6.0.6))(react-test-renderer@19.2.0(react@19.2.0))(react@19.2.0)
+      '@tursodatabase/sync':
+        specifier: ^0.6.0
+        version: 0.6.0
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -2616,12 +2619,44 @@ packages:
     resolution: {integrity: sha512-HqmEUIGRJ5fSXchkVgR5F7qn48bDBzv0kWj/Kfu5e6uci4UlEeng4331LnBkWffb++Ei3FOVLxo8JJWMFBDMeQ==}
     engines: {node: '>= 10'}
 
+  '@tursodatabase/database-common@0.6.1':
+    resolution: {integrity: sha512-fkmkhgSUDg3MXkcziTG9Ime3AY5+YvvDN7VvUDEMNV7MP+XgwE/i5tU6eQP1EKa/zDkdSYPq8gPcmROmKmKL8Q==}
+
+  '@tursodatabase/serverless@0.2.4':
+    resolution: {integrity: sha512-kqf3FINvTGx8N1iH/4e1Dkbr/om5q9qitshzvljtQXwZFQIsVP/mDE76mGg9U2dg/ElOZKFKtT1VXDgd39Dr1w==}
+
+  '@tursodatabase/sync-common@0.6.1':
+    resolution: {integrity: sha512-QjImpfwGomXRPmr7+KQUxN1RHslOCY77ElHgmAdpDy0IAqp4WDO12waPpzV45hxoVb6tlmuArFEDdBGdiq9npQ==}
+
+  '@tursodatabase/sync-darwin-arm64@0.6.0':
+    resolution: {integrity: sha512-8RzoxroxG5UJaDX+xarCukwTyrw2AygMeEHSR+Xb0I2oKTHMACgnhvmokLGZUP3hOwygp0+QrShZx+qU7K8WBw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@tursodatabase/sync-linux-arm64-gnu@0.6.0':
+    resolution: {integrity: sha512-7dogVhpxI+KPj8mvxFbUqYuBaV+6emOSj3XIeKwAr+KdQF97li35Qpab6UqeJoS7aHNU64uoAEuK0GXy2i3Ykw==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@tursodatabase/sync-linux-x64-gnu@0.6.0':
+    resolution: {integrity: sha512-KxHRnE+5c1jmxaWRAMV9mA9Y5AYugvZ8bK91BNhmqvKah0lD6vSiQULWkA0gZx+vrGuj4nfYzwZpM4xUbId+xA==}
+    cpu: [x64]
+    os: [linux]
+
   '@tursodatabase/sync-react-native@0.6.0':
     resolution: {integrity: sha512-yScUtS9l3gxwKWgUECrSRych+/0bwx9IJDhWJnbkIB/cw23fO8A3AUeTv+zNp3rwAverOHtY2ezqXZg9Lk7tEA==}
     engines: {node: '>=18'}
     peerDependencies:
       react: '>=18.0.0'
       react-native: '>=0.76.0'
+
+  '@tursodatabase/sync-win32-x64-msvc@0.6.0':
+    resolution: {integrity: sha512-c+LzrfAgycMA+lS2smGn+MGfz4+5Yu8BWTe+KMoZOzTvOGNZHd870h9bSU71y4hdN43BPal6fja5sdl95SdolA==}
+    cpu: [x64]
+    os: [win32]
+
+  '@tursodatabase/sync@0.6.0':
+    resolution: {integrity: sha512-Oys6WOS7EgC0YgFW34SOlRvQlGuE5KhqxlY51HVqe/lxnA/EmVoe15mDOxCf4umuDArq9Js+432Ol2sgjh730A==}
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -10046,11 +10081,42 @@ snapshots:
 
   '@tootallnate/once@2.0.1': {}
 
+  '@tursodatabase/database-common@0.6.1': {}
+
+  '@tursodatabase/serverless@0.2.4': {}
+
+  '@tursodatabase/sync-common@0.6.1':
+    dependencies:
+      '@tursodatabase/database-common': 0.6.1
+      '@tursodatabase/serverless': 0.2.4
+
+  '@tursodatabase/sync-darwin-arm64@0.6.0':
+    optional: true
+
+  '@tursodatabase/sync-linux-arm64-gnu@0.6.0':
+    optional: true
+
+  '@tursodatabase/sync-linux-x64-gnu@0.6.0':
+    optional: true
+
   '@tursodatabase/sync-react-native@0.6.0(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)(utf-8-validate@6.0.6))(react@19.2.0)':
     dependencies:
       '@babel/runtime': 7.29.2
       react: 19.2.0
       react-native: 0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.0)(utf-8-validate@6.0.6)
+
+  '@tursodatabase/sync-win32-x64-msvc@0.6.0':
+    optional: true
+
+  '@tursodatabase/sync@0.6.0':
+    dependencies:
+      '@tursodatabase/database-common': 0.6.1
+      '@tursodatabase/sync-common': 0.6.1
+    optionalDependencies:
+      '@tursodatabase/sync-darwin-arm64': 0.6.0
+      '@tursodatabase/sync-linux-arm64-gnu': 0.6.0
+      '@tursodatabase/sync-linux-x64-gnu': 0.6.0
+      '@tursodatabase/sync-win32-x64-msvc': 0.6.0
 
   '@tybys/wasm-util@0.10.1':
     dependencies:

@@ -1,5 +1,6 @@
 import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
+import { ensureHouseholdSchemaReady } from "@/lib/services/household/household-schema";
 import {
 	type HouseholdDatabaseConfig,
 	type HouseholdStoreExecutor,
@@ -53,6 +54,14 @@ export async function createSessionDataServices(
 	const syncAuthorized = Boolean(
 		store.syncAuthorized && store.push && store.sync,
 	);
+	if (syncAuthorized && store.sync) {
+		const storeSync = store.sync;
+		await ensureHouseholdSchemaReady({
+			store,
+			sync: () => storeSync(),
+			logger: log,
+		});
+	}
 	let closed = false;
 	const lists = createListService({
 		householdId: config.householdId,
