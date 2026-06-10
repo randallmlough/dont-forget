@@ -128,7 +128,7 @@ Service methods should emit informative product tracking after successful operat
 
 ## HouseholdStore
 
-`HouseholdStore` is the app-owned infrastructure seam around the local synced Household data file. It is not a service and should not be named `*-db-service`. It lives in the db layer at `db/household-store.ts` (see ADR-0013), not under `lib/services/`, and also owns the store's sync contract: `SyncResult`, `SyncInterruptedError`, and the native sync-error classification. `SyncResult` is re-exported through `lib/services/sync` because app-facing code may only consume types through the service layer, never from `@/db`.
+`HouseholdStore` is the app-owned infrastructure seam around the local synced Household data file. It is not a service and should not be named `*-db-service`. It lives in the db layer at `db/household-store.ts` (see ADR-0013), not under `lib/services/`, and also owns the store's sync contract: `SyncResult`, `SyncInterruptedError`, and the native sync-error classification. `SyncResult` is re-exported through `lib/services/sync` because app-facing code may only consume types through the service layer, never from `@/db`. Lint enforces that ban for `app/`, `screens/`, and `components/` (`no-db-imports-outside-services`); for other non-service `lib/` modules it is policy, not lint — follow it anyway.
 
 Initial shape should stay minimal:
 

@@ -25,6 +25,7 @@ We will make `db/` the single home for data-store infrastructure on both runtime
 - `lib/services/sync` keeps coordinator-level vocabulary (`SyncStatus`, `SyncRequestReason`, `SyncMode`, `SyncOptions`, `SyncCoordinator`) and re-exports the `SyncResult` type only. `SyncResult` is also coordinator vocabulary (`requestSync` returns it), and app-facing code may consume types only through the service layer, never from `@/db`.
 - Session services remain the composition root for the store: `createSessionDataServices` opens `HouseholdStore` via `openHouseholdStore` and injects the executor into List/Item services, because store lifetime is tied to the Authenticated App Session (ADR-0012).
 - A new ESLint rule (`no-db-server-imports`) enforces the boundary: `@/db/server/*` is importable only from `db/server/**`, `lib/services/**/server/**`, `lib/api/**`, `scripts/**`, tests, and lazily inside `app/api/**` request handlers. The existing `no-db-imports-outside-services` rule continues to bar app-facing code from all of `@/db/*`.
+- A companion ESLint rule (`no-services-imports-in-db`) enforces the downward direction: non-test code under `db/**` must not import `@/lib/services/**` or `@/lib/api/**`, so the layering inversion this ADR removed cannot silently return.
 
 ## Considered options
 
@@ -36,7 +37,7 @@ We will make `db/` the single home for data-store infrastructure on both runtime
 
 ## Consequences
 
-- The db layer is the bottom layer: it imports only cross-cutting utilities (`lib/errors`, `lib/logger`), never services.
+- The db layer is the bottom layer: it imports only cross-cutting `lib/` utilities (`lib/errors`, `lib/logger`, `lib/env`, `lib/load-env`, `lib/bootstrap` constants), never `lib/services/` or `lib/api/`. The never-services/api half is lint-enforced by `no-services-imports-in-db`.
 - App-safe service code is now lint-blocked from server db infrastructure instead of convention-blocked.
 - `package.json` db scripts point at `db/server/` (`db:generate`, `db:migrate`, `db:reset`).
 - ADR-0011's service-layer rules (factory DI, SQL ownership, naming, runtime nesting for services) remain in force; only the store's placement clause is superseded.

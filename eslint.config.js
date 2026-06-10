@@ -22,6 +22,7 @@ module.exports = defineConfig([
 			"dont-forget/no-lib-api-imports": "error",
 			"dont-forget/no-screen-use-effect": "error",
 			"dont-forget/no-server-service-imports": "error",
+			"dont-forget/no-services-imports-in-db": "error",
 			"react-hooks/exhaustive-deps": "error",
 			"@typescript-eslint/no-unused-vars": "error",
 			"@typescript-eslint/consistent-type-assertions": [

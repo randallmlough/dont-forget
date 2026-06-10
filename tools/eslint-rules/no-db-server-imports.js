@@ -3,6 +3,7 @@ const {
 	filenameFromContext,
 	importSource,
 	isAppApiFile,
+	isInsideFunction,
 	isTestFile,
 	normalizePath,
 } = require("./path-utils");
@@ -17,7 +18,7 @@ module.exports = {
 		},
 		messages: {
 			serverOnly:
-				"Only server-side code may import @/db/server. App-safe code uses @/db/household-store, @/db/schema, and @/db/utils; data access goes through domain services under lib/services/<domain>. See docs/how-things-work/services.md.",
+				"Only server-side code (db/server, lib/services/**/server, lib/api, scripts, and lazy app/api handlers) may import @/db/server. Everything else queries and mutates data through domain services under lib/services/<domain>. See docs/how-things-work/services.md.",
 			apiStatic:
 				"Expo API routes must lazy-load @/db/server modules inside request handlers instead of statically importing them. See docs/how-things-work/services.md.",
 		},
@@ -98,19 +99,4 @@ function isLibApiFile(filename) {
 
 function isScriptFile(filename) {
 	return /\/scripts\//.test(filename);
-}
-
-function isInsideFunction(node) {
-	let current = node.parent;
-	while (current) {
-		if (
-			current.type === "FunctionDeclaration" ||
-			current.type === "FunctionExpression" ||
-			current.type === "ArrowFunctionExpression"
-		) {
-			return true;
-		}
-		current = current.parent;
-	}
-	return false;
 }
