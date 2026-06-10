@@ -43,7 +43,14 @@ export async function seedLocalDatabases(): Promise<void> {
 		console.log(
 			`[seed] Users: ${scenario.users.avery.email}, ${scenario.users.blake.email}`,
 		);
-		console.log(`[seed] List: ${scenario.lists.groceries.name}`);
+		for (const list of Object.values(scenario.lists)) {
+			const status = list.deletedAt
+				? "deleted"
+				: list.archivedAt
+					? "archived"
+					: "active";
+			console.log(`[seed] List: ${list.name} (${list.id}, ${status})`);
+		}
 	} finally {
 		await householdClientInstance.close();
 		await directoryClientInstance.close();
@@ -78,6 +85,9 @@ async function assertSeedDataDoesNotExist({
 		PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
 		PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
 	];
+	const listIds = Object.values(PRIMARY_HOUSEHOLD_SEED.lists).map(
+		(list) => list.id,
+	);
 	const itemIds = Object.values(PRIMARY_HOUSEHOLD_SEED.items).map(
 		(item) => item.id,
 	);
@@ -113,7 +123,7 @@ async function assertSeedDataDoesNotExist({
 		household
 			.select({ id: lists.id })
 			.from(lists)
-			.where(inArray(lists.id, [PRIMARY_HOUSEHOLD_SEED.list.id])),
+			.where(inArray(lists.id, listIds)),
 		household
 			.select({ id: items.id })
 			.from(items)

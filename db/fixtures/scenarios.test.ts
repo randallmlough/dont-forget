@@ -9,7 +9,9 @@ import {
 	memberships,
 	users,
 } from "@/db/schema/directory";
+import { lists } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {
 	householdFixture,
 	householdJoinCodeAttemptFixture,
@@ -101,6 +103,56 @@ describe("database fixture scenarios", () => {
 				expect.objectContaining({
 					id: scenario.joinCodes.active.id,
 					householdId: scenario.household.id,
+				}),
+			]);
+		} finally {
+			await household.close();
+			await directory.close();
+		}
+	});
+
+	it("seeds multiple active Lists plus one archived and one deleted List", async () => {
+		const directory = await createTestDirectoryDb();
+		const household = await createTestHouseholdDb();
+
+		try {
+			const scenario = await seedPrimaryHouseholdScenario({
+				directory: directory.db,
+				household: household.db,
+			});
+
+			const rows = await household.db.select().from(lists);
+			const active = rows.filter(
+				(row) => row.archivedAt === null && row.deletedAt === null,
+			);
+			const archived = rows.filter(
+				(row) => row.archivedAt !== null && row.deletedAt === null,
+			);
+			const deleted = rows.filter((row) => row.deletedAt !== null);
+
+			expect(scenario.lists.groceries.id).toBe(DEFAULT_LIST_ID);
+			expect(rows).toHaveLength(5);
+			expect(active).toHaveLength(3);
+			expect(active.map((row) => row.id).sort()).toEqual(
+				[
+					scenario.lists.groceries.id,
+					scenario.lists.hardware.id,
+					scenario.lists.pharmacy.id,
+				].sort(),
+			);
+			expect(archived).toEqual([
+				expect.objectContaining({
+					id: scenario.lists.archived.id,
+					name: scenario.lists.archived.name,
+					archivedAt: expect.any(Number),
+					deletedAt: null,
+				}),
+			]);
+			expect(deleted).toEqual([
+				expect.objectContaining({
+					id: scenario.lists.deleted.id,
+					archivedAt: null,
+					deletedAt: expect.any(Number),
 				}),
 			]);
 		} finally {
