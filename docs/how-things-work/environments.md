@@ -40,6 +40,18 @@ The helper symlinks the first `.env.local` it finds in another git worktree. Use
 `WORKTREE_ENV_FILE=/path/to/.env.local` to choose a specific source, or
 `WORKTREE_ENV_MODE=copy` when a symlink is not appropriate.
 
+### Local API base URL is derived, not configured
+
+In `local` builds the app's API routes are served by the same Expo dev server
+that bundles the JS, so the client derives its API base URL from
+`expoConfig.hostUri` at runtime instead of reading
+`EXPO_PUBLIC_API_BASE_URL` (which local no longer requires). A worktree
+running Metro on a non-default port therefore cannot silently call another
+checkout's server, and physical devices reach the host machine through the
+LAN address they loaded the bundle from. Deployed builds (staging,
+production) still configure `EXPO_PUBLIC_API_BASE_URL`. `PUBLIC_APP_BASE_URL`
+(server-side links) remains env-configured for now.
+
 ### Per-worktree database isolation
 
 All worktrees share the local environment's databases by default. That is safe
