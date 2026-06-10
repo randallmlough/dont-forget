@@ -59,7 +59,9 @@ This creates `df-local-wt-<worktree>-dir` in the existing local group, migrates
 it, converts a symlinked `.env.local` into a private copy, and rewrites
 `TURSO_DIRECTORY_URL`/`TURSO_DIRECTORY_AUTH_TOKEN` (originals kept as
 comments). Create fresh accounts in that worktree; their Households provision
-into isolated Household DBs and local replicas.
+into isolated Household DBs and local replicas. The minted directory token
+expires after 30 days; for a worktree that lives longer, destroy and recreate
+the worktree DB.
 
 Tear it down when the branch is done:
 

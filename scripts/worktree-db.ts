@@ -21,15 +21,17 @@ import path from "node:path";
 import { createClient } from "@libsql/client/http";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
 import { tursoPlatformApi } from "./turso-platform-api";
 
 const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
-const ENV_FILE = ".env.local";
-export const WORKTREE_DB_PREFIX = "df-local-wt-";
-const ORIGINAL_PREFIX = "# worktree-db original ";
 const TOKEN_EXPIRATION = "30d";
+
+export const ENV_FILE = ".env.local";
+export const WORKTREE_DB_PREFIX = "df-local-wt-";
+export const ORIGINAL_PREFIX = "# worktree-db original ";
 
 async function main(): Promise<void> {
 	const appEnv = loadEnvFile();
@@ -55,7 +57,10 @@ async function main(): Promise<void> {
 	console.log(`[worktree-db] migrating ${database.url}`);
 	const client = createClient({ url: database.url, authToken });
 	try {
-		await migrate(drizzle(client), { migrationsFolder: DIRECTORY_MIGRATIONS });
+		await migrate(drizzle(client), {
+			migrationsFolder: DIRECTORY_MIGRATIONS,
+			migrationsTable: DRIZZLE_MIGRATIONS_TABLE,
+		});
 	} finally {
 		client.close();
 	}
@@ -107,14 +112,22 @@ function overrideEnvValues(
 	overrides: Record<string, string>,
 ): void {
 	const lines = readFileSync(envPath, "utf8").split("\n");
+	const replaced = new Set<string>();
 	const next = lines.flatMap((line) => {
 		for (const [key, value] of Object.entries(overrides)) {
 			if (line.startsWith(`${key}=`)) {
+				replaced.add(key);
 				return [`${ORIGINAL_PREFIX}${line}`, `${key}=${value}`];
 			}
 		}
 		return [line];
 	});
+	const missing = Object.keys(overrides).filter((key) => !replaced.has(key));
+	if (missing.length > 0) {
+		throw new Error(
+			`${ENV_FILE} has no ${missing.join(", ")} line(s) to rewrite; this worktree would keep using the shared directory DB`,
+		);
+	}
 	writeFileSync(envPath, next.join("\n"));
 }
 

@@ -28,13 +28,21 @@
     </ul>
 
     <h2>Spike Evidence</h2>
-    <p><code>scripts/spike-local-ddl-sync.mts</code> (run with <code>APP_ENV=local pnpm tsx scripts/spike-local-ddl-sync.mts</code>) against scratch DBs in the local Turso group, on <code>@tursodatabase/sync</code> 0.6.1 and 0.6.0 (the React Native package's version):</p>
+    <p><code>scripts/spike-local-ddl-sync.mts</code> (deleted after verification along with its <code>@tursodatabase/sync</code> devDependency — recover both from commit <code>cea1970b</code>) ran against scratch DBs in the local Turso group, on <code>@tursodatabase/sync</code> 0.6.1 and 0.6.0 (the React Native package's version):</p>
     <ul>
       <li>Remote <code>ALTER TABLE</code> + tracking row arrived at an existing replica in one <code>pull()</code>; schema and tracking rows travel together.</li>
       <li>Restart simulation: reopening the stale replica and reading before <code>pull()</code> reproduced <code>no such column</code>; the same read succeeded after one <code>pull()</code>.</li>
       <li>Remote <code>PRAGMA user_version = N</code> rejected by Turso Cloud (<code>SQL_PARSE_ERROR: SQL not allowed statement</code>); locally-set <code>user_version</code> reset to the remote's value by <code>pull()</code>.</li>
       <li>Locally re-running DDL the remote already ran failed with <code>duplicate column name</code>.</li>
       <li>Pushing local-only DDL plus rows to a not-yet-migrated remote silently applied the DDL remotely — push carries DDL; remote-first ordering remains the policy.</li>
+    </ul>
+
+    <h2>Review Follow-ups</h2>
+    <ul>
+      <li>The gate's awaited sync is bounded by a 5-second deadline so session open cannot hang on a degraded network; on timeout the session proceeds stale and the Home List's sync-driven retry heals it.</li>
+      <li>The migration tracking-table contract is pinned: <code>DRIZZLE_MIGRATIONS_TABLE</code> in <code>db/utils.ts</code> is passed to every <code>migrate()</code> call and read by the gate, and a test runs the real drizzle migrator against a temp DB to prove the gate reads it as ready.</li>
+      <li><code>db/test.ts</code> records tracking rows as it applies migration files, so test Household DBs report the same schema version a server-migrated DB would.</li>
+      <li><code>make worktree-db</code> fails loudly if it cannot rewrite the <code>TURSO_DIRECTORY_*</code> lines instead of reporting isolation it did not deliver.</li>
     </ul>
 
     <h2>Open Questions</h2>

@@ -17,10 +17,7 @@ import { households } from "@/db/schema/directory";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
 import { tursoPlatformApi } from "./turso-platform-api";
-import { WORKTREE_DB_PREFIX } from "./worktree-db";
-
-const ENV_FILE = ".env.local";
-const ORIGINAL_PREFIX = "# worktree-db original ";
+import { ENV_FILE, ORIGINAL_PREFIX, WORKTREE_DB_PREFIX } from "./worktree-db";
 
 async function main(): Promise<void> {
 	const appEnv = loadEnvFile();

@@ -9,6 +9,7 @@ import { loadEnvFile } from "@/lib/load-env";
 import { directoryClient } from "./client";
 import { migrateHouseholdDb } from "./household-migrations";
 import { households } from "./schema/directory";
+import { DRIZZLE_MIGRATIONS_TABLE } from "./utils";
 
 const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
 
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
 		console.log("[directory] migrating…");
 		await migrate(drizzle(directory), {
 			migrationsFolder: DIRECTORY_MIGRATIONS,
+			migrationsTable: DRIZZLE_MIGRATIONS_TABLE,
 		});
 		console.log("[directory] done");
 
