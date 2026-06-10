@@ -1,5 +1,5 @@
-import Constants from "expo-constants";
 import { z } from "zod";
+import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 import {
 	type HouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
@@ -252,13 +252,4 @@ async function requestJson(
 function errorMessageFromPayload(payload: unknown): string {
 	const parsed = z.object({ error: z.string() }).safeParse(payload);
 	return parsed.success ? parsed.data.error : "Something went wrong.";
-}
-
-function readApiBaseUrl(): string {
-	const value = Constants.expoConfig?.extra?.apiBaseUrl;
-	if (typeof value !== "string" || value.length === 0) {
-		throw new Error("Missing EXPO_PUBLIC_API_BASE_URL");
-	}
-
-	return value.replace(/\/$/, "");
 }

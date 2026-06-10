@@ -1,10 +1,10 @@
-import Constants from "expo-constants";
 import { track } from "@/lib/analytics";
 import {
 	BOOTSTRAP_API_PATH,
 	type BootstrapResponse,
 	bootstrapResponseSchema,
 } from "@/lib/bootstrap";
+import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 
 export type SessionBootstrap = BootstrapResponse;
@@ -75,13 +75,4 @@ export function sessionAnalyticsProperties(session: SessionBootstrap): {
 		member_role: session.activeMember.role,
 		member_count: session.members.length,
 	};
-}
-
-function readApiBaseUrl(): string {
-	const value = Constants.expoConfig?.extra?.apiBaseUrl;
-	if (typeof value !== "string" || value.length === 0) {
-		throw new Error("Missing EXPO_PUBLIC_API_BASE_URL");
-	}
-
-	return value.replace(/\/$/, "");
 }
