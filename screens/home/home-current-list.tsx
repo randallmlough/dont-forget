@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { ActiveList } from "@/components/active-list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { HomeListSwitcher } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";
 
@@ -22,6 +24,7 @@ function HomeCurrentListResource({
 	const currentMemberName = homeSessionMemberName(session);
 	const list = useHomeCurrentList(session);
 	const loadState = list.state;
+	const [switcherOpen, setSwitcherOpen] = useState(false);
 
 	if (loadState.status === "loading") {
 		return (
@@ -53,21 +56,33 @@ function HomeCurrentListResource({
 	}
 
 	return (
-		<ActiveList.Provider
-			key={`${session.resourceKey}:${loadState.listId}`}
-			initialState={loadState.initialList}
-			currentMemberName={currentMemberName}
-			onLoadList={loadState.actions.loadList}
-			onAddItem={loadState.actions.addItem}
-			onSetItemChecked={loadState.actions.setItemChecked}
-			syncCoordinator={session.services.sync}
-		>
-			<ActiveList.Screen>
-				<ActiveList.Header />
-				<ActiveList.Items />
-				<ActiveList.AddItemForm />
-			</ActiveList.Screen>
-		</ActiveList.Provider>
+		<>
+			<ActiveList.Provider
+				key={`${session.resourceKey}:${loadState.listId}`}
+				initialState={loadState.initialList}
+				currentMemberName={currentMemberName}
+				onLoadList={loadState.actions.loadList}
+				onAddItem={loadState.actions.addItem}
+				onSetItemChecked={loadState.actions.setItemChecked}
+				syncCoordinator={session.services.sync}
+			>
+				<ActiveList.Screen>
+					<ActiveList.Header onPressListName={() => setSwitcherOpen(true)} />
+					<ActiveList.Items />
+					<ActiveList.AddItemForm />
+				</ActiveList.Screen>
+			</ActiveList.Provider>
+			{switcherOpen ? (
+				<HomeListSwitcher
+					session={session}
+					currentListId={loadState.listId}
+					onDismiss={() => setSwitcherOpen(false)}
+					// Task 5 re-resolution: re-reads the freshly stored selection and
+					// remounts the Active List boundary via the listId-keyed Provider.
+					onSwitched={list.retry}
+				/>
+			) : null}
+		</>
 	);
 }
 

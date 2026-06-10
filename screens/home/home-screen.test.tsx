@@ -6,7 +6,7 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { eq } from "drizzle-orm";
-import type { PropsWithChildren, ReactElement } from "react";
+import type { PropsWithChildren, ReactElement, ReactNode } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
 import {
@@ -16,6 +16,8 @@ import {
 import { items, lists } from "@/db/schema/household";
 import type { TestDirectoryDb, TestHouseholdDb } from "@/db/test";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import { track } from "@/lib/analytics";
+import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {
 	clearCurrentListSelection,
 	getCurrentListSelection,
@@ -23,6 +25,7 @@ import {
 } from "@/lib/local-storage/current-list-selection";
 import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { createSessionResourceLease } from "@/lib/services/session/resource-lease";
 import { createSessionDataServices } from "@/lib/services/session/services";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
@@ -45,6 +48,46 @@ jest.mock("expo-router", () => ({
 jest.mock("@/lib/analytics", () =>
 	jest.requireActual("@/lib/test/mocks/analytics"),
 );
+
+// The real @expo/ui swift-ui module evaluates `requireNativeModule("ExpoUI")`
+// at import time, which jest-expo cannot satisfy. The shell is native-only
+// behavior (covered by simulator QA); these pass-throughs keep the Home-owned
+// switcher logic fully testable, including native dismissal via the captured
+// BottomSheet props.
+const mockBottomSheet: {
+	lastProps: {
+		isPresented: boolean;
+		onIsPresentedChange: (isPresented: boolean) => void;
+	} | null;
+} = { lastProps: null };
+
+jest.mock("@expo/ui/swift-ui", () => {
+	const ReactActual = jest.requireActual<typeof import("react")>("react");
+	const { View } =
+		jest.requireActual<typeof import("react-native")>("react-native");
+	const passthrough = ({ children }: { children?: ReactNode }) =>
+		ReactActual.createElement(View, null, children);
+	return {
+		Host: passthrough,
+		Group: passthrough,
+		RNHostView: passthrough,
+		BottomSheet: (props: {
+			children?: ReactNode;
+			isPresented: boolean;
+			onIsPresentedChange: (isPresented: boolean) => void;
+		}) => {
+			mockBottomSheet.lastProps = props;
+			return ReactActual.createElement(View, null, props.children);
+		},
+	};
+});
+
+jest.mock("@expo/ui/swift-ui/modifiers", () => ({
+	presentationDetents: jest.fn(() => ({ $type: "presentationDetents" })),
+	presentationDragIndicator: jest.fn(() => ({
+		$type: "presentationDragIndicator",
+	})),
+}));
 
 jest.mock("@/lib/logger", () =>
 	jest
@@ -73,7 +116,15 @@ beforeEach(() => {
 		.mocked(clearCurrentListSelection)
 		.mockReset()
 		.mockResolvedValue(undefined);
+	jest.mocked(track).mockClear();
+	mockBottomSheet.lastProps = null;
 });
+
+function listSwitchedTrackCalls() {
+	return jest
+		.mocked(track)
+		.mock.calls.filter(([event]) => event === "list_switched");
+}
 
 describe("HomeScreen", () => {
 	beforeEach(() => {
@@ -311,6 +362,8 @@ describe("HomeScreenView", () => {
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 			expect(clearCurrentListSelection).not.toHaveBeenCalled();
+			// Fallback resolution is not an explicit switch: no analytics.
+			expect(listSwitchedTrackCalls()).toHaveLength(0);
 		} finally {
 			await harness.close();
 		}
@@ -702,6 +755,324 @@ describe("HomeScreenView", () => {
 			await freshHarness.close();
 		}
 	});
+
+	it("clears a stored selection that survives to the post-loop clear when every candidate is stale", async () => {
+		const harness = await createHomeSessionHarness();
+		// Pharmacy is stored and present in the listLists() snapshot, but every
+		// candidate (including it) is stale at getList() time, so the resolver
+		// exits the loop with zeroActive and must clear via the post-loop branch.
+		jest
+			.mocked(getCurrentListSelection)
+			.mockResolvedValue(harness.scenario.lists.pharmacy.id);
+		harness.setStaleMissingListIds([
+			harness.scenario.lists.groceries.id,
+			harness.scenario.lists.hardware.id,
+			harness.scenario.lists.pharmacy.id,
+		]);
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+
+			await waitFor(() =>
+				expect(screen.getByText("No active Lists")).toBeTruthy(),
+			);
+			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelection).toHaveBeenCalledWith(
+				harness.scenario.users.avery.id,
+				harness.scenario.household.id,
+			);
+			expect(setCurrentListSelection).not.toHaveBeenCalled();
+			expect(listSwitchedTrackCalls()).toHaveLength(0);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("targets Item writes at the resolved List, not a stale stored selection", async () => {
+		const harness = await createHomeSessionHarness();
+		// Stored selection (archived Holiday Dinner) differs from the resolved
+		// fallback (Groceries); Item writes must follow the RESOLVED List.
+		jest
+			.mocked(getCurrentListSelection)
+			.mockResolvedValue(harness.scenario.lists.archived.id);
+
+		try {
+			renderWithSafeArea(
+				<HomeScreenView
+					state={{ status: "ready", refreshing: false }}
+					session={harness.session}
+				/>,
+			);
+			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
+
+			openAddItemComposer();
+			fireEvent.changeText(screen.getByLabelText("Item name"), "Lantern");
+			await act(async () => {
+				fireEvent.press(screen.getByLabelText("Submit Item"));
+			});
+			await waitFor(() => expect(screen.getByText("Lantern")).toBeTruthy());
+
+			const persistedItem = await harness.household.db.query.items.findFirst({
+				where: (table, { eq }) => eq(table.name, "Lantern"),
+			});
+			expect(persistedItem?.listId).toBe(harness.scenario.lists.groceries.id);
+			expect(persistedItem?.listId).not.toBe(
+				harness.scenario.lists.archived.id,
+			);
+		} finally {
+			await harness.close();
+		}
+	});
+});
+
+describe("List switcher", () => {
+	async function renderHomeReady(harness: HomeSessionHarness) {
+		renderWithSafeArea(
+			<HomeScreenView
+				state={{ status: "ready", refreshing: false }}
+				session={harness.session}
+			/>,
+		);
+		await waitFor(() =>
+			expect(screen.getByLabelText("Switch List")).toBeTruthy(),
+		);
+	}
+
+	function openSwitcher() {
+		fireEvent.press(screen.getByLabelText("Switch List"));
+	}
+
+	it("opens from the Current List header and lists only active List summaries", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			await renderHomeReady(harness);
+			openSwitcher();
+
+			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
+			expect(screen.getByText("Pharmacy")).toBeTruthy();
+			// Groceries appears in the Active List header and as a switcher row.
+			expect(screen.getAllByText("Groceries")).toHaveLength(2);
+			expect(screen.getByText("1 unchecked · 2 checked")).toBeTruthy();
+			expect(screen.getAllByText("0 unchecked · 0 checked")).toHaveLength(2);
+			// Active-only rows: archived and deleted Lists never appear.
+			expect(screen.queryByText("Holiday Dinner")).toBeNull();
+			expect(screen.queryByText("Camping Trip")).toBeNull();
+			// No search affordance in the MVP switcher.
+			expect(screen.queryByPlaceholderText(/search/i)).toBeNull();
+			// Opening the sheet emits no analytics.
+			expect(listSwitchedTrackCalls()).toHaveLength(0);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("indicates the current row visually and accessibly", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			await renderHomeReady(harness);
+			openSwitcher();
+
+			await waitFor(() => expect(screen.getByText("Current")).toBeTruthy());
+			expect(
+				screen.getByRole("button", { name: "Groceries", selected: true }),
+			).toBeTruthy();
+			expect(
+				screen.getByRole("button", { name: "Pharmacy", selected: false }),
+			).toBeTruthy();
+			expect(
+				screen.getByRole("button", { name: "Hardware", selected: false }),
+			).toBeTruthy();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("treats a current row tap as a no-op", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			await renderHomeReady(harness);
+			openSwitcher();
+			await waitFor(() => expect(screen.getByText("Current")).toBeTruthy());
+
+			await act(async () => {
+				fireEvent.press(
+					screen.getByRole("button", { name: "Groceries", selected: true }),
+				);
+			});
+
+			expect(setCurrentListSelection).not.toHaveBeenCalled();
+			expect(listSwitchedTrackCalls()).toHaveLength(0);
+			expect(harness.requestSync).not.toHaveBeenCalled();
+			// The sheet stays open with its rows intact.
+			expect(screen.getByText("Pharmacy")).toBeTruthy();
+			expect(screen.getByText("Current")).toBeTruthy();
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("switches to another active List: persists before analytics, closes the sheet, and renders it", async () => {
+		const harness = await createHomeSessionHarness();
+		// Simulate real storage: once persisted, re-resolution reads the new
+		// stored selection.
+		jest
+			.mocked(setCurrentListSelection)
+			.mockImplementation(async (_userId, _householdId, listId) => {
+				jest.mocked(getCurrentListSelection).mockResolvedValue(listId);
+			});
+
+		try {
+			await renderHomeReady(harness);
+			openSwitcher();
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+
+			await act(async () => {
+				fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
+			});
+
+			expect(setCurrentListSelection).toHaveBeenCalledTimes(1);
+			expect(setCurrentListSelection).toHaveBeenCalledWith(
+				harness.scenario.users.avery.id,
+				harness.scenario.household.id,
+				harness.scenario.lists.pharmacy.id,
+			);
+			const switchedCalls = listSwitchedTrackCalls();
+			expect(switchedCalls).toHaveLength(1);
+			// Typed event shape: identifiers only — no List name, no counts.
+			expect(switchedCalls[0]?.[1]).toEqual({
+				household_id: harness.scenario.household.id,
+				list_id: harness.scenario.lists.pharmacy.id,
+				user_id: harness.scenario.users.avery.id,
+			});
+			// Persistence strictly precedes the analytics emission.
+			const persistOrder = jest.mocked(setCurrentListSelection).mock
+				.invocationCallOrder[0];
+			const trackMock = jest.mocked(track);
+			const switchedIndex = trackMock.mock.calls.findIndex(
+				([event]) => event === "list_switched",
+			);
+			const emitOrder = trackMock.mock.invocationCallOrder[switchedIndex];
+			expect(persistOrder).toBeLessThan(emitOrder ?? 0);
+
+			// The selected List renders through the resolver/remount path.
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+			expect(screen.queryByText("Milk")).toBeNull();
+			// The sheet is closed: switcher rows are gone.
+			expect(screen.queryByText("Hardware")).toBeNull();
+			expect(screen.queryByText("Current")).toBeNull();
+			// Switching never requests sync.
+			expect(harness.requestSync).not.toHaveBeenCalled();
+			// No DEFAULT_LIST_ID regression: the explicitly selected List is not
+			// the default Groceries List, and writes follow it.
+			expect(harness.scenario.lists.pharmacy.id).not.toBe(DEFAULT_LIST_ID);
+
+			openAddItemComposer();
+			fireEvent.changeText(screen.getByLabelText("Item name"), "Bandages");
+			await act(async () => {
+				fireEvent.press(screen.getByLabelText("Submit Item"));
+			});
+			await waitFor(() => expect(screen.getByText("Bandages")).toBeTruthy());
+			const persistedItem = await harness.household.db.query.items.findFirst({
+				where: (table, { eq }) => eq(table.name, "Bandages"),
+			});
+			expect(persistedItem?.listId).toBe(harness.scenario.lists.pharmacy.id);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("does not emit list_switched when selection persistence fails", async () => {
+		const harness = await createHomeSessionHarness();
+		jest
+			.mocked(setCurrentListSelection)
+			.mockRejectedValueOnce(new Error("storage offline"));
+
+		try {
+			await renderHomeReady(harness);
+			openSwitcher();
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+
+			await act(async () => {
+				fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
+			});
+
+			expect(setCurrentListSelection).toHaveBeenCalledTimes(1);
+			expect(listSwitchedTrackCalls()).toHaveLength(0);
+			// The sheet stays open and the current List is unchanged.
+			expect(screen.getByText("Pharmacy")).toBeTruthy();
+			expect(screen.getByText("Current")).toBeTruthy();
+
+			// The User can retap after the failure (in-flight guard released).
+			jest
+				.mocked(setCurrentListSelection)
+				.mockImplementation(async (_userId, _householdId, listId) => {
+					jest.mocked(getCurrentListSelection).mockResolvedValue(listId);
+				});
+			await act(async () => {
+				fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
+			});
+			expect(listSwitchedTrackCalls()).toHaveLength(1);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("dismisses natively and reopens from the header without persistence or analytics", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			await renderHomeReady(harness);
+			openSwitcher();
+			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
+
+			// Native dismissal (swipe down / scrim tap) reports isPresented=false.
+			act(() => {
+				mockBottomSheet.lastProps?.onIsPresentedChange(false);
+			});
+
+			expect(screen.queryByText("Hardware")).toBeNull();
+			expect(setCurrentListSelection).not.toHaveBeenCalled();
+			expect(listSwitchedTrackCalls()).toHaveLength(0);
+			expect(harness.requestSync).not.toHaveBeenCalled();
+
+			// The header opens the switcher again after dismissal.
+			openSwitcher();
+			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("retries a failed switcher load without emitting analytics", async () => {
+		const harness = await createHomeSessionHarness();
+
+		try {
+			await renderHomeReady(harness);
+			harness.failNextListListsRead();
+			openSwitcher();
+
+			await waitFor(() =>
+				expect(
+					screen.getByText("Unable to load your Lists. Please try again."),
+				).toBeTruthy(),
+			);
+			fireEvent.press(screen.getByText("Try again"));
+
+			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
+			expect(listSwitchedTrackCalls()).toHaveLength(0);
+			expect(setCurrentListSelection).not.toHaveBeenCalled();
+		} finally {
+			await harness.close();
+		}
+	});
 });
 
 type HomeSessionHarness = {
@@ -709,9 +1080,13 @@ type HomeSessionHarness = {
 	household: TestHouseholdDb;
 	scenario: PrimaryHouseholdScenario;
 	session: AuthenticatedAppSession;
+	requestSync: jest.MockedFunction<
+		AuthenticatedAppSession["services"]["sync"]["requestSync"]
+	>;
 	listReadCount: () => number;
 	listListsReadCount: () => number;
 	getListReadCount: () => number;
+	failNextListListsRead: () => void;
 	setStaleMissingListIds: (listIds: string[]) => void;
 	setStaleDeletedListIds: (listIds: string[]) => void;
 	setStaleArchivedListIds: (listIds: string[]) => void;
@@ -744,6 +1119,7 @@ async function createHomeSessionHarness(
 	let staleDeletedListIds = new Set<string>();
 	let staleArchivedListIds = new Set<string>();
 	let shouldFailNextListRead = options.failNextListRead ?? false;
+	let shouldFailNextListListsRead = false;
 	const execute = async (statement: HouseholdSqlStatement) => {
 		if (isListRead(statement)) {
 			listReadCount += 1;
@@ -769,6 +1145,10 @@ async function createHomeSessionHarness(
 			}
 		} else if (isListRead(statement)) {
 			listListsReadCount += 1;
+			if (shouldFailNextListListsRead) {
+				shouldFailNextListListsRead = false;
+				throw new Error("offline");
+			}
 		}
 		return household.client.execute(statement);
 	};
@@ -787,6 +1167,15 @@ async function createHomeSessionHarness(
 			},
 		},
 	);
+	// Mirror production wiring (resource-manager.createSessionResource): the
+	// session exposes lease-wrapped lists/items, so every Home read — including
+	// the switcher's listLists() — exercises the lease wrapper at runtime.
+	const lease = createSessionResourceLease({
+		lists: dataServices.lists,
+		items: dataServices.items,
+		sync: dataServices.sync,
+	});
+	const syncCoordinator = passiveSyncCoordinator();
 	const session: AuthenticatedAppSession = {
 		user: {
 			id: scenario.users.avery.id,
@@ -827,9 +1216,9 @@ async function createHomeSessionHarness(
 		],
 		resourceKey: options.resourceKey ?? "authenticated-app-session:seeded",
 		services: {
-			lists: dataServices.lists,
-			items: dataServices.items,
-			sync: passiveSyncCoordinator(),
+			lists: lease.services.lists,
+			items: lease.services.items,
+			sync: syncCoordinator,
 		},
 	};
 
@@ -838,9 +1227,13 @@ async function createHomeSessionHarness(
 		household,
 		scenario,
 		session,
+		requestSync: syncCoordinator.requestSync,
 		listReadCount: () => listReadCount,
 		listListsReadCount: () => listListsReadCount,
 		getListReadCount: () => getListReadCount,
+		failNextListListsRead() {
+			shouldFailNextListListsRead = true;
+		},
 		setStaleMissingListIds(listIds) {
 			staleMissingListIds = new Set(listIds);
 		},
@@ -901,11 +1294,18 @@ function staleListRow(
 	};
 }
 
-function passiveSyncCoordinator(): AuthenticatedAppSession["services"]["sync"] {
+function passiveSyncCoordinator(): AuthenticatedAppSession["services"]["sync"] & {
+	requestSync: jest.MockedFunction<
+		AuthenticatedAppSession["services"]["sync"]["requestSync"]
+	>;
+} {
 	return {
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),
-		requestSync: async () => null,
+		requestSync: jest.fn<
+			ReturnType<AuthenticatedAppSession["services"]["sync"]["requestSync"]>,
+			Parameters<AuthenticatedAppSession["services"]["sync"]["requestSync"]>
+		>(async () => null),
 	};
 }
 
