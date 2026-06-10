@@ -88,7 +88,10 @@ export function readPublicExpoConfig(
 	);
 
 	const apiBaseUrl = optionalEnv("EXPO_PUBLIC_API_BASE_URL", source);
-	if (appEnv !== "test" && !apiBaseUrl) {
+	// local builds derive the API base URL from the Expo dev server at
+	// runtime (see lib/client-api/api-base-url.ts); only deployed envs need
+	// it configured. Tests inject their own API dependencies.
+	if (appEnv !== "test" && appEnv !== "local" && !apiBaseUrl) {
 		throw new Error(
 			`Missing required env var for ${appEnv}: EXPO_PUBLIC_API_BASE_URL`,
 		);
