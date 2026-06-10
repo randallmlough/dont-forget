@@ -17,7 +17,12 @@ import { households } from "@/db/schema/directory";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
 import { tursoPlatformApi } from "./turso-platform-api";
-import { ENV_FILE, ORIGINAL_PREFIX, WORKTREE_DB_PREFIX } from "./worktree-db";
+import {
+	directoryDbNameFromUrl,
+	ENV_FILE,
+	ORIGINAL_PREFIX,
+	WORKTREE_DB_PREFIX,
+} from "./worktree-db";
 
 async function main(): Promise<void> {
 	const appEnv = loadEnvFile();
@@ -58,17 +63,6 @@ async function main(): Promise<void> {
 
 	restoreEnvValues(path.join(process.cwd(), ENV_FILE));
 	console.log(`[worktree-db] restored ${ENV_FILE} to the shared environment`);
-}
-
-function directoryDbNameFromUrl(url: string, org: string): string {
-	const subdomain = url
-		.replace(/^libsql:\/\//, "")
-		.replace(/^https:\/\//, "")
-		.split(".")[0];
-	// Subdomain is <db-name>-<org>; hosts may also carry a region segment.
-	return subdomain.endsWith(`-${org}`)
-		? subdomain.slice(0, -(org.length + 1))
-		: subdomain;
 }
 
 function restoreEnvValues(envPath: string): void {

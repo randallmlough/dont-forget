@@ -16,25 +16,29 @@ import { itemChecks, items, lists } from "@/db/schema/household";
 import type { AppEnv } from "@/lib/env";
 import { readTursoMigrationConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
+import { seedHouseholdDbNameForDirectory } from "./worktree-db";
 
 export async function seedLocalDatabases(): Promise<void> {
 	const appEnv = loadEnvFile();
 	assertLocalSeedEnvironment(appEnv);
 	const config = readTursoMigrationConfig();
+	const seedDbName =
+		seedHouseholdDbNameForDirectory(config.directoryUrl, config.org) ??
+		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName;
 	const directoryClientInstance = directoryClient();
 	const householdClientInstance = householdClient(
-		householdDbUrl(PRIMARY_HOUSEHOLD_SEED.household.tursoDbName, config.org),
+		householdDbUrl(seedDbName, config.org),
 		config.platformGroupToken,
 	);
 
 	try {
 		const directory = directoryDb(directoryClientInstance);
 		const household = householdDb(householdClientInstance);
-		await assertSeedDataDoesNotExist({ directory, household });
+		await assertSeedDataDoesNotExist({ directory, household, seedDbName });
 		const scenario = await seedPrimaryHouseholdScenario({
 			directory,
 			household,
-			householdTursoDbName: PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
+			householdTursoDbName: seedDbName,
 		});
 
 		console.log(
@@ -67,11 +71,13 @@ export function assertLocalSeedEnvironment(appEnv: AppEnv): void {
 type SeedConflictDbs = {
 	directory: ReturnType<typeof directoryDb>;
 	household: ReturnType<typeof householdDb>;
+	seedDbName: string;
 };
 
 async function assertSeedDataDoesNotExist({
 	directory,
 	household,
+	seedDbName,
 }: SeedConflictDbs): Promise<void> {
 	const userIds = [
 		PRIMARY_HOUSEHOLD_SEED.users.avery.id,
@@ -109,9 +115,7 @@ async function assertSeedDataDoesNotExist({
 				.where(
 					or(
 						inArray(households.id, [PRIMARY_HOUSEHOLD_SEED.household.id]),
-						inArray(households.tursoDbName, [
-							PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
-						]),
+						inArray(households.tursoDbName, [seedDbName]),
 					),
 				),
 			directory

@@ -19,6 +19,7 @@ import {
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
 import { assertLocalSeedEnvironment, seedLocalDatabases } from "./seed";
+import { seedHouseholdDbNameForDirectory } from "./worktree-db";
 
 const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
 
@@ -46,22 +47,22 @@ export async function reseedLocalDatabases(): Promise<void> {
 		await directoryClientInstance.close();
 	}
 
-	console.log("[seed-household] ensuring deterministic Household database");
-	await ensureSeedHouseholdDatabase(config);
-	await migrateHouseholdDb(
-		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
-		config,
+	const seedDbName =
+		seedHouseholdDbNameForDirectory(config.directoryUrl, config.org) ??
+		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName;
+	console.log(
+		`[seed-household] ensuring deterministic Household database ${seedDbName}`,
 	);
-	await resetRemoteHouseholdDatabase(
-		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
-		config,
-	);
+	await ensureSeedHouseholdDatabase(seedDbName, config);
+	await migrateHouseholdDb(seedDbName, config);
+	await resetRemoteHouseholdDatabase(seedDbName, config);
 	await seedLocalDatabases();
 }
 
 type ReseedTursoConfig = ReturnType<typeof readTursoOperatorConfig>;
 
 async function ensureSeedHouseholdDatabase(
+	tursoDbName: string,
 	config: ReseedTursoConfig,
 ): Promise<void> {
 	const response = await fetch(
@@ -73,7 +74,7 @@ async function ensureSeedHouseholdDatabase(
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				name: PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
+				name: tursoDbName,
 				group: config.group,
 			}),
 		},

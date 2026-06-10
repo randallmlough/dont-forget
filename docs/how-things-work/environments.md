@@ -63,6 +63,13 @@ into isolated Household DBs and local replicas. The minted directory token
 expires after 30 days; for a worktree that lives longer, destroy and recreate
 the worktree DB.
 
+The deterministic seed flow is worktree-scoped too: when `.env.local` points at
+a worktree directory DB, `make db-reseed`/`make db-seed` target
+`df-local-wt-<worktree>-hh-seed` instead of the shared seed Household DB, so a
+worktree carrying Household migrations can reseed without touching (or being
+poisoned by) shared local state. The seed Household row records that scoped
+name, so `make worktree-db-destroy` deletes it with the rest.
+
 Tear it down when the branch is done:
 
 ```bash
