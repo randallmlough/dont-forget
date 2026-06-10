@@ -93,7 +93,7 @@ export function HomeListSwitcher({
 						</Pressable>
 					</View>
 				) : (
-					<ScrollView alwaysBounceVertical={false}>
+					<ScrollView alwaysBounceVertical={false} style={styles.rowsScroll}>
 						{rows.summaries.map((summary) => (
 							<HomeListSwitcherRow
 								key={summary.id}
@@ -176,6 +176,12 @@ const styles = StyleSheet.create((theme) => ({
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.border,
 		backgroundColor: theme.colors.surface,
+	},
+	rowsScroll: {
+		// A ScrollView with auto height lays out at full content height and never
+		// scrolls; flex: 1 bounds it to the remaining detent space inside the
+		// sheet so overflowing rows scroll within the detent.
+		flex: 1,
 	},
 	retryLabel: {
 		...theme.typography.callout,

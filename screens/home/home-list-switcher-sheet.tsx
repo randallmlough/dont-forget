@@ -1,25 +1,22 @@
-import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
-import {
-	presentationDetents,
-	presentationDragIndicator,
-} from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement } from "react";
-import { StyleSheet } from "react-native-unistyles";
+import { Modal } from "react-native";
 
 /**
  * Native bottom-sheet shell for the Home List switcher.
  *
- * The subtree is mounted only while the switcher is open, so `isPresented` is
- * constant `true`; a native dismissal (swipe down, scrim tap) reports
- * `isPresented: false` and the owner unmounts the sheet via `onDismiss`.
+ * The subtree is mounted only while the switcher is open, so `visible` is
+ * constant `true`; a native swipe-down dismissal fires `onRequestClose` and
+ * the owner unmounts the sheet via `onDismiss`.
  *
- * Detents (medium/large) size the sheet — never fit-to-content/match-contents,
- * which misbehaves with variable row counts. The hosted React Native content
- * fills the detent and scrolls internally.
+ * `pageSheet` is a UIKit large-detent sheet (UISheetPresentationController),
+ * so the hosted React Native content gets a real bounded height and the row
+ * ScrollView scrolls natively within it.
  *
- * This is the only file that touches `@expo/ui`; if simulator QA disproves
- * `BottomSheet`/`RNHostView`, swap this file for an RN `Modal` shell with the
- * same `{ onDismiss, children }` contract.
+ * This file replaced an `@expo/ui` BottomSheet/RNHostView shell: simulator QA
+ * proved RNHostView's bidirectional size negotiation with Yoga
+ * nondeterministically settles at fit-to-content height (frame == content
+ * size), which makes the row ScrollView unscrollable and clips overflow rows.
+ * See worker-notes (attempt 2) for the live evidence.
  */
 export function HomeListSwitcherSheet({
 	onDismiss,
@@ -29,28 +26,14 @@ export function HomeListSwitcherSheet({
 	children: ReactElement;
 }) {
 	return (
-		<Host style={styles.host}>
-			<BottomSheet
-				isPresented
-				onIsPresentedChange={(isPresented) => {
-					if (!isPresented) onDismiss();
-				}}
-			>
-				<Group
-					modifiers={[
-						presentationDetents(["medium", "large"]),
-						presentationDragIndicator("visible"),
-					]}
-				>
-					<RNHostView>{children}</RNHostView>
-				</Group>
-			</BottomSheet>
-		</Host>
+		<Modal
+			visible
+			animationType="slide"
+			presentationStyle="pageSheet"
+			allowSwipeDismissal
+			onRequestClose={onDismiss}
+		>
+			{children}
+		</Modal>
 	);
 }
-
-const styles = StyleSheet.create(() => ({
-	host: {
-		position: "absolute",
-	},
-}));

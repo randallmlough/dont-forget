@@ -6,7 +6,8 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { eq } from "drizzle-orm";
-import type { PropsWithChildren, ReactElement, ReactNode } from "react";
+import type { PropsWithChildren, ReactElement } from "react";
+import { Modal } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
 import {
@@ -50,46 +51,6 @@ jest.mock("@/lib/analytics", () =>
 	jest.requireActual("@/lib/test/mocks/analytics"),
 );
 
-// The real @expo/ui swift-ui module evaluates `requireNativeModule("ExpoUI")`
-// at import time, which jest-expo cannot satisfy. The shell is native-only
-// behavior (covered by simulator QA); these pass-throughs keep the Home-owned
-// switcher logic fully testable, including native dismissal via the captured
-// BottomSheet props.
-const mockBottomSheet: {
-	lastProps: {
-		isPresented: boolean;
-		onIsPresentedChange: (isPresented: boolean) => void;
-	} | null;
-} = { lastProps: null };
-
-jest.mock("@expo/ui/swift-ui", () => {
-	const ReactActual = jest.requireActual<typeof import("react")>("react");
-	const { View } =
-		jest.requireActual<typeof import("react-native")>("react-native");
-	const passthrough = ({ children }: { children?: ReactNode }) =>
-		ReactActual.createElement(View, null, children);
-	return {
-		Host: passthrough,
-		Group: passthrough,
-		RNHostView: passthrough,
-		BottomSheet: (props: {
-			children?: ReactNode;
-			isPresented: boolean;
-			onIsPresentedChange: (isPresented: boolean) => void;
-		}) => {
-			mockBottomSheet.lastProps = props;
-			return ReactActual.createElement(View, null, props.children);
-		},
-	};
-});
-
-jest.mock("@expo/ui/swift-ui/modifiers", () => ({
-	presentationDetents: jest.fn(() => ({ $type: "presentationDetents" })),
-	presentationDragIndicator: jest.fn(() => ({
-		$type: "presentationDragIndicator",
-	})),
-}));
-
 jest.mock("@/lib/logger", () =>
 	jest
 		.requireActual<typeof import("@/lib/test/mocks/logger")>(
@@ -118,7 +79,6 @@ beforeEach(() => {
 		.mockReset()
 		.mockResolvedValue(undefined);
 	jest.mocked(track).mockClear();
-	mockBottomSheet.lastProps = null;
 });
 
 function listSwitchedTrackCalls() {
@@ -1073,9 +1033,9 @@ describe("List switcher", () => {
 			openSwitcher();
 			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
 
-			// Native dismissal (swipe down / scrim tap) reports isPresented=false.
+			// Native swipe-down dismissal fires the sheet Modal's onRequestClose.
 			act(() => {
-				mockBottomSheet.lastProps?.onIsPresentedChange(false);
+				screen.UNSAFE_getByType(Modal).props.onRequestClose();
 			});
 
 			expect(screen.queryByText("Hardware")).toBeNull();
