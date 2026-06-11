@@ -66,6 +66,7 @@ Use this checklist before accepting human- or AI-generated React, React Native, 
 - [Testing](./testing.md)
 - [Tooling](./tooling.md)
 - [TypeScript](./typescript.md)
+- [UI Composition](./ui-composition.md)
 
 ## Sources
 

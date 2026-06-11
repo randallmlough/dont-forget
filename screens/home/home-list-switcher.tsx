@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { track } from "@/lib/analytics";
 import {
 	clearCurrentListSelection,
@@ -22,7 +23,6 @@ import type {
 	RenameListResult,
 } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
-import { HomeListSwitcherSheet } from "./home-list-switcher-sheet";
 import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
 
 /**
@@ -212,8 +212,18 @@ export function HomeListSwitcher({
 		return null;
 	}
 
+	// The switcher subtree is mounted only while open and `onDismiss` unmounts
+	// it, so `isPresented` is constant `true`; unmount-on-close resets the
+	// per-open mode/rows state.
 	return (
-		<HomeListSwitcherSheet onDismiss={onDismiss}>
+		<BottomSheet
+			isPresented
+			onIsPresentedChange={(isPresented) => {
+				if (!isPresented) {
+					onDismiss();
+				}
+			}}
+		>
 			<View style={styles.sheetContent}>
 				{mode.kind === "switcher" ? (
 					<>
@@ -306,7 +316,7 @@ export function HomeListSwitcher({
 					/>
 				)}
 			</View>
-		</HomeListSwitcherSheet>
+		</BottomSheet>
 	);
 }
 
