@@ -159,7 +159,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 					}),
 				});
 				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
-					throw new Error("List not found");
+					throw new Error("List is not active");
 				}
 				const position = await insertedItemPosition(deps.store, id);
 
@@ -195,10 +195,12 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		},
 		async setItemChecked(input) {
 			try {
+				const schema = await readItemsSchema(deps.store);
 				const now = nextItemServiceTimestamp();
 				// Sourcing the upsert from the guarded Item-and-List join makes the
 				// lifecycle check and the write one statement: a deleted Item, an Item
-				// outside the List, or a deleted List all reject with rowsAffected = 0.
+				// outside the List, or a deleted/archived List (Home's active flow
+				// excludes both) all reject with rowsAffected = 0.
 				const writeResult = await deps.store.execute({
 					kind: "write",
 					sql: `
@@ -207,7 +209,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
             FROM items i
             JOIN lists l ON l.id = i.list_id
             WHERE i.id = ? AND i.list_id = ?
-              AND i.deleted_at IS NULL AND l.deleted_at IS NULL
+              AND i.deleted_at IS NULL AND ${listActiveSql(schema)}
             ON CONFLICT(item_id, user_id) DO UPDATE SET
               checked_at = excluded.checked_at,
               updated_at = excluded.updated_at
@@ -278,17 +280,34 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 
 type ItemsSchema = {
 	hasQuantity: boolean;
+	hasListArchivedAt: boolean;
 };
 
 async function readItemsSchema(
 	store: HouseholdStoreExecutor,
 ): Promise<ItemsSchema> {
-	const result = await store.execute({
+	const itemsResult = await store.execute({
 		kind: "read",
 		sql: "PRAGMA table_info(items)",
 	});
-	const columns = new Set(result.rows.map((row) => String(row.name)));
-	return { hasQuantity: columns.has("quantity") };
+	const listsResult = await store.execute({
+		kind: "read",
+		sql: "PRAGMA table_info(lists)",
+	});
+	const itemColumns = new Set(itemsResult.rows.map((row) => String(row.name)));
+	const listColumns = new Set(listsResult.rows.map((row) => String(row.name)));
+	return {
+		hasQuantity: itemColumns.has("quantity"),
+		hasListArchivedAt: listColumns.has("archived_at"),
+	};
+}
+
+// A previous local Household schema (before lists.archived_at existed) cannot
+// hold archived Lists, so the lifecycle guard narrows to the deleted check.
+function listActiveSql(schema: ItemsSchema): string {
+	return schema.hasListArchivedAt
+		? "l.deleted_at IS NULL AND l.archived_at IS NULL"
+		: "l.deleted_at IS NULL";
 }
 
 type AddItemSqlInput = {
@@ -302,9 +321,10 @@ type AddItemSqlInput = {
 	schema: ItemsSchema;
 };
 
-// Selecting FROM the guarded lists row makes the insert and the deleted-List
-// check one statement: a delete tombstone synced in after any pre-read cannot
-// land an Item under the deleted List (rowsAffected = 0 rejects above).
+// Selecting FROM the guarded lists row makes the insert and the List
+// lifecycle check one statement: a delete tombstone or archive flag synced in
+// after any pre-read cannot land an Item under a List that Home's active flow
+// excludes (rowsAffected = 0 rejects above).
 function addItemSql(schema: ItemsSchema): string {
 	return schema.hasQuantity
 		? `
@@ -334,7 +354,7 @@ function addItemSql(schema: ItemsSchema): string {
           ?,
           ?
         FROM lists l
-        WHERE l.id = ? AND l.deleted_at IS NULL
+        WHERE l.id = ? AND ${listActiveSql(schema)}
       `
 		: `
         INSERT INTO items (
@@ -361,7 +381,7 @@ function addItemSql(schema: ItemsSchema): string {
           ?,
           ?
         FROM lists l
-        WHERE l.id = ? AND l.deleted_at IS NULL
+        WHERE l.id = ? AND ${listActiveSql(schema)}
       `;
 }
 
