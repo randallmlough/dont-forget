@@ -69,6 +69,13 @@ const itemRowSchema = z.object({
 	updated_at: sqlNumberSchema,
 });
 
+// The real Household store always reports rowsAffected on writes; parse it
+// loudly so a write rejected by the List lifecycle guard (deleted or missing
+// List) surfaces as an error instead of a silent no-op.
+const writeResultSchema = z.object({
+	rowsAffected: sqlNumberSchema,
+});
+
 let lastItemServiceTimestamp: number | null = null;
 
 export function createItemService(deps: ItemServiceDeps): ItemService {
@@ -137,7 +144,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 				}
 				const now = nextItemServiceTimestamp();
 				const id = createAppId("itm", randomUuid);
-				await deps.store.execute({
+				const writeResult = await deps.store.execute({
 					kind: "write",
 					sql: addItemSql(schema),
 					args: addItemArgs({
@@ -151,6 +158,9 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 						schema,
 					}),
 				});
+				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
+					throw new Error("List is not active");
+				}
 				const position = await insertedItemPosition(deps.store, id);
 
 				const item = {
@@ -185,32 +195,36 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		},
 		async setItemChecked(input) {
 			try {
+				const schema = await readItemsSchema(deps.store);
 				const now = nextItemServiceTimestamp();
-				const itemResult = await deps.store.execute({
-					kind: "read",
-					sql: `
-            SELECT id
-            FROM items
-            WHERE id = ? AND list_id = ? AND deleted_at IS NULL
-            LIMIT 1
-          `,
-					args: [input.itemId, input.listId],
-				});
-				if (!itemResult.rows[0]) {
-					throw new Error("Item not found in List");
-				}
-
-				await deps.store.execute({
+				// Sourcing the upsert from the guarded Item-and-List join makes the
+				// lifecycle check and the write one statement: a deleted Item, an Item
+				// outside the List, or a deleted/archived List (Home's active flow
+				// excludes both) all reject with rowsAffected = 0.
+				const writeResult = await deps.store.execute({
 					kind: "write",
 					sql: `
             INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
-            VALUES (?, ?, ?, ?)
+            SELECT i.id, ?, ?, ?
+            FROM items i
+            JOIN lists l ON l.id = i.list_id
+            WHERE i.id = ? AND i.list_id = ?
+              AND i.deleted_at IS NULL AND ${listActiveSql(schema)}
             ON CONFLICT(item_id, user_id) DO UPDATE SET
               checked_at = excluded.checked_at,
               updated_at = excluded.updated_at
 					`,
-					args: [input.itemId, input.userId, input.checked ? now : null, now],
+					args: [
+						input.userId,
+						input.checked ? now : null,
+						now,
+						input.itemId,
+						input.listId,
+					],
 				});
+				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
+					throw new Error("Item not found in List");
+				}
 				analytics.track("item_checked_state_changed", {
 					household_id: deps.householdId,
 					list_id: input.listId,
@@ -266,17 +280,34 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 
 type ItemsSchema = {
 	hasQuantity: boolean;
+	hasListArchivedAt: boolean;
 };
 
 async function readItemsSchema(
 	store: HouseholdStoreExecutor,
 ): Promise<ItemsSchema> {
-	const result = await store.execute({
+	const itemsResult = await store.execute({
 		kind: "read",
 		sql: "PRAGMA table_info(items)",
 	});
-	const columns = new Set(result.rows.map((row) => String(row.name)));
-	return { hasQuantity: columns.has("quantity") };
+	const listsResult = await store.execute({
+		kind: "read",
+		sql: "PRAGMA table_info(lists)",
+	});
+	const itemColumns = new Set(itemsResult.rows.map((row) => String(row.name)));
+	const listColumns = new Set(listsResult.rows.map((row) => String(row.name)));
+	return {
+		hasQuantity: itemColumns.has("quantity"),
+		hasListArchivedAt: listColumns.has("archived_at"),
+	};
+}
+
+// A previous local Household schema (before lists.archived_at existed) cannot
+// hold archived Lists, so the lifecycle guard narrows to the deleted check.
+function listActiveSql(schema: ItemsSchema): string {
+	return schema.hasListArchivedAt
+		? "l.deleted_at IS NULL AND l.archived_at IS NULL"
+		: "l.deleted_at IS NULL";
 }
 
 type AddItemSqlInput = {
@@ -290,6 +321,10 @@ type AddItemSqlInput = {
 	schema: ItemsSchema;
 };
 
+// Selecting FROM the guarded lists row makes the insert and the List
+// lifecycle check one statement: a delete tombstone or archive flag synced in
+// after any pre-read cannot land an Item under a List that Home's active flow
+// excludes (rowsAffected = 0 rejects above).
 function addItemSql(schema: ItemsSchema): string {
 	return schema.hasQuantity
 		? `
@@ -306,16 +341,20 @@ function addItemSql(schema: ItemsSchema): string {
         )
         SELECT
           ?,
+          l.id,
           ?,
           ?,
           ?,
-          ?,
-          COALESCE(MAX(position), -1) + 1,
+          (
+            SELECT COALESCE(MAX(position), -1) + 1
+            FROM items
+            WHERE list_id = l.id AND deleted_at IS NULL
+          ),
           ?,
           ?,
           ?
-        FROM items
-        WHERE list_id = ? AND deleted_at IS NULL
+        FROM lists l
+        WHERE l.id = ? AND ${listActiveSql(schema)}
       `
 		: `
         INSERT INTO items (
@@ -330,15 +369,19 @@ function addItemSql(schema: ItemsSchema): string {
         )
         SELECT
           ?,
+          l.id,
           ?,
           ?,
-          ?,
-          COALESCE(MAX(position), -1) + 1,
+          (
+            SELECT COALESCE(MAX(position), -1) + 1
+            FROM items
+            WHERE list_id = l.id AND deleted_at IS NULL
+          ),
           ?,
           ?,
           ?
-        FROM items
-        WHERE list_id = ? AND deleted_at IS NULL
+        FROM lists l
+        WHERE l.id = ? AND ${listActiveSql(schema)}
       `;
 }
 
@@ -346,7 +389,6 @@ function addItemArgs(input: AddItemSqlInput) {
 	if (input.schema.hasQuantity) {
 		return [
 			input.id,
-			input.listId,
 			input.name,
 			input.quantity,
 			input.notes,
@@ -359,7 +401,6 @@ function addItemArgs(input: AddItemSqlInput) {
 
 	return [
 		input.id,
-		input.listId,
 		input.name,
 		input.notes,
 		input.userId,

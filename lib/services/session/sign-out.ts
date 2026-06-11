@@ -1,5 +1,6 @@
 import { reset, track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
+import { clearUserCurrentListSelections } from "@/lib/local-storage/current-list-selection";
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
 import type { ServiceResetAnalytics } from "@/lib/services/analytics";
@@ -8,6 +9,7 @@ import type {
 	AuthenticatedAppSessionActivation,
 	AuthenticatedAppSessionController,
 	AuthenticatedAppSessionDisposal,
+	AuthenticatedAppSessionStateSnapshot,
 } from "./controller";
 
 export type AuthenticatedAppSessionSignOutAuth =
@@ -31,6 +33,7 @@ export type AuthenticatedAppSessionSignOutDeps = {
 	getAuth: () => AuthenticatedAppSessionSignOutAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearSignedOutSessionData?: typeof defaultClearSignedOutSessionData;
+	clearCurrentListSelectionsForUser?: (userId: string) => Promise<void>;
 	logger?: Logger;
 	runningState?: AuthenticatedAppSessionSignOutRunningState;
 };
@@ -45,6 +48,7 @@ export function createAuthenticatedAppSessionSignOut({
 	getAuth,
 	analytics = defaultAnalytics,
 	clearSignedOutSessionData = defaultClearSignedOutSessionData,
+	clearCurrentListSelectionsForUser = clearUserCurrentListSelections,
 	logger = defaultLogger,
 	runningState,
 }: AuthenticatedAppSessionSignOutDeps): AuthenticatedAppSessionSignOut {
@@ -54,6 +58,9 @@ export function createAuthenticatedAppSessionSignOut({
 		if (state.running) return;
 		state.running = true;
 		const signOut = getAuth().signOut;
+		// Captured before dispose(): dispose publishes the idle snapshot and
+		// discards the signed-out User's Authenticated App Session.
+		const signedOutUserId = sessionUserIdFromSnapshot(controller.getSnapshot());
 
 		analytics.track("user_signed_out", {});
 		analytics.reset();
@@ -80,6 +87,17 @@ export function createAuthenticatedAppSessionSignOut({
 			logger.error("authenticated app session sign-out local cleanup failed", {
 				error: asError(error),
 			});
+		}
+
+		if (signedOutUserId) {
+			try {
+				await clearCurrentListSelectionsForUser(signedOutUserId);
+			} catch (error) {
+				logger.error(
+					"authenticated app session sign-out current list selection cleanup failed",
+					{ error: asError(error) },
+				);
+			}
 		}
 
 		try {
@@ -109,4 +127,14 @@ export function createAuthenticatedAppSessionSignOut({
 		isRunning: () => state.running,
 		run,
 	};
+}
+
+function sessionUserIdFromSnapshot(
+	snapshot: AuthenticatedAppSessionStateSnapshot,
+): string | null {
+	if (snapshot.status === "ready") return snapshot.session.user.id;
+	if (snapshot.status === "loading" || snapshot.status === "error") {
+		return snapshot.previous?.user.id ?? null;
+	}
+	return null;
 }

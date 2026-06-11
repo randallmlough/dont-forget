@@ -51,6 +51,7 @@ export type SessionDataServicesFixture = SessionDataServices;
 type SessionDataServicesFixtureOverrides = Partial<SessionDataServices> & {
 	addItem?: jest.Mock;
 	setItemChecked?: jest.Mock;
+	createList?: jest.Mock;
 };
 
 export function sessionDataServicesFixture(
@@ -61,7 +62,9 @@ export function sessionDataServicesFixture(
 		overrides.setItemChecked ?? jest.fn().mockResolvedValue(undefined);
 
 	return {
-		lists: overrides.lists ?? controllerListServiceBoundary(),
+		lists:
+			overrides.lists ??
+			controllerListServiceBoundary({ createList: overrides.createList }),
 		items:
 			overrides.items ??
 			controllerItemServiceBoundary({ addItem, setItemChecked }),
@@ -152,12 +155,46 @@ function pickCacheOverrides(
 	};
 }
 
-function controllerListServiceBoundary(): ListService {
+function controllerListServiceBoundary(
+	overrides: { createList?: jest.Mock } = {},
+): ListService {
 	return {
+		createList:
+			overrides.createList ??
+			jest
+				.fn<
+					ReturnType<ListService["createList"]>,
+					Parameters<ListService["createList"]>
+				>()
+				.mockRejectedValue(
+					new Error("Controller tests must not write List data"),
+				),
 		getList: jest
 			.fn<
 				ReturnType<ListService["getList"]>,
 				Parameters<ListService["getList"]>
+			>()
+			.mockRejectedValue(new Error("Controller tests must not read List data")),
+		renameList: jest
+			.fn<
+				ReturnType<ListService["renameList"]>,
+				Parameters<ListService["renameList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not write List data"),
+			),
+		deleteList: jest
+			.fn<
+				ReturnType<ListService["deleteList"]>,
+				Parameters<ListService["deleteList"]>
+			>()
+			.mockRejectedValue(
+				new Error("Controller tests must not write List data"),
+			),
+		listLists: jest
+			.fn<
+				ReturnType<ListService["listLists"]>,
+				Parameters<ListService["listLists"]>
 			>()
 			.mockRejectedValue(new Error("Controller tests must not read List data")),
 	};

@@ -40,6 +40,26 @@ export type EventMap = {
 		user_id: string;
 		checked: boolean;
 	};
+	list_created: {
+		household_id: string;
+		list_id: string;
+		user_id: string;
+	};
+	list_renamed: {
+		household_id: string;
+		list_id: string;
+		user_id: string;
+	};
+	list_deleted: {
+		household_id: string;
+		list_id: string;
+		user_id: string;
+	};
+	list_switched: {
+		household_id: string;
+		list_id: string;
+		user_id: string;
+	};
 	invitation_accepted: {
 		household_id: string;
 		user_id: string;

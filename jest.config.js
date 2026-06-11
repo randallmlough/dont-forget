@@ -13,7 +13,9 @@ module.exports = {
 		"^@/(.*)$": "<rootDir>/$1",
 	},
 	transformIgnorePatterns: [
-		"node_modules/(?!(?:.pnpm/)?((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|expo-router|@expo-google-fonts/.*|@react-navigation/.*|react-native-svg|@clerk/.*))",
+		// pnpm encodes the scope separator as `+` inside `.pnpm` (e.g. `@expo+ui@...`),
+		// so scoped allowlist entries must accept both `/` and `+`.
+		"node_modules/(?!(?:.pnpm/)?((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?[/+].*|expo-router|@expo-google-fonts[/+].*|@react-navigation[/+].*|react-native-svg|@clerk[/+].*))",
 	],
 	collectCoverageFrom: [
 		"app/**/*.{ts,tsx}",

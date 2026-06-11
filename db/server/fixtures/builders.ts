@@ -83,7 +83,13 @@ export const PRIMARY_HOUSEHOLD_SEED = {
 		blake: { id: "hjcu_blake" },
 		cameron: { id: "hjcu_cameron" },
 	},
-	list: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
+	lists: {
+		groceries: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
+		hardware: { id: "lst_seed_hardware", name: "Hardware" },
+		pharmacy: { id: "lst_seed_pharmacy", name: "Pharmacy" },
+		archived: { id: "lst_seed_holiday", name: "Holiday Dinner" },
+		deleted: { id: "lst_seed_camping", name: "Camping Trip" },
+	},
 	items: {
 		unchecked: { id: "itm_seed_milk", name: "Milk" },
 		checkedByAvery: { id: "itm_seed_eggs", name: "Eggs" },
@@ -209,11 +215,12 @@ export function householdJoinCodeAttemptFixture(
 export function listFixture(overrides: Partial<NewList> = {}): NewList {
 	const now = PRIMARY_HOUSEHOLD_SEED.now;
 	return {
-		id: PRIMARY_HOUSEHOLD_SEED.list.id,
-		name: PRIMARY_HOUSEHOLD_SEED.list.name,
+		id: PRIMARY_HOUSEHOLD_SEED.lists.groceries.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.groceries.name,
 		createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
 		createdAt: now,
 		updatedAt: now,
+		archivedAt: null,
 		deletedAt: null,
 		...overrides,
 	};
@@ -223,7 +230,7 @@ export function itemFixture(overrides: Partial<NewItem> = {}): NewItem {
 	const now = PRIMARY_HOUSEHOLD_SEED.now;
 	return {
 		id: PRIMARY_HOUSEHOLD_SEED.items.unchecked.id,
-		listId: PRIMARY_HOUSEHOLD_SEED.list.id,
+		listId: PRIMARY_HOUSEHOLD_SEED.lists.groceries.id,
 		name: PRIMARY_HOUSEHOLD_SEED.items.unchecked.name,
 		notes: null,
 		position: 0,

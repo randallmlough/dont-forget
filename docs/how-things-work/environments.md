@@ -76,6 +76,13 @@ into isolated Household DBs and local replicas. The minted directory token
 expires after 30 days; for a worktree that lives longer, destroy and recreate
 the worktree DB.
 
+The deterministic seed flow is worktree-scoped too: when `.env.local` points at
+a worktree directory DB, `make db-reseed`/`make db-seed` target
+`df-local-wt-<worktree>-hh-seed` instead of the shared seed Household DB, so a
+worktree carrying Household migrations can reseed without touching (or being
+poisoned by) shared local state. The seed Household row records that scoped
+name, so `make worktree-db-destroy` deletes it with the rest.
+
 Tear it down when the branch is done:
 
 ```bash
@@ -104,9 +111,9 @@ PostHog analytics and logs are tagged with `APP_ENV`. Do not derive analytics/lo
 
 ## API Hosts
 
-App builds point at one API base URL for their selected environment. Local can use a simulator-safe local URL or tunnel; staging and production use separate hosted API deployments/domains.
+App builds point at one API base URL for their selected environment. Local derives it at runtime from the Expo dev server that served the bundle (see "Local API base URL is derived, not configured" above); staging and production use separate hosted API deployments/domains.
 
-`EXPO_PUBLIC_API_BASE_URL` is required for `local`, `staging`, and `production` app builds. `test` may omit it because tests mock app/API boundaries directly.
+`EXPO_PUBLIC_API_BASE_URL` is required for `staging` and `production` app builds. `local` ignores it in favor of the dev-server derivation, and `test` may omit it because tests mock app/API boundaries directly.
 
 ## iOS App Identity
 

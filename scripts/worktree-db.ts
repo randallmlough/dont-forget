@@ -91,6 +91,41 @@ export function worktreeDirectoryDbName(worktreePath: string): string {
 	return `${WORKTREE_DB_PREFIX}${slug.slice(0, maxSlug)}-dir`;
 }
 
+export function directoryDbNameFromUrl(url: string, org: string): string {
+	const subdomain = url
+		.replace(/^libsql:\/\//, "")
+		.replace(/^https:\/\//, "")
+		.split(".")[0];
+	// Subdomain is <db-name>-<org>; hosts may also carry a region segment.
+	return subdomain.endsWith(`-${org}`)
+		? subdomain.slice(0, -(org.length + 1))
+		: subdomain;
+}
+
+/**
+ * The deterministic seed Household DB must be worktree-scoped alongside the
+ * directory DB: a fixed shared name would let parallel worktrees apply
+ * divergent Household migrations to one DB, and `worktree-db-destroy` would
+ * delete the shared seed DB out from under other checkouts. Returns null when
+ * the directory DB is not a worktree DB (shared environment keeps the fixture
+ * default).
+ */
+export function seedHouseholdDbNameForDirectory(
+	directoryUrl: string,
+	org: string,
+): string | null {
+	const directoryDbName = directoryDbNameFromUrl(directoryUrl, org);
+	if (
+		!directoryDbName.startsWith(WORKTREE_DB_PREFIX) ||
+		!directoryDbName.endsWith("-dir")
+	) {
+		return null;
+	}
+	const base = directoryDbName.slice(0, -"-dir".length);
+	// Turso database names are limited to 51 characters.
+	return `${base.slice(0, 51 - "-hh-seed".length)}-hh-seed`;
+}
+
 function materializeEnvFile(envPath: string): void {
 	const stats = lstatSync(envPath, { throwIfNoEntry: false });
 	if (!stats) {

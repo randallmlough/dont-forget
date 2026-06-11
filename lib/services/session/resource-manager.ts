@@ -149,6 +149,7 @@ export function createSessionResourceManager(
 			});
 			const openedDataServices = await createDataServices({
 				householdId: session.activeHousehold.id,
+				userId: session.user.id,
 				database: session.householdDatabase,
 				logger: householdLogger,
 			});

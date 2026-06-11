@@ -178,11 +178,41 @@ export async function seedPrimaryHouseholdScenario(
 		createdAt: now + 2,
 	});
 	const groceries = listFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.list.id,
-		name: PRIMARY_HOUSEHOLD_SEED.list.name,
+		id: PRIMARY_HOUSEHOLD_SEED.lists.groceries.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.groceries.name,
 		createdByUserId: avery.id,
 		createdAt: now,
 		updatedAt: now,
+	});
+	const hardware = listFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.lists.hardware.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.hardware.name,
+		createdByUserId: avery.id,
+		createdAt: now + 1,
+		updatedAt: now + 1,
+	});
+	const pharmacy = listFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.lists.pharmacy.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.pharmacy.name,
+		createdByUserId: blake.id,
+		createdAt: now + 2,
+		updatedAt: now + 2,
+	});
+	const archivedList = listFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.lists.archived.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.archived.name,
+		createdByUserId: avery.id,
+		createdAt: now + 3,
+		updatedAt: now + 60,
+		archivedAt: now + 60,
+	});
+	const deletedList = listFixture({
+		id: PRIMARY_HOUSEHOLD_SEED.lists.deleted.id,
+		name: PRIMARY_HOUSEHOLD_SEED.lists.deleted.name,
+		createdByUserId: avery.id,
+		createdAt: now + 4,
+		updatedAt: now + 70,
+		deletedAt: now + 70,
 	});
 	const uncheckedItem = itemFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.items.unchecked.id,
@@ -249,7 +279,9 @@ export async function seedPrimaryHouseholdScenario(
 			.where(eq(users.id, blake.id));
 	});
 	await input.household.transaction(async (tx) => {
-		await tx.insert(lists).values(groceries);
+		await tx
+			.insert(lists)
+			.values([groceries, hardware, pharmacy, archivedList, deletedList]);
 		await tx
 			.insert(items)
 			.values([
@@ -270,7 +302,13 @@ export async function seedPrimaryHouseholdScenario(
 		members: { avery: averyMembership, blake: blakeMembership },
 		memberships: { avery: averyMembership, blake: blakeMembership },
 		joinCodes: { active: joinCode },
-		lists: { groceries },
+		lists: {
+			groceries,
+			hardware,
+			pharmacy,
+			archived: archivedList,
+			deleted: deletedList,
+		},
 		items: {
 			unchecked: uncheckedItem,
 			checkedByAvery: checkedByAveryItem,
