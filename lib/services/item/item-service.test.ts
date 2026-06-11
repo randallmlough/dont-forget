@@ -449,7 +449,7 @@ describe("createItemService", () => {
 			if (statement.sql.includes("SELECT position FROM items")) {
 				return { rows: [{ position: 4 }] };
 			}
-			return { rows: [] };
+			return { rows: [], rowsAffected: 1 };
 		});
 		const service = createItemService({
 			householdId: "hh_avery",
@@ -475,6 +475,78 @@ describe("createItemService", () => {
 		expect(firstSql).toContain("INSERT INTO items");
 		expect(firstSql).toContain("COALESCE(MAX(position), -1) + 1");
 		expect(firstSql).not.toMatch(/^\s*SELECT COALESCE\(MAX\(position\)/);
+	});
+
+	it("rejects adding Items to a deleted List", async () => {
+		const household = await createTestHouseholdDb();
+		const analytics = createMockAnalytics();
+
+		try {
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+					deletedAt: 100,
+				}),
+			);
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics,
+			});
+
+			await expect(
+				service.addItem({
+					listId: "lst_weekend",
+					userId: "usr_avery",
+					name: "Milk",
+					quantity: null,
+					notes: null,
+				}),
+			).rejects.toThrow("List not found");
+
+			const rows = await household.client.execute({
+				sql: "SELECT id FROM items",
+			});
+			expect(rows.rows).toEqual([]);
+			expect(analytics.track).not.toHaveBeenCalled();
+		} finally {
+			await household.close();
+		}
+	});
+
+	it("rejects adding Items to a missing List", async () => {
+		const household = await createTestHouseholdDb();
+		const analytics = createMockAnalytics();
+
+		try {
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics,
+			});
+
+			await expect(
+				service.addItem({
+					listId: "lst_missing",
+					userId: "usr_avery",
+					name: "Milk",
+					quantity: null,
+					notes: null,
+				}),
+			).rejects.toThrow("List not found");
+
+			const rows = await household.client.execute({
+				sql: "SELECT id FROM items",
+			});
+			expect(rows.rows).toEqual([]);
+			expect(analytics.track).not.toHaveBeenCalled();
+		} finally {
+			await household.close();
+		}
 	});
 
 	it("rejects empty Item names before writing", async () => {
@@ -621,6 +693,55 @@ describe("createItemService", () => {
 			await expect(
 				service.setItemChecked({
 					listId: "lst_hardware",
+					itemId: "itm_milk",
+					userId: "usr_avery",
+					checked: true,
+				}),
+			).rejects.toThrow("Item not found in List");
+
+			await expect(
+				household.db.query.itemChecks.findFirst({
+					where: (table, { eq }) => eq(table.itemId, "itm_milk"),
+				}),
+			).resolves.toBeUndefined();
+			expect(analytics.track).not.toHaveBeenCalled();
+		} finally {
+			await household.close();
+		}
+	});
+
+	it("rejects checked state changes when the List is deleted", async () => {
+		const household = await createTestHouseholdDb();
+		const analytics = createMockAnalytics();
+
+		try {
+			await household.db.insert(lists).values(
+				listFixture({
+					id: "lst_weekend",
+					name: "Weekend Groceries",
+					createdByUserId: "usr_avery",
+					deletedAt: 100,
+				}),
+			);
+			await household.db.insert(items).values(
+				itemFixture({
+					id: "itm_milk",
+					listId: "lst_weekend",
+					name: "Milk",
+					position: 0,
+					createdByUserId: "usr_avery",
+				}),
+			);
+			const service = createItemService({
+				householdId: "hh_avery",
+				store: { execute: household.client.execute.bind(household.client) },
+				logger: testLogger,
+				analytics,
+			});
+
+			await expect(
+				service.setItemChecked({
+					listId: "lst_weekend",
 					itemId: "itm_milk",
 					userId: "usr_avery",
 					checked: true,
