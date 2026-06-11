@@ -179,6 +179,18 @@ describe("SignUpScreen", () => {
 		expect(Alert.alert).not.toHaveBeenCalled();
 	});
 
+	it("alerts when the verification code is empty", async () => {
+		await moveToVerification();
+
+		fireEvent.press(screen.getByText("Verify email"));
+
+		expect(Alert.alert).toHaveBeenCalledWith(
+			"Enter the code",
+			"Check your email for the verification code.",
+		);
+		expect(clerkMocks.attemptEmailAddressVerification).not.toHaveBeenCalled();
+	});
+
 	it("alerts when verification does not create a session", async () => {
 		await moveToVerification();
 		clerkMocks.attemptEmailAddressVerification.mockResolvedValue({
