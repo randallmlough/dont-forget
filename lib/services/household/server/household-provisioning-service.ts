@@ -7,7 +7,7 @@ import {
 import { migrateHouseholdDb } from "@/db/server/household-migrations";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import { readTursoOperatorConfig } from "@/lib/env";
-import { createTursoPlatformClient } from "./turso-platform";
+import { createTursoPlatformClient } from "@/lib/server/turso-platform";
 
 export type HouseholdDatabaseProvisioningResult = {
 	url: string;

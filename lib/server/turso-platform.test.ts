@@ -2,7 +2,7 @@ import type { TursoOperatorConfig } from "@/lib/env";
 import {
 	createTursoPlatformClient,
 	type TursoPlatformError,
-} from "./turso-platform";
+} from "@/lib/server/turso-platform";
 
 describe("createTursoPlatformClient", () => {
 	it("creates or reuses a database and normalizes its URL", async () => {
@@ -105,6 +105,41 @@ describe("createTursoPlatformClient", () => {
 		await expect(client.getDatabase("db-one")).rejects.toThrow(
 			"Turso Platform database response was malformed",
 		);
+	});
+
+	it("deletes databases", async () => {
+		const fetchMock = jest.fn().mockResolvedValueOnce(response(204, null));
+		const client = createTursoPlatformClient(config, fetchMock as typeof fetch);
+
+		await expect(client.deleteDatabase("db-one")).resolves.toBeUndefined();
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://api.turso.tech/v1/organizations/acme/databases/db-one",
+			expect.objectContaining({ method: "DELETE" }),
+		);
+	});
+
+	it("tolerates deleting an absent database", async () => {
+		const fetchMock = jest
+			.fn()
+			.mockResolvedValueOnce(response(404, { error: "not found" }, false));
+		const client = createTursoPlatformClient(config, fetchMock as typeof fetch);
+
+		await expect(client.deleteDatabase("db-one")).resolves.toBeUndefined();
+	});
+
+	it("throws platform errors when database deletion fails", async () => {
+		const fetchMock = jest
+			.fn()
+			.mockResolvedValueOnce(response(500, { error: "delete failed" }, false));
+		const client = createTursoPlatformClient(config, fetchMock as typeof fetch);
+
+		await expect(client.deleteDatabase("db-one")).rejects.toMatchObject({
+			name: "TursoPlatformError",
+			status: 500,
+			message:
+				'Turso Platform request failed with 500: {"error":"delete failed"}',
+			details: '{"error":"delete failed"}',
+		} satisfies Partial<TursoPlatformError>);
 	});
 });
 

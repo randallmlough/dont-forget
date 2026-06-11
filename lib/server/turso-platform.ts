@@ -27,6 +27,7 @@ export type TursoPlatformClient = {
 		databaseName: string,
 		expiration: string,
 	) => Promise<string>;
+	deleteDatabase: (databaseName: string) => Promise<void>;
 };
 
 const recordSchema = z.record(z.string(), z.unknown());
@@ -51,7 +52,11 @@ export function createTursoPlatformClient(
 ): TursoPlatformClient {
 	const baseUrl = `https://api.turso.tech/v1/organizations/${config.org}`;
 
-	async function request(path: string, init?: RequestInit): Promise<unknown> {
+	async function request(
+		path: string,
+		init?: RequestInit,
+		tolerateStatus: number[] = [],
+	): Promise<unknown> {
 		const response = await fetchFn(`${baseUrl}${path}`, {
 			...init,
 			headers: {
@@ -61,7 +66,7 @@ export function createTursoPlatformClient(
 			},
 		});
 
-		if (!response.ok) {
+		if (!response.ok && !tolerateStatus.includes(response.status)) {
 			const details = await response.text().catch(() => "");
 			throw new TursoPlatformError(
 				[
@@ -75,22 +80,19 @@ export function createTursoPlatformClient(
 			);
 		}
 
-		if (response.status === 204) return null;
+		if (!response.ok || response.status === 204) return null;
 		return response.json();
 	}
 
 	async function createDatabase(databaseName: string): Promise<void> {
-		try {
-			await request("/databases", {
+		await request(
+			"/databases",
+			{
 				method: "POST",
 				body: JSON.stringify({ name: databaseName, group: config.group }),
-			});
-		} catch (error) {
-			if (error instanceof TursoPlatformError && error.status === 409) {
-				return;
-			}
-			throw error;
-		}
+			},
+			[409],
+		);
 	}
 
 	async function getDatabase(databaseName: string): Promise<TursoDatabase> {
@@ -119,6 +121,9 @@ export function createTursoPlatformClient(
 			}
 
 			return token;
+		},
+		async deleteDatabase(databaseName: string) {
+			await request(`/databases/${databaseName}`, { method: "DELETE" }, [404]);
 		},
 	};
 }

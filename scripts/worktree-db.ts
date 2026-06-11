@@ -24,7 +24,7 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
-import { tursoPlatformApi } from "./turso-platform-api";
+import { createTursoPlatformClient } from "../lib/server/turso-platform";
 
 const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
 const TOKEN_EXPIRATION = "30d";
@@ -50,9 +50,12 @@ async function main(): Promise<void> {
 	materializeEnvFile(envPath);
 
 	console.log(`[worktree-db] creating ${dbName} in group ${config.group}`);
-	const platform = tursoPlatformApi(config);
-	const database = await platform.ensureDatabase(dbName, config.group);
-	const authToken = await platform.createAuthToken(dbName, TOKEN_EXPIRATION);
+	const platform = createTursoPlatformClient(config);
+	const database = await platform.ensureDatabase(dbName);
+	const authToken = await platform.createDatabaseAuthToken(
+		dbName,
+		TOKEN_EXPIRATION,
+	);
 
 	console.log(`[worktree-db] migrating ${database.url}`);
 	const client = createClient({ url: database.url, authToken });

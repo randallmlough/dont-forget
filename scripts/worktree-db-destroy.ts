@@ -16,7 +16,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { households } from "@/db/schema/directory";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
-import { tursoPlatformApi } from "./turso-platform-api";
+import { createTursoPlatformClient } from "../lib/server/turso-platform";
 import {
 	directoryDbNameFromUrl,
 	ENV_FILE,
@@ -37,7 +37,7 @@ async function main(): Promise<void> {
 		);
 	}
 
-	const platform = tursoPlatformApi(config);
+	const platform = createTursoPlatformClient(config);
 	const client = createClient({
 		url: config.directoryUrl,
 		authToken: config.directoryAuthToken,
