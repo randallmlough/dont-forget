@@ -21,10 +21,10 @@ import path from "node:path";
 import { createClient } from "@libsql/client/http";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
+import { createTursoPlatformClient } from "@/db/server/turso-platform";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
-import { createTursoPlatformClient } from "../lib/server/turso-platform";
 
 const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
 const TOKEN_EXPIRATION = "30d";

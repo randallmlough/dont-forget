@@ -80,7 +80,6 @@ lib/services/household/
   server/
     household-provisioning-service.ts
     household-service.ts
-    turso-platform.ts
 
 lib/services/list/list-service.ts
 lib/services/item/item-service.ts
@@ -93,6 +92,7 @@ As part of that slice:
 - Move app-session bootstrap/cache, resource composition, resource leasing, and server `/api/bootstrap` orchestration into `lib/services/session/`.
 - Keep List and Item data loading route-owned by explicit List ID after the Authenticated App Session exists.
 - Keep Household provisioning and Household domain server services under `lib/services/household/server/`.
+- Keep Turso Platform API infrastructure under `db/server/`, not the Household service layer.
 
 [ADR-0012](0012-authenticated-app-session-controller.md) supersedes the Home-owned resource ownership from the initial Home/List/Item slice. Authenticated App Session resource composition belongs to `lib/services/session/controller.ts`, with screens borrowing provider-owned session state and actions.
 

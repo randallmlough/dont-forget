@@ -14,9 +14,9 @@ import { createClient } from "@libsql/client/http";
 import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { households } from "@/db/schema/directory";
+import { createTursoPlatformClient } from "@/db/server/turso-platform";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
-import { createTursoPlatformClient } from "../lib/server/turso-platform";
 import {
 	directoryDbNameFromUrl,
 	ENV_FILE,
