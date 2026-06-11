@@ -89,13 +89,18 @@ export function useHomeCurrentList(session: AuthenticatedAppSession): {
 	}, [failed, loadKey, session]);
 
 	return {
-		state: homeCurrentListStateFromResource(resource, loadKey, session),
+		state: homeCurrentListStateFromResource(resource, loadKey),
 		retry: () => dispatch({ type: "retryRequested", loadKey }),
 	};
 }
 
 type HomeCurrentListResolution =
-	| { status: "active"; listId: string; initialList: ActiveListInitialState }
+	| {
+			status: "active";
+			listId: string;
+			initialList: ActiveListInitialState;
+			actions: HomeCurrentListActions;
+	  }
 	| { status: "zeroActive" };
 
 type HomeCurrentListResource =
@@ -165,7 +170,6 @@ function homeCurrentListReducer(
 function homeCurrentListStateFromResource(
 	resource: HomeCurrentListResource,
 	loadKey: string,
-	session: AuthenticatedAppSession,
 ): HomeCurrentListState {
 	if (resource.loadKey !== loadKey || resource.status === "loading") {
 		return { status: "loading" };
@@ -183,7 +187,7 @@ function homeCurrentListStateFromResource(
 		status: "active",
 		listId: resource.resolution.listId,
 		initialList: resource.resolution.initialList,
-		actions: homeCurrentListActions(session, resource.resolution.listId),
+		actions: resource.resolution.actions,
 	};
 }
 
@@ -234,7 +238,12 @@ async function resolveCurrentList(
 			if (clearStoredSelection) {
 				await clearCurrentListSelection(userId, householdId);
 			}
-			return { status: "active", listId, initialList };
+			return {
+				status: "active",
+				listId,
+				initialList,
+				actions: homeCurrentListActions(session, listId),
+			};
 		}
 		// Typed missing/deleted lifecycle result: stale candidate, never an error.
 		if (listId === storedListId) {
