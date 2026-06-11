@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import * as Clipboard from "expo-clipboard";
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
 	type CreateInvitationResponse,
 	createHouseholdApiClient,
@@ -87,26 +87,36 @@ export function useHouseholdSettings(
 	clientProp?: HouseholdApiClient,
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
+	// Latest-ref pattern: the resolved client stays stable across getToken
+	// identity changes (so the load effect does not refetch) while always
+	// calling the most recent token callback. Resolution happens in effects
+	// and event handlers because react-hooks/refs forbids creating the
+	// token-forwarding closure during render.
 	const getTokenRef = useRef(getToken);
-	getTokenRef.current = getToken;
-	const client = useMemo(
-		() =>
-			clientProp ??
-			createHouseholdApiClient({
-				getToken: () => getTokenRef.current(),
-			}),
-		[clientProp],
-	);
+	const defaultClientRef = useRef<HouseholdApiClient | null>(null);
+	useEffect(() => {
+		getTokenRef.current = getToken;
+	}, [getToken]);
+	const resolveClient = useCallback((): HouseholdApiClient => {
+		if (clientProp) return clientProp;
+		defaultClientRef.current ??= createHouseholdApiClient({
+			getToken: () => getTokenRef.current(),
+		});
+		return defaultClientRef.current;
+	}, [clientProp]);
 	const loadKey = `${session.resourceKey}:${session.activeHousehold.id}`;
 	const [resource, dispatch] = useReducer(reducer, loadKey, initialResource);
 	const resourceRef = useRef(resource);
 	const operationInFlightRef = useRef(false);
-	resourceRef.current = resource;
+	useEffect(() => {
+		resourceRef.current = resource;
+	}, [resource]);
 	const loadAttempt = resource.loadKey === loadKey ? resource.attempt : 0;
 	const householdId = session.activeHousehold.id;
 
 	useEffect(() => {
 		let cancelled = false;
+		const client = resolveClient();
 		dispatch({ type: "loadStarted", loadKey, attempt: loadAttempt });
 
 		Promise.all([
@@ -140,7 +150,7 @@ export function useHouseholdSettings(
 		return () => {
 			cancelled = true;
 		};
-	}, [client, householdId, loadAttempt, loadKey]);
+	}, [householdId, loadAttempt, loadKey, resolveClient]);
 
 	async function createInvitation(email: string) {
 		const normalizedEmail = normalizeInvitationEmailInput(email);
@@ -154,6 +164,7 @@ export function useHouseholdSettings(
 		}
 		if (!startOperation({ status: "creatingInvitation" })) return;
 		try {
+			const client = resolveClient();
 			const response = await client.createInvitation({
 				householdId,
 				email: normalizedEmail,
@@ -170,7 +181,7 @@ export function useHouseholdSettings(
 	async function revokeInvitation(invitationId: string) {
 		if (!startOperation({ status: "revokingInvitation", invitationId })) return;
 		try {
-			await client.revokeInvitation(invitationId);
+			await resolveClient().revokeInvitation(invitationId);
 			dispatch({ type: "invitationRevoked", loadKey, invitationId });
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
@@ -182,7 +193,7 @@ export function useHouseholdSettings(
 	async function regenerateJoinCode() {
 		if (!startOperation({ status: "regeneratingJoinCode" })) return;
 		try {
-			const joinCode = await client.regenerateJoinCode(householdId);
+			const joinCode = await resolveClient().regenerateJoinCode(householdId);
 			dispatch({ type: "joinCodeChanged", loadKey, joinCode });
 			dispatch({
 				type: "notice",
@@ -199,7 +210,7 @@ export function useHouseholdSettings(
 	async function setJoinCodeEnabled(enabled: boolean) {
 		if (!startOperation({ status: "settingJoinCodeEnabled" })) return;
 		try {
-			const joinCode = await client.setJoinCodeEnabled({
+			const joinCode = await resolveClient().setJoinCodeEnabled({
 				householdId,
 				enabled,
 			});

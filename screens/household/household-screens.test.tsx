@@ -65,10 +65,10 @@ beforeEach(() => {
 });
 
 describe("HouseholdSettingsView", () => {
-	it("renders Members, pending Invitations, and enabled Household Join Code controls", () => {
+	it("renders Members, pending Invitations, and enabled Household Join Code controls", async () => {
 		const actions = settingsActions();
 
-		render(
+		await render(
 			<HouseholdSettingsView
 				session={sessionFixture()}
 				state={{
@@ -111,7 +111,7 @@ describe("HouseholdSettingsView", () => {
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 		expect(screen.getByText("pending@example.com")).toBeTruthy();
 		expect(screen.getByText("ABCD EFGH")).toBeTruthy();
-		fireEvent.press(screen.getByText("Copy link"));
+		await fireEvent.press(screen.getByText("Copy link"));
 		expect(actions.copyText).toHaveBeenCalledWith(
 			"https://app.example/households/join?code=ABCDEFGH",
 			"Household join link copied.",
@@ -144,7 +144,7 @@ describe("useHouseholdSettings", () => {
 			return <TextNode>{state.status}</TextNode>;
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 
 		await waitFor(() => expect(screen.getByText("ready")).toBeTruthy());
 		expect(fetcher).toHaveBeenCalledTimes(3);
@@ -195,10 +195,10 @@ describe("useHouseholdSettings", () => {
 		}
 
 		const cachedSession = sessionFixture();
-		const { rerender } = render(<Harness session={cachedSession} />);
+		const { rerender } = await render(<Harness session={cachedSession} />);
 		expect(screen.getByText("loading")).toBeTruthy();
 
-		rerender(
+		await rerender(
 			<Harness
 				session={{
 					...cachedSession,
@@ -254,12 +254,12 @@ describe("useHouseholdSettings", () => {
 			);
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 		await screen.findByText("idle");
 
-		fireEvent.press(screen.getByText("Create"));
+		await fireEvent.press(screen.getByText("Create"));
 		await screen.findByText("creatingInvitation");
-		fireEvent.press(screen.getByText("Regenerate"));
+		await fireEvent.press(screen.getByText("Regenerate"));
 
 		expect(client.regenerateJoinCode).not.toHaveBeenCalled();
 		await act(async () => {
@@ -326,10 +326,10 @@ describe("useHouseholdSettings", () => {
 			);
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 		await screen.findByText("Create");
 
-		fireEvent.press(screen.getByText("Create"));
+		await fireEvent.press(screen.getByText("Create"));
 
 		await screen.findByText("Enter a valid email address.");
 		expect(client.createInvitation).not.toHaveBeenCalled();
@@ -337,19 +337,19 @@ describe("useHouseholdSettings", () => {
 });
 
 describe("HouseholdSwitch", () => {
-	it("renders loading state while the Authenticated App Session is preparing", () => {
+	it("renders loading state while the Authenticated App Session is preparing", async () => {
 		mockAuthenticatedAppSession = {
 			...mockAuthenticatedAppSession,
 			state: { status: "loading" },
 			session: null,
 		};
 
-		render(<HouseholdSwitchScreen />);
+		await render(<HouseholdSwitchScreen />);
 
 		expect(screen.getByText("Preparing your Household")).toBeTruthy();
 	});
 
-	it("renders retryable error state when the Authenticated App Session fails", () => {
+	it("renders retryable error state when the Authenticated App Session fails", async () => {
 		mockAuthenticatedAppSession = {
 			...mockAuthenticatedAppSession,
 			state: {
@@ -359,16 +359,16 @@ describe("HouseholdSwitch", () => {
 			session: null,
 		};
 
-		render(<HouseholdSwitchScreen />);
+		await render(<HouseholdSwitchScreen />);
 
 		expect(screen.getByText("Household unavailable")).toBeTruthy();
 		expect(screen.getByText("Unable to prepare your Household.")).toBeTruthy();
-		fireEvent.press(screen.getByText("Try again"));
+		await fireEvent.press(screen.getByText("Try again"));
 		expect(mockRetrySession).toHaveBeenCalledTimes(1);
 	});
 
-	it("renders the active Household badge", () => {
-		render(
+	it("renders the active Household badge", async () => {
+		await render(
 			<HouseholdSwitchView
 				session={sessionFixture()}
 				state={{ code: "", notice: null, operation: { status: "idle" } }}
@@ -407,8 +407,8 @@ describe("HouseholdSwitch", () => {
 			);
 		}
 
-		render(<Harness />);
-		fireEvent.press(screen.getByText("Switch"));
+		await render(<Harness />);
+		await fireEvent.press(screen.getByText("Switch"));
 
 		await waitFor(() =>
 			expect(
@@ -446,8 +446,8 @@ describe("HouseholdSwitch", () => {
 			);
 		}
 
-		render(<Harness />);
-		fireEvent.press(screen.getByText("Switch"));
+		await render(<Harness />);
+		await fireEvent.press(screen.getByText("Switch"));
 
 		await waitFor(() =>
 			expect(
@@ -487,20 +487,20 @@ describe("HouseholdSwitch", () => {
 			);
 		}
 
-		render(<Harness />);
-		fireEvent.press(screen.getByText("Set code"));
-		fireEvent.press(screen.getByText("Switch"));
+		await render(<Harness />);
+		await fireEvent.press(screen.getByText("Set code"));
+		await fireEvent.press(screen.getByText("Switch"));
 		await screen.findByText("switchingHousehold");
 
-		fireEvent.press(screen.getByText("Join"));
+		await fireEvent.press(screen.getByText("Join"));
 
 		expect(joinByCode).not.toHaveBeenCalled();
 	});
 });
 
 describe("PublicHouseholdEntry", () => {
-	it("does not render invitee email, Member list, visible token, or code", () => {
-		render(
+	it("does not render invitee email, Member list, visible token, or code", async () => {
+		await render(
 			<PublicHouseholdEntryView
 				state={{
 					status: "ready",
@@ -554,7 +554,7 @@ describe("PublicHouseholdEntry", () => {
 			);
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 
 		await screen.findByText("River House");
 		expect(fetcher).toHaveBeenCalledTimes(1);
@@ -594,7 +594,7 @@ describe("PublicHouseholdEntry", () => {
 			);
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 		await act(async () => {
 			resolvePreview({
 				available: true,
@@ -603,7 +603,7 @@ describe("PublicHouseholdEntry", () => {
 			});
 		});
 		await screen.findByText("River House");
-		fireEvent.press(screen.getByText("Accept Invitation"));
+		await fireEvent.press(screen.getByText("Accept Invitation"));
 
 		await waitFor(() =>
 			expect(acceptInvitation).toHaveBeenCalledWith("secret-token"),
@@ -641,10 +641,10 @@ describe("PublicHouseholdEntry", () => {
 			);
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 		await screen.findByText("River House");
 
-		fireEvent.press(screen.getByText("Accept Invitation"));
+		await fireEvent.press(screen.getByText("Accept Invitation"));
 
 		expect(acceptInvitation).not.toHaveBeenCalled();
 		expect(mockReloadSession).not.toHaveBeenCalled();
@@ -681,10 +681,10 @@ describe("PublicHouseholdEntry", () => {
 			);
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 		await screen.findByText("Household");
 
-		fireEvent.press(screen.getByText("Join Household"));
+		await fireEvent.press(screen.getByText("Join Household"));
 
 		expect(previewJoinCode).not.toHaveBeenCalled();
 		expect(joinByCode).not.toHaveBeenCalled();
@@ -722,7 +722,7 @@ describe("PublicHouseholdEntry", () => {
 			);
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 
 		expect(screen.getByText("Loading Household")).toBeTruthy();
 		await waitFor(() => expect(previewJoinCode).not.toHaveBeenCalled());
@@ -765,7 +765,7 @@ describe("PublicHouseholdEntry", () => {
 			);
 		}
 
-		render(<Harness />);
+		await render(<Harness />);
 		await act(async () => {
 			resolvePreview({
 				available: true,
@@ -774,7 +774,7 @@ describe("PublicHouseholdEntry", () => {
 		});
 		await screen.findByText("River House");
 
-		fireEvent.press(screen.getByText("Join Household"));
+		await fireEvent.press(screen.getByText("Join Household"));
 
 		await waitFor(() =>
 			expect(joinByCode).toHaveBeenCalledWith(
@@ -818,10 +818,10 @@ describe("PublicHouseholdEntry", () => {
 			);
 		}
 
-		const { rerender } = render(<Harness secret="first-token" />);
+		const { rerender } = await render(<Harness secret="first-token" />);
 		await screen.findByText("River House");
 
-		rerender(<Harness secret="second-token" />);
+		await rerender(<Harness secret="second-token" />);
 
 		expect(screen.getByText("Loading Household")).toBeTruthy();
 		expect(screen.queryByText("River House")).toBeNull();

@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
 	type AuthRedirectParams,
 	authHrefWithIntent,
@@ -70,16 +70,23 @@ export function usePublicHouseholdEntry({
 } {
 	const { getToken, isSignedIn } = useAuth();
 	const router = useRouter();
+	// Latest-ref pattern: the resolved client stays stable across getToken
+	// identity changes (so the entry effect does not re-run) while always
+	// calling the most recent token callback. Resolution happens in effects
+	// and event handlers because react-hooks/refs forbids creating the
+	// token-forwarding closure during render.
 	const getTokenRef = useRef(getToken);
-	getTokenRef.current = getToken;
-	const client = useMemo(
-		() =>
-			clientProp ??
-			createHouseholdApiClient({
-				getToken: () => getTokenRef.current(),
-			}),
-		[clientProp],
-	);
+	const defaultClientRef = useRef<HouseholdApiClient | null>(null);
+	useEffect(() => {
+		getTokenRef.current = getToken;
+	}, [getToken]);
+	const resolveClient = useCallback((): HouseholdApiClient => {
+		if (clientProp) return clientProp;
+		defaultClientRef.current ??= createHouseholdApiClient({
+			getToken: () => getTokenRef.current(),
+		});
+		return defaultClientRef.current;
+	}, [clientProp]);
 	const entryKey = `${kind}:${secret ?? ""}`;
 	const [resource, dispatch] = useReducer(reducer, {
 		status: "loading",
@@ -110,6 +117,7 @@ export function usePublicHouseholdEntry({
 			return;
 		}
 
+		const client = resolveClient();
 		const preview =
 			kind === "invitation"
 				? client.previewInvitation(secret)
@@ -131,7 +139,7 @@ export function usePublicHouseholdEntry({
 		return () => {
 			cancelled = true;
 		};
-	}, [client, entryKey, isSignedIn, kind, secret]);
+	}, [entryKey, isSignedIn, kind, resolveClient, secret]);
 
 	async function submit() {
 		if (!secret || state.status !== "ready") return;
@@ -142,6 +150,7 @@ export function usePublicHouseholdEntry({
 
 		dispatch({ type: "working", entryKey });
 		try {
+			const client = resolveClient();
 			if (kind === "invitation") {
 				await client.acceptInvitation(secret);
 			} else {

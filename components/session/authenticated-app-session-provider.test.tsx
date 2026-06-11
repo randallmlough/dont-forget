@@ -45,7 +45,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 	it("eagerly activates the controller and renders fresh ready state", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
@@ -60,7 +60,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			signedIn: true,
 		});
 
-		act(() => {
+		await act(() => {
 			controller.publish({ status: "ready", session: appSessionFixture() });
 		});
 
@@ -73,7 +73,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 	it("can defer initial activation until reload is requested", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
@@ -86,7 +86,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await Promise.resolve();
 		expect(controller.activate).not.toHaveBeenCalled();
 
-		fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
 
 		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(1));
 	});
@@ -94,7 +94,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 	it("does not reactivate when only the token callback identity changes", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		const firstAuth = authFixture();
-		const { rerender } = render(
+		const { rerender } = await render(
 			<AuthenticatedAppSessionProvider controller={controller} auth={firstAuth}>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
@@ -102,7 +102,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		expect(controller.activate).toHaveBeenCalledTimes(1);
 
-		rerender(
+		await rerender(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture({
@@ -119,7 +119,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 	it("keeps the previous session while a replacement is loading", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
@@ -128,7 +128,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		act(() => {
+		await act(() => {
 			controller.publish({
 				status: "loading",
 				previous: appSessionFixture(),
@@ -145,7 +145,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 	it("stops exposing ready session data while loading has no previous session", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
@@ -153,14 +153,14 @@ describe("AuthenticatedAppSessionProvider", () => {
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
 		);
-		act(() => {
+		await act(() => {
 			controller.publish({ status: "ready", session: appSessionFixture() });
 		});
 		await waitFor(() =>
 			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
 		);
 
-		act(() => {
+		await act(() => {
 			controller.publish({ status: "loading" });
 		});
 
@@ -176,14 +176,14 @@ describe("AuthenticatedAppSessionProvider", () => {
 				message: "Unable to prepare your Household.",
 			},
 		});
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider controller={controller} auth={auth}>
 				<RetryState />
 			</AuthenticatedAppSessionProvider>,
 		);
 
 		expect(screen.getByText("Unable to prepare your Household.")).toBeTruthy();
-		fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
 
 		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
 		const [activation] = controller.activate.mock.calls.at(-1) ?? [];
@@ -193,7 +193,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		});
 		await expect(activation?.getToken()).resolves.toBe("token");
 
-		act(() => {
+		await act(() => {
 			controller.publish({ status: "ready", session: appSessionFixture() });
 		});
 		expect(screen.getByText("authenticated-app-session:1")).toBeTruthy();
@@ -202,13 +202,13 @@ describe("AuthenticatedAppSessionProvider", () => {
 	it("reloads the Authenticated App Session with the latest auth inputs", async () => {
 		const auth = authFixture();
 		const controller = authenticatedAppSessionControllerFixture();
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider controller={controller} auth={auth}>
 				<ReloadState />
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
 
 		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
 		const [activation] = controller.activate.mock.calls.at(-1) ?? [];
@@ -238,7 +238,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			order.push("clear");
 		});
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
@@ -249,7 +249,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
 		expect(order).toEqual(["track", "reset", "dispose", "clear", "clerk"]);
@@ -264,7 +264,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const nextAnalytics = { track: jest.fn(), reset: jest.fn() };
 		const firstClearSignedOutData = jest.fn(async () => undefined);
 		const nextClearSignedOutData = jest.fn(async () => undefined);
-		const { rerender } = render(
+		const { rerender } = await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
@@ -275,7 +275,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		rerender(
+		await rerender(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
@@ -286,7 +286,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		expect(firstAnalytics.track).not.toHaveBeenCalled();
@@ -304,7 +304,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		});
 		const clearSignedOutData = jest.fn(async () => undefined);
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
@@ -315,7 +315,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() =>
 			expect(clearSignedOutData).toHaveBeenCalledWith(["hh_active"]),
 		);
@@ -326,7 +326,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		controller.dispose.mockRejectedValue(new Error("dispose failed"));
 		const auth = authFixture();
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
@@ -337,7 +337,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		expect(mockLogger.error).toHaveBeenCalledWith(
@@ -353,7 +353,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const localDataDeleted = deferred<void>();
 		const clearSignedOutData = jest.fn(() => localDataDeleted.promise);
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
@@ -365,8 +365,8 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 
 		const signOutButton = screen.getByRole("button", { name: "Sign out" });
-		fireEvent.press(signOutButton);
-		fireEvent.press(signOutButton);
+		await fireEvent.press(signOutButton);
+		await fireEvent.press(signOutButton);
 
 		await waitFor(() => expect(clearSignedOutData).toHaveBeenCalledTimes(1));
 		expect(analytics.track).toHaveBeenCalledTimes(1);
@@ -384,7 +384,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const auth = authFixture({
 			signOut: jest.fn(() => signOutFinished.promise),
 		});
-		const { rerender } = render(
+		const { rerender } = await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
@@ -396,10 +396,10 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 
 		expect(controller.activate).toHaveBeenCalledTimes(1);
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
-		rerender(
+		await rerender(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={{ ...auth, signedIn: false }}
@@ -424,7 +424,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		});
 		const controller = authenticatedAppSessionControllerFixture();
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
@@ -436,18 +436,18 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 
 		const button = screen.getByRole("button", { name: "Sign out" });
-		fireEvent.press(button);
+		await fireEvent.press(button);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
 
-		fireEvent.press(button);
+		await fireEvent.press(button);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
 	});
 
 	it("allows sign-out retry after cleanup fails and Clerk sign-out succeeds", async () => {
 		const auth = authFixture();
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
@@ -461,10 +461,10 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 
 		const button = screen.getByRole("button", { name: "Sign out" });
-		fireEvent.press(button);
+		await fireEvent.press(button);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
-		fireEvent.press(button);
+		await fireEvent.press(button);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
 	});
 
@@ -477,7 +477,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		controller.dispose.mockImplementation(() => disposed.promise);
 		const clearSignedOutData = jest.fn(async () => undefined);
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
@@ -488,7 +488,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		await waitFor(() => expect(controller.dispose).toHaveBeenCalledTimes(1));
 		expect(clearSignedOutData).not.toHaveBeenCalled();
@@ -503,7 +503,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const localDataDeleted = deferred<void>();
 		const clearSignedOutData = jest.fn(() => localDataDeleted.promise);
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
@@ -514,7 +514,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		await waitFor(() => expect(clearSignedOutData).toHaveBeenCalledTimes(1));
 		expect(auth.signOut).not.toHaveBeenCalled();
@@ -525,7 +525,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 	it("continues Clerk sign out when local Household cleanup fails", async () => {
 		const auth = authFixture();
 
-		render(
+		await render(
 			<AuthenticatedAppSessionProvider
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
@@ -538,7 +538,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		expect(mockLogger.error).toHaveBeenCalledWith(
@@ -547,9 +547,9 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 	});
 
-	it("disposes the controller on provider unmount", () => {
+	it("disposes the controller on provider unmount", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
-		const { unmount } = render(
+		const { unmount } = await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={authFixture()}
@@ -558,7 +558,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		unmount();
+		await unmount();
 
 		expect(controller.dispose).toHaveBeenCalledTimes(1);
 	});
@@ -583,8 +583,10 @@ function CurrentState() {
 
 function SignOutButton() {
 	const { signOut } = useAuthenticatedAppSession();
+	// RNTL 14's fireEvent chains a promise returned from the handler, which
+	// would deadlock tests that hold sign-out pending — don't return it.
 	return (
-		<Pressable accessibilityRole="button" onPress={signOut}>
+		<Pressable accessibilityRole="button" onPress={() => void signOut()}>
 			<Text>Sign out</Text>
 		</Pressable>
 	);

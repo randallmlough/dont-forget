@@ -118,7 +118,6 @@ function ActiveListProviderContent({
 		) {
 			void reloadListAfterSync();
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- reloadListAfterSync is a React Effect Event; syncState is the reactive input.
 	}, [syncState]);
 
 	function requestLocalWriteSync() {

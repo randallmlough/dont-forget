@@ -5,7 +5,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import { FlatList, Keyboard } from "react-native";
+import { Keyboard } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -51,7 +51,7 @@ type TestSyncCoordinator = Omit<ActiveListSyncCoordinator, "requestSync"> & {
 
 describe("ActiveList", () => {
 	it("adds and checks an Item for the current Member", async () => {
-		renderActiveList(emptyList);
+		await renderActiveList(emptyList);
 
 		expect(screen.getByText("Avery")).toBeTruthy();
 		expect(screen.getByText("Groceries")).toBeTruthy();
@@ -62,7 +62,7 @@ describe("ActiveList", () => {
 		expect(screen.getByLabelText("Add Item")).toBeTruthy();
 		expect(screen.queryByLabelText("Submit Item")).toBeNull();
 
-		openAddItemComposer();
+		await openAddItemComposer();
 		expect(screen.getByLabelText("Quantity")).toBeTruthy();
 		expect(screen.getByLabelText("Add note")).toBeTruthy();
 		expect(screen.getByLabelText("Add note").props.accessibilityState).toEqual({
@@ -71,20 +71,24 @@ describe("ActiveList", () => {
 		expect(screen.getByLabelText("Selected List: Groceries")).toBeTruthy();
 
 		const input = screen.getByLabelText("Item name");
-		fireEvent.changeText(input, " Milk ");
-		fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
-		fireEvent.press(screen.getByLabelText("Add note"));
+		await fireEvent.changeText(input, " Milk ");
+		await fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
+		await fireEvent.press(screen.getByLabelText("Add note"));
 		expect(screen.getByLabelText("Add note").props.accessibilityState).toEqual({
 			selected: true,
 		});
-		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+		await fireEvent.changeText(
+			screen.getByLabelText("Item note"),
+			"Organic if easy",
+		);
 		await act(async () => {
-			fireEvent.press(screen.getByLabelText("Submit Item"));
+			await fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() => {
 			expect(
-				screen.getByRole("checkbox", { name: "Milk" }).props.accessibilityState,
+				screen.getByRole("checkbox", { name: /^Milk\b/ }).props
+					.accessibilityState,
 			).toEqual({
 				checked: false,
 			});
@@ -96,12 +100,13 @@ describe("ActiveList", () => {
 		expect(screen.getByLabelText("Add Item")).toBeTruthy();
 
 		await act(async () => {
-			fireEvent.press(screen.getByRole("checkbox", { name: "Milk" }));
+			await fireEvent.press(screen.getByRole("checkbox", { name: /^Milk\b/ }));
 		});
 
 		await waitFor(() => {
 			expect(
-				screen.getByRole("checkbox", { name: "Milk" }).props.accessibilityState,
+				screen.getByRole("checkbox", { name: /^Milk\b/ }).props
+					.accessibilityState,
 			).toEqual({
 				checked: true,
 			});
@@ -110,9 +115,9 @@ describe("ActiveList", () => {
 		expect(screen.getByText("Checked by Avery Chen")).toBeTruthy();
 	});
 
-	it("opens the add Item composer", () => {
-		renderActiveList(emptyList);
-		openAddItemComposer();
+	it("opens the add Item composer", async () => {
+		await renderActiveList(emptyList);
+		await openAddItemComposer();
 
 		expect(screen.getByLabelText("Item name")).toBeTruthy();
 		expect(screen.getByLabelText("Add Item composer").props).toMatchObject({
@@ -125,11 +130,13 @@ describe("ActiveList", () => {
 		expect(screen.queryByLabelText("Add Item")).toBeNull();
 	});
 
-	it("reserves bottom scroll space for the add Item composer", () => {
-		const rendered = renderActiveList(emptyList);
-		const list = rendered.UNSAFE_getByType(FlatList);
+	it("reserves bottom scroll space for the add Item composer", async () => {
+		const rendered = await renderActiveList(emptyList);
+		const list = rendered.root?.queryAll(
+			(instance) => instance.type === "RCTScrollView",
+		)[0];
 
-		expect(list.props.contentContainerStyle).toEqual(
+		expect(list?.props.contentContainerStyle).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
 					paddingBottom: 34 + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE,
@@ -138,17 +145,19 @@ describe("ActiveList", () => {
 		);
 	});
 
-	it("reserves keyboard-aware bottom scroll space while composing", () => {
+	it("reserves keyboard-aware bottom scroll space while composing", async () => {
 		const keyboard = captureKeyboardListeners();
 		try {
-			const rendered = renderActiveList(emptyList);
+			const rendered = await renderActiveList(emptyList);
 
-			act(() => {
+			await act(() => {
 				keyboard.emit("keyboardWillShow", 320);
 			});
 
-			const list = rendered.UNSAFE_getByType(FlatList);
-			expect(list.props.contentContainerStyle).toEqual(
+			const list = rendered.root?.queryAll(
+				(instance) => instance.type === "RCTScrollView",
+			)[0];
+			expect(list?.props.contentContainerStyle).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({
 						paddingBottom: 320 + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE,
@@ -160,32 +169,32 @@ describe("ActiveList", () => {
 		}
 	});
 
-	it("dismisses the composer without clearing an open draft", () => {
-		renderActiveList(emptyList);
+	it("dismisses the composer without clearing an open draft", async () => {
+		await renderActiveList(emptyList);
 
-		openAddItemComposer();
-		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
-		fireEvent.changeText(screen.getByLabelText("Quantity"), "1, 1 dozen");
-		fireEvent.press(
+		await openAddItemComposer();
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		await fireEvent.changeText(screen.getByLabelText("Quantity"), "1, 1 dozen");
+		await fireEvent.press(
 			screen.getByRole("button", { name: "Dismiss add Item composer" }),
 		);
 
 		expect(screen.queryByLabelText("Item name")).toBeNull();
 
-		openAddItemComposer();
+		await openAddItemComposer();
 		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
 		expect(screen.getByLabelText("Quantity").props.value).toBe("1, 1 dozen");
 	});
 
-	it("keeps the composer open when the keyboard hides", () => {
+	it("keeps the composer open when the keyboard hides", async () => {
 		const keyboard = captureKeyboardListeners();
 		try {
-			renderActiveList(emptyList);
+			await renderActiveList(emptyList);
 
-			openAddItemComposer();
-			fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+			await openAddItemComposer();
+			await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 
-			act(() => {
+			await act(() => {
 				keyboard.emit("keyboardWillHide");
 			});
 
@@ -197,20 +206,23 @@ describe("ActiveList", () => {
 	});
 
 	it("clears composer fields after submit", async () => {
-		renderActiveList(emptyList);
+		await renderActiveList(emptyList);
 
-		openAddItemComposer();
-		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
-		fireEvent.changeText(screen.getByLabelText("Quantity"), "dozen");
-		fireEvent.press(screen.getByLabelText("Add note"));
-		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+		await openAddItemComposer();
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		await fireEvent.changeText(screen.getByLabelText("Quantity"), "dozen");
+		await fireEvent.press(screen.getByLabelText("Add note"));
+		await fireEvent.changeText(
+			screen.getByLabelText("Item note"),
+			"Organic if easy",
+		);
 
 		await act(async () => {
-			fireEvent.press(screen.getByLabelText("Submit Item"));
+			await fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
-		openAddItemComposer();
+		await openAddItemComposer();
 		expect(screen.getByLabelText("Item name").props.value).toBe("");
 		expect(screen.getByLabelText("Quantity").props.value).toBe("");
 		expect(screen.queryByLabelText("Item note")).toBeNull();
@@ -220,16 +232,19 @@ describe("ActiveList", () => {
 		const actions = memoryListActions(emptyList, {
 			addItem: jest.fn().mockRejectedValue(new Error("write failed")),
 		});
-		renderActiveList(emptyList, actions);
+		await renderActiveList(emptyList, actions);
 
-		openAddItemComposer();
-		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
-		fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
-		fireEvent.press(screen.getByLabelText("Add note"));
-		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
+		await openAddItemComposer();
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		await fireEvent.changeText(screen.getByLabelText("Quantity"), "1 gallon");
+		await fireEvent.press(screen.getByLabelText("Add note"));
+		await fireEvent.changeText(
+			screen.getByLabelText("Item note"),
+			"Organic if easy",
+		);
 
 		await act(async () => {
-			fireEvent.press(screen.getByLabelText("Submit Item"));
+			await fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() =>
@@ -258,16 +273,22 @@ describe("ActiveList", () => {
 				checkedByMemberName: null,
 			}),
 		);
-		renderActiveList(emptyList, memoryListActions(emptyList, { addItem }));
+		await renderActiveList(
+			emptyList,
+			memoryListActions(emptyList, { addItem }),
+		);
 
-		openAddItemComposer();
-		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
-		fireEvent.press(screen.getByLabelText("Add note"));
-		fireEvent.changeText(screen.getByLabelText("Item note"), "Organic if easy");
-		fireEvent.press(screen.getByLabelText("Add note"));
+		await openAddItemComposer();
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		await fireEvent.press(screen.getByLabelText("Add note"));
+		await fireEvent.changeText(
+			screen.getByLabelText("Item note"),
+			"Organic if easy",
+		);
+		await fireEvent.press(screen.getByLabelText("Add note"));
 
 		await act(async () => {
-			fireEvent.press(screen.getByLabelText("Submit Item"));
+			await fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() =>
@@ -285,13 +306,13 @@ describe("ActiveList", () => {
 			addItem: jest.fn().mockRejectedValue(new Error("write failed")),
 			load: jest.fn().mockRejectedValue(new Error("reload failed")),
 		});
-		renderActiveList(emptyList, actions);
+		await renderActiveList(emptyList, actions);
 
-		openAddItemComposer();
-		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		await openAddItemComposer();
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 
 		await act(async () => {
-			fireEvent.press(screen.getByLabelText("Submit Item"));
+			await fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() =>
@@ -322,12 +343,16 @@ describe("ActiveList", () => {
 			return null;
 		});
 
-		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
+		await renderActiveList(
+			emptyList,
+			memoryListActions(emptyList),
+			coordinator,
+		);
 
-		openAddItemComposer();
-		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		await openAddItemComposer();
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByLabelText("Submit Item"));
+			await fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() => expect(screen.getByText("Pending sync")).toBeTruthy());
@@ -343,8 +368,8 @@ describe("ActiveList", () => {
 		expect(mockLogger.error).not.toHaveBeenCalled();
 	});
 
-	it("shows offline sync state when sync is not authorized", () => {
-		renderActiveList(
+	it("shows offline sync state when sync is not authorized", async () => {
+		await renderActiveList(
 			emptyList,
 			memoryListActions(emptyList),
 			passiveSyncCoordinator("offline"),
@@ -356,7 +381,11 @@ describe("ActiveList", () => {
 	it("samples sync status after subscribing", async () => {
 		const coordinator = syncCoordinatorWithPostSubscribeStatus("offline");
 
-		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
+		await renderActiveList(
+			emptyList,
+			memoryListActions(emptyList),
+			coordinator,
+		);
 
 		expect(coordinator.subscribe).toHaveBeenCalled();
 		expect(
@@ -369,16 +398,16 @@ describe("ActiveList", () => {
 		const coordinator = controllableSyncCoordinator("synced");
 		const load = jest.fn(async () => emptyList);
 
-		renderActiveList(
+		await renderActiveList(
 			emptyList,
 			memoryListActions(emptyList, { load }),
 			coordinator,
 		);
 
-		openAddItemComposer();
-		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		await openAddItemComposer();
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByLabelText("Submit Item"));
+			await fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 
 		await waitFor(() =>
@@ -419,10 +448,10 @@ describe("ActiveList", () => {
 			return { changed: true };
 		});
 
-		renderActiveList(emptyList, actions, coordinator);
+		await renderActiveList(emptyList, actions, coordinator);
 
 		await act(async () => {
-			fireEvent.press(screen.getByText("Refresh"));
+			await fireEvent.press(screen.getByText("Refresh"));
 		});
 
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
@@ -439,7 +468,7 @@ describe("ActiveList", () => {
 		const load = jest.fn(async () => state);
 		const actions = memoryListActions(emptyList, { load });
 
-		renderActiveList(emptyList, actions, coordinator);
+		await renderActiveList(emptyList, actions, coordinator);
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 
 		state = {
@@ -485,11 +514,11 @@ describe("ActiveList", () => {
 			return { changed: true };
 		});
 
-		renderActiveList(emptyList, actions, coordinator);
+		await renderActiveList(emptyList, actions, coordinator);
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 
 		await act(async () => {
-			fireEvent.press(screen.getByText("Refresh"));
+			await fireEvent.press(screen.getByText("Refresh"));
 		});
 		expect(screen.getByText("Refreshing")).toBeTruthy();
 
@@ -520,11 +549,15 @@ describe("ActiveList", () => {
 			throw syncError;
 		});
 
-		renderActiveList(emptyList, memoryListActions(emptyList), coordinator);
+		await renderActiveList(
+			emptyList,
+			memoryListActions(emptyList),
+			coordinator,
+		);
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
 
 		await act(async () => {
-			fireEvent.press(screen.getByText("Refresh"));
+			await fireEvent.press(screen.getByText("Refresh"));
 		});
 
 		await waitFor(() =>
@@ -546,22 +579,22 @@ describe("ActiveList", () => {
 			await syncAfterWrite.promise;
 			return { changed: true };
 		});
-		const { unmount } = renderActiveList(
+		const { unmount } = await renderActiveList(
 			emptyList,
 			memoryListActions(emptyList, { load }),
 			coordinator,
 		);
 
-		openAddItemComposer();
-		fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
+		await openAddItemComposer();
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Milk");
 		await act(async () => {
-			fireEvent.press(screen.getByLabelText("Submit Item"));
+			await fireEvent.press(screen.getByLabelText("Submit Item"));
 		});
 		await waitFor(() =>
 			expect(coordinator.requestSync).toHaveBeenCalledTimes(1),
 		);
 
-		unmount();
+		await unmount();
 		await act(async () => {
 			syncAfterWrite.resolve({ changed: true });
 			await Promise.resolve();
@@ -601,8 +634,8 @@ function renderActiveList(
 	);
 }
 
-function openAddItemComposer() {
-	fireEvent.press(screen.getByLabelText("Add Item"));
+async function openAddItemComposer() {
+	await fireEvent.press(screen.getByLabelText("Add Item"));
 }
 
 function captureKeyboardListeners() {

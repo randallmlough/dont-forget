@@ -7,7 +7,6 @@ import {
 } from "@testing-library/react-native";
 import { eq } from "drizzle-orm";
 import type { PropsWithChildren, ReactElement } from "react";
-import { Modal } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
 import type { HouseholdSqlStatement } from "@/db/household-store";
@@ -97,14 +96,14 @@ describe("HomeScreen", () => {
 		testLogger.with.mockImplementation(() => testLogger);
 	});
 
-	it("renders provider-derived loading state", () => {
+	it("renders provider-derived loading state", async () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "loading" },
 			session: null,
 			...noopProviderActions,
 		});
 
-		renderWithSafeArea(<HomeScreen />);
+		await renderWithSafeArea(<HomeScreen />);
 
 		expect(screen.getByText("Preparing your Household")).toBeTruthy();
 	});
@@ -118,7 +117,7 @@ describe("HomeScreen", () => {
 		});
 
 		try {
-			renderWithSafeArea(<HomeScreen />);
+			await renderWithSafeArea(<HomeScreen />);
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy(), {
 				timeout: 5_000,
@@ -129,7 +128,7 @@ describe("HomeScreen", () => {
 		}
 	});
 
-	it("wires retry and sign out actions from the provider", () => {
+	it("wires retry and sign out actions from the provider", async () => {
 		const retry = jest.fn();
 		const signOut = jest.fn(async () => undefined);
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
@@ -143,10 +142,10 @@ describe("HomeScreen", () => {
 			signOut,
 		});
 
-		renderWithSafeArea(<HomeScreen />);
+		await renderWithSafeArea(<HomeScreen />);
 
-		fireEvent.press(screen.getByText("Try again"));
-		fireEvent.press(screen.getByText("Sign out"));
+		await fireEvent.press(screen.getByText("Try again"));
+		await fireEvent.press(screen.getByText("Sign out"));
 		expect(retry).toHaveBeenCalledTimes(1);
 		expect(signOut).toHaveBeenCalledTimes(1);
 	});
@@ -163,7 +162,7 @@ it("remounts Active List when the session resource changes", async () => {
 	});
 
 	try {
-		const { rerender } = renderWithSafeArea(
+		const { rerender } = await renderWithSafeArea(
 			<HomeScreenView
 				state={{ status: "ready", refreshing: false }}
 				session={firstHarness.session}
@@ -171,7 +170,7 @@ it("remounts Active List when the session resource changes", async () => {
 		);
 
 		await waitFor(() => expect(screen.getByText("Cached Milk")).toBeTruthy());
-		rerender(
+		await rerender(
 			<HomeScreenView
 				state={{ status: "ready", refreshing: false }}
 				session={secondHarness.session}
@@ -187,15 +186,15 @@ it("remounts Active List when the session resource changes", async () => {
 });
 
 describe("HomeScreenView", () => {
-	it("shows Authenticated App Session loading and retryable error states", () => {
+	it("shows Authenticated App Session loading and retryable error states", async () => {
 		const retry = jest.fn();
 
-		const { rerender } = renderWithSafeArea(
+		const { rerender } = await renderWithSafeArea(
 			<HomeScreenView state={{ status: "loading" }} session={null} />,
 		);
 		expect(screen.getByText("Preparing your Household")).toBeTruthy();
 
-		rerender(
+		await rerender(
 			<HomeScreenView
 				state={{
 					status: "error",
@@ -206,7 +205,7 @@ describe("HomeScreenView", () => {
 			/>,
 		);
 
-		fireEvent.press(screen.getByText("Try again"));
+		await fireEvent.press(screen.getByText("Try again"));
 		expect(retry).toHaveBeenCalledTimes(1);
 	});
 
@@ -214,7 +213,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness();
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -244,7 +243,7 @@ describe("HomeScreenView", () => {
 		);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -263,7 +262,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness({ failNextListRead: true });
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -273,7 +272,7 @@ describe("HomeScreenView", () => {
 			await waitFor(() =>
 				expect(screen.getByText("List unavailable")).toBeTruthy(),
 			);
-			fireEvent.press(screen.getByText("Try again"));
+			await fireEvent.press(screen.getByText("Try again"));
 
 			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
 			expect(harness.listReadCount()).toBeGreaterThanOrEqual(2);
@@ -299,7 +298,7 @@ describe("HomeScreenView", () => {
 		};
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -310,7 +309,7 @@ describe("HomeScreenView", () => {
 				expect(screen.getByText("List unavailable")).toBeTruthy(),
 			);
 
-			act(() => {
+			await act(() => {
 				for (const listener of syncListeners) listener("synced");
 			});
 
@@ -328,7 +327,7 @@ describe("HomeScreenView", () => {
 			.mockResolvedValue(harness.scenario.lists.pharmacy.id);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -351,7 +350,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness();
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -374,7 +373,7 @@ describe("HomeScreenView", () => {
 		jest.mocked(getCurrentListSelection).mockResolvedValue("lst_ghost");
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -400,7 +399,7 @@ describe("HomeScreenView", () => {
 			.mockResolvedValue(harness.scenario.lists.archived.id);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -423,7 +422,7 @@ describe("HomeScreenView", () => {
 			.mockResolvedValue(harness.scenario.lists.deleted.id);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -446,7 +445,7 @@ describe("HomeScreenView", () => {
 		harness.setStaleMissingListIds([harness.scenario.lists.groceries.id]);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -471,7 +470,7 @@ describe("HomeScreenView", () => {
 		harness.setStaleArchivedListIds([harness.scenario.lists.groceries.id]);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -496,7 +495,7 @@ describe("HomeScreenView", () => {
 			.mockRejectedValueOnce(new Error("storage offline"));
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -506,7 +505,7 @@ describe("HomeScreenView", () => {
 			await waitFor(() =>
 				expect(screen.getByText("List unavailable")).toBeTruthy(),
 			);
-			fireEvent.press(screen.getByText("Try again"));
+			await fireEvent.press(screen.getByText("Try again"));
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			expect(clearCurrentListSelection).toHaveBeenCalledTimes(2);
@@ -526,7 +525,7 @@ describe("HomeScreenView", () => {
 		harness.setStaleDeletedListIds([harness.scenario.lists.pharmacy.id]);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -556,7 +555,7 @@ describe("HomeScreenView", () => {
 		]);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -581,7 +580,7 @@ describe("HomeScreenView", () => {
 		await harness.household.db.update(lists).set({ deletedAt: 1 });
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -619,7 +618,7 @@ describe("HomeScreenView", () => {
 			.mockResolvedValue(harness.scenario.lists.pharmacy.id);
 
 		try {
-			const { rerender } = renderWithSafeArea(
+			const { rerender } = await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -627,10 +626,10 @@ describe("HomeScreenView", () => {
 			);
 			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
-			openAddItemComposer();
-			fireEvent.changeText(screen.getByLabelText("Item name"), "Snacks");
+			await openAddItemComposer();
+			await fireEvent.changeText(screen.getByLabelText("Item name"), "Snacks");
 			await act(async () => {
-				fireEvent.press(screen.getByLabelText("Submit Item"));
+				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
 			await waitFor(() => expect(screen.getByText("Snacks")).toBeTruthy());
 
@@ -639,7 +638,7 @@ describe("HomeScreenView", () => {
 				.mockResolvedValue(harness.scenario.lists.groceries.id);
 			// Same resourceKey, new session identity: re-resolution changes only
 			// the resolved List ID, which must remount the Active List boundary.
-			rerender(
+			await rerender(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={{ ...harness.session }}
@@ -661,7 +660,7 @@ describe("HomeScreenView", () => {
 			.mockResolvedValue(harness.scenario.lists.pharmacy.id);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -669,18 +668,26 @@ describe("HomeScreenView", () => {
 			);
 			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
-			openAddItemComposer();
-			fireEvent.changeText(screen.getByLabelText("Item name"), "Yogurt");
-			fireEvent.changeText(screen.getByLabelText("Quantity"), "half carton");
-			fireEvent.press(screen.getByLabelText("Add note"));
-			fireEvent.changeText(screen.getByLabelText("Item note"), "Plain Greek");
+			await openAddItemComposer();
+			await fireEvent.changeText(screen.getByLabelText("Item name"), "Yogurt");
+			await fireEvent.changeText(
+				screen.getByLabelText("Quantity"),
+				"half carton",
+			);
+			await fireEvent.press(screen.getByLabelText("Add note"));
+			await fireEvent.changeText(
+				screen.getByLabelText("Item note"),
+				"Plain Greek",
+			);
 			await act(async () => {
-				fireEvent.press(screen.getByLabelText("Submit Item"));
+				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
 			await waitFor(() => expect(screen.getByText("Yogurt")).toBeTruthy());
 			expect(screen.getByText("half carton - Plain Greek")).toBeTruthy();
 			await act(async () => {
-				fireEvent.press(screen.getByRole("checkbox", { name: "Yogurt" }));
+				await fireEvent.press(
+					screen.getByRole("checkbox", { name: /^Yogurt\b/ }),
+				);
 			});
 
 			const persistedItem = await harness.household.db.query.items.findFirst({
@@ -724,14 +731,14 @@ describe("HomeScreenView", () => {
 		});
 
 		try {
-			const { rerender } = renderWithSafeArea(
+			const { rerender } = await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={staleHarness.session}
 				/>,
 			);
 
-			rerender(
+			await rerender(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={freshHarness.session}
@@ -771,7 +778,7 @@ describe("HomeScreenView", () => {
 		]);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -802,7 +809,7 @@ describe("HomeScreenView", () => {
 			.mockResolvedValue(harness.scenario.lists.archived.id);
 
 		try {
-			renderWithSafeArea(
+			await renderWithSafeArea(
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
@@ -810,10 +817,10 @@ describe("HomeScreenView", () => {
 			);
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 
-			openAddItemComposer();
-			fireEvent.changeText(screen.getByLabelText("Item name"), "Lantern");
+			await openAddItemComposer();
+			await fireEvent.changeText(screen.getByLabelText("Item name"), "Lantern");
 			await act(async () => {
-				fireEvent.press(screen.getByLabelText("Submit Item"));
+				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
 			await waitFor(() => expect(screen.getByText("Lantern")).toBeTruthy());
 
@@ -832,7 +839,7 @@ describe("HomeScreenView", () => {
 
 describe("List switcher", () => {
 	async function renderHomeReady(harness: HomeSessionHarness) {
-		renderWithSafeArea(
+		const rendered = await renderWithSafeArea(
 			<HomeScreenView
 				state={{ status: "ready", refreshing: false }}
 				session={harness.session}
@@ -841,10 +848,11 @@ describe("List switcher", () => {
 		await waitFor(() =>
 			expect(screen.getByLabelText("Switch List")).toBeTruthy(),
 		);
+		return rendered;
 	}
 
-	function openSwitcher() {
-		fireEvent.press(screen.getByLabelText("Switch List"));
+	async function openSwitcher() {
+		await fireEvent.press(screen.getByLabelText("Switch List"));
 	}
 
 	it("opens from the Current List header and lists only active List summaries", async () => {
@@ -852,7 +860,7 @@ describe("List switcher", () => {
 
 		try {
 			await renderHomeReady(harness);
-			openSwitcher();
+			await openSwitcher();
 
 			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
 			expect(screen.getByText("Pharmacy")).toBeTruthy();
@@ -877,7 +885,7 @@ describe("List switcher", () => {
 
 		try {
 			await renderHomeReady(harness);
-			openSwitcher();
+			await openSwitcher();
 
 			await waitFor(() => expect(screen.getByText("Current")).toBeTruthy());
 			expect(
@@ -899,11 +907,11 @@ describe("List switcher", () => {
 
 		try {
 			await renderHomeReady(harness);
-			openSwitcher();
+			await openSwitcher();
 			await waitFor(() => expect(screen.getByText("Current")).toBeTruthy());
 
 			await act(async () => {
-				fireEvent.press(
+				await fireEvent.press(
 					screen.getByRole("button", { name: "Groceries", selected: true }),
 				);
 			});
@@ -931,11 +939,11 @@ describe("List switcher", () => {
 
 		try {
 			await renderHomeReady(harness);
-			openSwitcher();
+			await openSwitcher();
 			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
 			await act(async () => {
-				fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
+				await fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
 			});
 
 			expect(setCurrentListSelection).toHaveBeenCalledTimes(1);
@@ -974,10 +982,13 @@ describe("List switcher", () => {
 			// the default Groceries List, and writes follow it.
 			expect(harness.scenario.lists.pharmacy.id).not.toBe(DEFAULT_LIST_ID);
 
-			openAddItemComposer();
-			fireEvent.changeText(screen.getByLabelText("Item name"), "Bandages");
+			await openAddItemComposer();
+			await fireEvent.changeText(
+				screen.getByLabelText("Item name"),
+				"Bandages",
+			);
 			await act(async () => {
-				fireEvent.press(screen.getByLabelText("Submit Item"));
+				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
 			await waitFor(() => expect(screen.getByText("Bandages")).toBeTruthy());
 			const persistedItem = await harness.household.db.query.items.findFirst({
@@ -997,11 +1008,11 @@ describe("List switcher", () => {
 
 		try {
 			await renderHomeReady(harness);
-			openSwitcher();
+			await openSwitcher();
 			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
 			await act(async () => {
-				fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
+				await fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
 			});
 
 			expect(setCurrentListSelection).toHaveBeenCalledTimes(1);
@@ -1017,7 +1028,7 @@ describe("List switcher", () => {
 					jest.mocked(getCurrentListSelection).mockResolvedValue(listId);
 				});
 			await act(async () => {
-				fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
+				await fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
 			});
 			expect(listSwitchedTrackCalls()).toHaveLength(1);
 		} finally {
@@ -1029,13 +1040,15 @@ describe("List switcher", () => {
 		const harness = await createHomeSessionHarness();
 
 		try {
-			await renderHomeReady(harness);
-			openSwitcher();
+			const rendered = await renderHomeReady(harness);
+			await openSwitcher();
 			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
 
 			// Native swipe-down dismissal fires the sheet Modal's onRequestClose.
-			act(() => {
-				screen.UNSAFE_getByType(Modal).props.onRequestClose();
+			await act(() => {
+				rendered.root
+					?.queryAll((instance) => instance.type === "Modal")[0]
+					?.props.onRequestClose();
 			});
 
 			expect(screen.queryByText("Hardware")).toBeNull();
@@ -1044,7 +1057,7 @@ describe("List switcher", () => {
 			expect(harness.requestSync).not.toHaveBeenCalled();
 
 			// The header opens the switcher again after dismissal.
-			openSwitcher();
+			await openSwitcher();
 			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
 		} finally {
 			await harness.close();
@@ -1057,14 +1070,14 @@ describe("List switcher", () => {
 		try {
 			await renderHomeReady(harness);
 			harness.failNextListListsRead();
-			openSwitcher();
+			await openSwitcher();
 
 			await waitFor(() =>
 				expect(
 					screen.getByText("Unable to load your Lists. Please try again."),
 				).toBeTruthy(),
 			);
-			fireEvent.press(screen.getByText("Try again"));
+			await fireEvent.press(screen.getByText("Try again"));
 
 			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
 			expect(listSwitchedTrackCalls()).toHaveLength(0);
@@ -1098,16 +1111,18 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
 
-				fireEvent.press(screen.getByRole("button", { name: "Create List" }));
-				fireEvent.changeText(
+				await fireEvent.press(
+					screen.getByRole("button", { name: "Create List" }),
+				);
+				await fireEvent.changeText(
 					screen.getByLabelText("List name"),
 					"  Weekend Trip  ",
 				);
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Create" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Create" }));
 				});
 
 				// The List exists locally with the trimmed name and the persisted
@@ -1160,7 +1175,7 @@ describe("List switcher", () => {
 				});
 
 			try {
-				renderWithSafeArea(
+				await renderWithSafeArea(
 					<HomeScreenView
 						state={{ status: "ready", refreshing: false }}
 						session={harness.session}
@@ -1170,13 +1185,18 @@ describe("List switcher", () => {
 					expect(screen.getByText("No active Lists")).toBeTruthy(),
 				);
 
-				fireEvent.press(screen.getByRole("button", { name: "Create List" }));
+				await fireEvent.press(
+					screen.getByRole("button", { name: "Create List" }),
+				);
 				await waitFor(() =>
 					expect(screen.getByLabelText("List name")).toBeTruthy(),
 				);
-				fireEvent.changeText(screen.getByLabelText("List name"), "Camping");
+				await fireEvent.changeText(
+					screen.getByLabelText("List name"),
+					"Camping",
+				);
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Create" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Create" }));
 				});
 
 				// Normal Home restored: the new empty Current List renders.
@@ -1201,22 +1221,24 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
-				fireEvent.press(screen.getByRole("button", { name: "Create List" }));
+				await fireEvent.press(
+					screen.getByRole("button", { name: "Create List" }),
+				);
 
-				fireEvent.changeText(screen.getByLabelText("List name"), "   ");
+				await fireEvent.changeText(screen.getByLabelText("List name"), "   ");
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Create" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Create" }));
 				});
 				expect(screen.getByText("List name is required.")).toBeTruthy();
 
-				fireEvent.changeText(
+				await fireEvent.changeText(
 					screen.getByLabelText("List name"),
 					"x".repeat(81),
 				);
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Create" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Create" }));
 				});
 				expect(
 					screen.getByText("List names are 80 characters max."),
@@ -1237,16 +1259,19 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
 
-				fireEvent.press(screen.getByLabelText("Rename Groceries"));
+				await fireEvent.press(screen.getByLabelText("Rename Groceries"));
 				expect(screen.getByLabelText("List name").props.value).toBe(
 					"Groceries",
 				);
-				fireEvent.changeText(screen.getByLabelText("List name"), "Food Shop");
+				await fireEvent.changeText(
+					screen.getByLabelText("List name"),
+					"Food Shop",
+				);
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Save" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Save" }));
 				});
 
 				// The Home header updates through re-resolution; the sheet closes.
@@ -1271,13 +1296,16 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
-				fireEvent.press(screen.getByLabelText("Rename Pharmacy"));
-				fireEvent.changeText(screen.getByLabelText("List name"), "Drugstore");
+				await fireEvent.press(screen.getByLabelText("Rename Pharmacy"));
+				await fireEvent.changeText(
+					screen.getByLabelText("List name"),
+					"Drugstore",
+				);
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Save" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Save" }));
 				});
 
 				// Back in the switcher with refreshed rows; the sheet stays open.
@@ -1302,16 +1330,16 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
 
-				fireEvent.press(screen.getByLabelText("Rename Groceries"));
-				fireEvent.changeText(
+				await fireEvent.press(screen.getByLabelText("Rename Groceries"));
+				await fireEvent.changeText(
 					screen.getByLabelText("List name"),
 					"  Groceries  ",
 				);
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Save" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Save" }));
 				});
 
 				// Returns to the switcher; nothing written, no sync, no analytics.
@@ -1329,22 +1357,22 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
-				fireEvent.press(screen.getByLabelText("Rename Pharmacy"));
-				fireEvent.changeText(screen.getByLabelText("List name"), "");
+				await fireEvent.press(screen.getByLabelText("Rename Pharmacy"));
+				await fireEvent.changeText(screen.getByLabelText("List name"), "");
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Save" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Save" }));
 				});
 				expect(screen.getByText("List name is required.")).toBeTruthy();
 
-				fireEvent.changeText(
+				await fireEvent.changeText(
 					screen.getByLabelText("List name"),
 					"y".repeat(81),
 				);
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Save" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Save" }));
 				});
 				expect(
 					screen.getByText("List names are 80 characters max."),
@@ -1362,16 +1390,19 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 				// Deleted between the rows snapshot and the rename: the service
 				// pre-read sees the tombstone.
 				harness.setStaleDeletedListIds([harness.scenario.lists.pharmacy.id]);
 
-				fireEvent.press(screen.getByLabelText("Rename Pharmacy"));
-				fireEvent.changeText(screen.getByLabelText("List name"), "Drugstore");
+				await fireEvent.press(screen.getByLabelText("Rename Pharmacy"));
+				await fireEvent.changeText(
+					screen.getByLabelText("List name"),
+					"Drugstore",
+				);
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Save" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Save" }));
 				});
 
 				await waitFor(() =>
@@ -1391,17 +1422,17 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
-				fireEvent.press(screen.getByLabelText("Delete Pharmacy"));
+				await fireEvent.press(screen.getByLabelText("Delete Pharmacy"));
 				expect(
 					screen.getByText(
 						'Delete "Pharmacy"? Its Items will no longer be available.',
 					),
 				).toBeTruthy();
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 				});
 
 				// Back in the switcher with the deleted row gone; sheet still open.
@@ -1434,12 +1465,12 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 
-				fireEvent.press(screen.getByLabelText("Delete Groceries"));
+				await fireEvent.press(screen.getByLabelText("Delete Groceries"));
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 				});
 
 				// Explicit User repair: pharmacy is the most recently active
@@ -1480,16 +1511,16 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() =>
 					expect(
 						screen.getByRole("button", { name: "Groceries", selected: true }),
 					).toBeTruthy(),
 				);
 
-				fireEvent.press(screen.getByLabelText("Delete Groceries"));
+				await fireEvent.press(screen.getByLabelText("Delete Groceries"));
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 				});
 
 				expect(clearCurrentListSelection).toHaveBeenCalledWith(
@@ -1520,14 +1551,14 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 				// The service pre-read sees a tombstone another Member already wrote.
 				harness.setStaleDeletedListIds([harness.scenario.lists.pharmacy.id]);
 
-				fireEvent.press(screen.getByLabelText("Delete Pharmacy"));
+				await fireEvent.press(screen.getByLabelText("Delete Pharmacy"));
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 				});
 
 				// No local write happened: no sync, no analytics; back in the
@@ -1547,13 +1578,13 @@ describe("List switcher", () => {
 
 			try {
 				await renderHomeReady(harness);
-				openSwitcher();
+				await openSwitcher();
 				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
 				harness.setStaleMissingListIds([harness.scenario.lists.pharmacy.id]);
 
-				fireEvent.press(screen.getByLabelText("Delete Pharmacy"));
+				await fireEvent.press(screen.getByLabelText("Delete Pharmacy"));
 				await act(async () => {
-					fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+					await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 				});
 
 				await waitFor(() =>
@@ -1821,6 +1852,6 @@ function TestSafeAreaProvider({ children }: PropsWithChildren) {
 	);
 }
 
-function openAddItemComposer() {
-	fireEvent.press(screen.getByLabelText("Add Item"));
+async function openAddItemComposer() {
+	await fireEvent.press(screen.getByLabelText("Add Item"));
 }
