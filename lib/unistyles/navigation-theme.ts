@@ -1,4 +1,4 @@
-import { DefaultTheme, type Theme } from "@react-navigation/native";
+import { DefaultTheme, type Theme } from "expo-router/react-navigation";
 
 import { lightTheme } from "@/lib/unistyles/unistyles";
 
