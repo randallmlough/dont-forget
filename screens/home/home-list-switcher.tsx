@@ -227,7 +227,19 @@ export function HomeListSwitcher({
 			<View style={styles.sheetContent}>
 				{mode.kind === "switcher" ? (
 					<>
-						<Text style={styles.title}>Switch List</Text>
+						<View style={styles.sheetHeader}>
+							<Text style={styles.title}>Switch List</Text>
+							<Pressable
+								accessibilityRole="button"
+								onPress={onDismiss}
+								style={({ pressed }) => [
+									styles.closeButton,
+									pressed ? styles.pressed : undefined,
+								]}
+							>
+								<Text style={styles.closeButtonLabel}>Close</Text>
+							</Pressable>
+						</View>
 						{rows.status === "loading" ? (
 							<View style={styles.statusContainer}>
 								<ActivityIndicator />
@@ -549,6 +561,22 @@ const styles = StyleSheet.create((theme) => ({
 	title: {
 		...theme.typography.captionStrong,
 		color: theme.colors.textMuted,
+	},
+	sheetHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: theme.spacing(3),
+	},
+	closeButton: {
+		minHeight: theme.spacing(8),
+		paddingHorizontal: theme.spacing(2),
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	closeButtonLabel: {
+		...theme.typography.captionStrong,
+		color: theme.colors.primary,
 	},
 	statusContainer: {
 		alignItems: "center",
