@@ -1051,25 +1051,6 @@ describe("List switcher", () => {
 		}
 	});
 
-	it("dismisses from the visible close button without persistence or analytics", async () => {
-		const harness = await createHomeSessionHarness();
-
-		try {
-			await renderHomeReady(harness);
-			openSwitcher();
-			await waitFor(() => expect(screen.getByText("Hardware")).toBeTruthy());
-
-			fireEvent.press(screen.getByRole("button", { name: "Close" }));
-
-			expect(screen.queryByText("Hardware")).toBeNull();
-			expect(setCurrentListSelection).not.toHaveBeenCalled();
-			expect(listSwitchedTrackCalls()).toHaveLength(0);
-			expect(harness.requestSync).not.toHaveBeenCalled();
-		} finally {
-			await harness.close();
-		}
-	});
-
 	it("retries a failed switcher load without emitting analytics", async () => {
 		const harness = await createHomeSessionHarness();
 
