@@ -1,3 +1,4 @@
+import { memo, useCallback } from "react";
 import {
 	FlatList,
 	type ListRenderItemInfo,
@@ -11,8 +12,14 @@ import { useActiveList } from "./context";
 import type { ActiveListItem } from "./types";
 
 export function ActiveListItems() {
-	const { state } = useActiveList();
+	const { state, actions } = useActiveList();
 	const bottomScrollInset = useAddItemComposerScrollInset();
+	const renderItem = useCallback(
+		({ item }: ListRenderItemInfo<ActiveListItem>) => (
+			<ItemRow item={item} onToggle={actions.toggleItem} />
+		),
+		[actions.toggleItem],
+	);
 
 	return (
 		<FlatList
@@ -31,12 +38,17 @@ export function ActiveListItems() {
 	);
 }
 
-function ItemRow({ item }: { item: ActiveListItem }) {
-	const { actions } = useActiveList();
+function ItemRowComponent({
+	item,
+	onToggle,
+}: {
+	item: ActiveListItem;
+	onToggle: (id: string) => void;
+}) {
 	const detailText = itemDetailText(item);
 
 	function toggle() {
-		void actions.toggleItem(item.id);
+		onToggle(item.id);
 	}
 
 	return (
@@ -77,6 +89,8 @@ function ItemRow({ item }: { item: ActiveListItem }) {
 	);
 }
 
+const ItemRow = memo(ItemRowComponent);
+
 function EmptyList() {
 	return (
 		<View style={styles.emptyState}>
@@ -94,10 +108,6 @@ function ItemSeparator() {
 
 function keyExtractor(item: ActiveListItem) {
 	return item.id;
-}
-
-function renderItem({ item }: ListRenderItemInfo<ActiveListItem>) {
-	return <ItemRow item={item} />;
 }
 
 function itemDetailText(item: ActiveListItem): string | null {
