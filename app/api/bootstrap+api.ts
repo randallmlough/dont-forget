@@ -1,3 +1,6 @@
+import { asError } from "@/lib/errors";
+import { redactAttributes } from "@/lib/redact";
+
 export async function POST(request: Request): Promise<Response> {
 	let UnauthorizedError:
 		| typeof import("@/lib/server/auth")["UnauthorizedError"]
@@ -30,7 +33,10 @@ export async function POST(request: Request): Promise<Response> {
 			return Response.json({ error: error.message }, { status: 401 });
 		}
 
-		console.error("Bootstrap API failed", error);
+		console.error(
+			"Bootstrap API failed",
+			redactAttributes({ error: asError(error) }),
+		);
 		return Response.json({ error: "Bootstrap failed" }, { status: 500 });
 	}
 }

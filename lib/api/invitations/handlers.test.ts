@@ -3,7 +3,10 @@ import {
 	seedInvitationVariantsScenario,
 } from "@/db/server/fixtures";
 import { createTestDirectoryDb } from "@/db/server/test";
-import { createInvitationService } from "@/lib/services/invitation/server";
+import {
+	createInvitationService,
+	type InvitationService,
+} from "@/lib/services/invitation/server";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
@@ -242,6 +245,57 @@ describe("Invitation API handlers", () => {
 			});
 		} finally {
 			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("redacts thrown service errors before logging generic server failures", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const thrownError = new Error(
+			"boom https://db.example.com?authToken=secret-token-value user@example.com",
+		);
+		const service: InvitationService = {
+			createInvitation: jest.fn(async () => {
+				throw thrownError;
+			}),
+			previewInvitation: jest.fn(),
+			acceptInvitation: jest.fn(),
+			listPendingInvitations: jest.fn(),
+			revokeInvitation: jest.fn(),
+		};
+
+		try {
+			const response = await handleCreateInvitation(
+				createApiRequest({ body: { householdId: "hh_avery" } }),
+				{
+					directory: directory.db,
+					authenticate: async (_request, db) =>
+						upsertAuthenticatedUser(
+							{
+								clerkUserId: "user_avery",
+								email: "avery@example.com",
+								firstName: "Avery",
+								lastName: "User",
+								displayName: "Avery User",
+							},
+							db,
+						),
+					createInvitationService: () => service,
+				},
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 500,
+				body: { error: "Server error" },
+			});
+			expect(errorSpy).toHaveBeenCalled();
+			const loggedAttributes = JSON.stringify(errorSpy.mock.calls[0]?.[1]);
+			expect(loggedAttributes).not.toContain("secret-token-value");
+			expect(loggedAttributes).not.toContain("user@example.com");
+			expect(loggedAttributes).toContain("error_message");
+		} finally {
+			errorSpy.mockRestore();
 			await directory.close();
 		}
 	});

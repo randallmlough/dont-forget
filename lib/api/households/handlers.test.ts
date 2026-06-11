@@ -397,6 +397,59 @@ describe("Household API handlers", () => {
 			await directory.close();
 		}
 	});
+
+	it("redacts thrown service errors before logging generic server failures", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const thrownError = new Error(
+			"boom https://db.example.com?authToken=secret-token-value user@example.com",
+		);
+		const service: HouseholdJoinCodeService = {
+			getCurrentJoinCode: jest.fn(),
+			previewJoinCode: jest.fn(),
+			joinByCode: jest.fn(),
+			regenerateJoinCode: jest.fn(async () => {
+				throw thrownError;
+			}),
+			disableJoinCode: jest.fn(),
+			enableJoinCode: jest.fn(),
+		};
+
+		try {
+			const response = await handleRegenerateJoinCode(
+				createApiRequest({ method: "POST" }),
+				{ householdId: "hh_avery" },
+				{
+					directory: directory.db,
+					authenticate: async (_request, db) =>
+						upsertAuthenticatedUser(
+							{
+								clerkUserId: "user_avery",
+								email: "avery@example.com",
+								firstName: "Avery",
+								lastName: "User",
+								displayName: "Avery User",
+							},
+							db,
+						),
+					createHouseholdJoinCodeService: () => service,
+				},
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 500,
+				body: { error: "Server error" },
+			});
+			expect(errorSpy).toHaveBeenCalled();
+			const loggedAttributes = JSON.stringify(errorSpy.mock.calls[0]?.[1]);
+			expect(loggedAttributes).not.toContain("secret-token-value");
+			expect(loggedAttributes).not.toContain("user@example.com");
+			expect(loggedAttributes).toContain("error_message");
+		} finally {
+			errorSpy.mockRestore();
+			await directory.close();
+		}
+	});
 });
 
 function householdDeps(

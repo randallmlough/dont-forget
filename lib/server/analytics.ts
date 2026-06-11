@@ -2,6 +2,7 @@ import { PostHog } from "posthog-node";
 
 import type { EventMap, EventName } from "@/lib/analytics-events";
 import { optionalEnv } from "@/lib/env";
+import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 
@@ -104,5 +105,8 @@ function warnMissingPostHogConfig() {
 function warnCaptureError(error: unknown) {
 	if (warnedCaptureError) return;
 	warnedCaptureError = true;
-	console.warn("Server analytics capture failed", error);
+	console.warn(
+		"Server analytics capture failed",
+		redactAttributes({ error: asError(error) }),
+	);
 }
