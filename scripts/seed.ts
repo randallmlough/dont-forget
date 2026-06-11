@@ -1,18 +1,17 @@
 import { inArray, or } from "drizzle-orm";
-
+import { households, memberships, users } from "@/db/schema/directory";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	directoryClient,
 	directoryDb,
 	householdClient,
 	householdDb,
 	householdDbUrl,
-} from "@/db/client";
+} from "@/db/server/client";
 import {
 	PRIMARY_HOUSEHOLD_SEED,
 	seedPrimaryHouseholdScenario,
-} from "@/db/fixtures";
-import { households, memberships, users } from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/server/fixtures";
 import type { AppEnv } from "@/lib/env";
 import { readTursoMigrationConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";

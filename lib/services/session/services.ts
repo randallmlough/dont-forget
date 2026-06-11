@@ -1,12 +1,12 @@
-import { asError } from "@/lib/errors";
-import type { Logger } from "@/lib/logger";
-import { ensureHouseholdSchemaReady } from "@/lib/services/household/household-schema";
+import { ensureHouseholdSchemaReady } from "@/db/household-schema";
 import {
 	type HouseholdDatabaseConfig,
 	type HouseholdStoreExecutor,
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
-} from "@/lib/services/household/household-store";
+} from "@/db/household-store";
+import { asError } from "@/lib/errors";
+import type { Logger } from "@/lib/logger";
 import { createItemService, type ItemService } from "@/lib/services/item";
 import { createListService, type ListService } from "@/lib/services/list";
 import type { SyncOptions, SyncResult } from "@/lib/services/sync";

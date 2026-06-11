@@ -1,6 +1,8 @@
 import { isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
+import { households } from "@/db/schema/directory";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import {
 	assertProductionConfirmation,
 	readTursoMigrationConfig,
@@ -8,8 +10,6 @@ import {
 import { loadEnvFile } from "@/lib/load-env";
 import { directoryClient } from "./client";
 import { migrateHouseholdDb } from "./household-migrations";
-import { households } from "./schema/directory";
-import { DRIZZLE_MIGRATIONS_TABLE } from "./utils";
 
 const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
 

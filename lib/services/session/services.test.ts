@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
-import { seedPrimaryHouseholdScenario } from "@/db/fixtures";
+import { EXPECTED_HOUSEHOLD_SCHEMA_VERSION } from "@/db/household-schema";
+import type { HouseholdSqlStatement } from "@/db/household-store";
 import { itemChecks, items } from "@/db/schema/household";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
-import { EXPECTED_HOUSEHOLD_SCHEMA_VERSION } from "@/lib/services/household/household-schema";
-import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
+import { seedPrimaryHouseholdScenario } from "@/db/server/fixtures";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 import { createSessionDataServices } from "./services";

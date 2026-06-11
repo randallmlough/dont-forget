@@ -1,18 +1,18 @@
 import { eq } from "drizzle-orm";
 
+import type { HouseholdSqlStatement } from "@/db/household-store";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	itemCheckFixture,
 	itemFixture,
 	listFixture,
 	seedPrimaryHouseholdScenario,
-} from "@/db/fixtures";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/server/fixtures";
 import {
 	createTestDirectoryDb,
 	createTestHouseholdDb,
 	type TestHouseholdDb,
-} from "@/db/test";
-import type { HouseholdSqlStatement } from "@/lib/services/household";
+} from "@/db/server/test";
 import {
 	createMockAnalytics,
 	type MockAnalytics,

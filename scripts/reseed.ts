@@ -7,15 +7,15 @@ import {
 	householdClient,
 	householdDb,
 	householdDbUrl,
-} from "@/db/client";
-import { PRIMARY_HOUSEHOLD_SEED } from "@/db/fixtures";
-import { migrateHouseholdDb } from "@/db/household-migrations";
+} from "@/db/server/client";
+import { PRIMARY_HOUSEHOLD_SEED } from "@/db/server/fixtures";
+import { migrateHouseholdDb } from "@/db/server/household-migrations";
 import {
 	assertDatabaseResetConfirmation,
 	householdDatabasesForReset,
 	resetDirectoryDatabase,
 	resetHouseholdDatabase,
-} from "@/db/reset";
+} from "@/db/server/reset";
 import { readTursoOperatorConfig } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
 import { assertLocalSeedEnvironment, seedLocalDatabases } from "./seed";

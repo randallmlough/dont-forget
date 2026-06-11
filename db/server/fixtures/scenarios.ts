@@ -1,6 +1,4 @@
 import { eq } from "drizzle-orm";
-
-import type { DirectoryDb, HouseholdDb } from "@/db/client";
 import {
 	householdJoinCodeAttempts,
 	householdJoinCodes,
@@ -11,6 +9,7 @@ import {
 	users,
 } from "@/db/schema/directory";
 import { itemChecks, items, lists } from "@/db/schema/household";
+import type { DirectoryDb, HouseholdDb } from "@/db/server/client";
 import {
 	householdFixture,
 	householdJoinCodeAttemptFixture,

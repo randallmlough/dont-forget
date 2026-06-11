@@ -2,7 +2,7 @@ import {
 	isSyncInterruptedError,
 	nativeSyncInterruptedError,
 	SyncInterruptedError,
-} from "./sync-errors";
+} from "./household-store";
 
 describe("sync errors", () => {
 	it("wraps known native network failures as typed sync interruptions", () => {

@@ -10,7 +10,7 @@ import {
 	users,
 } from "@/db/schema/directory";
 import { lists } from "@/db/schema/household";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {
 	householdFixture,

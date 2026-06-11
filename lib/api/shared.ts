@@ -1,5 +1,9 @@
-import { type DirectoryDb, directoryClient, directoryDb } from "@/db/client";
 import type { User } from "@/db/schema/directory";
+import {
+	type DirectoryDb,
+	directoryClient,
+	directoryDb,
+} from "@/db/server/client";
 import { requireEnv } from "@/lib/env";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import { createUserService } from "@/lib/services/user/server";

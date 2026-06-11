@@ -1,9 +1,8 @@
+import type { HouseholdStoreExecutor, SyncResult } from "@/db/household-store";
 import householdMigrationJournal from "@/db/migrations/household/meta/_journal.json";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
-import type { SyncResult } from "@/lib/services/sync/sync-types";
-import type { HouseholdStoreExecutor } from "./household-store";
 
 /**
  * The Household schema version this app build was compiled against: the

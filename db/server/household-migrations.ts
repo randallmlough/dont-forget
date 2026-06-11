@@ -1,9 +1,8 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
-
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import { readTursoMigrationConfig, type TursoMigrationConfig } from "@/lib/env";
 import { householdClient, householdDbUrl } from "./client";
-import { DRIZZLE_MIGRATIONS_TABLE } from "./utils";
 
 const HOUSEHOLD_MIGRATIONS = "./db/migrations/household";
 

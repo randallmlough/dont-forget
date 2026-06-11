@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
-
-import type { DirectoryDb } from "@/db/client";
 import { type User, users } from "@/db/schema/directory";
+import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
 import type { ServerUserProfile } from "@/lib/server/auth";
 

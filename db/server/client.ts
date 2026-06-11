@@ -1,8 +1,8 @@
 import { type Client, createClient } from "@libsql/client/http";
 import { drizzle } from "drizzle-orm/libsql";
+import * as directorySchema from "@/db/schema/directory";
+import * as householdSchema from "@/db/schema/household";
 import { readTursoConfig } from "@/lib/env";
-import * as directorySchema from "./schema/directory";
-import * as householdSchema from "./schema/household";
 
 export type DirectoryDb = ReturnType<typeof directoryDb>;
 export type HouseholdDb = ReturnType<typeof householdDb>;

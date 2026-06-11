@@ -10,13 +10,14 @@ import type { PropsWithChildren, ReactElement } from "react";
 import { Modal } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
+import type { HouseholdSqlStatement } from "@/db/household-store";
+import { items, lists } from "@/db/schema/household";
 import {
 	type PrimaryHouseholdScenario,
 	seedPrimaryHouseholdScenario,
-} from "@/db/fixtures";
-import { items, lists } from "@/db/schema/household";
-import type { TestDirectoryDb, TestHouseholdDb } from "@/db/test";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+} from "@/db/server/fixtures";
+import type { TestDirectoryDb, TestHouseholdDb } from "@/db/server/test";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import { track } from "@/lib/analytics";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {
@@ -24,7 +25,6 @@ import {
 	getCurrentListSelection,
 	setCurrentListSelection,
 } from "@/lib/local-storage/current-list-selection";
-import type { HouseholdSqlStatement } from "@/lib/services/household/household-store";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionResourceLease } from "@/lib/services/session/resource-lease";
 import { createSessionDataServices } from "@/lib/services/session/services";

@@ -5,7 +5,7 @@ export async function POST(request: Request): Promise<Response> {
 
 	try {
 		const [db, bootstrap, auth] = await Promise.all([
-			import("@/db/client"),
+			import("@/db/server/client"),
 			import("@/lib/services/session/server"),
 			import("@/lib/server/auth"),
 		]);

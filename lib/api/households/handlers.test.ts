@@ -1,17 +1,17 @@
+import { householdJoinCodeAttempts } from "@/db/schema/directory";
 import {
 	householdJoinCodeAttemptFixture,
 	PRIMARY_HOUSEHOLD_SEED,
 	seedHouseholdJoinCodeAuditScenario,
 	seedMultiHouseholdUserScenario,
 	seedPrimaryHouseholdScenario,
-} from "@/db/fixtures";
-import { householdJoinCodeAttempts } from "@/db/schema/directory";
+} from "@/db/server/fixtures";
 import {
 	createTestDirectoryDb,
 	createTestHouseholdDb,
 	type TestDirectoryDb,
 	type TestHouseholdDb,
-} from "@/db/test";
+} from "@/db/server/test";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import {
 	createHouseholdJoinCodeService,

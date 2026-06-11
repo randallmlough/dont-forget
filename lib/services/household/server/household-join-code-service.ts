@@ -1,7 +1,5 @@
 import { randomInt } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
-
-import type { DirectoryDb } from "@/db/client";
 import {
 	type HouseholdJoinCode,
 	householdJoinCodeAttempts,
@@ -9,6 +7,7 @@ import {
 	householdJoinCodeUses,
 	households,
 } from "@/db/schema/directory";
+import type { DirectoryDb } from "@/db/server/client";
 import { runWithSqliteBusyRetry } from "@/db/utils";
 import {
 	type HouseholdJoinCodeSource,

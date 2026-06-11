@@ -28,11 +28,27 @@ function isAppApiFile(filename) {
 	return /\/app\/api\/.*\+api\.tsx?$/.test(filename);
 }
 
+function isInsideFunction(node) {
+	let current = node.parent;
+	while (current) {
+		if (
+			current.type === "FunctionDeclaration" ||
+			current.type === "FunctionExpression" ||
+			current.type === "ArrowFunctionExpression"
+		) {
+			return true;
+		}
+		current = current.parent;
+	}
+	return false;
+}
+
 module.exports = {
 	dynamicImportSource,
 	filenameFromContext,
 	importSource,
 	isAppApiFile,
+	isInsideFunction,
 	isTestFile,
 	normalizePath,
 };

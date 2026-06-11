@@ -14,7 +14,7 @@ We will keep the server as the only schema writer and gate session open on schem
 
 ## Consequences
 
-- `lib/services/household/household-schema.ts` owns `EXPECTED_HOUSEHOLD_SCHEMA_VERSION` (the newest bundled journal `when`) and `ensureHouseholdSchemaReady`. `createSessionDataServices` runs it for sync-authorized stores before returning services; reads can no longer race the first pull after a migration.
+- `db/household-schema.ts` owns `EXPECTED_HOUSEHOLD_SCHEMA_VERSION` (the newest bundled journal `when`) and `ensureHouseholdSchemaReady`. `createSessionDataServices` runs it for sync-authorized stores before returning services; reads can no longer race the first pull after a migration.
 - A replica that is still stale after the gate's sync (offline open, or the remote was not migrated yet) proceeds on the previous schema. This residual case keeps ADR-0003's rule alive: Household migrations must stay backward-compatible with the previous shipped app version (additive / expand-contract; renames and drops need a two-phase rollout). A local schema newer than the app build logs a warning and proceeds for the same reason.
 - Operational ordering: migrate remote Household DBs (`make db-migrate`) before running app code built against the new schema. The spike showed pushing local writes that reference a column the remote lacks silently migrates the remote via pushed DDL — do not rely on that; it bypasses the fanout's `__drizzle_migrations` bookkeeping.
 - The Home List subscribes to sync status while in an error state and retries on the next successful sync (`screens/home/use-home-current-list.ts`), so mid-session healing (for example connectivity returning) no longer requires a manual retry.

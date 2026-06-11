@@ -28,7 +28,7 @@ module.exports = {
 		"!**/*.d.ts",
 		"!**/*.test.{ts,tsx}",
 		"!**/db/migrations/**",
-		"!db/test.ts",
+		"!db/server/test.ts",
 		"!lib/test/**/*",
 	],
 };

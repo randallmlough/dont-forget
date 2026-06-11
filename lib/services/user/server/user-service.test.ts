@@ -1,5 +1,5 @@
 import { users } from "@/db/schema/directory";
-import { createTestDirectoryDb } from "@/db/test";
+import { createTestDirectoryDb } from "@/db/server/test";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import { createUserService } from "./user-service";
 

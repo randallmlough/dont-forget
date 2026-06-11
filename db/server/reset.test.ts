@@ -8,7 +8,7 @@ import {
 	users,
 } from "@/db/schema/directory";
 import { itemChecks, items, lists } from "@/db/schema/household";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/test";
+import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import {
 	assertDatabaseResetConfirmation,
 	householdDatabasesForReset,
