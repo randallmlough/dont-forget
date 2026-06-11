@@ -185,11 +185,7 @@ export function createListService(deps: ListServiceDeps): ListService {
           `,
 					args: [id, validated.name, deps.userId, now, now],
 				});
-				analytics.track("list_created", {
-					household_id: deps.householdId,
-					list_id: id,
-					user_id: deps.userId,
-				});
+				analytics.track("list_created", analyticsProperties(deps, id));
 
 				return {
 					status: "available",
@@ -281,11 +277,10 @@ export function createListService(deps: ListServiceDeps): ListService {
 				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
 					return reclassifyLostWrite(deps.store, input.listId);
 				}
-				analytics.track("list_renamed", {
-					household_id: deps.householdId,
-					list_id: input.listId,
-					user_id: deps.userId,
-				});
+				analytics.track(
+					"list_renamed",
+					analyticsProperties(deps, input.listId),
+				);
 
 				return {
 					status: "available",
@@ -331,11 +326,10 @@ export function createListService(deps: ListServiceDeps): ListService {
 				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
 					return reclassifyLostWrite(deps.store, input.listId);
 				}
-				analytics.track("list_deleted", {
-					household_id: deps.householdId,
-					list_id: input.listId,
-					user_id: deps.userId,
-				});
+				analytics.track(
+					"list_deleted",
+					analyticsProperties(deps, input.listId),
+				);
 
 				return {
 					status: "deleted",
@@ -518,6 +512,14 @@ function validateListName(
 	}
 
 	return { ok: true, name };
+}
+
+function analyticsProperties(deps: ListServiceDeps, listId: string) {
+	return {
+		household_id: deps.householdId,
+		list_id: listId,
+		user_id: deps.userId,
+	};
 }
 
 function randomUuid(): string {
