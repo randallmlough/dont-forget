@@ -122,8 +122,9 @@ function ActiveListProviderContent({
 				await onAddItem({ name, quantity, notes });
 				setErrorIfMounted(null);
 				requestLocalWriteSync();
-			} catch {
-				setErrorIfMounted("Unable to save that Item. The List was refreshed.");
+			} catch (error) {
+				setErrorIfMounted("Unable to save that Item. Please try again.");
+				throw error;
 			}
 		},
 		[onAddItem, requestLocalWriteSync, setErrorIfMounted],
@@ -139,9 +140,7 @@ function ActiveListProviderContent({
 				setErrorIfMounted(null);
 				requestLocalWriteSync();
 			} catch {
-				setErrorIfMounted(
-					"Unable to save that change. The List was refreshed.",
-				);
+				setErrorIfMounted("Unable to save that change. Please try again.");
 			}
 		},
 		[onSetItemChecked, requestLocalWriteSync, setErrorIfMounted, state.items],

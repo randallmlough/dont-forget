@@ -14,7 +14,11 @@ export function useSessionQuery<T>(options: {
 	loadKey: string;
 	load: () => Promise<T>;
 	errorMessage: string;
-}): { state: SessionQueryState<T>; refetch: () => void } {
+}): {
+	state: SessionQueryState<T>;
+	refetch: () => void;
+	reload: () => void;
+} {
 	const { session, loadKey, errorMessage } = options;
 	const logger = useLogger();
 	const loadRef = useRef(options.load);
@@ -101,9 +105,13 @@ export function useSessionQuery<T>(options: {
 		[publish],
 	);
 
-	function refetch() {
+	const refetch = useCallback(() => {
 		runLoad({ resetToLoading: false });
-	}
+	}, [runLoad]);
+
+	const reload = useCallback(() => {
+		runLoad({ resetToLoading: true });
+	}, [runLoad]);
 
 	useEffect(() => {
 		loadRef.current = options.load;
@@ -152,5 +160,5 @@ export function useSessionQuery<T>(options: {
 		return () => subscription.remove();
 	}, [session.services.changes, runLoad]);
 
-	return { state, refetch };
+	return { state, refetch, reload };
 }

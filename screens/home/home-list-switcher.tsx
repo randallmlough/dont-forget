@@ -42,7 +42,7 @@ import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
  * no analytics for them and never emits `list_switched` for create or
  * delete-fallback selection repair.
  *
- * `onSwitched` (= resolver retry) flips Home into its loading state, which
+ * `onSwitched` (= resolver reload) flips Home into its loading state, which
  * unmounts this sheet's subtree; every `onSwitched()` call is therefore
  * paired with `onDismiss()` so the Modal closes instead of flickering
  * through an unmount/remount.

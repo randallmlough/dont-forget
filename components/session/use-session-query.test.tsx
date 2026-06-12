@@ -171,6 +171,28 @@ describe("useSessionQuery", () => {
 		expect(screen.queryByText("Unable to load")).toBeNull();
 	});
 
+	it("reload resets ready data and surfaces failures", async () => {
+		const session = sessionFixture();
+		const reload = deferred<string>();
+		const load = jest
+			.fn<Promise<string>, []>()
+			.mockResolvedValueOnce("Milk")
+			.mockReturnValueOnce(reload.promise);
+		await render(<QueryView session={session} loadKey="list" load={load} />);
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+		expect(screen.queryByText("Milk")).toBeNull();
+		await rejectLoad(reload, new Error("offline"));
+
+		await waitFor(() =>
+			expect(screen.getByText("Unable to load")).toBeTruthy(),
+		);
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
 	it("removes the subscription and discards in-flight results on unmount", async () => {
 		const session = sessionFixture();
 		const pending = deferred<string>();
@@ -216,7 +238,7 @@ function QueryView({
 	loadKey: string;
 	load: () => Promise<string>;
 }) {
-	const { state, refetch } = useSessionQuery({
+	const { state, refetch, reload } = useSessionQuery({
 		session,
 		loadKey,
 		load,
@@ -230,6 +252,9 @@ function QueryView({
 			<Pressable accessibilityRole="button" onPress={refetch}>
 				<Text>Retry</Text>
 			</Pressable>
+			<Pressable accessibilityRole="button" onPress={reload}>
+				<Text>Reload</Text>
+			</Pressable>
 		</>
 	);
 }
@@ -238,6 +263,13 @@ async function resolveLoad<T>(load: Deferred<T>, value: T) {
 	await act(async () => {
 		load.resolve(value);
 		await load.promise;
+	});
+}
+
+async function rejectLoad<T>(load: Deferred<T>, error: unknown) {
+	await act(async () => {
+		load.reject(error);
+		await load.promise.catch(() => undefined);
 	});
 }
 

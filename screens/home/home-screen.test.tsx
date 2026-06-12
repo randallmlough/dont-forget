@@ -1045,6 +1045,43 @@ describe("List switcher", () => {
 		}
 	});
 
+	it("shows a retryable List error when explicit switch re-resolution fails", async () => {
+		const harness = await createHomeSessionHarness();
+		jest
+			.mocked(setCurrentListSelection)
+			.mockImplementation(async (_userId, _householdId, listId) => {
+				jest.mocked(getCurrentListSelection).mockResolvedValue(listId);
+			});
+
+		try {
+			await renderHomeReady(harness);
+			await openSwitcher();
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+			harness.failNextListRead();
+
+			await act(async () => {
+				await fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
+			});
+
+			await waitFor(() =>
+				expect(screen.getByText("List unavailable")).toBeTruthy(),
+			);
+			expect(
+				screen.getByText("Unable to load this List. Please try again."),
+			).toBeTruthy();
+			expect(screen.queryByText("Milk")).toBeNull();
+			expect(screen.queryByText("Current")).toBeNull();
+			expect(setCurrentListSelection).toHaveBeenCalledWith(
+				harness.scenario.users.avery.id,
+				harness.scenario.household.id,
+				harness.scenario.lists.pharmacy.id,
+			);
+			expect(listSwitchedTrackCalls()).toHaveLength(1);
+		} finally {
+			await harness.close();
+		}
+	});
+
 	it("does not emit list_switched when selection persistence fails", async () => {
 		const harness = await createHomeSessionHarness();
 		jest
@@ -1658,6 +1695,7 @@ type HomeSessionHarness = {
 	listListsReadCount: () => number;
 	getListReadCount: () => number;
 	fireChange: () => void;
+	failNextListRead: () => void;
 	failNextListListsRead: () => void;
 	setStaleMissingListIds: (listIds: string[]) => void;
 	setStaleDeletedListIds: (listIds: string[]) => void;
@@ -1817,6 +1855,9 @@ async function createHomeSessionHarness(
 			for (const listener of changeListeners) {
 				listener();
 			}
+		},
+		failNextListRead() {
+			shouldFailNextListRead = true;
 		},
 		failNextListListsRead() {
 			shouldFailNextListListsRead = true;

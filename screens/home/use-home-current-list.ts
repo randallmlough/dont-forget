@@ -30,6 +30,7 @@ export type HomeCurrentListState =
 export function useHomeCurrentList(session: AuthenticatedAppSession): {
 	state: HomeCurrentListState;
 	retry: () => void;
+	reload: () => void;
 } {
 	const query = useSessionQuery({
 		session,
@@ -40,9 +41,10 @@ export function useHomeCurrentList(session: AuthenticatedAppSession): {
 
 	return {
 		state: homeCurrentListStateFromQuery(query.state),
-		// Current List selection lives in AsyncStorage, so switch/create flows
-		// still refetch explicitly after persisting a new selection.
-		retry: query.refetch,
+		retry: query.reload,
+		// Current List selection lives in AsyncStorage, so switch/create/delete
+		// flows reset and re-resolve after persisting a new selection.
+		reload: query.reload,
 	};
 }
 

@@ -72,7 +72,7 @@ function HomeCurrentListResource({
 						onDismiss={() => setSwitcherOpen(false)}
 						// A successful create persists the selection, then re-resolution
 						// renders the new empty Current List.
-						onSwitched={list.retry}
+						onSwitched={list.reload}
 					/>
 				) : null}
 			</>
@@ -102,7 +102,7 @@ function HomeCurrentListResource({
 					onDismiss={() => setSwitcherOpen(false)}
 					// Task 5 re-resolution: re-reads the freshly stored selection and
 					// remounts the Active List boundary via the listId-keyed Provider.
-					onSwitched={list.retry}
+					onSwitched={list.reload}
 				/>
 			) : null}
 		</>

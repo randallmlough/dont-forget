@@ -250,13 +250,18 @@ describe("ActiveList", () => {
 
 		await waitFor(() =>
 			expect(
-				screen.getByText("Unable to save that Item. The List was refreshed."),
+				screen.getByText("Unable to save that Item. Please try again."),
 			).toBeTruthy(),
 		);
 		expect(screen.queryByRole("checkbox", { name: "Milk" })).toBeNull();
 		expect(
 			screen.getByText("This List is empty.", { includeHiddenElements: true }),
 		).toBeTruthy();
+		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
+		expect(screen.getByLabelText("Quantity").props.value).toBe("1 gallon");
+		expect(screen.getByLabelText("Item note").props.value).toBe(
+			"Organic if easy",
+		);
 	});
 
 	it("does not submit a note after the note field is toggled off", async () => {
@@ -306,7 +311,7 @@ describe("ActiveList", () => {
 
 		await waitFor(() =>
 			expect(
-				screen.getByText("Unable to save that Item. The List was refreshed."),
+				screen.getByText("Unable to save that Item. Please try again."),
 			).toBeTruthy(),
 		);
 		expect(screen.queryByRole("checkbox", { name: "Milk" })).toBeNull();
