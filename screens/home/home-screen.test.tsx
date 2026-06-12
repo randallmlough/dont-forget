@@ -27,11 +27,13 @@ import {
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionResourceLease } from "@/lib/services/session/resource-lease";
 import { createSessionDataServices } from "@/lib/services/session/services";
-import type { SyncStatus } from "@/lib/services/sync";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 
 jest.mock("@/components/session", () => ({
+	...jest.requireActual<typeof import("@/components/session")>(
+		"@/components/session",
+	),
 	useAuthenticatedAppSession: jest.fn(),
 }));
 
@@ -284,21 +286,8 @@ describe("HomeScreenView", () => {
 		}
 	});
 
-	it("reloads a failed List automatically when a sync completes", async () => {
+	it("re-queries a failed List when the change signal fires", async () => {
 		const harness = await createHomeSessionHarness({ failNextListRead: true });
-		const syncListeners = new Set<(status: SyncStatus) => void>();
-		harness.session.services.sync = {
-			getStatus: () => "synced",
-			subscribe: (listener) => {
-				syncListeners.add(listener);
-				return {
-					remove() {
-						syncListeners.delete(listener);
-					},
-				};
-			},
-			requestSync: async () => null,
-		};
 
 		try {
 			await renderWithSafeArea(
@@ -313,7 +302,7 @@ describe("HomeScreenView", () => {
 			);
 
 			await act(() => {
-				for (const listener of syncListeners) listener("synced");
+				harness.fireChange();
 			});
 
 			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
@@ -634,6 +623,9 @@ describe("HomeScreenView", () => {
 			await act(async () => {
 				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
+			await act(() => {
+				harness.fireChange();
+			});
 			await waitFor(() => expect(screen.getByText("Snacks")).toBeTruthy());
 
 			jest
@@ -647,6 +639,9 @@ describe("HomeScreenView", () => {
 					session={{ ...harness.session }}
 				/>,
 			);
+			await act(() => {
+				harness.fireChange();
+			});
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
@@ -685,12 +680,18 @@ describe("HomeScreenView", () => {
 			await act(async () => {
 				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
+			await act(() => {
+				harness.fireChange();
+			});
 			await waitFor(() => expect(screen.getByText("Yogurt")).toBeTruthy());
 			expect(screen.getByText("half carton - Plain Greek")).toBeTruthy();
 			await act(async () => {
 				await fireEvent.press(
 					screen.getByRole("checkbox", { name: /^Yogurt\b/ }),
 				);
+			});
+			await act(() => {
+				harness.fireChange();
 			});
 
 			const persistedItem = await harness.household.db.query.items.findFirst({
@@ -825,6 +826,9 @@ describe("HomeScreenView", () => {
 			await act(async () => {
 				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
+			await act(() => {
+				harness.fireChange();
+			});
 			await waitFor(() => expect(screen.getByText("Lantern")).toBeTruthy());
 
 			const persistedItem = await harness.household.db.query.items.findFirst({
@@ -841,33 +845,39 @@ describe("HomeScreenView", () => {
 });
 
 describe("List switcher", () => {
-	it("does not start a queued switcher load after unmount", async () => {
-		const queuedMicrotasks: VoidFunction[] = [];
-		const queueMicrotaskSpy = jest
-			.spyOn(globalThis, "queueMicrotask")
-			.mockImplementation((callback) => {
-				queuedMicrotasks.push(callback);
-			});
+	it("removes the switcher change subscription after unmount", async () => {
+		const changeListeners = new Set<() => void>();
 		const listLists = jest.fn(async () => []);
-		const session = homeListSwitcherSession({ listLists });
+		const session = homeListSwitcherSession({
+			listLists,
+			changes: {
+				subscribe(listener) {
+					changeListeners.add(listener);
+					return {
+						remove() {
+							changeListeners.delete(listener);
+						},
+					};
+				},
+			},
+		});
 
 		function Harness() {
 			useHomeListSwitcherRows(session);
 			return null;
 		}
 
-		try {
-			const rendered = await render(<Harness />);
-			await rendered.unmount();
+		const rendered = await render(<Harness />);
+		await waitFor(() => expect(listLists).toHaveBeenCalledTimes(1));
+		expect(changeListeners.size).toBe(1);
 
-			expect(listLists).not.toHaveBeenCalled();
-			await act(async () => {
-				for (const run of queuedMicrotasks) run();
-			});
-			expect(listLists).not.toHaveBeenCalled();
-		} finally {
-			queueMicrotaskSpy.mockRestore();
-		}
+		await rendered.unmount();
+		expect(changeListeners.size).toBe(0);
+
+		await act(() => {
+			for (const listener of changeListeners) listener();
+		});
+		expect(listLists).toHaveBeenCalledTimes(1);
 	});
 
 	async function renderHomeReady(harness: HomeSessionHarness) {
@@ -1021,6 +1031,9 @@ describe("List switcher", () => {
 			);
 			await act(async () => {
 				await fireEvent.press(screen.getByLabelText("Submit Item"));
+			});
+			await act(() => {
+				harness.fireChange();
 			});
 			await waitFor(() => expect(screen.getByText("Bandages")).toBeTruthy());
 			const persistedItem = await harness.household.db.query.items.findFirst({
@@ -1644,6 +1657,7 @@ type HomeSessionHarness = {
 	listReadCount: () => number;
 	listListsReadCount: () => number;
 	getListReadCount: () => number;
+	fireChange: () => void;
 	failNextListListsRead: () => void;
 	setStaleMissingListIds: (listIds: string[]) => void;
 	setStaleDeletedListIds: (listIds: string[]) => void;
@@ -1678,6 +1692,7 @@ async function createHomeSessionHarness(
 	let staleArchivedListIds = new Set<string>();
 	let shouldFailNextListRead = options.failNextListRead ?? false;
 	let shouldFailNextListListsRead = false;
+	const changeListeners = new Set<() => void>();
 	const execute = async (statement: HouseholdSqlStatement) => {
 		if (isListRead(statement)) {
 			listReadCount += 1;
@@ -1721,7 +1736,14 @@ async function createHomeSessionHarness(
 			store: {
 				syncAuthorized: false,
 				execute,
-				subscribeToChanges: () => ({ remove() {} }),
+				subscribeToChanges: (listener) => {
+					changeListeners.add(listener);
+					return {
+						remove() {
+							changeListeners.delete(listener);
+						},
+					};
+				},
 				close() {},
 			},
 		},
@@ -1777,6 +1799,7 @@ async function createHomeSessionHarness(
 		services: {
 			lists: lease.services.lists,
 			items: lease.services.items,
+			changes: dataServices.changes,
 			sync: syncCoordinator,
 		},
 	};
@@ -1790,6 +1813,11 @@ async function createHomeSessionHarness(
 		listReadCount: () => listReadCount,
 		listListsReadCount: () => listListsReadCount,
 		getListReadCount: () => getListReadCount,
+		fireChange() {
+			for (const listener of changeListeners) {
+				listener();
+			}
+		},
 		failNextListListsRead() {
 			shouldFailNextListListsRead = true;
 		},
@@ -1854,8 +1882,10 @@ function staleListRow(
 }
 
 function homeListSwitcherSession({
+	changes,
 	listLists,
 }: {
+	changes?: AuthenticatedAppSession["services"]["changes"];
 	listLists: AuthenticatedAppSession["services"]["lists"]["listLists"];
 }): AuthenticatedAppSession {
 	const unusedServiceCall = async () => {
@@ -1907,6 +1937,7 @@ function homeListSwitcherSession({
 		services: {
 			lists,
 			items,
+			changes,
 			sync: passiveSyncCoordinator(),
 		},
 	};
