@@ -5,6 +5,33 @@
 - This is **Don't Forget**, an iOS-only Expo/React Native shared shopping-list app.
 - Before non-trivial work, search `CONTEXT.md` and `docs/`, then confirm behavior in source. `CONTEXT.md` owns domain language: `Household`, `Member`, `Owner`, `User`, `List`, `Item`, and `Invitation`; do not replace them with group/team/account/todo/invite link terminology.
 
+## Commands
+
+- `make format` — apply Biome formatting and safe fixes; run before verification.
+- `make verify` — typecheck, Biome, ESLint, and tests; the standard final proof for any change.
+- `make help` — list all other targets (db, simulator, Storybook, etc.).
+
+## Code Standards (read BEFORE writing code)
+
+Read the relevant file before starting work, not after. `docs/code-standards/README.md` defines requirement levels and the change checklist for non-trivial work.
+
+| Task involves...                        | Read first                                               |
+|-----------------------------------------|----------------------------------------------------------|
+| Placing new files, services, routes     | docs/code-standards/architecture.md                      |
+| React components, hooks, state, effects | docs/code-standards/react.md                             |
+| Lists, gestures, images, animation      | docs/code-standards/react-native.md                      |
+| Compound components, feature surfaces   | docs/code-standards/react-composition.md                 |
+| Bottom sheets, shared UI patterns       | docs/code-standards/ui-composition.md                    |
+| Styling or theme tokens                 | docs/code-standards/styling.md                           |
+| Tests or Storybook stories              | docs/code-standards/testing.md                           |
+| Types, Zod, external boundaries         | docs/code-standards/typescript.md                        |
+| Imports, lint, verification             | docs/code-standards/tooling.md                           |
+| Naming anything new                     | CONTEXT.md (domain language)                             |
+| DB schema or migrations                 | docs/guides/adding-database-migration.md                 |
+| New domain service                      | docs/guides/creating-domain-service.md                   |
+| Analytics events or logging             | docs/guides/adding-analytics-event-or-logger-contract.md |
+| New screen                              | docs/guides/adding-screen-view-split.md                  |
+
 ## Docs Directory Map
 
 - `docs/adr/` records architectural decisions and the context that made them true.
@@ -20,9 +47,7 @@
 
 ## 0. Before You Start
 
-Assume every project is greenfield with no users. I strive for a single source of truth: 
-
-This means no fallbacks, no legacy code support, just one clean stream of information flow
+Assume every project is greenfield with no users. I strive for a single source of truth: this means no fallbacks, no legacy code support, just one clean stream of information flow.
 
 ## 1. Think Before Coding
 
