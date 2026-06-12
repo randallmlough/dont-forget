@@ -201,3 +201,54 @@ test empirically and record the answer. (Recorded below once known.)
     /tmp/expo-build-sim1c.log.
   - Lesson for the real replatform: prefer op-sqlite + explicit OPSqliteOpenFactory on
     RN; the implicit quick-sqlite path is fragile with Metro bundling.
+
+- **Final adapter versions**: `@powersync/op-sqlite@0.9.10`, `@op-engineering/op-sqlite@16.2.0`.
+
+### Step 2 — DONE (VERIFIED)
+
+- Both apps build + run. After the op-sqlite switch, the app launches clean on both
+  sims showing "connected · synced", "Groceries (H1)", and items Milk + Eggs synced down
+  from Postgres via PowerSync. Only warning is the SafeAreaView deprecation (cosmetic).
+- Drove the UI with `rocketsim` (accessibility-id taps/types + screenshots). Worked well.
+  Note: `rocketsim interact type` takes the text as a POSITIONAL arg (not `--text`), and
+  element ids are per-snapshot (re-read elements before each tap).
+
+- **VERIFICATION (Step 2 acceptance) — PASS, cross-device propagation**:
+  - Sim 2 switched to Bob (B). Sim 1 stays Alice (A).
+  - Typed "Bananas" + tapped Add on Sim 1 (A). Polled Sim 2 (B) for the row.
+  - It appeared on Sim 2 on the FIRST poll iteration. Measured wall-clock T0(tap)→found
+    = **0.96 s**, which bounds-from-above the true propagation (it includes the rocketsim
+    tap round-trip, optimistic local insert, uploadData→Node→Postgres, PowerSync
+    replication, sync-down to Sim 2, AND my element-read poll overhead). No manual refresh.
+  - Confirmed the row in Postgres: `items` has `name=Bananas, list_id=list-h1,
+    created_by_user_id=user-a` with a client-generated UUID id → full write round-trip
+    through the Node endpoint (LWW + authz) is real, not just local-optimistic.
+  - Screenshot evidence saved: /tmp/spike-shots/sim1-alice.png, /tmp/spike-shots/sim2-bob.png
+    (sim2 shows Bob selected + Milk/Eggs/Bananas).
+
+- **Bonus check — per-user checked state (ADR-0002)**: tapped Milk on Sim 2 (Bob).
+  Postgres `item_checks` then held TWO rows for item-h1-1: `(user-a)` (seeded) and
+  `(user-b)` (Bob's tap) — distinct per-user rows, no conflict. The split-out check model
+  syncs correctly through PowerSync.
+
+- **Backend logic also unit-checked directly via curl** (before wiring the app):
+  - A adds to list-h1 (H1, A member) → applied.
+  - B adds to list-h2 (H2, B NOT member) → 403 rejected.
+  - A sends a stale `updated_at` PATCH → skipped (`stale-lww`); row unchanged in Postgres.
+
+## How to observe the running demo (for the reviewer)
+
+State left running at end of Phase 1:
+- Docker stack UP (`cd spikes/powersync && docker compose ps` → 4 services).
+- Persistent Metro on :8081 (bg). If it died, restart: `cd spikes/powersync/app && npx expo start --dev-client`.
+- App installed + running on BOTH sims:
+  - iPhone 17  `F6EFD6E9-E4E6-472D-B500-FF3E6877A232` (Alice)
+  - iPhone 17e `DE4DB10F-A42B-472A-89A6-567C554A63BF` (Bob)
+- Operator's iPhone 17 Pro `261F6427-...` was left untouched.
+
+Re-verify Step 1: `cd spikes/powersync && node tools/synced-rows.mjs user-a` / `... user-b`.
+Relaunch an app: `xcrun simctl launch <UDID> com.dont-forget.app` (Metro must be up).
+Inspect Postgres: `docker compose exec pg-source psql -U postgres -p 5499 -d postgres -c "table items;"`
+
+NOTE: the demo DB now contains the test artifacts (the "Bananas" item and Bob's Milk
+check) as living proof. To reset to the pristine seed: `docker compose down -v && docker compose up -d`.
