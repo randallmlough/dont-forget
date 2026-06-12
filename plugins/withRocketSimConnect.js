@@ -1,7 +1,10 @@
-const { withAppDelegate, WarningAggregator } = require("@expo/config-plugins");
 const {
-	mergeContents,
-} = require("@expo/config-plugins/build/utils/generateCode");
+	CodeGenerator,
+	withAppDelegate,
+	WarningAggregator,
+} = require("expo/config-plugins");
+
+const { mergeContents } = CodeGenerator;
 
 const objcDefinition = `@interface RocketSimLoader : NSObject
 

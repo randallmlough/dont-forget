@@ -25,7 +25,7 @@ jest.mock("expo-router", () => {
 	};
 });
 
-function fillCreateAccountForm({
+async function fillCreateAccountForm({
 	email = " member@example.com ",
 	password = "correct horse battery staple",
 	confirm = password,
@@ -34,12 +34,12 @@ function fillCreateAccountForm({
 	password?: string;
 	confirm?: string;
 } = {}) {
-	fireEvent.changeText(screen.getByPlaceholderText("Email"), email);
-	fireEvent.changeText(
+	await fireEvent.changeText(screen.getByPlaceholderText("Email"), email);
+	await fireEvent.changeText(
 		screen.getByPlaceholderText("Password (8+ characters)"),
 		password,
 	);
-	fireEvent.changeText(
+	await fireEvent.changeText(
 		screen.getByPlaceholderText("Confirm password"),
 		confirm,
 	);
@@ -47,10 +47,10 @@ function fillCreateAccountForm({
 
 async function moveToVerification() {
 	clerkMocks.signUpCreate.mockResolvedValue({ createdSessionId: null });
-	render(<SignUpScreen />);
+	await render(<SignUpScreen />);
 
-	fillCreateAccountForm();
-	fireEvent.press(screen.getByText("Create account"));
+	await fillCreateAccountForm();
+	await fireEvent.press(screen.getByText("Create account"));
 
 	await waitFor(() => {
 		expect(clerkMocks.prepareEmailAddressVerification).toHaveBeenCalledWith({
@@ -69,10 +69,10 @@ describe("SignUpScreen", () => {
 			createdSessionId: "session_1",
 		});
 
-		render(<SignUpScreen />);
+		await render(<SignUpScreen />);
 
-		fillCreateAccountForm();
-		fireEvent.press(screen.getByText("Create account"));
+		await fillCreateAccountForm();
+		await fireEvent.press(screen.getByText("Create account"));
 
 		await waitFor(() => {
 			expect(clerkMocks.signUpCreate).toHaveBeenCalledWith({
@@ -91,10 +91,10 @@ describe("SignUpScreen", () => {
 	it("starts email verification when Clerk does not create a session immediately", async () => {
 		clerkMocks.signUpCreate.mockResolvedValue({ createdSessionId: null });
 
-		render(<SignUpScreen />);
+		await render(<SignUpScreen />);
 
-		fillCreateAccountForm();
-		fireEvent.press(screen.getByText("Create account"));
+		await fillCreateAccountForm();
+		await fireEvent.press(screen.getByText("Create account"));
 
 		await waitFor(() => {
 			expect(clerkMocks.prepareEmailAddressVerification).toHaveBeenCalledWith({
@@ -112,10 +112,10 @@ describe("SignUpScreen", () => {
 		expect(Alert.alert).not.toHaveBeenCalled();
 	});
 
-	it("alerts when email or password is missing", () => {
-		render(<SignUpScreen />);
+	it("alerts when email or password is missing", async () => {
+		await render(<SignUpScreen />);
 
-		fireEvent.press(screen.getByText("Create account"));
+		await fireEvent.press(screen.getByText("Create account"));
 
 		expect(Alert.alert).toHaveBeenCalledWith(
 			"Missing info",
@@ -124,11 +124,11 @@ describe("SignUpScreen", () => {
 		expect(clerkMocks.signUpCreate).not.toHaveBeenCalled();
 	});
 
-	it("alerts when password confirmation does not match", () => {
-		render(<SignUpScreen />);
+	it("alerts when password confirmation does not match", async () => {
+		await render(<SignUpScreen />);
 
-		fillCreateAccountForm({ confirm: "different password" });
-		fireEvent.press(screen.getByText("Create account"));
+		await fillCreateAccountForm({ confirm: "different password" });
+		await fireEvent.press(screen.getByText("Create account"));
 
 		expect(Alert.alert).toHaveBeenCalledWith(
 			"Passwords don't match",
@@ -140,10 +140,10 @@ describe("SignUpScreen", () => {
 	it("alerts when Clerk rejects sign-up creation", async () => {
 		clerkMocks.signUpCreate.mockRejectedValue(new Error("Email is invalid."));
 
-		render(<SignUpScreen />);
+		await render(<SignUpScreen />);
 
-		fillCreateAccountForm();
-		fireEvent.press(screen.getByText("Create account"));
+		await fillCreateAccountForm();
+		await fireEvent.press(screen.getByText("Create account"));
 
 		await waitFor(() => {
 			expect(Alert.alert).toHaveBeenCalledWith(
@@ -159,11 +159,11 @@ describe("SignUpScreen", () => {
 			createdSessionId: "session_2",
 		});
 
-		fireEvent.changeText(
+		await fireEvent.changeText(
 			screen.getByPlaceholderText("Verification code"),
 			" 123456 ",
 		);
-		fireEvent.press(screen.getByText("Verify email"));
+		await fireEvent.press(screen.getByText("Verify email"));
 
 		await waitFor(() => {
 			expect(clerkMocks.attemptEmailAddressVerification).toHaveBeenCalledWith({
@@ -182,7 +182,7 @@ describe("SignUpScreen", () => {
 	it("alerts when the verification code is empty", async () => {
 		await moveToVerification();
 
-		fireEvent.press(screen.getByText("Verify email"));
+		await fireEvent.press(screen.getByText("Verify email"));
 
 		expect(Alert.alert).toHaveBeenCalledWith(
 			"Enter the code",
@@ -197,11 +197,11 @@ describe("SignUpScreen", () => {
 			createdSessionId: null,
 		});
 
-		fireEvent.changeText(
+		await fireEvent.changeText(
 			screen.getByPlaceholderText("Verification code"),
 			"123456",
 		);
-		fireEvent.press(screen.getByText("Verify email"));
+		await fireEvent.press(screen.getByText("Verify email"));
 
 		await waitFor(() => {
 			expect(Alert.alert).toHaveBeenCalledWith(
@@ -217,11 +217,11 @@ describe("SignUpScreen", () => {
 			new Error("Code expired."),
 		);
 
-		fireEvent.changeText(
+		await fireEvent.changeText(
 			screen.getByPlaceholderText("Verification code"),
 			"123456",
 		);
-		fireEvent.press(screen.getByText("Verify email"));
+		await fireEvent.press(screen.getByText("Verify email"));
 
 		await waitFor(() => {
 			expect(Alert.alert).toHaveBeenCalledWith(
@@ -234,7 +234,7 @@ describe("SignUpScreen", () => {
 	it("returns to the create-account form from email verification", async () => {
 		await moveToVerification();
 
-		fireEvent.press(screen.getByText("Use a different email"));
+		await fireEvent.press(screen.getByText("Use a different email"));
 
 		expect(screen.getByPlaceholderText("Email")).toBeTruthy();
 		expect(

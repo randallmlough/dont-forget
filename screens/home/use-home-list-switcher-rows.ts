@@ -40,8 +40,15 @@ export function useHomeListSwitcherRows(session: AuthenticatedAppSession): {
 	}, [session]);
 
 	useEffect(() => {
-		void reload();
+		let cancelled = false;
+		// Deferred a microtask so reload's synchronous "loading" setState happens
+		// outside the effect body (react-hooks/set-state-in-effect).
+		queueMicrotask(() => {
+			if (cancelled) return;
+			void reload();
+		});
 		return () => {
+			cancelled = true;
 			// Invalidate any in-flight load on unmount.
 			loadAttemptRef.current += 1;
 		};

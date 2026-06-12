@@ -45,7 +45,7 @@ describe("AuthGate", () => {
 		jest.mocked(hasCachedAuthenticatedAppSession).mockResolvedValue(true);
 		setMockAuthState({ isLoaded: false, isSignedIn: false });
 
-		render(<AuthGate pathname="/" />);
+		await render(<AuthGate pathname="/" />);
 
 		await waitFor(() =>
 			expect(hasCachedAuthenticatedAppSession).toHaveBeenCalledTimes(1),
@@ -57,7 +57,7 @@ describe("AuthGate", () => {
 		jest.mocked(hasCachedAuthenticatedAppSession).mockResolvedValue(true);
 		setMockAuthState({ isLoaded: true, isSignedIn: false });
 
-		render(<AuthGate pathname="/" />);
+		await render(<AuthGate pathname="/" />);
 
 		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/sign-in"));
 		expect(hasCachedAuthenticatedAppSession).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe("AuthGate", () => {
 	it("redirects to sign-in when there is no Clerk session or cached Household session", async () => {
 		setMockAuthState({ isLoaded: true, isSignedIn: false });
 
-		render(<AuthGate pathname="/" />);
+		await render(<AuthGate pathname="/" />);
 
 		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/sign-in"));
 	});
@@ -74,7 +74,7 @@ describe("AuthGate", () => {
 	it("keeps public routes reachable while signed in", async () => {
 		setMockAuthState({ isLoaded: true, isSignedIn: true });
 
-		render(
+		await render(
 			<AuthGate
 				pathname="/invitations/accept"
 				params={{ token: "token-123" }}
@@ -87,7 +87,7 @@ describe("AuthGate", () => {
 	it("keeps public routes reachable while signed out", async () => {
 		setMockAuthState({ isLoaded: true, isSignedIn: false });
 
-		render(
+		await render(
 			<AuthGate pathname="/households/join" params={{ code: "ABCDEFGH" }} />,
 		);
 
@@ -97,7 +97,7 @@ describe("AuthGate", () => {
 	it("redirects signed-in auth routes to safe internal route intent", async () => {
 		setMockAuthState({ isLoaded: true, isSignedIn: true });
 
-		render(
+		await render(
 			<AuthGate pathname="/sign-in" params={{ next: "/household/settings" }} />,
 		);
 
@@ -109,7 +109,7 @@ describe("AuthGate", () => {
 	it("redirects signed-in auth routes to preserved public route intent", async () => {
 		setMockAuthState({ isLoaded: true, isSignedIn: true });
 
-		render(
+		await render(
 			<AuthGate
 				pathname="/sign-in"
 				params={{ next: "/invitations/accept", token: "token-123" }}

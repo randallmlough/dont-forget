@@ -1,10 +1,10 @@
 import { act, render, screen } from "@testing-library/react-native";
-import { Modal, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { BottomSheet } from "./bottom-sheet";
 
-it("renders children inside the sheet Modal while presented", () => {
-	render(
+it("renders children inside the sheet Modal while presented", async () => {
+	const rendered = await render(
 		<BottomSheet isPresented onIsPresentedChange={jest.fn()}>
 			<View>
 				<Text>Sheet content</Text>
@@ -12,12 +12,16 @@ it("renders children inside the sheet Modal while presented", () => {
 		</BottomSheet>,
 	);
 
-	expect(screen.UNSAFE_getByType(Modal)).toBeTruthy();
+	expect(
+		rendered.root?.queryAll((instance) => instance.type === "Modal", {
+			includeSelf: true,
+		}),
+	).toHaveLength(1);
 	expect(screen.getByText("Sheet content")).toBeTruthy();
 });
 
-it("renders nothing when not presented", () => {
-	render(
+it("renders nothing when not presented", async () => {
+	const rendered = await render(
 		<BottomSheet isPresented={false} onIsPresentedChange={jest.fn()}>
 			<View>
 				<Text>Sheet content</Text>
@@ -26,12 +30,16 @@ it("renders nothing when not presented", () => {
 	);
 
 	expect(screen.queryByText("Sheet content")).toBeNull();
-	expect(screen.UNSAFE_queryByType(Modal)).toBeNull();
+	expect(
+		rendered.root?.queryAll((instance) => instance.type === "Modal", {
+			includeSelf: true,
+		}) ?? [],
+	).toHaveLength(0);
 });
 
-it("reports dismissal when the Modal's onRequestClose fires", () => {
+it("reports dismissal when the Modal's onRequestClose fires", async () => {
 	const onIsPresentedChange = jest.fn();
-	render(
+	const rendered = await render(
 		<BottomSheet isPresented onIsPresentedChange={onIsPresentedChange}>
 			<View>
 				<Text>Sheet content</Text>
@@ -40,8 +48,12 @@ it("reports dismissal when the Modal's onRequestClose fires", () => {
 	);
 
 	// Native swipe-down dismissal fires the sheet Modal's onRequestClose.
-	act(() => {
-		screen.UNSAFE_getByType(Modal).props.onRequestClose();
+	await act(() => {
+		rendered.root
+			?.queryAll((instance) => instance.type === "Modal", {
+				includeSelf: true,
+			})[0]
+			?.props.onRequestClose();
 	});
 
 	expect(onIsPresentedChange).toHaveBeenCalledWith(false);

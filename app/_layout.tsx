@@ -1,7 +1,7 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
-import { ThemeProvider } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useGlobalSearchParams, usePathname } from "expo-router";
+import { ThemeProvider } from "expo-router/react-navigation";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef } from "react";
 import "react-native-reanimated";

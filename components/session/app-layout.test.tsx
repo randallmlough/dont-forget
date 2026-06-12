@@ -8,8 +8,8 @@ jest.mock("expo-router", () => ({
 }));
 
 describe("AppLayout", () => {
-	it("renders signed-in routes", () => {
-		render(<AppLayout />);
+	it("renders signed-in routes", async () => {
+		await render(<AppLayout />);
 
 		expect(screen.getByText("Signed-in stack")).toBeTruthy();
 	});

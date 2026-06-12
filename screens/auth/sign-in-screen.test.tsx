@@ -32,17 +32,17 @@ describe("SignInScreen", () => {
 			createdSessionId: "session_123",
 		});
 
-		render(<SignInScreen />);
+		await render(<SignInScreen />);
 
-		fireEvent.changeText(
+		await fireEvent.changeText(
 			screen.getByPlaceholderText("Email"),
 			" member@example.com ",
 		);
-		fireEvent.changeText(
+		await fireEvent.changeText(
 			screen.getByPlaceholderText("Password"),
 			"correct horse battery staple",
 		);
-		fireEvent.press(screen.getByText("Sign in"));
+		await fireEvent.press(screen.getByText("Sign in"));
 
 		await waitFor(() => {
 			expect(clerkMocks.signInCreate).toHaveBeenCalledWith({
