@@ -600,3 +600,58 @@ and configured; a real Clerk dev session JWT passes PowerSync's signature + sub/
 lifetime checks against the LIVE service; the sole gap is the `aud` claim, addable only via a
 Clerk Dashboard JWT template (no API). High confidence the path is sound — only a manual
 Dashboard step (which the spike cannot perform with the secret key alone) remains.
+
+## Q6 — Tooling fit (Expo/dev-client friction, views-over-data, resource footprint)
+
+Most of this is mined from the Phase 1 log above (Step 2); consolidated here with new
+quantitative data.
+
+EXPO / DEV-CLIENT FRICTION (all from Phase 1, real errors+fixes):
+- Native modules: PowerSync RN needs a SQLite adapter native module, so it CANNOT run in
+  Expo Go — it requires a dev client / `expo run:ios` (custom native build). Build via
+  xcodebuild (Xcode 26.5) + CocoaPods 1.16.2; `ios/` is prebuild-generated + gitignored.
+  All three Phase-1 builds ended "Build Succeeded" (logs /tmp/expo-build-sim1*.log, 361-373
+  compile lines each). Not a one-command JS-only install; it is a native rebuild whenever a
+  native dep changes.
+- pnpm friction (RELEVANT — the main repo uses pnpm): pnpm's default symlinked node_modules
+  is NOT resolved by Metro/RN autolinking → `app/.npmrc` with `node-linker=hoisted` is
+  REQUIRED (committed). Standard Expo+pnpm workaround but a real gotcha for the replatform.
+- SQLite adapter choice MATTERS: `@journeyapps/react-native-quick-sqlite` failed at runtime
+  (`Could not resolve ...`) because PowerSync's pre-bundled dist does a dynamic bare
+  `require()` Metro won't bundle. FIX: switched to `@powersync/op-sqlite` +
+  `@op-engineering/op-sqlite` with an EXPLICIT `OPSqliteOpenFactory` (statically imported →
+  Metro always bundles). Lesson for prod: prefer op-sqlite + explicit factory on RN.
+- Config plugin: op-sqlite autolinks (no Expo config plugin needed); quick-sqlite needed one.
+  `metro.config.js` kept (SDK-recommended, harmless).
+- Polyfills: SDK 1.35 pre-bundles fetch/stream polyfills; only
+  `@azure/core-asynciterator-polyfill` (watched-query async iterators) +
+  `react-native-get-random-values` (client uuid) are needed. Much shorter than older guides.
+- Final client dep set (package.json): @powersync/react-native@1.35.4, @powersync/react@1.10,
+  @powersync/op-sqlite@0.9.10, @op-engineering/op-sqlite@16.2.0, on Expo SDK 56 / RN 0.85 /
+  React 19.2. `npx tsc --noEmit` clean.
+
+CLIENT SCHEMA = VIEWS OVER SYNCED DATA, NO CLIENT MIGRATIONS (verified):
+- `app/src/schema.ts` declares table SHAPES via `new Schema({ Table(...) })`. There is NO
+  CREATE TABLE, no migration file, no schema-version gate anywhere in the app. PowerSync
+  materializes these as SQLite VIEWS over its internal `ps_data` storage at
+  `PowerSyncDatabase` construction. `id` is implicit (must not be declared).
+- Proof it works without migrations: the app rendered correctly from this declarative schema
+  on first run, and Q1's server-side schema reset (`down -v && up -d`) reconciled on the
+  clients with NO client migration step — the client just re-synced the new row set. Changing
+  a column is a code edit, not a migration fanout. This directly removes the prod
+  `db/household-schema.ts` staleness gate + migration machinery (see report section 3).
+
+SERVICE RESOURCE FOOTPRINT (live `docker stats`, idle, single-app, 2 connected sims):
+- powersync-service: ~94 MB RAM, ~0% CPU idle.
+- pg-source (replicated data): ~34 MB. pg-storage (bucket storage): ~45 MB.
+- node backend (upload endpoint): ~20 MB.
+- WHOLE STACK idles < ~200 MB RAM. Images on disk: powersync-service:1.22.0 = 715 MB,
+  postgres:18 = 671 MB (shared by both PG containers). Comfortably fits a small VPS.
+- NODE_OPTIONS caps powersync heap at 1000 MB (`--max-old-space-size=1000`) in compose; not
+  approached at this scale.
+
+Q6 VERDICT: PASS with known, documented friction. PowerSync RN requires a dev-client native
+build (no Expo Go) and a careful SQLite-adapter choice (op-sqlite + explicit factory); pnpm
+needs hoisted node-linker. The "views over synced data" model eliminated client migrations
+entirely (verified). Resource footprint is small (< 200 MB idle, fits one VPS). None of the
+friction is a blocker — all have one-time fixes recorded above.
