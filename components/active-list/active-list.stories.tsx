@@ -3,10 +3,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
-import {
-	ActiveList,
-	type ActiveListInitialState,
-} from "@/components/active-list";
+import { ActiveList, type ActiveListState } from "@/components/active-list";
 import {
 	createActiveListMemoryActions,
 	createPassiveActiveListSyncCoordinator,
@@ -32,11 +29,8 @@ export const WithItems: Story = {
 	render: () => <ActiveListStory initialState={populatedActiveListState} />,
 };
 
-function ActiveListStory({
-	initialState,
-}: {
-	initialState: ActiveListInitialState;
-}) {
+function ActiveListStory({ initialState }: { initialState: ActiveListState }) {
+	const [state, setState] = useState(initialState);
 	const [actions] = useState(() =>
 		createActiveListMemoryActions(initialState, {
 			itemIdPrefix: "story-item",
@@ -48,11 +42,16 @@ function ActiveListStory({
 	return (
 		<View style={styles.canvas}>
 			<ActiveList.Provider
-				initialState={initialState}
+				state={state}
 				currentMemberName="Avery Chen"
-				onLoadList={actions.load}
-				onAddItem={actions.addItem}
-				onSetItemChecked={actions.setItemChecked}
+				onAddItem={async (input) => {
+					await actions.addItem(input);
+					setState(await actions.load());
+				}}
+				onSetItemChecked={async (itemId, checked) => {
+					await actions.setItemChecked(itemId, checked);
+					setState(await actions.load());
+				}}
 				syncCoordinator={syncCoordinator}
 				logger={storybookLogger}
 			>

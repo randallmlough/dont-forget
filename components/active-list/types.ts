@@ -32,8 +32,6 @@ export type ActiveListState = {
 	items: ActiveListItem[];
 };
 
-export type ActiveListInitialState = ActiveListState;
-
 export type ActiveListSyncState = SyncStatus;
 
 export type ActiveListSyncResult = SyncResult;

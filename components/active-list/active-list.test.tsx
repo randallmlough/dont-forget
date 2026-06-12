@@ -5,12 +5,13 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
+import { useState } from "react";
 import { Keyboard } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
 	ActiveList,
-	type ActiveListInitialState,
+	type ActiveListState,
 	type ActiveListSyncCoordinator,
 } from "@/components/active-list";
 import {
@@ -38,7 +39,7 @@ beforeEach(() => {
 	jest.mocked(useLogger).mockReturnValue(mockLogger);
 });
 
-const emptyList: ActiveListInitialState = {
+const emptyList: ActiveListState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [],
@@ -228,7 +229,7 @@ describe("ActiveList", () => {
 		expect(screen.queryByLabelText("Item note")).toBeNull();
 	});
 
-	it("keeps the composer draft open when adding an Item fails", async () => {
+	it("shows an error and keeps prior rows when adding an Item fails", async () => {
 		const actions = memoryListActions(emptyList, {
 			addItem: jest.fn().mockRejectedValue(new Error("write failed")),
 		});
@@ -252,26 +253,15 @@ describe("ActiveList", () => {
 				screen.getByText("Unable to save that Item. The List was refreshed."),
 			).toBeTruthy(),
 		);
-		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
-		expect(screen.getByLabelText("Quantity").props.value).toBe("1 gallon");
-		expect(screen.getByLabelText("Item note").props.value).toBe(
-			"Organic if easy",
-		);
+		expect(screen.queryByRole("checkbox", { name: "Milk" })).toBeNull();
 		expect(
-			screen.getByLabelText("Submit Item").props.accessibilityState,
-		).toEqual({ disabled: false });
+			screen.getByText("This List is empty.", { includeHiddenElements: true }),
+		).toBeTruthy();
 	});
 
 	it("does not submit a note after the note field is toggled off", async () => {
 		const addItem: ActiveListMemoryActions["addItem"] = jest.fn(
-			async (input) => ({
-				id: "test-item-1",
-				name: input.name,
-				quantity: input.quantity,
-				notes: input.notes,
-				checked: false,
-				checkedByMemberName: null,
-			}),
+			async () => undefined,
 		);
 		await renderActiveList(
 			emptyList,
@@ -301,10 +291,9 @@ describe("ActiveList", () => {
 		expect(screen.queryByText("Organic if easy")).toBeNull();
 	});
 
-	it("removes the optimistic Item when add and reload both fail", async () => {
+	it("does not add a local row when adding an Item fails", async () => {
 		const actions = memoryListActions(emptyList, {
 			addItem: jest.fn().mockRejectedValue(new Error("write failed")),
-			load: jest.fn().mockRejectedValue(new Error("reload failed")),
 		});
 		await renderActiveList(emptyList, actions);
 
@@ -317,20 +306,13 @@ describe("ActiveList", () => {
 
 		await waitFor(() =>
 			expect(
-				screen.getByText(
-					"Unable to save that Item. The List could not be refreshed.",
-				),
+				screen.getByText("Unable to save that Item. The List was refreshed."),
 			).toBeTruthy(),
 		);
 		expect(screen.queryByRole("checkbox", { name: "Milk" })).toBeNull();
 		expect(
 			screen.getByText("This List is empty.", { includeHiddenElements: true }),
 		).toBeTruthy();
-		expect(screen.getByLabelText("Item name").props.value).toBe("Milk");
-		expect(mockLogger.error).toHaveBeenCalledWith(
-			"active list reload after add failure failed",
-			{ error: expect.any(Error) },
-		);
 	});
 
 	it("shows pending and offline sync without discarding local Item changes", async () => {
@@ -394,13 +376,12 @@ describe("ActiveList", () => {
 		expect(coordinator.getStatus).toHaveBeenCalled();
 	});
 
-	it("requests local-write sync without reloading outside the sync status transition", async () => {
+	it("requests local-write sync after adding an Item", async () => {
 		const coordinator = controllableSyncCoordinator("synced");
-		const load = jest.fn(async () => emptyList);
 
 		await renderActiveList(
 			emptyList,
-			memoryListActions(emptyList, { load }),
+			memoryListActions(emptyList),
 			coordinator,
 		);
 
@@ -415,75 +396,50 @@ describe("ActiveList", () => {
 				reason: "localWrite",
 			}),
 		);
-		expect(load).not.toHaveBeenCalled();
 	});
 
-	it("requests manual sync before refreshing the List view", async () => {
-		let state = emptyList;
+	it("requests manual sync when refreshing the List view", async () => {
 		const coordinator = controllableSyncCoordinator("synced");
-		const actions = memoryListActions(emptyList, {
-			async load() {
-				return state;
-			},
-		});
-		const load = jest.spyOn(actions, "load");
+		const refreshSync = deferred<{ changed: boolean }>();
 
 		coordinator.requestSync.mockImplementationOnce(async () => {
 			coordinator.emit("pending");
-			state = {
-				...state,
-				items: [
-					...state.items,
-					{
-						id: "test-item-remote",
-						name: "Remote Apples",
-						quantity: null,
-						notes: null,
-						checked: false,
-						checkedByMemberName: null,
-					},
-				],
-			};
+			await refreshSync.promise;
 			coordinator.emit("synced");
 			return { changed: true };
 		});
 
-		await renderActiveList(emptyList, actions, coordinator);
+		await renderActiveList(
+			emptyList,
+			memoryListActions(emptyList),
+			coordinator,
+		);
 
 		await act(async () => {
-			await fireEvent.press(screen.getByText("Refresh"));
+			void fireEvent.press(screen.getByText("Refresh"));
+		});
+		expect(screen.getByText("Refreshing")).toBeTruthy();
+
+		await act(async () => {
+			refreshSync.resolve({ changed: true });
 		});
 
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
-		expect(await screen.findByText("Remote Apples")).toBeTruthy();
 		expect(coordinator.requestSync).toHaveBeenCalledWith({
 			reason: "manualRefresh",
 		});
-		expect(load).toHaveBeenCalledTimes(1);
+		expect(screen.getByText("Refresh")).toBeTruthy();
 	});
 
-	it("reloads visible List rows after coordinator-owned sync completes", async () => {
-		let state = emptyList;
+	it("updates the sync status pill when coordinator-owned sync completes", async () => {
 		const coordinator = controllableSyncCoordinator("synced");
-		const load = jest.fn(async () => state);
-		const actions = memoryListActions(emptyList, { load });
 
-		await renderActiveList(emptyList, actions, coordinator);
+		await renderActiveList(
+			emptyList,
+			memoryListActions(emptyList),
+			coordinator,
+		);
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
-
-		state = {
-			...emptyList,
-			items: [
-				{
-					id: "test-item-remote",
-					name: "Remote Apples",
-					quantity: null,
-					notes: null,
-					checked: false,
-					checkedByMemberName: null,
-				},
-			],
-		};
 
 		await act(async () => {
 			coordinator.emit("pending");
@@ -495,49 +451,10 @@ describe("ActiveList", () => {
 			await Promise.resolve();
 		});
 
-		expect(await screen.findByText("Remote Apples")).toBeTruthy();
-	});
-
-	it("reports manual refresh failure when the visible List cannot reload", async () => {
-		const refreshSync = deferred<{ changed: boolean }>();
-		const load = jest
-			.fn<Promise<ActiveListInitialState>, []>()
-			.mockRejectedValueOnce(new Error("load failed"));
-		const actions = memoryListActions(emptyList, {
-			load,
-		});
-		const coordinator = controllableSyncCoordinator("synced");
-		coordinator.requestSync.mockImplementationOnce(async () => {
-			coordinator.emit("pending");
-			await refreshSync.promise;
-			coordinator.emit("synced");
-			return { changed: true };
-		});
-
-		await renderActiveList(emptyList, actions, coordinator);
 		await waitFor(() => expect(screen.getByText("Synced")).toBeTruthy());
-
-		await act(async () => {
-			await fireEvent.press(screen.getByText("Refresh"));
-		});
-		expect(screen.getByText("Refreshing")).toBeTruthy();
-
-		await act(async () => {
-			refreshSync.resolve({ changed: true });
-		});
-
-		await waitFor(() =>
-			expect(
-				screen.getByText("Unable to refresh this List. Please try again."),
-			).toBeTruthy(),
-		);
-		expect(screen.getByText("Refresh")).toBeTruthy();
-		expect(mockLogger.error).toHaveBeenCalledWith(
-			"active list refresh failed",
-			{
-				error: expect.any(Error),
-			},
-		);
+		expect(
+			screen.getByText("This List is empty.", { includeHiddenElements: true }),
+		).toBeTruthy();
 	});
 
 	it("reports manual refresh failure when sync fails unexpectedly", async () => {
@@ -571,9 +488,8 @@ describe("ActiveList", () => {
 		expect(mockLogger.error).not.toHaveBeenCalled();
 	});
 
-	it("does not reload List data when a sync completes after unmount", async () => {
+	it("does not update after local-write sync completes after unmount", async () => {
 		const syncAfterWrite = deferred<{ changed: boolean }>();
-		const load = jest.fn(async () => emptyList);
 		const coordinator = controllableSyncCoordinator("synced");
 		coordinator.requestSync.mockImplementationOnce(async () => {
 			await syncAfterWrite.promise;
@@ -581,7 +497,7 @@ describe("ActiveList", () => {
 		});
 		const { unmount } = await renderActiveList(
 			emptyList,
-			memoryListActions(emptyList, { load }),
+			memoryListActions(emptyList),
 			coordinator,
 		);
 
@@ -600,28 +516,30 @@ describe("ActiveList", () => {
 			await Promise.resolve();
 		});
 
-		expect(load).not.toHaveBeenCalled();
+		expect(coordinator.requestSync).toHaveBeenCalledTimes(1);
 	});
 });
 
 function renderActiveList(
-	initialState: ActiveListInitialState,
+	initialState: ActiveListState,
 	actions = memoryListActions(initialState),
 	syncCoordinator = passiveSyncCoordinator(),
 ) {
-	return render(
-		<SafeAreaProvider
-			initialMetrics={{
-				frame: { x: 0, y: 0, width: 390, height: 844 },
-				insets: { top: 47, right: 0, bottom: 34, left: 0 },
-			}}
-		>
+	function ActiveListTestHarness() {
+		const [state, setState] = useState(initialState);
+
+		return (
 			<ActiveList.Provider
-				initialState={initialState}
+				state={state}
 				currentMemberName="Avery Chen"
-				onLoadList={actions.load}
-				onAddItem={actions.addItem}
-				onSetItemChecked={actions.setItemChecked}
+				onAddItem={async (input) => {
+					await actions.addItem(input);
+					setState(await actions.load());
+				}}
+				onSetItemChecked={async (itemId, checked) => {
+					await actions.setItemChecked(itemId, checked);
+					setState(await actions.load());
+				}}
 				syncCoordinator={syncCoordinator}
 			>
 				<ActiveList.Screen>
@@ -630,6 +548,17 @@ function renderActiveList(
 					<ActiveList.AddItemForm />
 				</ActiveList.Screen>
 			</ActiveList.Provider>
+		);
+	}
+
+	return render(
+		<SafeAreaProvider
+			initialMetrics={{
+				frame: { x: 0, y: 0, width: 390, height: 844 },
+				insets: { top: 47, right: 0, bottom: 34, left: 0 },
+			}}
+		>
+			<ActiveListTestHarness />
 		</SafeAreaProvider>,
 	);
 }
@@ -740,7 +669,7 @@ function controllableSyncCoordinator(
 }
 
 function memoryListActions(
-	initialState: ActiveListInitialState,
+	initialState: ActiveListState,
 	overrides: Partial<ActiveListMemoryActions> = {},
 ): ActiveListMemoryActions {
 	return {

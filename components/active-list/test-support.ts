@@ -1,16 +1,16 @@
 import type {
-	ActiveListInitialState,
+	ActiveListState,
 	ActiveListSyncCoordinator,
 	AddActiveListItemInput,
 } from "./types";
 
-export const emptyActiveListState: ActiveListInitialState = {
+export const emptyActiveListState: ActiveListState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [],
 };
 
-export const populatedActiveListState: ActiveListInitialState = {
+export const populatedActiveListState: ActiveListState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [
@@ -42,10 +42,8 @@ export const populatedActiveListState: ActiveListInitialState = {
 };
 
 export type ActiveListMemoryActions = {
-	load: () => Promise<ActiveListInitialState>;
-	addItem: (
-		input: AddActiveListItemInput,
-	) => Promise<ActiveListInitialState["items"][number]>;
+	load: () => Promise<ActiveListState>;
+	addItem: (input: AddActiveListItemInput) => Promise<void>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -55,7 +53,7 @@ type ActiveListMemoryActionsOptions = {
 };
 
 export function createActiveListMemoryActions(
-	initialState: ActiveListInitialState,
+	initialState: ActiveListState,
 	options: ActiveListMemoryActionsOptions = {},
 ): ActiveListMemoryActions {
 	const itemIdPrefix = options.itemIdPrefix ?? "memory-item";
@@ -78,7 +76,6 @@ export function createActiveListMemoryActions(
 			};
 			nextItem += 1;
 			state = { ...state, items: [...state.items, item] };
-			return item;
 		},
 		async setItemChecked(itemId, checked) {
 			state = {
