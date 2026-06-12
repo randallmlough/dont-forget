@@ -37,6 +37,10 @@ app/                     minimal Expo client (Step 2)
 
 ## First-time setup: dev keys
 
+> In the Phase-1 worktree the keypair already exists at `keys/` and matches the JWK in
+> `powersync/service.yaml`, so the running demo works without this step. These steps are
+> only needed on a fresh clone (keys are gitignored).
+
 The RS256 dev keypair is gitignored (never commit private keys). Regenerate it and
 re-embed the public JWK before running:
 
