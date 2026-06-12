@@ -353,3 +353,29 @@ server as authoritative for the synced row set.
 Q1 VERDICT: PASS. Offline local writes are instant; offline cold start renders from local
 SQLite with no hang and no data loss; queued INSERTs reach Postgres + propagate on reconnect.
 The one anomaly (lost check UPDATE) was a spike-backend bug, now fixed — NOT an engine issue.
+
+## Q2 — Propagation latency (10 cross-device adds, online)
+
+Method: add a uniquely-named item on Alice (user-a), poll Bob (user-b) `elements` until the
+row appears. T0 = monotonic clock captured immediately before the Add tap; found = when Bob's
+snapshot first contains it. Single python3 process per run → one consistent clock.
+
+Raw deltas (ms), in run order:
+  Lat01=889 Lat02=889 Lat03=858 Lat04=853 Lat05=857
+  Lat06=877 Lat07=897 Lat08=888 Lat09=928 Lat10=874
+All 10 resolved on the FIRST Bob poll (polls=1).
+
+Stats: median = 882.5 ms (0.88 s), worst = 928 ms (0.93 s), best = 853 ms, mean = 881 ms.
+
+REQUIREMENT (seconds-scale propagation): PASS — every run sub-second.
+
+IMPORTANT measurement caveat (report this): these deltas BOUND THE TRUE LATENCY FROM ABOVE.
+Each delta includes, before any sync work: the Add-tap rocketsim round-trip (~700 ms observed
+as `duration_ms` on interact taps) and at least one Bob `elements` read (~150–250 ms). Because
+every run resolved on the first poll, the granularity is one full poll cycle — the real
+engine-side propagation (optimistic insert → uploadData → Node → Postgres → PowerSync
+replication → sync-down) is meaningfully faster than ~0.88 s and we cannot resolve it more
+finely with UI polling. The tight 853–928 ms spread (75 ms) reflects fixed tooling overhead,
+not network variance. Consistent with Phase 1's single ~0.96 s measurement.
+
+Side effect: Lat01–Lat10 + TestType items now sit in list-h1. Will `down -v` reset before Q5.
