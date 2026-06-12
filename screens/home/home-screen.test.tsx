@@ -69,6 +69,9 @@ const noopProviderActions = {
 const { default: HomeScreen, HomeScreenView } = jest.requireActual<
 	typeof import("@/screens/home/home-screen")
 >("@/screens/home/home-screen");
+const { useHomeListSwitcherRows } = jest.requireActual<
+	typeof import("@/screens/home/use-home-list-switcher-rows")
+>("@/screens/home/use-home-list-switcher-rows");
 
 beforeEach(() => {
 	jest.mocked(getCurrentListSelection).mockReset().mockResolvedValue(null);
@@ -838,6 +841,35 @@ describe("HomeScreenView", () => {
 });
 
 describe("List switcher", () => {
+	it("does not start a queued switcher load after unmount", async () => {
+		const queuedMicrotasks: VoidFunction[] = [];
+		const queueMicrotaskSpy = jest
+			.spyOn(globalThis, "queueMicrotask")
+			.mockImplementation((callback) => {
+				queuedMicrotasks.push(callback);
+			});
+		const listLists = jest.fn(async () => []);
+		const session = homeListSwitcherSession({ listLists });
+
+		function Harness() {
+			useHomeListSwitcherRows(session);
+			return null;
+		}
+
+		try {
+			const rendered = await render(<Harness />);
+			await rendered.unmount();
+
+			expect(listLists).not.toHaveBeenCalled();
+			await act(async () => {
+				for (const run of queuedMicrotasks) run();
+			});
+			expect(listLists).not.toHaveBeenCalled();
+		} finally {
+			queueMicrotaskSpy.mockRestore();
+		}
+	});
+
 	async function renderHomeReady(harness: HomeSessionHarness) {
 		const rendered = await renderWithSafeArea(
 			<HomeScreenView
@@ -1817,6 +1849,65 @@ function staleListRow(
 		updated_at: 2,
 		archived_at: lifecycle.archived_at ?? null,
 		deleted_at: lifecycle.deleted_at ?? null,
+	};
+}
+
+function homeListSwitcherSession({
+	listLists,
+}: {
+	listLists: AuthenticatedAppSession["services"]["lists"]["listLists"];
+}): AuthenticatedAppSession {
+	const unusedServiceCall = async () => {
+		throw new Error("Unexpected service call");
+	};
+	const lists: AuthenticatedAppSession["services"]["lists"] = {
+		createList: unusedServiceCall,
+		getList: unusedServiceCall,
+		renameList: unusedServiceCall,
+		deleteList: unusedServiceCall,
+		listLists,
+	};
+	const items: AuthenticatedAppSession["services"]["items"] = {
+		listItems: async () => [],
+		addItem: unusedServiceCall,
+		setItemChecked: unusedServiceCall,
+	};
+
+	return {
+		user: {
+			id: "usr_1",
+			email: "member@example.com",
+			displayName: "Member One",
+		},
+		activeHousehold: { id: "hh_1", name: "Test Household" },
+		households: [
+			{
+				id: "hh_1",
+				name: "Test Household",
+				role: "owner",
+				isActive: true,
+			},
+		],
+		activeMember: {
+			id: "mbr_1",
+			userId: "usr_1",
+			role: "owner",
+			displayName: "Member One",
+		},
+		members: [
+			{
+				membershipId: "mbr_1",
+				userId: "usr_1",
+				role: "owner",
+				displayName: "Member One",
+			},
+		],
+		resourceKey: "authenticated-app-session:test",
+		services: {
+			lists,
+			items,
+			sync: passiveSyncCoordinator(),
+		},
 	};
 }
 
