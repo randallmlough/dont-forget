@@ -170,3 +170,14 @@ test empirically and record the answer. (Recorded below once known.)
   - Sim 2: **iPhone 17e** `DE4DB10F-A42B-472A-89A6-567C554A63BF` — acts as Bob (B).
 - Native build via `expo run:ios` running in background (log /tmp/expo-build-sim1.log).
   Using xcodebuild (Xcode 26.5) + CocoaPods 1.16.2. ios/ is prebuild-generated, gitignored.
+
+- **ERROR + FIX: pnpm + Metro module resolution.** First build (default pnpm symlinked
+  node_modules) compiled natively and launched, but the JS runtime threw:
+  `Could not resolve @journeyapps/react-native-quick-sqlite`. Cause: pnpm's symlinked
+  `.pnpm` store layout isn't resolved by Metro / RN autolinking. Fix: added
+  `app/.npmrc` with `node-linker=hoisted` (flat node_modules), `rm -rf node_modules ios`,
+  reinstalled, and re-ran `expo run:ios`. After hoisting, the package is a real directory
+  (not a symlink) and resolves. This `.npmrc` IS committed — it's required for the app to
+  run. (This is the standard Expo + pnpm workaround; worth flagging for the real
+  replatform since the main repo uses pnpm.)
+  - Build 2 log: /tmp/expo-build-sim1b.log.
