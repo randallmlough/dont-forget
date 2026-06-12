@@ -5,9 +5,9 @@ import {
 	householdDbUrl,
 } from "@/db/server/client";
 import { migrateHouseholdDb } from "@/db/server/household-migrations";
+import { createTursoPlatformClient } from "@/db/server/turso-platform";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 import { readTursoOperatorConfig } from "@/lib/env";
-import { createTursoPlatformClient } from "./turso-platform";
 
 export type HouseholdDatabaseProvisioningResult = {
 	url: string;

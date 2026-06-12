@@ -106,11 +106,7 @@ export function useHouseholdSettings(
 	}, [clientProp]);
 	const loadKey = `${session.resourceKey}:${session.activeHousehold.id}`;
 	const [resource, dispatch] = useReducer(reducer, loadKey, initialResource);
-	const resourceRef = useRef(resource);
 	const operationInFlightRef = useRef(false);
-	useEffect(() => {
-		resourceRef.current = resource;
-	}, [resource]);
 	const loadAttempt = resource.loadKey === loadKey ? resource.attempt : 0;
 	const householdId = session.activeHousehold.id;
 
@@ -246,13 +242,11 @@ export function useHouseholdSettings(
 	}
 
 	function startOperation(operation: HouseholdSettingsOperation): boolean {
-		const current = resourceRef.current;
-		if (
-			operationInFlightRef.current ||
-			current.status !== "ready" ||
-			current.loadKey !== loadKey ||
-			current.operation.status !== "idle"
-		) {
+		if (operationInFlightRef.current) return false;
+		if (resource.status !== "ready" || resource.loadKey !== loadKey) {
+			return false;
+		}
+		if (resource.operation.status !== "idle") {
 			return false;
 		}
 

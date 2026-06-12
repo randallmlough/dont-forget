@@ -5,7 +5,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import type { ReactNode } from "react";
+import { type ReactNode, useLayoutEffect, useRef } from "react";
 import type { AuthenticatedAppSessionContextValue } from "@/components/session";
 import type { HouseholdApiClient } from "@/lib/client-api/households";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
@@ -281,6 +281,67 @@ describe("useHouseholdSettings", () => {
 			});
 		});
 		await screen.findByText("idle");
+	});
+
+	it("starts an operation when settings first become ready", async () => {
+		const client = {
+			...emptyClient(),
+			listMembers: jest.fn(async () => []),
+			listInvitations: jest.fn(async () => []),
+			getJoinCode: jest.fn(async () => ({
+				enabled: false as const,
+				householdId: "hh_1",
+			})),
+			createInvitation: jest.fn(async () => ({
+				invitation: {
+					id: "inv_1",
+					householdId: "hh_1",
+					email: "pending@example.com",
+					createdByUserId: "usr_1",
+					createdAt: 1,
+					expiresAt: 2,
+					acceptedAt: null,
+					acceptedByUserId: null,
+					revokedAt: null,
+					acceptUrl: "https://app.example/invitations/accept?token=secret",
+				},
+				emailDelivery: { status: "sent" as const },
+				reusedExisting: false,
+			})),
+		};
+
+		function CreateWhenReady({
+			state,
+			actions,
+		}: ReturnType<typeof useHouseholdSettings>) {
+			const startedRef = useRef(false);
+			useLayoutEffect(() => {
+				if (
+					!startedRef.current &&
+					state.status === "ready" &&
+					state.operation.status === "idle"
+				) {
+					startedRef.current = true;
+					void actions.createInvitation("pending@example.com");
+				}
+			}, [state, actions]);
+
+			return <TextNode>{state.status}</TextNode>;
+		}
+
+		function Harness() {
+			const settings = useHouseholdSettings(sessionFixture(), client);
+			return <CreateWhenReady {...settings} />;
+		}
+
+		await render(<Harness />);
+
+		await waitFor(() =>
+			expect(client.createInvitation).toHaveBeenCalledWith({
+				householdId: "hh_1",
+				email: "pending@example.com",
+			}),
+		);
 	});
 
 	it("does not create an emailed Invitation from invalid email text", async () => {

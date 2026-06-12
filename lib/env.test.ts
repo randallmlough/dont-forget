@@ -46,6 +46,43 @@ describe("environment config", () => {
 		).toThrow("EXPO_PUBLIC_API_BASE_URL");
 	});
 
+	it("rejects non-HTTPS API base URLs for deployed app builds", () => {
+		expect(() =>
+			readPublicExpoConfig({
+				APP_ENV: "staging",
+				EXPO_PUBLIC_API_BASE_URL: "http://api.example.com",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+			}),
+		).toThrow("must use https://");
+		expect(() =>
+			readPublicExpoConfig({
+				APP_ENV: "production",
+				EXPO_PUBLIC_API_BASE_URL: "http://api.example.com",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_123",
+			}),
+		).toThrow("must use https://");
+	});
+
+	it("rejects malformed API base URLs for deployed app builds", () => {
+		expect(() =>
+			readPublicExpoConfig({
+				APP_ENV: "staging",
+				EXPO_PUBLIC_API_BASE_URL: "not a url",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+			}),
+		).toThrow("must be a valid URL");
+	});
+
+	it("accepts HTTPS API base URLs for deployed app builds", () => {
+		expect(
+			readPublicExpoConfig({
+				APP_ENV: "staging",
+				EXPO_PUBLIC_API_BASE_URL: "https://api.example.com",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+			}).apiBaseUrl,
+		).toBe("https://api.example.com");
+	});
+
 	it("allows local builds to omit the API base URL", () => {
 		expect(
 			readPublicExpoConfig({

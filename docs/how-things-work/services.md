@@ -15,7 +15,6 @@ lib/services/
       index.ts
       household-provisioning-service.ts
       household-service.ts
-      turso-platform.ts
   invitation/
   item/
     index.ts
@@ -50,7 +49,7 @@ Rules:
 - `lib/services/<domain>/server/index.ts` and `lib/services/session/server/index.ts` may export server-only APIs for API routes and server tests.
 - There is no root `lib/services/index.ts` barrel.
 - Top-level `lib/app/` and `lib/server/` are legacy locations. Do not add new data-access modules there.
-- Data-store infrastructure is not a service and lives in the db layer (see ADR-0014): the `db/` root is app-safe (`db/schema/`, `db/utils.ts`, `db/household-store.ts`); everything touching `@libsql/client`, operator config, migrations, reset, or test seeding lives under `db/server/`.
+- Data-store infrastructure is not a service and lives in the db layer (see ADR-0014): the `db/` root is app-safe (`db/schema/`, `db/utils.ts`, `db/household-store.ts`); everything touching `@libsql/client`, Turso Platform APIs, operator config, migrations, reset, or test seeding lives under `db/server/`.
 
 ## Runtime Boundary
 
