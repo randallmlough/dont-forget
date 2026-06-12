@@ -1,7 +1,9 @@
 import {
 	type PropsWithChildren,
+	useCallback,
 	useEffect,
 	useEffectEvent,
+	useMemo,
 	useRef,
 	useState,
 	useSyncExternalStore,
@@ -89,17 +91,17 @@ function ActiveListProviderContent({
 		};
 	}, []);
 
-	function dispatchIfMounted(transition: ActiveListTransition) {
+	const dispatchIfMounted = useCallback((transition: ActiveListTransition) => {
 		if (!mounted.current) return;
 		const nextModel = activeListReducer(modelRef.current, transition);
 		modelRef.current = nextModel;
 		setModel(nextModel);
-	}
+	}, []);
 
-	async function loadList() {
+	const loadList = useCallback(async () => {
 		const nextState = await onLoadList();
 		dispatchIfMounted({ type: "listLoaded", list: nextState });
-	}
+	}, [dispatchIfMounted, onLoadList]);
 
 	const reloadListAfterSync = useEffectEvent(async () => {
 		await loadList().catch((error) => {
@@ -121,13 +123,13 @@ function ActiveListProviderContent({
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- reloadListAfterSync is a React Effect Event; syncState is the reactive input.
 	}, [syncState]);
 
-	function requestLocalWriteSync() {
+	const requestLocalWriteSync = useCallback(() => {
 		void syncCoordinator
 			.requestSync({ reason: "localWrite" })
 			.catch(() => undefined);
-	}
+	}, [syncCoordinator]);
 
-	async function refresh() {
+	const refresh = useCallback(async () => {
 		dispatchIfMounted({ type: "refreshRequested" });
 
 		try {
@@ -139,84 +141,109 @@ function ActiveListProviderContent({
 			}
 			dispatchIfMounted({ type: "refreshFailed" });
 		}
-	}
+	}, [dispatchIfMounted, loadList, logger, syncCoordinator]);
 
-	async function addItem(input: AddActiveListItemDraft) {
-		const name = input.name.trim();
-		if (!name) return;
-		const quantity = nullableTrimmed(input.quantity);
-		const notes = nullableTrimmed(input.notes);
+	const addItem = useCallback(
+		async (input: AddActiveListItemDraft) => {
+			const name = input.name.trim();
+			if (!name) return;
+			const quantity = nullableTrimmed(input.quantity);
+			const notes = nullableTrimmed(input.notes);
 
-		const item: ActiveListItem = {
-			id: `pending-item-${nextItemNumber.current}`,
-			name,
-			quantity,
-			notes,
-			checked: false,
-			checkedByMemberName: null,
-		};
-		nextItemNumber.current += 1;
-
-		dispatchIfMounted({ type: "itemAddedOptimistically", item });
-
-		try {
-			const persistedItem = await onAddItem({
+			const item: ActiveListItem = {
+				id: `pending-item-${nextItemNumber.current}`,
 				name,
 				quantity,
 				notes,
-			});
-			dispatchIfMounted({
-				type: "itemAddPersisted",
-				pendingItemId: item.id,
-				item: persistedItem,
-			});
-			requestLocalWriteSync();
-		} catch (error) {
-			dispatchIfMounted({ type: "itemAddFailed", pendingItemId: item.id });
-			await loadList().catch((reloadError) => {
-				logger.error("active list reload after add failure failed", {
-					error: reloadError,
+				checked: false,
+				checkedByMemberName: null,
+			};
+			nextItemNumber.current += 1;
+
+			dispatchIfMounted({ type: "itemAddedOptimistically", item });
+
+			try {
+				const persistedItem = await onAddItem({
+					name,
+					quantity,
+					notes,
 				});
-				dispatchIfMounted({ type: "itemAddReloadFailed" });
+				dispatchIfMounted({
+					type: "itemAddPersisted",
+					pendingItemId: item.id,
+					item: persistedItem,
+				});
+				requestLocalWriteSync();
+			} catch (error) {
+				dispatchIfMounted({ type: "itemAddFailed", pendingItemId: item.id });
+				await loadList().catch((reloadError) => {
+					logger.error("active list reload after add failure failed", {
+						error: reloadError,
+					});
+					dispatchIfMounted({ type: "itemAddReloadFailed" });
+				});
+				throw error;
+			}
+		},
+		[dispatchIfMounted, loadList, logger, onAddItem, requestLocalWriteSync],
+	);
+
+	const toggleItem = useCallback(
+		async (itemId: string) => {
+			const target = modelRef.current.list.items.find(
+				(item) => item.id === itemId,
+			);
+			if (!target) return;
+
+			const checked = !target.checked;
+			dispatchIfMounted({
+				type: "itemToggledOptimistically",
+				itemId,
+				checked,
+				checkedByMemberName: checked ? currentMemberName : null,
 			});
-			throw error;
-		}
-	}
 
-	async function toggleItem(itemId: string) {
-		const target = modelRef.current.list.items.find(
-			(item) => item.id === itemId,
-		);
-		if (!target) return;
+			try {
+				await onSetItemChecked(itemId, checked);
+				dispatchIfMounted({ type: "itemTogglePersisted" });
+				requestLocalWriteSync();
+			} catch {
+				dispatchIfMounted({ type: "itemToggleFailed" });
+				await loadList().catch(() => undefined);
+			}
+		},
+		[
+			currentMemberName,
+			dispatchIfMounted,
+			loadList,
+			onSetItemChecked,
+			requestLocalWriteSync,
+		],
+	);
 
-		const checked = !target.checked;
-		dispatchIfMounted({
-			type: "itemToggledOptimistically",
-			itemId,
-			checked,
-			checkedByMemberName: checked ? currentMemberName : null,
-		});
+	const actions = useMemo(
+		() => ({ addItem, refresh, toggleItem }),
+		[addItem, refresh, toggleItem],
+	);
 
-		try {
-			await onSetItemChecked(itemId, checked);
-			dispatchIfMounted({ type: "itemTogglePersisted" });
-			requestLocalWriteSync();
-		} catch {
-			dispatchIfMounted({ type: "itemToggleFailed" });
-			await loadList().catch(() => undefined);
-		}
-	}
-
-	const value = {
-		state: model.list,
-		actions: { addItem, refresh, toggleItem },
-		meta: {
+	const meta = useMemo(
+		() => ({
 			currentMemberName,
 			errorMessage: model.errorMessage,
 			isRefreshing: model.isRefreshing,
 			syncState,
-		},
-	};
+		}),
+		[currentMemberName, model.errorMessage, model.isRefreshing, syncState],
+	);
+
+	const value = useMemo(
+		() => ({
+			state: model.list,
+			actions,
+			meta,
+		}),
+		[actions, meta, model.list],
+	);
 
 	return (
 		<ActiveListContext.Provider value={value}>
