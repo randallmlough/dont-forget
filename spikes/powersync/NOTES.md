@@ -521,5 +521,82 @@ and to capture re-grant behavior (bonus evidence):
 RE-GRANT BEHAVIOR (bonus): after re-insert, `synced-rows.mjs user-b` again returns H1
 (households [h1], lists [list-h1], items [item-h1-1, item-h1-2]) — PowerSync re-evaluated the
 membership query and re-added the H1 buckets to B's checkpoint; the live sim re-rendered
-Groceries (H1). Re-granting access self-heals symmetrically: add the membership row → the
-client re-syncs the household with no app intervention.
+Groceries (H1) with Milk + Eggs (rocketsim read confirmed). Re-granting access self-heals
+symmetrically: add the membership row → the client re-syncs the household with no app
+intervention.
+
+## Q4 — Clerk JWT (validate real Clerk dev tokens via PowerSync jwks_uri)
+
+Secrets policy: keys loaded into shell env at RUNTIME from the MAIN checkout's
+`/Users/randy/Dev/personal/dont-forget/.env.local` (gitignored). Both keys are `_test_`
+(dev instance). No secret VALUE is recorded here — env var names + the PUBLIC Clerk domain
+only. Reproduce with `tools/clerk-token-test.mjs` (reads the keys from env).
+
+STEP 1 — derive Clerk JWKS URL from the publishable key (public, not a secret):
+- `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` = `pk_test_<base64>`. Strip prefix, base64-decode,
+  drop trailing `$` → frontend-API domain `comic-peacock-75.clerk.accounts.dev`.
+- JWKS = `https://comic-peacock-75.clerk.accounts.dev/.well-known/jwks.json`. Fetched it
+  live: 1 key, kty RSA, alg RS256, kid present. This is exactly what PowerSync's
+  `client_auth.jwks_uri` consumes. (The domain is embedded in any shipped web bundle and
+  derivable from the public pk — safe to record. It is NOT the secret key.)
+
+STEP 2 — configure PowerSync (DONE, committed in powersync/service.yaml):
+- Added `client_auth.jwks_uri: https://comic-peacock-75.clerk.accounts.dev/.well-known/jwks.json`
+  ALONGSIDE the existing static dev `jwks`. Verified in the running image's source
+  (`/app/.../compound-config-collector.js`) that the config builds a `CompoundKeyCollector`
+  that adds BOTH the static keys and every jwks_uri as remote collectors — they coexist, so
+  dev tokens keep working AND Clerk tokens are now verifiable. REGRESSION-CONFIRMED after
+  restart: `synced-rows.mjs user-a` still returns h1+h2 (dev-token path intact).
+
+STEP 3 — mint a REAL Clerk dev session token from the secret key, NO browser (DONE):
+- `GET https://api.clerk.com/v1/users?limit=1` → 5 real dev users; took
+  user_3F0S334auQkkg2SQTfuR1eIeVHp.
+- `POST /v1/sessions {user_id}` → session sess_3F1n...; `POST /v1/sessions/{id}/tokens`
+  `{expires_in_seconds:3600}` → a real RS256 JWT signed by Clerk (header kid
+  ins_3D3kzMnRJ55XbKY9hhnRN7W6eLL, the Clerk JWKS key). Decoded claims:
+  iss=https://comic-peacock-75.clerk.accounts.dev, sub=user_3F0S..., exp-iat=3600s,
+  claims=[exp,fva,iat,iss,nbf,sid,sts,sub,v]. **aud is ABSENT.**
+
+STEP 4 — POST the real Clerk token to the live PowerSync `/sync/stream` (DONE):
+- Result: **HTTP 401 PSYNC_S2105 "JWT payload is missing a required claim 'aud'"**.
+- WHAT THIS PROVES (read the KeyStore source to be certain — `KeyStore.verifyJwt`):
+  PowerSync verifies in this ORDER: (1) signature against a collected key + required
+  sub/iat/exp; THEN (2) aud presence (S2105); then aud value; then lifetime (S2104).
+  Reaching S2105 means the token PASSED step 1 — i.e. PowerSync fetched Clerk's remote
+  JWKS, matched the kid, and **verified the Clerk signature**, and sub/iat/exp were present
+  and the 3600s lifetime is within the 24h cap. The ONLY failing assertion is the missing
+  `aud`. If signature/kid had failed it would be S2101/S2102 instead. So the entire Clerk
+  -> PowerSync trust path WORKS end-to-end against the live service with a real Clerk dev
+  token; one claim is missing.
+
+THE BLOCKER (confirmed empirically + in source, not memory):
+- PowerSync REQUIRES `aud` and the check CANNOT be disabled (KeyStore.ts hard-throws S2105
+  when aud is null, regardless of an empty `audience` config). An empty audience list makes
+  aud impossible to satisfy, not optional.
+- Clerk's DEFAULT session token has NO `aud`. The only way to add one is a Clerk **JWT
+  template** (body e.g. `{"aud":"powersync-dev"}`), and templates can ONLY be created in the
+  Clerk **Dashboard** — there is NO Backend API to create one. Confirmed empirically:
+  `POST /v1/sessions/{id}/tokens/powersync` → `{"errors":[{"code":"resource_not_found",
+  "message":"No JWT template exists with name: powersync"}]}`.
+- This last step (one Dashboard click to create a `powersync` template) is outside what this
+  spike can do via API alone with the dev secret key. Per the plan, Q4 is therefore marked
+  PARTIAL/OPEN with this single, specific, well-understood blocker — NOT a fudged PASS.
+
+WHAT A PRODUCTION INTEGRATION NEEDS (fully specified by this spike):
+  1. Clerk Dashboard → JWT Templates → new template `powersync`, body `{"aud":"powersync-dev"}`,
+     token lifetime ≤ 3600s (PowerSync hard-caps at 24h, recommends ≤ 1h).
+  2. service.yaml `client_auth.jwks_uri` = the derived Clerk JWKS URL (already committed),
+     `audience: ["powersync-dev"]` matching the template (already includes it).
+  3. RN client: the connector's `fetchCredentials()` calls Clerk's `session.getToken({
+     template: 'powersync' })` instead of the spike's dev-token endpoint; `sub` becomes the
+     Clerk user id (`user_...`), which is what the sync-stream `auth.user_id()` resolves to —
+     so the Postgres `users.id` / membership rows must key on the Clerk user id (the prod
+     directory already links via `clerk_user_id`; here it would BE the id). No backend token
+     endpoint needed at all (Clerk mints the token client-side).
+  Everything except step 1's Dashboard click is verified working here.
+
+Q4 VERDICT: PARTIAL / OPEN, single named blocker. The Clerk dev-instance JWKS is reachable
+and configured; a real Clerk dev session JWT passes PowerSync's signature + sub/iat/exp +
+lifetime checks against the LIVE service; the sole gap is the `aud` claim, addable only via a
+Clerk Dashboard JWT template (no API). High confidence the path is sound — only a manual
+Dashboard step (which the spike cannot perform with the secret key alone) remains.

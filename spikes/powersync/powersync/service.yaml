@@ -38,6 +38,17 @@ client_auth:
         use: "sig"
         n: "xT9IR4HiLPWql_Hs92Fsui_EfA_YqG_Ate1HIakozqcGmdEm1NHTYDAMYvjfqhawzv4fcSdqvgjOBi84aKuPe3l2xNDHb_ciSR9fpUvAgid4Ijb0Wmi8Vk_dJxRROOjLogKjgY7zapo1qJsRcW8BNJHt1UXF0i-UF3NW9TnGwVc8USTUo4HjBx5DzHohIsHCsQkAp-h02Bs0Fs9DYQE0sPNGXKjHzQC8qSbhlVIwR790eH_-vo9fwd6dCLW17yGq_Un9WjFsUTTXVsEUVxjSrFrL8kTj9ARh97wnkmQ5PiYp9D-QSQgr4VMt7NzyK1xeQm1k8k6LWnniH64MIdlcOQ"
         e: "AQAB"
+  # Q4 (Clerk JWT): a SECOND, REMOTE JWKS — the Clerk dev instance's published JWKS.
+  # The config collector builds a CompoundKeyCollector, so the static dev key AND this
+  # remote Clerk key both verify tokens (dev tokens keep working; Clerk tokens also do).
+  # The domain below is the Clerk frontend-API domain; it is PUBLIC (embedded in any web
+  # bundle, derivable from the pk_test_ publishable key) — NOT a secret. Derive it with:
+  #   node -e "const pk=process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY; \
+  #     console.log(Buffer.from(pk.replace(/^pk_(test|live)_/,''),'base64').toString().replace(/\$$/,''))"
+  jwks_uri: https://comic-peacock-75.clerk.accounts.dev/.well-known/jwks.json
+  # PowerSync REQUIRES the JWT carry an `aud` in this list. Clerk's DEFAULT session token
+  # has NO aud — only a Clerk Dashboard JWT template can add `aud: powersync-dev` (no
+  # Backend API to create templates). See NOTES.md Q4 for the empirical blocker.
   audience: ["powersync-dev", "powersync"]
 
 api:
