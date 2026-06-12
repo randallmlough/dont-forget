@@ -1721,6 +1721,7 @@ async function createHomeSessionHarness(
 			store: {
 				syncAuthorized: false,
 				execute,
+				subscribeToChanges: () => ({ remove() {} }),
 				close() {},
 			},
 		},
