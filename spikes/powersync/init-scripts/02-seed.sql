@@ -28,5 +28,5 @@ insert into public.items (id, list_id, name, quantity, position, created_by_user
   ('item-h2-1', 'list-h2', 'Screws', 1, 0, 'user-a');
 
 -- A per-user check so item_checks is non-empty for the row-set verification.
-insert into public.item_checks (item_id, user_id, checked_at) values
-  ('item-h1-1', 'user-a', now());
+insert into public.item_checks (id, item_id, user_id, checked_at) values
+  ('chk-a-h1-1', 'item-h1-1', 'user-a', now());

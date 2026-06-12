@@ -83,7 +83,14 @@ async function householdsForOp(client, op) {
       return r.rows.map((x) => x.household_id);
     }
     case "item_checks": {
-      const itemId = data?.item_id || id; // PK is composite; client sends item_id in data
+      // item_id is on the incoming PUT data; for PATCH/DELETE (only changed cols)
+      // resolve via the stored row by its synthetic id.
+      let itemId = data?.item_id;
+      if (!itemId) {
+        const r0 = await client.query("SELECT item_id FROM item_checks WHERE id = $1", [id]);
+        itemId = r0.rows[0]?.item_id;
+      }
+      if (!itemId) return [];
       const r = await client.query(
         "SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
         [itemId]
@@ -110,17 +117,8 @@ async function isActiveMember(client, userId, householdId) {
 // (or the row does not yet exist). Older writes are ignored.
 async function lwwAllows(client, table, id, incomingUpdatedAt) {
   if (!incomingUpdatedAt) return true; // no clock on the op -> let it through
-  let row;
-  if (table === "item_checks") {
-    // composite PK; id here is the item_checks synthetic id. We compare by the
-    // row the client targets. For simplicity the client sends a stable id.
-    row = await client.query("SELECT updated_at FROM item_checks WHERE item_id = $1 AND user_id = $2", [
-      id.item_id ?? id,
-      id.user_id,
-    ]);
-  } else {
-    row = await client.query(`SELECT updated_at FROM ${table} WHERE id = $1`, [id]);
-  }
+  // All synced tables (incl. item_checks) key on the synthetic `id`.
+  const row = await client.query(`SELECT updated_at FROM ${table} WHERE id = $1`, [id]);
   if (row.rowCount === 0) return true;
   const stored = row.rows[0].updated_at;
   return new Date(incomingUpdatedAt).getTime() >= new Date(stored).getTime();
@@ -134,17 +132,7 @@ async function applyOp(client, op) {
   const { op: kind, table, id, data } = op;
 
   if (kind === "PUT") {
-    // Upsert. item_checks uses composite PK; everything else uses id.
-    if (table === "item_checks") {
-      await client.query(
-        `INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (item_id, user_id) DO UPDATE
-           SET checked_at = EXCLUDED.checked_at, updated_at = EXCLUDED.updated_at`,
-        [data.item_id, data.user_id, data.checked_at ?? null, data.updated_at]
-      );
-      return;
-    }
+    // Upsert on the synthetic id (all tables, incl. item_checks).
     const cols = ["id", ...columnsFor(table, data).filter((c) => c !== "id")];
     const vals = cols.map((c) => (c === "id" ? id : data[c]));
     const placeholders = cols.map((_, i) => `$${i + 1}`);
@@ -158,15 +146,7 @@ async function applyOp(client, op) {
   }
 
   if (kind === "PATCH") {
-    if (table === "item_checks") {
-      const cols = Object.keys(data).filter((c) => c !== "item_id" && c !== "user_id");
-      const set = cols.map((c, i) => `${c} = $${i + 1}`);
-      await client.query(
-        `UPDATE item_checks SET ${set.join(", ")} WHERE item_id = $${cols.length + 1} AND user_id = $${cols.length + 2}`,
-        [...cols.map((c) => data[c]), data.item_id, data.user_id]
-      );
-      return;
-    }
+    // Update changed columns, keyed on the synthetic id (all tables).
     const cols = Object.keys(data).filter((c) => c !== "id");
     const set = cols.map((c, i) => `${c} = $${i + 1}`);
     await client.query(`UPDATE ${table} SET ${set.join(", ")} WHERE id = $${cols.length + 1}`, [
@@ -177,14 +157,12 @@ async function applyOp(client, op) {
   }
 
   if (kind === "DELETE") {
-    // Tombstone, not hard delete (ADR-0002). Set deleted_at.
+    // item_checks has no deleted_at column (a missing row == unchecked); hard delete by id.
     if (table === "item_checks") {
-      await client.query("DELETE FROM item_checks WHERE item_id = $1 AND user_id = $2", [
-        data?.item_id ?? id,
-        data?.user_id,
-      ]);
+      await client.query("DELETE FROM item_checks WHERE id = $1", [id]);
       return;
     }
+    // Other tables: tombstone, not hard delete (ADR-0002). Set deleted_at.
     await client.query(`UPDATE ${table} SET deleted_at = now(), updated_at = now() WHERE id = $1`, [id]);
     return;
   }
@@ -254,10 +232,9 @@ const server = createServer(async (req, res) => {
         }
       }
 
-      // ---- LWW: ignore stale updates.
+      // ---- LWW: ignore stale updates (keyed on the synthetic id for all tables).
       const incomingUpdatedAt = op.data?.updated_at;
-      const lwwId = op.table === "item_checks" ? { item_id: op.data?.item_id, user_id: op.data?.user_id } : op.id;
-      if (!(await lwwAllows(client, op.table, lwwId, incomingUpdatedAt))) {
+      if (!(await lwwAllows(client, op.table, op.id, incomingUpdatedAt))) {
         results.push({ id: op.id, table: op.table, skipped: "stale-lww" });
         continue;
       }

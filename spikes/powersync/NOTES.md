@@ -284,3 +284,72 @@ Sever connectivity by stopping the powersync + backend containers
 Restore with `docker compose start powersync backend`. The two source Postgres containers stay
 up the whole time (they are the DB, not the network path).
 
+
+## Q1 — Offline writes + cold start (run on Alice / user-a)
+
+Method: app online + synced (Milk, Eggs in H1). `docker compose stop powersync backend`
+at 00:29:43 → app shows "connecting…" within ~4 s but the list still renders from local
+SQLite (Milk, Eggs). Source Postgres containers stayed up; only the sync path was severed.
+
+OFFLINE WRITES (instant local):
+- Added "OfflineApples" offline → appeared INSTANTLY in the list while "connecting…"
+  (screenshot /tmp/spike-shots/q1-alice-offline.png shows Milk, Eggs, OfflineApples).
+- Toggled Milk's check offline → checkbox flipped instantly in UI (optimistic local write).
+
+OFFLINE COLD START:
+- `xcrun simctl terminate` + `launch` Alice WHILE STILL OFFLINE → app cold-started and
+  rendered Groceries (H1) with Milk, Eggs, AND OfflineApples from local SQLite. UI did NOT
+  hang on the spinner — `connectAs()`/`db.connect()` resolves immediately offline (the
+  orchestrator-flagged spinner-hang risk did NOT materialize; no spike-app patch needed).
+  No data loss across the offline restart. Status badge stayed "connecting…".
+
+RESTORE + UPLOAD:
+- `docker compose start powersync backend` at 00:31:17, healthy by 00:31:24.
+- After ~6 s, source Postgres `items` had the OfflineApples row
+  (id efa96df6-…, list_id list-h1, created_by_user_id user-a) — the queued offline PUT
+  uploaded through the Node endpoint and persisted. Bob (user-b) received it too (Q2 below
+  re-verifies cross-device). No data loss on the INSERT path.
+
+FINDING — spike-app write-path bug on item_checks PATCH (NOT a PowerSync limitation):
+- The offline Milk UNCHECK did NOT persist to Postgres. `item_checks(item-h1-1, user-a)`
+  kept its seed checked_at/updated_at. Reproduced ONLINE too: tapping an already-checked
+  Milk (an UPDATE of an existing row) never changed Postgres, and PowerSync then reverted
+  the local row to the server's authoritative checked state on the next checkpoint
+  (screenshot q1-alice-reconnected.png / q1-milk-online-toggle.png show Milk ☑ again).
+- Root cause: PowerSync PATCH `opData` carries ONLY changed columns + filters by the
+  synthetic row `id` (confirmed in docs /websites/powersync usage-examples: PATCH does
+  `eq("id", entry.id)`). The spike backend's item_checks PATCH keyed off
+  `data.item_id`/`data.user_id`, which are absent from a PATCH op → `WHERE item_id=undefined`
+  updated 0 rows, silently. New checks (PUT, carries all cols) worked; updates to existing
+  checks (PATCH) were lost.
+- This is the documented PowerSync contract (every synced row has an `id`; PATCH/DELETE key
+  on it). The spike's composite-PK-only item_checks violated it. Fix applied below so Q5
+  conflict results are clean. The INSERT/offline-cold-start evidence above is unaffected.
+- IMPORTANT distinction for the report: PowerSync's "revert un-acknowledged local writes to
+  server state on reconnect" is CORRECT engine behavior — it surfaced our backend bug rather
+  than papering over it. The local-first guarantee held for the write that the backend
+  actually accepted (the INSERT).
+
+### Fix applied (in scope: spikes/powersync/**) — item_checks gets a synthetic id
+
+Per PowerSync's documented contract (every synced row has an `id`; PATCH/DELETE filter on
+it), gave Postgres `item_checks` a synthetic text `id` PK + a `unique(item_id, user_id)`
+constraint (preserves ADR-0002 per-User invariant). Backend now keys ALL item_checks ops on
+`id` like every other table (deleted the composite-PK special cases in householdsForOp /
+lwwAllows / applyOp PUT/PATCH/DELETE — net simpler). Client schema unchanged (id implicit;
+App.tsx already inserts a uuid id on PUT and UPDATEs by id). Seed gives the seeded check
+id `chk-a-h1-1`.
+
+VERIFIED after `down -v && up -d` + relaunch: Alice unchecking seed-checked Milk online now
+sets checked_at=NULL and advances updated_at in Postgres (07:36:30); re-checking sets it
+back. Toggle round-trips both directions through the upload endpoint. Q1 INSERT evidence is
+unaffected; this only fixes the previously-lost item_checks UPDATE path so Q5 is clean.
+
+Also observed (re-confirms Q1 cold-start reconciliation): after the schema reset, both sims
+relaunched with stale local SQLite (old OfflineApples row) but reconciled to the fresh server
+checkpoint on reconnect — the now-nonexistent row was removed locally. PowerSync treats the
+server as authoritative for the synced row set.
+
+Q1 VERDICT: PASS. Offline local writes are instant; offline cold start renders from local
+SQLite with no hang and no data loss; queued INSERTs reach Postgres + propagate on reconnect.
+The one anomaly (lost check UPDATE) was a spike-backend bug, now fixed — NOT an engine issue.

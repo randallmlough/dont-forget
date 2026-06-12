@@ -55,12 +55,16 @@ create table public.items (
   deleted_at         timestamptz
 );
 
+-- item_checks carries a synthetic text `id` PK so it obeys PowerSync's contract
+-- (every synced row has an `id`; PATCH/DELETE key on it). (item_id, user_id) is a
+-- unique constraint to preserve the per-User checked-state invariant (ADR-0002).
 create table public.item_checks (
+  id         text primary key,
   item_id    text not null references public.items (id),
   user_id    text not null,
   checked_at timestamptz,
   updated_at timestamptz not null default now(),
-  primary key (item_id, user_id)
+  unique (item_id, user_id)
 );
 
 -- PowerSync logical-replication publication. Only synced tables are listed.
