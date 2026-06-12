@@ -8,7 +8,12 @@ const dontForget = require("./tools/eslint-rules");
 module.exports = defineConfig([
 	expoConfig,
 	{
-		ignores: [".agents/**", ".rnstorybook/storybook.requires.ts", "dist/**"],
+		ignores: [
+			".agents/**",
+			".claude/**",
+			".rnstorybook/storybook.requires.ts",
+			"dist/**",
+		],
 	},
 	{
 		plugins: {
