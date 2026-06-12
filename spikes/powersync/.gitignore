@@ -1,0 +1,9 @@
+# Dependencies (reinstall with pnpm install in backend/ and tools/)
+node_modules/
+
+# Dev key material. Throwaway + local-only, but never commit private keys.
+# Regenerate with the openssl commands in README.md, then re-derive the JWK.
+keys/
+
+# Docker/postgres data is in named volumes, not here, but ignore stray dumps.
+*.dump

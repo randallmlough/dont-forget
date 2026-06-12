@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-schema@latest/json-schema/powersync-config.json
+#
+# PowerSync self-hosted service config for the spike.
+# - replication: single source Postgres (all Households).
+# - storage: separate Postgres (bucket storage; no MongoDB).
+# - client_auth: STATIC dev JWKS (RS256). The public key here is the pair of
+#   keys/dev-private.pem; tokens are minted by tools/mint-token.mjs. Local dev
+#   only — see docs/installation/authentication-setup/development-tokens.
+
+_type: self-hosted
+
+telemetry:
+  disable_telemetry_sharing: false
+
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_DATA_SOURCE_URI
+      sslmode: disable
+
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_SOURCE_URI
+  sslmode: disable
+
+port: !env PS_PORT
+
+sync_config:
+  path: sync-config.yaml
+
+client_auth:
+  # Static public key for verifying locally-minted dev tokens.
+  jwks:
+    keys:
+      - kty: "RSA"
+        alg: "RS256"
+        kid: "spike-dev-key-1"
+        use: "sig"
+        n: "xT9IR4HiLPWql_Hs92Fsui_EfA_YqG_Ate1HIakozqcGmdEm1NHTYDAMYvjfqhawzv4fcSdqvgjOBi84aKuPe3l2xNDHb_ciSR9fpUvAgid4Ijb0Wmi8Vk_dJxRROOjLogKjgY7zapo1qJsRcW8BNJHt1UXF0i-UF3NW9TnGwVc8USTUo4HjBx5DzHohIsHCsQkAp-h02Bs0Fs9DYQE0sPNGXKjHzQC8qSbhlVIwR790eH_-vo9fwd6dCLW17yGq_Un9WjFsUTTXVsEUVxjSrFrL8kTj9ARh97wnkmQ5PiYp9D-QSQgr4VMt7NzyK1xeQm1k8k6LWnniH64MIdlcOQ"
+        e: "AQAB"
+  audience: ["powersync-dev", "powersync"]
+
+api:
+  tokens:
+    # Local admin API auth only (diagnostics endpoints). Not an end-user secret.
+    - spike_local_admin_token
+
+system:
+  logging:
+    level: info
+    format: text

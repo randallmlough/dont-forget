@@ -1,0 +1,11 @@
+{
+  "name": "powersync-spike-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Minimal upload endpoint: applies client CRUD to source Postgres with LWW-by-updated_at and membership authorization (throwaway spike).",
+  "dependencies": {
+    "jose": "^5.9.6",
+    "pg": "^8.13.1"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "powersync-spike-tools",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Dev-token minting + JWK derivation for the PowerSync spike (throwaway).",
+  "dependencies": {
+    "jose": "^5.9.6"
+  }
+}

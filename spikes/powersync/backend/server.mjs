@@ -1,0 +1,257 @@
+// Minimal PowerSync upload endpoint for the spike.
+//
+// Responsibilities (Step 2 of plan 015):
+//   1. Verify the caller's dev JWT (RS256, same key pair as the sync service)
+//      and extract the user id from `sub`.
+//   2. Apply each client CRUD op (PUT / PATCH / DELETE) to the source Postgres.
+//   3. LWW: ignore an update whose app-owned `updated_at` is older than the
+//      stored row's `updated_at`.
+//   4. Authorization: reject writes touching a Household the JWT's user is not
+//      an ACTIVE member of. Authorization is resolved per row by walking
+//      table -> household_id (lists.household_id; items via list_id;
+//      item_checks via item_id -> items.list_id).
+//
+// This is throwaway: single-file http server, no framework.
+
+import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
+import pg from "pg";
+import { importSPKI, jwtVerify } from "jose";
+
+const PORT = Number(process.env.PORT || 6068);
+const ALG = "RS256";
+const AUDIENCE = ["powersync-dev", "powersync"];
+
+const publicPem = readFileSync(new URL("../keys/dev-public.pem", import.meta.url), "utf8");
+const verifyKey = await importSPKI(publicPem, ALG);
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URI });
+
+// Tables we accept writes for, and how each row maps to a household for authz.
+const TABLES = new Set(["users", "households", "memberships", "lists", "items", "item_checks"]);
+
+function send(res, status, body) {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(payload);
+}
+
+async function readBody(req) {
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+// Resolve the household id(s) a write touches, so we can authorize it.
+// Returns an array of household ids (usually one) or null if not household-scoped.
+async function householdsForOp(client, op) {
+  const { table, id, data } = op;
+  switch (table) {
+    case "lists":
+      // household_id is on the row itself (incoming data, or stored).
+      if (data?.household_id) return [data.household_id];
+      {
+        const r = await client.query("SELECT household_id FROM lists WHERE id = $1", [id]);
+        return r.rows.map((x) => x.household_id);
+      }
+    case "items": {
+      const listId = data?.list_id;
+      if (listId) {
+        const r = await client.query("SELECT household_id FROM lists WHERE id = $1", [listId]);
+        return r.rows.map((x) => x.household_id);
+      }
+      const r = await client.query(
+        "SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
+        [id]
+      );
+      return r.rows.map((x) => x.household_id);
+    }
+    case "item_checks": {
+      const itemId = data?.item_id || id; // PK is composite; client sends item_id in data
+      const r = await client.query(
+        "SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
+        [itemId]
+      );
+      return r.rows.map((x) => x.household_id);
+    }
+    case "memberships":
+      return data?.household_id ? [data.household_id] : null;
+    default:
+      // users, households: not household-membership scoped in this spike.
+      return null;
+  }
+}
+
+async function isActiveMember(client, userId, householdId) {
+  const r = await client.query(
+    "SELECT 1 FROM memberships WHERE user_id = $1 AND household_id = $2 AND status = 'active'",
+    [userId, householdId]
+  );
+  return r.rowCount > 0;
+}
+
+// LWW guard: returns true if the incoming updated_at is >= stored updated_at
+// (or the row does not yet exist). Older writes are ignored.
+async function lwwAllows(client, table, id, incomingUpdatedAt) {
+  if (!incomingUpdatedAt) return true; // no clock on the op -> let it through
+  let row;
+  if (table === "item_checks") {
+    // composite PK; id here is the item_checks synthetic id. We compare by the
+    // row the client targets. For simplicity the client sends a stable id.
+    row = await client.query("SELECT updated_at FROM item_checks WHERE item_id = $1 AND user_id = $2", [
+      id.item_id ?? id,
+      id.user_id,
+    ]);
+  } else {
+    row = await client.query(`SELECT updated_at FROM ${table} WHERE id = $1`, [id]);
+  }
+  if (row.rowCount === 0) return true;
+  const stored = row.rows[0].updated_at;
+  return new Date(incomingUpdatedAt).getTime() >= new Date(stored).getTime();
+}
+
+function columnsFor(table, data) {
+  return Object.keys(data).filter((k) => k !== undefined);
+}
+
+async function applyOp(client, op) {
+  const { op: kind, table, id, data } = op;
+
+  if (kind === "PUT") {
+    // Upsert. item_checks uses composite PK; everything else uses id.
+    if (table === "item_checks") {
+      await client.query(
+        `INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (item_id, user_id) DO UPDATE
+           SET checked_at = EXCLUDED.checked_at, updated_at = EXCLUDED.updated_at`,
+        [data.item_id, data.user_id, data.checked_at ?? null, data.updated_at]
+      );
+      return;
+    }
+    const cols = ["id", ...columnsFor(table, data).filter((c) => c !== "id")];
+    const vals = cols.map((c) => (c === "id" ? id : data[c]));
+    const placeholders = cols.map((_, i) => `$${i + 1}`);
+    const updates = cols.filter((c) => c !== "id").map((c) => `${c} = EXCLUDED.${c}`);
+    await client.query(
+      `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})
+       ON CONFLICT (id) DO UPDATE SET ${updates.join(", ")}`,
+      vals
+    );
+    return;
+  }
+
+  if (kind === "PATCH") {
+    if (table === "item_checks") {
+      const cols = Object.keys(data).filter((c) => c !== "item_id" && c !== "user_id");
+      const set = cols.map((c, i) => `${c} = $${i + 1}`);
+      await client.query(
+        `UPDATE item_checks SET ${set.join(", ")} WHERE item_id = $${cols.length + 1} AND user_id = $${cols.length + 2}`,
+        [...cols.map((c) => data[c]), data.item_id, data.user_id]
+      );
+      return;
+    }
+    const cols = Object.keys(data).filter((c) => c !== "id");
+    const set = cols.map((c, i) => `${c} = $${i + 1}`);
+    await client.query(`UPDATE ${table} SET ${set.join(", ")} WHERE id = $${cols.length + 1}`, [
+      ...cols.map((c) => data[c]),
+      id,
+    ]);
+    return;
+  }
+
+  if (kind === "DELETE") {
+    // Tombstone, not hard delete (ADR-0002). Set deleted_at.
+    if (table === "item_checks") {
+      await client.query("DELETE FROM item_checks WHERE item_id = $1 AND user_id = $2", [
+        data?.item_id ?? id,
+        data?.user_id,
+      ]);
+      return;
+    }
+    await client.query(`UPDATE ${table} SET deleted_at = now(), updated_at = now() WHERE id = $1`, [id]);
+    return;
+  }
+
+  throw new Error(`unknown op kind: ${kind}`);
+}
+
+const server = createServer(async (req, res) => {
+  if (req.method === "GET" && req.url === "/health") {
+    return send(res, 200, { ok: true });
+  }
+  if (req.method !== "POST" || req.url !== "/api/data") {
+    return send(res, 404, { error: "not found" });
+  }
+
+  // ---- Authn: verify the dev JWT, extract user id from sub.
+  const authz = req.headers["authorization"] || "";
+  const token = authz.startsWith("Bearer ") ? authz.slice(7) : null;
+  if (!token) return send(res, 401, { error: "missing bearer token" });
+
+  let userId;
+  try {
+    const { payload } = await jwtVerify(token, verifyKey, { audience: AUDIENCE });
+    userId = payload.sub;
+  } catch (e) {
+    return send(res, 401, { error: "invalid token", detail: String(e.message || e) });
+  }
+
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return send(res, 400, { error: "bad json" });
+  }
+  const batch = Array.isArray(body.batch) ? body.batch : [];
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const results = [];
+    for (const op of batch) {
+      if (!TABLES.has(op.table)) {
+        await client.query("ROLLBACK");
+        return send(res, 400, { error: `unknown table ${op.table}` });
+      }
+
+      // ---- Authz: every household-scoped write must target an active membership.
+      const households = await householdsForOp(client, op);
+      if (households && households.length > 0) {
+        for (const hid of households) {
+          if (!(await isActiveMember(client, userId, hid))) {
+            await client.query("ROLLBACK");
+            return send(res, 403, {
+              error: "not an active member of household",
+              household_id: hid,
+              user_id: userId,
+              table: op.table,
+            });
+          }
+        }
+      }
+
+      // ---- LWW: ignore stale updates.
+      const incomingUpdatedAt = op.data?.updated_at;
+      const lwwId = op.table === "item_checks" ? { item_id: op.data?.item_id, user_id: op.data?.user_id } : op.id;
+      if (!(await lwwAllows(client, op.table, lwwId, incomingUpdatedAt))) {
+        results.push({ id: op.id, table: op.table, skipped: "stale-lww" });
+        continue;
+      }
+
+      await applyOp(client, op);
+      results.push({ id: op.id, table: op.table, applied: op.op });
+    }
+    await client.query("COMMIT");
+    return send(res, 200, { ok: true, results });
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    return send(res, 500, { error: "apply failed", detail: String(e.message || e) });
+  } finally {
+    client.release();
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`[spike-backend] listening on :${PORT}`);
+});
