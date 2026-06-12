@@ -181,3 +181,23 @@ test empirically and record the answer. (Recorded below once known.)
   run. (This is the standard Expo + pnpm workaround; worth flagging for the real
   replatform since the main repo uses pnpm.)
   - Build 2 log: /tmp/expo-build-sim1b.log.
+
+- **ERROR + 2nd FIX: SQLite adapter (quick-sqlite -> op-sqlite).** Even after hoisting,
+  the runtime still threw `Could not resolve @journeyapps/react-native-quick-sqlite`.
+  Root cause: PowerSync's `ReactNativeQuickSqliteOpenFactory` does a dynamic bare
+  `require('@journeyapps/react-native-quick-sqlite')` from its pre-bundled `dist/index.js`.
+  Metro will not bundle a package that is only referenced via a runtime require and is
+  never statically imported, so the require fails at runtime regardless of node-linker.
+  - Attempt: added `app/metro.config.js` blocking inline-requires for
+    `@powersync/react-native` (per the SDK README). Bundle count changed (746 -> 734) but
+    the error persisted — confirming the issue is "package not bundled", not inlining.
+  - FIX (genuinely different, 2nd approach): switched to the op-sqlite adapter
+    (`@powersync/op-sqlite@0.9.x` + `@op-engineering/op-sqlite@16.x`) and constructed an
+    explicit `OPSqliteOpenFactory` passed as `database` to `PowerSyncDatabase`. op-sqlite
+    is imported STATICALLY by the adapter, so Metro always bundles it. Removed the
+    quick-sqlite Expo config plugin from app.json (op-sqlite autolinks; no plugin).
+    Kept metro.config.js (harmless, still recommended by the SDK README).
+  - This required a native rebuild (op-sqlite is a new native module). Build 3 log:
+    /tmp/expo-build-sim1c.log.
+  - Lesson for the real replatform: prefer op-sqlite + explicit OPSqliteOpenFactory on
+    RN; the implicit quick-sqlite path is fragile with Metro bundling.

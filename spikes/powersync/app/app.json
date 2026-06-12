@@ -22,8 +22,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "@journeyapps/react-native-quick-sqlite"
-    ]
+    "plugins": []
   }
 }

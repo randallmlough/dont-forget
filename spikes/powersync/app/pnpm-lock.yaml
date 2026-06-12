@@ -11,9 +11,12 @@ importers:
       '@azure/core-asynciterator-polyfill':
         specifier: ^1.0.2
         version: 1.0.2
-      '@journeyapps/react-native-quick-sqlite':
-        specifier: ^2.5.2
-        version: 2.5.2(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      '@op-engineering/op-sqlite':
+        specifier: ^16.2.0
+        version: 16.2.0(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      '@powersync/op-sqlite':
+        specifier: ^0.9.10
+        version: 0.9.10(@op-engineering/op-sqlite@16.2.0(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(@powersync/common@1.54.0)(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       '@powersync/react':
         specifier: ^1.10.0
         version: 1.10.0(@powersync/common@1.54.0)(react@19.2.3)
@@ -597,8 +600,26 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
+  '@op-engineering/op-sqlite@16.2.0':
+    resolution: {integrity: sha512-aP8wlZt2HcyP1YzqIfB3G73vlBVS1voY6Z5zCVMuwB9/Up/cPGtkjJtiZm2l5SNVwF/QMYQiq/KooBVSovVEbg==}
+    peerDependencies:
+      '@sqlite.org/sqlite-wasm': '*'
+      react: '*'
+      react-native: '*'
+    peerDependenciesMeta:
+      '@sqlite.org/sqlite-wasm':
+        optional: true
+
   '@powersync/common@1.54.0':
     resolution: {integrity: sha512-/gzitw4iQL4UI7ILf7TUzCy/cfbDJGU3/aiN/ciaLtDd2Uts3wYARVKclSW0OJhPPisKCX0E8Ev/iZGQPbTgDA==}
+
+  '@powersync/op-sqlite@0.9.10':
+    resolution: {integrity: sha512-tFKEXuQt7GqJC3loWrUHl05UtCFvKxmHkyfYNndvU3wGzgEXaqD+DlCDYlsFFZNvkhjECZwbDIx2CXY3knRfRg==}
+    peerDependencies:
+      '@op-engineering/op-sqlite': ^13.0.0 || ^14.0.0 || ^15.0.0
+      '@powersync/common': ^1.54.0
+      react: '*'
+      react-native: '*'
 
   '@powersync/react-native@1.35.4':
     resolution: {integrity: sha512-ACL31m1hrMoEzW1RKvZVVDxA07LLQxe4dRDaBExBAZb8BJSObRAd3dSAe97R0hhjizIgFWu2znYpLnCJkwdkIg==}
@@ -2889,6 +2910,7 @@ snapshots:
     dependencies:
       react: 19.2.3
       react-native: 0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
+    optional: true
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -2914,10 +2936,22 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@op-engineering/op-sqlite@16.2.0(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      react: 19.2.3
+      react-native: 0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
+
   '@powersync/common@1.54.0':
     dependencies:
       event-iterator: 2.0.0
       js-logger: 1.6.1
+
+  '@powersync/op-sqlite@0.9.10(@op-engineering/op-sqlite@16.2.0(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(@powersync/common@1.54.0)(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      '@op-engineering/op-sqlite': 16.2.0(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      '@powersync/common': 1.54.0
+      react: 19.2.3
+      react-native: 0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
 
   '@powersync/react-native@1.35.4(@journeyapps/react-native-quick-sqlite@2.5.2(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(@powersync/common@1.54.0)(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)':
     dependencies:

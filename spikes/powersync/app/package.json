@@ -4,7 +4,8 @@
   "main": "index.ts",
   "dependencies": {
     "@azure/core-asynciterator-polyfill": "^1.0.2",
-    "@journeyapps/react-native-quick-sqlite": "^2.5.2",
+    "@op-engineering/op-sqlite": "^16.2.0",
+    "@powersync/op-sqlite": "^0.9.10",
     "@powersync/react": "^1.10.0",
     "@powersync/react-native": "^1.35.4",
     "expo": "~56.0.11",
