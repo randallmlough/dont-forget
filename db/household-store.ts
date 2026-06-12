@@ -94,6 +94,7 @@ export type HouseholdStore = {
 	path: string;
 	syncAuthorized: boolean;
 	execute: (statement: HouseholdSqlStatement) => Promise<HouseholdSqlResult>;
+	subscribeToChanges: (listener: () => void) => { remove: () => void };
 	push: () => Promise<void>;
 	pull: () => Promise<SyncResult>;
 	sync: () => Promise<SyncResult>;
@@ -191,7 +192,22 @@ export async function openHouseholdStore(
 			: {}),
 	});
 	let closed = false;
+	const changeListeners = new Set<() => void>();
 	const enqueueDatabaseOperation = createDatabaseOperationQueue();
+
+	function notifyChanged() {
+		if (closed) return;
+
+		for (const listener of changeListeners) {
+			try {
+				listener();
+			} catch (error) {
+				log.error("household store change listener failed", {
+					error: asError(error),
+				});
+			}
+		}
+	}
 
 	try {
 		await database.connect();
@@ -203,6 +219,7 @@ export async function openHouseholdStore(
 	async function close() {
 		if (closed) return;
 		closed = true;
+		changeListeners.clear();
 		return enqueueDatabaseOperation(async () => {
 			try {
 				await database.close();
@@ -235,6 +252,7 @@ export async function openHouseholdStore(
 			return enqueueDatabaseOperation(async () => {
 				try {
 					const result = await database.run(sql, args);
+					notifyChanged();
 					return {
 						rows: [],
 						rowsAffected: result.changes,
@@ -246,6 +264,18 @@ export async function openHouseholdStore(
 				}
 			});
 		},
+		subscribeToChanges(listener) {
+			if (closed) {
+				return { remove() {} };
+			}
+
+			changeListeners.add(listener);
+			return {
+				remove() {
+					changeListeners.delete(listener);
+				},
+			};
+		},
 		async push() {
 			return enqueueDatabaseOperation(async () => {
 				await runNativeSyncOperation(() => database.push());
@@ -253,7 +283,11 @@ export async function openHouseholdStore(
 		},
 		async pull() {
 			return enqueueDatabaseOperation(async () => {
-				return { changed: await runNativeSyncOperation(() => database.pull()) };
+				const changed = await runNativeSyncOperation(() => database.pull());
+				if (changed) {
+					notifyChanged();
+				}
+				return { changed };
 			});
 		},
 		async sync() {
@@ -265,7 +299,11 @@ export async function openHouseholdStore(
 				const changedAfterPush = await runNativeSyncOperation(() =>
 					database.pull(),
 				);
-				return { changed: changedBeforePush || changedAfterPush };
+				const changed = changedBeforePush || changedAfterPush;
+				if (changed) {
+					notifyChanged();
+				}
+				return { changed };
 			});
 		},
 		close,

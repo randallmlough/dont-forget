@@ -132,6 +132,128 @@ describe("openHouseholdStore", () => {
 		);
 	});
 
+	it("notifies listeners after successful writes but not reads", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const listener = jest.fn();
+		store.subscribeToChanges(listener);
+
+		await store.execute({
+			kind: "read",
+			sql: "SELECT id FROM items",
+		});
+		expect(listener).not.toHaveBeenCalled();
+
+		await store.execute({
+			kind: "write",
+			sql: "INSERT INTO items (id, name) VALUES (?, ?)",
+			args: ["itm_eggs", "Eggs"],
+		});
+		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
+	it("notifies listeners only when pull reports changed Household data", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const nativeDb = onlyInstance(instances);
+		const listener = jest.fn();
+		store.subscribeToChanges(listener);
+
+		nativeDb.pullResult = false;
+		await expect(store.pull()).resolves.toEqual({ changed: false });
+		expect(listener).not.toHaveBeenCalled();
+
+		nativeDb.pullResult = true;
+		await expect(store.pull()).resolves.toEqual({ changed: true });
+		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
+	it("notifies listeners when sync reports changed Household data", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const nativeDb = onlyInstance(instances);
+		const listener = jest.fn();
+		store.subscribeToChanges(listener);
+
+		nativeDb.pullResults = [false, false];
+		await expect(store.sync()).resolves.toEqual({ changed: false });
+		expect(listener).not.toHaveBeenCalled();
+
+		nativeDb.pullResults = [false, true];
+		await expect(store.sync()).resolves.toEqual({ changed: true });
+		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
+	it("logs listener failures and continues notifying other listeners", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const error = new Error("listener failed");
+		const failingListener = jest.fn(() => {
+			throw error;
+		});
+		const succeedingListener = jest.fn();
+		store.subscribeToChanges(failingListener);
+		store.subscribeToChanges(succeedingListener);
+
+		await store.execute({
+			kind: "write",
+			sql: "INSERT INTO items (id, name) VALUES (?, ?)",
+			args: ["itm_eggs", "Eggs"],
+		});
+
+		expect(failingListener).toHaveBeenCalledTimes(1);
+		expect(succeedingListener).toHaveBeenCalledTimes(1);
+		expect(defaultScopedLogger.error).toHaveBeenCalledWith(
+			"household store change listener failed",
+			{ error },
+		);
+	});
+
+	it("removes change listeners", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const listener = jest.fn();
+		const subscription = store.subscribeToChanges(listener);
+
+		subscription.remove();
+		await store.execute({
+			kind: "write",
+			sql: "INSERT INTO items (id, name) VALUES (?, ?)",
+			args: ["itm_eggs", "Eggs"],
+		});
+
+		expect(listener).not.toHaveBeenCalled();
+	});
+
+	it("clears listeners on close and never notifies listeners added after close", async () => {
+		const store = await openHouseholdStore(configFixture(), {
+			runtime,
+			fileSystem,
+		});
+		const nativeDb = onlyInstance(instances);
+		const listenerBeforeClose = jest.fn();
+		const listenerAfterClose = jest.fn();
+		store.subscribeToChanges(listenerBeforeClose);
+
+		await store.close();
+		store.subscribeToChanges(listenerAfterClose);
+		nativeDb.pullResult = true;
+		await expect(store.pull()).resolves.toEqual({ changed: true });
+
+		expect(listenerBeforeClose).not.toHaveBeenCalled();
+		expect(listenerAfterClose).not.toHaveBeenCalled();
+	});
+
 	it("wraps push, pull, sync, close, and local deletion", async () => {
 		const store = await openHouseholdStore(configFixture(), {
 			runtime,
