@@ -1,9 +1,9 @@
-import { useEffect, useReducer } from "react";
 import type {
-	ActiveListInitialState,
 	ActiveListItem,
+	ActiveListState,
 	AddActiveListItemInput,
 } from "@/components/active-list";
+import { useSessionQuery } from "@/components/session";
 import {
 	clearCurrentListSelection,
 	getCurrentListSelection,
@@ -12,8 +12,7 @@ import type { Item } from "@/lib/services/item";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 
 export type HomeCurrentListActions = {
-	loadList: () => Promise<ActiveListInitialState>;
-	addItem: (input: AddActiveListItemInput) => Promise<ActiveListItem>;
+	addItem: (input: AddActiveListItemInput) => Promise<void>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -24,7 +23,7 @@ export type HomeCurrentListState =
 	| {
 			status: "active";
 			listId: string;
-			initialList: ActiveListInitialState;
+			list: ActiveListState;
 			actions: HomeCurrentListActions;
 	  };
 
@@ -32,65 +31,18 @@ export function useHomeCurrentList(session: AuthenticatedAppSession): {
 	state: HomeCurrentListState;
 	retry: () => void;
 } {
-	const loadKey = session.resourceKey;
-	const [resource, dispatch] = useReducer(
-		homeCurrentListReducer,
-		loadKey,
-		initialHomeCurrentListResource,
-	);
-	const loadAttempt = resource.loadKey === loadKey ? resource.attempt : 0;
-
-	useEffect(() => {
-		let cancelled = false;
-
-		resolveCurrentList(session)
-			.then((resolution) => {
-				if (!cancelled) {
-					dispatch({
-						type: "listResolved",
-						loadKey,
-						attempt: loadAttempt,
-						resolution,
-					});
-				}
-			})
-			.catch(() => {
-				if (!cancelled) {
-					dispatch({
-						type: "listResolutionFailed",
-						loadKey,
-						attempt: loadAttempt,
-						message: "Unable to load this List. Please try again.",
-					});
-				}
-			});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [loadAttempt, loadKey, session]);
-
-	// A failed load can be caused by state a sync later repairs (e.g. a stale
-	// replica schema healed by the next pull), so retry automatically when a
-	// sync completes while the List is in an error state.
-	const failed = resource.loadKey === loadKey && resource.status === "error";
-	useEffect(() => {
-		if (!failed) return;
-
-		const subscription = session.services.sync.subscribe((status) => {
-			if (status === "synced") {
-				dispatch({ type: "retryRequested", loadKey });
-			}
-		});
-
-		return () => {
-			subscription.remove();
-		};
-	}, [failed, loadKey, session]);
+	const query = useSessionQuery({
+		session,
+		loadKey: session.resourceKey,
+		load: () => resolveCurrentList(session),
+		errorMessage: "Unable to load this List. Please try again.",
+	});
 
 	return {
-		state: homeCurrentListStateFromResource(resource, loadKey),
-		retry: () => dispatch({ type: "retryRequested", loadKey }),
+		state: homeCurrentListStateFromQuery(query.state),
+		// Current List selection lives in AsyncStorage, so switch/create flows
+		// still refetch explicitly after persisting a new selection.
+		retry: query.refetch,
 	};
 }
 
@@ -98,96 +50,34 @@ type HomeCurrentListResolution =
 	| {
 			status: "active";
 			listId: string;
-			initialList: ActiveListInitialState;
+			list: ActiveListState;
 			actions: HomeCurrentListActions;
 	  }
 	| { status: "zeroActive" };
 
-type HomeCurrentListResource =
-	| { status: "loading"; loadKey: string; attempt: number }
-	| { status: "error"; loadKey: string; attempt: number; message: string }
-	| {
-			status: "resolved";
-			loadKey: string;
-			attempt: number;
-			resolution: HomeCurrentListResolution;
-	  };
-
-type HomeCurrentListResourceAction =
-	| { type: "retryRequested"; loadKey: string }
-	| {
-			type: "listResolved";
-			loadKey: string;
-			attempt: number;
-			resolution: HomeCurrentListResolution;
-	  }
-	| {
-			type: "listResolutionFailed";
-			loadKey: string;
-			attempt: number;
-			message: string;
-	  };
-
-function initialHomeCurrentListResource(
-	loadKey: string,
-): HomeCurrentListResource {
-	return { status: "loading", loadKey, attempt: 0 };
-}
-
-function homeCurrentListReducer(
-	state: HomeCurrentListResource,
-	action: HomeCurrentListResourceAction,
-): HomeCurrentListResource {
-	if (action.type === "retryRequested") {
-		return {
-			status: "loading",
-			loadKey: action.loadKey,
-			attempt: state.loadKey === action.loadKey ? state.attempt + 1 : 0,
-		};
-	}
-
-	if (state.loadKey === action.loadKey && state.attempt !== action.attempt) {
-		return state;
-	}
-
-	if (action.type === "listResolved") {
-		return {
-			status: "resolved",
-			loadKey: action.loadKey,
-			attempt: action.attempt,
-			resolution: action.resolution,
-		};
-	}
-
-	return {
-		status: "error",
-		loadKey: action.loadKey,
-		attempt: action.attempt,
-		message: action.message,
-	};
-}
-
-function homeCurrentListStateFromResource(
-	resource: HomeCurrentListResource,
-	loadKey: string,
+function homeCurrentListStateFromQuery(
+	queryState:
+		| { status: "loading" }
+		| { status: "error"; message: string }
+		| { status: "ready"; data: HomeCurrentListResolution },
 ): HomeCurrentListState {
-	if (resource.loadKey !== loadKey || resource.status === "loading") {
+	if (queryState.status === "loading") {
 		return { status: "loading" };
 	}
 
-	if (resource.status === "error") {
-		return { status: "error", message: resource.message };
+	if (queryState.status === "error") {
+		return { status: "error", message: queryState.message };
 	}
 
-	if (resource.resolution.status === "zeroActive") {
+	if (queryState.data.status === "zeroActive") {
 		return { status: "zeroActive" };
 	}
 
 	return {
 		status: "active",
-		listId: resource.resolution.listId,
-		initialList: resource.resolution.initialList,
-		actions: resource.resolution.actions,
+		listId: queryState.data.listId,
+		list: queryState.data.list,
+		actions: queryState.data.actions,
 	};
 }
 
@@ -241,7 +131,7 @@ async function resolveCurrentList(
 			return {
 				status: "active",
 				listId,
-				initialList,
+				list: initialList,
 				actions: homeCurrentListActions(session, listId),
 			};
 		}
@@ -262,25 +152,14 @@ function homeCurrentListActions(
 	listId: string,
 ): HomeCurrentListActions {
 	return {
-		async loadList() {
-			const initialList = await loadActiveListState(session, listId);
-			// Refresh path for the already-resolved List. Mid-session lifecycle
-			// discovery (sync finds it archived/deleted) is out of scope; the
-			// ActiveList provider's existing refresh-failure handling applies.
-			if (!initialList) {
-				throw new Error("Current List is no longer active");
-			}
-			return initialList;
-		},
 		async addItem(input: AddActiveListItemInput) {
-			const item = await session.services.items.addItem({
+			await session.services.items.addItem({
 				listId,
 				userId: session.activeMember.userId,
 				name: input.name,
 				quantity: input.quantity,
 				notes: input.notes,
 			});
-			return activeListItemFromItem(item, memberNamesFromSession(session));
 		},
 		async setItemChecked(itemId: string, checked: boolean) {
 			await session.services.items.setItemChecked({
@@ -296,7 +175,7 @@ function homeCurrentListActions(
 async function loadActiveListState(
 	session: AuthenticatedAppSession,
 	listId: string,
-): Promise<ActiveListInitialState | null> {
+): Promise<ActiveListState | null> {
 	const [listResult, items] = await Promise.all([
 		session.services.lists.getList({ listId }),
 		session.services.items.listItems({ listId }),

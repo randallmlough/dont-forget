@@ -83,9 +83,8 @@ function HomeCurrentListResource({
 		<>
 			<ActiveList.Provider
 				key={`${session.resourceKey}:${loadState.listId}`}
-				initialState={loadState.initialList}
+				state={loadState.list}
 				currentMemberName={currentMemberName}
-				onLoadList={loadState.actions.loadList}
 				onAddItem={loadState.actions.addItem}
 				onSetItemChecked={loadState.actions.setItemChecked}
 				syncCoordinator={session.services.sync}

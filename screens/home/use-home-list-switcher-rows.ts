@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useSessionQuery } from "@/components/session";
 import type { ListSummary } from "@/lib/services/list";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 
@@ -10,49 +10,36 @@ export type HomeListSwitcherRows =
 /**
  * Loads the active List summaries for the Home List switcher: exactly
  * `listLists({ archive: "active", sort: "recentActivity" })`, no searchText.
- * `reload` re-runs the load (retry after a failed load); stale responses are
- * discarded via the attempt counter, including in-flight loads on unmount.
+ * `reload` re-runs the load after create/rename/delete actions or failed loads;
+ * Household DB change signals also refresh the rows.
  */
 export function useHomeListSwitcherRows(session: AuthenticatedAppSession): {
 	rows: HomeListSwitcherRows;
-	reload: () => Promise<void>;
+	reload: () => void;
 } {
-	const [rows, setRows] = useState<HomeListSwitcherRows>({ status: "loading" });
-	const loadAttemptRef = useRef(0);
-
-	const reload = useCallback(async () => {
-		loadAttemptRef.current += 1;
-		const attempt = loadAttemptRef.current;
-		setRows({ status: "loading" });
-		try {
-			const summaries = await session.services.lists.listLists({
+	const query = useSessionQuery({
+		session,
+		loadKey: session.resourceKey,
+		load: () =>
+			session.services.lists.listLists({
 				archive: "active",
 				sort: "recentActivity",
-			});
-			if (loadAttemptRef.current === attempt) {
-				setRows({ status: "ready", summaries });
-			}
-		} catch {
-			if (loadAttemptRef.current === attempt) {
-				setRows({ status: "error" });
-			}
-		}
-	}, [session]);
+			}),
+		errorMessage: "Unable to load Lists",
+	});
 
-	useEffect(() => {
-		let cancelled = false;
-		// Deferred a microtask so reload's synchronous "loading" setState happens
-		// outside the effect body (react-hooks/set-state-in-effect).
-		queueMicrotask(() => {
-			if (cancelled) return;
-			void reload();
-		});
-		return () => {
-			cancelled = true;
-			// Invalidate any in-flight load on unmount.
-			loadAttemptRef.current += 1;
+	if (query.state.status === "ready") {
+		return {
+			rows: { status: "ready", summaries: query.state.data },
+			reload: query.refetch,
 		};
-	}, [reload]);
+	}
 
-	return { rows, reload };
+	return {
+		rows:
+			query.state.status === "error"
+				? { status: "error" }
+				: { status: "loading" },
+		reload: query.refetch,
+	};
 }
