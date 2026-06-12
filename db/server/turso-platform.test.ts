@@ -41,14 +41,8 @@ describe("createTursoPlatformClient", () => {
 			"db-token",
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
-			"https://api.turso.tech/v1/organizations/acme/databases/db-one/auth/tokens",
-			expect.objectContaining({
-				method: "POST",
-				body: JSON.stringify({
-					authorization: "full-access",
-					expiration: "24h",
-				}),
-			}),
+			"https://api.turso.tech/v1/organizations/acme/databases/db-one/auth/tokens?authorization=full-access&expiration=24h",
+			expect.objectContaining({ method: "POST" }),
 		);
 	});
 

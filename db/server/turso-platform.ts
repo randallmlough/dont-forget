@@ -107,10 +107,14 @@ export function createTursoPlatformClient(
 		},
 		getDatabase,
 		async createDatabaseAuthToken(databaseName: string, expiration: string) {
-			const payload = await request(`/databases/${databaseName}/auth/tokens`, {
-				method: "POST",
-				body: JSON.stringify({ authorization: "full-access", expiration }),
+			const search = new URLSearchParams({
+				authorization: "full-access",
+				expiration,
 			});
+			const payload = await request(
+				`/databases/${databaseName}/auth/tokens?${search.toString()}`,
+				{ method: "POST" },
+			);
 			const tokenPayload = parseAuthTokenPayload(payload);
 			const token =
 				tokenPayload.jwt ?? tokenPayload.token ?? tokenPayload.authToken;
