@@ -16,14 +16,30 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import pg from "pg";
-import { importSPKI, jwtVerify } from "jose";
+import { importSPKI, importPKCS8, jwtVerify, SignJWT } from "jose";
 
 const PORT = Number(process.env.PORT || 6068);
 const ALG = "RS256";
+const KID = "spike-dev-key-1";
 const AUDIENCE = ["powersync-dev", "powersync"];
+const TOKEN_AUDIENCE = "powersync-dev";
 
 const publicPem = readFileSync(new URL("../keys/dev-public.pem", import.meta.url), "utf8");
 const verifyKey = await importSPKI(publicPem, ALG);
+const privatePem = readFileSync(new URL("../keys/dev-private.pem", import.meta.url), "utf8");
+const signKey = await importPKCS8(privatePem, ALG);
+
+// Mint a dev token for a user id (the JWT `sub`). Server-side signing so the
+// RN client needs no crypto polyfill. Spike only — Phase 2 swaps in Clerk.
+async function mintToken(sub) {
+  return new SignJWT({})
+    .setProtectedHeader({ alg: ALG, kid: KID })
+    .setSubject(sub)
+    .setAudience(TOKEN_AUDIENCE)
+    .setIssuedAt()
+    .setExpirationTime("12h")
+    .sign(signKey);
+}
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URI });
 
@@ -179,6 +195,13 @@ async function applyOp(client, op) {
 const server = createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     return send(res, 200, { ok: true });
+  }
+  // Dev-token endpoint: GET /api/auth/token?user_id=user-a
+  if (req.method === "GET" && req.url.startsWith("/api/auth/token")) {
+    const u = new URL(req.url, "http://localhost");
+    const sub = u.searchParams.get("user_id");
+    if (!sub) return send(res, 400, { error: "missing user_id" });
+    return send(res, 200, { token: await mintToken(sub) });
   }
   if (req.method !== "POST" || req.url !== "/api/data") {
     return send(res, 404, { error: "not found" });

@@ -136,3 +136,37 @@ test empirically and record the answer. (Recorded below once known.)
     item_id for item_checks. This works but means a row moving lists changes its bucket.
   - Cosmetic: synced-rows.mjs prints item_checks ids blank because item_checks has a
     composite PK (no `id` column), so object_id is empty in the op. Count is correct.
+
+### Step 2 — IN PROGRESS
+
+- **Expo SDK deviation**: `create-expo-app@latest` produced **Expo SDK 56 / RN 0.85 /
+  React 19.2**, not the plan's "SDK 55 / RN 0.83". The plan said the spike app is
+  standalone and need not match the main app, so I accepted the newer SDK rather than
+  pin backwards. Recorded as a deviation. (Main app is on SDK 56 per commit 847a68b3.)
+- Removed create-expo-app's template extras (`.claude/`, `AGENTS.md`, `CLAUDE.md`,
+  `LICENSE`) so a nested CLAUDE.md doesn't confuse agents. Template `.gitignore` already
+  covers node_modules, /ios, /android, .expo — no addition needed.
+- **PowerSync client packages** (current, from live README, NOT memory):
+  - `@powersync/react-native@1.35.4`
+  - `@powersync/react@1.10.0` (hooks: PowerSyncContext, useQuery, useStatus)
+  - adapter: `@journeyapps/react-native-quick-sqlite@2.5.2` (chosen over op-sqlite:
+    simpler, no use_frameworks/staticLibrary config; auto-added its Expo config plugin)
+  - `@azure/core-asynciterator-polyfill@1.0.2` (imported first in App.tsx — required
+    for watched/reactive query async iterators)
+  - dev: `@babel/plugin-transform-async-generator-functions@7.29.7` in babel.config.js
+  - `react-native-get-random-values` + `uuid` for client-generated row ids.
+  - Note: SDK 1.35 pre-bundles the fetch/stream polyfills, so the older long polyfill
+    list (react-native-fetch-api, web-streams-polyfill, base-64, text-encoding) is NOT
+    needed anymore. Verified against the repo README.
+- **Auth in client**: client does NOT sign tokens (no RN crypto). Added a backend route
+  `GET /api/auth/token?user_id=...` that signs a dev token server-side. Connector
+  fetchCredentials() calls it. This is the Phase-1 dev-token path; Phase 2 (decision
+  question 4) swaps in Clerk JWTs.
+- **Client schema**: mirrors the synced tables. `id` is implicit; item_checks carries
+  item_id/user_id as columns (composite PK lives server-side; upload upserts on them).
+- `npx tsc --noEmit` passes clean.
+- Simulators for the two-device demo (operator's iPhone 17 Pro 261F... left alone):
+  - Sim 1: **iPhone 17** `F6EFD6E9-E4E6-472D-B500-FF3E6877A232` — acts as Alice (A).
+  - Sim 2: **iPhone 17e** `DE4DB10F-A42B-472A-89A6-567C554A63BF` — acts as Bob (B).
+- Native build via `expo run:ios` running in background (log /tmp/expo-build-sim1.log).
+  Using xcodebuild (Xcode 26.5) + CocoaPods 1.16.2. ios/ is prebuild-generated, gitignored.
