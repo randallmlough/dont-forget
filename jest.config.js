@@ -7,6 +7,7 @@ module.exports = {
 	],
 	setupFilesAfterEnv: ["<rootDir>/lib/test/setup.ts"],
 	testMatch: ["**/*.test.ts", "**/*.test.tsx"],
+	testPathIgnorePatterns: ["/.claude/"],
 	moduleNameMapper: {
 		// Keep Jest aligned with Metro: Drizzle may resolve the libsql package root.
 		"^@libsql/client$": "@libsql/client/http",
