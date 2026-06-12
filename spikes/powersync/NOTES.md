@@ -445,3 +445,81 @@ TOMBSTONES (deleted_at) — where care is needed (reasoned; app has no delete UI
 Q5 VERDICT: PASS. Same-field edits converge deterministically to max-updated_at (LWW),
 identically on both devices and in Postgres; per-User checks are independent and never
 conflict. Tombstone edge cases are application-write-endpoint concerns, not engine concerns.
+
+## Q3 — Revocation (delete B's H1 membership)
+
+Ordering: run AFTER Q5 (Q3 deletes B's membership which Q5 needs); restore B after (below).
+
+BASELINE (before): `node tools/synced-rows.mjs user-b` → households [h1]; lists [list-h1];
+items [item-h1-1, item-h1-2]; item_checks 3. B is an active H1 member. Both sims connected.
+
+REVOCATION: `DELETE FROM memberships WHERE id='m-b-h1';` in pg-source at 08:00:32.3Z (UTC).
+
+(1) DOES B STOP RECEIVING H1 CHANGES, AND HOW FAST?
+- Fresh sync-stream connect for B at 08:00:40Z (~8 s later) → households []; lists [];
+  items []; item_checks []. B receives ZERO H1 rows. A is unaffected (still h1+h2).
+- LIVE CLIENT (the actual RN sim, not my node tool): PowerSync service log shows, for
+  `user_id: user-b, user_agent: powersync-js/1.54.0 ... react-native ios`:
+    `Updated checkpoint: 25 | write: 1 | buckets: 2`
+    `removed: [my_households|h1, my_lists|h1, my_items|list-h1,
+               my_item_checks|item-h1-2, my_item_checks|item-h1-1]` (5 buckets)
+    `operation_counts: {put:2, remove:1}` (the remove:1 is the membership row delete).
+  So PowerSync re-evaluated the parameter (membership) query the instant the DELETE
+  replicated and pushed a checkpoint REMOVING all 5 H1 buckets from B's local DB.
+  Timing bound: membership deleted 08:00:32Z; the removal checkpoint and the empty
+  fresh-connect were both observed within ~8 s. Seconds-scale revocation. ✓
+- LIVE SIM UI (Bob, iPhone 17e DE4DB10F) after revocation, read via rocketsim:
+  row "connected · synced 1:00:32 AM" + row "Waiting for list to sync…" — the list and all
+  items VANISHED from the UI; the connection stayed alive. Screenshot:
+  /tmp/spike-shots/q3-bob-revoked.png. (Connection stays up because the dev token is keyed
+  on sub=user-b, which still exists — revoking MEMBERSHIP is not revoking AUTH. Important
+  distinction: PowerSync auth = "who are you"; sync-stream membership query = "what do you
+  get". Revoking the latter cut the row set without dropping the socket.)
+
+(2) DOES ALREADY-SYNCED LOCAL DATA REMAIN ON B's DEVICE?
+- NO — and this is the KEY engine finding that CORRECTS the plan's expectation. The plan
+  expected local data to remain (so a sign-out wipe is an app concern). EMPIRICALLY,
+  PowerSync REMOVED the 5 H1 buckets from B's local SQLite (the `removed:` checkpoint
+  above). When a row leaves a user's sync-rule result set, PowerSync deletes it from that
+  client's local DB on the next checkpoint. So revoking the grant in Postgres
+  AUTOMATICALLY purges the orphaned local rows from the client — no app-driven wipe needed
+  for the revocation case. (A full sign-out wipe / disconnectAndClear remains an app concern
+  for the DIFFERENT case of "user logs out entirely", but membership revocation self-heals.)
+  This is BETTER than the plan assumed — record as a positive finding.
+
+(3) DO B's QUEUED WRITES FOR H1 GET REJECTED BY THE UPLOAD ENDPOINT?
+- YES. Minted B's dev token, POSTed an item PUT to list-h1 (H1) via /api/data →
+  HTTP 403 `{"error":"not an active member of household","household_id":"h1",...}`.
+  Confirmed the row did NOT land in Postgres (count 0). The upload endpoint re-checks
+  active membership per row at write time, so a revoked user's writes are rejected instantly
+  — server-side authorization, exactly the property the per-Household-Turso-token model
+  CANNOT provide (those tokens are 24h, full-access, irrevocable).
+- CAVEAT for the report (orchestrator trap #3): the spike connector's uploadData THROWS on a
+  non-OK response, which keeps the rejected transaction QUEUED and retrying forever. In this
+  spike B's queued H1 writes would 403-retry indefinitely (a poison-message jam). PowerSync's
+  documented handling for PERMANENTLY-rejected writes is to discard/compensate and call
+  tx.complete() so the queue drains (do not re-throw on a 4xx that will never succeed). The
+  spike does not implement this (no offline-write-then-revoke queue was left pending — the
+  403 test was a direct online POST), but PRODUCTION must distinguish retryable (5xx/network)
+  from terminal (4xx authz) upload failures: complete()+surface-to-user on terminal, throw
+  (retry) on transient. Flagged for the report; not an engine defect, a connector-policy
+  requirement.
+
+Q3 VERDICT: PASS. Revoking a membership row in Postgres cuts B's H1 row set within seconds
+(sync-rule re-evaluation removes the buckets), purges the already-synced local rows from B's
+device automatically, and the developer-owned upload endpoint rejects B's H1 writes with 403.
+Server-authoritative, instantly-revocable access — the core property the Turso per-Household
+token model lacks. One production to-do surfaced: the upload connector must treat terminal
+4xx as complete()+discard, not infinite retry.
+
+### Restore B's membership (per working-agreement 6 + plan ordering note)
+
+Re-inserted m-b-h1 matching init-scripts/02-seed.sql to leave the stack in the seeded state
+and to capture re-grant behavior (bonus evidence):
+  `INSERT INTO memberships (id, household_id, user_id, role, status)
+   VALUES ('m-b-h1','h1','user-b','member','active');`
+RE-GRANT BEHAVIOR (bonus): after re-insert, `synced-rows.mjs user-b` again returns H1
+(households [h1], lists [list-h1], items [item-h1-1, item-h1-2]) — PowerSync re-evaluated the
+membership query and re-added the H1 buckets to B's checkpoint; the live sim re-rendered
+Groceries (H1). Re-granting access self-heals symmetrically: add the membership row → the
+client re-syncs the household with no app intervention.
