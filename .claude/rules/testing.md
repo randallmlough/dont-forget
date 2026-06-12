@@ -1,6 +1,6 @@
 ---
 paths:
-  - "**/*.test.{ts,tsx}"
+  - "**/*.test.{js,ts,tsx}"
   - "**/*.stories.{ts,tsx}"
 ---
 

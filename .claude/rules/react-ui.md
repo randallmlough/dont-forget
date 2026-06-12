@@ -1,6 +1,6 @@
 ---
 paths:
-  - "app/**/*.{ts,tsx}"
+  - "app/**/*.tsx"
   - "components/**/*.{ts,tsx}"
   - "screens/**/*.{ts,tsx}"
 ---
