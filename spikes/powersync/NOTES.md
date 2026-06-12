@@ -379,3 +379,69 @@ finely with UI polling. The tight 853–928 ms spread (75 ms) reflects fixed too
 not network variance. Consistent with Phase 1's single ~0.96 s measurement.
 
 Side effect: Lat01–Lat10 + TestType items now sit in list-h1. Will `down -v` reset before Q5.
+
+## Q5 — Conflict semantics (LWW by updated_at + per-User check independence)
+
+Added a CRUD rename affordance (spike-only, App.tsx): long-press an item → rename to
+`<base>-<userLetter>-<HHMMSS>` and stamp a fresh updated_at. This is the missing "edit same
+field" path the spike app lacked (it only had add + check-toggle). Verified online first
+(Alice long-press Eggs → Eggs-a-074338 persisted to Postgres).
+NOTE: a JS-only App.tsx change needs a FULL Metro bundle rebuild + app relaunch to take
+effect; a plain `simctl launch` reused the cached 728-module bundle and silently ran old
+code (first rename attempts were no-ops). Forcing `curl .../index.bundle` rebuilt it (now
+782 modules) — recorded as a dev-loop gotcha.
+
+CONFLICT TEST — same item (item-h1-2 / "Eggs") renamed on BOTH devices while offline, then
+reconnect. Backend logs (added `[lww] APPLY/SKIP` lines) give ground truth on the real ISO
+updated_at the client sent, not just the second-resolution name.
+
+  Run 2 (A first, B later):
+    APPLY user-a PATCH items item-h1-2 Eggs-a-074739 incoming=…T07:47:39.861Z
+    APPLY user-b PATCH items item-h1-2 Eggs-b-074746 incoming=…T07:47:46.493Z
+    → Postgres = Eggs-b-074746 (the LATER write). Both UIs converged to Eggs-b. ✓
+  Run 3 (B first, A later — reversed):
+    APPLY user-b PATCH items item-h1-2 Eggs-b-074917 incoming=…T07:49:17.745Z
+    APPLY user-a PATCH items item-h1-2 Eggs-a-074924 incoming=…T07:49:24.194Z
+    → Postgres = Eggs-a-074924 (the LATER write). Both UIs converged to Eggs-a. ✓
+
+DETERMINISM: the winner is always the MAX updated_at, independent of device and of upload
+arrival order — the backend's `incoming >= stored` guard enforces it (a write that arrives
+after a newer one is logged `SKIP stale-lww`). Both clients then converge to the same value
+on the next checkpoint. No split-brain in any run.
+
+Run 1 anomaly (recorded honestly): an earlier run showed the EARLIER-looking writer winning.
+Root cause was simulator clock skew — the name encodes only HH:MM:SS, but LWW keys on the
+millisecond ISO updated_at, and the two simulators' wall clocks differ slightly. The
+logged runs (2,3) prove the rule is "max updated_at wins"; the spike's app-owned updated_at
+is only as good as the device clock (same caveat the production LWW design already lives with
+per ADR-0002). This is an argument FOR server-authoritative timestamping in production, noted
+for the report.
+
+PER-USER CHECK INDEPENDENCE — both A and B checked the SAME item (Eggs/item-h1-2) offline,
+reconnected. Result: Postgres item_checks holds TWO rows for item-h1-2, one per user, each
+with its own synthetic id, both checked:
+  e36f7596… item-h1-2 user-a t
+  890a6a12… item-h1-2 user-b t
+Backend logged both as APPLY PUT (independent inserts, no LWW contest). The (item_id,user_id)
+unique constraint isolates each User's check — they NEVER conflict across users, confirming
+ADR-0002's split-out-checks model syncs correctly through PowerSync. ✓
+
+TOMBSTONES (deleted_at) — where care is needed (reasoned; app has no delete UI to exercise):
+- The backend DELETE handler tombstones items/lists (`SET deleted_at = now()`), not hard
+  delete, matching ADR-0002. The sync stream `SELECT *` still matches tombstoned rows (they
+  retain their household linkage), so they sync DOWN and the client hides them via
+  `WHERE deleted_at IS NULL`. This works but means tombstones accumulate in every client's
+  local DB forever — production needs a purge/GC policy (server hard-deletes old tombstones;
+  PowerSync then removes them from clients on the next checkpoint).
+- A delete-vs-edit conflict (one device tombstones, another renames offline) resolves by the
+  same updated_at LWW: whichever carries the higher updated_at wins. The backend DELETE sets
+  updated_at=now() so a delete generally beats an older edit — but a rename with a LATER
+  clock would UN-delete by setting a name without clearing deleted_at, which is a real edge
+  the production write endpoint must handle explicitly (e.g. treat deleted_at as monotonic,
+  or reject edits to tombstoned rows). Flagged for the report; not a PowerSync concern.
+- item_checks DELETE is a hard delete by id (a missing row == unchecked), so no tombstone
+  needed there.
+
+Q5 VERDICT: PASS. Same-field edits converge deterministically to max-updated_at (LWW),
+identically on both devices and in Postgres; per-User checks are independent and never
+conflict. Tombstone edge cases are application-write-endpoint concerns, not engine concerns.

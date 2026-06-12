@@ -235,11 +235,13 @@ const server = createServer(async (req, res) => {
       // ---- LWW: ignore stale updates (keyed on the synthetic id for all tables).
       const incomingUpdatedAt = op.data?.updated_at;
       if (!(await lwwAllows(client, op.table, op.id, incomingUpdatedAt))) {
+        console.log(`[lww] SKIP user=${userId} ${op.op} ${op.table} ${op.id} name=${op.data?.name ?? ""} incoming=${incomingUpdatedAt}`);
         results.push({ id: op.id, table: op.table, skipped: "stale-lww" });
         continue;
       }
 
       await applyOp(client, op);
+      console.log(`[lww] APPLY user=${userId} ${op.op} ${op.table} ${op.id} name=${op.data?.name ?? ""} incoming=${incomingUpdatedAt}`);
       results.push({ id: op.id, table: op.table, applied: op.op });
     }
     await client.query("COMMIT");

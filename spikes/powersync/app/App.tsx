@@ -83,6 +83,21 @@ function ListView({ userId }: { userId: string }) {
     }
   }
 
+  // Q5 conflict affordance (spike-only): long-press renames an item to
+  // `<base>-<user>-<HHMMSS>` and stamps a fresh updated_at. Two devices renaming
+  // the same item offline then reconnecting exercises LWW-by-updated_at.
+  async function renameItem(itemId: string, currentName: string) {
+    const ts = nowIso();
+    const base = currentName.split('-')[0];
+    const stamp = ts.slice(11, 19).replace(/:/g, '');
+    const newName = `${base}-${userId.slice(-1)}-${stamp}`;
+    await db.execute(`UPDATE items SET name = ?, updated_at = ? WHERE id = ?`, [
+      newName,
+      ts,
+      itemId,
+    ]);
+  }
+
   if (!list) {
     return <Text style={styles.dim}>Waiting for list to sync…</Text>;
   }
@@ -113,6 +128,7 @@ function ListView({ userId }: { userId: string }) {
             <Pressable
               style={styles.itemRow}
               onPress={() => toggleCheck(item.id, checked)}
+              onLongPress={() => renameItem(item.id, item.name)}
               accessibilityLabel={`item-${item.name}`}
             >
               <Text style={styles.checkbox}>{checked ? '☑' : '☐'}</Text>
