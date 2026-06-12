@@ -929,6 +929,9 @@ function sessionFixture(): AuthenticatedAppSession {
 		services: {
 			lists,
 			items,
+			changes: {
+				subscribe: () => ({ remove() {} }),
+			},
 			sync: {
 				getStatus: jest.fn(() => "synced"),
 				subscribe: jest.fn(() => ({ remove() {} })),

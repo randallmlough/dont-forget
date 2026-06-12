@@ -48,7 +48,7 @@ export type AuthenticatedAppSessionSync = Pick<
 export type AuthenticatedAppSessionServices = {
 	lists: ListService;
 	items: ItemService;
-	changes?: {
+	changes: {
 		subscribe: (listener: () => void) => { remove: () => void };
 	};
 	sync: AuthenticatedAppSessionSync;

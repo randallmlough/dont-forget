@@ -1885,7 +1885,7 @@ function homeListSwitcherSession({
 	changes,
 	listLists,
 }: {
-	changes?: AuthenticatedAppSession["services"]["changes"];
+	changes: AuthenticatedAppSession["services"]["changes"];
 	listLists: AuthenticatedAppSession["services"]["lists"]["listLists"];
 }): AuthenticatedAppSession {
 	const unusedServiceCall = async () => {

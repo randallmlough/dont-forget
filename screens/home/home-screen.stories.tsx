@@ -107,6 +107,7 @@ function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 		resourceKey: `story:${initialList.householdName}:${initialList.listName}`,
 		services: {
 			...storyServices(initialList),
+			changes: passiveChanges(),
 			sync: storySyncCoordinator(),
 		},
 	};
@@ -223,6 +224,12 @@ function storySyncCoordinator(): ActiveListSyncCoordinator {
 		async requestSync() {
 			return { changed: false };
 		},
+	};
+}
+
+function passiveChanges(): AuthenticatedAppSession["services"]["changes"] {
+	return {
+		subscribe: () => ({ remove() {} }),
 	};
 }
 

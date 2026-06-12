@@ -684,6 +684,9 @@ function appSessionFixture(): AuthenticatedAppSession {
 				addItem: unusedSessionService,
 				setItemChecked: unusedSessionService,
 			},
+			changes: {
+				subscribe: () => ({ remove() {} }),
+			},
 			sync: {
 				getStatus: () => "synced",
 				subscribe: () => ({ remove() {} }),

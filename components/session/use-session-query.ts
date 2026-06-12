@@ -146,10 +146,10 @@ export function useSessionQuery<T>(options: {
 	}, [loadKey, runLoad]);
 
 	useEffect(() => {
-		const subscription = session.services.changes?.subscribe(() => {
+		const subscription = session.services.changes.subscribe(() => {
 			runLoad({ resetToLoading: false });
 		});
-		return () => subscription?.remove();
+		return () => subscription.remove();
 	}, [session.services.changes, runLoad]);
 
 	return { state, refetch };

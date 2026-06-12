@@ -49,9 +49,6 @@ describe("createAuthenticatedAppSessionController activation", () => {
 		});
 		const snapshot = controller.getSnapshot();
 		if (snapshot.status !== "ready") throw new Error("Expected ready snapshot");
-		if (!snapshot.session.services.changes) {
-			throw new Error("Expected session change signal");
-		}
 		const changeListener = jest.fn();
 		const changeSubscription =
 			snapshot.session.services.changes.subscribe(changeListener);
