@@ -252,3 +252,35 @@ Inspect Postgres: `docker compose exec pg-source psql -U postgres -p 5499 -d pos
 
 NOTE: the demo DB now contains the test artifacts (the "Bananas" item and Bob's Milk
 check) as living proof. To reset to the pristine seed: `docker compose down -v && docker compose up -d`.
+
+---
+
+# Phase 2 — Steps 3 & 4 (the six decision questions + the report)
+
+Phase 2 agent context: Phase 1 left the stack UP and both apps installed. At Phase 2
+start I reset the source DB to pristine seed (`docker compose down -v && up -d`) so all
+measurements begin from a known fixture, restarted Metro (died with the Phase 1 session),
+and relaunched both apps.
+
+## Phase 2 setup (verified)
+
+- Docker stack reset to pristine seed and healthy (4 containers). Verified row sets via
+  `tools/synced-rows.mjs`: user-a → households [h1,h2], items[item-h1-1,item-h1-2,item-h2-1];
+  user-b → households [h1], items[item-h1-1,item-h1-2]. 1 seeded item_check (A's Milk).
+- Metro restarted (bg, :8081, log /tmp/metro-phase2.log). Both apps cold-started clean,
+  reconciled local SQLite against the fresh server checkpoint (no stale Phase-1 "Bananas"
+  lingering) — evidence that a server-side bucket wipe is reflected on clients on reconnect.
+- Device assignment for Phase 2:
+  - **Alice = user-a** on iPhone 17 `F6EFD6E9-E4E6-472D-B500-FF3E6877A232`.
+  - **Bob = user-b** on iPhone 17e `DE4DB10F-A42B-472A-89A6-567C554A63BF` (tapped switch-user-b;
+    screen hash changed 89534ce8→813e2fb1; disconnectAndClear + reconnect as B; shows H1 Milk+Eggs).
+  - Operator's iPhone 17 Pro `261F6427-...` booted, left strictly alone.
+- rocketsim CLI at /opt/homebrew/bin/rocketsim; target a specific sim with `--udid <UDID>`.
+
+## Offline method (per orchestrator briefing)
+
+Sever connectivity by stopping the powersync + backend containers
+(`docker compose stop powersync backend`), NOT the Mac network (that kills Metro + tooling).
+Restore with `docker compose start powersync backend`. The two source Postgres containers stay
+up the whole time (they are the DB, not the network path).
+
