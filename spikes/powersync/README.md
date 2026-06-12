@@ -2,7 +2,8 @@
 
 Throwaway spike proving a single Postgres + PowerSync sync streams can replace the
 per-Household Turso DB model. All code here is disposable; the deliverable is the
-report (Phase 2 writes `REPORT.md`). Engineering log: `NOTES.md`.
+report: **`REPORT.md`** (verdict + the six decision questions). Engineering log with every
+raw measurement, error, and fix: **`NOTES.md`**.
 
 ## What's here
 
@@ -91,7 +92,34 @@ npx expo run:ios --device "<simulator name or udid>"
 ```
 
 The app has a hardcoded A/B user switcher, renders H1's first List with items and
-per-user checks via a reactive query, and writes through the Node endpoint.
+per-user checks via a reactive query, and writes through the Node endpoint. Long-press
+an item to rename it (the crude Q5 conflict affordance).
+
+## Reproduce the decision-question evidence (Phase 2)
+
+```bash
+cd spikes/powersync
+
+# Q3 revocation: B stops receiving H1 and B's H1 writes are 403'd.
+docker compose exec -T pg-source psql -U postgres -p 5499 -d postgres \
+  -c "DELETE FROM memberships WHERE id='m-b-h1';"
+node tools/synced-rows.mjs user-b          # -> households [] (B cut off)
+# ...then restore so the demo is back to seed:
+docker compose exec -T pg-source psql -U postgres -p 5499 -d postgres \
+  -c "INSERT INTO memberships (id,household_id,user_id,role,status) VALUES ('m-b-h1','h1','user-b','member','active');"
+
+# Q4 Clerk JWT (needs the main checkout's gitignored .env.local at RUNTIME ONLY):
+set -a; source <(grep -E '^(CLERK_SECRET_KEY|EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY)=' \
+  ../../.env.local); set +a
+node tools/clerk-token-test.mjs            # default token -> PowerSync 401 PSYNC_S2105 (missing aud)
+# After creating a Clerk Dashboard JWT template named `powersync` ({"aud":"powersync-dev"}):
+node tools/clerk-token-test.mjs http://localhost:8089 powersync   # -> accepted
+```
+
+> The Clerk frontend-API domain in `powersync/service.yaml` (`client_auth.jwks_uri`) is
+> PUBLIC (derivable from the publishable key); it is not a secret. The publishable/secret
+> KEY VALUES are never committed — `tools/clerk-token-test.mjs` reads them from the
+> environment at runtime.
 
 ## Tear down
 
