@@ -91,10 +91,13 @@ export function readPublicExpoConfig(
 	// local builds derive the API base URL from the Expo dev server at
 	// runtime (see lib/client-api/api-base-url.ts); only deployed envs need
 	// it configured. Tests inject their own API dependencies.
-	if (appEnv !== "test" && appEnv !== "local" && !apiBaseUrl) {
-		throw new Error(
-			`Missing required env var for ${appEnv}: EXPO_PUBLIC_API_BASE_URL`,
-		);
+	if (appEnv !== "test" && appEnv !== "local") {
+		if (!apiBaseUrl) {
+			throw new Error(
+				`Missing required env var for ${appEnv}: EXPO_PUBLIC_API_BASE_URL`,
+			);
+		}
+		validateApiBaseUrlForEnv(appEnv, apiBaseUrl);
 	}
 
 	return {
@@ -173,6 +176,25 @@ export function validateClerkKeyForEnv(
 	if (!key.startsWith(expectedPrefix)) {
 		throw new Error(
 			`${keyName} must start with ${expectedPrefix} when APP_ENV=${appEnv}`,
+		);
+	}
+}
+
+export function validateApiBaseUrlForEnv(
+	appEnv: AppEnv,
+	apiBaseUrl: string,
+): void {
+	let parsed: URL;
+	try {
+		parsed = new URL(apiBaseUrl);
+	} catch {
+		throw new Error(
+			`EXPO_PUBLIC_API_BASE_URL must be a valid URL when APP_ENV=${appEnv}`,
+		);
+	}
+	if (parsed.protocol !== "https:") {
+		throw new Error(
+			`EXPO_PUBLIC_API_BASE_URL must use https:// when APP_ENV=${appEnv}`,
 		);
 	}
 }
