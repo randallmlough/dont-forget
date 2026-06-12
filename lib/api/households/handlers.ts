@@ -1,9 +1,11 @@
 import type { DirectoryDb } from "@/db/server/client";
+import { asError } from "@/lib/errors";
 import {
 	type HouseholdJoinCodeSource,
 	isHouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
 } from "@/lib/household-join-code-source";
+import { redactAttributes } from "@/lib/redact";
 import {
 	ActiveHouseholdMembershipRequiredError,
 	type ActiveHouseholdService,
@@ -292,6 +294,6 @@ function householdErrorResponse(error: unknown, context: string): Response {
 		return householdJoinCodeThrottledResponse();
 	}
 
-	console.error(context, error);
+	console.error(context, redactAttributes({ error: asError(error) }));
 	return errorResponse("Server error", 500);
 }

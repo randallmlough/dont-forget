@@ -1,4 +1,6 @@
 import type { DirectoryDb } from "@/db/server/client";
+import { asError } from "@/lib/errors";
+import { redactAttributes } from "@/lib/redact";
 import {
 	createInvitationService,
 	InvitationInvalidEmailError,
@@ -182,6 +184,6 @@ function invitationErrorResponse(error: unknown, context: string): Response {
 		return unavailableErrorResponse("invitation");
 	}
 
-	console.error(context, error);
+	console.error(context, redactAttributes({ error: asError(error) }));
 	return errorResponse("Server error", 500);
 }
