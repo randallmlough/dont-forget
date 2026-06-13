@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { UnistylesRuntime } from "react-native-unistyles";
 
 export type AppearancePreference = "system" | "light" | "dark";
 
@@ -18,6 +19,21 @@ export async function writeAppearancePreference(
 	preference: AppearancePreference,
 ): Promise<void> {
 	await AsyncStorage.setItem(APPEARANCE_PREFERENCE_KEY, preference);
+}
+
+export function applyAppearancePreference(
+	preference: AppearancePreference,
+): void {
+	switch (preference) {
+		case "system":
+			UnistylesRuntime.setAdaptiveThemes(true);
+			return;
+		case "light":
+		case "dark":
+			UnistylesRuntime.setAdaptiveThemes(false);
+			UnistylesRuntime.setTheme(preference);
+			return;
+	}
 }
 
 function isAppearancePreference(

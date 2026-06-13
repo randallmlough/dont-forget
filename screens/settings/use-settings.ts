@@ -17,6 +17,7 @@ import {
 } from "@/lib/push/registration";
 import {
 	type AppearancePreference,
+	applyAppearancePreference,
 	readAppearancePreference,
 	writeAppearancePreference,
 } from "./appearance-preference";
@@ -89,9 +90,8 @@ export function useSettings(): {
 
 	async function setAppearancePreference(preference: AppearancePreference) {
 		await writeAppearancePreference(preference);
+		applyAppearancePreference(preference);
 		setAppearancePreferenceState(preference);
-		// Only the light Unistyles theme exists today. When a dark theme lands,
-		// apply this with UnistylesRuntime.setAdaptiveThemes(true) or setTheme(...).
 		track("appearance_preference_changed", { preference });
 	}
 

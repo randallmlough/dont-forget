@@ -25,6 +25,7 @@ module.exports = defineConfig([
 			"dont-forget/no-db-imports-outside-services": "error",
 			"dont-forget/no-db-server-imports": "error",
 			"dont-forget/no-lib-api-imports": "error",
+			"dont-forget/no-raw-color-literals": "error",
 			"dont-forget/no-screen-use-effect": "error",
 			"dont-forget/no-server-service-imports": "error",
 			"dont-forget/no-services-imports-in-db": "error",

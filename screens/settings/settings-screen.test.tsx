@@ -12,6 +12,7 @@ import { WebBrowserResultType } from "expo-web-browser";
 import type { PropsWithChildren, ReactElement } from "react";
 import { Linking } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { UnistylesRuntime } from "react-native-unistyles";
 
 import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
@@ -29,6 +30,12 @@ const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
 	disabled: 0,
 }));
+const setAdaptiveThemesSpy = jest
+	.spyOn(UnistylesRuntime, "setAdaptiveThemes")
+	.mockImplementation(() => undefined);
+const setThemeSpy = jest
+	.spyOn(UnistylesRuntime, "setTheme")
+	.mockImplementation(() => undefined);
 
 jest.mock("expo-constants", () => ({
 	__esModule: true,
@@ -78,6 +85,8 @@ beforeEach(() => {
 	mockRouterReplace.mockReset();
 	mockSignOut.mockClear();
 	mockSendTestNotification.mockClear();
+	setAdaptiveThemesSpy.mockClear();
+	setThemeSpy.mockClear();
 	jest.mocked(createUsersApiClient).mockClear();
 	jest.mocked(track).mockClear();
 	jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
@@ -189,13 +198,36 @@ describe("SettingsScreen", () => {
 
 		await fireEvent.press(screen.getByText("Dark"));
 
-		expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-			"appearance-preference",
-			"dark",
+		await waitFor(() =>
+			expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+				"appearance-preference",
+				"dark",
+			),
 		);
+		expect(setAdaptiveThemesSpy).toHaveBeenCalledWith(false);
+		expect(setThemeSpy).toHaveBeenCalledWith("dark");
 		expect(track).toHaveBeenCalledWith("appearance_preference_changed", {
 			preference: "dark",
 		});
+	});
+
+	it("applies each appearance option through Unistyles runtime", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Light"));
+
+		await waitFor(() => expect(setThemeSpy).toHaveBeenCalledWith("light"));
+		expect(setAdaptiveThemesSpy).toHaveBeenCalledWith(false);
+
+		setAdaptiveThemesSpy.mockClear();
+		setThemeSpy.mockClear();
+
+		await fireEvent.press(screen.getByText("System"));
+
+		await waitFor(() =>
+			expect(setAdaptiveThemesSpy).toHaveBeenCalledWith(true),
+		);
+		expect(setThemeSpy).not.toHaveBeenCalled();
 	});
 
 	it("registers for push notifications from the toggle", async () => {

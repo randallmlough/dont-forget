@@ -13,23 +13,6 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
 export const ADD_ITEM_COMPOSER_SCROLL_CLEARANCE = 128;
-const COMPOSER_COLORS = {
-	entryBackground: "rgba(255, 255, 255, 0.86)",
-	entryBorder: "rgba(130, 154, 177, 0.38)",
-	trayBackground: "rgba(255, 255, 255, 0.78)",
-	trayBorder: "rgba(130, 154, 177, 0.4)",
-	inputBackground: "rgba(255, 255, 255, 0.74)",
-	inputBorder: "rgba(130, 154, 177, 0.36)",
-	fieldBackground: "rgba(255, 255, 255, 0.58)",
-	pillBackground: "rgba(255, 255, 255, 0.62)",
-	pillBorder: "rgba(130, 154, 177, 0.34)",
-	selectedPillBackground: "rgba(47, 133, 90, 0.12)",
-	selectedPillBorder: "rgba(47, 133, 90, 0.28)",
-} as const;
-const COMPOSER_SHADOWS = {
-	entry: "0 6px 18px rgba(16, 42, 67, 0.12)",
-	tray: "0 8px 28px rgba(16, 42, 67, 0.18)",
-} as const;
 
 export type AddItemComposerProps = {
 	draft: AddItemComposerDraft;
@@ -287,10 +270,10 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(11),
 		paddingHorizontal: theme.spacing(3.5),
 		borderRadius: theme.spacing(5.5),
-		backgroundColor: COMPOSER_COLORS.entryBackground,
+		backgroundColor: theme.effects.addItemComposer.entryBackground,
 		borderWidth: theme.borders.hairline,
-		borderColor: COMPOSER_COLORS.entryBorder,
-		boxShadow: COMPOSER_SHADOWS.entry,
+		borderColor: theme.effects.addItemComposer.entryBorder,
+		boxShadow: theme.effects.addItemComposer.entryShadow,
 		justifyContent: "center",
 	},
 	entryLabel: {
@@ -309,10 +292,10 @@ const styles = StyleSheet.create((theme) => ({
 		borderRadius: theme.spacing(4),
 		borderCurve: "continuous",
 		overflow: "hidden",
-		backgroundColor: COMPOSER_COLORS.trayBackground,
+		backgroundColor: theme.effects.addItemComposer.trayBackground,
 		borderWidth: theme.borders.hairline,
-		borderColor: COMPOSER_COLORS.trayBorder,
-		boxShadow: COMPOSER_SHADOWS.tray,
+		borderColor: theme.effects.addItemComposer.trayBorder,
+		boxShadow: theme.effects.addItemComposer.trayShadow,
 	},
 	primaryRow: {
 		minHeight: theme.spacing(10),
@@ -327,9 +310,9 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(3),
 		borderRadius: theme.radii.control,
 		borderCurve: "continuous",
-		backgroundColor: COMPOSER_COLORS.inputBackground,
+		backgroundColor: theme.effects.addItemComposer.inputBackground,
 		borderWidth: theme.borders.hairline,
-		borderColor: COMPOSER_COLORS.inputBorder,
+		borderColor: theme.effects.addItemComposer.inputBorder,
 		color: theme.colors.text,
 		fontSize: theme.fontSizes.body,
 	},
@@ -372,7 +355,7 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(2.5),
 		borderRadius: theme.radii.control,
 		borderCurve: "continuous",
-		backgroundColor: COMPOSER_COLORS.fieldBackground,
+		backgroundColor: theme.effects.addItemComposer.fieldBackground,
 		color: theme.colors.text,
 		fontSize: theme.fontSizes.callout,
 	},
@@ -388,13 +371,13 @@ const styles = StyleSheet.create((theme) => ({
 		justifyContent: "center",
 		paddingHorizontal: theme.spacing(3),
 		borderRadius: theme.spacing(4),
-		backgroundColor: COMPOSER_COLORS.pillBackground,
+		backgroundColor: theme.effects.addItemComposer.pillBackground,
 		borderWidth: theme.borders.hairline,
-		borderColor: COMPOSER_COLORS.pillBorder,
+		borderColor: theme.effects.addItemComposer.pillBorder,
 	},
 	pillSelected: {
-		backgroundColor: COMPOSER_COLORS.selectedPillBackground,
-		borderColor: COMPOSER_COLORS.selectedPillBorder,
+		backgroundColor: theme.effects.addItemComposer.selectedPillBackground,
+		borderColor: theme.effects.addItemComposer.selectedPillBorder,
 	},
 	pillText: {
 		...theme.typography.captionStrong,
@@ -405,7 +388,7 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(2.5),
 		borderRadius: theme.radii.control,
 		borderCurve: "continuous",
-		backgroundColor: COMPOSER_COLORS.fieldBackground,
+		backgroundColor: theme.effects.addItemComposer.fieldBackground,
 		color: theme.colors.text,
 		fontSize: theme.fontSizes.callout,
 	},

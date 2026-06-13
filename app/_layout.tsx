@@ -3,13 +3,14 @@ import Constants from "expo-constants";
 import { useGlobalSearchParams, usePathname } from "expo-router";
 import { ThemeProvider } from "expo-router/react-navigation";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import "react-native-reanimated";
 import { PostHogProvider } from "posthog-react-native";
 import {
 	initialWindowMetrics,
 	SafeAreaProvider,
 } from "react-native-safe-area-context";
+import { useUnistyles } from "react-native-unistyles";
 
 import { AuthGate } from "@/components/auth/auth-gate";
 import {
@@ -22,7 +23,11 @@ import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
 import { posthog } from "@/lib/posthog";
 import "@/lib/push/notification-handler";
 import { tokenCache } from "@/lib/token-cache";
-import { navigationTheme } from "@/lib/unistyles/navigation-theme";
+import { navigationThemeFor } from "@/lib/unistyles/navigation-theme";
+import {
+	applyAppearancePreference,
+	readAppearancePreference,
+} from "@/screens/settings/appearance-preference";
 
 export const unstable_settings = {
 	anchor: "(app)",
@@ -47,6 +52,12 @@ export default function RootLayout() {
 	const pathname = usePathname();
 	const params = useGlobalSearchParams();
 	const previousPathname = useRef<string | undefined>(undefined);
+	const { theme, rt } = useUnistyles();
+	const isDarkTheme = rt.themeName === "dark";
+	const navigationTheme = useMemo(
+		() => navigationThemeFor(theme, isDarkTheme),
+		[theme, isDarkTheme],
+	);
 
 	useEffect(() => {
 		if (previousPathname.current !== pathname) {
@@ -57,6 +68,19 @@ export default function RootLayout() {
 			previousPathname.current = pathname;
 		}
 	}, [pathname, params]);
+
+	useEffect(() => {
+		let active = true;
+
+		void readAppearancePreference().then((preference) => {
+			if (!active) return;
+			applyAppearancePreference(preference);
+		});
+
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	return (
 		<PostHogProvider
@@ -77,7 +101,7 @@ export default function RootLayout() {
 						>
 							<AuthGate pathname={pathname} params={params} />
 						</AuthenticatedAppSessionProvider>
-						<StatusBar style="dark" />
+						<StatusBar style={isDarkTheme ? "light" : "dark"} />
 					</ThemeProvider>
 				</ClerkProvider>
 			</SafeAreaProvider>

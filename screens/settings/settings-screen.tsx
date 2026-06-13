@@ -2,7 +2,7 @@ import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 import type { AppearancePreference } from "./appearance-preference";
 import {
@@ -167,15 +167,23 @@ function AppearancePreferenceControl({
 	preference: AppearancePreference;
 	onChange: (preference: AppearancePreference) => Promise<void>;
 }) {
+	const { rt } = useUnistyles();
+	const selectedPreference = runtimeAppearancePreference(preference, {
+		hasAdaptiveThemes: rt.hasAdaptiveThemes,
+		themeName: rt.themeName,
+	});
+
 	return (
 		<View style={styles.preferenceRow}>
 			<View style={styles.rowTextGroup}>
 				<Text style={styles.rowTitle}>Appearance</Text>
-				<Text style={styles.rowSubtitle}>{appearanceLabel(preference)}</Text>
+				<Text style={styles.rowSubtitle}>
+					{appearanceLabel(selectedPreference)}
+				</Text>
 			</View>
 			<View style={styles.segmentedControl}>
 				{(["system", "light", "dark"] as const).map((option) => {
-					const selected = option === preference;
+					const selected = option === selectedPreference;
 					return (
 						<Pressable
 							key={option}
@@ -204,6 +212,17 @@ function AppearancePreferenceControl({
 			</View>
 		</View>
 	);
+}
+
+function runtimeAppearancePreference(
+	fallback: AppearancePreference,
+	runtime: { hasAdaptiveThemes: boolean; themeName?: string },
+): AppearancePreference {
+	if (runtime.hasAdaptiveThemes) return "system";
+	if (runtime.themeName === "light" || runtime.themeName === "dark") {
+		return runtime.themeName;
+	}
+	return fallback;
 }
 
 function NotificationToggleRow({
