@@ -21,6 +21,7 @@ import { track } from "@/lib/analytics";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {
 	clearCurrentListSelection,
+	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 	setCurrentListSelection,
 } from "@/lib/local-storage/current-list-selection";
@@ -41,6 +42,7 @@ jest.mock("@/lib/local-storage/current-list-selection", () => ({
 	getCurrentListSelection: jest.fn(),
 	setCurrentListSelection: jest.fn(),
 	clearCurrentListSelection: jest.fn(),
+	clearCurrentListSelectionIfMatches: jest.fn(),
 	clearUserCurrentListSelections: jest.fn(),
 }));
 
@@ -82,6 +84,10 @@ beforeEach(() => {
 		.mocked(clearCurrentListSelection)
 		.mockReset()
 		.mockResolvedValue(undefined);
+	jest
+		.mocked(clearCurrentListSelectionIfMatches)
+		.mockReset()
+		.mockResolvedValue(false);
 	jest.mocked(track).mockClear();
 });
 
@@ -373,10 +379,11 @@ describe("HomeScreenView", () => {
 			);
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
-			expect(clearCurrentListSelection).toHaveBeenCalledWith(
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledWith(
 				harness.scenario.users.avery.id,
 				harness.scenario.household.id,
+				"lst_ghost",
 			);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
@@ -400,7 +407,7 @@ describe("HomeScreenView", () => {
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			expect(screen.queryByText("Holiday Dinner")).toBeNull();
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
 			await harness.close();
@@ -423,7 +430,7 @@ describe("HomeScreenView", () => {
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			expect(screen.queryByText("Camping Trip")).toBeNull();
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
 			await harness.close();
@@ -483,7 +490,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness();
 		jest.mocked(getCurrentListSelection).mockResolvedValue("lst_ghost");
 		jest
-			.mocked(clearCurrentListSelection)
+			.mocked(clearCurrentListSelectionIfMatches)
 			.mockRejectedValueOnce(new Error("storage offline"));
 
 		try {
@@ -500,7 +507,7 @@ describe("HomeScreenView", () => {
 			await fireEvent.press(screen.getByText("Try again"));
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(2);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(2);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
 			await harness.close();
@@ -527,10 +534,11 @@ describe("HomeScreenView", () => {
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			expect(screen.queryByText("List unavailable")).toBeNull();
 			expect(screen.queryByText("Try again")).toBeNull();
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
-			expect(clearCurrentListSelection).toHaveBeenCalledWith(
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledWith(
 				harness.scenario.users.avery.id,
 				harness.scenario.household.id,
+				harness.scenario.lists.pharmacy.id,
 			);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
@@ -792,10 +800,11 @@ describe("HomeScreenView", () => {
 			await waitFor(() =>
 				expect(screen.getByText("No active Lists")).toBeTruthy(),
 			);
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
-			expect(clearCurrentListSelection).toHaveBeenCalledWith(
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledWith(
 				harness.scenario.users.avery.id,
 				harness.scenario.household.id,
+				harness.scenario.lists.pharmacy.id,
 			);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 			expect(listSwitchedTrackCalls()).toHaveLength(0);
@@ -1576,6 +1585,69 @@ describe("List switcher", () => {
 				expect(trackCallsFor("list_deleted")).toHaveLength(1);
 				expect(listSwitchedTrackCalls()).toHaveLength(0);
 			} finally {
+				await harness.close();
+			}
+		});
+
+		it("does not clear a repaired fallback selection when a stale delete re-resolution finishes later", async () => {
+			const harness = await createHomeSessionHarness();
+			let storedSelection: string | null = harness.scenario.lists.groceries.id;
+			let firedStaleChange = false;
+			const staleClearStarted = deferred<void>();
+			const allowStaleClear = deferred<void>();
+
+			jest
+				.mocked(getCurrentListSelection)
+				.mockImplementation(async () => storedSelection);
+			jest
+				.mocked(setCurrentListSelection)
+				.mockImplementation(async (_userId, _householdId, listId) => {
+					if (
+						!firedStaleChange &&
+						listId === harness.scenario.lists.pharmacy.id
+					) {
+						firedStaleChange = true;
+						harness.fireChange();
+					}
+					storedSelection = listId;
+				});
+			jest
+				.mocked(clearCurrentListSelectionIfMatches)
+				.mockImplementation(async (_userId, _householdId, listId) => {
+					staleClearStarted.resolve();
+					await allowStaleClear.promise;
+					if (storedSelection !== listId) return false;
+					storedSelection = null;
+					return true;
+				});
+
+			try {
+				await renderHomeReady(harness);
+				await openSwitcher();
+				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+
+				await fireEvent.press(screen.getByLabelText("Delete Groceries"));
+				await act(async () => {
+					await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+				});
+
+				await staleClearStarted.promise;
+				expect(storedSelection).toBe(harness.scenario.lists.pharmacy.id);
+
+				await act(async () => {
+					allowStaleClear.resolve();
+					await allowStaleClear.promise;
+				});
+
+				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+				expect(storedSelection).toBe(harness.scenario.lists.pharmacy.id);
+				expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledWith(
+					harness.scenario.users.avery.id,
+					harness.scenario.household.id,
+					harness.scenario.lists.groceries.id,
+				);
+			} finally {
+				allowStaleClear.resolve();
 				await harness.close();
 			}
 		});

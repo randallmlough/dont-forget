@@ -5,7 +5,7 @@ import type {
 } from "@/components/active-list";
 import { useSessionQuery } from "@/components/session";
 import {
-	clearCurrentListSelection,
+	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 } from "@/lib/local-storage/current-list-selection";
 import type { Item } from "@/lib/services/item";
@@ -127,8 +127,12 @@ async function resolveCurrentList(
 	for (const listId of candidateListIds) {
 		const initialList = await loadActiveListState(session, listId);
 		if (initialList) {
-			if (clearStoredSelection) {
-				await clearCurrentListSelection(userId, householdId);
+			if (clearStoredSelection && storedListId !== null) {
+				await clearCurrentListSelectionIfMatches(
+					userId,
+					householdId,
+					storedListId,
+				);
 			}
 			return {
 				status: "active",
@@ -143,8 +147,8 @@ async function resolveCurrentList(
 		}
 	}
 
-	if (clearStoredSelection) {
-		await clearCurrentListSelection(userId, householdId);
+	if (clearStoredSelection && storedListId !== null) {
+		await clearCurrentListSelectionIfMatches(userId, householdId, storedListId);
 	}
 	return { status: "zeroActive" };
 }
