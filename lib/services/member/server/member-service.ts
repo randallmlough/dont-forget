@@ -303,16 +303,18 @@ async function findActiveMembershipRow(
 	const [existing] = await directory
 		.select()
 		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
 		.where(
 			and(
 				eq(memberships.householdId, input.householdId),
 				eq(memberships.userId, input.userId),
 				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
 			),
 		)
 		.limit(1);
 
-	return existing ?? null;
+	return existing?.memberships ?? null;
 }
 
 async function listHouseholdMembers(
@@ -329,10 +331,12 @@ async function listHouseholdMembers(
 		})
 		.from(memberships)
 		.innerJoin(users, eq(users.id, memberships.userId))
+		.innerJoin(households, eq(households.id, memberships.householdId))
 		.where(
 			and(
 				eq(memberships.householdId, householdId),
 				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
 			),
 		)
 		.orderBy(asc(memberships.joinedAt), asc(memberships.id));
@@ -488,16 +492,18 @@ async function findActiveMembershipById(
 	const [membership] = await directory
 		.select()
 		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
 		.where(
 			and(
 				eq(memberships.householdId, input.householdId),
 				eq(memberships.id, input.membershipId),
 				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
 			),
 		)
 		.limit(1);
 
-	return membership ?? null;
+	return membership?.memberships ?? null;
 }
 
 async function listActiveMembershipRows(
@@ -507,11 +513,14 @@ async function listActiveMembershipRows(
 	return directory
 		.select()
 		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
 		.where(
 			and(
 				eq(memberships.householdId, householdId),
 				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
 			),
 		)
-		.orderBy(asc(memberships.joinedAt), asc(memberships.id));
+		.orderBy(asc(memberships.joinedAt), asc(memberships.id))
+		.then((rows) => rows.map((row) => row.memberships));
 }

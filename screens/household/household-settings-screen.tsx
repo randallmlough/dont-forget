@@ -59,7 +59,7 @@ function HouseholdSettingsContent({
 	reloadSession,
 }: {
 	session: AuthenticatedAppSession;
-	reloadSession: () => void;
+	reloadSession: (options?: { retireCurrent?: boolean }) => void;
 }) {
 	const { state, actions } = useHouseholdSettings(
 		session,

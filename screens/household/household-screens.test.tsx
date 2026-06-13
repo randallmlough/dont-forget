@@ -8,6 +8,7 @@ import {
 import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { Alert } from "react-native";
 import type { AuthenticatedAppSessionContextValue } from "@/components/session";
+import { track } from "@/lib/analytics";
 import type {
 	HouseholdApiClient,
 	HouseholdMember,
@@ -58,6 +59,7 @@ jest.mock("@/lib/analytics", () => ({
 }));
 
 beforeEach(() => {
+	jest.mocked(track).mockClear();
 	mockReplace.mockReset();
 	mockPush.mockReset();
 	mockReloadSession.mockReset();
@@ -495,6 +497,195 @@ describe("useHouseholdSettings", () => {
 
 		await screen.findByText("Enter a valid email address.");
 		expect(client.createInvitation).not.toHaveBeenCalled();
+	});
+
+	it("removes a Member, refreshes Members, and tracks success", async () => {
+		const refreshedMembers = [
+			{
+				membershipId: "mbr_1",
+				userId: "usr_1",
+				role: "owner" as const,
+				displayName: "Avery",
+			},
+		];
+		const client = readySettingsClient({
+			removeMember: jest.fn(async () => undefined),
+			listMembers: jest
+				.fn()
+				.mockResolvedValueOnce([
+					...refreshedMembers,
+					{
+						membershipId: "mbr_2",
+						userId: "usr_2",
+						role: "member" as const,
+						displayName: "Blake",
+					},
+				])
+				.mockResolvedValueOnce(refreshedMembers),
+		});
+
+		await render(<SettingsActionHarness client={client} action="remove" />);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Remove"));
+
+		await screen.findByText("Member removed.");
+		expect(client.removeMember).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			membershipId: "mbr_2",
+		});
+		expect(screen.getByText("members:1")).toBeTruthy();
+		expect(track).toHaveBeenCalledWith("member_removed", {
+			household_id: "hh_1",
+			membership_id: "mbr_2",
+			removed_by_user_id: "usr_1",
+		});
+	});
+
+	it("surfaces remove Member failures without refreshing Members", async () => {
+		const client = readySettingsClient({
+			removeMember: jest.fn(async () => {
+				throw new Error("Cannot remove this Member.");
+			}),
+			listMembers: jest.fn(async () => [
+				{
+					membershipId: "mbr_2",
+					userId: "usr_2",
+					role: "member" as const,
+					displayName: "Blake",
+				},
+			]),
+		});
+
+		await render(<SettingsActionHarness client={client} action="remove" />);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Remove"));
+
+		await screen.findByText("Cannot remove this Member.");
+		expect(client.listMembers).toHaveBeenCalledTimes(1);
+	});
+
+	it("changes a Member role, refreshes Members, and tracks success", async () => {
+		const client = readySettingsClient({
+			setMemberRole: jest.fn(async () => undefined),
+			listMembers: jest
+				.fn()
+				.mockResolvedValueOnce([
+					{
+						membershipId: "mbr_2",
+						userId: "usr_2",
+						role: "member" as const,
+						displayName: "Blake",
+					},
+				])
+				.mockResolvedValueOnce([
+					{
+						membershipId: "mbr_2",
+						userId: "usr_2",
+						role: "owner" as const,
+						displayName: "Blake",
+					},
+				]),
+		});
+
+		await render(<SettingsActionHarness client={client} action="role" />);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Change role"));
+
+		await screen.findByText("Member role changed.");
+		expect(client.setMemberRole).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			membershipId: "mbr_2",
+			role: "owner",
+		});
+		expect(screen.getByText("firstRole:owner")).toBeTruthy();
+		expect(track).toHaveBeenCalledWith("member_role_changed", {
+			household_id: "hh_1",
+			membership_id: "mbr_2",
+			role: "owner",
+			changed_by_user_id: "usr_1",
+		});
+	});
+
+	it("surfaces role-change failures without refreshing Members", async () => {
+		const client = readySettingsClient({
+			setMemberRole: jest.fn(async () => {
+				throw new Error("A Household must have at least one Owner.");
+			}),
+			listMembers: jest.fn(async () => [
+				{
+					membershipId: "mbr_2",
+					userId: "usr_2",
+					role: "member" as const,
+					displayName: "Blake",
+				},
+			]),
+		});
+
+		await render(<SettingsActionHarness client={client} action="role" />);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Change role"));
+
+		await screen.findByText("A Household must have at least one Owner.");
+		expect(client.listMembers).toHaveBeenCalledTimes(1);
+	});
+
+	it("retires and reloads the session after leaving without routing Home", async () => {
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			leaveHousehold: jest.fn(async () => ({
+				left: true as const,
+				promotedMembershipId: "mbr_2",
+			})),
+		});
+
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="leave"
+				reloadSession={reloadSession}
+			/>,
+		);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Leave"));
+
+		await waitFor(() =>
+			expect(reloadSession).toHaveBeenCalledWith({ retireCurrent: true }),
+		);
+		expect(mockReplace).not.toHaveBeenCalledWith("/");
+		expect(track).toHaveBeenCalledWith("household_left", {
+			household_id: "hh_1",
+			user_id: "usr_1",
+			promoted_membership_id: "mbr_2",
+		});
+	});
+
+	it("surfaces leave failures without retiring or routing", async () => {
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			leaveHousehold: jest.fn(async () => {
+				throw new Error("The only Member cannot leave the Household.");
+			}),
+		});
+
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="leave"
+				reloadSession={reloadSession}
+			/>,
+		);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Leave"));
+
+		await screen.findByText("The only Member cannot leave the Household.");
+		expect(reloadSession).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalledWith("/");
 	});
 });
 
@@ -1069,6 +1260,64 @@ function readySettingsState(members: HouseholdMember[]) {
 		notice: null,
 		operation: { status: "idle" as const },
 	};
+}
+
+function readySettingsClient(
+	overrides: Partial<HouseholdApiClient> = {},
+): HouseholdApiClient {
+	return {
+		...emptyClient(),
+		listMembers: jest.fn(async () => []),
+		listInvitations: jest.fn(async () => []),
+		getJoinCode: jest.fn(async () => ({
+			enabled: false as const,
+			householdId: "hh_1",
+		})),
+		...overrides,
+	};
+}
+
+function SettingsActionHarness({
+	client,
+	action,
+	reloadSession = jest.fn(),
+}: {
+	client: HouseholdApiClient;
+	action: "remove" | "role" | "leave";
+	reloadSession?: (options?: { retireCurrent?: boolean }) => void;
+}) {
+	const { state, actions } = useHouseholdSettings(
+		sessionFixture(),
+		client,
+		reloadSession,
+	);
+	if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+	return (
+		<>
+			<PressableText
+				label="Remove"
+				onPress={() => {
+					if (action === "remove") void actions.removeMember("mbr_2");
+				}}
+			/>
+			<PressableText
+				label="Change role"
+				onPress={() => {
+					if (action === "role") void actions.setMemberRole("mbr_2", "owner");
+				}}
+			/>
+			<PressableText
+				label="Leave"
+				onPress={() => {
+					if (action === "leave") void actions.leaveHousehold();
+				}}
+			/>
+			<TextNode>{state.operation.status}</TextNode>
+			<TextNode>{`members:${state.members.length}`}</TextNode>
+			<TextNode>{`firstRole:${state.members[0]?.role ?? "none"}`}</TextNode>
+			{state.notice ? <TextNode>{state.notice}</TextNode> : null}
+		</>
+	);
 }
 
 function emptyClient(): HouseholdApiClient {

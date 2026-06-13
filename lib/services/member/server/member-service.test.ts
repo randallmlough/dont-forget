@@ -594,6 +594,44 @@ describe("createMemberService", () => {
 			await directory.close();
 		}
 	});
+
+	it("does not list or mutate Memberships for deleted Households", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await seedMembers(directory.db, [
+				{ id: "mbr_owner", userId: "usr_owner", role: "owner", joinedAt: 1 },
+				{ id: "mbr_member", userId: "usr_member", role: "member", joinedAt: 2 },
+			]);
+			await directory.db
+				.update(households)
+				.set({ deletedAt: 50 })
+				.where(eq(households.id, "hh_1"));
+
+			await expect(service.listHouseholdMembers("hh_1")).resolves.toEqual([]);
+			await expect(
+				service.removeMember({
+					householdId: "hh_1",
+					membershipId: "mbr_member",
+					requestedByUserId: "usr_owner",
+				}),
+			).rejects.toBeInstanceOf(MemberManagementForbiddenError);
+			await expect(
+				service.changeMemberRole({
+					householdId: "hh_1",
+					membershipId: "mbr_member",
+					role: "owner",
+					requestedByUserId: "usr_owner",
+				}),
+			).rejects.toBeInstanceOf(MemberManagementForbiddenError);
+			await expect(
+				service.leaveHousehold({ householdId: "hh_1", userId: "usr_owner" }),
+			).rejects.toThrow("Member not found.");
+		} finally {
+			await directory.close();
+		}
+	});
 });
 
 async function seedMembers(

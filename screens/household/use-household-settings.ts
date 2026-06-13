@@ -1,6 +1,5 @@
 import { useAuth } from "@clerk/clerk-expo";
 import * as Clipboard from "expo-clipboard";
-import { useRouter } from "expo-router";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { track } from "@/lib/analytics";
 import {
@@ -97,10 +96,10 @@ type Action =
 export function useHouseholdSettings(
 	session: AuthenticatedAppSession,
 	clientProp?: HouseholdApiClient,
-	reloadSession: () => void = () => undefined,
+	reloadSession: (options?: { retireCurrent?: boolean }) => void = () =>
+		undefined,
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
-	const router = useRouter();
 	// Latest-ref pattern: the resolved client stays stable across getToken
 	// identity changes (so the load effect does not refetch) while always
 	// calling the most recent token callback. Resolution happens in effects
@@ -250,8 +249,7 @@ export function useHouseholdSettings(
 				user_id: session.user.id,
 				promoted_membership_id: response.promotedMembershipId,
 			});
-			reloadSession();
-			router.replace("/");
+			reloadSession({ retireCurrent: true });
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {
