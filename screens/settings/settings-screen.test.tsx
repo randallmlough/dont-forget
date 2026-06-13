@@ -10,7 +10,7 @@ import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { WebBrowserResultType } from "expo-web-browser";
 import type { PropsWithChildren, ReactElement } from "react";
-import { Linking } from "react-native";
+import { Linking, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { UnistylesRuntime } from "react-native-unistyles";
 
@@ -30,6 +30,7 @@ const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
 	disabled: 0,
 }));
+const devClientHeaderActionGutter = 56;
 const setAdaptiveThemesSpy = jest
 	.spyOn(UnistylesRuntime, "setAdaptiveThemes")
 	.mockImplementation(() => undefined);
@@ -178,6 +179,11 @@ describe("SettingsScreen", () => {
 	it("shows a Home control that returns to Home", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
+		const headerAction = screen.getByTestId("settings-header-action");
+
+		expect(StyleSheet.flatten(headerAction.props.style)).toMatchObject({
+			paddingRight: devClientHeaderActionGutter,
+		});
 		expect(screen.getByText("Home")).toBeTruthy();
 
 		await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));

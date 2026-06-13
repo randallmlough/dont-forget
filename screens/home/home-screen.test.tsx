@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react-native";
 import { eq } from "drizzle-orm";
 import type { PropsWithChildren, ReactElement } from "react";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
 import type { HouseholdSqlStatement } from "@/db/household-store";
@@ -65,6 +66,7 @@ jest.mock("@/lib/logger", () =>
 );
 
 const testLogger = createMockLogger();
+const devClientHeaderActionGutter = 56;
 testLogger.with.mockReturnValue(testLogger);
 const noopProviderActions = {
 	markOnboardingComplete() {},
@@ -201,6 +203,25 @@ it("remounts Active List when the session resource changes", async () => {
 });
 
 describe("HomeScreenView", () => {
+	it("keeps top-right header actions out of the dev-client menu overlay", async () => {
+		await renderWithSafeArea(
+			<HomeScreenView
+				state={{ status: "loading" }}
+				session={null}
+				onOpenSettings={() => {}}
+				onOpenHouseholdSettings={() => {}}
+			/>,
+		);
+
+		const headerActions = screen.getByTestId("home-header-actions");
+
+		expect(StyleSheet.flatten(headerActions.props.style)).toMatchObject({
+			paddingRight: devClientHeaderActionGutter,
+		});
+		expect(screen.getByRole("button", { name: "Household" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
+	});
+
 	it("shows Authenticated App Session loading and retryable error states", async () => {
 		const retry = jest.fn();
 

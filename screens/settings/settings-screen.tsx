@@ -41,17 +41,19 @@ export function SettingsScreenView({
 						App settings
 					</Text>
 				</View>
-				<Pressable
-					accessibilityLabel="Back to Home"
-					accessibilityRole="button"
-					onPress={() => router.replace("/")}
-					style={({ pressed }) => [
-						styles.headerButton,
-						pressed ? styles.headerButtonPressed : undefined,
-					]}
-				>
-					<Text style={styles.headerButtonLabel}>Home</Text>
-				</Pressable>
+				<View style={styles.headerAction} testID="settings-header-action">
+					<Pressable
+						accessibilityLabel="Back to Home"
+						accessibilityRole="button"
+						onPress={() => router.replace("/")}
+						style={({ pressed }) => [
+							styles.headerButton,
+							pressed ? styles.headerButtonPressed : undefined,
+						]}
+					>
+						<Text style={styles.headerButtonLabel}>Home</Text>
+					</Pressable>
+				</View>
 			</View>
 			<ScrollView contentContainerStyle={styles.content}>
 				{sections.map((section) => (
@@ -343,6 +345,9 @@ const styles = StyleSheet.create((theme) => ({
 	headerTextGroup: {
 		flex: 1,
 		minWidth: 0,
+	},
+	headerAction: {
+		paddingRight: theme.spacing(14),
 	},
 	headerLabel: {
 		...theme.typography.captionStrong,
