@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { pushTokens, users } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/server/test";
+import type { PushTokenService } from "@/lib/services/push/server";
 import { ApiUnauthorizedError } from "../shared";
 import {
 	handleRegisterPushToken,
@@ -101,6 +102,53 @@ describe("Users API handlers", () => {
 				.where(eq(pushTokens.expoPushToken, "ExponentPushToken[one]"));
 			expect(row.disabledAt).toEqual(expect.any(Number));
 		} finally {
+			await directory.close();
+		}
+	});
+
+	it("redacts thrown push token errors before logging generic server failures", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const rawExpoPushToken = "ExponentPushToken[secret-push-token]";
+		const rawAuthToken = "secret-auth-token-value";
+		const thrownError = new Error(
+			`boom https://push.example.test/register?expoPushToken=${rawExpoPushToken}&authToken=${rawAuthToken}`,
+		);
+		const service: PushTokenService = {
+			registerToken: jest.fn(async () => {
+				throw thrownError;
+			}),
+			disableToken: jest.fn(),
+			disableTokens: jest.fn(),
+			listActiveTokensForUsers: jest.fn(),
+		};
+
+		try {
+			const response = await handleRegisterPushToken(
+				jsonRequest({ expoPushToken: rawExpoPushToken }),
+				{
+					directory: directory.db,
+					authenticate: async () => testUser,
+					createPushTokenService: () => service,
+				},
+			);
+
+			expect(response.status).toBe(500);
+			await expect(response.json()).resolves.toEqual({
+				error: "Something went wrong.",
+			});
+			expect(errorSpy).toHaveBeenCalledWith(
+				"Register push token API failed",
+				expect.objectContaining({
+					error_message: expect.stringContaining("[REDACTED]"),
+				}),
+			);
+			const loggedAttributes = JSON.stringify(errorSpy.mock.calls[0]?.[1]);
+			expect(loggedAttributes).not.toContain(rawExpoPushToken);
+			expect(loggedAttributes).not.toContain(rawAuthToken);
+			expect(loggedAttributes).toContain("error_message");
+		} finally {
+			errorSpy.mockRestore();
 			await directory.close();
 		}
 	});
