@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useMemo, useReducer } from "react";
+import { track } from "@/lib/analytics";
 import {
 	createHouseholdApiClient,
 	type HouseholdApiClient,
@@ -9,17 +10,20 @@ import type { AuthenticatedAppSession } from "@/lib/services/session";
 
 export type HouseholdSwitchState = {
 	code: string;
+	householdName: string;
 	notice: string | null;
 	operation: HouseholdSwitchOperation;
 };
 
 export type HouseholdSwitchOperation =
 	| { status: "idle" }
+	| { status: "creatingHousehold" }
 	| { status: "joiningByCode" }
 	| { status: "switchingHousehold"; householdId: string };
 
 type Action =
 	| { type: "codeChanged"; code: string }
+	| { type: "householdNameChanged"; householdName: string }
 	| { type: "operationStarted"; operation: HouseholdSwitchOperation }
 	| { type: "notice"; notice: string | null };
 
@@ -30,6 +34,8 @@ export function useHouseholdSwitch(
 ): {
 	state: HouseholdSwitchState;
 	setCode: (code: string) => void;
+	setHouseholdName: (name: string) => void;
+	createHousehold: () => Promise<void>;
 	switchHousehold: (householdId: string) => Promise<void>;
 	joinByCode: () => Promise<void>;
 } {
@@ -41,6 +47,7 @@ export function useHouseholdSwitch(
 	);
 	const [state, dispatch] = useReducer(reducer, {
 		code: "",
+		householdName: "",
 		notice: null,
 		operation: { status: "idle" },
 	});
@@ -77,8 +84,28 @@ export function useHouseholdSwitch(
 
 		try {
 			await client.switchHousehold(householdId);
-			reloadSession();
-			router.replace("/");
+			finishHouseholdChange(reloadSession, router);
+		} catch (error) {
+			dispatch({ type: "notice", notice: messageFromError(error) });
+		}
+	}
+
+	async function createHousehold() {
+		if (operationInProgress(state.operation)) return;
+		dispatch({
+			type: "operationStarted",
+			operation: { status: "creatingHousehold" },
+		});
+		try {
+			const household = await client.createHousehold({
+				name: state.householdName.trim() || undefined,
+			});
+			track("household_created", {
+				household_id: household.id,
+				created_by_user_id: session.user.id,
+				source: "manual",
+			});
+			finishHouseholdChange(reloadSession, router);
 		} catch (error) {
 			dispatch({ type: "notice", notice: messageFromError(error) });
 		}
@@ -97,8 +124,7 @@ export function useHouseholdSwitch(
 		});
 		try {
 			await client.joinByCode(code);
-			reloadSession();
-			router.replace("/");
+			finishHouseholdChange(reloadSession, router);
 		} catch (error) {
 			dispatch({ type: "notice", notice: messageFromError(error) });
 		}
@@ -107,6 +133,9 @@ export function useHouseholdSwitch(
 	return {
 		state,
 		setCode: (code) => dispatch({ type: "codeChanged", code }),
+		setHouseholdName: (householdName) =>
+			dispatch({ type: "householdNameChanged", householdName }),
+		createHousehold,
 		switchHousehold,
 		joinByCode,
 	};
@@ -117,6 +146,9 @@ function reducer(
 	action: Action,
 ): HouseholdSwitchState {
 	if (action.type === "codeChanged") return { ...state, code: action.code };
+	if (action.type === "householdNameChanged") {
+		return { ...state, householdName: action.householdName };
+	}
 	if (action.type === "operationStarted") {
 		return { ...state, operation: action.operation, notice: null };
 	}
@@ -129,4 +161,12 @@ function operationInProgress(operation: HouseholdSwitchOperation): boolean {
 
 function messageFromError(error: unknown): string {
 	return error instanceof Error ? error.message : "Something went wrong.";
+}
+
+function finishHouseholdChange(
+	reloadSession: () => void,
+	router: ReturnType<typeof useRouter>,
+): void {
+	reloadSession();
+	router.replace("/");
 }

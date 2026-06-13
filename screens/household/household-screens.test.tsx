@@ -885,8 +885,15 @@ describe("HouseholdSwitch", () => {
 		await render(
 			<HouseholdSwitchView
 				session={sessionFixture()}
-				state={{ code: "", notice: null, operation: { status: "idle" } }}
+				state={{
+					code: "",
+					householdName: "",
+					notice: null,
+					operation: { status: "idle" },
+				}}
 				onCodeChange={jest.fn()}
+				onHouseholdNameChange={jest.fn()}
+				onCreateHousehold={jest.fn()}
 				onJoinByCode={jest.fn()}
 				onSwitchHousehold={jest.fn()}
 			/>,
@@ -894,6 +901,73 @@ describe("HouseholdSwitch", () => {
 
 		expect(screen.getByText("Current")).toBeTruthy();
 		expect(screen.getByText("Lake House")).toBeTruthy();
+	});
+
+	it("creates a Household, tracks success, and reloads the Authenticated App Session", async () => {
+		const session = sessionFixture();
+		const createHousehold = jest.fn(async () => ({
+			id: "hh_created",
+			name: "Work Pantry",
+		}));
+
+		function Harness() {
+			const model = useHouseholdSwitch(session, mockReloadSession, {
+				...emptyClient(),
+				createHousehold,
+			});
+			return (
+				<>
+					<PressableText
+						label="Set name"
+						onPress={() => model.setHouseholdName("Work Pantry")}
+					/>
+					<PressableText
+						label="Create"
+						onPress={() => void model.createHousehold()}
+					/>
+					<TextNode>{model.state.operation.status}</TextNode>
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await fireEvent.press(screen.getByText("Set name"));
+		await fireEvent.press(screen.getByText("Create"));
+
+		await waitFor(() => expect(mockReloadSession).toHaveBeenCalledTimes(1));
+		expect(createHousehold).toHaveBeenCalledWith({ name: "Work Pantry" });
+		expect(mockReplace).toHaveBeenCalledWith("/");
+		expect(track).toHaveBeenCalledWith("household_created", {
+			household_id: "hh_created",
+			created_by_user_id: "usr_1",
+			source: "manual",
+		});
+	});
+
+	it("creates a Household without a name when the name input is blank", async () => {
+		const createHousehold = jest.fn(async () => ({
+			id: "hh_created",
+			name: "Blue Basket",
+		}));
+
+		function Harness() {
+			const model = useHouseholdSwitch(sessionFixture(), mockReloadSession, {
+				...emptyClient(),
+				createHousehold,
+			});
+			return (
+				<PressableText
+					label="Create"
+					onPress={() => void model.createHousehold()}
+				/>
+			);
+		}
+
+		await render(<Harness />);
+		await fireEvent.press(screen.getByText("Create"));
+
+		await waitFor(() => expect(mockReloadSession).toHaveBeenCalledTimes(1));
+		expect(createHousehold).toHaveBeenCalledWith({ name: undefined });
 	});
 
 	it("keeps the current Household when sync-before-switch fails", async () => {
@@ -1492,6 +1566,7 @@ function SettingsActionHarness({
 
 function emptyClient(): HouseholdApiClient {
 	return {
+		createHousehold: jest.fn(),
 		renameHousehold: jest.fn(),
 		listMembers: jest.fn(),
 		removeMember: jest.fn(),

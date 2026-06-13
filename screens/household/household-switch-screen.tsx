@@ -44,6 +44,8 @@ function HouseholdSwitchContent({
 			session={session}
 			state={switchModel.state}
 			onCodeChange={switchModel.setCode}
+			onHouseholdNameChange={switchModel.setHouseholdName}
+			onCreateHousehold={switchModel.createHousehold}
 			onJoinByCode={switchModel.joinByCode}
 			onSwitchHousehold={switchModel.switchHousehold}
 		/>
@@ -54,12 +56,16 @@ export function HouseholdSwitchView({
 	session,
 	state,
 	onCodeChange,
+	onHouseholdNameChange,
+	onCreateHousehold,
 	onJoinByCode,
 	onSwitchHousehold,
 }: {
 	session: AuthenticatedAppSession;
 	state: HouseholdSwitchState;
 	onCodeChange: (code: string) => void;
+	onHouseholdNameChange: (name: string) => void;
+	onCreateHousehold: () => void;
 	onJoinByCode: () => void;
 	onSwitchHousehold: (householdId: string) => void;
 }) {
@@ -84,11 +90,19 @@ export function HouseholdSwitchView({
 				keyExtractor={(household) => household.id}
 				contentContainerStyle={styles.listContent}
 				ListHeaderComponent={
-					<JoinByCodeForm
-						state={state}
-						onCodeChange={onCodeChange}
-						onJoinByCode={onJoinByCode}
-					/>
+					<View style={styles.headerForms}>
+						<CreateHouseholdForm
+							state={state}
+							onHouseholdNameChange={onHouseholdNameChange}
+							onCreateHousehold={onCreateHousehold}
+						/>
+						<JoinByCodeForm
+							state={state}
+							onCodeChange={onCodeChange}
+							onJoinByCode={onJoinByCode}
+						/>
+						<Text style={styles.sectionTitle}>Your Households</Text>
+					</View>
 				}
 				renderItem={({ item }) => (
 					<HouseholdListRow
@@ -99,6 +113,39 @@ export function HouseholdSwitchView({
 				)}
 			/>
 		</SafeAreaView>
+	);
+}
+
+function CreateHouseholdForm({
+	state,
+	onHouseholdNameChange,
+	onCreateHousehold,
+}: {
+	state: HouseholdSwitchState;
+	onHouseholdNameChange: (name: string) => void;
+	onCreateHousehold: () => void;
+}) {
+	const busy = state.operation.status !== "idle";
+	const creating = state.operation.status === "creatingHousehold";
+	return (
+		<View style={styles.panel}>
+			<Text style={styles.panelTitle}>Create Household</Text>
+			<TextInput
+				accessibilityLabel="New Household name"
+				autoCapitalize="words"
+				editable={!busy}
+				onChangeText={onHouseholdNameChange}
+				placeholder="Optional name"
+				style={styles.input}
+				value={state.householdName}
+			/>
+			<HouseholdButton
+				variant="primary"
+				label={creating ? "Creating" : "Create Household"}
+				onPress={onCreateHousehold}
+				disabled={busy}
+			/>
+		</View>
 	);
 }
 
@@ -134,7 +181,6 @@ function JoinByCodeForm({
 			{state.notice ? (
 				<Text style={styles.noticeText}>{state.notice}</Text>
 			) : null}
-			<Text style={styles.sectionTitle}>Your Households</Text>
 		</View>
 	);
 }
@@ -240,6 +286,9 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	listContent: {
 		padding: theme.spacing(4),
+		gap: theme.spacing(3),
+	},
+	headerForms: {
 		gap: theme.spacing(3),
 	},
 	panel: {

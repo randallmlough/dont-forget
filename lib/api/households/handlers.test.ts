@@ -25,11 +25,13 @@ import {
 	createHouseholdJoinCodeService,
 	type HouseholdJoinCodeService,
 } from "@/lib/services/household/server";
+import { INITIAL_HOUSEHOLD_NAMES } from "@/lib/services/household/server/initial-household-name";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
 	type HouseholdApiDeps,
 	handleChangeMemberRole,
+	handleCreateHousehold,
 	handleGetJoinCode,
 	handleJoinByCode,
 	handleLeaveHousehold,
@@ -45,6 +47,135 @@ import {
 const now = PRIMARY_HOUSEHOLD_SEED.now + 100_000;
 
 describe("Household API handlers", () => {
+	it("requires auth for Household creation", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleCreateHousehold(
+				createApiRequest({
+					method: "POST",
+					body: { name: "Lake House" },
+				}),
+				{
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError("Invalid Clerk session token");
+					},
+					appEnv: "local",
+				},
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Invalid Clerk session token" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects invalid Household creation names", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleCreateHousehold(
+				createApiRequest({
+					method: "POST",
+					body: { name: "a".repeat(81) },
+				}),
+				householdDeps(directory, "user_avery"),
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 400,
+				body: { error: "Household name must be 80 characters or fewer." },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("creates a Household with an Owner Membership and sets it active", async () => {
+		const directory = await createTestDirectoryDb();
+		const dateNow = jest.spyOn(Date, "now").mockReturnValue(now);
+		try {
+			const response = await handleCreateHousehold(
+				createApiRequest({
+					method: "POST",
+					body: { name: "  Lake House  " },
+				}),
+				householdDeps(directory, "user_avery"),
+			);
+			const created = await readJsonResponse(response);
+			expect(created).toMatchObject({
+				status: 201,
+				body: {
+					household: {
+						id: expect.stringMatching(/^hh_/),
+						name: "Lake House",
+					},
+				},
+			});
+			const householdId = (
+				created.body as { household: { id: string; name: string } }
+			).household.id;
+			const [storedHousehold] = await directory.db
+				.select()
+				.from(households)
+				.where(eq(households.id, householdId));
+			const [storedMembership] = await directory.db
+				.select()
+				.from(memberships)
+				.where(eq(memberships.householdId, householdId));
+			const [storedUser] = await directory.db
+				.select()
+				.from(users)
+				.where(eq(users.clerkUserId, "user_avery"));
+
+			expect(storedHousehold).toMatchObject({
+				id: householdId,
+				name: "Lake House",
+				tursoDbName: expect.stringContaining("df-local-hh-"),
+				provisioningCompletedAt: null,
+				createdByUserId: storedUser?.id,
+			});
+			expect(storedMembership).toMatchObject({
+				householdId,
+				userId: storedUser?.id,
+				role: "owner",
+				removedAt: null,
+			});
+			expect(storedUser?.activeHouseholdId).toBe(householdId);
+		} finally {
+			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("uses an initial Household name when creation body has no name", async () => {
+		const directory = await createTestDirectoryDb();
+		const random = jest.spyOn(Math, "random").mockReturnValue(0);
+		try {
+			const response = await handleCreateHousehold(
+				createApiRequest({
+					method: "POST",
+					body: {},
+				}),
+				householdDeps(directory, "user_avery"),
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 201,
+				body: {
+					household: {
+						name: INITIAL_HOUSEHOLD_NAMES[0],
+					},
+				},
+			});
+		} finally {
+			random.mockRestore();
+			await directory.close();
+		}
+	});
+
 	it("requires auth for active Household switching", async () => {
 		const directory = await createTestDirectoryDb();
 		try {
@@ -824,6 +955,7 @@ function householdDeps(
 ): HouseholdApiDeps {
 	return {
 		directory: directory.db,
+		appEnv: "local",
 		authenticate: async (_request, db) =>
 			upsertAuthenticatedUser(
 				{

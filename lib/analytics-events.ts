@@ -95,6 +95,11 @@ export type EventMap = {
 		household_id: string;
 		renamed_by_user_id: string;
 	};
+	household_created: {
+		household_id: string;
+		created_by_user_id: string;
+		source: "manual";
+	};
 	household_join_code_used: {
 		household_id: string;
 		user_id: string;
