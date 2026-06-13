@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import {
 	householdJoinCodeAttempts,
+	households,
 	memberships,
 	users,
 } from "@/db/schema/directory";
@@ -36,6 +37,7 @@ import {
 	handlePreviewJoinCode,
 	handleRegenerateJoinCode,
 	handleRemoveMember,
+	handleRenameHousehold,
 	handleSetJoinCodeEnabled,
 	handleSwitchActiveHousehold,
 } from "./handlers";
@@ -151,6 +153,114 @@ describe("Household API handlers", () => {
 				),
 			);
 			expect(forbidden.status).toBe(403);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("requires auth for Household rename", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleRenameHousehold(
+				createApiRequest({
+					method: "PATCH",
+					body: { name: "Lake House" },
+				}),
+				{ householdId: "hh_avery" },
+				{
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError("Invalid Clerk session token");
+					},
+				},
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Invalid Clerk session token" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects Household rename by plain Members", async () => {
+		const harness = await primaryHarness();
+		try {
+			const response = await handleRenameHousehold(
+				createApiRequest({
+					method: "PATCH",
+					body: { name: "Lake House" },
+				}),
+				{ householdId: harness.scenario.household.id },
+				householdDeps(
+					harness.directory,
+					harness.scenario.users.blake.clerkUserId,
+				),
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 403,
+				body: { error: "Forbidden" },
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("rejects invalid Household rename names", async () => {
+		const harness = await primaryHarness();
+		try {
+			const response = await handleRenameHousehold(
+				createApiRequest({
+					method: "PATCH",
+					body: { name: "a".repeat(81) },
+				}),
+				{ householdId: harness.scenario.household.id },
+				householdDeps(
+					harness.directory,
+					harness.scenario.users.avery.clerkUserId,
+				),
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 400,
+				body: { error: "Household name must be 80 characters or fewer." },
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("renames Households and returns the updated name", async () => {
+		const harness = await primaryHarness();
+		try {
+			const response = await handleRenameHousehold(
+				createApiRequest({
+					method: "PATCH",
+					body: { name: "  Lake House  " },
+				}),
+				{ householdId: harness.scenario.household.id },
+				householdDeps(
+					harness.directory,
+					harness.scenario.users.avery.clerkUserId,
+				),
+			);
+			const [stored] = await harness.directory.db
+				.select()
+				.from(households)
+				.where(eq(households.id, harness.scenario.household.id));
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 200,
+				body: {
+					household: {
+						id: harness.scenario.household.id,
+						name: "Lake House",
+					},
+				},
+			});
+			expect(stored?.name).toBe("Lake House");
 		} finally {
 			await harness.close();
 		}

@@ -3,6 +3,7 @@ import {
 	type Household,
 	households,
 	type Membership,
+	memberships,
 	type User,
 } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
@@ -27,6 +28,11 @@ export type HouseholdService = {
 		user: User;
 		name: string;
 	}): Promise<Household>;
+	renameHousehold(input: {
+		householdId: string;
+		name: string;
+		requestedByUserId: string;
+	}): Promise<Household>;
 	markProvisioningCompleted(householdId: string): Promise<void>;
 	activeMembershipFrom(
 		household: Household,
@@ -39,6 +45,27 @@ export type HouseholdServiceDeps = {
 	generateJoinCode?: HouseholdJoinCodeGenerator;
 };
 
+export class HouseholdForbiddenError extends Error {
+	constructor() {
+		super("Forbidden");
+		this.name = "HouseholdForbiddenError";
+	}
+}
+
+export class HouseholdNameInvalidError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "HouseholdNameInvalidError";
+	}
+}
+
+export class HouseholdNotFoundError extends Error {
+	constructor() {
+		super("Household not found.");
+		this.name = "HouseholdNotFoundError";
+	}
+}
+
 export function createHouseholdService(
 	deps: HouseholdServiceDeps,
 ): HouseholdService {
@@ -48,6 +75,9 @@ export function createHouseholdService(
 		},
 		createOwnedHousehold(input) {
 			return createOwnedHousehold(input, deps.directory, deps.generateJoinCode);
+		},
+		renameHousehold(input) {
+			return renameHousehold(input, deps.directory);
 		},
 		async markProvisioningCompleted(householdId) {
 			await deps.directory
@@ -122,6 +152,81 @@ async function createOwnedHousehold(
 		generateJoinCode,
 	);
 	return household;
+}
+
+async function renameHousehold(
+	input: { householdId: string; name: string; requestedByUserId: string },
+	directory: HouseholdServiceDirectory,
+): Promise<Household> {
+	const name = normalizeHouseholdName(input.name);
+	const household = await findActiveHousehold(input.householdId, directory);
+	if (!household) throw new HouseholdNotFoundError();
+
+	const requester = await findActiveOwnerMembership(
+		{
+			householdId: input.householdId,
+			userId: input.requestedByUserId,
+		},
+		directory,
+	);
+	if (!requester) throw new HouseholdForbiddenError();
+
+	await directory
+		.update(households)
+		.set({ name })
+		.where(
+			and(eq(households.id, input.householdId), isNull(households.deletedAt)),
+		);
+
+	return { ...household, name };
+}
+
+function normalizeHouseholdName(name: string): string {
+	const trimmed = name.trim();
+	if (!trimmed) {
+		throw new HouseholdNameInvalidError("Household name is required.");
+	}
+	if (trimmed.length > 80) {
+		throw new HouseholdNameInvalidError(
+			"Household name must be 80 characters or fewer.",
+		);
+	}
+	return trimmed;
+}
+
+async function findActiveHousehold(
+	householdId: string,
+	directory: HouseholdServiceDirectory,
+): Promise<Household | null> {
+	const [household] = await directory
+		.select()
+		.from(households)
+		.where(and(eq(households.id, householdId), isNull(households.deletedAt)))
+		.limit(1);
+
+	return household ?? null;
+}
+
+async function findActiveOwnerMembership(
+	input: { householdId: string; userId: string },
+	directory: HouseholdServiceDirectory,
+): Promise<Membership | null> {
+	const [row] = await directory
+		.select()
+		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				eq(memberships.userId, input.userId),
+				eq(memberships.role, "owner"),
+				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
+			),
+		)
+		.limit(1);
+
+	return row?.memberships ?? null;
 }
 
 function activeMembershipFrom(

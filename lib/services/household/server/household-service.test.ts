@@ -1,9 +1,23 @@
 import { eq } from "drizzle-orm";
 
-import { householdJoinCodes, households, users } from "@/db/schema/directory";
+import {
+	householdJoinCodes,
+	households,
+	memberships,
+	users,
+} from "@/db/schema/directory";
+import {
+	householdFixture,
+	membershipFixture,
+	PRIMARY_HOUSEHOLD_SEED,
+	userFixture,
+} from "@/db/server/fixtures";
 import { createTestDirectoryDb } from "@/db/server/test";
 import {
 	createHouseholdService,
+	HouseholdForbiddenError,
+	HouseholdNameInvalidError,
+	HouseholdNotFoundError,
 	householdDatabaseName,
 } from "./household-service";
 
@@ -65,4 +79,126 @@ describe("createHouseholdService", () => {
 			await directory.close();
 		}
 	});
+
+	it("renames a Household for an active Owner and trims the stored name", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
+
+			const renamed = await service.renameHousehold({
+				householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+				name: "  Lake House  ",
+				requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+			});
+
+			const [stored] = await directory.db
+				.select()
+				.from(households)
+				.where(eq(households.id, PRIMARY_HOUSEHOLD_SEED.household.id));
+			expect(renamed.name).toBe("Lake House");
+			expect(stored?.name).toBe("Lake House");
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects Household rename by a plain Member", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
+
+			await expect(
+				service.renameHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					name: "Lake House",
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdForbiddenError);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects empty and overlong Household names", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
+
+			await expect(
+				service.renameHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					name: "   ",
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdNameInvalidError);
+			await expect(
+				service.renameHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					name: "a".repeat(81),
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdNameInvalidError);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects unknown and deleted Households", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
+
+			await expect(
+				service.renameHousehold({
+					householdId: "hh_missing",
+					name: "Lake House",
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdNotFoundError);
+
+			await directory.db
+				.update(households)
+				.set({ deletedAt: PRIMARY_HOUSEHOLD_SEED.now + 1 })
+				.where(eq(households.id, PRIMARY_HOUSEHOLD_SEED.household.id));
+
+			await expect(
+				service.renameHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					name: "Lake House",
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdNotFoundError);
+		} finally {
+			await directory.close();
+		}
+	});
 });
+
+type TestDirectory = Awaited<ReturnType<typeof createTestDirectoryDb>>["db"];
+
+async function seedRenameScenario(directory: TestDirectory) {
+	await directory
+		.insert(users)
+		.values([
+			userFixture(PRIMARY_HOUSEHOLD_SEED.users.avery),
+			userFixture(PRIMARY_HOUSEHOLD_SEED.users.blake),
+		]);
+	await directory.insert(households).values(householdFixture());
+	await directory.insert(memberships).values([
+		membershipFixture(),
+		membershipFixture({
+			id: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
+			userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
+			role: "member",
+			joinedAt: PRIMARY_HOUSEHOLD_SEED.now + 1,
+		}),
+	]);
+}

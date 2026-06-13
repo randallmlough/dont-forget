@@ -20,12 +20,14 @@ export type HouseholdSettingsState =
 			members: HouseholdMember[];
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
+			householdName: string | null;
 			notice: string | null;
 			operation: HouseholdSettingsOperation;
 	  };
 
 export type HouseholdSettingsOperation =
 	| { status: "idle" }
+	| { status: "renamingHousehold" }
 	| { status: "creatingInvitation" }
 	| { status: "revokingInvitation"; invitationId: string }
 	| { status: "removingMember"; membershipId: string }
@@ -37,6 +39,7 @@ export type HouseholdSettingsOperation =
 
 export type HouseholdSettingsActions = {
 	retry: () => void;
+	renameHousehold: (name: string) => Promise<void>;
 	createInvitation: (email: string) => Promise<void>;
 	revokeInvitation: (invitationId: string) => Promise<void>;
 	removeMember: (membershipId: string) => Promise<void>;
@@ -61,6 +64,7 @@ type Resource =
 			members: HouseholdMember[];
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
+			householdName: string | null;
 			notice: string | null;
 			operation: HouseholdSettingsOperation;
 	  };
@@ -88,6 +92,11 @@ type Action =
 			loadKey: string;
 			response: CreateInvitationResponse;
 			invitations: PendingInvitation[];
+	  }
+	| {
+			type: "householdRenamed";
+			loadKey: string;
+			household: { id: string; name: string };
 	  }
 	| { type: "invitationRevoked"; loadKey: string; invitationId: string }
 	| { type: "membersChanged"; loadKey: string; members: HouseholdMember[] }
@@ -160,6 +169,25 @@ export function useHouseholdSettings(
 			cancelled = true;
 		};
 	}, [householdId, loadAttempt, loadKey, resolveClient]);
+
+	async function renameHousehold(name: string) {
+		if (!startOperation({ status: "renamingHousehold" })) return;
+		try {
+			const household = await resolveClient().renameHousehold({
+				householdId,
+				name,
+			});
+			dispatch({ type: "householdRenamed", loadKey, household });
+			track("household_renamed", {
+				household_id: household.id,
+				renamed_by_user_id: session.user.id,
+			});
+		} catch (error) {
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
+		}
+	}
 
 	async function createInvitation(email: string) {
 		const normalizedEmail = normalizeInvitationEmailInput(email);
@@ -330,6 +358,7 @@ export function useHouseholdSettings(
 		state: stateFromResource(resource, loadKey),
 		actions: {
 			retry: () => dispatch({ type: "retry", loadKey }),
+			renameHousehold,
 			createInvitation,
 			revokeInvitation,
 			removeMember,
@@ -375,6 +404,7 @@ function reducer(state: Resource, action: Action): Resource {
 		return {
 			...action,
 			status: "ready",
+			householdName: null,
 			notice: null,
 			operation: { status: "idle" },
 		};
@@ -400,6 +430,14 @@ function reducer(state: Resource, action: Action): Resource {
 			...state,
 			invitations: action.invitations,
 			notice: invitationCreatedNotice(action.response),
+			operation: { status: "idle" },
+		};
+	}
+	if (action.type === "householdRenamed") {
+		return {
+			...state,
+			householdName: action.household.name,
+			notice: "Household renamed.",
 			operation: { status: "idle" },
 		};
 	}

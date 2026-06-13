@@ -30,6 +30,7 @@ import {
 } from "./use-household-settings";
 
 type SettingsRow =
+	| { type: "householdName" }
 	| { type: "invitationForm" }
 	| { type: "joinCode" }
 	| { type: "section"; id: string; title: string }
@@ -82,9 +83,13 @@ export function HouseholdSettingsView({
 	actions: HouseholdSettingsActions;
 }) {
 	const router = useRouter();
+	const title =
+		state.status === "ready"
+			? (state.householdName ?? session.activeHousehold.name)
+			: session.activeHousehold.name;
 
 	return (
-		<HouseholdSettingsShell title={session.activeHousehold.name}>
+		<HouseholdSettingsShell title={title}>
 			<View style={styles.topActions}>
 				<HouseholdButton label="Home" onPress={() => router.replace("/")} />
 				<HouseholdButton
@@ -121,7 +126,8 @@ function SettingsList({
 	state: Extract<HouseholdSettingsState, { status: "ready" }>;
 	actions: HouseholdSettingsActions;
 }) {
-	const rows = settingsRows(state);
+	const rows = settingsRows(state, session.activeMember.role === "owner");
+	const householdName = state.householdName ?? session.activeHousehold.name;
 
 	return (
 		<FlatList
@@ -134,6 +140,7 @@ function SettingsList({
 					row={item}
 					session={session}
 					state={state}
+					householdName={householdName}
 					actions={actions}
 				/>
 			)}
@@ -152,11 +159,13 @@ function SettingsRowView({
 	row,
 	session,
 	state,
+	householdName,
 	actions,
 }: {
 	row: SettingsRow;
 	session: AuthenticatedAppSession;
 	state: Extract<HouseholdSettingsState, { status: "ready" }>;
+	householdName: string;
 	actions: HouseholdSettingsActions;
 }) {
 	if (row.type === "section") {
@@ -170,6 +179,15 @@ function SettingsRowView({
 			<MemberRow
 				member={row.member}
 				session={session}
+				operation={state.operation}
+				actions={actions}
+			/>
+		);
+	}
+	if (row.type === "householdName") {
+		return (
+			<HouseholdNamePanel
+				name={householdName}
 				operation={state.operation}
 				actions={actions}
 			/>
@@ -197,6 +215,68 @@ function SettingsRowView({
 		);
 	}
 	return <CreateInvitationForm operation={state.operation} actions={actions} />;
+}
+
+function HouseholdNamePanel({
+	name,
+	operation,
+	actions,
+}: {
+	name: string;
+	operation: HouseholdSettingsOperation;
+	actions: HouseholdSettingsActions;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [draftName, setDraftName] = useState(name);
+	const disabled = operation.status === "renamingHousehold";
+
+	if (!editing) {
+		return (
+			<View style={styles.panel}>
+				<Text style={styles.panelTitle}>Household Name</Text>
+				<Text style={styles.nameText}>{name}</Text>
+				<HouseholdButton
+					label="Rename"
+					onPress={() => {
+						setDraftName(name);
+						setEditing(true);
+					}}
+				/>
+			</View>
+		);
+	}
+
+	return (
+		<View style={styles.panel}>
+			<Text style={styles.panelTitle}>Household Name</Text>
+			<TextInput
+				accessibilityLabel="Household name"
+				autoCapitalize="words"
+				editable={!disabled}
+				onChangeText={setDraftName}
+				placeholder="Household name"
+				style={styles.input}
+				value={draftName}
+			/>
+			<View style={styles.rowActions}>
+				<HouseholdButton
+					variant="primary"
+					label={disabled ? "Renaming" : "Rename"}
+					onPress={() => {
+						void actions.renameHousehold(draftName).then(() => {
+							setEditing(false);
+						});
+					}}
+					disabled={disabled}
+				/>
+				<HouseholdButton
+					label="Cancel"
+					onPress={() => setEditing(false)}
+					disabled={disabled}
+				/>
+			</View>
+		</View>
+	);
 }
 
 function CreateInvitationForm({
@@ -476,12 +556,15 @@ function CenteredStatus({
 
 function settingsRows(
 	state: Extract<HouseholdSettingsState, { status: "ready" }>,
+	canRenameHousehold: boolean,
 ) {
-	const rows: SettingsRow[] = [
+	const rows: SettingsRow[] = [];
+	if (canRenameHousehold) rows.push({ type: "householdName" });
+	rows.push(
 		{ type: "invitationForm" },
 		{ type: "joinCode" },
 		{ type: "section", id: "members", title: "Members" },
-	];
+	);
 	for (const member of state.members) rows.push({ type: "member", member });
 	if (state.members.length === 0) {
 		rows.push({
@@ -643,6 +726,10 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	codeText: {
 		...theme.typography.title,
+		color: theme.colors.text,
+	},
+	nameText: {
+		...theme.typography.body,
 		color: theme.colors.text,
 	},
 	mutedText: {

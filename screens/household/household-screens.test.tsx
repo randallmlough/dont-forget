@@ -112,6 +112,7 @@ describe("HouseholdSettingsView", () => {
 						createdAt: 1,
 					},
 					notice: null,
+					householdName: null,
 					operation: { status: "idle" },
 				}}
 				actions={actions}
@@ -155,6 +156,27 @@ describe("HouseholdSettingsView", () => {
 		expect(screen.getByText("Leave Household")).toBeTruthy();
 	});
 
+	it("renames Households from the Owner-only rename form", async () => {
+		const actions = settingsActions();
+
+		await render(
+			<HouseholdSettingsView
+				session={sessionFixture()}
+				state={readySettingsState([])}
+				actions={actions}
+			/>,
+		);
+
+		await fireEvent.press(screen.getByText("Rename"));
+		await fireEvent.changeText(
+			screen.getByLabelText("Household name"),
+			"Lake House",
+		);
+		await fireEvent.press(screen.getByText("Rename"));
+
+		expect(actions.renameHousehold).toHaveBeenCalledWith("Lake House");
+	});
+
 	it("hides Member management actions from plain Members", async () => {
 		const session = {
 			...sessionFixture(),
@@ -184,6 +206,28 @@ describe("HouseholdSettingsView", () => {
 		expect(screen.queryByText("Make Owner")).toBeNull();
 		expect(screen.queryByText("Remove")).toBeNull();
 		expect(screen.getByText("Leave Household")).toBeTruthy();
+	});
+
+	it("hides the Household rename affordance from plain Members", async () => {
+		const session = {
+			...sessionFixture(),
+			activeMember: {
+				id: "mbr_1",
+				userId: "usr_1",
+				role: "member" as const,
+				displayName: "Avery",
+			},
+		};
+
+		await render(
+			<HouseholdSettingsView
+				session={session}
+				state={readySettingsState([])}
+				actions={settingsActions()}
+			/>,
+		);
+
+		expect(screen.queryByText("Rename")).toBeNull();
 	});
 
 	it("confirms before leaving a Household", async () => {
@@ -631,6 +675,31 @@ describe("useHouseholdSettings", () => {
 
 		await screen.findByText("A Household must have at least one Owner.");
 		expect(client.listMembers).toHaveBeenCalledTimes(1);
+	});
+
+	it("renames a Household, surfaces the updated name, and tracks success", async () => {
+		const client = readySettingsClient({
+			renameHousehold: jest.fn(async () => ({
+				id: "hh_1",
+				name: "Lake House",
+			})),
+		});
+
+		await render(<SettingsActionHarness client={client} action="rename" />);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Rename action"));
+
+		await screen.findByText("Household renamed.");
+		expect(client.renameHousehold).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			name: "Lake House",
+		});
+		expect(screen.getByText("householdName:Lake House")).toBeTruthy();
+		expect(track).toHaveBeenCalledWith("household_renamed", {
+			household_id: "hh_1",
+			renamed_by_user_id: "usr_1",
+		});
 	});
 
 	it("retires and reloads the session after leaving without routing Home", async () => {
@@ -1236,6 +1305,7 @@ function sessionFixture(): AuthenticatedAppSession {
 function settingsActions() {
 	return {
 		retry: jest.fn(),
+		renameHousehold: jest.fn(async () => undefined),
 		createInvitation: jest.fn(),
 		revokeInvitation: jest.fn(),
 		removeMember: jest.fn(),
@@ -1257,6 +1327,7 @@ function readySettingsState(members: HouseholdMember[]) {
 			enabled: false as const,
 			householdId: "hh_1",
 		},
+		householdName: null,
 		notice: null,
 		operation: { status: "idle" as const },
 	};
@@ -1283,7 +1354,7 @@ function SettingsActionHarness({
 	reloadSession = jest.fn(),
 }: {
 	client: HouseholdApiClient;
-	action: "remove" | "role" | "leave";
+	action: "remove" | "role" | "leave" | "rename";
 	reloadSession?: (options?: { retireCurrent?: boolean }) => void;
 }) {
 	const { state, actions } = useHouseholdSettings(
@@ -1294,6 +1365,12 @@ function SettingsActionHarness({
 	if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
 	return (
 		<>
+			<PressableText
+				label="Rename action"
+				onPress={() => {
+					if (action === "rename") void actions.renameHousehold("Lake House");
+				}}
+			/>
 			<PressableText
 				label="Remove"
 				onPress={() => {
@@ -1313,6 +1390,7 @@ function SettingsActionHarness({
 				}}
 			/>
 			<TextNode>{state.operation.status}</TextNode>
+			<TextNode>{`householdName:${state.householdName ?? "none"}`}</TextNode>
 			<TextNode>{`members:${state.members.length}`}</TextNode>
 			<TextNode>{`firstRole:${state.members[0]?.role ?? "none"}`}</TextNode>
 			{state.notice ? <TextNode>{state.notice}</TextNode> : null}
@@ -1322,6 +1400,7 @@ function SettingsActionHarness({
 
 function emptyClient(): HouseholdApiClient {
 	return {
+		renameHousehold: jest.fn(),
 		listMembers: jest.fn(),
 		removeMember: jest.fn(),
 		setMemberRole: jest.fn(),

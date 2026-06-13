@@ -82,6 +82,13 @@ const createInvitationResponseSchema = z.object({
 	reusedExisting: z.boolean(),
 });
 
+const renameHouseholdResponseSchema = z.object({
+	household: z.object({
+		id: z.string(),
+		name: z.string(),
+	}),
+});
+
 const leaveHouseholdResponseSchema = z.object({
 	left: z.literal(true),
 	promotedMembershipId: z.string().nullable(),
@@ -101,6 +108,10 @@ export type LeaveHouseholdResponse = z.infer<
 >;
 
 export type HouseholdApiClient = {
+	renameHousehold(input: {
+		householdId: string;
+		name: string;
+	}): Promise<{ id: string; name: string }>;
 	listMembers(householdId: string): Promise<HouseholdMember[]>;
 	removeMember(input: {
 		householdId: string;
@@ -147,6 +158,13 @@ export function createHouseholdApiClient({
 		requestJson(path, { ...init, fetcher, apiBaseUrl });
 
 	return {
+		async renameHousehold(input) {
+			const payload = await authed(`/api/households/${input.householdId}`, {
+				method: "PATCH",
+				body: JSON.stringify({ name: input.name }),
+			});
+			return renameHouseholdResponseSchema.parse(payload).household;
+		},
 		async listMembers(householdId) {
 			const payload = await authed(`/api/households/${householdId}/members`);
 			return z

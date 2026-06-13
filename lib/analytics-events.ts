@@ -91,6 +91,10 @@ export type EventMap = {
 		user_id: string;
 		promoted_membership_id: string | null;
 	};
+	household_renamed: {
+		household_id: string;
+		renamed_by_user_id: string;
+	};
 	household_join_code_used: {
 		household_id: string;
 		user_id: string;
