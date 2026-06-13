@@ -93,4 +93,62 @@ describe("createPushTokenService", () => {
 			await directory.close();
 		}
 	});
+
+	it("disables all active tokens for one User without reviving unrelated disabled tokens", async () => {
+		const directory = await createTestDirectoryDb();
+		const now = jest.spyOn(Date, "now");
+		const service = createPushTokenService({ directory: directory.db });
+
+		try {
+			await directory.db.insert(users).values([
+				{ id: "usr_avery", clerkUserId: "clerk_avery" },
+				{ id: "usr_blake", clerkUserId: "clerk_blake" },
+			]);
+			now.mockReturnValue(1);
+			await service.registerToken({
+				userId: "usr_avery",
+				expoPushToken: "ExponentPushToken[one]",
+			});
+			await service.registerToken({
+				userId: "usr_avery",
+				expoPushToken: "ExponentPushToken[two]",
+			});
+			await service.registerToken({
+				userId: "usr_blake",
+				expoPushToken: "ExponentPushToken[three]",
+			});
+			now.mockReturnValue(2);
+			await service.disableToken({
+				userId: "usr_avery",
+				expoPushToken: "ExponentPushToken[two]",
+			});
+
+			now.mockReturnValue(3);
+			await service.disableTokensForUser("usr_avery");
+
+			const rows = await directory.db.select().from(pushTokens);
+			expect(rows).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						expoPushToken: "ExponentPushToken[one]",
+						disabledAt: 3,
+						updatedAt: 3,
+					}),
+					expect.objectContaining({
+						expoPushToken: "ExponentPushToken[two]",
+						disabledAt: 2,
+						updatedAt: 2,
+					}),
+					expect.objectContaining({
+						expoPushToken: "ExponentPushToken[three]",
+						disabledAt: null,
+						updatedAt: 1,
+					}),
+				]),
+			);
+		} finally {
+			now.mockRestore();
+			await directory.close();
+		}
+	});
 });

@@ -6,7 +6,10 @@ import {
 } from "@/db/server/client";
 import { requireEnv } from "@/lib/env";
 import type { ServerUserProfile } from "@/lib/server/auth";
-import { createUserService } from "@/lib/services/user/server";
+import {
+	createUserService,
+	DeletedUserError,
+} from "@/lib/services/user/server";
 
 export const INVITATION_UNAVAILABLE_MESSAGE =
 	"This Invitation is no longer available.";
@@ -98,7 +101,14 @@ export async function upsertAuthenticatedUser(
 	profile: ServerUserProfile,
 	directory: DirectoryDb,
 ): Promise<User> {
-	return createUserService({ directory }).upsertUser(profile);
+	try {
+		return await createUserService({ directory }).upsertUser(profile);
+	} catch (error) {
+		if (error instanceof DeletedUserError) {
+			throw new ApiUnauthorizedError("User has been deleted.");
+		}
+		throw error;
+	}
 }
 
 export async function readJsonObject(request: Request): Promise<JsonObject> {

@@ -12,6 +12,7 @@ import { createHouseholdProvisioningService } from "@/lib/services/household/ser
 import {
 	type AuthenticatedAppSessionBootstrapDeps,
 	bootstrapAuthenticatedAppSession,
+	DeletedUserBootstrapError,
 	householdDatabaseName,
 } from "./bootstrap";
 
@@ -134,6 +135,36 @@ describe("bootstrapAuthenticatedAppSession", () => {
 			expect(harness.createdDatabases).toEqual([
 				householdDatabaseName("test", response.activeHousehold.id),
 			]);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("refuses a deleted User without recreating their authenticated app session", async () => {
+		const harness = await createBootstrapHarness();
+
+		try {
+			await harness.directory.db.insert(users).values({
+				id: "usr_deleted",
+				clerkUserId: "clerk_avery",
+				email: null,
+				firstName: null,
+				lastName: null,
+				displayName: null,
+				deletedAt: 1,
+			});
+
+			await expect(
+				bootstrapAuthenticatedAppSession(averyProfile, harness.deps),
+			).rejects.toBeInstanceOf(DeletedUserBootstrapError);
+
+			expect(await harness.directory.db.select().from(users)).toHaveLength(1);
+			expect(await harness.directory.db.select().from(households)).toHaveLength(
+				0,
+			);
+			expect(
+				await harness.directory.db.select().from(memberships),
+			).toHaveLength(0);
 		} finally {
 			await harness.close();
 		}

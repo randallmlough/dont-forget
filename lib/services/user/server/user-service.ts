@@ -12,6 +12,7 @@ export type UserServiceDirectory = DirectoryDb | DirectoryTransaction;
 
 export type UserService = {
 	anonymizeUser(userId: string): Promise<void>;
+	markUserDeleted(userId: string): Promise<void>;
 	upsertUser(profile: ServerUserProfile): Promise<User>;
 };
 
@@ -19,10 +20,20 @@ export type UserServiceDeps = {
 	directory: UserServiceDirectory;
 };
 
+export class DeletedUserError extends Error {
+	constructor() {
+		super("User has been deleted.");
+		this.name = "DeletedUserError";
+	}
+}
+
 export function createUserService(deps: UserServiceDeps): UserService {
 	return {
 		anonymizeUser(userId) {
 			return anonymizeUser(userId, deps.directory);
+		},
+		markUserDeleted(userId) {
+			return markUserDeleted(userId, deps.directory);
 		},
 		upsertUser(profile) {
 			return upsertUser(profile, deps.directory);
@@ -38,11 +49,24 @@ async function anonymizeUser(
 	await directory
 		.update(users)
 		.set({
+			clerkUserId: `deleted_${userId}`,
+			updatedAt: now,
+		})
+		.where(eq(users.id, userId));
+}
+
+async function markUserDeleted(
+	userId: string,
+	directory: UserServiceDirectory,
+): Promise<void> {
+	const now = Date.now();
+	await directory
+		.update(users)
+		.set({
 			email: null,
 			firstName: null,
 			lastName: null,
 			displayName: null,
-			clerkUserId: `deleted_${userId}`,
 			activeHouseholdId: null,
 			updatedAt: now,
 			deletedAt: now,
@@ -54,6 +78,15 @@ async function upsertUser(
 	profile: ServerUserProfile,
 	directory: UserServiceDirectory,
 ): Promise<User> {
+	const [existing] = await directory
+		.select()
+		.from(users)
+		.where(eq(users.clerkUserId, profile.clerkUserId))
+		.limit(1);
+	if (existing?.deletedAt !== null && existing?.deletedAt !== undefined) {
+		throw new DeletedUserError();
+	}
+
 	const now = Date.now();
 	const profileFields = {
 		email: profile.email,

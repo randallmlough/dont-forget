@@ -203,14 +203,20 @@ export function useSettings(clientProp?: UsersApiClient): {
 				user_id: profile.id,
 				deleted_household_count: result.deletedHouseholdCount,
 			});
-			await signOut();
-			return true;
 		} catch {
 			setAccountDeletionError("Account deletion failed. Please try again.");
 			return false;
 		} finally {
 			setAccountDeletionInFlight(false);
 		}
+
+		try {
+			await signOut();
+		} catch {
+			// Server-side deletion is complete; local cleanup recovery belongs to the
+			// centralized sign-out runner rather than this destructive action notice.
+		}
+		return true;
 	}
 
 	async function updateProfile(input: {
