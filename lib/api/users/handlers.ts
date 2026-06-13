@@ -4,6 +4,10 @@ import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
 import {
+	type AccountDeletionService,
+	createAccountDeletionService,
+} from "@/lib/services/account/server";
+import {
 	createPushTokenService,
 	type PushMessage,
 	type PushTokenService,
@@ -40,6 +44,9 @@ export type CurrentUser = {
 
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
+	createAccountDeletionService?: (
+		directory: DirectoryDb,
+	) => AccountDeletionService;
 	createPushTokenService?: (directory: DirectoryDb) => PushTokenService;
 	createUserService?: (
 		directory: DirectoryDb,
@@ -73,6 +80,29 @@ export async function handleUpdateUserName(
 		});
 	} catch (error) {
 		return usersErrorResponse(error, "Update User name API failed");
+	}
+}
+
+export async function handleDeleteAccount(
+	request: Request,
+	deps?: UsersApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const summary = await accountDeletionService(
+				directory,
+				deps,
+			).deleteAccount({
+				user,
+			});
+			return jsonResponse({
+				deleted: true,
+				deletedHouseholdCount: summary.deletedHouseholdIds.length,
+			});
+		});
+	} catch (error) {
+		return usersErrorResponse(error, "Delete account API failed");
 	}
 }
 
@@ -226,6 +256,22 @@ function userService(
 	return (
 		deps?.createUserService?.(directory) ?? createUserService({ directory })
 	);
+}
+
+function accountDeletionService(
+	directory: DirectoryDb,
+	deps: UsersApiDeps | undefined,
+): AccountDeletionService {
+	if (deps?.createAccountDeletionService) {
+		return deps.createAccountDeletionService(directory);
+	}
+	return createAccountDeletionService({
+		directory,
+		deleteClerkUser: async (clerkUserId) => {
+			const { deleteClerkUser } = await import("@/lib/server/auth");
+			await deleteClerkUser(clerkUserId);
+		},
+	});
 }
 
 function expoPushTokenField(body: Record<string, unknown>): string {

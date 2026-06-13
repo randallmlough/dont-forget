@@ -131,6 +131,12 @@ function settingsSections(
 					onPress={() => navigate("/household/settings")}
 					showChevron
 				/>,
+				<DeleteAccountControl
+					key="delete-account"
+					error={state.accountDeletionError}
+					deleteInFlight={state.accountDeletionInFlight}
+					onDelete={actions.deleteAccount}
+				/>,
 			],
 		},
 		{
@@ -294,6 +300,85 @@ function UserNameSettingsForm({
 					>
 						<Text style={styles.primaryButtonText}>
 							{updateInFlight ? "Saving" : "Save"}
+						</Text>
+					</Pressable>
+				</View>
+			) : null}
+		</View>
+	);
+}
+
+function DeleteAccountControl({
+	error,
+	deleteInFlight,
+	onDelete,
+}: {
+	error: string | null;
+	deleteInFlight: boolean;
+	onDelete: () => Promise<boolean>;
+}) {
+	const [expanded, setExpanded] = useState(false);
+	const [confirmation, setConfirmation] = useState("");
+	const confirmed = confirmation === "DELETE";
+
+	async function deleteAccount() {
+		if (!confirmed || deleteInFlight) return;
+		await onDelete();
+	}
+
+	return (
+		<View style={styles.deleteAccountBlock}>
+			<Pressable
+				accessibilityLabel="Delete Account"
+				accessibilityRole="button"
+				accessibilityState={{ expanded }}
+				onPress={() => {
+					setExpanded((current) => !current);
+				}}
+				style={({ pressed }) => [
+					styles.row,
+					pressed ? styles.rowPressed : undefined,
+				]}
+			>
+				<Text style={[styles.rowTitle, styles.destructiveText]}>
+					Delete Account
+				</Text>
+				<Text style={styles.chevron}>{expanded ? "⌃" : "›"}</Text>
+			</Pressable>
+			{expanded ? (
+				<View style={styles.deleteAccountForm}>
+					<Text style={styles.deleteAccountCopy}>
+						Your account, your Memberships, and any Household where you are the
+						only Member — including all of its Lists — are permanently deleted.
+						This cannot be undone.
+					</Text>
+					<AuthTextInput
+						accessibilityLabel="Type DELETE to confirm"
+						autoCapitalize="characters"
+						autoCorrect={false}
+						editable={!deleteInFlight}
+						onChangeText={setConfirmation}
+						placeholder="DELETE"
+						returnKeyType="done"
+						value={confirmation}
+					/>
+					{error ? <Text style={styles.formError}>{error}</Text> : null}
+					<Pressable
+						accessibilityLabel="Permanently delete account"
+						accessibilityRole="button"
+						accessibilityState={{ disabled: !confirmed || deleteInFlight }}
+						disabled={!confirmed || deleteInFlight}
+						onPress={() => {
+							void deleteAccount();
+						}}
+						style={({ pressed }) => [
+							styles.destructiveButton,
+							pressed ? styles.rowPressed : undefined,
+							!confirmed || deleteInFlight ? styles.disabledButton : undefined,
+						]}
+					>
+						<Text style={styles.destructiveButtonText}>
+							{deleteInFlight ? "Deleting" : "Delete Account"}
 						</Text>
 					</Pressable>
 				</View>
@@ -545,10 +630,23 @@ const styles = StyleSheet.create((theme) => ({
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
+	deleteAccountBlock: {
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.border,
+	},
 	userNameForm: {
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
 		paddingBottom: theme.spacing(4),
+	},
+	deleteAccountForm: {
+		gap: theme.spacing(3),
+		paddingHorizontal: theme.spacing(4),
+		paddingBottom: theme.spacing(4),
+	},
+	deleteAccountCopy: {
+		...theme.typography.callout,
+		color: theme.colors.text,
 	},
 	preferenceRow: {
 		gap: theme.spacing(3),
@@ -605,6 +703,17 @@ const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.text,
 	},
 	primaryButtonText: {
+		...theme.typography.controlLabel,
+		color: theme.colors.inverseText,
+	},
+	destructiveButton: {
+		minHeight: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: theme.radii.control,
+		backgroundColor: theme.colors.destructive,
+	},
+	destructiveButtonText: {
 		...theme.typography.controlLabel,
 		color: theme.colors.inverseText,
 	},

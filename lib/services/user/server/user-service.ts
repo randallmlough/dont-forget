@@ -17,6 +17,7 @@ export type UpdateClerkUserName = (input: {
 }) => Promise<ServerUserRecord>;
 
 export type UserService = {
+	anonymizeUser(userId: string): Promise<void>;
 	completeOnboarding(userId: string): Promise<void>;
 	upsertUser(userRecord: ServerUserRecord): Promise<User>;
 	updateUserName(input: {
@@ -33,6 +34,9 @@ export type UserServiceDeps = {
 
 export function createUserService(deps: UserServiceDeps): UserService {
 	return {
+		anonymizeUser(userId) {
+			return anonymizeUser(userId, deps.directory);
+		},
 		completeOnboarding(userId) {
 			return completeOnboarding(userId, deps.directory);
 		},
@@ -46,6 +50,26 @@ export function createUserService(deps: UserServiceDeps): UserService {
 			return upsertUser(userRecord, deps.directory);
 		},
 	};
+}
+
+async function anonymizeUser(
+	userId: string,
+	directory: UserServiceDirectory,
+): Promise<void> {
+	const now = Date.now();
+	await directory
+		.update(users)
+		.set({
+			email: null,
+			firstName: null,
+			lastName: null,
+			displayName: null,
+			clerkUserId: `deleted_${userId}`,
+			activeHouseholdId: null,
+			updatedAt: now,
+			deletedAt: now,
+		})
+		.where(eq(users.id, userId));
 }
 
 async function completeOnboarding(

@@ -3,6 +3,7 @@ import {
 	createClerkClient,
 	verifyToken,
 } from "@clerk/backend";
+import { isClerkAPIResponseError } from "@clerk/backend/errors";
 
 import { readClerkServerConfig } from "@/lib/env";
 
@@ -58,6 +59,17 @@ export async function updateClerkUserName(input: {
 	return serverUserFromClerkUser(user);
 }
 
+export async function deleteClerkUser(clerkUserId: string): Promise<void> {
+	const config = readClerkServerConfig();
+	const clerk = createClerkClient({ secretKey: config.secretKey });
+	try {
+		await clerk.users.deleteUser(clerkUserId);
+	} catch (error) {
+		if (isClerkNotFoundError(error)) return;
+		throw error;
+	}
+}
+
 export function bearerToken(authorization: string | null): string {
 	if (!authorization) {
 		throw new UnauthorizedError("Missing bearer token");
@@ -100,4 +112,8 @@ function emptyToNull(value: string | null | undefined): string | null {
 	if (!value) return null;
 	const trimmed = value.trim();
 	return trimmed.length > 0 ? trimmed : null;
+}
+
+function isClerkNotFoundError(error: unknown): boolean {
+	return isClerkAPIResponseError(error) && error.status === 404;
 }

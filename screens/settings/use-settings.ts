@@ -35,6 +35,8 @@ export type SettingsState = {
 	notice: string | null;
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
+	accountDeletionError: string | null;
+	accountDeletionInFlight: boolean;
 	user: SettingsUser;
 	userNotice: string | null;
 	userError: string | null;
@@ -47,6 +49,7 @@ export type SettingsActions = {
 	openPrivacyPolicy: () => Promise<void>;
 	sendTestNotification: () => Promise<void>;
 	openTerms: () => Promise<void>;
+	deleteAccount: () => Promise<boolean>;
 	setAppearancePreference: (preference: AppearancePreference) => Promise<void>;
 	setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 	signOut: () => Promise<void>;
@@ -80,6 +83,10 @@ export function useSettings(clientProp?: UsersApiClient): {
 	const [notificationNotice, setNotificationNotice] = useState<string | null>(
 		null,
 	);
+	const [accountDeletionError, setAccountDeletionError] = useState<
+		string | null
+	>(null);
+	const [accountDeletionInFlight, setAccountDeletionInFlight] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [updatedUser, setUpdatedUser] = useState<SettingsUser | null>(null);
 	const [userNotice, setUserNotice] = useState<string | null>(null);
@@ -244,6 +251,30 @@ export function useSettings(clientProp?: UsersApiClient): {
 		await resolveClient().sendTestNotification();
 	}
 
+	async function deleteAccount(): Promise<boolean> {
+		if (accountDeletionInFlight) return false;
+		if (!user.id) {
+			setAccountDeletionError("Account deletion failed. Please try again.");
+			return false;
+		}
+		setAccountDeletionInFlight(true);
+		setAccountDeletionError(null);
+		try {
+			const result = await resolveClient().deleteAccount();
+			track("account_deleted", {
+				user_id: user.id,
+				deleted_household_count: result.deletedHouseholdCount,
+			});
+			await signOut();
+			return true;
+		} catch {
+			setAccountDeletionError("Account deletion failed. Please try again.");
+			return false;
+		} finally {
+			setAccountDeletionInFlight(false);
+		}
+	}
+
 	async function updateUserName(input: {
 		firstName: string | null;
 		lastName: string | null;
@@ -279,6 +310,8 @@ export function useSettings(clientProp?: UsersApiClient): {
 			notice,
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
+			accountDeletionError,
+			accountDeletionInFlight,
 			user,
 			userNotice,
 			userError,
@@ -306,6 +339,7 @@ export function useSettings(clientProp?: UsersApiClient): {
 						setNotice("Unable to open link. Try again.");
 					},
 				),
+			deleteAccount,
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,

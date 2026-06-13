@@ -27,6 +27,7 @@ export const users = sqliteTable(
 		updatedAt: integer("updated_at")
 			.notNull()
 			.default(sql`(unixepoch() * 1000)`),
+		deletedAt: integer("deleted_at"),
 	},
 	(t) => [uniqueIndex("users_clerk_user_id_unique").on(t.clerkUserId)],
 );
