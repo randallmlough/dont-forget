@@ -321,6 +321,10 @@ const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.background,
 	},
 	header: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(5),
 		paddingTop: theme.spacing(4.5),
 		paddingBottom: theme.spacing(3),
