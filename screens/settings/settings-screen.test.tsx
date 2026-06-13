@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+	act,
 	fireEvent,
 	render,
 	screen,
@@ -9,17 +10,27 @@ import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { WebBrowserResultType } from "expo-web-browser";
 import type { PropsWithChildren, ReactElement } from "react";
+import { Linking } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
+import { createUsersApiClient } from "@/lib/client-api/users";
 import { useLogger } from "@/lib/logger";
+import {
+	registerForPushNotifications,
+	unregisterPushNotifications,
+} from "@/lib/push/registration";
 import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
+const mockSendTestNotification = jest.fn(async () => ({
+	sent: 1,
+	disabled: 0,
+}));
 let mockLogger: MockLogger;
 
 jest.mock("expo-constants", () => ({
@@ -40,8 +51,20 @@ jest.mock("expo-router", () => ({
 	useRouter: () => ({ push: mockRouterPush, replace: mockRouterReplace }),
 }));
 
+jest.mock("@clerk/clerk-expo", () => ({
+	useAuth: () => ({ getToken: jest.fn(async () => "token") }),
+}));
+
 jest.mock("@/components/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
+}));
+
+jest.mock("@/lib/client-api/users", () => ({
+	createUsersApiClient: jest.fn(() => ({
+		registerPushToken: jest.fn(async () => undefined),
+		unregisterPushToken: jest.fn(async () => undefined),
+		sendTestNotification: mockSendTestNotification,
+	})),
 }));
 
 jest.mock("@/lib/analytics", () =>
@@ -56,15 +79,28 @@ jest.mock("@/lib/logger", () =>
 		.createMockLoggerModule(),
 );
 
+jest.mock("@/lib/push/registration", () => ({
+	registerForPushNotifications: jest.fn(),
+	unregisterPushNotifications: jest.fn(async () => undefined),
+}));
+
 beforeEach(() => {
 	mockLogger = createMockLogger();
 	jest.mocked(useLogger).mockReturnValue(mockLogger);
 	mockRouterPush.mockReset();
 	mockRouterReplace.mockReset();
 	mockSignOut.mockClear();
+	mockSendTestNotification.mockClear();
+	jest.mocked(createUsersApiClient).mockClear();
 	jest.mocked(track).mockClear();
 	jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
 	jest.mocked(AsyncStorage.setItem).mockResolvedValue(undefined);
+	jest.mocked(Linking.openSettings).mockResolvedValue(undefined);
+	jest.mocked(registerForPushNotifications).mockResolvedValue({
+		status: "registered",
+		expoPushToken: "ExponentPushToken[one]",
+	});
+	jest.mocked(unregisterPushNotifications).mockResolvedValue(undefined);
 	jest.mocked(WebBrowser.openBrowserAsync).mockResolvedValue({
 		type: WebBrowserResultType.OPENED,
 	});
@@ -92,6 +128,10 @@ describe("SettingsScreen", () => {
 		expect(screen.getByText("Household")).toBeTruthy();
 		expect(screen.getByText("Household settings")).toBeTruthy();
 		expect(screen.getAllByText("Appearance").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText("Notifications").length).toBeGreaterThanOrEqual(
+			1,
+		);
+		expect(screen.getByText("Send test notification")).toBeTruthy();
 		expect(screen.getByText("About")).toBeTruthy();
 		expect(screen.getByText("Privacy Policy")).toBeTruthy();
 		expect(screen.getByText("Terms of Service")).toBeTruthy();
@@ -112,6 +152,7 @@ describe("SettingsScreen", () => {
 
 		expect(screen.queryByText("Privacy Policy")).toBeNull();
 		expect(screen.queryByText("Terms of Service")).toBeNull();
+		expect(screen.queryByText("Send test notification")).toBeNull();
 		expect(screen.getByText("1.2.3")).toBeTruthy();
 	});
 
@@ -141,9 +182,7 @@ describe("SettingsScreen", () => {
 		).toBeTruthy();
 		expect(mockLogger.error).toHaveBeenCalledWith(
 			"settings legal link failed",
-			{
-				error,
-			},
+			{ error },
 		);
 	});
 
@@ -227,6 +266,95 @@ describe("SettingsScreen", () => {
 		);
 		expect(track).not.toHaveBeenCalledWith("appearance_preference_changed", {
 			preference: "dark",
+		});
+	});
+
+	it("registers for push notifications from the toggle", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await act(async () => {
+			fireEvent(
+				screen.getByRole("switch", { name: "Notifications" }),
+				"valueChange",
+				true,
+			);
+		});
+
+		await waitFor(() =>
+			expect(registerForPushNotifications).toHaveBeenCalledTimes(1),
+		);
+		expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+			"notification-preference",
+			JSON.stringify({
+				enabled: true,
+				expoPushToken: "ExponentPushToken[one]",
+			}),
+		);
+		expect(track).toHaveBeenCalledWith("push_registration_changed", {
+			enabled: true,
+			outcome: "registered",
+		});
+	});
+
+	it("opens iOS Settings when push permission is denied", async () => {
+		jest.mocked(registerForPushNotifications).mockResolvedValue({
+			status: "denied",
+		});
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await act(async () => {
+			fireEvent(
+				screen.getByRole("switch", { name: "Notifications" }),
+				"valueChange",
+				true,
+			);
+		});
+
+		await waitFor(() => expect(Linking.openSettings).toHaveBeenCalledTimes(1));
+		expect(
+			screen.getByText(/Notifications are off in iOS Settings/),
+		).toBeTruthy();
+		expect(track).toHaveBeenCalledWith("push_registration_changed", {
+			enabled: false,
+			outcome: "denied",
+		});
+	});
+
+	it("unregisters push notifications from the toggle", async () => {
+		jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => {
+			if (key === "notification-preference") {
+				return JSON.stringify({
+					enabled: true,
+					expoPushToken: "ExponentPushToken[one]",
+				});
+			}
+			return null;
+		});
+
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("switch", { name: "Notifications" }),
+			).toBeTruthy(),
+		);
+		await act(async () => {
+			fireEvent(
+				screen.getByRole("switch", { name: "Notifications" }),
+				"valueChange",
+				false,
+			);
+		});
+
+		await waitFor(() =>
+			expect(unregisterPushNotifications).toHaveBeenCalledWith({
+				client: expect.any(Object),
+				expoPushToken: "ExponentPushToken[one]",
+			}),
+		);
+		expect(track).toHaveBeenCalledWith("push_registration_changed", {
+			enabled: false,
+			outcome: "unregistered",
 		});
 	});
 });

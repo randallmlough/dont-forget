@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -134,6 +134,27 @@ function settingsSections(
 				/>,
 			],
 		},
+		{
+			id: "notifications",
+			title: "Notifications",
+			rows: [
+				<NotificationToggleRow
+					key="notifications-toggle"
+					enabled={state.notificationsEnabled}
+					notice={state.notificationNotice}
+					onChange={actions.setNotificationsEnabled}
+				/>,
+				...(state.appEnv === "production"
+					? []
+					: [
+							<SettingsRow
+								key="test-notification"
+								label="Send test notification"
+								onPress={actions.sendTestNotification}
+							/>,
+						]),
+			],
+		},
 		{ id: "about", title: "About", rows: aboutRows },
 		{
 			id: "sign-out",
@@ -192,6 +213,35 @@ function AppearancePreferenceControl({
 					);
 				})}
 			</View>
+		</View>
+	);
+}
+
+function NotificationToggleRow({
+	enabled,
+	notice,
+	onChange,
+}: {
+	enabled: boolean;
+	notice: string | null;
+	onChange: (enabled: boolean) => Promise<void>;
+}) {
+	return (
+		<View style={styles.row}>
+			<View style={styles.rowTextGroup}>
+				<Text style={styles.rowTitle}>Notifications</Text>
+				<Text style={styles.rowSubtitle}>
+					{notice ?? "Allow push notifications for this User"}
+				</Text>
+			</View>
+			<Switch
+				accessibilityLabel="Notifications"
+				accessibilityRole="switch"
+				value={enabled}
+				onValueChange={(value) => {
+					void onChange(value);
+				}}
+			/>
 		</View>
 	);
 }

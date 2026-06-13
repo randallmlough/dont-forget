@@ -126,6 +126,10 @@ export type EventMap = {
 	appearance_preference_changed: {
 		preference: "system" | "light" | "dark";
 	};
+	push_registration_changed: {
+		enabled: boolean;
+		outcome: "registered" | "denied" | "unavailable" | "unregistered";
+	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };
 	user_email_verified: Record<string, never>;

@@ -153,6 +153,26 @@ export const householdJoinCodeAttempts = sqliteTable(
 	},
 );
 
+export const pushTokens = sqliteTable(
+	"push_tokens",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id),
+		expoPushToken: text("expo_push_token").notNull(),
+		deviceName: text("device_name"),
+		platform: text("platform", { enum: ["ios"] }).notNull(),
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+		disabledAt: integer("disabled_at"),
+	},
+	(t) => [
+		index("push_tokens_user_idx").on(t.userId),
+		uniqueIndex("push_tokens_token_unique").on(t.expoPushToken),
+	],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Household = typeof households.$inferSelect;
@@ -169,3 +189,5 @@ export type HouseholdJoinCodeAttempt =
 	typeof householdJoinCodeAttempts.$inferSelect;
 export type NewHouseholdJoinCodeAttempt =
 	typeof householdJoinCodeAttempts.$inferInsert;
+export type PushToken = typeof pushTokens.$inferSelect;
+export type NewPushToken = typeof pushTokens.$inferInsert;
