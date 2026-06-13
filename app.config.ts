@@ -35,6 +35,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			apiBaseUrl: publicConfig.apiBaseUrl,
 			posthogProjectToken: publicConfig.posthogProjectToken,
 			posthogHost: publicConfig.posthogHost,
+			// EXPO_PUBLIC_PRIVACY_POLICY_URL is parsed in lib/env.ts and exposed here.
+			privacyPolicyUrl: publicConfig.privacyPolicyUrl,
+			termsUrl: publicConfig.termsUrl,
 		},
 	};
 };

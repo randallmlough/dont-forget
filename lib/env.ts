@@ -16,6 +16,8 @@ export type PublicExpoConfig = {
 	clerkPublishableKey: string;
 	posthogHost?: string;
 	posthogProjectToken?: string;
+	privacyPolicyUrl?: string;
+	termsUrl?: string;
 };
 
 export type TursoConfig = {
@@ -106,6 +108,8 @@ export function readPublicExpoConfig(
 		clerkPublishableKey,
 		posthogHost: optionalEnv("POSTHOG_HOST", source),
 		posthogProjectToken: optionalEnv("POSTHOG_PROJECT_TOKEN", source),
+		privacyPolicyUrl: optionalEnv("EXPO_PUBLIC_PRIVACY_POLICY_URL", source),
+		termsUrl: optionalEnv("EXPO_PUBLIC_TERMS_URL", source),
 	};
 }
 

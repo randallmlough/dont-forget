@@ -89,9 +89,16 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
 }));
 
 jest.mock("expo-web-browser", () => ({
+	WebBrowserResultType: {
+		CANCEL: "cancel",
+		DISMISS: "dismiss",
+		OPENED: "opened",
+		LOCKED: "locked",
+	},
 	maybeCompleteAuthSession: jest.fn(),
 	warmUpAsync: jest.fn(),
 	coolDownAsync: jest.fn(),
+	openBrowserAsync: jest.fn(),
 }));
 
 jest.mock("posthog-react-native", () => {
