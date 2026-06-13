@@ -1,3 +1,8 @@
+import {
+	Database as TursoNativeDatabase,
+	getDbPath as tursoNativeGetDbPath,
+} from "@tursodatabase/sync-react-native";
+import { deleteAsync, readDirectoryAsync } from "expo-file-system/legacy";
 import { createDatabaseOperationQueue } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
@@ -155,11 +160,16 @@ type OpenHouseholdStoreOptions = {
 
 const HOUSEHOLD_STORE_CLIENT_NAME = "dont-forget-household-db";
 
+const defaultTursoRuntime: TursoHouseholdStoreRuntime = {
+	Database: TursoNativeDatabase,
+	getDbPath: tursoNativeGetDbPath,
+};
+
 export async function openHouseholdStore(
 	config: OpenHouseholdStoreConfig,
 	options: OpenHouseholdStoreOptions = {},
 ): Promise<HouseholdStore> {
-	const runtime = options.runtime ?? (await loadTursoRuntime());
+	const runtime = options.runtime ?? defaultTursoRuntime;
 	const fileSystem = options.fileSystem ?? defaultHouseholdStoreFileSystem;
 	const path = runtime.getDbPath(householdStoreFilename(config.householdId));
 	const syncAuthorized = Boolean(
@@ -280,7 +290,7 @@ export async function deleteLocalHouseholdStoreData(
 	householdId: string,
 	options: OpenHouseholdStoreOptions = {},
 ): Promise<void> {
-	const runtime = options.runtime ?? (await loadTursoRuntime());
+	const runtime = options.runtime ?? defaultTursoRuntime;
 	const fileSystem = options.fileSystem ?? defaultHouseholdStoreFileSystem;
 	const path = runtime.getDbPath(householdStoreFilename(householdId));
 
@@ -317,19 +327,13 @@ async function runNativeSyncOperation<T>(
 	}
 }
 
-async function loadTursoRuntime(): Promise<TursoHouseholdStoreRuntime> {
-	const turso = await import("@tursodatabase/sync-react-native");
-	return { Database: turso.Database, getDbPath: turso.getDbPath };
-}
-
 const defaultHouseholdStoreFileSystem: HouseholdStoreFileSystem = {
 	async deleteFilesWithPrefix(path) {
-		const fileSystem = await import("expo-file-system/legacy");
 		const directoryPath = nativeDirectoryPath(path);
 		const filename = nativeBasename(path);
 		const directoryUri = nativePathToFileUri(directoryPath);
 		const entries = await readDirectoryOrFallback(
-			fileSystem.readDirectoryAsync,
+			readDirectoryAsync,
 			directoryUri,
 			filename,
 		);
@@ -340,10 +344,9 @@ const defaultHouseholdStoreFileSystem: HouseholdStoreFileSystem = {
 					(entry) => entry === filename || entry.startsWith(`${filename}-`),
 				)
 				.map((entry) =>
-					fileSystem.deleteAsync(
-						nativePathToFileUri(`${directoryPath}${entry}`),
-						{ idempotent: true },
-					),
+					deleteAsync(nativePathToFileUri(`${directoryPath}${entry}`), {
+						idempotent: true,
+					}),
 				),
 		);
 	},

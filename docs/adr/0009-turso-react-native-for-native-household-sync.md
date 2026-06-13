@@ -19,7 +19,7 @@ This revises the earlier op-sqlite candidate after the Issue #6 spike found Turs
 - Household schema migrations remain server-owned. The app does not run bundled migrations against synced Household DB files.
 - Cached bootstrap metadata must not include Household DB auth tokens. Opening a synced DB for push/pull still requires a fresh bootstrap token; offline reopen without authorization is a separate Home startup slice.
 - Turso Sync's package-level conflict behavior is documented as last-push-wins. App writes must continue using app-owned `updated_at` timestamps, `item_checks`, and tombstones so the replicated rows remain predictable for display, recovery upserts, and future migration paths even though transport ordering is push-based.
-- The package requires native linking and its JS entrypoint installs JSI bindings at module load. Keep the app-owned wrapper's import lazy so Jest and non-native code can test against mocks without loading the native module.
+- The package requires native linking and its JS entrypoint installs JSI bindings at module load. The wrapper imports it statically and JSI installation happens at app launch; Jest maps the package to a throwing stub (`lib/test/mocks/turso-sync-react-native.ts`) and tests inject `options.runtime`. (Amended 2026-06-11, plan 016: the import was lazy until SDK 56's dev-mode Metro lazy bundling broke dynamic `import()` — static import plus the Jest stub replaced it.)
 - `app/api/bootstrap+api.ts` lazy imports are not solved by the native Household DB package. Removing them is tracked separately in `docs/tech-debt/bootstrap-api-lazy-imports.md`.
 
 ## Issue #9 Sync Orchestration Finding

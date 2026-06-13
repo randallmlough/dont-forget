@@ -11,6 +11,10 @@ module.exports = {
 	moduleNameMapper: {
 		// Keep Jest aligned with Metro: Drizzle may resolve the libsql package root.
 		"^@libsql/client$": "@libsql/client/http",
+		// The Turso native entrypoint installs JSI bindings (and throws) at module
+		// load; tests inject options.runtime, so Jest maps the package to a stub.
+		"^@tursodatabase/sync-react-native$":
+			"<rootDir>/lib/test/mocks/turso-sync-react-native.ts",
 		"^@/(.*)$": "<rootDir>/$1",
 	},
 	transformIgnorePatterns: [
