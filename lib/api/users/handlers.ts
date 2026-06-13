@@ -1,5 +1,7 @@
 import type { DirectoryDb } from "@/db/server/client";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
+import { asError } from "@/lib/errors";
+import { redactAttributes } from "@/lib/redact";
 import {
 	createPushTokenService,
 	type PushMessage,
@@ -124,6 +126,6 @@ function usersErrorResponse(error: unknown, logMessage: string): Response {
 	if (isApiUnauthorizedError(error)) return errorResponse("Unauthorized", 401);
 	if (error instanceof BadRequestError)
 		return errorResponse(error.message, 400);
-	console.error(logMessage, error);
+	console.error(logMessage, redactAttributes({ error: asError(error) }));
 	return errorResponse("Something went wrong.", 500);
 }
