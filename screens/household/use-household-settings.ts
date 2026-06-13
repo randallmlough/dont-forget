@@ -182,6 +182,7 @@ export function useHouseholdSettings(
 				household_id: household.id,
 				renamed_by_user_id: session.user.id,
 			});
+			reloadSession();
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {

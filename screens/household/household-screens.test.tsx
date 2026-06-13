@@ -177,6 +177,33 @@ describe("HouseholdSettingsView", () => {
 		expect(actions.renameHousehold).toHaveBeenCalledWith("Lake House");
 	});
 
+	it("uses refreshed session metadata after settings remount", async () => {
+		const session = {
+			...sessionFixture(),
+			activeHousehold: { id: "hh_1", name: "Silver Spoon PR117 QA" },
+			households: [
+				{
+					id: "hh_1",
+					name: "Silver Spoon PR117 QA",
+					role: "owner" as const,
+					isActive: true,
+				},
+			],
+		};
+
+		await render(
+			<HouseholdSettingsView
+				session={session}
+				state={readySettingsState([])}
+				actions={settingsActions()}
+			/>,
+		);
+
+		expect(screen.getAllByText("Silver Spoon PR117 QA").length).toBeGreaterThan(
+			0,
+		);
+	});
+
 	it("hides Member management actions from plain Members", async () => {
 		const session = {
 			...sessionFixture(),
@@ -677,7 +704,8 @@ describe("useHouseholdSettings", () => {
 		expect(client.listMembers).toHaveBeenCalledTimes(1);
 	});
 
-	it("renames a Household, surfaces the updated name, and tracks success", async () => {
+	it("renames a Household, surfaces the updated name, reloads session metadata, and tracks success", async () => {
+		const reloadSession = jest.fn();
 		const client = readySettingsClient({
 			renameHousehold: jest.fn(async () => ({
 				id: "hh_1",
@@ -685,7 +713,13 @@ describe("useHouseholdSettings", () => {
 			})),
 		});
 
-		await render(<SettingsActionHarness client={client} action="rename" />);
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="rename"
+				reloadSession={reloadSession}
+			/>,
+		);
 		await screen.findByText("idle");
 
 		await fireEvent.press(screen.getByText("Rename action"));
@@ -696,6 +730,7 @@ describe("useHouseholdSettings", () => {
 			name: "Lake House",
 		});
 		expect(screen.getByText("householdName:Lake House")).toBeTruthy();
+		expect(reloadSession).toHaveBeenCalledWith();
 		expect(track).toHaveBeenCalledWith("household_renamed", {
 			household_id: "hh_1",
 			renamed_by_user_id: "usr_1",
