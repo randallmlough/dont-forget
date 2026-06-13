@@ -72,7 +72,7 @@ function HomeCurrentListResource({
 						onDismiss={() => setSwitcherOpen(false)}
 						// A successful create persists the selection, then re-resolution
 						// renders the new empty Current List.
-						onSwitched={list.retry}
+						onSwitched={list.reload}
 					/>
 				) : null}
 			</>
@@ -83,9 +83,8 @@ function HomeCurrentListResource({
 		<>
 			<ActiveList.Provider
 				key={`${session.resourceKey}:${loadState.listId}`}
-				initialState={loadState.initialList}
+				state={loadState.list}
 				currentMemberName={currentMemberName}
-				onLoadList={loadState.actions.loadList}
 				onAddItem={loadState.actions.addItem}
 				onSetItemChecked={loadState.actions.setItemChecked}
 				syncCoordinator={session.services.sync}
@@ -103,7 +102,7 @@ function HomeCurrentListResource({
 					onDismiss={() => setSwitcherOpen(false)}
 					// Task 5 re-resolution: re-reads the freshly stored selection and
 					// remounts the Active List boundary via the listId-keyed Provider.
-					onSwitched={list.retry}
+					onSwitched={list.reload}
 				/>
 			) : null}
 		</>

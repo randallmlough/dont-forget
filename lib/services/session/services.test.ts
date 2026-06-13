@@ -204,6 +204,27 @@ describe("createSessionDataServices", () => {
 		expect(store.sync).toHaveBeenCalledTimes(1);
 	});
 
+	it("exposes the HouseholdStore change signal", async () => {
+		const store = storeFixture();
+		const services = await createSessionDataServices(
+			{
+				householdId: "hh_avery",
+				userId: "usr_avery",
+				database: { url: "libsql://example", authToken: "secret" },
+				logger,
+			},
+			{ store },
+		);
+		const listener = jest.fn();
+		const subscription = services.changes.subscribe(listener);
+
+		store.fireChange();
+		subscription.remove();
+		store.fireChange();
+
+		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
 	it("uses native push only for pushLocalOnly sync when native push succeeds", async () => {
 		const store = storeFixture();
 		const services = await createSessionDataServices(
@@ -308,9 +329,23 @@ function storeFixture(
 			statement.sql.includes("__drizzle_migrations")
 				? { rows: [{ version: schemaVersion }] }
 				: { rows: [] });
+	const changeListeners = new Set<() => void>();
 	return {
 		syncAuthorized: overrides.syncAuthorized ?? true,
 		execute: jest.fn(execute),
+		subscribeToChanges: jest.fn((listener: () => void) => {
+			changeListeners.add(listener);
+			return {
+				remove() {
+					changeListeners.delete(listener);
+				},
+			};
+		}),
+		fireChange() {
+			for (const listener of changeListeners) {
+				listener();
+			}
+		},
 		pull: jest.fn(async () => ({ changed: false })),
 		push: jest.fn(async () => undefined),
 		sync: jest.fn(async () => ({ changed: false })),

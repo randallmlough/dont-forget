@@ -1,6 +1,7 @@
 import { ensureHouseholdSchemaReady } from "@/db/household-schema";
 import {
 	type HouseholdDatabaseConfig,
+	type HouseholdStore,
 	type HouseholdStoreExecutor,
 	type OpenHouseholdStoreConfig,
 	openHouseholdStore,
@@ -13,6 +14,7 @@ import type { SyncOptions, SyncResult } from "@/lib/services/sync";
 
 type SessionStore = HouseholdStoreExecutor & {
 	syncAuthorized?: boolean;
+	subscribeToChanges: HouseholdStore["subscribeToChanges"];
 	push?: () => Promise<void>;
 	sync?: () => Promise<SyncResult>;
 	close: () => void | Promise<void>;
@@ -33,6 +35,9 @@ export type SessionDataServicesOptions = {
 export type SessionDataServices = {
 	lists: ListService;
 	items: ItemService;
+	changes: {
+		subscribe: (listener: () => void) => { remove: () => void };
+	};
 	syncAuthorized: boolean;
 	sync: (options?: SyncOptions) => Promise<SyncResult>;
 	close: () => Promise<void>;
@@ -83,6 +88,9 @@ export async function createSessionDataServices(
 	return {
 		lists,
 		items,
+		changes: {
+			subscribe: (listener) => store.subscribeToChanges(listener),
+		},
 		syncAuthorized,
 		async sync(syncOptions?: SyncOptions) {
 			if (!syncAuthorized) return { changed: false };

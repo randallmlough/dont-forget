@@ -18,6 +18,7 @@ export type SessionResourceBootstrap =
 export type SessionResource = {
 	lists: SessionDataServices["lists"];
 	items: SessionDataServices["items"];
+	changes: SessionDataServices["changes"];
 	close: (options?: { waitForDrain?: boolean }) => Promise<void>;
 	syncCoordinator: SyncCoordinator;
 };
@@ -167,6 +168,8 @@ export function createSessionResourceManager(
 			return {
 				lists: lease.services.lists,
 				items: lease.services.items,
+				// Leases guard request/response operations; the signal is passive and consumers remount on resourceKey change.
+				changes: openedDataServices.changes,
 				close: (options) =>
 					lease.retireAndClose({
 						close: openedDataServices.close,

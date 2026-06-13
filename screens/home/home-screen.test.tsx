@@ -21,17 +21,20 @@ import { track } from "@/lib/analytics";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {
 	clearCurrentListSelection,
+	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 	setCurrentListSelection,
 } from "@/lib/local-storage/current-list-selection";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createSessionResourceLease } from "@/lib/services/session/resource-lease";
 import { createSessionDataServices } from "@/lib/services/session/services";
-import type { SyncStatus } from "@/lib/services/sync";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 
 jest.mock("@/components/session", () => ({
+	...jest.requireActual<typeof import("@/components/session")>(
+		"@/components/session",
+	),
 	useAuthenticatedAppSession: jest.fn(),
 }));
 
@@ -39,6 +42,7 @@ jest.mock("@/lib/local-storage/current-list-selection", () => ({
 	getCurrentListSelection: jest.fn(),
 	setCurrentListSelection: jest.fn(),
 	clearCurrentListSelection: jest.fn(),
+	clearCurrentListSelectionIfMatches: jest.fn(),
 	clearUserCurrentListSelections: jest.fn(),
 }));
 
@@ -80,6 +84,10 @@ beforeEach(() => {
 		.mocked(clearCurrentListSelection)
 		.mockReset()
 		.mockResolvedValue(undefined);
+	jest
+		.mocked(clearCurrentListSelectionIfMatches)
+		.mockReset()
+		.mockResolvedValue(false);
 	jest.mocked(track).mockClear();
 });
 
@@ -284,21 +292,8 @@ describe("HomeScreenView", () => {
 		}
 	});
 
-	it("reloads a failed List automatically when a sync completes", async () => {
+	it("re-queries a failed List when the change signal fires", async () => {
 		const harness = await createHomeSessionHarness({ failNextListRead: true });
-		const syncListeners = new Set<(status: SyncStatus) => void>();
-		harness.session.services.sync = {
-			getStatus: () => "synced",
-			subscribe: (listener) => {
-				syncListeners.add(listener);
-				return {
-					remove() {
-						syncListeners.delete(listener);
-					},
-				};
-			},
-			requestSync: async () => null,
-		};
 
 		try {
 			await renderWithSafeArea(
@@ -313,7 +308,7 @@ describe("HomeScreenView", () => {
 			);
 
 			await act(() => {
-				for (const listener of syncListeners) listener("synced");
+				harness.fireChange();
 			});
 
 			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
@@ -384,10 +379,11 @@ describe("HomeScreenView", () => {
 			);
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
-			expect(clearCurrentListSelection).toHaveBeenCalledWith(
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledWith(
 				harness.scenario.users.avery.id,
 				harness.scenario.household.id,
+				"lst_ghost",
 			);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
@@ -411,7 +407,7 @@ describe("HomeScreenView", () => {
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			expect(screen.queryByText("Holiday Dinner")).toBeNull();
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
 			await harness.close();
@@ -434,7 +430,7 @@ describe("HomeScreenView", () => {
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			expect(screen.queryByText("Camping Trip")).toBeNull();
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
 			await harness.close();
@@ -494,7 +490,7 @@ describe("HomeScreenView", () => {
 		const harness = await createHomeSessionHarness();
 		jest.mocked(getCurrentListSelection).mockResolvedValue("lst_ghost");
 		jest
-			.mocked(clearCurrentListSelection)
+			.mocked(clearCurrentListSelectionIfMatches)
 			.mockRejectedValueOnce(new Error("storage offline"));
 
 		try {
@@ -511,7 +507,7 @@ describe("HomeScreenView", () => {
 			await fireEvent.press(screen.getByText("Try again"));
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(2);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(2);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
 			await harness.close();
@@ -538,10 +534,11 @@ describe("HomeScreenView", () => {
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			expect(screen.queryByText("List unavailable")).toBeNull();
 			expect(screen.queryByText("Try again")).toBeNull();
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
-			expect(clearCurrentListSelection).toHaveBeenCalledWith(
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledWith(
 				harness.scenario.users.avery.id,
 				harness.scenario.household.id,
+				harness.scenario.lists.pharmacy.id,
 			);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 		} finally {
@@ -634,6 +631,9 @@ describe("HomeScreenView", () => {
 			await act(async () => {
 				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
+			await act(() => {
+				harness.fireChange();
+			});
 			await waitFor(() => expect(screen.getByText("Snacks")).toBeTruthy());
 
 			jest
@@ -647,6 +647,9 @@ describe("HomeScreenView", () => {
 					session={{ ...harness.session }}
 				/>,
 			);
+			await act(() => {
+				harness.fireChange();
+			});
 
 			await waitFor(() => expect(screen.getByText("Groceries")).toBeTruthy());
 			await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
@@ -685,12 +688,18 @@ describe("HomeScreenView", () => {
 			await act(async () => {
 				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
+			await act(() => {
+				harness.fireChange();
+			});
 			await waitFor(() => expect(screen.getByText("Yogurt")).toBeTruthy());
 			expect(screen.getByText("half carton - Plain Greek")).toBeTruthy();
 			await act(async () => {
 				await fireEvent.press(
 					screen.getByRole("checkbox", { name: /^Yogurt\b/ }),
 				);
+			});
+			await act(() => {
+				harness.fireChange();
 			});
 
 			const persistedItem = await harness.household.db.query.items.findFirst({
@@ -791,10 +800,11 @@ describe("HomeScreenView", () => {
 			await waitFor(() =>
 				expect(screen.getByText("No active Lists")).toBeTruthy(),
 			);
-			expect(clearCurrentListSelection).toHaveBeenCalledTimes(1);
-			expect(clearCurrentListSelection).toHaveBeenCalledWith(
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledTimes(1);
+			expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledWith(
 				harness.scenario.users.avery.id,
 				harness.scenario.household.id,
+				harness.scenario.lists.pharmacy.id,
 			);
 			expect(setCurrentListSelection).not.toHaveBeenCalled();
 			expect(listSwitchedTrackCalls()).toHaveLength(0);
@@ -825,6 +835,9 @@ describe("HomeScreenView", () => {
 			await act(async () => {
 				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
+			await act(() => {
+				harness.fireChange();
+			});
 			await waitFor(() => expect(screen.getByText("Lantern")).toBeTruthy());
 
 			const persistedItem = await harness.household.db.query.items.findFirst({
@@ -841,33 +854,39 @@ describe("HomeScreenView", () => {
 });
 
 describe("List switcher", () => {
-	it("does not start a queued switcher load after unmount", async () => {
-		const queuedMicrotasks: VoidFunction[] = [];
-		const queueMicrotaskSpy = jest
-			.spyOn(globalThis, "queueMicrotask")
-			.mockImplementation((callback) => {
-				queuedMicrotasks.push(callback);
-			});
+	it("removes the switcher change subscription after unmount", async () => {
+		const changeListeners = new Set<() => void>();
 		const listLists = jest.fn(async () => []);
-		const session = homeListSwitcherSession({ listLists });
+		const session = homeListSwitcherSession({
+			listLists,
+			changes: {
+				subscribe(listener) {
+					changeListeners.add(listener);
+					return {
+						remove() {
+							changeListeners.delete(listener);
+						},
+					};
+				},
+			},
+		});
 
 		function Harness() {
 			useHomeListSwitcherRows(session);
 			return null;
 		}
 
-		try {
-			const rendered = await render(<Harness />);
-			await rendered.unmount();
+		const rendered = await render(<Harness />);
+		await waitFor(() => expect(listLists).toHaveBeenCalledTimes(1));
+		expect(changeListeners.size).toBe(1);
 
-			expect(listLists).not.toHaveBeenCalled();
-			await act(async () => {
-				for (const run of queuedMicrotasks) run();
-			});
-			expect(listLists).not.toHaveBeenCalled();
-		} finally {
-			queueMicrotaskSpy.mockRestore();
-		}
+		await rendered.unmount();
+		expect(changeListeners.size).toBe(0);
+
+		await act(() => {
+			for (const listener of changeListeners) listener();
+		});
+		expect(listLists).toHaveBeenCalledTimes(1);
 	});
 
 	async function renderHomeReady(harness: HomeSessionHarness) {
@@ -1022,11 +1041,51 @@ describe("List switcher", () => {
 			await act(async () => {
 				await fireEvent.press(screen.getByLabelText("Submit Item"));
 			});
+			await act(() => {
+				harness.fireChange();
+			});
 			await waitFor(() => expect(screen.getByText("Bandages")).toBeTruthy());
 			const persistedItem = await harness.household.db.query.items.findFirst({
 				where: (table, { eq }) => eq(table.name, "Bandages"),
 			});
 			expect(persistedItem?.listId).toBe(harness.scenario.lists.pharmacy.id);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("shows a retryable List error when explicit switch re-resolution fails", async () => {
+		const harness = await createHomeSessionHarness();
+		jest
+			.mocked(setCurrentListSelection)
+			.mockImplementation(async (_userId, _householdId, listId) => {
+				jest.mocked(getCurrentListSelection).mockResolvedValue(listId);
+			});
+
+		try {
+			await renderHomeReady(harness);
+			await openSwitcher();
+			await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+			harness.failNextListRead();
+
+			await act(async () => {
+				await fireEvent.press(screen.getByRole("button", { name: "Pharmacy" }));
+			});
+
+			await waitFor(() =>
+				expect(screen.getByText("List unavailable")).toBeTruthy(),
+			);
+			expect(
+				screen.getByText("Unable to load this List. Please try again."),
+			).toBeTruthy();
+			expect(screen.queryByText("Milk")).toBeNull();
+			expect(screen.queryByText("Current")).toBeNull();
+			expect(setCurrentListSelection).toHaveBeenCalledWith(
+				harness.scenario.users.avery.id,
+				harness.scenario.household.id,
+				harness.scenario.lists.pharmacy.id,
+			);
+			expect(listSwitchedTrackCalls()).toHaveLength(1);
 		} finally {
 			await harness.close();
 		}
@@ -1530,6 +1589,69 @@ describe("List switcher", () => {
 			}
 		});
 
+		it("does not clear a repaired fallback selection when a stale delete re-resolution finishes later", async () => {
+			const harness = await createHomeSessionHarness();
+			let storedSelection: string | null = harness.scenario.lists.groceries.id;
+			let firedStaleChange = false;
+			const staleClearStarted = deferred<void>();
+			const allowStaleClear = deferred<void>();
+
+			jest
+				.mocked(getCurrentListSelection)
+				.mockImplementation(async () => storedSelection);
+			jest
+				.mocked(setCurrentListSelection)
+				.mockImplementation(async (_userId, _householdId, listId) => {
+					if (
+						!firedStaleChange &&
+						listId === harness.scenario.lists.pharmacy.id
+					) {
+						firedStaleChange = true;
+						harness.fireChange();
+					}
+					storedSelection = listId;
+				});
+			jest
+				.mocked(clearCurrentListSelectionIfMatches)
+				.mockImplementation(async (_userId, _householdId, listId) => {
+					staleClearStarted.resolve();
+					await allowStaleClear.promise;
+					if (storedSelection !== listId) return false;
+					storedSelection = null;
+					return true;
+				});
+
+			try {
+				await renderHomeReady(harness);
+				await openSwitcher();
+				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+
+				await fireEvent.press(screen.getByLabelText("Delete Groceries"));
+				await act(async () => {
+					await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+				});
+
+				await staleClearStarted.promise;
+				expect(storedSelection).toBe(harness.scenario.lists.pharmacy.id);
+
+				await act(async () => {
+					allowStaleClear.resolve();
+					await allowStaleClear.promise;
+				});
+
+				await waitFor(() => expect(screen.getByText("Pharmacy")).toBeTruthy());
+				expect(storedSelection).toBe(harness.scenario.lists.pharmacy.id);
+				expect(clearCurrentListSelectionIfMatches).toHaveBeenCalledWith(
+					harness.scenario.users.avery.id,
+					harness.scenario.household.id,
+					harness.scenario.lists.groceries.id,
+				);
+			} finally {
+				allowStaleClear.resolve();
+				await harness.close();
+			}
+		});
+
 		it("deletes the last active List: clears the selection and renders zero-active with create recovery", async () => {
 			const harness = await createHomeSessionHarness();
 			await harness.household.db
@@ -1644,6 +1766,8 @@ type HomeSessionHarness = {
 	listReadCount: () => number;
 	listListsReadCount: () => number;
 	getListReadCount: () => number;
+	fireChange: () => void;
+	failNextListRead: () => void;
 	failNextListListsRead: () => void;
 	setStaleMissingListIds: (listIds: string[]) => void;
 	setStaleDeletedListIds: (listIds: string[]) => void;
@@ -1678,6 +1802,7 @@ async function createHomeSessionHarness(
 	let staleArchivedListIds = new Set<string>();
 	let shouldFailNextListRead = options.failNextListRead ?? false;
 	let shouldFailNextListListsRead = false;
+	const changeListeners = new Set<() => void>();
 	const execute = async (statement: HouseholdSqlStatement) => {
 		if (isListRead(statement)) {
 			listReadCount += 1;
@@ -1721,6 +1846,14 @@ async function createHomeSessionHarness(
 			store: {
 				syncAuthorized: false,
 				execute,
+				subscribeToChanges: (listener) => {
+					changeListeners.add(listener);
+					return {
+						remove() {
+							changeListeners.delete(listener);
+						},
+					};
+				},
 				close() {},
 			},
 		},
@@ -1776,6 +1909,7 @@ async function createHomeSessionHarness(
 		services: {
 			lists: lease.services.lists,
 			items: lease.services.items,
+			changes: dataServices.changes,
 			sync: syncCoordinator,
 		},
 	};
@@ -1789,6 +1923,14 @@ async function createHomeSessionHarness(
 		listReadCount: () => listReadCount,
 		listListsReadCount: () => listListsReadCount,
 		getListReadCount: () => getListReadCount,
+		fireChange() {
+			for (const listener of changeListeners) {
+				listener();
+			}
+		},
+		failNextListRead() {
+			shouldFailNextListRead = true;
+		},
 		failNextListListsRead() {
 			shouldFailNextListListsRead = true;
 		},
@@ -1853,8 +1995,10 @@ function staleListRow(
 }
 
 function homeListSwitcherSession({
+	changes,
 	listLists,
 }: {
+	changes: AuthenticatedAppSession["services"]["changes"];
 	listLists: AuthenticatedAppSession["services"]["lists"]["listLists"];
 }): AuthenticatedAppSession {
 	const unusedServiceCall = async () => {
@@ -1906,6 +2050,7 @@ function homeListSwitcherSession({
 		services: {
 			lists,
 			items,
+			changes,
 			sync: passiveSyncCoordinator(),
 		},
 	};

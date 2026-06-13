@@ -124,7 +124,7 @@ List and Item services own local domain reads and writes. They commit local Hous
 
 The authenticated app session controller creates authenticated app session List/Item services and the coordinator, closes Household resources, stops sync before sign-out or replacement, and starts fresh authorized sync lifecycle work after offline reopen. The authenticated app provider activates and observes the controller; route surfaces borrow provider dependencies and actions instead of owning Household DB or sync lifecycle.
 
-Current-List UI owns visible List interaction and rendering. It subscribes to coordinator status, requests `localWrite` after successful local mutations, requests `manualRefresh` for explicit refresh, and reloads visible rows after sync reports remote changes.
+Current-List UI owns visible List interaction and rendering. It subscribes to coordinator status, requests `localWrite` after successful local mutations, and requests `manualRefresh` for explicit refresh. Visible rows reload through the HouseholdStore change signal exposed as `session.services.changes`, not through sync status transitions.
 
 Future platform awareness belongs behind coordinator-owned adapter boundaries. It should feed the coordinator another reasoned request instead of adding sync policy to UI, domain services, HouseholdStore, or native package call sites.
 

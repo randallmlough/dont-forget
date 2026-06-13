@@ -36,6 +36,9 @@ describe("createAuthenticatedAppSessionController activation", () => {
 						addItem: expect.any(Function),
 						setItemChecked: expect.any(Function),
 					}),
+					changes: expect.objectContaining({
+						subscribe: expect.any(Function),
+					}),
 					sync: expect.objectContaining({
 						getStatus: expect.any(Function),
 						subscribe: expect.any(Function),
@@ -46,6 +49,13 @@ describe("createAuthenticatedAppSessionController activation", () => {
 		});
 		const snapshot = controller.getSnapshot();
 		if (snapshot.status !== "ready") throw new Error("Expected ready snapshot");
+		const changeListener = jest.fn();
+		const changeSubscription =
+			snapshot.session.services.changes.subscribe(changeListener);
+		dataServices.fireChange();
+		changeSubscription.remove();
+		dataServices.fireChange();
+		expect(changeListener).toHaveBeenCalledTimes(1);
 		expect(snapshot.session.services.sync).not.toHaveProperty("start");
 		expect(snapshot.session.services.sync).not.toHaveProperty("stop");
 		expect(dataServices.lists.getList).not.toHaveBeenCalled();

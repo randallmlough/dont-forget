@@ -213,6 +213,7 @@ function appSessionFixture(userId: string): AuthenticatedAppSession {
 		services: {
 			lists: services.lists,
 			items: services.items,
+			changes: services.changes,
 			sync: {
 				getStatus: syncCoordinator.getStatus,
 				subscribe: syncCoordinator.subscribe,

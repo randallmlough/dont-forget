@@ -138,6 +138,39 @@ describe("createCurrentListSelectionStore", () => {
 		expect(storage.values.size).toBe(0);
 	});
 
+	it("clears a selection only when it still matches the expected List", async () => {
+		const storage = memoryStorage();
+		const store = createCurrentListSelectionStore({ storage });
+
+		await store.setCurrentListSelection(
+			"usr_avery",
+			"hh_avery",
+			"list_groceries",
+		);
+
+		await expect(
+			store.clearCurrentListSelectionIfMatches(
+				"usr_avery",
+				"hh_avery",
+				"list_pharmacy",
+			),
+		).resolves.toBe(false);
+		await expect(
+			store.getCurrentListSelection("usr_avery", "hh_avery"),
+		).resolves.toBe("list_groceries");
+
+		await expect(
+			store.clearCurrentListSelectionIfMatches(
+				"usr_avery",
+				"hh_avery",
+				"list_groceries",
+			),
+		).resolves.toBe(true);
+		await expect(
+			store.getCurrentListSelection("usr_avery", "hh_avery"),
+		).resolves.toBeNull();
+	});
+
 	it("clears all of one User's selections without touching other Users", async () => {
 		const storage = memoryStorage();
 		const store = createCurrentListSelectionStore({ storage });

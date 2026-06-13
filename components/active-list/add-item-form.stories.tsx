@@ -25,6 +25,7 @@ export const Default: Story = {
 };
 
 function AddItemComposerStory() {
+	const [state, setState] = useState(emptyActiveListState);
 	const [actions] = useState(() =>
 		createActiveListMemoryActions(emptyActiveListState, {
 			itemIdPrefix: "story-item",
@@ -42,11 +43,16 @@ function AddItemComposerStory() {
 		>
 			<View style={styles.canvas}>
 				<ActiveList.Provider
-					initialState={emptyActiveListState}
+					state={state}
 					currentMemberName="Avery Chen"
-					onLoadList={actions.load}
-					onAddItem={actions.addItem}
-					onSetItemChecked={actions.setItemChecked}
+					onAddItem={async (input) => {
+						await actions.addItem(input);
+						setState(await actions.load());
+					}}
+					onSetItemChecked={async (itemId, checked) => {
+						await actions.setItemChecked(itemId, checked);
+						setState(await actions.load());
+					}}
 					syncCoordinator={syncCoordinator}
 				>
 					<ActiveList.Screen>

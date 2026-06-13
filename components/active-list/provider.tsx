@@ -2,32 +2,24 @@ import {
 	type PropsWithChildren,
 	useCallback,
 	useEffect,
-	useEffectEvent,
 	useMemo,
 	useRef,
 	useState,
 	useSyncExternalStore,
 } from "react";
 import { type Logger, useLogger } from "@/lib/logger";
-import {
-	type ActiveListTransition,
-	activeListReducer,
-	initialActiveListModel,
-} from "./active-list-state";
 import { ActiveListContext } from "./context";
 import type {
-	ActiveListInitialState,
-	ActiveListItem,
+	ActiveListState,
 	ActiveListSyncCoordinator,
 	AddActiveListItemDraft,
 	AddActiveListItemInput,
 } from "./types";
 
 export type ActiveListProviderProps = PropsWithChildren<{
-	initialState: ActiveListInitialState;
+	state: ActiveListState;
 	currentMemberName: string;
-	onLoadList: () => Promise<ActiveListInitialState>;
-	onAddItem: (input: AddActiveListItemInput) => Promise<ActiveListItem>;
+	onAddItem: (input: AddActiveListItemInput) => Promise<void>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	syncCoordinator: ActiveListSyncCoordinator;
 	logger?: Logger;
@@ -59,9 +51,8 @@ function ActiveListProviderWithLogger(
 }
 
 function ActiveListProviderContent({
-	initialState,
+	state,
 	currentMemberName,
-	onLoadList,
 	onAddItem,
 	onSetItemChecked,
 	syncCoordinator,
@@ -76,13 +67,9 @@ function ActiveListProviderContent({
 		() => syncCoordinator.getStatus(),
 		() => syncCoordinator.getStatus(),
 	);
-	const [model, setModel] = useState(() =>
-		initialActiveListModel(initialState),
-	);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [isRefreshing, setIsRefreshing] = useState(false);
 	const mounted = useRef(true);
-	const nextItemNumber = useRef(initialState.items.length + 1);
-	const modelRef = useRef(model);
-	const previousSyncState = useRef(syncState);
 
 	useEffect(() => {
 		mounted.current = true;
@@ -91,36 +78,17 @@ function ActiveListProviderContent({
 		};
 	}, []);
 
-	const dispatchIfMounted = useCallback((transition: ActiveListTransition) => {
-		if (!mounted.current) return;
-		const nextModel = activeListReducer(modelRef.current, transition);
-		modelRef.current = nextModel;
-		setModel(nextModel);
+	const setErrorIfMounted = useCallback((message: string | null) => {
+		if (mounted.current) {
+			setErrorMessage(message);
+		}
 	}, []);
 
-	const loadList = useCallback(async () => {
-		const nextState = await onLoadList();
-		dispatchIfMounted({ type: "listLoaded", list: nextState });
-	}, [dispatchIfMounted, onLoadList]);
-
-	const reloadListAfterSync = useEffectEvent(async () => {
-		await loadList().catch((error) => {
-			logger.error("active list reload after sync failed", { error });
-		});
-	});
-
-	useEffect(() => {
-		const lastSyncState = previousSyncState.current;
-		previousSyncState.current = syncState;
-
-		if (
-			lastSyncState === "pending" &&
-			syncState === "synced" &&
-			!modelRef.current.isRefreshing
-		) {
-			void reloadListAfterSync();
+	const setRefreshingIfMounted = useCallback((refreshing: boolean) => {
+		if (mounted.current) {
+			setIsRefreshing(refreshing);
 		}
-	}, [syncState]);
+	}, []);
 
 	const requestLocalWriteSync = useCallback(() => {
 		void syncCoordinator
@@ -129,18 +97,19 @@ function ActiveListProviderContent({
 	}, [syncCoordinator]);
 
 	const refresh = useCallback(async () => {
-		dispatchIfMounted({ type: "refreshRequested" });
-
+		setErrorIfMounted(null);
+		setRefreshingIfMounted(true);
 		try {
 			await syncCoordinator.requestSync({ reason: "manualRefresh" });
-			await loadList();
 		} catch (error) {
 			if (syncCoordinator.getStatus() !== "failed") {
 				logger.error("active list refresh failed", { error });
 			}
-			dispatchIfMounted({ type: "refreshFailed" });
+			setErrorIfMounted("Unable to refresh this List. Please try again.");
+		} finally {
+			setRefreshingIfMounted(false);
 		}
-	}, [dispatchIfMounted, loadList, logger, syncCoordinator]);
+	}, [logger, setErrorIfMounted, setRefreshingIfMounted, syncCoordinator]);
 
 	const addItem = useCallback(
 		async (input: AddActiveListItemDraft) => {
@@ -149,75 +118,32 @@ function ActiveListProviderContent({
 			const quantity = nullableTrimmed(input.quantity);
 			const notes = nullableTrimmed(input.notes);
 
-			const item: ActiveListItem = {
-				id: `pending-item-${nextItemNumber.current}`,
-				name,
-				quantity,
-				notes,
-				checked: false,
-				checkedByMemberName: null,
-			};
-			nextItemNumber.current += 1;
-
-			dispatchIfMounted({ type: "itemAddedOptimistically", item });
-
 			try {
-				const persistedItem = await onAddItem({
-					name,
-					quantity,
-					notes,
-				});
-				dispatchIfMounted({
-					type: "itemAddPersisted",
-					pendingItemId: item.id,
-					item: persistedItem,
-				});
+				await onAddItem({ name, quantity, notes });
+				setErrorIfMounted(null);
 				requestLocalWriteSync();
 			} catch (error) {
-				dispatchIfMounted({ type: "itemAddFailed", pendingItemId: item.id });
-				await loadList().catch((reloadError) => {
-					logger.error("active list reload after add failure failed", {
-						error: reloadError,
-					});
-					dispatchIfMounted({ type: "itemAddReloadFailed" });
-				});
+				setErrorIfMounted("Unable to save that Item. Please try again.");
 				throw error;
 			}
 		},
-		[dispatchIfMounted, loadList, logger, onAddItem, requestLocalWriteSync],
+		[onAddItem, requestLocalWriteSync, setErrorIfMounted],
 	);
 
 	const toggleItem = useCallback(
 		async (itemId: string) => {
-			const target = modelRef.current.list.items.find(
-				(item) => item.id === itemId,
-			);
+			const target = state.items.find((item) => item.id === itemId);
 			if (!target) return;
 
-			const checked = !target.checked;
-			dispatchIfMounted({
-				type: "itemToggledOptimistically",
-				itemId,
-				checked,
-				checkedByMemberName: checked ? currentMemberName : null,
-			});
-
 			try {
-				await onSetItemChecked(itemId, checked);
-				dispatchIfMounted({ type: "itemTogglePersisted" });
+				await onSetItemChecked(itemId, !target.checked);
+				setErrorIfMounted(null);
 				requestLocalWriteSync();
 			} catch {
-				dispatchIfMounted({ type: "itemToggleFailed" });
-				await loadList().catch(() => undefined);
+				setErrorIfMounted("Unable to save that change. Please try again.");
 			}
 		},
-		[
-			currentMemberName,
-			dispatchIfMounted,
-			loadList,
-			onSetItemChecked,
-			requestLocalWriteSync,
-		],
+		[onSetItemChecked, requestLocalWriteSync, setErrorIfMounted, state.items],
 	);
 
 	const actions = useMemo(
@@ -228,20 +154,20 @@ function ActiveListProviderContent({
 	const meta = useMemo(
 		() => ({
 			currentMemberName,
-			errorMessage: model.errorMessage,
-			isRefreshing: model.isRefreshing,
+			errorMessage,
+			isRefreshing,
 			syncState,
 		}),
-		[currentMemberName, model.errorMessage, model.isRefreshing, syncState],
+		[currentMemberName, errorMessage, isRefreshing, syncState],
 	);
 
 	const value = useMemo(
 		() => ({
-			state: model.list,
+			state,
 			actions,
 			meta,
 		}),
-		[actions, meta, model.list],
+		[actions, meta, state],
 	);
 
 	return (

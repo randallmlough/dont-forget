@@ -46,7 +46,9 @@ export function collectSnapshots(controller: {
 	return snapshots;
 }
 
-export type SessionDataServicesFixture = SessionDataServices;
+export type SessionDataServicesFixture = SessionDataServices & {
+	fireChange: () => void;
+};
 
 type SessionDataServicesFixtureOverrides = Partial<SessionDataServices> & {
 	addItem?: jest.Mock;
@@ -60,6 +62,7 @@ export function sessionDataServicesFixture(
 	const addItem = overrides.addItem ?? jest.fn();
 	const setItemChecked =
 		overrides.setItemChecked ?? jest.fn().mockResolvedValue(undefined);
+	const changeListeners = new Set<() => void>();
 
 	return {
 		lists:
@@ -68,6 +71,21 @@ export function sessionDataServicesFixture(
 		items:
 			overrides.items ??
 			controllerItemServiceBoundary({ addItem, setItemChecked }),
+		changes: overrides.changes ?? {
+			subscribe(listener) {
+				changeListeners.add(listener);
+				return {
+					remove() {
+						changeListeners.delete(listener);
+					},
+				};
+			},
+		},
+		fireChange() {
+			for (const listener of changeListeners) {
+				listener();
+			}
+		},
 		syncAuthorized: overrides.syncAuthorized ?? true,
 		sync: overrides.sync ?? jest.fn().mockResolvedValue({ changed: false }),
 		close: overrides.close ?? jest.fn().mockResolvedValue(undefined),

@@ -3,8 +3,8 @@ import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import type {
-	ActiveListInitialState,
 	ActiveListItem,
+	ActiveListState,
 	ActiveListSyncCoordinator,
 } from "@/components/active-list";
 import {
@@ -74,9 +74,7 @@ export const AuthenticatedAppSessionError: Story = {
 
 function noop() {}
 
-function readySession(
-	initialList: ActiveListInitialState,
-): AuthenticatedAppSession {
+function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 	return {
 		user: {
 			id: "usr_avery",
@@ -109,12 +107,13 @@ function readySession(
 		resourceKey: `story:${initialList.householdName}:${initialList.listName}`,
 		services: {
 			...storyServices(initialList),
+			changes: passiveChanges(),
 			sync: storySyncCoordinator(),
 		},
 	};
 }
 
-function storyServices(initialList: ActiveListInitialState): {
+function storyServices(initialList: ActiveListState): {
 	lists: ListService;
 	items: ItemService;
 } {
@@ -176,12 +175,16 @@ function storyServices(initialList: ActiveListInitialState): {
 				return state.items.map(activeListStoryItemToItem);
 			},
 			async addItem(input) {
-				const item = await actions.addItem({
+				await actions.addItem({
 					name: input.name,
 					quantity: input.quantity,
 					notes: input.notes,
 				});
 				const state = await actions.load();
+				const item = state.items.at(-1);
+				if (!item) {
+					throw new Error("Story Item was not added");
+				}
 				return activeListStoryItemToItem(
 					item,
 					state.items.findIndex((stateItem) => stateItem.id === item.id),
@@ -221,6 +224,12 @@ function storySyncCoordinator(): ActiveListSyncCoordinator {
 		async requestSync() {
 			return { changed: false };
 		},
+	};
+}
+
+function passiveChanges(): AuthenticatedAppSession["services"]["changes"] {
+	return {
+		subscribe: () => ({ remove() {} }),
 	};
 }
 

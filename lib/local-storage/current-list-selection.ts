@@ -24,6 +24,11 @@ export type CurrentListSelectionStore = {
 		userId: string,
 		householdId: string,
 	) => Promise<void>;
+	clearCurrentListSelectionIfMatches: (
+		userId: string,
+		householdId: string,
+		listId: string,
+	) => Promise<boolean>;
 	clearUserCurrentListSelections: (userId: string) => Promise<void>;
 };
 
@@ -86,6 +91,15 @@ export function createCurrentListSelectionStore(
 			await writeSelectionMap(userId, selections);
 		},
 
+		async clearCurrentListSelectionIfMatches(userId, householdId, listId) {
+			const selections = await readSelectionMap(userId);
+			if (!selections || selections[householdId] !== listId) return false;
+
+			delete selections[householdId];
+			await writeSelectionMap(userId, selections);
+			return true;
+		},
+
 		async clearUserCurrentListSelections(userId) {
 			await storage.removeItem(storageKey(userId));
 		},
@@ -100,5 +114,7 @@ export const setCurrentListSelection =
 	defaultCurrentListSelectionStore.setCurrentListSelection;
 export const clearCurrentListSelection =
 	defaultCurrentListSelectionStore.clearCurrentListSelection;
+export const clearCurrentListSelectionIfMatches =
+	defaultCurrentListSelectionStore.clearCurrentListSelectionIfMatches;
 export const clearUserCurrentListSelections =
 	defaultCurrentListSelectionStore.clearUserCurrentListSelections;

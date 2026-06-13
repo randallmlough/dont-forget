@@ -136,6 +136,7 @@ export type HouseholdStore = {
   path: string;
   syncAuthorized: boolean;
   execute(statement: HouseholdSqlStatement): Promise<HouseholdSqlResult>;
+  subscribeToChanges(listener: () => void): { remove(): void };
   push(): Promise<void>;
   pull(): Promise<SyncResult>;
   sync(): Promise<SyncResult>;
@@ -193,7 +194,9 @@ return {
 };
 ```
 
-Current List is selection state only. Today Home selects `DEFAULT_LIST_ID`; future List switching should change the selected `listId`, not introduce a new Household-owned Current List service or data source. `ActiveList` receives loaded state and explicit callbacks such as `onLoadList`, `onAddItem`, and `onSetItemChecked`.
+`HouseholdStore` emits a store-level change signal after successful local writes and sync/pull operations that changed the local Household DB. The Authenticated App Session exposes that signal as `session.services.changes`; UI consumes it through `useSessionQuery` so List and Item reads re-run when the local database changes. Sync status is still coordinator-owned UI state, not a data-reload trigger.
+
+Current List is selection state only. Home resolves the selected `listId` from local selection state and session-scoped List services; List switching changes the selected `listId`, not a Household-owned Current List service or data source. `ActiveList` receives loaded state and explicit callbacks such as `onAddItem` and `onSetItemChecked`.
 
 During safe cached-to-fresh replacement, the provider may expose `state: { status: "ready", refreshing: true }` with the previous `session`. The previous List UI remains writable until a replacement session is published. After replacement, the old borrowed session resource rejects new List/Item/sync calls with a typed stale-resource error and closes only after accepted operations drain.
 
@@ -218,6 +221,8 @@ const item = await session.services.items.addItem(input);
 void session.services.sync.requestSync({ reason: "localWrite" });
 return item;
 ```
+
+Local UI freshness does not wait for that sync request. The local write updates the Household DB first, `HouseholdStore` emits `session.services.changes`, and `useSessionQuery` consumers reload from local services. Later sync work may pull remote Household changes; when the local store changes, the same signal drives UI reloads.
 
 The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while the app is active, and receives app lifecycle and connectivity events through app-owned adapter seams. The Authenticated App Session controller owns when a Household coordinator exists, starts, stops, and is replaced. See [Sync Coordinator](./sync-coordinator.md).
 

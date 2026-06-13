@@ -7,7 +7,6 @@ import { ActiveListScreen } from "./screen";
 export { useActiveList } from "./context";
 export type {
 	ActiveListActions,
-	ActiveListInitialState,
 	ActiveListItem,
 	ActiveListMeta,
 	ActiveListState,

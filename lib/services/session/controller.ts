@@ -48,6 +48,9 @@ export type AuthenticatedAppSessionSync = Pick<
 export type AuthenticatedAppSessionServices = {
 	lists: ListService;
 	items: ItemService;
+	changes: {
+		subscribe: (listener: () => void) => { remove: () => void };
+	};
 	sync: AuthenticatedAppSessionSync;
 };
 
@@ -503,6 +506,7 @@ function authenticatedAppSessionFromOpened(
 		services: {
 			lists: opened.resource.lists,
 			items: opened.resource.items,
+			changes: opened.resource.changes,
 			sync: syncHandleFromCoordinator(opened.resource.syncCoordinator),
 		},
 	};
