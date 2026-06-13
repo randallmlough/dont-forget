@@ -297,6 +297,32 @@ describe("SettingsScreen", () => {
 		expect(mockSignOut).toHaveBeenCalledTimes(1);
 	});
 
+	it("does not show server deletion failure copy when sign-out cleanup fails after deletion", async () => {
+		mockSignOut.mockRejectedValueOnce(new Error("local cleanup failed"));
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Account" }),
+		);
+		await fireEvent.changeText(
+			screen.getByLabelText("Type DELETE to confirm"),
+			"DELETE",
+		);
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Permanently delete account" }),
+		);
+
+		await waitFor(() => expect(mockDeleteAccount).toHaveBeenCalledTimes(1));
+		expect(track).toHaveBeenCalledWith("account_deleted", {
+			user_id: "usr_1",
+			deleted_household_count: 1,
+		});
+		expect(mockSignOut).toHaveBeenCalledTimes(1);
+		expect(
+			screen.queryByText("Account deletion failed. Please try again."),
+		).toBeNull();
+	});
+
 	it("shows a notice when account deletion fails", async () => {
 		mockDeleteAccount.mockRejectedValue(new Error("server down"));
 		await renderWithSafeArea(<SettingsScreen />);

@@ -2,10 +2,10 @@ import { eq } from "drizzle-orm";
 import { users } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/server/test";
 import type { ServerUserRecord } from "@/lib/server/auth";
-import { createUserService } from "./user-service";
+import { createUserService, DeletedUserError } from "./user-service";
 
 describe("createUserService", () => {
-	it("anonymizes a deleted app User without removing the row", async () => {
+	it("marks a deleted app User without removing the row or Clerk link", async () => {
 		const directory = await createTestDirectoryDb();
 		const service = createUserService({ directory: directory.db });
 		const dateNow = jest.spyOn(Date, "now");
@@ -24,12 +24,12 @@ describe("createUserService", () => {
 			});
 			dateNow.mockReturnValueOnce(1_700_000_002_000);
 
-			await service.anonymizeUser("usr_avery");
+			await service.markUserDeleted("usr_avery");
 
 			const [user] = await directory.db.select().from(users);
 			expect(user).toMatchObject({
 				id: "usr_avery",
-				clerkUserId: "deleted_usr_avery",
+				clerkUserId: "clerk_avery",
 				email: null,
 				firstName: null,
 				lastName: null,
@@ -41,6 +41,69 @@ describe("createUserService", () => {
 			});
 		} finally {
 			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("tombstones the Clerk link after external deletion succeeds", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createUserService({ directory: directory.db });
+		const dateNow = jest.spyOn(Date, "now");
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				email: null,
+				firstName: null,
+				lastName: null,
+				displayName: null,
+				activeHouseholdId: null,
+				createdAt: 1,
+				updatedAt: 1,
+				deletedAt: 1,
+			});
+			dateNow.mockReturnValueOnce(1_700_000_003_000);
+
+			await service.anonymizeUser("usr_avery");
+
+			const [user] = await directory.db.select().from(users);
+			expect(user).toMatchObject({
+				id: "usr_avery",
+				clerkUserId: "deleted_usr_avery",
+				email: null,
+				firstName: null,
+				lastName: null,
+				displayName: null,
+				deletedAt: 1,
+				updatedAt: 1_700_000_003_000,
+			});
+		} finally {
+			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("rejects upserting a deleted User with the same Clerk identity", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createUserService({ directory: directory.db });
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				email: null,
+				firstName: null,
+				lastName: null,
+				displayName: null,
+				deletedAt: 1,
+			});
+
+			await expect(service.upsertUser(averyUserRecord)).rejects.toBeInstanceOf(
+				DeletedUserError,
+			);
+			expect(await directory.db.select().from(users)).toHaveLength(1);
+		} finally {
 			await directory.close();
 		}
 	});

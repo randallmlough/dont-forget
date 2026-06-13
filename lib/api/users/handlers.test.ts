@@ -369,6 +369,7 @@ describe("Users API handlers", () => {
 			}),
 			disableToken: jest.fn(),
 			disableTokens: jest.fn(),
+			disableTokensForUser: jest.fn(),
 			listActiveTokensForUsers: jest.fn(),
 		};
 

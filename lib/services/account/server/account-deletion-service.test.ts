@@ -4,6 +4,7 @@ import {
 	households,
 	invitations,
 	memberships,
+	pushTokens,
 	type User,
 	users,
 } from "@/db/schema/directory";
@@ -17,6 +18,13 @@ describe("createAccountDeletionService", () => {
 		const deleteDatabase = jest.fn(async () => undefined);
 		const deleteClerkUser = jest.fn(async () => undefined);
 		const anonymizeUser = jest.fn(async () => undefined);
+		let transactionRunnerCalls = 0;
+		const transactionRunner = async <T>(
+			operation: () => Promise<T>,
+		): Promise<T> => {
+			transactionRunnerCalls += 1;
+			return operation();
+		};
 
 		try {
 			const user = await seedUser(directory.db, "usr_avery", "clerk_avery");
@@ -37,6 +45,7 @@ describe("createAccountDeletionService", () => {
 				tursoPlatform: () => tursoPlatform(deleteDatabase),
 				deleteClerkUser,
 				anonymizeUser,
+				transactionRunner,
 			}).deleteAccount({ user });
 
 			expect(summary).toEqual({
@@ -47,8 +56,10 @@ describe("createAccountDeletionService", () => {
 			expect(deleteDatabase).toHaveBeenCalledWith("df-test-hh-solo");
 			expect(deleteClerkUser).toHaveBeenCalledWith("clerk_avery");
 			expect(anonymizeUser).toHaveBeenCalledWith("usr_avery");
+			expect(transactionRunnerCalls).toBe(1);
 			await expectHouseholdDeleted(directory.db, "hh_solo");
 			await expectMembershipRemoved(directory.db, "mbr_solo");
+			await expectUserMarkedDeleted(directory.db, user.id);
 		} finally {
 			await directory.close();
 		}
@@ -267,6 +278,75 @@ describe("createAccountDeletionService", () => {
 		}
 	});
 
+	it("disables active push tokens for the deleted User inside the directory transaction", async () => {
+		const directory = await createTestDirectoryDb();
+
+		try {
+			const user = await seedUser(directory.db, "usr_avery", "clerk_avery");
+			const other = await seedUser(directory.db, "usr_other", "clerk_other");
+			await seedHousehold(directory.db, {
+				id: "hh_solo",
+				tursoDbName: "df-test-hh-solo",
+				createdByUserId: user.id,
+			});
+			await seedMembership(directory.db, {
+				id: "mbr_solo",
+				householdId: "hh_solo",
+				userId: user.id,
+				role: "owner",
+			});
+			await directory.db.insert(pushTokens).values([
+				pushToken({
+					id: "pst_active_one",
+					userId: user.id,
+					expoPushToken: "ExponentPushToken[one]",
+				}),
+				pushToken({
+					id: "pst_disabled",
+					userId: user.id,
+					expoPushToken: "ExponentPushToken[two]",
+					disabledAt: 2,
+					updatedAt: 2,
+				}),
+				pushToken({
+					id: "pst_other",
+					userId: other.id,
+					expoPushToken: "ExponentPushToken[three]",
+				}),
+			]);
+
+			await createAccountDeletionService({
+				directory: directory.db,
+				tursoPlatform: () => tursoPlatform(),
+				deleteClerkUser: async () => undefined,
+				anonymizeUser: async () => undefined,
+			}).deleteAccount({ user });
+
+			const rows = await directory.db.select().from(pushTokens);
+			expect(rows).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: "pst_active_one",
+						disabledAt: expect.any(Number),
+						updatedAt: expect.any(Number),
+					}),
+					expect.objectContaining({
+						id: "pst_disabled",
+						disabledAt: 2,
+						updatedAt: 2,
+					}),
+					expect.objectContaining({
+						id: "pst_other",
+						disabledAt: null,
+						updatedAt: 1,
+					}),
+				]),
+			);
+		} finally {
+			await directory.close();
+		}
+	});
+
 	it("records Turso teardown failures without failing account deletion", async () => {
 		const directory = await createTestDirectoryDb();
 		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
@@ -308,7 +388,7 @@ describe("createAccountDeletionService", () => {
 		}
 	});
 
-	it("throws Clerk failures after committing directory unwinding", async () => {
+	it("throws Clerk failures after committing directory unwinding and PII removal", async () => {
 		const directory = await createTestDirectoryDb();
 		const anonymizeUser = jest.fn(async () => undefined);
 
@@ -339,7 +419,44 @@ describe("createAccountDeletionService", () => {
 
 			await expectHouseholdDeleted(directory.db, "hh_solo");
 			await expectMembershipRemoved(directory.db, "mbr_solo");
+			await expectUserMarkedDeleted(directory.db, user.id);
 			expect(anonymizeUser).not.toHaveBeenCalled();
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("does not leave PII behind when final Clerk-link anonymization fails after Clerk deletion", async () => {
+		const directory = await createTestDirectoryDb();
+		const deleteClerkUser = jest.fn(async () => undefined);
+
+		try {
+			const user = await seedUser(directory.db, "usr_avery", "clerk_avery");
+			await seedHousehold(directory.db, {
+				id: "hh_solo",
+				tursoDbName: "df-test-hh-solo",
+				createdByUserId: user.id,
+			});
+			await seedMembership(directory.db, {
+				id: "mbr_solo",
+				householdId: "hh_solo",
+				userId: user.id,
+				role: "owner",
+			});
+
+			await expect(
+				createAccountDeletionService({
+					directory: directory.db,
+					tursoPlatform: () => tursoPlatform(),
+					deleteClerkUser,
+					anonymizeUser: async () => {
+						throw new Error("directory unavailable");
+					},
+				}).deleteAccount({ user }),
+			).rejects.toThrow("directory unavailable");
+
+			expect(deleteClerkUser).toHaveBeenCalledWith("clerk_avery");
+			await expectUserMarkedDeleted(directory.db, user.id);
 		} finally {
 			await directory.close();
 		}
@@ -481,6 +598,24 @@ function invitation(input: {
 	};
 }
 
+function pushToken(input: {
+	id: string;
+	userId: string;
+	expoPushToken: string;
+	disabledAt?: number | null;
+	updatedAt?: number;
+}) {
+	return {
+		id: input.id,
+		userId: input.userId,
+		expoPushToken: input.expoPushToken,
+		platform: "ios" as const,
+		createdAt: 1,
+		updatedAt: input.updatedAt ?? 1,
+		disabledAt: input.disabledAt ?? null,
+	};
+}
+
 function tursoPlatform(
 	deleteDatabase: (databaseName: string) => Promise<void> = jest.fn(
 		async () => undefined,
@@ -514,4 +649,21 @@ async function expectMembershipRemoved(
 		.from(memberships)
 		.where(eq(memberships.id, membershipId));
 	expect(membership.removedAt).toEqual(expect.any(Number));
+}
+
+async function expectUserMarkedDeleted(directory: DirectoryDb, userId: string) {
+	const [user] = await directory
+		.select()
+		.from(users)
+		.where(eq(users.id, userId));
+	expect(user).toMatchObject({
+		id: userId,
+		clerkUserId: "clerk_avery",
+		email: null,
+		firstName: null,
+		lastName: null,
+		displayName: null,
+		activeHouseholdId: null,
+		deletedAt: expect.any(Number),
+	});
 }

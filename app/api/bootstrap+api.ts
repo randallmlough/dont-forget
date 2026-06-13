@@ -5,6 +5,9 @@ export async function POST(request: Request): Promise<Response> {
 	let UnauthorizedError:
 		| typeof import("@/lib/server/auth")["UnauthorizedError"]
 		| null = null;
+	let DeletedUserBootstrapError:
+		| typeof import("@/lib/services/session/server")["DeletedUserBootstrapError"]
+		| null = null;
 
 	try {
 		const [db, bootstrap, auth] = await Promise.all([
@@ -13,6 +16,7 @@ export async function POST(request: Request): Promise<Response> {
 			import("@/lib/server/auth"),
 		]);
 		UnauthorizedError = auth.UnauthorizedError;
+		DeletedUserBootstrapError = bootstrap.DeletedUserBootstrapError;
 
 		const userRecord = await auth.verifyClerkRequest(request);
 		const client = db.directoryClient();
@@ -30,6 +34,12 @@ export async function POST(request: Request): Promise<Response> {
 		}
 	} catch (error) {
 		if (UnauthorizedError && error instanceof UnauthorizedError) {
+			return Response.json({ error: error.message }, { status: 401 });
+		}
+		if (
+			DeletedUserBootstrapError &&
+			error instanceof DeletedUserBootstrapError
+		) {
 			return Response.json({ error: error.message }, { status: 401 });
 		}
 

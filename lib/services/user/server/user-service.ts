@@ -19,6 +19,7 @@ export type UpdateClerkUserName = (input: {
 export type UserService = {
 	anonymizeUser(userId: string): Promise<void>;
 	completeOnboarding(userId: string): Promise<void>;
+	markUserDeleted(userId: string): Promise<void>;
 	upsertUser(userRecord: ServerUserRecord): Promise<User>;
 	updateUserName(input: {
 		clerkUserId: string;
@@ -32,6 +33,13 @@ export type UserServiceDeps = {
 	updateClerkUserName?: UpdateClerkUserName;
 };
 
+export class DeletedUserError extends Error {
+	constructor() {
+		super("User has been deleted.");
+		this.name = "DeletedUserError";
+	}
+}
+
 export function createUserService(deps: UserServiceDeps): UserService {
 	return {
 		anonymizeUser(userId) {
@@ -39,6 +47,9 @@ export function createUserService(deps: UserServiceDeps): UserService {
 		},
 		completeOnboarding(userId) {
 			return completeOnboarding(userId, deps.directory);
+		},
+		markUserDeleted(userId) {
+			return markUserDeleted(userId, deps.directory);
 		},
 		upsertUser(userRecord) {
 			return upsertUser(userRecord, deps.directory);
@@ -60,11 +71,24 @@ async function anonymizeUser(
 	await directory
 		.update(users)
 		.set({
+			clerkUserId: `deleted_${userId}`,
+			updatedAt: now,
+		})
+		.where(eq(users.id, userId));
+}
+
+async function markUserDeleted(
+	userId: string,
+	directory: UserServiceDirectory,
+): Promise<void> {
+	const now = Date.now();
+	await directory
+		.update(users)
+		.set({
 			email: null,
 			firstName: null,
 			lastName: null,
 			displayName: null,
-			clerkUserId: `deleted_${userId}`,
 			activeHouseholdId: null,
 			updatedAt: now,
 			deletedAt: now,
@@ -95,6 +119,15 @@ async function upsertUser(
 	userRecord: ServerUserRecord,
 	directory: UserServiceDirectory,
 ): Promise<User> {
+	const [existing] = await directory
+		.select()
+		.from(users)
+		.where(eq(users.clerkUserId, userRecord.clerkUserId))
+		.limit(1);
+	if (existing?.deletedAt !== null && existing?.deletedAt !== undefined) {
+		throw new DeletedUserError();
+	}
+
 	const now = Date.now();
 	const userRecordFields = {
 		email: userRecord.email,

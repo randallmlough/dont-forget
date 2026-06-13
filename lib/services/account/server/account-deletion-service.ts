@@ -11,6 +11,7 @@ import {
 	createTursoPlatformClient,
 	type TursoPlatformClient,
 } from "@/db/server/turso-platform";
+import { runWithSqliteBusyRetry } from "@/db/utils";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
 import {
@@ -23,11 +24,15 @@ import {
 	type MemberService,
 	type MemberServiceDirectory,
 } from "@/lib/services/member/server";
+import { createPushTokenService } from "@/lib/services/push/server";
 import {
 	lockHouseholdLifecycle,
 	lockUserLifecycle,
 } from "@/lib/services/shared/server/lifecycle-lock";
-import { createUserService } from "@/lib/services/user/server";
+import {
+	createUserService,
+	type UserService,
+} from "@/lib/services/user/server";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -50,6 +55,8 @@ export type AccountDeletionServiceDeps = {
 	tursoPlatform?: () => TursoPlatformClient;
 	deleteClerkUser: (clerkUserId: string) => Promise<void>;
 	anonymizeUser?: (userId: string) => Promise<void>;
+	transactionRunner?: <T>(operation: () => Promise<T>) => Promise<T>;
+	userService?: (directory: DirectoryTransaction) => UserService;
 };
 
 type DirectoryDeletionResult = {
@@ -68,8 +75,11 @@ export function createAccountDeletionService(
 ): AccountDeletionService {
 	return {
 		async deleteAccount(input) {
-			const directoryResult = await deps.directory.transaction((tx) =>
-				deleteDirectoryAccountData(input.user, tx, deps),
+			const runTransaction = deps.transactionRunner ?? runWithSqliteBusyRetry;
+			const directoryResult = await runTransaction(() =>
+				deps.directory.transaction((tx) =>
+					deleteDirectoryAccountData(input.user, tx, deps),
+				),
 			);
 			const databasesNotDeleted = await deleteHouseholdDatabases(
 				directoryResult.tursoDbNames,
@@ -142,6 +152,9 @@ async function deleteDirectoryAccountData(
 		leftHouseholdIds.push(membership.householdId);
 	}
 
+	await createPushTokenService({ directory: tx }).disableTokensForUser(user.id);
+	await userService(tx, deps).markUserDeleted(user.id);
+
 	await tx
 		.update(invitations)
 		.set({ revokedAt: Date.now() })
@@ -154,6 +167,13 @@ async function deleteDirectoryAccountData(
 		);
 
 	return { leftHouseholdIds, deletedHouseholdIds, tursoDbNames };
+}
+
+function userService(
+	directory: DirectoryTransaction,
+	deps: AccountDeletionServiceDeps,
+): UserService {
+	return deps.userService?.(directory) ?? createUserService({ directory });
 }
 
 async function listActiveUserMemberships(

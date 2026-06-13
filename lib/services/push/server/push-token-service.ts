@@ -4,6 +4,11 @@ import { pushTokens } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
 
+type DirectoryTransaction = Parameters<
+	Parameters<DirectoryDb["transaction"]>[0]
+>[0];
+type PushTokenServiceDirectory = DirectoryDb | DirectoryTransaction;
+
 export type PushTokenRecord = {
 	id: string;
 	userId: string;
@@ -34,11 +39,12 @@ export type PushTokenService = {
 	registerToken(input: RegisterPushTokenInput): Promise<PushTokenRecord>;
 	disableToken(input: DisablePushTokenInput): Promise<void>;
 	disableTokens(input: DisablePushTokensInput): Promise<void>;
+	disableTokensForUser(userId: string): Promise<void>;
 	listActiveTokensForUsers(userIds: string[]): Promise<PushTokenRecord[]>;
 };
 
 export type PushTokenServiceDeps = {
-	directory: DirectoryDb;
+	directory: PushTokenServiceDirectory;
 };
 
 export function createPushTokenService(
@@ -99,6 +105,16 @@ export function createPushTokenService(
 						inArray(pushTokens.expoPushToken, input.expoPushTokens),
 						isNull(pushTokens.disabledAt),
 					),
+				);
+		},
+
+		async disableTokensForUser(userId) {
+			const now = Date.now();
+			await directory
+				.update(pushTokens)
+				.set({ disabledAt: now, updatedAt: now })
+				.where(
+					and(eq(pushTokens.userId, userId), isNull(pushTokens.disabledAt)),
 				);
 		},
 
