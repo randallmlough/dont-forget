@@ -1,3 +1,4 @@
+import { POST as sendTestNotification } from "@/app/api/dev/test-notification+api";
 import { GET as listInvitations } from "@/app/api/households/[householdId]/invitations+api";
 import { POST as regenerateJoinCode } from "@/app/api/households/[householdId]/join-code/regenerate+api";
 import {
@@ -19,6 +20,10 @@ import { POST as acceptInvitation } from "@/app/api/invitations/accept+api";
 import { GET as previewInvitation } from "@/app/api/invitations/preview+api";
 import { POST as createInvitation } from "@/app/api/invitations+api";
 import { PATCH as switchActiveHousehold } from "@/app/api/users/me/active-household+api";
+import {
+	POST as registerPushToken,
+	DELETE as unregisterPushToken,
+} from "@/app/api/users/me/push-tokens+api";
 
 jest.mock("@/lib/api/invitations/handlers", () => {
 	throw new Error("Invitation API handler imported during route registration");
@@ -26,6 +31,10 @@ jest.mock("@/lib/api/invitations/handlers", () => {
 
 jest.mock("@/lib/api/households/handlers", () => {
 	throw new Error("Household API handler imported during route registration");
+});
+
+jest.mock("@/lib/api/users/handlers", () => {
+	throw new Error("Users API handler imported during route registration");
 });
 
 describe("Stage 5 API route wrappers", () => {
@@ -47,5 +56,8 @@ describe("Stage 5 API route wrappers", () => {
 		expect(typeof previewJoinCode).toBe("function");
 		expect(typeof joinByCode).toBe("function");
 		expect(typeof switchActiveHousehold).toBe("function");
+		expect(typeof registerPushToken).toBe("function");
+		expect(typeof unregisterPushToken).toBe("function");
+		expect(typeof sendTestNotification).toBe("function");
 	});
 });

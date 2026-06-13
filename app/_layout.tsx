@@ -20,6 +20,7 @@ import { AuthenticatedAppSessionProvider } from "@/components/session";
 import { screen } from "@/lib/analytics";
 import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
 import { posthog } from "@/lib/posthog";
+import "@/lib/push/notification-handler";
 import { tokenCache } from "@/lib/token-cache";
 import { navigationTheme } from "@/lib/unistyles/navigation-theme";
 
