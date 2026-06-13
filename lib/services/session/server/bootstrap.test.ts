@@ -40,6 +40,8 @@ describe("bootstrapAuthenticatedAppSession", () => {
 			expect(response.user).toMatchObject({
 				id: expect.stringMatching(/^usr_/),
 				displayName: "Avery Chen",
+				firstName: "Avery",
+				lastName: "Chen",
 			});
 			expect(response.activeHousehold).toEqual({
 				id: expect.stringMatching(/^hh_/),

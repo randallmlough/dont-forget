@@ -1,10 +1,11 @@
 import { and, eq, isNull } from "drizzle-orm";
 
-import { users } from "@/db/schema/directory";
+import { type User, users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
+import type { ServerUserProfile } from "@/lib/server/auth";
 import {
 	createPushTokenService,
 	type PushMessage,
@@ -21,10 +22,26 @@ import {
 	optionalStringField,
 	readJsonObject,
 	stringField,
+	upsertAuthenticatedUser,
 	withDirectory,
 } from "../shared";
 
 const EXPO_PUSH_TOKEN_PREFIX = "ExponentPushToken[";
+const MAX_NAME_LENGTH = 50;
+
+export type UserProfile = {
+	id: string;
+	email: string | null;
+	displayName: string | null;
+	firstName: string | null;
+	lastName: string | null;
+};
+
+export type UpdateClerkUserName = (input: {
+	clerkUserId: string;
+	firstName: string | null;
+	lastName: string | null;
+}) => Promise<ServerUserProfile>;
 
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
@@ -32,7 +49,35 @@ export type UsersApiDeps = ApiHandlerDeps & {
 	sendPushNotifications?: (
 		messages: PushMessage[],
 	) => Promise<{ deadTokens: string[] }>;
+	updateClerkUserName?: UpdateClerkUserName;
 };
+
+export type UserApiDeps = UsersApiDeps;
+
+export async function handleUpdateProfile(
+	request: Request,
+	deps?: UsersApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const body = await readJsonObject(request);
+			const input = updateProfileInput(body);
+			const updateName =
+				deps?.updateClerkUserName ?? (await defaultUpdateName());
+			const profile = await updateName({
+				clerkUserId: user.clerkUserId,
+				firstName: input.firstName,
+				lastName: input.lastName,
+			});
+			const updatedUser = await upsertAuthenticatedUser(profile, directory);
+
+			return jsonResponse({ user: userProfileResponse(updatedUser, profile) });
+		});
+	} catch (error) {
+		return usersErrorResponse(error, "Update User profile API failed");
+	}
+}
 
 export async function handleRegisterPushToken(
 	request: Request,
@@ -129,6 +174,59 @@ export async function handleSendTestNotification(
 	}
 }
 
+async function defaultUpdateName(): Promise<UpdateClerkUserName> {
+	const { updateClerkUserName } = await import("@/lib/server/auth");
+	return updateClerkUserName;
+}
+
+function updateProfileInput(body: Record<string, unknown>): {
+	firstName: string | null;
+	lastName: string | null;
+} {
+	const firstName = nullableNameField(body, "firstName");
+	const lastName = nullableNameField(body, "lastName");
+	if (!firstName && !lastName) {
+		throw new BadRequestError("Provide a first or last name");
+	}
+	return { firstName, lastName };
+}
+
+function nullableNameField(
+	body: Record<string, unknown>,
+	key: "firstName" | "lastName",
+): string | null {
+	const value = body[key];
+	if (value === undefined || value === null) return null;
+	if (typeof value !== "string") {
+		throw new BadRequestError(`Invalid ${key}`);
+	}
+	const trimmed = value.trim();
+	if (trimmed.length === 0) return null;
+	if (trimmed.length > MAX_NAME_LENGTH) {
+		throw new BadRequestError(
+			`${nameLabel(key)} must be 50 characters or fewer.`,
+		);
+	}
+	return trimmed;
+}
+
+function nameLabel(key: "firstName" | "lastName"): string {
+	return key === "firstName" ? "First name" : "Last name";
+}
+
+function userProfileResponse(
+	user: User,
+	profile: ServerUserProfile,
+): UserProfile {
+	return {
+		id: user.id,
+		email: user.email,
+		displayName: user.displayName,
+		firstName: profile.firstName,
+		lastName: profile.lastName,
+	};
+}
+
 function pushTokenService(
 	directory: DirectoryDb,
 	deps: UsersApiDeps | undefined,
@@ -148,7 +246,7 @@ function expoPushTokenField(body: Record<string, unknown>): string {
 }
 
 function usersErrorResponse(error: unknown, logMessage: string): Response {
-	if (isApiUnauthorizedError(error)) return errorResponse("Unauthorized", 401);
+	if (isApiUnauthorizedError(error)) return errorResponse(error.message, 401);
 	if (error instanceof BadRequestError)
 		return errorResponse(error.message, 400);
 	console.error(logMessage, redactAttributes({ error: asError(error) }));

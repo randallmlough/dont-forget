@@ -4,6 +4,25 @@ import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 
 export type ApiGetToken = () => Promise<string | null>;
 
+export const userProfileSchema = z.object({
+	id: z.string(),
+	email: z.string().nullable(),
+	displayName: z.string().nullable(),
+	firstName: z.string().nullable(),
+	lastName: z.string().nullable(),
+});
+
+const updateProfileResponseSchema = z.object({
+	user: userProfileSchema,
+});
+
+const testNotificationResponseSchema = z.object({
+	sent: z.number(),
+	disabled: z.number(),
+});
+
+export type UserProfile = z.infer<typeof userProfileSchema>;
+
 export type UsersApiClient = {
 	completeOnboarding(): Promise<void>;
 	registerPushToken(input: {
@@ -12,12 +31,13 @@ export type UsersApiClient = {
 	}): Promise<void>;
 	unregisterPushToken(input: { expoPushToken: string }): Promise<void>;
 	sendTestNotification(): Promise<{ sent: number; disabled: number }>;
+	updateProfile(input: {
+		firstName: string | null;
+		lastName: string | null;
+	}): Promise<UserProfile>;
 };
 
-const testNotificationResponseSchema = z.object({
-	sent: z.number(),
-	disabled: z.number(),
-});
+export type UserApiClient = UsersApiClient;
 
 export function createUsersApiClient({
 	getToken,
@@ -55,8 +75,17 @@ export function createUsersApiClient({
 			});
 			return testNotificationResponseSchema.parse(payload);
 		},
+		async updateProfile(input) {
+			const payload = await authed("/api/users/me", {
+				method: "PATCH",
+				body: JSON.stringify(input),
+			});
+			return updateProfileResponseSchema.parse(payload).user;
+		},
 	};
 }
+
+export const createUserApiClient = createUsersApiClient;
 
 async function requestJson(
 	path: string,
@@ -81,10 +110,12 @@ async function requestJson(
 	});
 	const payload: unknown = await response.json().catch(() => null);
 	if (!response.ok) {
-		const parsed = z.object({ error: z.string() }).safeParse(payload);
-		throw new Error(
-			parsed.success ? parsed.data.error : "Something went wrong.",
-		);
+		throw new Error(errorMessageFromPayload(payload));
 	}
 	return payload;
+}
+
+function errorMessageFromPayload(payload: unknown): string {
+	const parsed = z.object({ error: z.string() }).safeParse(payload);
+	return parsed.success ? parsed.data.error : "Something went wrong.";
 }

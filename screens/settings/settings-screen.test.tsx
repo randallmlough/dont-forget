@@ -21,6 +21,12 @@ import {
 	registerForPushNotifications,
 	unregisterPushNotifications,
 } from "@/lib/push/registration";
+import type { ItemService } from "@/lib/services/item";
+import type { ListService } from "@/lib/services/list";
+import type {
+	AuthenticatedAppSession,
+	AuthenticatedAppSessionSync,
+} from "@/lib/services/session";
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
@@ -30,6 +36,7 @@ const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
 	disabled: 0,
 }));
+const mockUpdateProfile = jest.fn();
 const devClientHeaderActionGutter = 56;
 const setAdaptiveThemesSpy = jest
 	.spyOn(UnistylesRuntime, "setAdaptiveThemes")
@@ -66,9 +73,11 @@ jest.mock("@/components/session", () => ({
 
 jest.mock("@/lib/client-api/users", () => ({
 	createUsersApiClient: jest.fn(() => ({
+		completeOnboarding: jest.fn(async () => undefined),
 		registerPushToken: jest.fn(async () => undefined),
 		unregisterPushToken: jest.fn(async () => undefined),
 		sendTestNotification: mockSendTestNotification,
+		updateProfile: mockUpdateProfile,
 	})),
 }));
 
@@ -86,6 +95,14 @@ beforeEach(() => {
 	mockRouterReplace.mockReset();
 	mockSignOut.mockClear();
 	mockSendTestNotification.mockClear();
+	mockUpdateProfile.mockReset();
+	mockUpdateProfile.mockResolvedValue({
+		id: "usr_1",
+		email: "avery@example.com",
+		displayName: "Avery Chen",
+		firstName: "Avery",
+		lastName: "Chen",
+	});
 	setAdaptiveThemesSpy.mockClear();
 	setThemeSpy.mockClear();
 	jest.mocked(createUsersApiClient).mockClear();
@@ -103,7 +120,7 @@ beforeEach(() => {
 	});
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
-		session: null,
+		session: sessionFixture(),
 		markOnboardingComplete() {},
 		retry() {},
 		reloadSession() {},
@@ -124,6 +141,8 @@ describe("SettingsScreen", () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
 		expect(screen.getByText("Account")).toBeTruthy();
+		expect(screen.getByText("Profile")).toBeTruthy();
+		expect(screen.getByText("Avery User")).toBeTruthy();
 		expect(screen.getByText("Household settings")).toBeTruthy();
 		expect(screen.getAllByText("Appearance").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getAllByText("Notifications").length).toBeGreaterThanOrEqual(
@@ -197,6 +216,62 @@ describe("SettingsScreen", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		expect(mockSignOut).toHaveBeenCalledTimes(1);
+	});
+
+	it("hydrates saved profile names from the authenticated app session", async () => {
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "ready", refreshing: false },
+			session: sessionFixture({
+				displayName: "QA006 Check",
+				firstName: "QA006",
+				lastName: "Check",
+			}),
+			markOnboardingComplete() {},
+			retry() {},
+			reloadSession() {},
+			signOut: mockSignOut,
+		});
+
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Profile"));
+
+		expect(screen.getByLabelText("First name").props.value).toBe("QA006");
+		expect(screen.getByLabelText("Last name").props.value).toBe("Check");
+	});
+
+	it("saves trimmed profile names and shows a success notice", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Profile"));
+		await fireEvent.changeText(
+			await screen.findByLabelText("First name"),
+			"  Avery  ",
+		);
+		await fireEvent.changeText(screen.getByLabelText("Last name"), "  Chen  ");
+		await fireEvent.press(screen.getByText("Save"));
+
+		await waitFor(() =>
+			expect(mockUpdateProfile).toHaveBeenCalledWith({
+				firstName: "Avery",
+				lastName: "Chen",
+			}),
+		);
+		expect(await screen.findByText("Profile updated.")).toBeTruthy();
+		expect(track).toHaveBeenCalledWith("user_profile_updated", {
+			user_id: "usr_1",
+		});
+	});
+
+	it("blocks profile saves with no first or last name", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Profile"));
+		await screen.findByLabelText("First name");
+		await fireEvent.press(screen.getByText("Save"));
+
+		expect(mockUpdateProfile).not.toHaveBeenCalled();
+		expect(screen.getByText("Provide a first or last name.")).toBeTruthy();
 	});
 
 	it("persists and tracks appearance changes", async () => {
@@ -341,6 +416,61 @@ function TestSafeAreaProvider({ children }: PropsWithChildren) {
 			{children}
 		</SafeAreaProvider>
 	);
+}
+
+function sessionFixture(
+	overrides: Partial<AuthenticatedAppSession["user"]> = {},
+): AuthenticatedAppSession {
+	const lists: ListService = {
+		createList: jest.fn(),
+		deleteList: jest.fn(),
+		getList: jest.fn(),
+		listLists: jest.fn(),
+		renameList: jest.fn(),
+	};
+	const items: ItemService = {
+		addItem: jest.fn(),
+		listItems: jest.fn(),
+		setItemChecked: jest.fn(),
+	};
+	const sync: AuthenticatedAppSessionSync = {
+		getStatus: jest.fn(() => "synced"),
+		requestSync: jest.fn(),
+		subscribe: jest.fn(() => ({ remove() {} })),
+	};
+	const user = {
+		id: "usr_1",
+		email: "avery@example.com",
+		displayName: "Avery User",
+		firstName: null,
+		lastName: null,
+		onboardingCompletedAt: null,
+		...overrides,
+	};
+	return {
+		resourceKey: "session:usr_1",
+		user,
+		activeHousehold: {
+			id: "hh_1",
+			name: "Avery Household",
+		},
+		activeMember: {
+			id: "mem_1",
+			userId: "usr_1",
+			role: "owner",
+			displayName: user.displayName,
+		},
+		households: [],
+		members: [],
+		services: {
+			lists,
+			items,
+			changes: {
+				subscribe: () => ({ remove() {} }),
+			},
+			sync,
+		},
+	};
 }
 
 function setExpoConfig(config: {

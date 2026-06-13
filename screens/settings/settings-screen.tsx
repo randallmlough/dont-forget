@@ -1,9 +1,11 @@
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
+import { AuthTextInput } from "@/components/auth/auth-text-input";
 import type { AppearancePreference } from "./appearance-preference";
 import {
 	type SettingsActions,
@@ -106,6 +108,14 @@ function settingsSections(
 			id: "account",
 			title: "Account",
 			rows: [
+				<ProfileSettingsForm
+					key="profile"
+					profile={state.profile}
+					error={state.profileError}
+					notice={state.profileNotice}
+					updateInFlight={state.profileUpdateInFlight}
+					onSave={actions.updateProfile}
+				/>,
 				<SettingsRow
 					key="household"
 					label="Household settings"
@@ -160,6 +170,115 @@ function settingsSections(
 			],
 		},
 	];
+}
+
+function ProfileSettingsForm({
+	profile,
+	error,
+	notice,
+	updateInFlight,
+	onSave,
+}: {
+	profile: SettingsState["profile"];
+	error: string | null;
+	notice: string | null;
+	updateInFlight: boolean;
+	onSave: (input: {
+		firstName: string | null;
+		lastName: string | null;
+	}) => Promise<boolean>;
+}) {
+	const [expanded, setExpanded] = useState(false);
+	const [firstName, setFirstName] = useState(profile.firstName ?? "");
+	const [lastName, setLastName] = useState(profile.lastName ?? "");
+	const [validationMessage, setValidationMessage] = useState<string | null>(
+		null,
+	);
+
+	async function saveProfile() {
+		const nextFirstName = emptyToNull(firstName);
+		const nextLastName = emptyToNull(lastName);
+		if (!nextFirstName && !nextLastName) {
+			setValidationMessage("Provide a first or last name.");
+			return;
+		}
+		setValidationMessage(null);
+		await onSave({
+			firstName: nextFirstName,
+			lastName: nextLastName,
+		});
+	}
+
+	return (
+		<View style={styles.profileBlock}>
+			<Pressable
+				accessibilityLabel="Profile"
+				accessibilityRole="button"
+				accessibilityState={{ expanded }}
+				onPress={() => {
+					setExpanded((current) => !current);
+				}}
+				style={({ pressed }) => [
+					styles.row,
+					pressed ? styles.rowPressed : undefined,
+				]}
+			>
+				<View style={styles.rowTextGroup}>
+					<Text style={styles.rowTitle}>Profile</Text>
+					<Text style={styles.rowSubtitle}>
+						{profile.displayName ?? profile.email ?? "No name set"}
+					</Text>
+				</View>
+				<Text style={styles.chevron}>{expanded ? "⌃" : "›"}</Text>
+			</Pressable>
+			{expanded ? (
+				<View style={styles.profileForm}>
+					<AuthTextInput
+						accessibilityLabel="First name"
+						autoCapitalize="words"
+						autoComplete="given-name"
+						editable={!updateInFlight}
+						onChangeText={setFirstName}
+						placeholder="First name"
+						returnKeyType="next"
+						value={firstName}
+					/>
+					<AuthTextInput
+						accessibilityLabel="Last name"
+						autoCapitalize="words"
+						autoComplete="family-name"
+						editable={!updateInFlight}
+						onChangeText={setLastName}
+						placeholder="Last name"
+						returnKeyType="done"
+						value={lastName}
+					/>
+					{validationMessage ? (
+						<Text style={styles.formError}>{validationMessage}</Text>
+					) : null}
+					{error ? <Text style={styles.formError}>{error}</Text> : null}
+					{notice ? <Text style={styles.formNotice}>{notice}</Text> : null}
+					<Pressable
+						accessibilityRole="button"
+						accessibilityState={{ disabled: updateInFlight }}
+						disabled={updateInFlight}
+						onPress={() => {
+							void saveProfile();
+						}}
+						style={({ pressed }) => [
+							styles.primaryButton,
+							pressed ? styles.rowPressed : undefined,
+							updateInFlight ? styles.disabledButton : undefined,
+						]}
+					>
+						<Text style={styles.primaryButtonText}>
+							{updateInFlight ? "Saving" : "Save"}
+						</Text>
+					</Pressable>
+				</View>
+			) : null}
+		</View>
+	);
 }
 
 function AppearancePreferenceControl({
@@ -325,6 +444,11 @@ function versionLabel(
 	return `${version} (${appEnv})`;
 }
 
+function emptyToNull(value: string): string | null {
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : null;
+}
+
 const styles = StyleSheet.create((theme) => ({
 	root: {
 		flex: 1,
@@ -407,6 +531,15 @@ const styles = StyleSheet.create((theme) => ({
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
+	profileBlock: {
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.border,
+	},
+	profileForm: {
+		gap: theme.spacing(3),
+		paddingHorizontal: theme.spacing(4),
+		paddingBottom: theme.spacing(4),
+	},
 	preferenceRow: {
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
@@ -445,6 +578,28 @@ const styles = StyleSheet.create((theme) => ({
 	destructiveText: {
 		color: theme.colors.destructive,
 		fontWeight: theme.fontWeights.bold,
+	},
+	formError: {
+		...theme.typography.caption,
+		color: theme.colors.destructive,
+	},
+	formNotice: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
+	},
+	primaryButton: {
+		minHeight: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: theme.radii.control,
+		backgroundColor: theme.colors.text,
+	},
+	primaryButtonText: {
+		...theme.typography.controlLabel,
+		color: theme.colors.inverseText,
+	},
+	disabledButton: {
+		opacity: theme.opacities.disabled,
 	},
 	segmentedControl: {
 		flexDirection: "row",

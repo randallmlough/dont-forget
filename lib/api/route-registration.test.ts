@@ -28,6 +28,7 @@ import {
 	POST as registerPushToken,
 	DELETE as unregisterPushToken,
 } from "@/app/api/users/me/push-tokens+api";
+import { PATCH as updateProfile } from "@/app/api/users/me+api";
 
 jest.mock("@/lib/api/invitations/handlers", () => {
 	throw new Error("Invitation API handler imported during route registration");
@@ -65,5 +66,6 @@ describe("Stage 5 API route wrappers", () => {
 		expect(typeof registerPushToken).toBe("function");
 		expect(typeof unregisterPushToken).toBe("function");
 		expect(typeof sendTestNotification).toBe("function");
+		expect(typeof updateProfile).toBe("function");
 	});
 });

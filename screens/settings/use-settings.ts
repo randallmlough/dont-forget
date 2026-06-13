@@ -34,6 +34,10 @@ export type SettingsState = {
 	appVersion: string;
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
+	profile: SettingsUserProfile;
+	profileNotice: string | null;
+	profileError: string | null;
+	profileUpdateInFlight: boolean;
 	privacyPolicyUrl: string | null;
 	termsUrl: string | null;
 };
@@ -45,14 +49,26 @@ export type SettingsActions = {
 	setAppearancePreference: (preference: AppearancePreference) => Promise<void>;
 	setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 	signOut: () => Promise<void>;
+	updateProfile: (input: {
+		firstName: string | null;
+		lastName: string | null;
+	}) => Promise<boolean>;
 };
 
-export function useSettings(): {
+export type SettingsUserProfile = {
+	id: string | null;
+	email: string | null;
+	displayName: string | null;
+	firstName: string | null;
+	lastName: string | null;
+};
+
+export function useSettings(clientProp?: UsersApiClient): {
 	state: SettingsState;
 	actions: SettingsActions;
 } {
 	const { getToken } = useAuth();
-	const { signOut } = useAuthenticatedAppSession();
+	const { session, signOut } = useAuthenticatedAppSession();
 	const extra = Constants.expoConfig?.extra;
 	const [appearancePreference, setAppearancePreferenceState] =
 		useState<AppearancePreference>("system");
@@ -61,16 +77,30 @@ export function useSettings(): {
 	const [notificationNotice, setNotificationNotice] = useState<string | null>(
 		null,
 	);
+	const [updatedProfile, setUpdatedProfile] =
+		useState<SettingsUserProfile | null>(null);
+	const [profileNotice, setProfileNotice] = useState<string | null>(null);
+	const [profileError, setProfileError] = useState<string | null>(null);
+	const [profileUpdateInFlight, setProfileUpdateInFlight] = useState(false);
+	const privacyPolicyUrl = publicExtraString(extra, "privacyPolicyUrl");
+	const termsUrl = publicExtraString(extra, "termsUrl");
+	const sessionProfile = profileFromSession(session);
+	const profile =
+		updatedProfile?.id === sessionProfile.id ? updatedProfile : sessionProfile;
 	const getTokenRef = useRef(getToken);
+	const usersClientRef = useRef<UsersApiClient | null>(null);
+
 	useEffect(() => {
 		getTokenRef.current = getToken;
 	}, [getToken]);
-	const usersClientRef = useRef<UsersApiClient | null>(null);
-	usersClientRef.current ??= createUsersApiClient({
-		getToken: () => getTokenRef.current(),
-	});
-	const privacyPolicyUrl = publicExtraString(extra, "privacyPolicyUrl");
-	const termsUrl = publicExtraString(extra, "termsUrl");
+
+	function resolveClient(): UsersApiClient {
+		if (clientProp) return clientProp;
+		usersClientRef.current ??= createUsersApiClient({
+			getToken: () => getTokenRef.current(),
+		});
+		return usersClientRef.current;
+	}
 
 	useEffect(() => {
 		track("settings_opened", { source: "home" });
@@ -97,8 +127,7 @@ export function useSettings(): {
 
 	async function setNotificationsEnabled(enabled: boolean) {
 		setNotificationNotice(null);
-		const client = usersClientRef.current;
-		if (!client) return;
+		const client = resolveClient();
 
 		if (!enabled) {
 			await unregisterPushNotifications({
@@ -150,7 +179,29 @@ export function useSettings(): {
 	}
 
 	async function sendTestNotification() {
-		await usersClientRef.current?.sendTestNotification();
+		await resolveClient().sendTestNotification();
+	}
+
+	async function updateProfile(input: {
+		firstName: string | null;
+		lastName: string | null;
+	}): Promise<boolean> {
+		if (profileUpdateInFlight) return false;
+		setProfileUpdateInFlight(true);
+		setProfileNotice(null);
+		setProfileError(null);
+		try {
+			const updatedProfile = await resolveClient().updateProfile(input);
+			setUpdatedProfile(updatedProfile);
+			setProfileNotice("Profile updated.");
+			track("user_profile_updated", { user_id: updatedProfile.id });
+			return true;
+		} catch {
+			setProfileError("Unable to update profile. Please try again.");
+			return false;
+		} finally {
+			setProfileUpdateInFlight(false);
+		}
 	}
 
 	return {
@@ -160,6 +211,10 @@ export function useSettings(): {
 			appVersion: Constants.expoConfig?.version ?? "Unknown",
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
+			profile,
+			profileNotice,
+			profileError,
+			profileUpdateInFlight,
 			privacyPolicyUrl,
 			termsUrl,
 		},
@@ -170,7 +225,20 @@ export function useSettings(): {
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,
+			updateProfile,
 		},
+	};
+}
+
+function profileFromSession(
+	session: ReturnType<typeof useAuthenticatedAppSession>["session"],
+): SettingsUserProfile {
+	return {
+		id: session?.user.id ?? null,
+		email: session?.user.email ?? null,
+		displayName: session?.user.displayName ?? null,
+		firstName: session?.user.firstName ?? null,
+		lastName: session?.user.lastName ?? null,
 	};
 }
 

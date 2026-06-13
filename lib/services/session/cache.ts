@@ -11,6 +11,16 @@ const SIGNED_OUT_LOCAL_DATA_DELETION_KEY =
 	"dont-forget:signed-out-local-household-deletions:v1";
 
 const cachedSessionUserSchema = bootstrapResponseSchema.shape.user.extend({
+	firstName: z
+		.string()
+		.nullable()
+		.optional()
+		.transform((value) => value ?? null),
+	lastName: z
+		.string()
+		.nullable()
+		.optional()
+		.transform((value) => value ?? null),
 	onboardingCompletedAt: z
 		.number()
 		.nullable()
