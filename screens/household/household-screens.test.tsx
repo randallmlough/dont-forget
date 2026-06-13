@@ -934,7 +934,11 @@ describe("HouseholdSwitch", () => {
 		await fireEvent.press(screen.getByText("Set name"));
 		await fireEvent.press(screen.getByText("Create"));
 
-		await waitFor(() => expect(mockReloadSession).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(mockReloadSession).toHaveBeenCalledWith({
+				retireCurrent: true,
+			}),
+		);
 		expect(createHousehold).toHaveBeenCalledWith({ name: "Work Pantry" });
 		expect(mockReplace).toHaveBeenCalledWith("/");
 		expect(track).toHaveBeenCalledWith("household_created", {
@@ -966,7 +970,11 @@ describe("HouseholdSwitch", () => {
 		await render(<Harness />);
 		await fireEvent.press(screen.getByText("Create"));
 
-		await waitFor(() => expect(mockReloadSession).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(mockReloadSession).toHaveBeenCalledWith({
+				retireCurrent: true,
+			}),
+		);
 		expect(createHousehold).toHaveBeenCalledWith({ name: undefined });
 	});
 

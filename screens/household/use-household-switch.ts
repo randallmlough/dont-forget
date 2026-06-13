@@ -29,7 +29,7 @@ type Action =
 
 export function useHouseholdSwitch(
 	session: AuthenticatedAppSession,
-	reloadSession: () => void,
+	reloadSession: (options?: { retireCurrent?: boolean }) => void,
 	clientProp?: HouseholdApiClient,
 ): {
 	state: HouseholdSwitchState;
@@ -164,9 +164,9 @@ function messageFromError(error: unknown): string {
 }
 
 function finishHouseholdChange(
-	reloadSession: () => void,
+	reloadSession: (options?: { retireCurrent?: boolean }) => void,
 	router: ReturnType<typeof useRouter>,
 ): void {
-	reloadSession();
+	reloadSession({ retireCurrent: true });
 	router.replace("/");
 }

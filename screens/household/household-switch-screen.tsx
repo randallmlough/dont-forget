@@ -36,7 +36,7 @@ function HouseholdSwitchContent({
 	reloadSession,
 }: {
 	session: AuthenticatedAppSession;
-	reloadSession: () => void;
+	reloadSession: (options?: { retireCurrent?: boolean }) => void;
 }) {
 	const switchModel = useHouseholdSwitch(session, reloadSession);
 	return (
