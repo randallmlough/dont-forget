@@ -55,7 +55,12 @@ export type HouseholdSettingsActions = {
 };
 
 type Resource =
-	| { status: "loading"; loadKey: string; attempt: number }
+	| {
+			status: "loading";
+			loadKey: string;
+			attempt: number;
+			preservedNotice: string | null;
+	  }
 	| { status: "error"; loadKey: string; attempt: number; message: string }
 	| {
 			status: "ready";
@@ -374,7 +379,7 @@ export function useHouseholdSettings(
 }
 
 function initialResource(loadKey: string): Resource {
-	return { status: "loading", loadKey, attempt: 0 };
+	return { status: "loading", loadKey, attempt: 0, preservedNotice: null };
 }
 
 function reducer(state: Resource, action: Action): Resource {
@@ -383,6 +388,7 @@ function reducer(state: Resource, action: Action): Resource {
 			status: "loading",
 			loadKey: action.loadKey,
 			attempt: action.attempt,
+			preservedNotice: noticePreservedAcrossLoad(state),
 		};
 	}
 
@@ -391,6 +397,7 @@ function reducer(state: Resource, action: Action): Resource {
 			status: "loading",
 			loadKey: action.loadKey,
 			attempt: state.loadKey === action.loadKey ? state.attempt + 1 : 0,
+			preservedNotice: noticePreservedAcrossLoad(state),
 		};
 	}
 
@@ -406,7 +413,7 @@ function reducer(state: Resource, action: Action): Resource {
 			...action,
 			status: "ready",
 			householdName: null,
-			notice: null,
+			notice: state.status === "loading" ? state.preservedNotice : null,
 			operation: { status: "idle" },
 		};
 	}
@@ -456,6 +463,14 @@ function reducer(state: Resource, action: Action): Resource {
 		return { ...state, members: action.members, operation: { status: "idle" } };
 	}
 	return { ...state, joinCode: action.joinCode, operation: { status: "idle" } };
+}
+
+function noticePreservedAcrossLoad(state: Resource): string | null {
+	if (state.status === "ready" && state.notice === "Household renamed.") {
+		return state.notice;
+	}
+	if (state.status === "loading") return state.preservedNotice;
+	return null;
 }
 
 function stateFromResource(

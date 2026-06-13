@@ -5,7 +5,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import type { AuthenticatedAppSessionContextValue } from "@/components/session";
 import { track } from "@/lib/analytics";
@@ -735,6 +735,63 @@ describe("useHouseholdSettings", () => {
 			household_id: "hh_1",
 			renamed_by_user_id: "usr_1",
 		});
+	});
+
+	it("keeps the rename success notice visible after the session metadata reload refreshes settings", async () => {
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			renameHousehold: jest.fn(async () => ({
+				id: "hh_1",
+				name: "Lake House",
+			})),
+		});
+
+		function Harness() {
+			const [session, setSession] = useState(sessionFixture());
+			const freshSession = {
+				...sessionFixture(),
+				activeHousehold: { id: "hh_1", name: "Lake House" },
+				households: [
+					{
+						id: "hh_1",
+						name: "Lake House",
+						role: "owner" as const,
+						isActive: true,
+					},
+				],
+				resourceKey: "authenticated-app-session:2",
+			};
+			const { state, actions } = useHouseholdSettings(session, client, () => {
+				reloadSession();
+				setSession(freshSession);
+			});
+			if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+			return (
+				<>
+					<PressableText
+						label="Rename action"
+						onPress={() => void actions.renameHousehold("Lake House")}
+					/>
+					<TextNode>{`resourceKey:${session.resourceKey}`}</TextNode>
+					<TextNode>{`householdName:${state.householdName ?? "none"}`}</TextNode>
+					{state.notice ? <TextNode>{state.notice}</TextNode> : null}
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await screen.findByText("resourceKey:authenticated-app-session:1");
+
+		await fireEvent.press(screen.getByText("Rename action"));
+
+		await screen.findByText("resourceKey:authenticated-app-session:2");
+		expect(screen.getByText("Household renamed.")).toBeTruthy();
+		expect(screen.getByText("householdName:none")).toBeTruthy();
+		expect(client.renameHousehold).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			name: "Lake House",
+		});
+		expect(reloadSession).toHaveBeenCalledTimes(1);
 	});
 
 	it("retires and reloads the session after leaving without routing Home", async () => {
