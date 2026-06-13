@@ -33,6 +33,7 @@ export type HouseholdSettingsOperation =
 	| { status: "removingMember"; membershipId: string }
 	| { status: "changingRole"; membershipId: string }
 	| { status: "leavingHousehold" }
+	| { status: "deletingHousehold" }
 	| { status: "regeneratingJoinCode" }
 	| { status: "settingJoinCodeEnabled" }
 	| { status: "copyingText" };
@@ -48,6 +49,7 @@ export type HouseholdSettingsActions = {
 		role: "owner" | "member",
 	) => Promise<void>;
 	leaveHousehold: () => Promise<void>;
+	deleteHousehold: () => Promise<void>;
 	regenerateJoinCode: () => Promise<void>;
 	setJoinCodeEnabled: (enabled: boolean) => Promise<void>;
 	copyText: (text: string, notice: string) => Promise<void>;
@@ -291,6 +293,27 @@ export function useHouseholdSettings(
 		}
 	}
 
+	async function deleteHousehold() {
+		const memberCount =
+			resource.status === "ready" && resource.loadKey === loadKey
+				? resource.members.length
+				: session.members.length;
+		if (!startOperation({ status: "deletingHousehold" })) return;
+		try {
+			await resolveClient().deleteHousehold(householdId);
+			track("household_deleted", {
+				household_id: householdId,
+				deleted_by_user_id: session.user.id,
+				member_count: memberCount,
+			});
+			reloadSession({ retireCurrent: true });
+		} catch (error) {
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
+		}
+	}
+
 	async function regenerateJoinCode() {
 		if (!startOperation({ status: "regeneratingJoinCode" })) return;
 		try {
@@ -370,6 +393,7 @@ export function useHouseholdSettings(
 			removeMember,
 			setMemberRole,
 			leaveHousehold,
+			deleteHousehold,
 			regenerateJoinCode,
 			setJoinCodeEnabled,
 			copyText,

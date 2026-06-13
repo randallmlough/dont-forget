@@ -13,6 +13,7 @@ import {
 	userFixture,
 } from "@/db/server/fixtures";
 import { createTestDirectoryDb } from "@/db/server/test";
+import { createMemberService } from "@/lib/services/member/server";
 import {
 	createHouseholdService,
 	HouseholdForbiddenError,
@@ -173,6 +174,100 @@ describe("createHouseholdService", () => {
 				service.renameHousehold({
 					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
 					name: "Lake House",
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdNotFoundError);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("deletes a Household by tombstoning it and removing active Memberships", async () => {
+		const directory = await createTestDirectoryDb();
+		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_100_000);
+
+		try {
+			await seedRenameScenario(directory.db);
+
+			const result = await directory.db.transaction((tx) =>
+				createHouseholdService({ directory: tx }).deleteHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				}),
+			);
+
+			const [storedHousehold] = await directory.db
+				.select()
+				.from(households)
+				.where(eq(households.id, PRIMARY_HOUSEHOLD_SEED.household.id));
+			const storedMemberships = await directory.db
+				.select()
+				.from(memberships)
+				.where(
+					eq(memberships.householdId, PRIMARY_HOUSEHOLD_SEED.household.id),
+				);
+			const associatedHouseholds = await createMemberService({
+				directory: directory.db,
+			}).listAssociatedHouseholds({
+				userId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				activeHouseholdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+			});
+
+			expect(result).toEqual({
+				tursoDbName: PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
+			});
+			expect(storedHousehold?.deletedAt).toBe(1_700_000_100_000);
+			expect(storedMemberships).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
+						removedAt: 1_700_000_100_000,
+					}),
+					expect.objectContaining({
+						id: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
+						removedAt: 1_700_000_100_000,
+					}),
+				]),
+			);
+			expect(associatedHouseholds).toEqual([]);
+		} finally {
+			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("rejects Household deletion by plain Members", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
+
+			await expect(
+				service.deleteHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdForbiddenError);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects already-deleted Households during deletion", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
+			await directory.db
+				.update(households)
+				.set({ deletedAt: PRIMARY_HOUSEHOLD_SEED.now + 1 })
+				.where(eq(households.id, PRIMARY_HOUSEHOLD_SEED.household.id));
+
+			await expect(
+				service.deleteHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
 					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
 				}),
 			).rejects.toBeInstanceOf(HouseholdNotFoundError);

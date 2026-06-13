@@ -1,4 +1,8 @@
 import type { DirectoryDb } from "@/db/server/client";
+import {
+	createTursoPlatformClient,
+	type TursoPlatformClient,
+} from "@/db/server/turso-platform";
 import { runWithSqliteBusyRetry } from "@/db/utils";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
@@ -71,6 +75,7 @@ export type HouseholdApiDeps = ApiHandlerDeps & {
 		directory: HouseholdServiceDirectory,
 	) => HouseholdService;
 	createMemberService?: (directory: MemberServiceDirectory) => MemberService;
+	createTursoPlatformClient?: () => TursoPlatformClient;
 };
 
 export async function handleCreateHousehold(
@@ -180,6 +185,46 @@ export async function handleRenameHousehold(
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Rename Household API failed");
+	}
+}
+
+export async function handleDeleteHousehold(
+	request: Request,
+	{ householdId }: { householdId: string },
+	deps?: HouseholdApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const { tursoDbName } = await runWithSqliteBusyRetry(() =>
+				directory.transaction(async (tx) => {
+					await lockHouseholdLifecycle(householdId, tx);
+					return householdService(tx, deps).deleteHousehold({
+						householdId,
+						requestedByUserId: user.id,
+					});
+				}),
+			);
+
+			let databaseDeleted = true;
+			try {
+				await tursoPlatformClient(deps).deleteDatabase(tursoDbName);
+			} catch (error) {
+				databaseDeleted = false;
+				console.error(
+					"Delete Household database API failed",
+					redactAttributes({
+						error: asError(error),
+						household_id: householdId,
+						turso_db_name: tursoDbName,
+					}),
+				);
+			}
+
+			return jsonResponse({ deleted: true, databaseDeleted });
+		});
+	} catch (error) {
+		return householdErrorResponse(error, "Delete Household API failed");
 	}
 }
 
@@ -452,6 +497,11 @@ function householdService(
 	if (deps?.createHouseholdService)
 		return deps.createHouseholdService(directory);
 	return createHouseholdService({ directory });
+}
+
+function tursoPlatformClient(deps?: HouseholdApiDeps): TursoPlatformClient {
+	if (deps?.createTursoPlatformClient) return deps.createTursoPlatformClient();
+	return createTursoPlatformClient();
 }
 
 function productionJoinCodeServiceDeps(

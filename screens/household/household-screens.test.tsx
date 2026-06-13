@@ -258,6 +258,76 @@ describe("HouseholdSettingsView", () => {
 		expect(screen.queryByText("Rename")).toBeNull();
 	});
 
+	it("shows the Household delete affordance only to Owners", async () => {
+		const memberSession = {
+			...sessionFixture(),
+			activeMember: {
+				id: "mbr_1",
+				userId: "usr_1",
+				role: "member" as const,
+				displayName: "Avery",
+			},
+		};
+		const { rerender } = await render(
+			<HouseholdSettingsView
+				session={memberSession}
+				state={readySettingsState([])}
+				actions={settingsActions()}
+			/>,
+		);
+
+		expect(screen.queryByText("Delete Household")).toBeNull();
+
+		await rerender(
+			<HouseholdSettingsView
+				session={sessionFixture()}
+				state={readySettingsState([])}
+				actions={settingsActions()}
+			/>,
+		);
+
+		expect(screen.getByText("Delete Household")).toBeTruthy();
+	});
+
+	it("confirms before deleting a Household", async () => {
+		const alert = jest
+			.spyOn(Alert, "alert")
+			.mockImplementation(() => undefined);
+		const actions = settingsActions();
+		try {
+			await render(
+				<HouseholdSettingsView
+					session={sessionFixture()}
+					state={readySettingsState([])}
+					actions={actions}
+				/>,
+			);
+
+			await fireEvent.press(screen.getByText("Delete"));
+
+			expect(alert).toHaveBeenCalledWith(
+				"Delete Household",
+				"This permanently deletes the Household and its Lists for every Member. This cannot be undone.",
+				expect.arrayContaining([
+					expect.objectContaining({ text: "Cancel" }),
+					expect.objectContaining({
+						text: "Delete Household",
+						style: "destructive",
+					}),
+				]),
+			);
+			const buttons = alert.mock.calls[0]?.[2];
+			if (!Array.isArray(buttons)) throw new Error("Expected Alert buttons");
+
+			buttons[0]?.onPress?.();
+			expect(actions.deleteHousehold).not.toHaveBeenCalled();
+			buttons[1]?.onPress?.();
+			expect(actions.deleteHousehold).toHaveBeenCalledTimes(1);
+		} finally {
+			alert.mockRestore();
+		}
+	});
+
 	it("confirms before leaving a Household", async () => {
 		const alert = jest
 			.spyOn(Alert, "alert")
@@ -848,6 +918,72 @@ describe("useHouseholdSettings", () => {
 		await screen.findByText("The only Member cannot leave the Household.");
 		expect(reloadSession).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalledWith("/");
+	});
+
+	it("retires and reloads the session after deleting a Household", async () => {
+		const reloadSession = jest.fn();
+		const members = [
+			{
+				membershipId: "mbr_1",
+				userId: "usr_1",
+				role: "owner" as const,
+				displayName: "Avery",
+			},
+			{
+				membershipId: "mbr_2",
+				userId: "usr_2",
+				role: "member" as const,
+				displayName: "Blake",
+			},
+		];
+		const client = readySettingsClient({
+			deleteHousehold: jest.fn(async () => undefined),
+			listMembers: jest.fn(async () => members),
+		});
+
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="delete"
+				reloadSession={reloadSession}
+			/>,
+		);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Delete action"));
+
+		await waitFor(() =>
+			expect(reloadSession).toHaveBeenCalledWith({ retireCurrent: true }),
+		);
+		expect(client.deleteHousehold).toHaveBeenCalledWith("hh_1");
+		expect(track).toHaveBeenCalledWith("household_deleted", {
+			household_id: "hh_1",
+			deleted_by_user_id: "usr_1",
+			member_count: 2,
+		});
+	});
+
+	it("surfaces Household delete failures without retiring", async () => {
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			deleteHousehold: jest.fn(async () => {
+				throw new Error("Only Owners can delete a Household.");
+			}),
+		});
+
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="delete"
+				reloadSession={reloadSession}
+			/>,
+		);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Delete action"));
+
+		await screen.findByText("Only Owners can delete a Household.");
+		expect(reloadSession).not.toHaveBeenCalled();
 	});
 });
 
@@ -1491,6 +1627,7 @@ function settingsActions() {
 		removeMember: jest.fn(),
 		setMemberRole: jest.fn(),
 		leaveHousehold: jest.fn(),
+		deleteHousehold: jest.fn(),
 		regenerateJoinCode: jest.fn(),
 		setJoinCodeEnabled: jest.fn(),
 		copyText: jest.fn(),
@@ -1534,7 +1671,7 @@ function SettingsActionHarness({
 	reloadSession = jest.fn(),
 }: {
 	client: HouseholdApiClient;
-	action: "remove" | "role" | "leave" | "rename";
+	action: "remove" | "role" | "leave" | "rename" | "delete";
 	reloadSession?: (options?: { retireCurrent?: boolean }) => void;
 }) {
 	const { state, actions } = useHouseholdSettings(
@@ -1569,6 +1706,12 @@ function SettingsActionHarness({
 					if (action === "leave") void actions.leaveHousehold();
 				}}
 			/>
+			<PressableText
+				label="Delete action"
+				onPress={() => {
+					if (action === "delete") void actions.deleteHousehold();
+				}}
+			/>
 			<TextNode>{state.operation.status}</TextNode>
 			<TextNode>{`householdName:${state.householdName ?? "none"}`}</TextNode>
 			<TextNode>{`members:${state.members.length}`}</TextNode>
@@ -1582,6 +1725,7 @@ function emptyClient(): HouseholdApiClient {
 	return {
 		createHousehold: jest.fn(),
 		renameHousehold: jest.fn(),
+		deleteHousehold: jest.fn(),
 		listMembers: jest.fn(),
 		removeMember: jest.fn(),
 		setMemberRole: jest.fn(),

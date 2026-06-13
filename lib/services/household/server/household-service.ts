@@ -21,6 +21,8 @@ type DirectoryTransaction = Parameters<
 
 export type HouseholdServiceDirectory = DirectoryDb | DirectoryTransaction;
 
+export type DeleteHouseholdResult = { tursoDbName: string };
+
 export type HouseholdService = {
 	findPendingCreatedHousehold(userId: string): Promise<Household | null>;
 	createOwnedHousehold(input: {
@@ -33,6 +35,10 @@ export type HouseholdService = {
 		name: string;
 		requestedByUserId: string;
 	}): Promise<Household>;
+	deleteHousehold(input: {
+		householdId: string;
+		requestedByUserId: string;
+	}): Promise<DeleteHouseholdResult>;
 	markProvisioningCompleted(householdId: string): Promise<void>;
 	activeMembershipFrom(
 		household: Household,
@@ -78,6 +84,9 @@ export function createHouseholdService(
 		},
 		renameHousehold(input) {
 			return renameHousehold(input, deps.directory);
+		},
+		deleteHousehold(input) {
+			return deleteHousehold(input, deps.directory);
 		},
 		async markProvisioningCompleted(householdId) {
 			await deps.directory
@@ -179,6 +188,42 @@ async function renameHousehold(
 		);
 
 	return { ...household, name };
+}
+
+async function deleteHousehold(
+	input: { householdId: string; requestedByUserId: string },
+	directory: HouseholdServiceDirectory,
+): Promise<DeleteHouseholdResult> {
+	const household = await findActiveHousehold(input.householdId, directory);
+	if (!household) throw new HouseholdNotFoundError();
+
+	const requester = await findActiveOwnerMembership(
+		{
+			householdId: input.householdId,
+			userId: input.requestedByUserId,
+		},
+		directory,
+	);
+	if (!requester) throw new HouseholdForbiddenError();
+
+	const now = Date.now();
+	await directory
+		.update(households)
+		.set({ deletedAt: now })
+		.where(
+			and(eq(households.id, input.householdId), isNull(households.deletedAt)),
+		);
+	await directory
+		.update(memberships)
+		.set({ removedAt: now })
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				isNull(memberships.removedAt),
+			),
+		);
+
+	return { tursoDbName: household.tursoDbName };
 }
 
 function normalizeHouseholdName(name: string): string {

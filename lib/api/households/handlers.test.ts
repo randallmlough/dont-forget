@@ -32,6 +32,7 @@ import {
 	type HouseholdApiDeps,
 	handleChangeMemberRole,
 	handleCreateHousehold,
+	handleDeleteHousehold,
 	handleGetJoinCode,
 	handleJoinByCode,
 	handleLeaveHousehold,
@@ -393,6 +394,160 @@ describe("Household API handlers", () => {
 			});
 			expect(stored?.name).toBe("Lake House");
 		} finally {
+			await harness.close();
+		}
+	});
+
+	it("requires auth for Household deletion", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleDeleteHousehold(
+				createApiRequest({ method: "DELETE" }),
+				{ householdId: "hh_avery" },
+				{
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError("Invalid Clerk session token");
+					},
+				},
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Invalid Clerk session token" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("deletes a Household and tears down its Turso database after the directory transaction", async () => {
+		const harness = await primaryHarness();
+		const deleteDatabase = jest.fn(async () => undefined);
+		const dateNow = jest.spyOn(Date, "now").mockReturnValue(now);
+		try {
+			const response = await handleDeleteHousehold(
+				createApiRequest({ method: "DELETE" }),
+				{ householdId: harness.scenario.household.id },
+				{
+					...householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+					...tursoPlatformDeps(deleteDatabase),
+				},
+			);
+			const [storedHousehold] = await harness.directory.db
+				.select()
+				.from(households)
+				.where(eq(households.id, harness.scenario.household.id));
+			const storedMemberships = await harness.directory.db
+				.select()
+				.from(memberships)
+				.where(eq(memberships.householdId, harness.scenario.household.id));
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 200,
+				body: { deleted: true, databaseDeleted: true },
+			});
+			expect(storedHousehold?.deletedAt).toBe(now);
+			expect(storedMemberships).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: harness.scenario.members.avery.id,
+						removedAt: now,
+					}),
+					expect.objectContaining({
+						id: harness.scenario.members.blake.id,
+						removedAt: now,
+					}),
+				]),
+			);
+			expect(deleteDatabase).toHaveBeenCalledWith(
+				harness.scenario.household.tursoDbName,
+			);
+		} finally {
+			dateNow.mockRestore();
+			await harness.close();
+		}
+	});
+
+	it("rejects Household deletion by plain Members and deleted Households", async () => {
+		const harness = await primaryHarness();
+		try {
+			const plainMember = await readJsonResponse(
+				await handleDeleteHousehold(
+					createApiRequest({ method: "DELETE" }),
+					{ householdId: harness.scenario.household.id },
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.blake.clerkUserId,
+					),
+				),
+			);
+
+			await harness.directory.db
+				.update(households)
+				.set({ deletedAt: now })
+				.where(eq(households.id, harness.scenario.household.id));
+			const deletedHousehold = await readJsonResponse(
+				await handleDeleteHousehold(
+					createApiRequest({ method: "DELETE" }),
+					{ householdId: harness.scenario.household.id },
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+				),
+			);
+
+			expect(plainMember).toMatchObject({
+				status: 403,
+				body: { error: "Forbidden" },
+			});
+			expect(deletedHousehold).toMatchObject({
+				status: 404,
+				body: { error: "Household not found." },
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("keeps Household deletion successful when Turso teardown fails", async () => {
+		const harness = await primaryHarness();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const deleteDatabase = jest.fn(async () => {
+			throw new Error(
+				"boom https://db.example.com?authToken=secret-token-value user@example.com",
+			);
+		});
+		try {
+			const response = await handleDeleteHousehold(
+				createApiRequest({ method: "DELETE" }),
+				{ householdId: harness.scenario.household.id },
+				{
+					...householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+					...tursoPlatformDeps(deleteDatabase),
+				},
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 200,
+				body: { deleted: true, databaseDeleted: false },
+			});
+			expect(deleteDatabase).toHaveBeenCalledWith(
+				harness.scenario.household.tursoDbName,
+			);
+			const loggedAttributes = JSON.stringify(errorSpy.mock.calls[0]?.[1]);
+			expect(loggedAttributes).not.toContain("secret-token-value");
+			expect(loggedAttributes).not.toContain("user@example.com");
+			expect(loggedAttributes).toContain("error_message");
+		} finally {
+			errorSpy.mockRestore();
 			await harness.close();
 		}
 	});
@@ -975,6 +1130,25 @@ function householdDeps(
 				generateCode: async () => "STAGE500",
 				analytics: { track: jest.fn() },
 			}),
+	};
+}
+
+function tursoPlatformDeps(
+	deleteDatabase: (databaseName: string) => Promise<void>,
+): Pick<HouseholdApiDeps, "createTursoPlatformClient"> {
+	return {
+		createTursoPlatformClient: () => ({
+			ensureDatabase: jest.fn(async () => ({
+				name: "unused",
+				url: "libsql://unused",
+			})),
+			getDatabase: jest.fn(async () => ({
+				name: "unused",
+				url: "libsql://unused",
+			})),
+			createDatabaseAuthToken: jest.fn(async () => "unused-token"),
+			deleteDatabase,
+		}),
 	};
 }
 
