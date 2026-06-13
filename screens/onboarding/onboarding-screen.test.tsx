@@ -1,4 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+	fireEvent,
+	render,
+	screen,
+	within,
+} from "@testing-library/react-native";
 import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
 import { createUsersApiClient } from "@/lib/client-api/users";
@@ -67,7 +72,9 @@ describe("OnboardingScreen", () => {
 	it("skips onboarding, completes best effort, and navigates Home", async () => {
 		await render(<OnboardingScreen />);
 
-		await fireEvent.press(screen.getByText("Skip"));
+		const footerActions = screen.getByTestId("onboarding-footer-actions");
+
+		await fireEvent.press(within(footerActions).getByText("Skip"));
 
 		expect(mockMarkOnboardingComplete).toHaveBeenCalledTimes(1);
 		expect(mockCompleteOnboarding).toHaveBeenCalledTimes(1);
@@ -76,6 +83,14 @@ describe("OnboardingScreen", () => {
 			last_step: "welcome",
 		});
 		expect(mockReplace).toHaveBeenCalledWith("/");
+	});
+
+	it("keeps Skip in the footer action row", async () => {
+		await render(<OnboardingScreen />);
+
+		const footerActions = screen.getByTestId("onboarding-footer-actions");
+
+		expect(within(footerActions).getByText("Skip")).toBeTruthy();
 	});
 
 	it("finishes onboarding from the final step", async () => {

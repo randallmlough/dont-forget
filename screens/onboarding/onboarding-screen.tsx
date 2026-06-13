@@ -28,16 +28,6 @@ export function OnboardingScreenView({
 					<Text style={styles.headerLabel}>Onboarding</Text>
 					<Text style={styles.headerTitle}>Set up your Household</Text>
 				</View>
-				<Pressable
-					accessibilityRole="button"
-					onPress={actions.skip}
-					style={({ pressed }) => [
-						styles.secondaryButton,
-						pressed ? styles.buttonPressed : undefined,
-					]}
-				>
-					<Text style={styles.secondaryButtonLabel}>Skip</Text>
-				</Pressable>
 			</View>
 
 			<View style={styles.content}>
@@ -64,7 +54,7 @@ export function OnboardingScreenView({
 						/>
 					))}
 				</View>
-				<View style={styles.actions}>
+				<View style={styles.actions} testID="onboarding-footer-actions">
 					<Pressable
 						accessibilityRole="button"
 						accessibilityState={{ disabled: state.isFirstStep }}
@@ -77,6 +67,16 @@ export function OnboardingScreenView({
 						]}
 					>
 						<Text style={styles.secondaryButtonLabel}>Back</Text>
+					</Pressable>
+					<Pressable
+						accessibilityRole="button"
+						onPress={actions.skip}
+						style={({ pressed }) => [
+							styles.secondaryButton,
+							pressed ? styles.buttonPressed : undefined,
+						]}
+					>
+						<Text style={styles.secondaryButtonLabel}>Skip</Text>
 					</Pressable>
 					<Pressable
 						accessibilityRole="button"
