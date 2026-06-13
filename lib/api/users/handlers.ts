@@ -7,6 +7,10 @@ import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import {
+	type AccountDeletionService,
+	createAccountDeletionService,
+} from "@/lib/services/account/server";
+import {
 	createPushTokenService,
 	type PushMessage,
 	type PushTokenService,
@@ -45,6 +49,9 @@ export type UpdateClerkUserName = (input: {
 
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
+	createAccountDeletionService?: (
+		directory: DirectoryDb,
+	) => AccountDeletionService;
 	createPushTokenService?: (directory: DirectoryDb) => PushTokenService;
 	sendPushNotifications?: (
 		messages: PushMessage[],
@@ -76,6 +83,29 @@ export async function handleUpdateProfile(
 		});
 	} catch (error) {
 		return usersErrorResponse(error, "Update User profile API failed");
+	}
+}
+
+export async function handleDeleteAccount(
+	request: Request,
+	deps?: UsersApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const summary = await accountDeletionService(
+				directory,
+				deps,
+			).deleteAccount({
+				user,
+			});
+			return jsonResponse({
+				deleted: true,
+				deletedHouseholdCount: summary.deletedHouseholdIds.length,
+			});
+		});
+	} catch (error) {
+		return usersErrorResponse(error, "Delete account API failed");
 	}
 }
 
@@ -235,6 +265,22 @@ function pushTokenService(
 		deps?.createPushTokenService?.(directory) ??
 		createPushTokenService({ directory })
 	);
+}
+
+function accountDeletionService(
+	directory: DirectoryDb,
+	deps: UsersApiDeps | undefined,
+): AccountDeletionService {
+	if (deps?.createAccountDeletionService) {
+		return deps.createAccountDeletionService(directory);
+	}
+	return createAccountDeletionService({
+		directory,
+		deleteClerkUser: async (clerkUserId) => {
+			const { deleteClerkUser } = await import("@/lib/server/auth");
+			await deleteClerkUser(clerkUserId);
+		},
+	});
 }
 
 function expoPushTokenField(body: Record<string, unknown>): string {

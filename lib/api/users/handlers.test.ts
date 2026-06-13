@@ -7,6 +7,7 @@ import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
 	handleCompleteOnboarding,
+	handleDeleteAccount,
 	handleRegisterPushToken,
 	handleSendTestNotification,
 	handleUnregisterPushToken,
@@ -25,9 +26,81 @@ const testUser = {
 	onboardingCompletedAt: null,
 	createdAt: 1,
 	updatedAt: 1,
+	deletedAt: null,
 };
 
 describe("Users API handlers", () => {
+	it("requires auth for account deletion", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleDeleteAccount(new Request("http://test"), {
+				directory: directory.db,
+				authenticate: async () => {
+					throw new ApiUnauthorizedError("Invalid Clerk session token");
+				},
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Invalid Clerk session token" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("deletes the authenticated User account", async () => {
+		const directory = await createTestDirectoryDb();
+		const deleteAccount = jest.fn(async () => ({
+			leftHouseholdIds: ["hh_shared"],
+			deletedHouseholdIds: ["hh_solo"],
+			databasesNotDeleted: [],
+		}));
+		try {
+			const response = await handleDeleteAccount(new Request("http://test"), {
+				directory: directory.db,
+				authenticate: async () => testUser,
+				createAccountDeletionService: () => ({ deleteAccount }),
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 200,
+				body: { deleted: true, deletedHouseholdCount: 1 },
+			});
+			expect(deleteAccount).toHaveBeenCalledWith({ user: testUser });
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("returns a generic server failure when account deletion fails", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const response = await handleDeleteAccount(new Request("http://test"), {
+				directory: directory.db,
+				authenticate: async () => testUser,
+				createAccountDeletionService: () => ({
+					deleteAccount: async () => {
+						throw new Error("Clerk unavailable");
+					},
+				}),
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 500,
+				body: { error: "Something went wrong." },
+			});
+			expect(errorSpy).toHaveBeenCalledWith(
+				"Delete account API failed",
+				expect.objectContaining({ error_message: "Clerk unavailable" }),
+			);
+		} finally {
+			errorSpy.mockRestore();
+			await directory.close();
+		}
+	});
+
 	it("requires auth for profile updates", async () => {
 		const directory = await createTestDirectoryDb();
 		try {

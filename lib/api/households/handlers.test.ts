@@ -608,6 +608,7 @@ describe("Household API handlers", () => {
 					onboardingCompletedAt: null,
 					createdAt: now,
 					updatedAt: now,
+					deletedAt: null,
 				}),
 				createMemberService: () =>
 					({

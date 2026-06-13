@@ -1,6 +1,7 @@
 import { createClerkClient } from "@clerk/backend";
 import {
 	bearerToken,
+	deleteClerkUser,
 	UnauthorizedError,
 	updateClerkUserName,
 } from "@/lib/server/auth";
@@ -8,6 +9,13 @@ import {
 jest.mock("@clerk/backend", () => ({
 	createClerkClient: jest.fn(),
 	verifyToken: jest.fn(),
+}));
+
+jest.mock("@clerk/backend/errors", () => ({
+	isClerkAPIResponseError: (error: unknown) =>
+		typeof error === "object" &&
+		error !== null &&
+		"isClerkAPIResponseError" in error,
 }));
 
 jest.mock("@/lib/env", () => ({
@@ -84,6 +92,43 @@ describe("updateClerkUserName", () => {
 	});
 });
 
+describe("deleteClerkUser", () => {
+	it("deletes the Clerk User", async () => {
+		const deleteUser = jest.fn(async () => clerkUser({}));
+		jest
+			.mocked(createClerkClient)
+			.mockReturnValue(clerkClientWithUsers({ deleteUser }));
+
+		await expect(deleteClerkUser("user_123")).resolves.toBeUndefined();
+
+		expect(deleteUser).toHaveBeenCalledWith("user_123");
+	});
+
+	it("treats Clerk not found as already deleted", async () => {
+		const deleteUser = jest.fn(async () => {
+			throw clerkApiError(404);
+		});
+		jest
+			.mocked(createClerkClient)
+			.mockReturnValue(clerkClientWithUsers({ deleteUser }));
+
+		await expect(deleteClerkUser("user_123")).resolves.toBeUndefined();
+	});
+
+	it("surfaces non-not-found Clerk delete failures", async () => {
+		const deleteUser = jest.fn(async () => {
+			throw clerkApiError(500);
+		});
+		jest
+			.mocked(createClerkClient)
+			.mockReturnValue(clerkClientWithUsers({ deleteUser }));
+
+		await expect(deleteClerkUser("user_123")).rejects.toMatchObject({
+			status: 500,
+		});
+	});
+});
+
 function clerkClientWithUpdateUser(
 	updateUser: jest.Mock,
 ): ReturnType<typeof createClerkClient> {
@@ -94,14 +139,21 @@ function clerkClientWithUpdateUser(
 	} as unknown as ReturnType<typeof createClerkClient>;
 }
 
+function clerkClientWithUsers(users: {
+	deleteUser?: jest.Mock;
+	updateUser?: jest.Mock;
+}): ReturnType<typeof createClerkClient> {
+	return { users } as unknown as ReturnType<typeof createClerkClient>;
+}
+
 function clerkUser({
-	firstName,
-	lastName,
-	emailAddress,
+	firstName = null,
+	lastName = null,
+	emailAddress = "avery@example.com",
 }: {
-	firstName: string | null;
-	lastName: string | null;
-	emailAddress: string;
+	firstName?: string | null;
+	lastName?: string | null;
+	emailAddress?: string;
 }) {
 	return {
 		id: "user_123",
@@ -110,4 +162,14 @@ function clerkUser({
 		primaryEmailAddressId: "email_123",
 		emailAddresses: [{ id: "email_123", emailAddress }],
 	};
+}
+
+function clerkApiError(status: number): Error & {
+	isClerkAPIResponseError: true;
+	status: number;
+} {
+	return Object.assign(new Error(`Clerk ${status}`), {
+		isClerkAPIResponseError: true as const,
+		status,
+	});
 }

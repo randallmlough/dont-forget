@@ -16,6 +16,11 @@ const updateProfileResponseSchema = z.object({
 	user: userProfileSchema,
 });
 
+const deleteAccountResponseSchema = z.object({
+	deleted: z.literal(true),
+	deletedHouseholdCount: z.number(),
+});
+
 const testNotificationResponseSchema = z.object({
 	sent: z.number(),
 	disabled: z.number(),
@@ -25,6 +30,7 @@ export type UserProfile = z.infer<typeof userProfileSchema>;
 
 export type UsersApiClient = {
 	completeOnboarding(): Promise<void>;
+	deleteAccount(): Promise<{ deletedHouseholdCount: number }>;
 	registerPushToken(input: {
 		expoPushToken: string;
 		deviceName?: string | null;
@@ -56,6 +62,13 @@ export function createUsersApiClient({
 			await authed("/api/users/me/onboarding", {
 				method: "POST",
 			});
+		},
+		async deleteAccount() {
+			const payload = await authed("/api/users/me", {
+				method: "DELETE",
+			});
+			const result = deleteAccountResponseSchema.parse(payload);
+			return { deletedHouseholdCount: result.deletedHouseholdCount };
 		},
 		async registerPushToken(input) {
 			await authed("/api/users/me/push-tokens", {

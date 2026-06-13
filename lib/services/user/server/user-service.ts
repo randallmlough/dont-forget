@@ -11,6 +11,7 @@ type DirectoryTransaction = Parameters<
 export type UserServiceDirectory = DirectoryDb | DirectoryTransaction;
 
 export type UserService = {
+	anonymizeUser(userId: string): Promise<void>;
 	upsertUser(profile: ServerUserProfile): Promise<User>;
 };
 
@@ -20,10 +21,33 @@ export type UserServiceDeps = {
 
 export function createUserService(deps: UserServiceDeps): UserService {
 	return {
+		anonymizeUser(userId) {
+			return anonymizeUser(userId, deps.directory);
+		},
 		upsertUser(profile) {
 			return upsertUser(profile, deps.directory);
 		},
 	};
+}
+
+async function anonymizeUser(
+	userId: string,
+	directory: UserServiceDirectory,
+): Promise<void> {
+	const now = Date.now();
+	await directory
+		.update(users)
+		.set({
+			email: null,
+			firstName: null,
+			lastName: null,
+			displayName: null,
+			clerkUserId: `deleted_${userId}`,
+			activeHouseholdId: null,
+			updatedAt: now,
+			deletedAt: now,
+		})
+		.where(eq(users.id, userId));
 }
 
 async function upsertUser(

@@ -34,6 +34,8 @@ export type SettingsState = {
 	appVersion: string;
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
+	accountDeletionError: string | null;
+	accountDeletionInFlight: boolean;
 	profile: SettingsUserProfile;
 	profileNotice: string | null;
 	profileError: string | null;
@@ -46,6 +48,7 @@ export type SettingsActions = {
 	openPrivacyPolicy: () => Promise<void>;
 	sendTestNotification: () => Promise<void>;
 	openTerms: () => Promise<void>;
+	deleteAccount: () => Promise<boolean>;
 	setAppearancePreference: (preference: AppearancePreference) => Promise<void>;
 	setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 	signOut: () => Promise<void>;
@@ -77,6 +80,10 @@ export function useSettings(clientProp?: UsersApiClient): {
 	const [notificationNotice, setNotificationNotice] = useState<string | null>(
 		null,
 	);
+	const [accountDeletionError, setAccountDeletionError] = useState<
+		string | null
+	>(null);
+	const [accountDeletionInFlight, setAccountDeletionInFlight] = useState(false);
 	const [updatedProfile, setUpdatedProfile] =
 		useState<SettingsUserProfile | null>(null);
 	const [profileNotice, setProfileNotice] = useState<string | null>(null);
@@ -182,6 +189,30 @@ export function useSettings(clientProp?: UsersApiClient): {
 		await resolveClient().sendTestNotification();
 	}
 
+	async function deleteAccount(): Promise<boolean> {
+		if (accountDeletionInFlight) return false;
+		if (!profile.id) {
+			setAccountDeletionError("Account deletion failed. Please try again.");
+			return false;
+		}
+		setAccountDeletionInFlight(true);
+		setAccountDeletionError(null);
+		try {
+			const result = await resolveClient().deleteAccount();
+			track("account_deleted", {
+				user_id: profile.id,
+				deleted_household_count: result.deletedHouseholdCount,
+			});
+			await signOut();
+			return true;
+		} catch {
+			setAccountDeletionError("Account deletion failed. Please try again.");
+			return false;
+		} finally {
+			setAccountDeletionInFlight(false);
+		}
+	}
+
 	async function updateProfile(input: {
 		firstName: string | null;
 		lastName: string | null;
@@ -211,6 +242,8 @@ export function useSettings(clientProp?: UsersApiClient): {
 			appVersion: Constants.expoConfig?.version ?? "Unknown",
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
+			accountDeletionError,
+			accountDeletionInFlight,
 			profile,
 			profileNotice,
 			profileError,
@@ -222,6 +255,7 @@ export function useSettings(clientProp?: UsersApiClient): {
 			openPrivacyPolicy: () => openConfiguredUrl(privacyPolicyUrl),
 			sendTestNotification,
 			openTerms: () => openConfiguredUrl(termsUrl),
+			deleteAccount,
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,
