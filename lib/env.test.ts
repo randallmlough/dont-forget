@@ -101,6 +101,20 @@ describe("environment config", () => {
 		).toBeUndefined();
 	});
 
+	it("reads optional public legal URLs", () => {
+		expect(
+			readPublicExpoConfig({
+				APP_ENV: "test",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+				EXPO_PUBLIC_PRIVACY_POLICY_URL: "https://example.com/privacy",
+				EXPO_PUBLIC_TERMS_URL: "https://example.com/terms",
+			}),
+		).toMatchObject({
+			privacyPolicyUrl: "https://example.com/privacy",
+			termsUrl: "https://example.com/terms",
+		});
+	});
+
 	it("requires confirmation for production operations", () => {
 		expect(() => assertProductionConfirmation("production", {})).toThrow(
 			"CONFIRM_APP_ENV=production",

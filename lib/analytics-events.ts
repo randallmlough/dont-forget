@@ -122,6 +122,10 @@ export type EventMap = {
 		household_id: string;
 		user_id: string;
 	};
+	settings_opened: { source: "home" };
+	appearance_preference_changed: {
+		preference: "system" | "light" | "dark";
+	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };
 	user_email_verified: Record<string, never>;

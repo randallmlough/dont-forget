@@ -15,12 +15,12 @@ export type HomeScreenViewProps = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
 	onRetry?: () => void;
-	onSignOut?: () => void;
+	onOpenSettings?: () => void;
 	onOpenHouseholdSettings?: () => void;
 };
 
 export default function HomeScreen() {
-	const { state, session, retry, signOut } = useAuthenticatedAppSession();
+	const { state, session, retry } = useAuthenticatedAppSession();
 	const router = useRouter();
 
 	return (
@@ -28,7 +28,7 @@ export default function HomeScreen() {
 			state={state}
 			session={session}
 			onRetry={retry}
-			onSignOut={signOut}
+			onOpenSettings={() => router.push("/settings")}
 			onOpenHouseholdSettings={() => router.push("/household/settings")}
 		/>
 	);
@@ -38,7 +38,7 @@ export function HomeScreenView({
 	state,
 	session,
 	onRetry,
-	onSignOut,
+	onOpenSettings,
 	onOpenHouseholdSettings,
 }: HomeScreenViewProps) {
 	const displayMemberName = homeSessionMemberName(session);
@@ -65,16 +65,16 @@ export function HomeScreenView({
 							<Text style={styles.settingsLabel}>Household</Text>
 						</Pressable>
 					) : null}
-					{onSignOut ? (
+					{onOpenSettings ? (
 						<Pressable
 							accessibilityRole="button"
-							onPress={onSignOut}
+							onPress={onOpenSettings}
 							style={({ pressed }) => [
-								styles.signOutButton,
+								styles.settingsButton,
 								pressed ? styles.buttonPressed : undefined,
 							]}
 						>
-							<Text style={styles.signOutLabel}>Sign out</Text>
+							<Text style={styles.settingsLabel}>Settings</Text>
 						</Pressable>
 					) : null}
 				</View>
@@ -132,15 +132,6 @@ const styles = StyleSheet.create((theme) => ({
 		fontSize: theme.fontSizes.subheadline,
 		fontWeight: theme.fontWeights.bold,
 	},
-	signOutButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.destructive,
-	},
 	settingsButton: {
 		minHeight: theme.spacing(11),
 		paddingHorizontal: theme.spacing(3),
@@ -158,11 +149,6 @@ const styles = StyleSheet.create((theme) => ({
 	settingsLabel: {
 		...theme.typography.callout,
 		color: theme.colors.text,
-		fontWeight: theme.fontWeights.bold,
-	},
-	signOutLabel: {
-		...theme.typography.callout,
-		color: theme.colors.inverseText,
 		fontWeight: theme.fontWeights.bold,
 	},
 }));
