@@ -35,8 +35,23 @@ export function SettingsScreenView({
 	return (
 		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
 			<View style={styles.header}>
-				<Text style={styles.headerLabel}>Settings</Text>
-				<Text style={styles.headerTitle}>App settings</Text>
+				<View style={styles.headerTextGroup}>
+					<Text style={styles.headerLabel}>Settings</Text>
+					<Text style={styles.headerTitle} numberOfLines={1}>
+						App settings
+					</Text>
+				</View>
+				<Pressable
+					accessibilityLabel="Back to Home"
+					accessibilityRole="button"
+					onPress={() => router.replace("/")}
+					style={({ pressed }) => [
+						styles.headerButton,
+						pressed ? styles.headerButtonPressed : undefined,
+					]}
+				>
+					<Text style={styles.headerButtonLabel}>Home</Text>
+				</Pressable>
 			</View>
 			<ScrollView contentContainerStyle={styles.content}>
 				{sections.map((section) => (
@@ -295,12 +310,20 @@ const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.background,
 	},
 	header: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(5),
 		paddingTop: theme.spacing(4.5),
 		paddingBottom: theme.spacing(3),
 		backgroundColor: theme.colors.surface,
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
+	},
+	headerTextGroup: {
+		flex: 1,
+		minWidth: 0,
 	},
 	headerLabel: {
 		...theme.typography.captionStrong,
@@ -309,6 +332,25 @@ const styles = StyleSheet.create((theme) => ({
 	headerTitle: {
 		...theme.typography.headline,
 		color: theme.colors.text,
+	},
+	headerButton: {
+		minHeight: theme.spacing(11),
+		paddingHorizontal: theme.spacing(3),
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
+		alignItems: "center",
+		justifyContent: "center",
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		backgroundColor: theme.colors.surface,
+	},
+	headerButtonPressed: {
+		opacity: theme.opacities.pressed,
+	},
+	headerButtonLabel: {
+		...theme.typography.callout,
+		color: theme.colors.text,
+		fontWeight: theme.fontWeights.bold,
 	},
 	content: {
 		padding: theme.spacing(4),

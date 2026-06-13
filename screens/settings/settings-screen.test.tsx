@@ -23,6 +23,7 @@ import {
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
+const mockRouterReplace = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
 const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
@@ -44,7 +45,7 @@ jest.mock("expo-constants", () => ({
 }));
 
 jest.mock("expo-router", () => ({
-	useRouter: () => ({ push: mockRouterPush }),
+	useRouter: () => ({ push: mockRouterPush, replace: mockRouterReplace }),
 }));
 
 jest.mock("@clerk/clerk-expo", () => ({
@@ -74,6 +75,7 @@ jest.mock("@/lib/push/registration", () => ({
 
 beforeEach(() => {
 	mockRouterPush.mockReset();
+	mockRouterReplace.mockReset();
 	mockSignOut.mockClear();
 	mockSendTestNotification.mockClear();
 	jest.mocked(createUsersApiClient).mockClear();
@@ -161,6 +163,16 @@ describe("SettingsScreen", () => {
 		await fireEvent.press(screen.getByText("Household settings"));
 
 		expect(mockRouterPush).toHaveBeenCalledWith("/household/settings");
+	});
+
+	it("shows a Home control that returns to Home", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		expect(screen.getByText("Home")).toBeTruthy();
+
+		await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
+
+		expect(mockRouterReplace).toHaveBeenCalledWith("/");
 	});
 
 	it("invokes authenticated app session sign-out", async () => {
