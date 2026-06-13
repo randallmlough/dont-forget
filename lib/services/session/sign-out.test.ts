@@ -16,6 +16,10 @@ import {
 	createAuthenticatedAppSessionSignOut,
 } from "./sign-out";
 
+jest.mock("@/lib/sentry", () => ({
+	clearSentryUser: jest.fn(),
+}));
+
 describe("createAuthenticatedAppSessionSignOut", () => {
 	it("clears the signed-out User's Current List selections and leaves other Users' selections untouched", async () => {
 		const selectionStore = createCurrentListSelectionStore({
@@ -158,6 +162,12 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		analytics.reset.mockImplementation(() => {
 			order.push("reset");
 		});
+		const { clearSentryUser } = jest.requireMock("@/lib/sentry") as {
+			clearSentryUser: jest.Mock;
+		};
+		clearSentryUser.mockImplementation(() => {
+			order.push("clearSentryUser");
+		});
 		const controller = controllerFixture(readySnapshot("usr_avery"));
 		const dispose = jest.mocked(controller.dispose);
 		const baseDispose = dispose.getMockImplementation();
@@ -190,6 +200,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(order).toEqual([
 			"track",
 			"reset",
+			"clearSentryUser",
 			"dispose",
 			"clearSignedOutSessionData",
 			"clearCurrentListSelections",

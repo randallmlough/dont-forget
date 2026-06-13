@@ -3,6 +3,7 @@ import { asError } from "@/lib/errors";
 import { clearUserCurrentListSelections } from "@/lib/local-storage/current-list-selection";
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
+import { clearSentryUser } from "@/lib/sentry";
 import type { ServiceResetAnalytics } from "@/lib/services/analytics";
 import { clearSignedOutSessionData as defaultClearSignedOutSessionData } from "./cache";
 import type {
@@ -64,6 +65,7 @@ export function createAuthenticatedAppSessionSignOut({
 
 		analytics.track("user_signed_out", {});
 		analytics.reset();
+		clearSentryUser();
 
 		let disposal: AuthenticatedAppSessionDisposal = {
 			householdIdsForLocalDataDeletion: [],

@@ -37,6 +37,7 @@
 		"@react-native-community/netinfo": "^12.0.1",
 		"@react-native-community/slider": "^5.2.0",
 		"@react-native/normalize-colors": "0.85.3",
+		"@sentry/react-native": "~7.11.0",
 		"@storybook/addon-ondevice-actions": "^10.4.1",
 		"@storybook/addon-ondevice-controls": "^10.4.1",
 		"@storybook/react-native": "^10.4.1",

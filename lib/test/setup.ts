@@ -119,6 +119,15 @@ jest.mock("posthog-react-native", () => {
 	};
 });
 
+jest.mock("@sentry/react-native", () => ({
+	addBreadcrumb: jest.fn(),
+	captureException: jest.fn(),
+	captureMessage: jest.fn(),
+	init: jest.fn(),
+	setUser: jest.fn(),
+	wrap: jest.fn((component) => component),
+}));
+
 beforeEach(() => {
 	jest.clearAllMocks();
 	resetClerkMocks();

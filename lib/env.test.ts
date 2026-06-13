@@ -149,6 +149,26 @@ describe("environment config", () => {
 		).toThrow("EXPO_PUBLIC_TERMS_URL must use https://");
 	});
 
+	it("reads an optional public Sentry DSN", () => {
+		expect(
+			readPublicExpoConfig({
+				APP_ENV: "test",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+				EXPO_PUBLIC_SENTRY_DSN: "https://public@example.ingest.sentry.io/1",
+			}).sentryDsn,
+		).toBe("https://public@example.ingest.sentry.io/1");
+	});
+
+	it("treats a blank public Sentry DSN as omitted", () => {
+		expect(
+			readPublicExpoConfig({
+				APP_ENV: "test",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+				EXPO_PUBLIC_SENTRY_DSN: " ",
+			}).sentryDsn,
+		).toBeUndefined();
+	});
+
 	it("requires confirmation for production operations", () => {
 		expect(() => assertProductionConfirmation("production", {})).toThrow(
 			"CONFIRM_APP_ENV=production",

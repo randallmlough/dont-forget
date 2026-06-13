@@ -35,6 +35,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			apiBaseUrl: publicConfig.apiBaseUrl,
 			posthogProjectToken: publicConfig.posthogProjectToken,
 			posthogHost: publicConfig.posthogHost,
+			sentryDsn: publicConfig.sentryDsn,
 			// EXPO_PUBLIC_PRIVACY_POLICY_URL is parsed in lib/env.ts and exposed here.
 			privacyPolicyUrl: publicConfig.privacyPolicyUrl,
 			termsUrl: publicConfig.termsUrl,
@@ -46,6 +47,23 @@ function withLocalConfigPlugins(
 	plugins: ExpoConfig["plugins"],
 ): ExpoConfig["plugins"] {
 	const resolvedPlugins = [...(plugins ?? [])];
+	const sentryPlugin = "@sentry/react-native/expo";
+
+	if (
+		!resolvedPlugins.some(
+			(plugin) =>
+				plugin === sentryPlugin ||
+				(Array.isArray(plugin) && plugin[0] === sentryPlugin),
+		)
+	) {
+		resolvedPlugins.push([
+			sentryPlugin,
+			{
+				organization: optionalConfigEnv(process.env.SENTRY_ORG),
+				project: optionalConfigEnv(process.env.SENTRY_PROJECT),
+			},
+		]);
+	}
 
 	if (process.env.EXPO_WITH_ROCKETSIM_CONNECT !== "1") {
 		return resolvedPlugins;
@@ -70,6 +88,10 @@ function withLocalConfigPlugins(
 	}
 
 	return resolvedPlugins;
+}
+
+function optionalConfigEnv(value: string | undefined): string | undefined {
+	return value && value.trim().length > 0 ? value : undefined;
 }
 
 function appNameForEnv(baseName: string, appEnv: AppEnv): string {

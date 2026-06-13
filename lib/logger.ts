@@ -3,6 +3,7 @@ import { useMemo } from "react";
 
 import { posthog } from "./posthog";
 import { redactAttributes, redactString } from "./redact";
+import { captureSentryLoggerError } from "./sentry";
 
 type PostHogLogAttributes = Parameters<typeof posthog.logger.info>[1];
 
@@ -60,11 +61,34 @@ class BaseLogger implements Logger {
 
 class PostHogLoggerAdapter implements LoggerAdapter {
 	log(level: LogLevel, message: string, attributes: LogAttributes) {
+		const redactedMessage = redactString(message);
+		const redactedAttributes = redactAttributes(attributes);
 		posthog.logger[level](
-			redactString(message),
-			redactAttributes(attributes) as PostHogLogAttributes,
+			redactedMessage,
+			redactedAttributes as PostHogLogAttributes,
 		);
+		if (level === "error") {
+			captureSentryLoggerError(
+				redactedMessage,
+				redactedAttributes,
+				redactedErrorFromAttributes(redactedAttributes),
+			);
+		}
 	}
+}
+
+function redactedErrorFromAttributes(
+	attributes: LogAttributes,
+): Error | undefined {
+	const message = attributes.error_message;
+	if (typeof message !== "string") return undefined;
+
+	const error = new Error(message);
+	const name = attributes.error_name;
+	const stack = attributes.error_stack;
+	if (typeof name === "string") error.name = name;
+	if (typeof stack === "string") error.stack = stack;
+	return error;
 }
 
 export const logger: Logger = new BaseLogger(new PostHogLoggerAdapter());
