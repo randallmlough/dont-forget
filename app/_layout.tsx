@@ -23,6 +23,7 @@ import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
 import { posthog } from "@/lib/posthog";
 import "@/lib/push/notification-handler";
 import { tokenCache } from "@/lib/token-cache";
+import "@/lib/unistyles/unistyles";
 import { navigationThemeFor } from "@/lib/unistyles/navigation-theme";
 import {
 	applyAppearancePreference,
