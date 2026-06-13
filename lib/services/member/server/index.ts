@@ -4,6 +4,12 @@ export {
 	createMemberService,
 	type EnsurePlainMemberMembershipResult,
 	type HouseholdMember,
+	LastOwnerError,
+	MemberManagementForbiddenError,
+	MemberManagementInvalidError,
+	MemberNotFoundError,
 	type MemberService,
 	type MemberServiceDeps,
+	type MemberServiceDirectory,
+	SoleMemberError,
 } from "./member-service";

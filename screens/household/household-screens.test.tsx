@@ -6,8 +6,12 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { Alert } from "react-native";
 import type { AuthenticatedAppSessionContextValue } from "@/components/session";
-import type { HouseholdApiClient } from "@/lib/client-api/households";
+import type {
+	HouseholdApiClient,
+	HouseholdMember,
+} from "@/lib/client-api/households";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HouseholdSettingsView } from "./household-settings-screen";
@@ -47,6 +51,10 @@ jest.mock("@/components/session", () => ({
 jest.mock("expo-router", () => ({
 	useLocalSearchParams: () => ({}),
 	useRouter: () => ({ replace: mockReplace, push: mockPush }),
+}));
+
+jest.mock("@/lib/analytics", () => ({
+	track: jest.fn(),
 }));
 
 beforeEach(() => {
@@ -116,6 +124,99 @@ describe("HouseholdSettingsView", () => {
 			"https://app.example/households/join?code=ABCDEFGH",
 			"Household join link copied.",
 		);
+	});
+
+	it("shows Member management actions to Owners for other Members", async () => {
+		await render(
+			<HouseholdSettingsView
+				session={sessionFixture()}
+				state={readySettingsState([
+					{
+						membershipId: "mbr_1",
+						userId: "usr_1",
+						role: "owner",
+						displayName: "Avery Chen",
+					},
+					{
+						membershipId: "mbr_2",
+						userId: "usr_2",
+						role: "member",
+						displayName: "Blake Rivera",
+					},
+				])}
+				actions={settingsActions()}
+			/>,
+		);
+
+		expect(screen.getByText("Make Owner")).toBeTruthy();
+		expect(screen.getByText("Remove")).toBeTruthy();
+		expect(screen.getByText("Leave Household")).toBeTruthy();
+	});
+
+	it("hides Member management actions from plain Members", async () => {
+		const session = {
+			...sessionFixture(),
+			activeMember: {
+				id: "mbr_1",
+				userId: "usr_1",
+				role: "member" as const,
+				displayName: "Avery",
+			},
+		};
+
+		await render(
+			<HouseholdSettingsView
+				session={session}
+				state={readySettingsState([
+					{
+						membershipId: "mbr_2",
+						userId: "usr_2",
+						role: "member",
+						displayName: "Blake Rivera",
+					},
+				])}
+				actions={settingsActions()}
+			/>,
+		);
+
+		expect(screen.queryByText("Make Owner")).toBeNull();
+		expect(screen.queryByText("Remove")).toBeNull();
+		expect(screen.getByText("Leave Household")).toBeTruthy();
+	});
+
+	it("confirms before leaving a Household", async () => {
+		const alert = jest
+			.spyOn(Alert, "alert")
+			.mockImplementation(() => undefined);
+		try {
+			await render(
+				<HouseholdSettingsView
+					session={sessionFixture()}
+					state={readySettingsState([
+						{
+							membershipId: "mbr_1",
+							userId: "usr_1",
+							role: "owner",
+							displayName: "Avery Chen",
+						},
+					])}
+					actions={settingsActions()}
+				/>,
+			);
+
+			await fireEvent.press(screen.getByText("Leave"));
+
+			expect(alert).toHaveBeenCalledWith(
+				"Leave Household",
+				"Leave this Household and remove your Membership?",
+				expect.arrayContaining([
+					expect.objectContaining({ text: "Cancel" }),
+					expect.objectContaining({ text: "Leave" }),
+				]),
+			);
+		} finally {
+			alert.mockRestore();
+		}
 	});
 });
 
@@ -946,6 +1047,9 @@ function settingsActions() {
 		retry: jest.fn(),
 		createInvitation: jest.fn(),
 		revokeInvitation: jest.fn(),
+		removeMember: jest.fn(),
+		setMemberRole: jest.fn(),
+		leaveHousehold: jest.fn(),
 		regenerateJoinCode: jest.fn(),
 		setJoinCodeEnabled: jest.fn(),
 		copyText: jest.fn(),
@@ -953,9 +1057,26 @@ function settingsActions() {
 	};
 }
 
+function readySettingsState(members: HouseholdMember[]) {
+	return {
+		status: "ready" as const,
+		members,
+		invitations: [],
+		joinCode: {
+			enabled: false as const,
+			householdId: "hh_1",
+		},
+		notice: null,
+		operation: { status: "idle" as const },
+	};
+}
+
 function emptyClient(): HouseholdApiClient {
 	return {
 		listMembers: jest.fn(),
+		removeMember: jest.fn(),
+		setMemberRole: jest.fn(),
+		leaveHousehold: jest.fn(),
 		listInvitations: jest.fn(),
 		createInvitation: jest.fn(),
 		revokeInvitation: jest.fn(),

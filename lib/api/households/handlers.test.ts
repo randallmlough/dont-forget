@@ -1,10 +1,17 @@
-import { householdJoinCodeAttempts } from "@/db/schema/directory";
+import { eq } from "drizzle-orm";
+import {
+	householdJoinCodeAttempts,
+	memberships,
+	users,
+} from "@/db/schema/directory";
 import {
 	householdJoinCodeAttemptFixture,
+	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
 	seedHouseholdJoinCodeAuditScenario,
 	seedMultiHouseholdUserScenario,
 	seedPrimaryHouseholdScenario,
+	userFixture,
 } from "@/db/server/fixtures";
 import {
 	createTestDirectoryDb,
@@ -21,11 +28,14 @@ import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
 	type HouseholdApiDeps,
+	handleChangeMemberRole,
 	handleGetJoinCode,
 	handleJoinByCode,
+	handleLeaveHousehold,
 	handleListMembers,
 	handlePreviewJoinCode,
 	handleRegenerateJoinCode,
+	handleRemoveMember,
 	handleSetJoinCodeEnabled,
 	handleSwitchActiveHousehold,
 } from "./handlers";
@@ -141,6 +151,201 @@ describe("Household API handlers", () => {
 				),
 			);
 			expect(forbidden.status).toBe(403);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("requires auth for Member management", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleRemoveMember(
+				createApiRequest({ method: "DELETE" }),
+				{ householdId: "hh_avery", membershipId: "mbr_blake" },
+				{
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError("Invalid Clerk session token");
+					},
+				},
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Invalid Clerk session token" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects Member management by non-Members and plain Members", async () => {
+		const harness = await primaryHarness();
+		try {
+			const nonMember = await readJsonResponse(
+				await handleRemoveMember(
+					createApiRequest({ method: "DELETE" }),
+					{
+						householdId: harness.scenario.household.id,
+						membershipId: harness.scenario.members.blake.id,
+					},
+					householdDeps(harness.directory, "user_casey"),
+				),
+			);
+			const plainMemberRemoval = await readJsonResponse(
+				await handleRemoveMember(
+					createApiRequest({ method: "DELETE" }),
+					{
+						householdId: harness.scenario.household.id,
+						membershipId: harness.scenario.members.avery.id,
+					},
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.blake.clerkUserId,
+					),
+				),
+			);
+			const plainMemberRoleChange = await readJsonResponse(
+				await handleChangeMemberRole(
+					createApiRequest({ method: "PATCH", body: { role: "owner" } }),
+					{
+						householdId: harness.scenario.household.id,
+						membershipId: harness.scenario.members.blake.id,
+					},
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.blake.clerkUserId,
+					),
+				),
+			);
+
+			expect(nonMember.status).toBe(403);
+			expect(plainMemberRemoval.status).toBe(403);
+			expect(plainMemberRoleChange.status).toBe(403);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("maps unknown Memberships and invalid Owner transitions", async () => {
+		const harness = await primaryHarness();
+		try {
+			const missing = await readJsonResponse(
+				await handleRemoveMember(
+					createApiRequest({ method: "DELETE" }),
+					{
+						householdId: harness.scenario.household.id,
+						membershipId: "mbr_missing",
+					},
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+				),
+			);
+			const lastOwner = await readJsonResponse(
+				await handleChangeMemberRole(
+					createApiRequest({ method: "PATCH", body: { role: "member" } }),
+					{
+						householdId: harness.scenario.household.id,
+						membershipId: harness.scenario.members.avery.id,
+					},
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+				),
+			);
+			await harness.directory.db
+				.update(memberships)
+				.set({ removedAt: now })
+				.where(eq(memberships.id, harness.scenario.members.blake.id));
+			const soleMemberLeave = await readJsonResponse(
+				await handleLeaveHousehold(
+					createApiRequest({ method: "POST" }),
+					{ householdId: harness.scenario.household.id },
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+				),
+			);
+
+			expect(missing).toMatchObject({
+				status: 404,
+				body: { error: "Member not found." },
+			});
+			expect(lastOwner).toMatchObject({
+				status: 409,
+				body: { error: "A Household must have at least one Owner." },
+			});
+			expect(soleMemberLeave).toMatchObject({
+				status: 409,
+				body: { error: "The only Member cannot leave the Household." },
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("removes Members, changes roles, and leaves Households", async () => {
+		const harness = await primaryHarness();
+		try {
+			await addCameronMember(harness);
+			const removed = await readJsonResponse(
+				await handleRemoveMember(
+					createApiRequest({ method: "DELETE" }),
+					{
+						householdId: harness.scenario.household.id,
+						membershipId: harness.scenario.members.blake.id,
+					},
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+				),
+			);
+			const roleChanged = await readJsonResponse(
+				await handleChangeMemberRole(
+					createApiRequest({ method: "PATCH", body: { role: "owner" } }),
+					{
+						householdId: harness.scenario.household.id,
+						membershipId: PRIMARY_HOUSEHOLD_SEED.memberships.cameron.id,
+					},
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+				),
+			);
+			const left = await readJsonResponse(
+				await handleLeaveHousehold(
+					createApiRequest({ method: "POST" }),
+					{ householdId: harness.scenario.household.id },
+					householdDeps(
+						harness.directory,
+						harness.scenario.users.avery.clerkUserId,
+					),
+				),
+			);
+
+			expect(removed).toMatchObject({
+				status: 200,
+				body: { removed: true },
+			});
+			expect(roleChanged).toMatchObject({
+				status: 200,
+				body: {
+					member: {
+						membershipId: PRIMARY_HOUSEHOLD_SEED.memberships.cameron.id,
+						role: "owner",
+					},
+				},
+			});
+			expect(left).toMatchObject({
+				status: 200,
+				body: { left: true, promotedMembershipId: null },
+			});
 		} finally {
 			await harness.close();
 		}
@@ -500,4 +705,23 @@ async function primaryHarness(): Promise<{
 			await directory.close();
 		},
 	};
+}
+
+async function addCameronMember(
+	harness: Awaited<ReturnType<typeof primaryHarness>>,
+) {
+	const cameron = userFixture({
+		...PRIMARY_HOUSEHOLD_SEED.users.cameron,
+		activeHouseholdId: harness.scenario.household.id,
+	});
+	await harness.directory.db.insert(users).values(cameron);
+	await harness.directory.db.insert(memberships).values(
+		membershipFixture({
+			id: PRIMARY_HOUSEHOLD_SEED.memberships.cameron.id,
+			householdId: harness.scenario.household.id,
+			userId: cameron.id,
+			role: "member",
+			joinedAt: now + 10,
+		}),
+	);
 }

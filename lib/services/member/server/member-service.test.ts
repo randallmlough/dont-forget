@@ -1,6 +1,14 @@
+import { eq } from "drizzle-orm";
 import { households, memberships, users } from "@/db/schema/directory";
+import type { DirectoryDb } from "@/db/server/client";
 import { createTestDirectoryDb } from "@/db/server/test";
-import { createMemberService } from "./member-service";
+import {
+	createMemberService,
+	LastOwnerError,
+	MemberManagementForbiddenError,
+	MemberManagementInvalidError,
+	SoleMemberError,
+} from "./member-service";
 
 describe("createMemberService", () => {
 	it("finds the oldest active Membership and lists authenticated app session Members", async () => {
@@ -309,4 +317,326 @@ describe("createMemberService", () => {
 			await directory.close();
 		}
 	});
+
+	it("lets an Owner remove a plain Member", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+		const dateNow = jest.spyOn(Date, "now").mockReturnValue(100);
+
+		try {
+			await seedMembers(directory.db, [
+				{ id: "mbr_owner", userId: "usr_owner", role: "owner", joinedAt: 1 },
+				{ id: "mbr_member", userId: "usr_member", role: "member", joinedAt: 2 },
+			]);
+
+			await service.removeMember({
+				householdId: "hh_1",
+				membershipId: "mbr_member",
+				requestedByUserId: "usr_owner",
+			});
+
+			const [removed] = await directory.db
+				.select()
+				.from(memberships)
+				.where(eq(memberships.id, "mbr_member"));
+			expect(removed?.removedAt).toBe(100);
+			await expect(service.listHouseholdMembers("hh_1")).resolves.toEqual([
+				{
+					membershipId: "mbr_owner",
+					userId: "usr_owner",
+					role: "owner",
+					displayName: "Owner",
+				},
+			]);
+		} finally {
+			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("rejects removal by a plain Member and self-removal by an Owner", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await seedMembers(directory.db, [
+				{ id: "mbr_owner", userId: "usr_owner", role: "owner", joinedAt: 1 },
+				{ id: "mbr_member", userId: "usr_member", role: "member", joinedAt: 2 },
+			]);
+
+			await expect(
+				service.removeMember({
+					householdId: "hh_1",
+					membershipId: "mbr_owner",
+					requestedByUserId: "usr_member",
+				}),
+			).rejects.toBeInstanceOf(MemberManagementForbiddenError);
+			await expect(
+				service.removeMember({
+					householdId: "hh_1",
+					membershipId: "mbr_owner",
+					requestedByUserId: "usr_owner",
+				}),
+			).rejects.toBeInstanceOf(MemberManagementInvalidError);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("allows removing an Owner only when another active Owner remains", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await seedMembers(directory.db, [
+				{
+					id: "mbr_owner_a",
+					userId: "usr_owner_a",
+					role: "owner",
+					joinedAt: 1,
+				},
+				{
+					id: "mbr_owner_b",
+					userId: "usr_owner_b",
+					role: "owner",
+					joinedAt: 2,
+				},
+				{ id: "mbr_member", userId: "usr_member", role: "member", joinedAt: 3 },
+			]);
+
+			await service.removeMember({
+				householdId: "hh_1",
+				membershipId: "mbr_owner_b",
+				requestedByUserId: "usr_owner_a",
+			});
+			await expect(
+				service.removeMember({
+					householdId: "hh_1",
+					membershipId: "mbr_owner_a",
+					requestedByUserId: "usr_owner_a",
+				}),
+			).rejects.toBeInstanceOf(MemberManagementInvalidError);
+			await expect(
+				service.changeMemberRole({
+					householdId: "hh_1",
+					membershipId: "mbr_owner_a",
+					role: "member",
+					requestedByUserId: "usr_owner_a",
+				}),
+			).rejects.toBeInstanceOf(LastOwnerError);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("changes roles with last Owner protection and same-role no-op", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await seedMembers(directory.db, [
+				{
+					id: "mbr_owner_a",
+					userId: "usr_owner_a",
+					role: "owner",
+					joinedAt: 1,
+				},
+				{
+					id: "mbr_owner_b",
+					userId: "usr_owner_b",
+					role: "owner",
+					joinedAt: 2,
+				},
+				{ id: "mbr_member", userId: "usr_member", role: "member", joinedAt: 3 },
+			]);
+
+			await service.changeMemberRole({
+				householdId: "hh_1",
+				membershipId: "mbr_owner_b",
+				role: "member",
+				requestedByUserId: "usr_owner_a",
+			});
+			await service.changeMemberRole({
+				householdId: "hh_1",
+				membershipId: "mbr_member",
+				role: "owner",
+				requestedByUserId: "usr_owner_a",
+			});
+			await service.changeMemberRole({
+				householdId: "hh_1",
+				membershipId: "mbr_member",
+				role: "owner",
+				requestedByUserId: "usr_owner_a",
+			});
+
+			const rows = await directory.db.select().from(memberships);
+			expect(rows).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: "mbr_owner_b", role: "member" }),
+					expect.objectContaining({ id: "mbr_member", role: "owner" }),
+				]),
+			);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("lets a plain Member leave without promotion", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await seedMembers(directory.db, [
+				{ id: "mbr_owner", userId: "usr_owner", role: "owner", joinedAt: 1 },
+				{ id: "mbr_member", userId: "usr_member", role: "member", joinedAt: 2 },
+			]);
+
+			await expect(
+				service.leaveHousehold({ householdId: "hh_1", userId: "usr_member" }),
+			).resolves.toEqual({ promotedMembershipId: null });
+			await expect(service.listHouseholdMembers("hh_1")).resolves.toHaveLength(
+				1,
+			);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("promotes the longest-tenured remaining Member when the last Owner leaves", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await seedMembers(directory.db, [
+				{ id: "mbr_owner", userId: "usr_owner", role: "owner", joinedAt: 1 },
+				{ id: "mbr_newer", userId: "usr_newer", role: "member", joinedAt: 30 },
+				{
+					id: "mbr_older_b",
+					userId: "usr_older_b",
+					role: "member",
+					joinedAt: 10,
+				},
+				{
+					id: "mbr_older_a",
+					userId: "usr_older_a",
+					role: "member",
+					joinedAt: 10,
+				},
+			]);
+
+			await expect(
+				service.leaveHousehold({ householdId: "hh_1", userId: "usr_owner" }),
+			).resolves.toEqual({ promotedMembershipId: "mbr_older_a" });
+
+			const [promoted] = await directory.db
+				.select()
+				.from(memberships)
+				.where(eq(memberships.id, "mbr_older_a"));
+			expect(promoted?.role).toBe("owner");
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects leaving as the sole Member", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await seedMembers(directory.db, [
+				{ id: "mbr_owner", userId: "usr_owner", role: "owner", joinedAt: 1 },
+			]);
+
+			await expect(
+				service.leaveHousehold({ householdId: "hh_1", userId: "usr_owner" }),
+			).rejects.toBeInstanceOf(SoleMemberError);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("ignores removed Memberships when computing last Owner and promotion tenure", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createMemberService({ directory: directory.db });
+
+		try {
+			await seedMembers(directory.db, [
+				{ id: "mbr_owner", userId: "usr_owner", role: "owner", joinedAt: 1 },
+				{
+					id: "mbr_removed_owner",
+					userId: "usr_removed_owner",
+					role: "owner",
+					joinedAt: 2,
+					removedAt: 5,
+				},
+				{
+					id: "mbr_removed_old",
+					userId: "usr_removed_old",
+					role: "member",
+					joinedAt: 3,
+					removedAt: 5,
+				},
+				{ id: "mbr_active", userId: "usr_active", role: "member", joinedAt: 4 },
+			]);
+
+			await expect(
+				service.changeMemberRole({
+					householdId: "hh_1",
+					membershipId: "mbr_owner",
+					role: "member",
+					requestedByUserId: "usr_owner",
+				}),
+			).rejects.toBeInstanceOf(LastOwnerError);
+			await expect(
+				service.leaveHousehold({ householdId: "hh_1", userId: "usr_owner" }),
+			).resolves.toEqual({ promotedMembershipId: "mbr_active" });
+		} finally {
+			await directory.close();
+		}
+	});
 });
+
+async function seedMembers(
+	directory: DirectoryDb,
+	membershipRows: {
+		id: string;
+		userId: string;
+		role: "owner" | "member";
+		joinedAt: number;
+		removedAt?: number;
+	}[],
+) {
+	await directory.insert(users).values(
+		membershipRows.map((membership) => ({
+			id: membership.userId,
+			clerkUserId: membership.userId.replace("usr_", "clerk_"),
+			displayName: displayName(membership.userId),
+		})),
+	);
+	await directory.insert(households).values({
+		id: "hh_1",
+		name: "River House",
+		tursoDbName: "db-river",
+		createdByUserId: membershipRows[0]?.userId ?? "usr_owner",
+		provisioningCompletedAt: 1,
+		createdAt: 1,
+	});
+	await directory.insert(memberships).values(
+		membershipRows.map((membership) => ({
+			id: membership.id,
+			householdId: "hh_1",
+			userId: membership.userId,
+			role: membership.role,
+			joinedAt: membership.joinedAt,
+			removedAt: membership.removedAt ?? null,
+		})),
+	);
+}
+
+function displayName(userId: string): string {
+	return userId
+		.replace("usr_", "")
+		.split("_")
+		.map((part) => part[0]?.toUpperCase() + part.slice(1))
+		.join(" ");
+}

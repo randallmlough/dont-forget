@@ -75,6 +75,22 @@ export type EventMap = {
 		household_id: string;
 		revoked_by_user_id: string;
 	};
+	member_removed: {
+		household_id: string;
+		membership_id: string;
+		removed_by_user_id: string;
+	};
+	member_role_changed: {
+		household_id: string;
+		membership_id: string;
+		role: "owner" | "member";
+		changed_by_user_id: string;
+	};
+	household_left: {
+		household_id: string;
+		user_id: string;
+		promoted_membership_id: string | null;
+	};
 	household_join_code_used: {
 		household_id: string;
 		user_id: string;

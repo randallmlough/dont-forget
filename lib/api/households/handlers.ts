@@ -19,7 +19,13 @@ import {
 } from "@/lib/services/household/server";
 import {
 	createMemberService,
+	LastOwnerError,
+	MemberManagementForbiddenError,
+	MemberManagementInvalidError,
+	MemberNotFoundError,
 	type MemberService,
+	type MemberServiceDirectory,
+	SoleMemberError,
 } from "@/lib/services/member/server";
 import {
 	ApiForbiddenError,
@@ -48,7 +54,7 @@ export type HouseholdApiDeps = ApiHandlerDeps & {
 	createHouseholdJoinCodeService?: (
 		directory: DirectoryDb,
 	) => HouseholdJoinCodeService;
-	createMemberService?: (directory: DirectoryDb) => MemberService;
+	createMemberService?: (directory: MemberServiceDirectory) => MemberService;
 };
 
 export async function handleSwitchActiveHousehold(
@@ -93,6 +99,77 @@ export async function handleListMembers(
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "List Members API failed");
+	}
+}
+
+export async function handleRemoveMember(
+	request: Request,
+	{ householdId, membershipId }: { householdId: string; membershipId: string },
+	deps?: HouseholdApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			return directory.transaction(async (tx) => {
+				const service = memberService(tx, deps);
+				await service.removeMember({
+					householdId,
+					membershipId,
+					requestedByUserId: user.id,
+				});
+				return jsonResponse({ removed: true });
+			});
+		});
+	} catch (error) {
+		return householdErrorResponse(error, "Remove Member API failed");
+	}
+}
+
+export async function handleChangeMemberRole(
+	request: Request,
+	{ householdId, membershipId }: { householdId: string; membershipId: string },
+	deps?: HouseholdApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const body = await readJsonObject(request);
+			const role = memberRoleField(body);
+			return directory.transaction(async (tx) => {
+				const service = memberService(tx, deps);
+				await service.changeMemberRole({
+					householdId,
+					membershipId,
+					role,
+					requestedByUserId: user.id,
+				});
+				return jsonResponse({ member: { membershipId, role } });
+			});
+		});
+	} catch (error) {
+		return householdErrorResponse(error, "Change Member role API failed");
+	}
+}
+
+export async function handleLeaveHousehold(
+	request: Request,
+	{ householdId }: { householdId: string },
+	deps?: HouseholdApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			return directory.transaction(async (tx) => {
+				const service = memberService(tx, deps);
+				const { promotedMembershipId } = await service.leaveHousehold({
+					householdId,
+					userId: user.id,
+				});
+				return jsonResponse({ left: true, promotedMembershipId });
+			});
+		});
+	} catch (error) {
+		return householdErrorResponse(error, "Leave Household API failed");
 	}
 }
 
@@ -231,6 +308,12 @@ function joinCodeSourceField(
 	throw new BadRequestError("Invalid Household Join Code source");
 }
 
+function memberRoleField(body: Record<string, unknown>): "owner" | "member" {
+	const role = body.role;
+	if (role === "owner" || role === "member") return role;
+	throw new BadRequestError("Invalid Member role");
+}
+
 function activeHouseholdService(
 	directory: DirectoryDb,
 	deps?: HouseholdApiDeps,
@@ -254,7 +337,7 @@ function householdJoinCodeService(
 }
 
 function memberService(
-	directory: DirectoryDb,
+	directory: MemberServiceDirectory,
 	deps?: HouseholdApiDeps,
 ): MemberService {
 	if (deps?.createMemberService) return deps.createMemberService(directory);
@@ -283,9 +366,20 @@ function householdErrorResponse(error: unknown, context: string): Response {
 	}
 	if (
 		error instanceof ActiveHouseholdMembershipRequiredError ||
-		error instanceof HouseholdJoinCodeMembershipRequiredError
+		error instanceof HouseholdJoinCodeMembershipRequiredError ||
+		error instanceof MemberManagementForbiddenError
 	) {
 		return errorResponse("Forbidden", 403);
+	}
+	if (error instanceof MemberNotFoundError) {
+		return errorResponse(error.message, 404);
+	}
+	if (
+		error instanceof LastOwnerError ||
+		error instanceof SoleMemberError ||
+		error instanceof MemberManagementInvalidError
+	) {
+		return errorResponse(error.message, 409);
 	}
 	if (error instanceof HouseholdJoinCodeUnavailableError) {
 		return unavailableErrorResponse("householdJoinCode");

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import {
 	ActivityIndicator,
+	Alert,
 	FlatList,
 	Text,
 	TextInput,
@@ -33,11 +34,12 @@ type SettingsRow =
 	| { type: "joinCode" }
 	| { type: "section"; id: string; title: string }
 	| { type: "member"; member: HouseholdMember }
+	| { type: "leaveHousehold" }
 	| { type: "invitation"; invitation: PendingInvitation }
 	| { type: "empty"; id: string; label: string };
 
 export default function HouseholdSettingsScreen() {
-	const { state, session, retry } = useAuthenticatedAppSession();
+	const { state, session, retry, reloadSession } = useAuthenticatedAppSession();
 
 	if (!session) {
 		return (
@@ -47,15 +49,23 @@ export default function HouseholdSettingsScreen() {
 		);
 	}
 
-	return <HouseholdSettingsContent session={session} />;
+	return (
+		<HouseholdSettingsContent session={session} reloadSession={reloadSession} />
+	);
 }
 
 function HouseholdSettingsContent({
 	session,
+	reloadSession,
 }: {
 	session: AuthenticatedAppSession;
+	reloadSession: () => void;
 }) {
-	const { state, actions } = useHouseholdSettings(session);
+	const { state, actions } = useHouseholdSettings(
+		session,
+		undefined,
+		reloadSession,
+	);
 
 	return (
 		<HouseholdSettingsView session={session} state={state} actions={actions} />
@@ -96,16 +106,18 @@ export function HouseholdSettingsView({
 					/>
 				</CenteredStatus>
 			) : (
-				<SettingsList state={state} actions={actions} />
+				<SettingsList session={session} state={state} actions={actions} />
 			)}
 		</HouseholdSettingsShell>
 	);
 }
 
 function SettingsList({
+	session,
 	state,
 	actions,
 }: {
+	session: AuthenticatedAppSession;
 	state: Extract<HouseholdSettingsState, { status: "ready" }>;
 	actions: HouseholdSettingsActions;
 }) {
@@ -118,7 +130,12 @@ function SettingsList({
 			contentContainerStyle={styles.listContent}
 			keyboardShouldPersistTaps="handled"
 			renderItem={({ item }) => (
-				<SettingsRowView row={item} state={state} actions={actions} />
+				<SettingsRowView
+					row={item}
+					session={session}
+					state={state}
+					actions={actions}
+				/>
 			)}
 			ListHeaderComponent={
 				state.notice ? (
@@ -133,10 +150,12 @@ function SettingsList({
 
 function SettingsRowView({
 	row,
+	session,
 	state,
 	actions,
 }: {
 	row: SettingsRow;
+	session: AuthenticatedAppSession;
 	state: Extract<HouseholdSettingsState, { status: "ready" }>;
 	actions: HouseholdSettingsActions;
 }) {
@@ -147,7 +166,17 @@ function SettingsRowView({
 		return <Text style={styles.emptyText}>{row.label}</Text>;
 	}
 	if (row.type === "member") {
-		return <MemberRow member={row.member} />;
+		return (
+			<MemberRow
+				member={row.member}
+				session={session}
+				operation={state.operation}
+				actions={actions}
+			/>
+		);
+	}
+	if (row.type === "leaveHousehold") {
+		return <LeaveHouseholdRow operation={state.operation} actions={actions} />;
 	}
 	if (row.type === "invitation") {
 		return (
@@ -269,7 +298,28 @@ function JoinCodeControls({
 	);
 }
 
-function MemberRow({ member }: { member: HouseholdMember }) {
+function MemberRow({
+	member,
+	session,
+	operation,
+	actions,
+}: {
+	member: HouseholdMember;
+	session: AuthenticatedAppSession;
+	operation: HouseholdSettingsOperation;
+	actions: HouseholdSettingsActions;
+}) {
+	const canManageMembers =
+		session.activeMember.role === "owner" &&
+		member.userId !== session.activeMember.userId;
+	const removing =
+		operation.status === "removingMember" &&
+		operation.membershipId === member.membershipId;
+	const changingRole =
+		operation.status === "changingRole" &&
+		operation.membershipId === member.membershipId;
+	const nextRole = member.role === "owner" ? "member" : "owner";
+
 	return (
 		<View style={styles.row}>
 			<View style={styles.rowTextGroup}>
@@ -280,6 +330,45 @@ function MemberRow({ member }: { member: HouseholdMember }) {
 					{member.role === "owner" ? "Owner" : "Member"}
 				</Text>
 			</View>
+			{canManageMembers ? (
+				<View style={styles.memberActions}>
+					<HouseholdButton
+						label={changingRole ? "Changing" : roleActionLabel(nextRole)}
+						onPress={() => confirmRoleChange(member, nextRole, actions)}
+						disabled={changingRole}
+					/>
+					<HouseholdButton
+						variant="danger"
+						label={removing ? "Removing" : "Remove"}
+						onPress={() => confirmRemoveMember(member, actions)}
+						disabled={removing}
+					/>
+				</View>
+			) : null}
+		</View>
+	);
+}
+
+function LeaveHouseholdRow({
+	operation,
+	actions,
+}: {
+	operation: HouseholdSettingsOperation;
+	actions: HouseholdSettingsActions;
+}) {
+	const leaving = operation.status === "leavingHousehold";
+	return (
+		<View style={styles.row}>
+			<View style={styles.rowTextGroup}>
+				<Text style={styles.rowTitle}>Leave Household</Text>
+				<Text style={styles.rowSubtitle}>Remove your Membership</Text>
+			</View>
+			<HouseholdButton
+				variant="danger"
+				label={leaving ? "Leaving" : "Leave"}
+				onPress={() => confirmLeaveHousehold(actions)}
+				disabled={leaving}
+			/>
 		</View>
 	);
 }
@@ -401,6 +490,7 @@ function settingsRows(
 			label: "No Members found.",
 		});
 	}
+	rows.push({ type: "leaveHousehold" });
 	rows.push({
 		type: "section",
 		id: "invitations",
@@ -424,6 +514,69 @@ function settingsRowKey(row: SettingsRow): string {
 	if (row.type === "invitation") return `invitation:${row.invitation.id}`;
 	if (row.type === "section" || row.type === "empty") return row.id;
 	return row.type;
+}
+
+function roleActionLabel(role: "owner" | "member"): string {
+	return role === "owner" ? "Make Owner" : "Make Member";
+}
+
+function confirmRemoveMember(
+	member: HouseholdMember,
+	actions: HouseholdSettingsActions,
+) {
+	Alert.alert(
+		"Remove Member",
+		`Remove ${member.displayName ?? "this Member"} from this Household?`,
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Remove",
+				style: "destructive",
+				onPress: () => {
+					void actions.removeMember(member.membershipId);
+				},
+			},
+		],
+	);
+}
+
+function confirmRoleChange(
+	member: HouseholdMember,
+	role: "owner" | "member",
+	actions: HouseholdSettingsActions,
+) {
+	Alert.alert(
+		roleActionLabel(role),
+		`Change ${member.displayName ?? "this Member"} to ${
+			role === "owner" ? "Owner" : "Member"
+		}?`,
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Change",
+				onPress: () => {
+					void actions.setMemberRole(member.membershipId, role);
+				},
+			},
+		],
+	);
+}
+
+function confirmLeaveHousehold(actions: HouseholdSettingsActions) {
+	Alert.alert(
+		"Leave Household",
+		"Leave this Household and remove your Membership?",
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Leave",
+				style: "destructive",
+				onPress: () => {
+					void actions.leaveHousehold();
+				},
+			},
+		],
+	);
 }
 
 function formatDate(timestamp: number): string {
@@ -532,6 +685,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	invitationActions: {
 		flexDirection: "row",
+		gap: theme.spacing(2),
+	},
+	memberActions: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		justifyContent: "flex-end",
 		gap: theme.spacing(2),
 	},
 	emptyText: {

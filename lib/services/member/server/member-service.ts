@@ -36,6 +36,41 @@ export type EnsurePlainMemberMembershipResult = {
 	created: boolean;
 };
 
+export class MemberManagementForbiddenError extends Error {
+	constructor() {
+		super("Only Owners can manage Members.");
+		this.name = "MemberManagementForbiddenError";
+	}
+}
+
+export class MemberManagementInvalidError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "MemberManagementInvalidError";
+	}
+}
+
+export class MemberNotFoundError extends Error {
+	constructor() {
+		super("Member not found.");
+		this.name = "MemberNotFoundError";
+	}
+}
+
+export class LastOwnerError extends Error {
+	constructor() {
+		super("A Household must have at least one Owner.");
+		this.name = "LastOwnerError";
+	}
+}
+
+export class SoleMemberError extends Error {
+	constructor() {
+		super("The only Member cannot leave the Household.");
+		this.name = "SoleMemberError";
+	}
+}
+
 export type AssociatedHousehold = {
 	id: string;
 	name: string;
@@ -63,6 +98,21 @@ export type MemberService = {
 		joinedAt?: number;
 	}): Promise<EnsurePlainMemberMembershipResult>;
 	listHouseholdMembers(householdId: string): Promise<HouseholdMember[]>;
+	removeMember(input: {
+		householdId: string;
+		membershipId: string;
+		requestedByUserId: string;
+	}): Promise<void>;
+	changeMemberRole(input: {
+		householdId: string;
+		membershipId: string;
+		role: "owner" | "member";
+		requestedByUserId: string;
+	}): Promise<void>;
+	leaveHousehold(input: {
+		householdId: string;
+		userId: string;
+	}): Promise<{ promotedMembershipId: string | null }>;
 };
 
 export type MemberServiceDeps = {
@@ -88,6 +138,15 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 		},
 		listHouseholdMembers(householdId) {
 			return listHouseholdMembers(householdId, deps.directory);
+		},
+		removeMember(input) {
+			return removeMember(input, deps.directory);
+		},
+		changeMemberRole(input) {
+			return changeMemberRole(input, deps.directory);
+		},
+		leaveHousehold(input) {
+			return leaveHousehold(input, deps.directory);
 		},
 	};
 }
@@ -279,4 +338,180 @@ async function listHouseholdMembers(
 		.orderBy(asc(memberships.joinedAt), asc(memberships.id));
 
 	return rows.map(({ joinedAt: _joinedAt, ...row }) => row);
+}
+
+async function removeMember(
+	input: {
+		householdId: string;
+		membershipId: string;
+		requestedByUserId: string;
+	},
+	directory: MemberServiceDirectory,
+): Promise<void> {
+	const requester = await findActiveMembershipRow(
+		{
+			householdId: input.householdId,
+			userId: input.requestedByUserId,
+		},
+		directory,
+	);
+	if (requester?.role !== "owner") {
+		throw new MemberManagementForbiddenError();
+	}
+
+	const target = await findActiveMembershipById(
+		{
+			householdId: input.householdId,
+			membershipId: input.membershipId,
+		},
+		directory,
+	);
+	if (!target) throw new MemberNotFoundError();
+	if (target.userId === input.requestedByUserId) {
+		throw new MemberManagementInvalidError(
+			"Use Leave Household to remove your own Membership.",
+		);
+	}
+
+	const activeMembers = await listActiveMembershipRows(
+		input.householdId,
+		directory,
+	);
+	if (
+		target.role === "owner" &&
+		activeMembers.some((member) => member.id !== target.id) &&
+		!activeMembers.some(
+			(member) => member.id !== target.id && member.role === "owner",
+		)
+	) {
+		throw new LastOwnerError();
+	}
+
+	await directory
+		.update(memberships)
+		.set({ removedAt: Date.now() })
+		.where(eq(memberships.id, target.id));
+}
+
+async function changeMemberRole(
+	input: {
+		householdId: string;
+		membershipId: string;
+		role: "owner" | "member";
+		requestedByUserId: string;
+	},
+	directory: MemberServiceDirectory,
+): Promise<void> {
+	const requester = await findActiveMembershipRow(
+		{
+			householdId: input.householdId,
+			userId: input.requestedByUserId,
+		},
+		directory,
+	);
+	if (requester?.role !== "owner") {
+		throw new MemberManagementForbiddenError();
+	}
+
+	const target = await findActiveMembershipById(
+		{
+			householdId: input.householdId,
+			membershipId: input.membershipId,
+		},
+		directory,
+	);
+	if (!target) throw new MemberNotFoundError();
+	if (target.role === input.role) return;
+
+	const activeMembers = await listActiveMembershipRows(
+		input.householdId,
+		directory,
+	);
+	if (
+		target.role === "owner" &&
+		input.role === "member" &&
+		!activeMembers.some(
+			(member) => member.id !== target.id && member.role === "owner",
+		)
+	) {
+		throw new LastOwnerError();
+	}
+
+	await directory
+		.update(memberships)
+		.set({ role: input.role })
+		.where(eq(memberships.id, target.id));
+}
+
+async function leaveHousehold(
+	input: { householdId: string; userId: string },
+	directory: MemberServiceDirectory,
+): Promise<{ promotedMembershipId: string | null }> {
+	const membership = await findActiveMembershipRow(input, directory);
+	if (!membership) throw new MemberNotFoundError();
+
+	const activeMembers = await listActiveMembershipRows(
+		input.householdId,
+		directory,
+	);
+	const remainingMembers = activeMembers.filter(
+		(member) => member.id !== membership.id,
+	);
+	if (remainingMembers.length === 0) throw new SoleMemberError();
+
+	let promotedMembershipId: string | null = null;
+	if (
+		membership.role === "owner" &&
+		!remainingMembers.some((member) => member.role === "owner")
+	) {
+		const [promoted] = remainingMembers;
+		if (!promoted) throw new SoleMemberError();
+		await directory
+			.update(memberships)
+			.set({ role: "owner" })
+			.where(eq(memberships.id, promoted.id));
+		promotedMembershipId = promoted.id;
+	}
+
+	await directory
+		.update(memberships)
+		.set({ removedAt: Date.now() })
+		.where(eq(memberships.id, membership.id));
+
+	return { promotedMembershipId };
+}
+
+async function findActiveMembershipById(
+	input: { householdId: string; membershipId: string },
+	directory: MemberServiceDirectory,
+): Promise<Membership | null> {
+	const [membership] = await directory
+		.select()
+		.from(memberships)
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				eq(memberships.id, input.membershipId),
+				isNull(memberships.removedAt),
+			),
+		)
+		.limit(1);
+
+	return membership ?? null;
+}
+
+async function listActiveMembershipRows(
+	householdId: string,
+	directory: MemberServiceDirectory,
+): Promise<Membership[]> {
+	return directory
+		.select()
+		.from(memberships)
+		.where(
+			and(
+				eq(memberships.householdId, householdId),
+				isNull(memberships.removedAt),
+			),
+		)
+		.orderBy(asc(memberships.joinedAt), asc(memberships.id));
 }
