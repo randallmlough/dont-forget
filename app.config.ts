@@ -3,8 +3,20 @@ import { resolve } from "node:path";
 
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
-import { type AppEnv, readPublicExpoConfig } from "./lib/env.ts";
+import {
+	type AppEnv,
+	isPersistentAppEnv,
+	readPublicExpoConfig,
+} from "./lib/env.ts";
 import { loadEnvFile } from "./lib/load-env.ts";
+
+type SentryPluginOptions = {
+	disableAutoUpload: boolean;
+	organization?: string;
+	project?: string;
+};
+
+type ConfigEnvSource = Record<string, string | undefined>;
 
 export default ({ config }: ConfigContext): ExpoConfig => {
 	loadEnvFile();
@@ -16,7 +28,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
 	return {
 		...config,
-		plugins: withLocalConfigPlugins(config.plugins),
+		plugins: withLocalConfigPlugins(config.plugins, publicConfig.appEnv),
 		name:
 			process.env.EXPO_APP_NAME ??
 			appNameForEnv(config.name ?? "Don't Forget", publicConfig.appEnv),
@@ -45,6 +57,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
 function withLocalConfigPlugins(
 	plugins: ExpoConfig["plugins"],
+	appEnv: AppEnv,
 ): ExpoConfig["plugins"] {
 	const resolvedPlugins = [...(plugins ?? [])];
 	const sentryPlugin = "@sentry/react-native/expo";
@@ -56,13 +69,7 @@ function withLocalConfigPlugins(
 				(Array.isArray(plugin) && plugin[0] === sentryPlugin),
 		)
 	) {
-		resolvedPlugins.push([
-			sentryPlugin,
-			{
-				organization: optionalConfigEnv(process.env.SENTRY_ORG),
-				project: optionalConfigEnv(process.env.SENTRY_PROJECT),
-			},
-		]);
+		resolvedPlugins.push([sentryPlugin, sentryPluginOptionsForEnv(appEnv)]);
 	}
 
 	if (process.env.EXPO_WITH_ROCKETSIM_CONNECT !== "1") {
@@ -88,6 +95,22 @@ function withLocalConfigPlugins(
 	}
 
 	return resolvedPlugins;
+}
+
+export function sentryPluginOptionsForEnv(
+	appEnv: AppEnv,
+	source: ConfigEnvSource = process.env,
+): SentryPluginOptions {
+	const organization = optionalConfigEnv(source.SENTRY_ORG);
+	const project = optionalConfigEnv(source.SENTRY_PROJECT);
+	const authToken = optionalConfigEnv(source.SENTRY_AUTH_TOKEN);
+
+	return {
+		disableAutoUpload:
+			!isPersistentAppEnv(appEnv) || !organization || !project || !authToken,
+		organization,
+		project,
+	};
 }
 
 function optionalConfigEnv(value: string | undefined): string | undefined {
