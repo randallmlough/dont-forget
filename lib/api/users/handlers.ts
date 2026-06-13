@@ -1,3 +1,6 @@
+import { and, eq, isNull } from "drizzle-orm";
+
+import { users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
@@ -49,6 +52,28 @@ export async function handleRegisterPushToken(
 		});
 	} catch (error) {
 		return usersErrorResponse(error, "Register push token API failed");
+	}
+}
+
+export async function handleCompleteOnboarding(
+	request: Request,
+	deps?: UsersApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const completedAt = Date.now();
+			await directory
+				.update(users)
+				.set({
+					onboardingCompletedAt: completedAt,
+					updatedAt: completedAt,
+				})
+				.where(and(eq(users.id, user.id), isNull(users.onboardingCompletedAt)));
+			return jsonResponse({ completed: true });
+		});
+	} catch (error) {
+		return usersErrorResponse(error, "Complete onboarding API failed");
 	}
 }
 

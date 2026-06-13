@@ -68,6 +68,7 @@ beforeEach(() => {
 	mockAuthenticatedAppSession = {
 		state: { status: "ready", refreshing: false },
 		session: sessionFixture(),
+		markOnboardingComplete: jest.fn(),
 		retry: mockRetrySession,
 		reloadSession: mockReloadSession,
 		signOut: jest.fn(async () => undefined),
@@ -1447,7 +1448,12 @@ function sessionFixture(): AuthenticatedAppSession {
 		setItemChecked: jest.fn(),
 	};
 	return {
-		user: { id: "usr_1", email: "avery@example.com", displayName: "Avery" },
+		user: {
+			id: "usr_1",
+			email: "avery@example.com",
+			displayName: "Avery",
+			onboardingCompletedAt: null,
+		},
 		activeHousehold: { id: "hh_1", name: "River House" },
 		households: [
 			{ id: "hh_1", name: "River House", role: "owner", isActive: true },

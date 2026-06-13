@@ -94,6 +94,7 @@ beforeEach(() => {
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: null,
+		markOnboardingComplete() {},
 		retry() {},
 		reloadSession() {},
 		signOut: mockSignOut,

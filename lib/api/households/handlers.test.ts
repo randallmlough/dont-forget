@@ -450,6 +450,7 @@ describe("Household API handlers", () => {
 					lastName: "Chen",
 					displayName: "Avery Chen",
 					activeHouseholdId: "hh_avery",
+					onboardingCompletedAt: null,
 					createdAt: now,
 					updatedAt: now,
 				}),

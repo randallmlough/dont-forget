@@ -5,6 +5,7 @@ import { createTestDirectoryDb } from "@/db/server/test";
 import type { PushTokenService } from "@/lib/services/push/server";
 import { ApiUnauthorizedError } from "../shared";
 import {
+	handleCompleteOnboarding,
 	handleRegisterPushToken,
 	handleSendTestNotification,
 	handleUnregisterPushToken,
@@ -18,6 +19,7 @@ const testUser = {
 	lastName: null,
 	displayName: "Avery",
 	activeHouseholdId: null,
+	onboardingCompletedAt: null,
 	createdAt: 1,
 	updatedAt: 1,
 };
@@ -102,6 +104,91 @@ describe("Users API handlers", () => {
 				.where(eq(pushTokens.expoPushToken, "ExponentPushToken[one]"));
 			expect(row.disabledAt).toEqual(expect.any(Number));
 		} finally {
+			await directory.close();
+		}
+	});
+
+	it("requires authentication for onboarding completion", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleCompleteOnboarding(
+				new Request("http://test"),
+				{
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError();
+					},
+				},
+			);
+
+			expect(response.status).toBe(401);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("sets the authenticated User onboarding completion timestamp", async () => {
+		const directory = await createTestDirectoryDb();
+		jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+		try {
+			await directory.db.insert(users).values({
+				id: testUser.id,
+				clerkUserId: testUser.clerkUserId,
+			});
+
+			const response = await handleCompleteOnboarding(
+				new Request("http://test"),
+				{
+					directory: directory.db,
+					authenticate: async () => testUser,
+				},
+			);
+
+			expect(response.status).toBe(200);
+			await expect(response.json()).resolves.toEqual({ completed: true });
+			const [row] = await directory.db
+				.select()
+				.from(users)
+				.where(eq(users.id, testUser.id));
+			expect(row.onboardingCompletedAt).toBe(1_700_000_000_000);
+			expect(row.updatedAt).toBe(1_700_000_000_000);
+		} finally {
+			jest.restoreAllMocks();
+			await directory.close();
+		}
+	});
+
+	it("does not overwrite an existing onboarding completion timestamp", async () => {
+		const directory = await createTestDirectoryDb();
+		jest.spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
+		try {
+			await directory.db.insert(users).values({
+				id: testUser.id,
+				clerkUserId: testUser.clerkUserId,
+				onboardingCompletedAt: 1_700_000_000_000,
+				updatedAt: 1_700_000_000_000,
+			});
+
+			const response = await handleCompleteOnboarding(
+				new Request("http://test"),
+				{
+					directory: directory.db,
+					authenticate: async () => ({
+						...testUser,
+						onboardingCompletedAt: 1_700_000_000_000,
+					}),
+				},
+			);
+
+			expect(response.status).toBe(200);
+			const [row] = await directory.db
+				.select()
+				.from(users)
+				.where(eq(users.id, testUser.id));
+			expect(row.onboardingCompletedAt).toBe(1_700_000_000_000);
+			expect(row.updatedAt).toBe(1_700_000_000_000);
+		} finally {
+			jest.restoreAllMocks();
 			await directory.close();
 		}
 	});

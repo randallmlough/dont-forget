@@ -130,6 +130,10 @@ export type EventMap = {
 		enabled: boolean;
 		outcome: "registered" | "denied" | "unavailable" | "unregistered";
 	};
+	onboarding_completed: {
+		skipped: boolean;
+		last_step: string;
+	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };
 	user_email_verified: Record<string, never>;

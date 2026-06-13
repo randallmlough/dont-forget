@@ -5,6 +5,7 @@ import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 export type ApiGetToken = () => Promise<string | null>;
 
 export type UsersApiClient = {
+	completeOnboarding(): Promise<void>;
 	registerPushToken(input: {
 		expoPushToken: string;
 		deviceName?: string | null;
@@ -31,6 +32,11 @@ export function createUsersApiClient({
 		requestJson(path, { ...init, getToken, fetcher, apiBaseUrl });
 
 	return {
+		async completeOnboarding() {
+			await authed("/api/users/me/onboarding", {
+				method: "POST",
+			});
+		},
 		async registerPushToken(input) {
 			await authed("/api/users/me/push-tokens", {
 				method: "POST",

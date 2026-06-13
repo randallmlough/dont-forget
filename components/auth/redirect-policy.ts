@@ -10,6 +10,8 @@ export type AuthRedirectInput = {
 	isAuthLoaded: boolean;
 	checkedCachedSession: boolean;
 	hasCachedSession: boolean;
+	onboardingCompletedAt?: number | null;
+	isAuthenticatedAppSessionReady?: boolean;
 };
 
 export const AUTH_PATHS = new Set(["/sign-in", "/sign-up"]);
@@ -25,10 +27,22 @@ export function authRedirectTarget({
 	isAuthLoaded,
 	checkedCachedSession,
 	hasCachedSession,
+	onboardingCompletedAt,
+	isAuthenticatedAppSessionReady = false,
 }: AuthRedirectInput): Href | null {
 	const onAuthPath = AUTH_PATHS.has(pathname);
 
 	if (isSignedIn) {
+		if (
+			shouldRedirectToOnboarding({
+				pathname,
+				isAuthLoaded,
+				isAuthenticatedAppSessionReady,
+				onboardingCompletedAt,
+			})
+		) {
+			return "/onboarding";
+		}
 		return onAuthPath ? signedInAuthPathTarget(params) : null;
 	}
 
@@ -43,6 +57,25 @@ export function authRedirectTarget({
 	if (!isAuthLoaded || onAuthPath) return null;
 
 	return pathname === "/" ? "/sign-in" : signInTarget(pathname, {});
+}
+
+function shouldRedirectToOnboarding({
+	pathname,
+	isAuthLoaded,
+	isAuthenticatedAppSessionReady,
+	onboardingCompletedAt,
+}: {
+	pathname: string;
+	isAuthLoaded: boolean;
+	isAuthenticatedAppSessionReady: boolean;
+	onboardingCompletedAt?: number | null;
+}): boolean {
+	return (
+		pathname === "/" &&
+		isAuthLoaded &&
+		isAuthenticatedAppSessionReady &&
+		onboardingCompletedAt === null
+	);
 }
 
 export function internalNextPath(value: unknown): string | null {

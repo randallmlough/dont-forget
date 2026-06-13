@@ -29,6 +29,7 @@ export type AuthenticatedAppSessionState =
 export type AuthenticatedAppSessionContextValue = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
+	markOnboardingComplete: () => void;
 	retry: () => void;
 	reloadSession: (options?: { retireCurrent?: boolean }) => void;
 	signOut: () => Promise<void>;
@@ -91,6 +92,10 @@ export function AuthenticatedAppSessionProvider({
 	const [retiredResourceKey, setRetiredResourceKey] = useState<string | null>(
 		null,
 	);
+	const [localOnboardingCompletions, markLocalOnboardingComplete] = useReducer(
+		localOnboardingCompletionReducer,
+		new Map<string, number>(),
+	);
 	const [signOutRunningState] = useState(() => ({ running: false }));
 	const getToken = useEffectEvent(() => auth.getToken());
 	const signOutFlow = createAuthenticatedAppSessionSignOut({
@@ -141,8 +146,22 @@ export function AuthenticatedAppSessionProvider({
 		requestActivation();
 	}
 
+	function markOnboardingComplete() {
+		const session = previousSessionFromSnapshot(snapshot);
+		if (!session) return;
+		markLocalOnboardingComplete({
+			userId: session.user.id,
+			completedAt: Date.now(),
+		});
+	}
+
 	const value: AuthenticatedAppSessionContextValue = {
-		...publicStateFromSnapshot(snapshot, retiredResourceKey),
+		...publicStateFromSnapshot(
+			snapshot,
+			retiredResourceKey,
+			localOnboardingCompletions,
+		),
+		markOnboardingComplete,
 		retry,
 		reloadSession,
 		signOut: signOutFlow.run,
@@ -175,6 +194,7 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 function publicStateFromSnapshot(
 	snapshot: AuthenticatedAppSessionStateSnapshot,
 	retiredResourceKey: string | null = null,
+	localOnboardingCompletions: ReadonlyMap<string, number> = new Map(),
 ): {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
@@ -185,7 +205,10 @@ function publicStateFromSnapshot(
 		}
 		return {
 			state: { status: "ready", refreshing: false },
-			session: snapshot.session,
+			session: sessionWithLocalOnboardingCompletion(
+				snapshot.session,
+				localOnboardingCompletions,
+			),
 		};
 	}
 
@@ -195,7 +218,10 @@ function publicStateFromSnapshot(
 		}
 		return {
 			state: { status: "ready", refreshing: true },
-			session: snapshot.previous,
+			session: sessionWithLocalOnboardingCompletion(
+				snapshot.previous,
+				localOnboardingCompletions,
+			),
 		};
 	}
 
@@ -207,4 +233,41 @@ function publicStateFromSnapshot(
 	}
 
 	return { state: { status: "loading" }, session: null };
+}
+
+function previousSessionFromSnapshot(
+	snapshot: AuthenticatedAppSessionStateSnapshot,
+): AuthenticatedAppSession | null {
+	if (snapshot.status === "ready") return snapshot.session;
+	if (snapshot.status === "loading" || snapshot.status === "error") {
+		return snapshot.previous ?? null;
+	}
+	return null;
+}
+
+function sessionWithLocalOnboardingCompletion(
+	session: AuthenticatedAppSession,
+	localOnboardingCompletions: ReadonlyMap<string, number>,
+): AuthenticatedAppSession {
+	if (session.user.onboardingCompletedAt !== null) return session;
+	const completedAt = localOnboardingCompletions.get(session.user.id);
+	if (completedAt === undefined) return session;
+
+	return {
+		...session,
+		user: {
+			...session.user,
+			onboardingCompletedAt: completedAt,
+		},
+	};
+}
+
+function localOnboardingCompletionReducer(
+	current: ReadonlyMap<string, number>,
+	completion: { userId: string; completedAt: number },
+): ReadonlyMap<string, number> {
+	if (current.has(completion.userId)) return current;
+	const next = new Map(current);
+	next.set(completion.userId, completion.completedAt);
+	return next;
 }

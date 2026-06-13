@@ -67,6 +67,7 @@ jest.mock("@/lib/logger", () =>
 const testLogger = createMockLogger();
 testLogger.with.mockReturnValue(testLogger);
 const noopProviderActions = {
+	markOnboardingComplete() {},
 	retry() {},
 	reloadSession() {},
 	async signOut() {},
@@ -150,6 +151,7 @@ describe("HomeScreen", () => {
 				message: "Unable to prepare your Household. Please try again.",
 			},
 			session: null,
+			markOnboardingComplete() {},
 			retry,
 			reloadSession() {},
 			async signOut() {},
@@ -1874,6 +1876,7 @@ async function createHomeSessionHarness(
 			id: scenario.users.avery.id,
 			email: scenario.users.avery.email ?? null,
 			displayName: scenario.users.avery.displayName ?? null,
+			onboardingCompletedAt: null,
 		},
 		activeHousehold: {
 			id: scenario.household.id,
@@ -2024,6 +2027,7 @@ function homeListSwitcherSession({
 			id: "usr_1",
 			email: "member@example.com",
 			displayName: "Member One",
+			onboardingCompletedAt: null,
 		},
 		activeHousehold: { id: "hh_1", name: "Test Household" },
 		households: [
