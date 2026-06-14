@@ -1,6 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 
 import {
+	deletedUserIdentities,
 	households,
 	invitations,
 	memberships,
@@ -55,11 +56,19 @@ describe("createAccountDeletionService", () => {
 			});
 			expect(deleteDatabase).toHaveBeenCalledWith("df-test-hh-solo");
 			expect(deleteClerkUser).toHaveBeenCalledWith("clerk_avery");
-			expect(anonymizeUser).toHaveBeenCalledWith("usr_avery");
+			expect(anonymizeUser).toHaveBeenCalledWith({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
 			expect(transactionRunnerCalls).toBe(1);
 			await expectHouseholdDeleted(directory.db, "hh_solo");
 			await expectMembershipRemoved(directory.db, "mbr_solo");
-			await expectUserMarkedDeleted(directory.db, user.id);
+			await expectUserMarkedDeleted(directory.db, {
+				userId: user.id,
+				directoryDeletedAt: expect.any(Number),
+				clerkDeletedAt: expect.any(Number),
+				anonymizedAt: null,
+			});
 		} finally {
 			await directory.close();
 		}
@@ -278,7 +287,7 @@ describe("createAccountDeletionService", () => {
 		}
 	});
 
-	it("disables active push tokens for the deleted User inside the directory transaction", async () => {
+	it("deletes push token identifiers for the deleted User inside the directory transaction", async () => {
 		const directory = await createTestDirectoryDb();
 
 		try {
@@ -322,26 +331,15 @@ describe("createAccountDeletionService", () => {
 				anonymizeUser: async () => undefined,
 			}).deleteAccount({ user });
 
-			const rows = await directory.db.select().from(pushTokens);
-			expect(rows).toEqual(
-				expect.arrayContaining([
-					expect.objectContaining({
-						id: "pst_active_one",
-						disabledAt: expect.any(Number),
-						updatedAt: expect.any(Number),
-					}),
-					expect.objectContaining({
-						id: "pst_disabled",
-						disabledAt: 2,
-						updatedAt: 2,
-					}),
-					expect.objectContaining({
-						id: "pst_other",
-						disabledAt: null,
-						updatedAt: 1,
-					}),
-				]),
-			);
+			await expect(directory.db.select().from(pushTokens)).resolves.toEqual([
+				expect.objectContaining({
+					id: "pst_other",
+					userId: other.id,
+					expoPushToken: "ExponentPushToken[three]",
+					disabledAt: null,
+					updatedAt: 1,
+				}),
+			]);
 		} finally {
 			await directory.close();
 		}
@@ -419,7 +417,12 @@ describe("createAccountDeletionService", () => {
 
 			await expectHouseholdDeleted(directory.db, "hh_solo");
 			await expectMembershipRemoved(directory.db, "mbr_solo");
-			await expectUserMarkedDeleted(directory.db, user.id);
+			await expectUserMarkedDeleted(directory.db, {
+				userId: user.id,
+				directoryDeletedAt: expect.any(Number),
+				clerkDeletedAt: null,
+				anonymizedAt: null,
+			});
 			expect(anonymizeUser).not.toHaveBeenCalled();
 		} finally {
 			await directory.close();
@@ -456,7 +459,12 @@ describe("createAccountDeletionService", () => {
 			).rejects.toThrow("directory unavailable");
 
 			expect(deleteClerkUser).toHaveBeenCalledWith("clerk_avery");
-			await expectUserMarkedDeleted(directory.db, user.id);
+			await expectUserMarkedDeleted(directory.db, {
+				userId: user.id,
+				directoryDeletedAt: expect.any(Number),
+				clerkDeletedAt: expect.any(Number),
+				anonymizedAt: null,
+			});
 		} finally {
 			await directory.close();
 		}
@@ -464,12 +472,18 @@ describe("createAccountDeletionService", () => {
 
 	it("completes on rerun after a previous Clerk failure", async () => {
 		const directory = await createTestDirectoryDb();
-		const anonymizeUser = jest.fn(async (userId: string) => {
-			await directory.db
-				.update(users)
-				.set({ clerkUserId: `deleted_${userId}`, deletedAt: 2 })
-				.where(eq(users.id, userId));
-		});
+		const anonymizeUser = jest.fn(
+			async (input: { userId: string; clerkUserId: string }) => {
+				await directory.db
+					.update(users)
+					.set({ clerkUserId: `deleted_${input.userId}`, deletedAt: 2 })
+					.where(eq(users.id, input.userId));
+				await directory.db
+					.update(deletedUserIdentities)
+					.set({ anonymizedAt: 3 })
+					.where(eq(deletedUserIdentities.userId, input.userId));
+			},
+		);
 
 		try {
 			const user = await seedUser(directory.db, "usr_avery", "clerk_avery");
@@ -651,13 +665,25 @@ async function expectMembershipRemoved(
 	expect(membership.removedAt).toEqual(expect.any(Number));
 }
 
-async function expectUserMarkedDeleted(directory: DirectoryDb, userId: string) {
+async function expectUserMarkedDeleted(
+	directory: DirectoryDb,
+	expected: {
+		userId: string;
+		directoryDeletedAt: unknown;
+		clerkDeletedAt: unknown;
+		anonymizedAt: unknown;
+	},
+) {
 	const [user] = await directory
 		.select()
 		.from(users)
-		.where(eq(users.id, userId));
+		.where(eq(users.id, expected.userId));
+	const [guard] = await directory
+		.select()
+		.from(deletedUserIdentities)
+		.where(eq(deletedUserIdentities.userId, expected.userId));
 	expect(user).toMatchObject({
-		id: userId,
+		id: expected.userId,
 		clerkUserId: "clerk_avery",
 		email: null,
 		firstName: null,
@@ -666,4 +692,11 @@ async function expectUserMarkedDeleted(directory: DirectoryDb, userId: string) {
 		activeHouseholdId: null,
 		deletedAt: expect.any(Number),
 	});
+	expect(guard).toMatchObject({
+		userId: expected.userId,
+		directoryDeletedAt: expected.directoryDeletedAt,
+		clerkDeletedAt: expected.clerkDeletedAt,
+		anonymizedAt: expected.anonymizedAt,
+	});
+	expect(guard.clerkUserIdHash).not.toBe("clerk_avery");
 }

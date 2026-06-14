@@ -32,6 +32,27 @@ export const users = sqliteTable(
 	(t) => [uniqueIndex("users_clerk_user_id_unique").on(t.clerkUserId)],
 );
 
+export const deletedUserIdentities = sqliteTable(
+	"deleted_user_identities",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id),
+		clerkUserIdHash: text("clerk_user_id_hash").notNull(),
+		createdAt: integer("created_at")
+			.notNull()
+			.default(sql`(unixepoch() * 1000)`),
+		directoryDeletedAt: integer("directory_deleted_at"),
+		clerkDeletedAt: integer("clerk_deleted_at"),
+		anonymizedAt: integer("anonymized_at"),
+	},
+	(t) => [
+		index("deleted_user_identities_user_idx").on(t.userId),
+		uniqueIndex("deleted_user_identities_hash_unique").on(t.clerkUserIdHash),
+	],
+);
+
 export const households = sqliteTable("households", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
@@ -179,6 +200,8 @@ export const pushTokens = sqliteTable(
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type DeletedUserIdentity = typeof deletedUserIdentities.$inferSelect;
+export type NewDeletedUserIdentity = typeof deletedUserIdentities.$inferInsert;
 export type Household = typeof households.$inferSelect;
 export type NewHousehold = typeof households.$inferInsert;
 export type Membership = typeof memberships.$inferSelect;
