@@ -4,22 +4,21 @@ import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
 import {
-	type AccountDeletionService,
-	createAccountDeletionService,
-} from "@/lib/services/account/server";
-import {
 	createPushTokenService,
 	type PushMessage,
 	type PushTokenService,
 	sendPushNotifications,
 } from "@/lib/services/push/server";
 import {
+	createUserDeletionService,
 	createUserService,
 	type UpdateClerkUserName,
+	type UserDeletionService,
 	type UserService,
 } from "@/lib/services/user/server";
 import {
 	type ApiHandlerDeps,
+	ApiUnauthorizedError,
 	authenticateApiUser,
 	BadRequestError,
 	errorResponse,
@@ -42,11 +41,11 @@ export type CurrentUser = {
 	lastName: string | null;
 };
 
+export type VerifyClerkRequestUserId = (request: Request) => Promise<string>;
+
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
-	createAccountDeletionService?: (
-		directory: DirectoryDb,
-	) => AccountDeletionService;
+	createUserDeletionService?: (directory: DirectoryDb) => UserDeletionService;
 	createPushTokenService?: (directory: DirectoryDb) => PushTokenService;
 	createUserService?: (
 		directory: DirectoryDb,
@@ -55,6 +54,7 @@ export type UsersApiDeps = ApiHandlerDeps & {
 		messages: PushMessage[],
 	) => Promise<{ deadTokens: string[] }>;
 	updateClerkUserName?: UpdateClerkUserName;
+	verifyClerkRequestUserId?: VerifyClerkRequestUserId;
 };
 
 export type UserApiDeps = UsersApiDeps;
@@ -89,12 +89,14 @@ export async function handleDeleteAccount(
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const summary = await accountDeletionService(
+			const { user, clerkUserId } = await authenticateDeleteUser(
+				request,
 				directory,
 				deps,
-			).deleteAccount({
+			);
+			const summary = await userDeletionService(directory, deps).deleteUser({
 				user,
+				clerkUserId,
 			});
 			return jsonResponse({
 				deleted: true,
@@ -206,6 +208,38 @@ function updateUserNameInput(body: Record<string, unknown>): {
 	return { firstName, lastName };
 }
 
+async function authenticateDeleteUser(
+	request: Request,
+	directory: DirectoryDb,
+	deps: UsersApiDeps | undefined,
+): Promise<{ user: User; clerkUserId: string }> {
+	const verifyUserId =
+		deps?.verifyClerkRequestUserId ?? (await defaultVerifyClerkRequestUserId());
+	let clerkUserId: string;
+	try {
+		clerkUserId = await verifyUserId(request);
+	} catch (error) {
+		if (isServerUnauthorizedError(error)) {
+			throw new ApiUnauthorizedError(error.message);
+		}
+		throw error;
+	}
+
+	const user = await createUserService({
+		directory,
+	}).findUserForDeletionByClerkUserId(clerkUserId);
+	if (!user) {
+		throw new ApiUnauthorizedError("Unauthorized");
+	}
+
+	return { user, clerkUserId };
+}
+
+async function defaultVerifyClerkRequestUserId(): Promise<VerifyClerkRequestUserId> {
+	const { verifyClerkRequestUserId } = await import("@/lib/server/auth");
+	return verifyClerkRequestUserId;
+}
+
 function nullableNameField(
 	body: Record<string, unknown>,
 	key: "firstName" | "lastName",
@@ -258,14 +292,14 @@ function userService(
 	);
 }
 
-function accountDeletionService(
+function userDeletionService(
 	directory: DirectoryDb,
 	deps: UsersApiDeps | undefined,
-): AccountDeletionService {
-	if (deps?.createAccountDeletionService) {
-		return deps.createAccountDeletionService(directory);
+): UserDeletionService {
+	if (deps?.createUserDeletionService) {
+		return deps.createUserDeletionService(directory);
 	}
-	return createAccountDeletionService({
+	return createUserDeletionService({
 		directory,
 		deleteClerkUser: async (clerkUserId) => {
 			const { deleteClerkUser } = await import("@/lib/server/auth");
@@ -291,4 +325,8 @@ function usersErrorResponse(error: unknown, logMessage: string): Response {
 		return errorResponse(error.message, 400);
 	console.error(logMessage, redactAttributes({ error: asError(error) }));
 	return errorResponse("Something went wrong.", 500);
+}
+
+function isServerUnauthorizedError(error: unknown): error is Error {
+	return error instanceof Error && error.name === "UnauthorizedError";
 }

@@ -20,6 +20,7 @@ export type UpdateClerkUserName = (input: {
 export type UserService = {
 	anonymizeUser(input: UserDeletionIdentityInput): Promise<void>;
 	completeOnboarding(userId: string): Promise<void>;
+	findUserForDeletionByClerkUserId(clerkUserId: string): Promise<User | null>;
 	markUserDeleted(input: UserDeletionIdentityInput): Promise<void>;
 	recordClerkDeleted(input: UserDeletionIdentityInput): Promise<void>;
 	upsertUser(userRecord: ServerUserRecord): Promise<User>;
@@ -55,6 +56,9 @@ export function createUserService(deps: UserServiceDeps): UserService {
 		completeOnboarding(userId) {
 			return completeOnboarding(userId, deps.directory);
 		},
+		findUserForDeletionByClerkUserId(clerkUserId) {
+			return findUserForDeletionByClerkUserId(clerkUserId, deps.directory);
+		},
 		markUserDeleted(input) {
 			return markUserDeleted(input, deps.directory);
 		},
@@ -71,6 +75,34 @@ export function createUserService(deps: UserServiceDeps): UserService {
 			return upsertUser(userRecord, deps.directory);
 		},
 	};
+}
+
+async function findUserForDeletionByClerkUserId(
+	clerkUserId: string,
+	directory: UserServiceDirectory,
+): Promise<User | null> {
+	const [userByClerkId] = await directory
+		.select()
+		.from(users)
+		.where(eq(users.clerkUserId, clerkUserId))
+		.limit(1);
+	if (userByClerkId) return userByClerkId;
+
+	const [deletedIdentity] = await directory
+		.select()
+		.from(deletedUserIdentities)
+		.where(
+			eq(deletedUserIdentities.clerkUserIdHash, clerkUserIdHash(clerkUserId)),
+		)
+		.limit(1);
+	if (!deletedIdentity) return null;
+
+	const [deletedUser] = await directory
+		.select()
+		.from(users)
+		.where(eq(users.id, deletedIdentity.userId))
+		.limit(1);
+	return deletedUser ?? null;
 }
 
 async function anonymizeUser(

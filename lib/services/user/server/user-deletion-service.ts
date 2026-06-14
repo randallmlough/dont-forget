@@ -29,26 +29,26 @@ import {
 	lockHouseholdLifecycle,
 	lockUserLifecycle,
 } from "@/lib/services/shared/server/lifecycle-lock";
-import {
-	createUserService,
-	type UserService,
-} from "@/lib/services/user/server";
+import { createUserService, type UserService } from "./user-service";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
 >[0];
 
-export type AccountDeletionService = {
-	deleteAccount(input: { user: User }): Promise<AccountDeletionSummary>;
+export type UserDeletionService = {
+	deleteUser(input: {
+		user: User;
+		clerkUserId: string;
+	}): Promise<UserDeletionSummary>;
 };
 
-export type AccountDeletionSummary = {
+export type UserDeletionSummary = {
 	leftHouseholdIds: string[];
 	deletedHouseholdIds: string[];
 	databasesNotDeleted: string[];
 };
 
-export type AccountDeletionServiceDeps = {
+export type UserDeletionServiceDeps = {
 	directory: DirectoryDb;
 	memberService?: (directory: MemberServiceDirectory) => MemberService;
 	householdService?: (directory: HouseholdServiceDirectory) => HouseholdService;
@@ -73,26 +73,26 @@ type ActiveUserMembership = {
 	role: "owner" | "member";
 };
 
-export function createAccountDeletionService(
-	deps: AccountDeletionServiceDeps,
-): AccountDeletionService {
+export function createUserDeletionService(
+	deps: UserDeletionServiceDeps,
+): UserDeletionService {
 	return {
-		async deleteAccount(input) {
+		async deleteUser(input) {
 			const runTransaction = deps.transactionRunner ?? runWithSqliteBusyRetry;
 			const directoryResult = await runTransaction(() =>
 				deps.directory.transaction((tx) =>
-					deleteDirectoryAccountData(input.user, tx, deps),
+					deleteDirectoryUserData(input, tx, deps),
 				),
 			);
 			const databasesNotDeleted = await deleteHouseholdDatabases(
 				directoryResult.tursoDbNames,
 				deps,
 			);
-			await deps.deleteClerkUser(input.user.clerkUserId);
+			await deps.deleteClerkUser(input.clerkUserId);
 			await createUserService({ directory: deps.directory }).recordClerkDeleted(
 				{
 					userId: input.user.id,
-					clerkUserId: input.user.clerkUserId,
+					clerkUserId: input.clerkUserId,
 				},
 			);
 			await (
@@ -101,7 +101,7 @@ export function createAccountDeletionService(
 					createUserService({ directory: deps.directory }).anonymizeUser(
 						identity,
 					))
-			)({ userId: input.user.id, clerkUserId: input.user.clerkUserId });
+			)({ userId: input.user.id, clerkUserId: input.clerkUserId });
 			return {
 				leftHouseholdIds: directoryResult.leftHouseholdIds,
 				deletedHouseholdIds: directoryResult.deletedHouseholdIds,
@@ -111,11 +111,12 @@ export function createAccountDeletionService(
 	};
 }
 
-async function deleteDirectoryAccountData(
-	user: User,
+async function deleteDirectoryUserData(
+	input: { user: User; clerkUserId: string },
 	tx: DirectoryTransaction,
-	deps: AccountDeletionServiceDeps,
+	deps: UserDeletionServiceDeps,
 ): Promise<DirectoryDeletionResult> {
+	const { user } = input;
 	await lockUserLifecycle(user.id, tx);
 	const activeMemberships = await listActiveUserMemberships(user.id, tx);
 	const leftHouseholdIds: string[] = [];
@@ -164,7 +165,7 @@ async function deleteDirectoryAccountData(
 	await createPushTokenService({ directory: tx }).deleteTokensForUser(user.id);
 	await userService(tx, deps).markUserDeleted({
 		userId: user.id,
-		clerkUserId: user.clerkUserId,
+		clerkUserId: input.clerkUserId,
 	});
 
 	await tx
@@ -183,7 +184,7 @@ async function deleteDirectoryAccountData(
 
 function userService(
 	directory: DirectoryTransaction,
-	deps: AccountDeletionServiceDeps,
+	deps: UserDeletionServiceDeps,
 ): UserService {
 	return deps.userService?.(directory) ?? createUserService({ directory });
 }
@@ -232,7 +233,7 @@ async function countOtherActiveMembers(
 
 async function deleteHouseholdDatabases(
 	tursoDbNames: string[],
-	deps: AccountDeletionServiceDeps,
+	deps: UserDeletionServiceDeps,
 ): Promise<string[]> {
 	if (tursoDbNames.length === 0) return [];
 
@@ -254,14 +255,14 @@ async function deleteHouseholdDatabases(
 
 function memberService(
 	directory: MemberServiceDirectory,
-	deps: AccountDeletionServiceDeps,
+	deps: UserDeletionServiceDeps,
 ): MemberService {
 	return deps.memberService?.(directory) ?? createMemberService({ directory });
 }
 
 function householdService(
 	directory: HouseholdServiceDirectory,
-	deps: AccountDeletionServiceDeps,
+	deps: UserDeletionServiceDeps,
 ): HouseholdService {
 	return (
 		deps.householdService?.(directory) ?? createHouseholdService({ directory })

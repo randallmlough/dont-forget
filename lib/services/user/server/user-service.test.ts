@@ -5,6 +5,83 @@ import type { ServerUserRecord } from "@/lib/server/auth";
 import { createUserService, DeletedUserError } from "./user-service";
 
 describe("createUserService", () => {
+	it("finds an active User for deletion by Clerk ID", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createUserService({ directory: directory.db });
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				email: "avery@example.com",
+			});
+
+			await expect(
+				service.findUserForDeletionByClerkUserId("clerk_avery"),
+			).resolves.toMatchObject({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				deletedAt: null,
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("finds a deleted User for deletion by the original Clerk ID", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createUserService({ directory: directory.db });
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				deletedAt: 1,
+			});
+
+			await expect(
+				service.findUserForDeletionByClerkUserId("clerk_avery"),
+			).resolves.toMatchObject({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				deletedAt: 1,
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("finds an anonymized deleted User through the deleted identity hash", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createUserService({ directory: directory.db });
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				deletedAt: 1,
+			});
+			await service.recordClerkDeleted({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
+			await service.anonymizeUser({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
+
+			await expect(
+				service.findUserForDeletionByClerkUserId("clerk_avery"),
+			).resolves.toMatchObject({
+				id: "usr_avery",
+				clerkUserId: "deleted_usr_avery",
+				deletedAt: 1,
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
 	it("marks a deleted app User without removing the row or Clerk link", async () => {
 		const directory = await createTestDirectoryDb();
 		const service = createUserService({ directory: directory.db });

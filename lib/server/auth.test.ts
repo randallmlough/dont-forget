@@ -1,9 +1,11 @@
-import { createClerkClient } from "@clerk/backend";
+import { createClerkClient, verifyToken } from "@clerk/backend";
 import {
 	bearerToken,
 	deleteClerkUser,
 	UnauthorizedError,
 	updateClerkUserName,
+	verifyClerkRequest,
+	verifyClerkRequestUserId,
 } from "@/lib/server/auth";
 
 jest.mock("@clerk/backend", () => ({
@@ -22,6 +24,10 @@ jest.mock("@/lib/env", () => ({
 	readClerkServerConfig: () => ({ appEnv: "test", secretKey: "sk_test_jest" }),
 }));
 
+beforeEach(() => {
+	jest.clearAllMocks();
+});
+
 describe("bearerToken", () => {
 	it("extracts a valid bearer token", () => {
 		expect(bearerToken("Bearer session-token")).toBe("session-token");
@@ -31,6 +37,45 @@ describe("bearerToken", () => {
 		expect(() => bearerToken(null)).toThrow(UnauthorizedError);
 		expect(() => bearerToken("Basic session-token")).toThrow(UnauthorizedError);
 		expect(() => bearerToken("Bearer one two")).toThrow(UnauthorizedError);
+	});
+});
+
+describe("verifyClerkRequestUserId", () => {
+	it("returns the Clerk token subject without loading the Clerk User", async () => {
+		jest.mocked(verifyToken).mockResolvedValue(clerkJwtPayload("user_123"));
+
+		await expect(
+			verifyClerkRequestUserId(
+				new Request("http://test", {
+					headers: { authorization: "Bearer session-token" },
+				}),
+			),
+		).resolves.toBe("user_123");
+
+		expect(verifyToken).toHaveBeenCalledWith("session-token", {
+			secretKey: "sk_test_jest",
+		});
+		expect(createClerkClient).not.toHaveBeenCalled();
+	});
+});
+
+describe("verifyClerkRequest", () => {
+	it("maps a missing Clerk User to unauthorized", async () => {
+		jest.mocked(verifyToken).mockResolvedValue(clerkJwtPayload("user_123"));
+		const getUser = jest.fn(async () => {
+			throw clerkApiError(404);
+		});
+		jest
+			.mocked(createClerkClient)
+			.mockReturnValue(clerkClientWithUsers({ getUser }));
+
+		await expect(
+			verifyClerkRequest(
+				new Request("http://test", {
+					headers: { authorization: "Bearer session-token" },
+				}),
+			),
+		).rejects.toBeInstanceOf(UnauthorizedError);
 	});
 });
 
@@ -139,8 +184,23 @@ function clerkClientWithUpdateUser(
 	} as unknown as ReturnType<typeof createClerkClient>;
 }
 
+function clerkJwtPayload(sub: string): Awaited<ReturnType<typeof verifyToken>> {
+	const payload: Awaited<ReturnType<typeof verifyToken>> = {
+		__raw: "jwt",
+		exp: 2,
+		iat: 1,
+		iss: "clerk",
+		nbf: 1,
+		sid: "session_123",
+		sub,
+		v: 2,
+	};
+	return payload;
+}
+
 function clerkClientWithUsers(users: {
 	deleteUser?: jest.Mock;
+	getUser?: jest.Mock;
 	updateUser?: jest.Mock;
 }): ReturnType<typeof createClerkClient> {
 	return { users } as unknown as ReturnType<typeof createClerkClient>;

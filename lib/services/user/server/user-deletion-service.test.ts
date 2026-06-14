@@ -11,9 +11,9 @@ import {
 } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/server/test";
 import type { TursoPlatformClient } from "@/db/server/turso-platform";
-import { createAccountDeletionService } from "./account-deletion-service";
+import { createUserDeletionService } from "./user-deletion-service";
 
-describe("createAccountDeletionService", () => {
+describe("createUserDeletionService", () => {
 	it("deletes a sole-Owner Household and tears down its Turso database", async () => {
 		const directory = await createTestDirectoryDb();
 		const deleteDatabase = jest.fn(async () => undefined);
@@ -41,13 +41,13 @@ describe("createAccountDeletionService", () => {
 				role: "owner",
 			});
 
-			const summary = await createAccountDeletionService({
+			const summary = await createUserDeletionService({
 				directory: directory.db,
 				tursoPlatform: () => tursoPlatform(deleteDatabase),
 				deleteClerkUser,
 				anonymizeUser,
 				transactionRunner,
-			}).deleteAccount({ user });
+			}).deleteUser({ user, clerkUserId: "clerk_avery" });
 
 			expect(summary).toEqual({
 				leftHouseholdIds: [],
@@ -91,12 +91,12 @@ describe("createAccountDeletionService", () => {
 				role: "member",
 			});
 
-			const summary = await createAccountDeletionService({
+			const summary = await createUserDeletionService({
 				directory: directory.db,
 				tursoPlatform: () => tursoPlatform(),
 				deleteClerkUser: async () => undefined,
 				anonymizeUser: async () => undefined,
-			}).deleteAccount({ user });
+			}).deleteUser({ user, clerkUserId: "clerk_avery" });
 
 			expect(summary.deletedHouseholdIds).toEqual(["hh_orphan"]);
 			const [membership] = await directory.db
@@ -142,11 +142,11 @@ describe("createAccountDeletionService", () => {
 				joinedAt: 2,
 			});
 
-			const summary = await createAccountDeletionService({
+			const summary = await createUserDeletionService({
 				directory: directory.db,
 				deleteClerkUser: async () => undefined,
 				anonymizeUser: async () => undefined,
-			}).deleteAccount({ user: owner });
+			}).deleteUser({ user: owner, clerkUserId: "clerk_owner" });
 
 			expect(summary).toEqual({
 				leftHouseholdIds: ["hh_shared"],
@@ -188,11 +188,11 @@ describe("createAccountDeletionService", () => {
 				role: "member",
 			});
 
-			const summary = await createAccountDeletionService({
+			const summary = await createUserDeletionService({
 				directory: directory.db,
 				deleteClerkUser: async () => undefined,
 				anonymizeUser: async () => undefined,
-			}).deleteAccount({ user: member });
+			}).deleteUser({ user: member, clerkUserId: "clerk_member" });
 
 			expect(summary.leftHouseholdIds).toEqual(["hh_shared"]);
 			await expectMembershipRemoved(directory.db, "mbr_member");
@@ -261,12 +261,12 @@ describe("createAccountDeletionService", () => {
 				}),
 			]);
 
-			const summary = await createAccountDeletionService({
+			const summary = await createUserDeletionService({
 				directory: directory.db,
 				tursoPlatform: () => tursoPlatform(),
 				deleteClerkUser: async () => undefined,
 				anonymizeUser: async () => undefined,
-			}).deleteAccount({ user });
+			}).deleteUser({ user, clerkUserId: "clerk_avery" });
 
 			expect(summary).toEqual({
 				leftHouseholdIds: ["hh_shared"],
@@ -324,12 +324,12 @@ describe("createAccountDeletionService", () => {
 				}),
 			]);
 
-			await createAccountDeletionService({
+			await createUserDeletionService({
 				directory: directory.db,
 				tursoPlatform: () => tursoPlatform(),
 				deleteClerkUser: async () => undefined,
 				anonymizeUser: async () => undefined,
-			}).deleteAccount({ user });
+			}).deleteUser({ user, clerkUserId: "clerk_avery" });
 
 			await expect(directory.db.select().from(pushTokens)).resolves.toEqual([
 				expect.objectContaining({
@@ -363,7 +363,7 @@ describe("createAccountDeletionService", () => {
 				role: "owner",
 			});
 
-			const summary = await createAccountDeletionService({
+			const summary = await createUserDeletionService({
 				directory: directory.db,
 				tursoPlatform: () =>
 					tursoPlatform(
@@ -373,7 +373,7 @@ describe("createAccountDeletionService", () => {
 					),
 				deleteClerkUser: async () => undefined,
 				anonymizeUser: async () => undefined,
-			}).deleteAccount({ user });
+			}).deleteUser({ user, clerkUserId: "clerk_avery" });
 
 			expect(summary.databasesNotDeleted).toEqual(["df-test-hh-solo"]);
 			expect(errorSpy).toHaveBeenCalledWith(
@@ -405,14 +405,14 @@ describe("createAccountDeletionService", () => {
 			});
 
 			await expect(
-				createAccountDeletionService({
+				createUserDeletionService({
 					directory: directory.db,
 					tursoPlatform: () => tursoPlatform(),
 					deleteClerkUser: async () => {
 						throw new Error("Clerk unavailable");
 					},
 					anonymizeUser,
-				}).deleteAccount({ user }),
+				}).deleteUser({ user, clerkUserId: "clerk_avery" }),
 			).rejects.toThrow("Clerk unavailable");
 
 			await expectHouseholdDeleted(directory.db, "hh_solo");
@@ -448,14 +448,14 @@ describe("createAccountDeletionService", () => {
 			});
 
 			await expect(
-				createAccountDeletionService({
+				createUserDeletionService({
 					directory: directory.db,
 					tursoPlatform: () => tursoPlatform(),
 					deleteClerkUser,
 					anonymizeUser: async () => {
 						throw new Error("directory unavailable");
 					},
-				}).deleteAccount({ user }),
+				}).deleteUser({ user, clerkUserId: "clerk_avery" }),
 			).rejects.toThrow("directory unavailable");
 
 			expect(deleteClerkUser).toHaveBeenCalledWith("clerk_avery");
@@ -500,21 +500,21 @@ describe("createAccountDeletionService", () => {
 			});
 
 			await expect(
-				createAccountDeletionService({
+				createUserDeletionService({
 					directory: directory.db,
 					tursoPlatform: () => tursoPlatform(),
 					deleteClerkUser: async () => {
 						throw new Error("Clerk unavailable");
 					},
 					anonymizeUser,
-				}).deleteAccount({ user }),
+				}).deleteUser({ user, clerkUserId: "clerk_avery" }),
 			).rejects.toThrow("Clerk unavailable");
 
-			const summary = await createAccountDeletionService({
+			const summary = await createUserDeletionService({
 				directory: directory.db,
 				deleteClerkUser: async () => undefined,
 				anonymizeUser,
-			}).deleteAccount({ user });
+			}).deleteUser({ user, clerkUserId: "clerk_avery" });
 
 			expect(summary).toEqual({
 				leftHouseholdIds: [],
@@ -529,6 +529,44 @@ describe("createAccountDeletionService", () => {
 				clerkUserId: "deleted_usr_avery",
 				deletedAt: 2,
 			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("finalizes a retry with the original Clerk subject after the User row is tombstoned", async () => {
+		const directory = await createTestDirectoryDb();
+		const deleteClerkUser = jest.fn(async () => undefined);
+
+		try {
+			const user = await seedUser(directory.db, "usr_avery", "clerk_avery");
+
+			await createUserDeletionService({
+				directory: directory.db,
+				deleteClerkUser,
+			}).deleteUser({ user, clerkUserId: "clerk_avery" });
+
+			const [tombstonedUser] = await directory.db
+				.select()
+				.from(users)
+				.where(eq(users.id, user.id));
+			expect(tombstonedUser).toMatchObject({
+				clerkUserId: "deleted_usr_avery",
+				deletedAt: expect.any(Number),
+			});
+
+			await createUserDeletionService({
+				directory: directory.db,
+				deleteClerkUser,
+			}).deleteUser({
+				user: tombstonedUser,
+				clerkUserId: "clerk_avery",
+			});
+
+			expect(deleteClerkUser).toHaveBeenCalledTimes(2);
+			expect(deleteClerkUser).toHaveBeenNthCalledWith(1, "clerk_avery");
+			expect(deleteClerkUser).toHaveBeenNthCalledWith(2, "clerk_avery");
+			expect(deleteClerkUser).not.toHaveBeenCalledWith("deleted_usr_avery");
 		} finally {
 			await directory.close();
 		}
