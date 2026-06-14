@@ -121,6 +121,15 @@ export function useHouseholdSwitch(
 			type: "operationStarted",
 			operation: { status: "joiningByCode" },
 		});
+		const synced = await syncCurrentHousehold(
+			session,
+			"Unable to sync this Household before joining. Try again.",
+			dispatch,
+		);
+		if (!synced) {
+			return;
+		}
+
 		try {
 			await client.joinByCode(code);
 			finishHouseholdChange(reloadSession, router);

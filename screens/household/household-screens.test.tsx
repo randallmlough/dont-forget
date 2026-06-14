@@ -1104,6 +1104,32 @@ describe("HouseholdSwitch", () => {
 		});
 	});
 
+	it("shows Household switch notices at the screen form level", async () => {
+		const notice =
+			"Unable to sync this Household before creating a new Household. Try again.";
+
+		await render(
+			<HouseholdSwitchView
+				session={sessionFixture()}
+				state={{
+					code: "",
+					householdName: "",
+					notice,
+					operation: { status: "idle" },
+				}}
+				onCodeChange={jest.fn()}
+				onHouseholdNameChange={jest.fn()}
+				onCreateHousehold={jest.fn()}
+				onJoinByCode={jest.fn()}
+				onSwitchHousehold={jest.fn()}
+			/>,
+		);
+
+		expect(screen.getByText(notice).parent).not.toBe(
+			screen.getByText("Join Household with Code").parent,
+		);
+	});
+
 	it("keeps the current Household when sync-before-switch fails", async () => {
 		const session = sessionFixture();
 		const switchHousehold = jest.fn(async () => undefined);
@@ -1179,6 +1205,44 @@ describe("HouseholdSwitch", () => {
 			).toBeTruthy(),
 		);
 		expect(switchHousehold).not.toHaveBeenCalled();
+	});
+
+	it("keeps the current Household when sync-before-join fails", async () => {
+		const session = sessionFixture();
+		const joinByCode = jest.fn(async () => undefined);
+		session.services.sync.requestSync = jest.fn(async () => null);
+
+		function Harness() {
+			const model = useHouseholdSwitch(session, mockReloadSession, {
+				...emptyClient(),
+				joinByCode,
+			});
+			return (
+				<>
+					<PressableText
+						label="Set code"
+						onPress={() => model.setCode("ABCDEFGH")}
+					/>
+					<PressableText label="Join" onPress={() => void model.joinByCode()} />
+					{model.state.notice ? (
+						<TextNode>{model.state.notice}</TextNode>
+					) : null}
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await fireEvent.press(screen.getByText("Set code"));
+		await fireEvent.press(screen.getByText("Join"));
+
+		await screen.findByText(
+			"Unable to sync this Household before joining. Try again.",
+		);
+		expect(joinByCode).not.toHaveBeenCalled();
+		expect(mockReloadSession).not.toHaveBeenCalled();
+		expect(session.services.sync.requestSync).toHaveBeenCalledWith({
+			reason: "manualRefresh",
+		});
 	});
 
 	it("does not join by code while a Household switch is running", async () => {

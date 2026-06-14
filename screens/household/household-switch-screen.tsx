@@ -101,6 +101,9 @@ export function HouseholdSwitchView({
 							onCodeChange={onCodeChange}
 							onJoinByCode={onJoinByCode}
 						/>
+						{state.notice ? (
+							<Text style={styles.noticeText}>{state.notice}</Text>
+						) : null}
 						<Text style={styles.sectionTitle}>Your Households</Text>
 					</View>
 				}
@@ -178,9 +181,6 @@ function JoinByCodeForm({
 				onPress={onJoinByCode}
 				disabled={busy}
 			/>
-			{state.notice ? (
-				<Text style={styles.noticeText}>{state.notice}</Text>
-			) : null}
 		</View>
 	);
 }
