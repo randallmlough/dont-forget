@@ -664,6 +664,55 @@ describe("useHouseholdSettings", () => {
 		});
 	});
 
+	it("keeps the current Household when sync-before-leave fails", async () => {
+		const session = sessionFixture();
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			leaveHousehold: jest.fn(async () => ({
+				left: true as const,
+				promotedMembershipId: null,
+			})),
+		});
+		session.services.sync.requestSync = jest.fn(async () => {
+			throw new Error("sync failed");
+		});
+
+		function Harness() {
+			const { state, actions } = useHouseholdSettings(
+				session,
+				client,
+				reloadSession,
+			);
+			if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+			return (
+				<>
+					<PressableText
+						label="Leave"
+						onPress={() => {
+							void actions.leaveHousehold();
+						}}
+					/>
+					<TextNode>{state.operation.status}</TextNode>
+					{state.notice ? <TextNode>{state.notice}</TextNode> : null}
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Leave"));
+
+		await screen.findByText(
+			"Unable to sync this Household before leaving. Try again.",
+		);
+		expect(client.leaveHousehold).not.toHaveBeenCalled();
+		expect(reloadSession).not.toHaveBeenCalled();
+		expect(session.services.sync.requestSync).toHaveBeenCalledWith({
+			reason: "manualRefresh",
+		});
+	});
+
 	it("surfaces leave failures without retiring or routing", async () => {
 		const reloadSession = jest.fn();
 		const client = readySettingsClient({
