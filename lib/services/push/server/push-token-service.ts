@@ -40,6 +40,7 @@ export type PushTokenService = {
 	disableToken(input: DisablePushTokenInput): Promise<void>;
 	disableTokens(input: DisablePushTokensInput): Promise<void>;
 	disableTokensForUser(userId: string): Promise<void>;
+	deleteTokensForUser(userId: string): Promise<void>;
 	listActiveTokensForUsers(userIds: string[]): Promise<PushTokenRecord[]>;
 };
 
@@ -116,6 +117,10 @@ export function createPushTokenService(
 				.where(
 					and(eq(pushTokens.userId, userId), isNull(pushTokens.disabledAt)),
 				);
+		},
+
+		async deleteTokensForUser(userId) {
+			await directory.delete(pushTokens).where(eq(pushTokens.userId, userId));
 		},
 
 		async listActiveTokensForUsers(userIds) {

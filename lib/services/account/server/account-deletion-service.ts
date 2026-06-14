@@ -54,7 +54,10 @@ export type AccountDeletionServiceDeps = {
 	householdService?: (directory: HouseholdServiceDirectory) => HouseholdService;
 	tursoPlatform?: () => TursoPlatformClient;
 	deleteClerkUser: (clerkUserId: string) => Promise<void>;
-	anonymizeUser?: (userId: string) => Promise<void>;
+	anonymizeUser?: (input: {
+		userId: string;
+		clerkUserId: string;
+	}) => Promise<void>;
 	transactionRunner?: <T>(operation: () => Promise<T>) => Promise<T>;
 	userService?: (directory: DirectoryTransaction) => UserService;
 };
@@ -86,13 +89,19 @@ export function createAccountDeletionService(
 				deps,
 			);
 			await deps.deleteClerkUser(input.user.clerkUserId);
+			await createUserService({ directory: deps.directory }).recordClerkDeleted(
+				{
+					userId: input.user.id,
+					clerkUserId: input.user.clerkUserId,
+				},
+			);
 			await (
 				deps.anonymizeUser ??
-				((userId) =>
+				((identity) =>
 					createUserService({ directory: deps.directory }).anonymizeUser(
-						userId,
+						identity,
 					))
-			)(input.user.id);
+			)({ userId: input.user.id, clerkUserId: input.user.clerkUserId });
 			return {
 				leftHouseholdIds: directoryResult.leftHouseholdIds,
 				deletedHouseholdIds: directoryResult.deletedHouseholdIds,
@@ -152,8 +161,11 @@ async function deleteDirectoryAccountData(
 		leftHouseholdIds.push(membership.householdId);
 	}
 
-	await createPushTokenService({ directory: tx }).disableTokensForUser(user.id);
-	await userService(tx, deps).markUserDeleted(user.id);
+	await createPushTokenService({ directory: tx }).deleteTokensForUser(user.id);
+	await userService(tx, deps).markUserDeleted({
+		userId: user.id,
+		clerkUserId: user.clerkUserId,
+	});
 
 	await tx
 		.update(invitations)

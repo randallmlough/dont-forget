@@ -1,4 +1,5 @@
-import { users } from "@/db/schema/directory";
+import { eq } from "drizzle-orm";
+import { deletedUserIdentities, users } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/server/test";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import { createUserService, DeletedUserError } from "./user-service";
@@ -23,9 +24,13 @@ describe("createUserService", () => {
 			});
 			dateNow.mockReturnValueOnce(1_700_000_002_000);
 
-			await service.markUserDeleted("usr_avery");
+			await service.markUserDeleted({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
 
 			const [user] = await directory.db.select().from(users);
+			const [guard] = await directory.db.select().from(deletedUserIdentities);
 			expect(user).toMatchObject({
 				id: "usr_avery",
 				clerkUserId: "clerk_avery",
@@ -38,6 +43,13 @@ describe("createUserService", () => {
 				updatedAt: 1_700_000_002_000,
 				deletedAt: 1_700_000_002_000,
 			});
+			expect(guard).toMatchObject({
+				userId: "usr_avery",
+				directoryDeletedAt: 1_700_000_002_000,
+				clerkDeletedAt: null,
+				anonymizedAt: null,
+			});
+			expect(guard.clerkUserIdHash).not.toBe("clerk_avery");
 		} finally {
 			dateNow.mockRestore();
 			await directory.close();
@@ -62,11 +74,19 @@ describe("createUserService", () => {
 				updatedAt: 1,
 				deletedAt: 1,
 			});
+			await service.markUserDeleted({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
 			dateNow.mockReturnValueOnce(1_700_000_003_000);
 
-			await service.anonymizeUser("usr_avery");
+			await service.anonymizeUser({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
 
 			const [user] = await directory.db.select().from(users);
+			const [guard] = await directory.db.select().from(deletedUserIdentities);
 			expect(user).toMatchObject({
 				id: "usr_avery",
 				clerkUserId: "deleted_usr_avery",
@@ -74,9 +94,45 @@ describe("createUserService", () => {
 				firstName: null,
 				lastName: null,
 				displayName: null,
-				deletedAt: 1,
+				deletedAt: expect.any(Number),
 				updatedAt: 1_700_000_003_000,
 			});
+			expect(guard).toMatchObject({
+				userId: "usr_avery",
+				directoryDeletedAt: expect.any(Number),
+				anonymizedAt: 1_700_000_003_000,
+			});
+		} finally {
+			dateNow.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("records Clerk deletion finalization without clearing the guard", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createUserService({ directory: directory.db });
+		const dateNow = jest.spyOn(Date, "now");
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				deletedAt: 1,
+			});
+			dateNow.mockReturnValueOnce(1_700_000_004_000);
+
+			await service.recordClerkDeleted({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
+
+			const [guard] = await directory.db.select().from(deletedUserIdentities);
+			expect(guard).toMatchObject({
+				userId: "usr_avery",
+				clerkDeletedAt: 1_700_000_004_000,
+				anonymizedAt: null,
+			});
+			expect(guard.clerkUserIdHash).not.toBe("clerk_avery");
 		} finally {
 			dateNow.mockRestore();
 			await directory.close();
@@ -102,6 +158,47 @@ describe("createUserService", () => {
 				DeletedUserError,
 			);
 			expect(await directory.db.select().from(users)).toHaveLength(1);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects a stale Clerk identity after the User row Clerk link is tombstoned", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createUserService({ directory: directory.db });
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				email: "avery@example.com",
+				firstName: "Avery",
+				lastName: "Chen",
+				displayName: "Avery Chen",
+			});
+			await service.markUserDeleted({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
+			await service.recordClerkDeleted({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
+			await service.anonymizeUser({
+				userId: "usr_avery",
+				clerkUserId: "clerk_avery",
+			});
+
+			await expect(service.upsertUser(averyProfile)).rejects.toBeInstanceOf(
+				DeletedUserError,
+			);
+			expect(await directory.db.select().from(users)).toHaveLength(1);
+			await expect(
+				directory.db
+					.select()
+					.from(users)
+					.where(eq(users.clerkUserId, "clerk_avery")),
+			).resolves.toEqual([]);
 		} finally {
 			await directory.close();
 		}

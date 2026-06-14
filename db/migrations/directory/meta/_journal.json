@@ -36,6 +36,13 @@
       "when": 1781392500490,
       "tag": "0004_cynical_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781395751046,
+      "tag": "0005_open_scarecrow",
+      "breakpoints": true
     }
   ]
 }

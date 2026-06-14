@@ -1,5 +1,6 @@
-import { eq } from "drizzle-orm";
-import { type User, users } from "@/db/schema/directory";
+import { createHash } from "node:crypto";
+import { eq, sql } from "drizzle-orm";
+import { deletedUserIdentities, type User, users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
 import type { ServerUserProfile } from "@/lib/server/auth";
@@ -11,9 +12,15 @@ type DirectoryTransaction = Parameters<
 export type UserServiceDirectory = DirectoryDb | DirectoryTransaction;
 
 export type UserService = {
-	anonymizeUser(userId: string): Promise<void>;
-	markUserDeleted(userId: string): Promise<void>;
+	anonymizeUser(input: UserDeletionIdentityInput): Promise<void>;
+	markUserDeleted(input: UserDeletionIdentityInput): Promise<void>;
+	recordClerkDeleted(input: UserDeletionIdentityInput): Promise<void>;
 	upsertUser(profile: ServerUserProfile): Promise<User>;
+};
+
+export type UserDeletionIdentityInput = {
+	userId: string;
+	clerkUserId: string;
 };
 
 export type UserServiceDeps = {
@@ -29,11 +36,14 @@ export class DeletedUserError extends Error {
 
 export function createUserService(deps: UserServiceDeps): UserService {
 	return {
-		anonymizeUser(userId) {
-			return anonymizeUser(userId, deps.directory);
+		anonymizeUser(input) {
+			return anonymizeUser(input, deps.directory);
 		},
-		markUserDeleted(userId) {
-			return markUserDeleted(userId, deps.directory);
+		markUserDeleted(input) {
+			return markUserDeleted(input, deps.directory);
+		},
+		recordClerkDeleted(input) {
+			return recordClerkDeleted(input, deps.directory);
 		},
 		upsertUser(profile) {
 			return upsertUser(profile, deps.directory);
@@ -42,24 +52,40 @@ export function createUserService(deps: UserServiceDeps): UserService {
 }
 
 async function anonymizeUser(
-	userId: string,
+	input: UserDeletionIdentityInput,
 	directory: UserServiceDirectory,
 ): Promise<void> {
 	const now = Date.now();
 	await directory
 		.update(users)
 		.set({
-			clerkUserId: `deleted_${userId}`,
+			clerkUserId: `deleted_${input.userId}`,
 			updatedAt: now,
 		})
-		.where(eq(users.id, userId));
+		.where(eq(users.id, input.userId));
+	await upsertDeletedUserIdentity(
+		{
+			userId: input.userId,
+			clerkUserId: input.clerkUserId,
+			anonymizedAt: now,
+		},
+		directory,
+	);
 }
 
 async function markUserDeleted(
-	userId: string,
+	input: UserDeletionIdentityInput,
 	directory: UserServiceDirectory,
 ): Promise<void> {
 	const now = Date.now();
+	await upsertDeletedUserIdentity(
+		{
+			userId: input.userId,
+			clerkUserId: input.clerkUserId,
+			directoryDeletedAt: now,
+		},
+		directory,
+	);
 	await directory
 		.update(users)
 		.set({
@@ -71,13 +97,41 @@ async function markUserDeleted(
 			updatedAt: now,
 			deletedAt: now,
 		})
-		.where(eq(users.id, userId));
+		.where(eq(users.id, input.userId));
+}
+
+async function recordClerkDeleted(
+	input: UserDeletionIdentityInput,
+	directory: UserServiceDirectory,
+): Promise<void> {
+	await upsertDeletedUserIdentity(
+		{
+			userId: input.userId,
+			clerkUserId: input.clerkUserId,
+			clerkDeletedAt: Date.now(),
+		},
+		directory,
+	);
 }
 
 async function upsertUser(
 	profile: ServerUserProfile,
 	directory: UserServiceDirectory,
 ): Promise<User> {
+	const [deletedIdentity] = await directory
+		.select()
+		.from(deletedUserIdentities)
+		.where(
+			eq(
+				deletedUserIdentities.clerkUserIdHash,
+				clerkUserIdHash(profile.clerkUserId),
+			),
+		)
+		.limit(1);
+	if (deletedIdentity) {
+		throw new DeletedUserError();
+	}
+
 	const [existing] = await directory
 		.select()
 		.from(users)
@@ -120,4 +174,43 @@ async function upsertUser(
 	}
 
 	return user;
+}
+
+type DeletedUserIdentityUpdate = {
+	userId: string;
+	clerkUserId: string;
+	directoryDeletedAt?: number;
+	clerkDeletedAt?: number;
+	anonymizedAt?: number;
+};
+
+async function upsertDeletedUserIdentity(
+	input: DeletedUserIdentityUpdate,
+	directory: UserServiceDirectory,
+): Promise<void> {
+	const values = {
+		id: createAppId("dui"),
+		userId: input.userId,
+		clerkUserIdHash: clerkUserIdHash(input.clerkUserId),
+		createdAt: input.directoryDeletedAt ?? Date.now(),
+		directoryDeletedAt: input.directoryDeletedAt,
+		clerkDeletedAt: input.clerkDeletedAt,
+		anonymizedAt: input.anonymizedAt,
+	};
+	await directory
+		.insert(deletedUserIdentities)
+		.values(values)
+		.onConflictDoUpdate({
+			target: deletedUserIdentities.clerkUserIdHash,
+			set: {
+				userId: input.userId,
+				directoryDeletedAt: sql`coalesce(excluded.directory_deleted_at, ${deletedUserIdentities.directoryDeletedAt})`,
+				clerkDeletedAt: sql`coalesce(excluded.clerk_deleted_at, ${deletedUserIdentities.clerkDeletedAt})`,
+				anonymizedAt: sql`coalesce(excluded.anonymized_at, ${deletedUserIdentities.anonymizedAt})`,
+			},
+		});
+}
+
+function clerkUserIdHash(clerkUserId: string): string {
+	return createHash("sha256").update(clerkUserId).digest("hex");
 }
