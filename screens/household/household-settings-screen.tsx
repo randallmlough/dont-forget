@@ -319,6 +319,7 @@ function MemberRow({
 		operation.status === "changingRole" &&
 		operation.membershipId === member.membershipId;
 	const nextRole = member.role === "owner" ? "member" : "owner";
+	const memberName = member.displayName ?? "this Member";
 
 	return (
 		<View style={styles.row}>
@@ -333,11 +334,15 @@ function MemberRow({
 			{canManageMembers ? (
 				<View style={styles.memberActions}>
 					<HouseholdButton
+						accessibilityLabel={`Make ${memberName} ${
+							nextRole === "owner" ? "an Owner" : "a Member"
+						}`}
 						label={changingRole ? "Changing" : roleActionLabel(nextRole)}
 						onPress={() => confirmRoleChange(member, nextRole, actions)}
 						disabled={changingRole}
 					/>
 					<HouseholdButton
+						accessibilityLabel={`Remove ${memberName} from this Household`}
 						variant="danger"
 						label={removing ? "Removing" : "Remove"}
 						onPress={() => confirmRemoveMember(member, actions)}

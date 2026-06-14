@@ -78,13 +78,13 @@ export type EventMap = {
 	member_removed: {
 		household_id: string;
 		membership_id: string;
-		removed_by_user_id: string;
+		requested_by_user_id: string;
 	};
 	member_role_changed: {
 		household_id: string;
 		membership_id: string;
 		role: "owner" | "member";
-		changed_by_user_id: string;
+		requested_by_user_id: string;
 	};
 	household_left: {
 		household_id: string;

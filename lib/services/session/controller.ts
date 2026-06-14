@@ -95,6 +95,7 @@ export type AuthenticatedAppSessionController = {
 	activate: (activation: AuthenticatedAppSessionActivation) => Promise<void>;
 	dispose: () => Promise<AuthenticatedAppSessionDisposal>;
 	getSnapshot: () => AuthenticatedAppSessionStateSnapshot;
+	invalidateCurrentSession: () => Promise<void>;
 	subscribe: (subscriber: AuthenticatedAppSessionSubscriber) => {
 		remove: () => void;
 	};
@@ -416,6 +417,22 @@ export function createAuthenticatedAppSessionController(
 			}
 
 			await handleSignedInActivation(activation, run, cachedAttempt);
+		},
+
+		async invalidateCurrentSession() {
+			activationRun += 1;
+			publish({ status: "loading" });
+			const results = await Promise.allSettled([
+				resources.closeOpeningResources(),
+				resources.closeActiveResource(),
+			]);
+			for (const result of results) {
+				if (result.status === "rejected") {
+					logger.error("authenticated app session resource close failed", {
+						error: asError(result.reason),
+					});
+				}
+			}
 		},
 
 		async dispose() {

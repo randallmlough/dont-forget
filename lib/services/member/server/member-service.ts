@@ -7,7 +7,11 @@ import {
 	users,
 } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
+import { runWithSqliteBusyRetry } from "@/db/utils";
 import { createAppId } from "@/lib/ids";
+import { serverServiceAnalytics } from "@/lib/server/analytics";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
+import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -117,9 +121,11 @@ export type MemberService = {
 
 export type MemberServiceDeps = {
 	directory: MemberServiceDirectory;
+	analytics?: ServiceAnalytics;
 };
 
 export function createMemberService(deps: MemberServiceDeps): MemberService {
+	const analytics = deps.analytics ?? serverServiceAnalytics;
 	return {
 		findOldestActiveMembership(userId) {
 			return findOldestActiveMembership(userId, deps.directory);
@@ -139,16 +145,71 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 		listHouseholdMembers(householdId) {
 			return listHouseholdMembers(householdId, deps.directory);
 		},
-		removeMember(input) {
-			return removeMember(input, deps.directory);
+		async removeMember(input) {
+			await runMemberManagementCommand(
+				input.householdId,
+				deps.directory,
+				(tx) => removeMemberInTransaction(input, tx),
+			);
+			analytics.track("member_removed", {
+				household_id: input.householdId,
+				membership_id: input.membershipId,
+				requested_by_user_id: input.requestedByUserId,
+			});
 		},
-		changeMemberRole(input) {
-			return changeMemberRole(input, deps.directory);
+		async changeMemberRole(input) {
+			const changed = await runMemberManagementCommand(
+				input.householdId,
+				deps.directory,
+				(tx) => changeMemberRoleInTransaction(input, tx),
+			);
+			if (changed) {
+				analytics.track("member_role_changed", {
+					household_id: input.householdId,
+					membership_id: input.membershipId,
+					role: input.role,
+					requested_by_user_id: input.requestedByUserId,
+				});
+			}
 		},
-		leaveHousehold(input) {
-			return leaveHousehold(input, deps.directory);
+		async leaveHousehold(input) {
+			const result = await runMemberManagementCommand(
+				input.householdId,
+				deps.directory,
+				(tx) => leaveHouseholdInTransaction(input, tx),
+			);
+			analytics.track("household_left", {
+				household_id: input.householdId,
+				user_id: input.userId,
+				promoted_membership_id: result.promotedMembershipId,
+			});
+			return result;
 		},
 	};
+}
+
+async function runMemberManagementCommand<T>(
+	householdId: string,
+	directory: MemberServiceDirectory,
+	command: (tx: DirectoryTransaction) => Promise<T>,
+): Promise<T> {
+	if (hasTransaction(directory)) {
+		return runWithSqliteBusyRetry(() =>
+			directory.transaction(async (tx) => {
+				await lockHouseholdLifecycle(householdId, tx);
+				return command(tx);
+			}),
+		);
+	}
+
+	await lockHouseholdLifecycle(householdId, directory);
+	return command(directory);
+}
+
+function hasTransaction(
+	directory: MemberServiceDirectory,
+): directory is DirectoryDb {
+	return "transaction" in directory;
 }
 
 async function findOldestActiveMembership(
@@ -344,7 +405,7 @@ async function listHouseholdMembers(
 	return rows.map(({ joinedAt: _joinedAt, ...row }) => row);
 }
 
-async function removeMember(
+async function removeMemberInTransaction(
 	input: {
 		householdId: string;
 		membershipId: string;
@@ -397,7 +458,7 @@ async function removeMember(
 		.where(eq(memberships.id, target.id));
 }
 
-async function changeMemberRole(
+async function changeMemberRoleInTransaction(
 	input: {
 		householdId: string;
 		membershipId: string;
@@ -405,7 +466,7 @@ async function changeMemberRole(
 		requestedByUserId: string;
 	},
 	directory: MemberServiceDirectory,
-): Promise<void> {
+): Promise<boolean> {
 	const requester = await findActiveMembershipRow(
 		{
 			householdId: input.householdId,
@@ -425,7 +486,7 @@ async function changeMemberRole(
 		directory,
 	);
 	if (!target) throw new MemberNotFoundError();
-	if (target.role === input.role) return;
+	if (target.role === input.role) return false;
 
 	const activeMembers = await listActiveMembershipRows(
 		input.householdId,
@@ -445,9 +506,10 @@ async function changeMemberRole(
 		.update(memberships)
 		.set({ role: input.role })
 		.where(eq(memberships.id, target.id));
+	return true;
 }
 
-async function leaveHousehold(
+async function leaveHouseholdInTransaction(
 	input: { householdId: string; userId: string },
 	directory: MemberServiceDirectory,
 ): Promise<{ promotedMembershipId: string | null }> {

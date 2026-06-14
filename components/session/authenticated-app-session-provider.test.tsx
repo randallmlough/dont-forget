@@ -162,6 +162,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
 		expect(screen.queryByText("authenticated-app-session:1")).toBeNull();
 		expect(controller.activate).toHaveBeenCalledTimes(2);
+		expect(controller.invalidateCurrentSession).toHaveBeenCalledTimes(1);
 	});
 
 	it("stops exposing ready session data while loading has no previous session", async () => {
@@ -756,6 +757,13 @@ function authenticatedAppSessionControllerFixture({
 			ReturnType<AuthenticatedAppSessionController["dispose"]>,
 			Parameters<AuthenticatedAppSessionController["dispose"]>
 		>(async () => ({ householdIdsForLocalDataDeletion: [] })),
+		invalidateCurrentSession: jest.fn<
+			ReturnType<AuthenticatedAppSessionController["invalidateCurrentSession"]>,
+			Parameters<AuthenticatedAppSessionController["invalidateCurrentSession"]>
+		>(async () => {
+			currentSnapshot = { status: "loading" };
+			for (const subscriber of subscribers) subscriber(currentSnapshot);
+		}),
 		getSnapshot: jest.fn<
 			ReturnType<AuthenticatedAppSessionController["getSnapshot"]>,
 			Parameters<AuthenticatedAppSessionController["getSnapshot"]>
