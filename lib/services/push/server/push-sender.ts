@@ -17,6 +17,8 @@ export type PushSendResult = {
 
 export type PushSenderDeps = {
 	fetchFn?: typeof globalThis.fetch;
+	receiptRetryDelaysMs?: number[];
+	sleep?: (delayMs: number) => Promise<void>;
 };
 
 export class PushSendError extends Error {
@@ -98,17 +100,49 @@ export async function sendPushNotifications(
 		}
 		throw new PushSendError(`Expo push send failed: ${ticket.message}`);
 	}
-	deadTokens.push(...(await fetchDeadReceiptTokens(acceptedTickets, fetchFn)));
+	deadTokens.push(
+		...(await fetchDeadReceiptTokens(acceptedTickets, {
+			fetchFn,
+			retryDelaysMs: deps.receiptRetryDelaysMs ?? [1_000, 2_000],
+			sleep: deps.sleep ?? sleep,
+		})),
+	);
 
 	return { deadTokens };
 }
 
 async function fetchDeadReceiptTokens(
 	tickets: { id: string; expoPushToken: string }[],
-	fetchFn: typeof globalThis.fetch,
+	deps: {
+		fetchFn: typeof globalThis.fetch;
+		retryDelaysMs: number[];
+		sleep: (delayMs: number) => Promise<void>;
+	},
 ): Promise<string[]> {
 	if (tickets.length === 0) return [];
 
+	let pendingTickets = tickets;
+	const deadTokens: string[] = [];
+	for (let attempt = 0; ; attempt++) {
+		const result = await fetchReceiptAttempt(pendingTickets, deps.fetchFn);
+		deadTokens.push(...result.deadTokens);
+		pendingTickets = result.missingTickets;
+		if (pendingTickets.length === 0) return deadTokens;
+		const retryDelayMs = deps.retryDelaysMs[attempt];
+		if (retryDelayMs === undefined) {
+			throw new PushSendError("Expo push receipts were not ready");
+		}
+		await deps.sleep(retryDelayMs);
+	}
+}
+
+async function fetchReceiptAttempt(
+	tickets: { id: string; expoPushToken: string }[],
+	fetchFn: typeof globalThis.fetch,
+): Promise<{
+	deadTokens: string[];
+	missingTickets: { id: string; expoPushToken: string }[];
+}> {
 	const response = await fetchFn(EXPO_PUSH_RECEIPTS_URL, {
 		method: "POST",
 		headers: {
@@ -130,9 +164,13 @@ async function fetchDeadReceiptTokens(
 	}
 
 	const deadTokens: string[] = [];
+	const missingTickets: { id: string; expoPushToken: string }[] = [];
 	for (const ticket of tickets) {
 		const receipt = parsed.data.data[ticket.id];
-		if (!receipt) continue;
+		if (!receipt) {
+			missingTickets.push(ticket);
+			continue;
+		}
 		if (receipt.status === "ok") continue;
 		if (receipt.details?.error === "DeviceNotRegistered") {
 			deadTokens.push(ticket.expoPushToken);
@@ -140,5 +178,9 @@ async function fetchDeadReceiptTokens(
 		}
 		throw new PushSendError(`Expo push receipt failed: ${receipt.message}`);
 	}
-	return deadTokens;
+	return { deadTokens, missingTickets };
+}
+
+function sleep(delayMs: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, delayMs));
 }

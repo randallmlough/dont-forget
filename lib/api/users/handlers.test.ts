@@ -106,6 +106,40 @@ describe("Users API handlers", () => {
 		}
 	});
 
+	it("accepts current Expo push token prefixes during registration", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			await directory.db.insert(users).values({
+				id: testUser.id,
+				clerkUserId: testUser.clerkUserId,
+				displayName: testUser.displayName,
+			});
+
+			const response = await handleRegisterPushToken(
+				jsonRequest({
+					expoPushToken: "ExpoPushToken[current]",
+					deviceName: "Avery's iPhone",
+				}),
+				{
+					directory: directory.db,
+					authenticate: async () => testUser,
+				},
+			);
+
+			expect(response.status).toBe(200);
+			const [row] = await directory.db
+				.select()
+				.from(pushTokens)
+				.where(eq(pushTokens.expoPushToken, "ExpoPushToken[current]"));
+			expect(row).toMatchObject({
+				userId: testUser.id,
+				expoPushToken: "ExpoPushToken[current]",
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
 	it("redacts thrown push token errors before logging generic server failures", async () => {
 		const directory = await createTestDirectoryDb();
 		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
