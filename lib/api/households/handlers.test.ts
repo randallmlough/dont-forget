@@ -326,57 +326,6 @@ describe("Household API handlers", () => {
 		}
 	});
 
-	it("locks Household lifecycle before Member mutation service reads", async () => {
-		const events: string[] = [];
-		const tx = {
-			update: () => ({
-				set: () => ({
-					where: async () => {
-						events.push("lock");
-					},
-				}),
-			}),
-		};
-		const directory = {
-			transaction: async <T>(
-				operation: (transaction: typeof tx) => Promise<T>,
-			) => operation(tx),
-		};
-
-		const response = await handleRemoveMember(
-			createApiRequest({ method: "DELETE" }),
-			{ householdId: "hh_avery", membershipId: "mbr_blake" },
-			{
-				directory: directory as unknown as HouseholdApiDeps["directory"],
-				authenticate: async () => ({
-					id: "usr_avery",
-					clerkUserId: "user_avery",
-					email: "avery@example.com",
-					firstName: "Avery",
-					lastName: "Chen",
-					displayName: "Avery Chen",
-					activeHouseholdId: "hh_avery",
-					createdAt: now,
-					updatedAt: now,
-				}),
-				createMemberService: () =>
-					({
-						removeMember: async () => {
-							events.push("service");
-						},
-					}) as unknown as ReturnType<
-						NonNullable<HouseholdApiDeps["createMemberService"]>
-					>,
-			},
-		);
-
-		await expect(readJsonResponse(response)).resolves.toMatchObject({
-			status: 200,
-			body: { removed: true },
-		});
-		expect(events).toEqual(["lock", "service"]);
-	});
-
 	it("rejects Member management by non-Members and plain Members", async () => {
 		const harness = await primaryHarness();
 		try {

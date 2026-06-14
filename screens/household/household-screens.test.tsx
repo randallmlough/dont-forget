@@ -8,7 +8,6 @@ import {
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import type { AuthenticatedAppSessionContextValue } from "@/components/session";
-import { track } from "@/lib/analytics";
 import type {
 	HouseholdApiClient,
 	HouseholdMember,
@@ -54,12 +53,7 @@ jest.mock("expo-router", () => ({
 	useRouter: () => ({ replace: mockReplace, push: mockPush }),
 }));
 
-jest.mock("@/lib/analytics", () => ({
-	track: jest.fn(),
-}));
-
 beforeEach(() => {
-	jest.mocked(track).mockClear();
 	mockReplace.mockReset();
 	mockPush.mockReset();
 	mockReloadSession.mockReset();
@@ -153,6 +147,14 @@ describe("HouseholdSettingsView", () => {
 
 		expect(screen.getByText("Make Owner")).toBeTruthy();
 		expect(screen.getByText("Remove")).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: "Make Blake Rivera an Owner" }),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("button", {
+				name: "Remove Blake Rivera from this Household",
+			}),
+		).toBeTruthy();
 		expect(screen.getByText("Leave Household")).toBeTruthy();
 	});
 
@@ -599,7 +601,8 @@ describe("useHouseholdSettings", () => {
 		expect(client.createInvitation).not.toHaveBeenCalled();
 	});
 
-	it("removes a Member, refreshes Members, and tracks success", async () => {
+	it("removes a Member, refreshes Members, and reloads the session", async () => {
+		const reloadSession = jest.fn();
 		const refreshedMembers = [
 			{
 				membershipId: "mbr_1",
@@ -624,7 +627,13 @@ describe("useHouseholdSettings", () => {
 				.mockResolvedValueOnce(refreshedMembers),
 		});
 
-		await render(<SettingsActionHarness client={client} action="remove" />);
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="remove"
+				reloadSession={reloadSession}
+			/>,
+		);
 		await screen.findByText("idle");
 
 		await fireEvent.press(screen.getByText("Remove"));
@@ -635,11 +644,7 @@ describe("useHouseholdSettings", () => {
 			membershipId: "mbr_2",
 		});
 		expect(screen.getByText("members:1")).toBeTruthy();
-		expect(track).toHaveBeenCalledWith("member_removed", {
-			household_id: "hh_1",
-			membership_id: "mbr_2",
-			removed_by_user_id: "usr_1",
-		});
+		expect(reloadSession).toHaveBeenCalledWith();
 	});
 
 	it("surfaces remove Member failures without refreshing Members", async () => {
@@ -666,7 +671,8 @@ describe("useHouseholdSettings", () => {
 		expect(client.listMembers).toHaveBeenCalledTimes(1);
 	});
 
-	it("changes a Member role, refreshes Members, and tracks success", async () => {
+	it("changes a Member role, refreshes Members, and reloads the session", async () => {
+		const reloadSession = jest.fn();
 		const client = readySettingsClient({
 			setMemberRole: jest.fn(async () => undefined),
 			listMembers: jest
@@ -689,7 +695,13 @@ describe("useHouseholdSettings", () => {
 				]),
 		});
 
-		await render(<SettingsActionHarness client={client} action="role" />);
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="role"
+				reloadSession={reloadSession}
+			/>,
+		);
 		await screen.findByText("idle");
 
 		await fireEvent.press(screen.getByText("Change role"));
@@ -701,12 +713,7 @@ describe("useHouseholdSettings", () => {
 			role: "owner",
 		});
 		expect(screen.getByText("firstRole:owner")).toBeTruthy();
-		expect(track).toHaveBeenCalledWith("member_role_changed", {
-			household_id: "hh_1",
-			membership_id: "mbr_2",
-			role: "owner",
-			changed_by_user_id: "usr_1",
-		});
+		expect(reloadSession).toHaveBeenCalledWith();
 	});
 
 	it("surfaces role-change failures without refreshing Members", async () => {
@@ -847,10 +854,54 @@ describe("useHouseholdSettings", () => {
 			expect(reloadSession).toHaveBeenCalledWith({ retireCurrent: true }),
 		);
 		expect(mockReplace).not.toHaveBeenCalledWith("/");
-		expect(track).toHaveBeenCalledWith("household_left", {
-			household_id: "hh_1",
-			user_id: "usr_1",
-			promoted_membership_id: "mbr_2",
+	});
+
+	it("keeps the current Household when sync-before-leave fails", async () => {
+		const session = sessionFixture();
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			leaveHousehold: jest.fn(async () => ({
+				left: true as const,
+				promotedMembershipId: null,
+			})),
+		});
+		session.services.sync.requestSync = jest.fn(async () => {
+			throw new Error("sync failed");
+		});
+
+		function Harness() {
+			const { state, actions } = useHouseholdSettings(
+				session,
+				client,
+				reloadSession,
+			);
+			if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+			return (
+				<>
+					<PressableText
+						label="Leave"
+						onPress={() => {
+							void actions.leaveHousehold();
+						}}
+					/>
+					<TextNode>{state.operation.status}</TextNode>
+					{state.notice ? <TextNode>{state.notice}</TextNode> : null}
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Leave"));
+
+		await screen.findByText(
+			"Unable to sync this Household before leaving. Try again.",
+		);
+		expect(client.leaveHousehold).not.toHaveBeenCalled();
+		expect(reloadSession).not.toHaveBeenCalled();
+		expect(session.services.sync.requestSync).toHaveBeenCalledWith({
+			reason: "manualRefresh",
 		});
 	});
 

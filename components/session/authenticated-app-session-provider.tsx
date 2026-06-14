@@ -88,9 +88,6 @@ export function AuthenticatedAppSessionProvider({
 		(attempt: number) => attempt + 1,
 		0,
 	);
-	const [retiredResourceKey, setRetiredResourceKey] = useState<string | null>(
-		null,
-	);
 	const [signOutRunningState] = useState(() => ({ running: false }));
 	const getToken = useEffectEvent(() => auth.getToken());
 	const signOutFlow = createAuthenticatedAppSessionSignOut({
@@ -135,14 +132,15 @@ export function AuthenticatedAppSessionProvider({
 	}
 
 	function reloadSession(options?: { retireCurrent?: boolean }) {
-		if (options?.retireCurrent && snapshot.status === "ready") {
-			setRetiredResourceKey(snapshot.session.resourceKey);
+		if (options?.retireCurrent) {
+			void controller.invalidateCurrentSession().finally(requestActivation);
+			return;
 		}
 		requestActivation();
 	}
 
 	const value: AuthenticatedAppSessionContextValue = {
-		...publicStateFromSnapshot(snapshot, retiredResourceKey),
+		...publicStateFromSnapshot(snapshot),
 		retry,
 		reloadSession,
 		signOut: signOutFlow.run,
@@ -174,15 +172,11 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 
 function publicStateFromSnapshot(
 	snapshot: AuthenticatedAppSessionStateSnapshot,
-	retiredResourceKey: string | null = null,
 ): {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
 } {
 	if (snapshot.status === "ready") {
-		if (snapshot.session.resourceKey === retiredResourceKey) {
-			return { state: { status: "loading" }, session: null };
-		}
 		return {
 			state: { status: "ready", refreshing: false },
 			session: snapshot.session,
@@ -190,9 +184,6 @@ function publicStateFromSnapshot(
 	}
 
 	if (snapshot.status === "loading" && snapshot.previous) {
-		if (snapshot.previous.resourceKey === retiredResourceKey) {
-			return { state: { status: "loading" }, session: null };
-		}
 		return {
 			state: { status: "ready", refreshing: true },
 			session: snapshot.previous,

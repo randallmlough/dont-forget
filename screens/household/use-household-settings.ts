@@ -1,7 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import * as Clipboard from "expo-clipboard";
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { track } from "@/lib/analytics";
 import {
 	type CreateInvitationResponse,
 	createHouseholdApiClient,
@@ -243,11 +242,7 @@ export function useHouseholdSettings(
 			const members = await client.listMembers(householdId);
 			dispatch({ type: "membersChanged", loadKey, members });
 			dispatch({ type: "notice", loadKey, notice: "Member removed." });
-			track("member_removed", {
-				household_id: householdId,
-				membership_id: membershipId,
-				removed_by_user_id: session.user.id,
-			});
+			reloadSession();
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {
@@ -263,12 +258,7 @@ export function useHouseholdSettings(
 			const members = await client.listMembers(householdId);
 			dispatch({ type: "membersChanged", loadKey, members });
 			dispatch({ type: "notice", loadKey, notice: "Member role changed." });
-			track("member_role_changed", {
-				household_id: householdId,
-				membership_id: membershipId,
-				role,
-				changed_by_user_id: session.user.id,
-			});
+			reloadSession();
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {
@@ -279,12 +269,15 @@ export function useHouseholdSettings(
 	async function leaveHousehold() {
 		if (!startOperation({ status: "leavingHousehold" })) return;
 		try {
-			const response = await resolveClient().leaveHousehold(householdId);
-			track("household_left", {
-				household_id: householdId,
-				user_id: session.user.id,
-				promoted_membership_id: response.promotedMembershipId,
-			});
+			if (!(await syncCurrentHousehold(session))) {
+				dispatch({
+					type: "notice",
+					loadKey,
+					notice: "Unable to sync this Household before leaving. Try again.",
+				});
+				return;
+			}
+			await resolveClient().leaveHousehold(householdId);
 			reloadSession({ retireCurrent: true });
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
@@ -378,6 +371,19 @@ export function useHouseholdSettings(
 			clearNotice: () => dispatch({ type: "notice", loadKey, notice: null }),
 		},
 	};
+}
+
+async function syncCurrentHousehold(
+	session: AuthenticatedAppSession,
+): Promise<boolean> {
+	try {
+		const syncResult = await session.services.sync.requestSync({
+			reason: "manualRefresh",
+		});
+		return Boolean(syncResult);
+	} catch {
+		return false;
+	}
 }
 
 function initialResource(loadKey: string): Resource {
