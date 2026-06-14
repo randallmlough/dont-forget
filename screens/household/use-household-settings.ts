@@ -182,10 +182,6 @@ export function useHouseholdSettings(
 				name,
 			});
 			dispatch({ type: "householdRenamed", loadKey, household });
-			track("household_renamed", {
-				household_id: household.id,
-				renamed_by_user_id: session.user.id,
-			});
 			reloadSession();
 			return true;
 		} catch (error) {

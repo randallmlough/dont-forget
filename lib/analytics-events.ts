@@ -93,7 +93,7 @@ export type EventMap = {
 	};
 	household_renamed: {
 		household_id: string;
-		renamed_by_user_id: string;
+		requested_by_user_id: string;
 	};
 	household_join_code_used: {
 		household_id: string;

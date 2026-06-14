@@ -740,7 +740,7 @@ describe("useHouseholdSettings", () => {
 		expect(client.listMembers).toHaveBeenCalledTimes(1);
 	});
 
-	it("renames a Household, surfaces the updated name, reloads session metadata, and tracks success", async () => {
+	it("renames a Household, surfaces the updated name, and reloads session metadata", async () => {
 		const reloadSession = jest.fn();
 		const client = readySettingsClient({
 			renameHousehold: jest.fn(async () => ({
@@ -767,10 +767,6 @@ describe("useHouseholdSettings", () => {
 		});
 		expect(screen.getByText("householdName:Lake House")).toBeTruthy();
 		expect(reloadSession).toHaveBeenCalledWith();
-		expect(track).toHaveBeenCalledWith("household_renamed", {
-			household_id: "hh_1",
-			renamed_by_user_id: "usr_1",
-		});
 	});
 
 	it("keeps the rename success notice visible after the session metadata reload refreshes settings", async () => {

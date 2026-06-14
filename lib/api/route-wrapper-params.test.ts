@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const dynamicRouteWrappers = [
+	"app/api/households/[householdId]+api.ts",
 	"app/api/households/[householdId]/members+api.ts",
 	"app/api/households/[householdId]/invitations+api.ts",
 	"app/api/households/[householdId]/join-code+api.ts",
