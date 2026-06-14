@@ -16,6 +16,7 @@ We will organize data access through a domain-first service layer under `lib/ser
     item/
     list/
     member/
+    push/
     user/
   ```
 
@@ -44,6 +45,7 @@ We will organize data access through a domain-first service layer under `lib/ser
 - Services own SQL directly for now. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
 - Server services may use Drizzle/directory DB infrastructure directly. App-safe services may use `HouseholdStore`; they must not import server/operator secrets, `@clerk/backend`, Turso Platform clients, or `@libsql/client` server entrypoints.
 - List and Item are separate service folders. Route-owned List loading composes them into UI state by explicit List ID after authenticated app session context exists.
+- Push Notification token storage and delivery use `lib/services/push/` because the feature combines User-scoped directory token data with provider delivery infrastructure. User-facing registration still belongs at User/API or screen action seams; the push service owns token persistence and provider send/receipt handling.
 - Reusable components keep UI-facing data-source contracts. The service layer owns CRUD; authenticated app session controller or feature-boundary composition adapts services into component contracts.
 - Services return domain-shaped records, not UI component types and not raw SQL rows.
 - One service file per domain is the starting point; split command/query/use-case files only when real pressure appears.
