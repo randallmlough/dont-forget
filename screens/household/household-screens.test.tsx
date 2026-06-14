@@ -1063,6 +1063,47 @@ describe("HouseholdSwitch", () => {
 		expect(createHousehold).toHaveBeenCalledWith({ name: undefined });
 	});
 
+	it("keeps the current Household when sync-before-create fails", async () => {
+		const session = sessionFixture();
+		const createHousehold = jest.fn(async () => ({
+			id: "hh_created",
+			name: "Work Pantry",
+		}));
+		session.services.sync.requestSync = jest.fn(async () => {
+			throw new Error("sync failed");
+		});
+
+		function Harness() {
+			const model = useHouseholdSwitch(session, mockReloadSession, {
+				...emptyClient(),
+				createHousehold,
+			});
+			return (
+				<>
+					<PressableText
+						label="Create"
+						onPress={() => void model.createHousehold()}
+					/>
+					{model.state.notice ? (
+						<TextNode>{model.state.notice}</TextNode>
+					) : null}
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await fireEvent.press(screen.getByText("Create"));
+
+		await screen.findByText(
+			"Unable to sync this Household before creating a new Household. Try again.",
+		);
+		expect(createHousehold).not.toHaveBeenCalled();
+		expect(mockReloadSession).not.toHaveBeenCalled();
+		expect(session.services.sync.requestSync).toHaveBeenCalledWith({
+			reason: "manualRefresh",
+		});
+	});
+
 	it("keeps the current Household when sync-before-switch fails", async () => {
 		const session = sessionFixture();
 		const switchHousehold = jest.fn(async () => undefined);

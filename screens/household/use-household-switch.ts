@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import { useMemo, useReducer } from "react";
+import { type Dispatch, useMemo, useReducer } from "react";
 import { track } from "@/lib/analytics";
 import {
 	createHouseholdApiClient,
@@ -63,22 +63,12 @@ export function useHouseholdSwitch(
 			type: "operationStarted",
 			operation: { status: "switchingHousehold", householdId },
 		});
-		try {
-			const syncResult = await session.services.sync.requestSync({
-				reason: "manualRefresh",
-			});
-			if (!syncResult) {
-				dispatch({
-					type: "notice",
-					notice: "Unable to sync this Household before switching. Try again.",
-				});
-				return;
-			}
-		} catch {
-			dispatch({
-				type: "notice",
-				notice: "Unable to sync this Household before switching. Try again.",
-			});
+		const synced = await syncCurrentHousehold(
+			session,
+			"Unable to sync this Household before switching. Try again.",
+			dispatch,
+		);
+		if (!synced) {
 			return;
 		}
 
@@ -96,6 +86,15 @@ export function useHouseholdSwitch(
 			type: "operationStarted",
 			operation: { status: "creatingHousehold" },
 		});
+		const synced = await syncCurrentHousehold(
+			session,
+			"Unable to sync this Household before creating a new Household. Try again.",
+			dispatch,
+		);
+		if (!synced) {
+			return;
+		}
+
 		try {
 			const household = await client.createHousehold({
 				name: state.householdName.trim() || undefined,
@@ -157,6 +156,23 @@ function reducer(
 
 function operationInProgress(operation: HouseholdSwitchOperation): boolean {
 	return operation.status !== "idle";
+}
+
+async function syncCurrentHousehold(
+	session: AuthenticatedAppSession,
+	failureNotice: string,
+	dispatch: Dispatch<Action>,
+): Promise<boolean> {
+	try {
+		const syncResult = await session.services.sync.requestSync({
+			reason: "manualRefresh",
+		});
+		if (syncResult) return true;
+	} catch {
+		// User-facing notice below covers sync start and sync failure cases.
+	}
+	dispatch({ type: "notice", notice: failureNotice });
+	return false;
 }
 
 function messageFromError(error: unknown): string {
