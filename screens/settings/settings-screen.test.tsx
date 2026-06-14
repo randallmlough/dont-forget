@@ -171,6 +171,17 @@ describe("SettingsScreen", () => {
 		expect(mockSignOut).toHaveBeenCalledTimes(1);
 	});
 
+	it("clears the Settings return target before signing out", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		expect(mockRouterReplace).toHaveBeenCalledWith("/");
+		expect(mockRouterReplace.mock.invocationCallOrder[0]).toBeLessThan(
+			mockSignOut.mock.invocationCallOrder[0],
+		);
+	});
+
 	it("persists and tracks appearance changes", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 

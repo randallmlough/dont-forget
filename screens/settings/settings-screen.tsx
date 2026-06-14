@@ -30,7 +30,16 @@ export function SettingsScreenView({
 	actions: SettingsActions;
 }) {
 	const router = useRouter();
-	const sections = settingsSections(state, actions, router.push);
+	const sections = settingsSections(
+		state,
+		{ ...actions, signOut: signOutFromSettings },
+		router.push,
+	);
+
+	async function signOutFromSettings() {
+		router.replace("/");
+		await actions.signOut();
+	}
 
 	return (
 		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
