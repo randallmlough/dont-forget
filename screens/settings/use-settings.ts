@@ -53,8 +53,9 @@ export function useSettings(): {
 	actions: SettingsActions;
 } {
 	const { getToken } = useAuth();
-	const { signOut } = useAuthenticatedAppSession();
+	const { session, signOut } = useAuthenticatedAppSession();
 	const logger = useLogger();
+	const userId = session?.user.id ?? null;
 	const extra = Constants.expoConfig?.extra;
 	const [appearancePreference, setAppearancePreferenceState] =
 		useState<AppearancePreference>("system");
@@ -84,7 +85,7 @@ export function useSettings(): {
 			.catch((error: unknown) => {
 				logger.error("settings appearance preference load failed", { error });
 			});
-		void readNotificationPreference()
+		void readNotificationPreference(userId)
 			.then((preference) => {
 				if (active) setNotificationPreferenceState(preference);
 			})
@@ -94,7 +95,7 @@ export function useSettings(): {
 		return () => {
 			active = false;
 		};
-	}, [logger]);
+	}, [logger, userId]);
 
 	async function setAppearancePreference(preference: AppearancePreference) {
 		try {
@@ -125,6 +126,10 @@ export function useSettings(): {
 		setNotificationNotice(null);
 		const client = usersClientRef.current;
 		if (!client) return;
+		if (!userId) {
+			setNotificationNotice("Sign in again to update notification settings.");
+			return;
+		}
 
 		if (!enabled) {
 			await unregisterPushNotifications({
@@ -132,7 +137,7 @@ export function useSettings(): {
 				expoPushToken: notificationPreference.expoPushToken,
 			});
 			const preference = disabledPreference();
-			await writeNotificationPreference(preference);
+			await writeNotificationPreference(userId, preference);
 			setNotificationPreferenceState(preference);
 			track("push_registration_changed", {
 				enabled: false,
@@ -141,13 +146,28 @@ export function useSettings(): {
 			return;
 		}
 
-		const result = await registerForPushNotifications({ client });
+		let result: Awaited<ReturnType<typeof registerForPushNotifications>>;
+		try {
+			result = await registerForPushNotifications({ client });
+		} catch {
+			const preference = disabledPreference();
+			await writeNotificationPreference(userId, preference);
+			setNotificationPreferenceState(preference);
+			setNotificationNotice(
+				"Notifications could not be enabled. Check your connection and try again.",
+			);
+			track("push_registration_changed", {
+				enabled: false,
+				outcome: "failed",
+			});
+			return;
+		}
 		if (result.status === "registered") {
 			const preference: NotificationPreference = {
 				enabled: true,
 				expoPushToken: result.expoPushToken,
 			};
-			await writeNotificationPreference(preference);
+			await writeNotificationPreference(userId, preference);
 			setNotificationPreferenceState(preference);
 			track("push_registration_changed", {
 				enabled: true,
@@ -157,7 +177,7 @@ export function useSettings(): {
 		}
 
 		const preference = disabledPreference();
-		await writeNotificationPreference(preference);
+		await writeNotificationPreference(userId, preference);
 		setNotificationPreferenceState(preference);
 		if (result.status === "denied") {
 			setNotificationNotice(

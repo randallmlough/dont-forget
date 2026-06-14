@@ -5,10 +5,13 @@ export type NotificationPreference = {
 	expoPushToken: string | null;
 };
 
-const NOTIFICATION_PREFERENCE_KEY = "notification-preference";
+const NOTIFICATION_PREFERENCE_KEY_PREFIX = "notification-preference";
 
-export async function readNotificationPreference(): Promise<NotificationPreference> {
-	const value = await AsyncStorage.getItem(NOTIFICATION_PREFERENCE_KEY);
+export async function readNotificationPreference(
+	userId: string | null,
+): Promise<NotificationPreference> {
+	if (!userId) return disabledPreference();
+	const value = await AsyncStorage.getItem(notificationPreferenceKey(userId));
 	if (!value) return disabledPreference();
 
 	try {
@@ -32,14 +35,19 @@ export async function readNotificationPreference(): Promise<NotificationPreferen
 }
 
 export async function writeNotificationPreference(
+	userId: string,
 	preference: NotificationPreference,
 ): Promise<void> {
 	await AsyncStorage.setItem(
-		NOTIFICATION_PREFERENCE_KEY,
+		notificationPreferenceKey(userId),
 		JSON.stringify(preference),
 	);
 }
 
 export function disabledPreference(): NotificationPreference {
 	return { enabled: false, expoPushToken: null };
+}
+
+function notificationPreferenceKey(userId: string): string {
+	return `${NOTIFICATION_PREFERENCE_KEY_PREFIX}:${userId}`;
 }

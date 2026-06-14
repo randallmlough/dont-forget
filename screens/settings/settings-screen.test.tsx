@@ -21,6 +21,8 @@ import {
 	registerForPushNotifications,
 	unregisterPushNotifications,
 } from "@/lib/push/registration";
+import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { sessionBootstrapFixture } from "@/lib/services/session/bootstrap.test-helpers";
 import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 import SettingsScreen from "./settings-screen";
 
@@ -106,7 +108,7 @@ beforeEach(() => {
 	});
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
-		session: null,
+		session: appSessionFixture(),
 		retry() {},
 		reloadSession() {},
 		signOut: mockSignOut,
@@ -284,7 +286,7 @@ describe("SettingsScreen", () => {
 			expect(registerForPushNotifications).toHaveBeenCalledTimes(1),
 		);
 		expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-			"notification-preference",
+			"notification-preference:usr_avery",
 			JSON.stringify({
 				enabled: true,
 				expoPushToken: "ExponentPushToken[one]",
@@ -320,9 +322,38 @@ describe("SettingsScreen", () => {
 		});
 	});
 
+	it("shows retry copy when push registration fails", async () => {
+		jest
+			.mocked(registerForPushNotifications)
+			.mockRejectedValue(new Error("network timeout"));
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await act(async () => {
+			fireEvent(
+				screen.getByRole("switch", { name: "Notifications" }),
+				"valueChange",
+				true,
+			);
+		});
+
+		expect(
+			await screen.findByText(
+				"Notifications could not be enabled. Check your connection and try again.",
+			),
+		).toBeTruthy();
+		expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+			"notification-preference:usr_avery",
+			JSON.stringify({ enabled: false, expoPushToken: null }),
+		);
+		expect(track).toHaveBeenCalledWith("push_registration_changed", {
+			enabled: false,
+			outcome: "failed",
+		});
+	});
+
 	it("unregisters push notifications from the toggle", async () => {
 		jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => {
-			if (key === "notification-preference") {
+			if (key === "notification-preference:usr_avery") {
 				return JSON.stringify({
 					enabled: true,
 					expoPushToken: "ExponentPushToken[one]",
@@ -381,4 +412,43 @@ function setExpoConfig(config: {
 	extra: Record<string, unknown>;
 }) {
 	(Constants as { expoConfig: unknown }).expoConfig = config;
+}
+
+function appSessionFixture(): AuthenticatedAppSession {
+	return {
+		...sessionBootstrapFixture(),
+		resourceKey: "resource:usr_avery",
+		services: {
+			lists: {
+				createList: async () => {
+					throw new Error("unused");
+				},
+				getList: async () => {
+					throw new Error("unused");
+				},
+				renameList: async () => {
+					throw new Error("unused");
+				},
+				deleteList: async () => {
+					throw new Error("unused");
+				},
+				listLists: async () => [],
+			},
+			items: {
+				listItems: async () => [],
+				addItem: async () => {
+					throw new Error("unused");
+				},
+				setItemChecked: async () => undefined,
+			},
+			changes: {
+				subscribe: () => ({ remove() {} }),
+			},
+			sync: {
+				getStatus: () => "synced",
+				subscribe: () => ({ remove() {} }),
+				requestSync: async () => null,
+			},
+		},
+	};
 }

@@ -128,7 +128,12 @@ export type EventMap = {
 	};
 	push_registration_changed: {
 		enabled: boolean;
-		outcome: "registered" | "denied" | "unavailable" | "unregistered";
+		outcome:
+			| "registered"
+			| "denied"
+			| "unavailable"
+			| "unregistered"
+			| "failed";
 	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };

@@ -46,6 +46,7 @@ function withLocalConfigPlugins(
 	plugins: ExpoConfig["plugins"],
 ): ExpoConfig["plugins"] {
 	const resolvedPlugins = [...(plugins ?? [])];
+	addPluginOnce(resolvedPlugins, "expo-notifications");
 
 	if (process.env.EXPO_WITH_ROCKETSIM_CONNECT !== "1") {
 		return resolvedPlugins;
@@ -59,17 +60,26 @@ function withLocalConfigPlugins(
 		return resolvedPlugins;
 	}
 
-	if (
-		!resolvedPlugins.some(
-			(plugin) =>
-				plugin === rocketSimPlugin ||
-				(Array.isArray(plugin) && plugin[0] === rocketSimPlugin),
-		)
-	) {
-		resolvedPlugins.push(rocketSimPlugin);
-	}
+	addPluginOnce(resolvedPlugins, rocketSimPlugin);
 
 	return resolvedPlugins;
+}
+
+function addPluginOnce(
+	plugins: NonNullable<ExpoConfig["plugins"]>,
+	pluginName: string,
+): void {
+	if (
+		plugins.some(
+			(plugin) =>
+				plugin === pluginName ||
+				(Array.isArray(plugin) && plugin[0] === pluginName),
+		)
+	) {
+		return;
+	}
+
+	plugins.push(pluginName);
 }
 
 function appNameForEnv(baseName: string, appEnv: AppEnv): string {
