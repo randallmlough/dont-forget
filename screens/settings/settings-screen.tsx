@@ -35,7 +35,19 @@ export function SettingsScreenView({
 	return (
 		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
 			<View style={styles.header}>
-				<Text style={styles.headerLabel}>Settings</Text>
+				<View style={styles.headerTopRow}>
+					<Text style={styles.headerLabel}>Settings</Text>
+					<Pressable
+						accessibilityRole="button"
+						onPress={() => router.replace("/")}
+						style={({ pressed }) => [
+							styles.homeButton,
+							pressed ? styles.rowPressed : undefined,
+						]}
+					>
+						<Text style={styles.homeButtonLabel}>Home</Text>
+					</Pressable>
+				</View>
 				<Text style={styles.headerTitle}>App settings</Text>
 			</View>
 			<ScrollView contentContainerStyle={styles.content}>
@@ -252,6 +264,13 @@ const styles = StyleSheet.create((theme) => ({
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
+	headerTopRow: {
+		minHeight: theme.spacing(11),
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: theme.spacing(3),
+	},
 	headerLabel: {
 		...theme.typography.captionStrong,
 		color: theme.colors.textMuted,
@@ -259,6 +278,21 @@ const styles = StyleSheet.create((theme) => ({
 	headerTitle: {
 		...theme.typography.headline,
 		color: theme.colors.text,
+	},
+	homeButton: {
+		minHeight: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: theme.spacing(3),
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		borderRadius: theme.radii.control,
+		backgroundColor: theme.colors.surface,
+	},
+	homeButtonLabel: {
+		...theme.typography.callout,
+		color: theme.colors.text,
+		fontWeight: theme.fontWeights.semibold,
 	},
 	content: {
 		padding: theme.spacing(4),
