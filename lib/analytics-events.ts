@@ -139,7 +139,7 @@ export type EventMap = {
 		skipped: boolean;
 		last_step: string;
 	};
-	user_profile_updated: {
+	user_name_updated: {
 		user_id: string;
 	};
 	user_signed_in: { method: "email" | "apple" | "google" };

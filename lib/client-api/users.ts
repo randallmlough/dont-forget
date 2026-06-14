@@ -4,7 +4,7 @@ import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 
 export type ApiGetToken = () => Promise<string | null>;
 
-export const userProfileSchema = z.object({
+export const currentUserSchema = z.object({
 	id: z.string(),
 	email: z.string().nullable(),
 	displayName: z.string().nullable(),
@@ -12,8 +12,8 @@ export const userProfileSchema = z.object({
 	lastName: z.string().nullable(),
 });
 
-const updateProfileResponseSchema = z.object({
-	user: userProfileSchema,
+const updateUserNameResponseSchema = z.object({
+	user: currentUserSchema,
 });
 
 const testNotificationResponseSchema = z.object({
@@ -21,7 +21,7 @@ const testNotificationResponseSchema = z.object({
 	disabled: z.number(),
 });
 
-export type UserProfile = z.infer<typeof userProfileSchema>;
+export type CurrentUser = z.infer<typeof currentUserSchema>;
 
 export type UsersApiClient = {
 	completeOnboarding(): Promise<void>;
@@ -31,10 +31,10 @@ export type UsersApiClient = {
 	}): Promise<void>;
 	unregisterPushToken(input: { expoPushToken: string }): Promise<void>;
 	sendTestNotification(): Promise<{ sent: number; disabled: number }>;
-	updateProfile(input: {
+	updateUserName(input: {
 		firstName: string | null;
 		lastName: string | null;
-	}): Promise<UserProfile>;
+	}): Promise<CurrentUser>;
 };
 
 export type UserApiClient = UsersApiClient;
@@ -75,12 +75,12 @@ export function createUsersApiClient({
 			});
 			return testNotificationResponseSchema.parse(payload);
 		},
-		async updateProfile(input) {
+		async updateUserName(input) {
 			const payload = await authed("/api/users/me", {
 				method: "PATCH",
 				body: JSON.stringify(input),
 			});
-			return updateProfileResponseSchema.parse(payload).user;
+			return updateUserNameResponseSchema.parse(payload).user;
 		},
 	};
 }

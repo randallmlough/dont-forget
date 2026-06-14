@@ -34,10 +34,10 @@ export type SettingsState = {
 	appVersion: string;
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
-	profile: SettingsUserProfile;
-	profileNotice: string | null;
-	profileError: string | null;
-	profileUpdateInFlight: boolean;
+	user: SettingsUser;
+	userNotice: string | null;
+	userError: string | null;
+	userUpdateInFlight: boolean;
 	privacyPolicyUrl: string | null;
 	termsUrl: string | null;
 };
@@ -49,13 +49,13 @@ export type SettingsActions = {
 	setAppearancePreference: (preference: AppearancePreference) => Promise<void>;
 	setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 	signOut: () => Promise<void>;
-	updateProfile: (input: {
+	updateUserName: (input: {
 		firstName: string | null;
 		lastName: string | null;
 	}) => Promise<boolean>;
 };
 
-export type SettingsUserProfile = {
+export type SettingsUser = {
 	id: string | null;
 	email: string | null;
 	displayName: string | null;
@@ -77,16 +77,14 @@ export function useSettings(clientProp?: UsersApiClient): {
 	const [notificationNotice, setNotificationNotice] = useState<string | null>(
 		null,
 	);
-	const [updatedProfile, setUpdatedProfile] =
-		useState<SettingsUserProfile | null>(null);
-	const [profileNotice, setProfileNotice] = useState<string | null>(null);
-	const [profileError, setProfileError] = useState<string | null>(null);
-	const [profileUpdateInFlight, setProfileUpdateInFlight] = useState(false);
+	const [updatedUser, setUpdatedUser] = useState<SettingsUser | null>(null);
+	const [userNotice, setUserNotice] = useState<string | null>(null);
+	const [userError, setUserError] = useState<string | null>(null);
+	const [userUpdateInFlight, setUserUpdateInFlight] = useState(false);
 	const privacyPolicyUrl = publicExtraString(extra, "privacyPolicyUrl");
 	const termsUrl = publicExtraString(extra, "termsUrl");
-	const sessionProfile = profileFromSession(session);
-	const profile =
-		updatedProfile?.id === sessionProfile.id ? updatedProfile : sessionProfile;
+	const sessionUser = userFromSession(session);
+	const user = updatedUser?.id === sessionUser.id ? updatedUser : sessionUser;
 	const getTokenRef = useRef(getToken);
 	const usersClientRef = useRef<UsersApiClient | null>(null);
 
@@ -182,26 +180,30 @@ export function useSettings(clientProp?: UsersApiClient): {
 		await resolveClient().sendTestNotification();
 	}
 
-	async function updateProfile(input: {
+	async function updateUserName(input: {
 		firstName: string | null;
 		lastName: string | null;
 	}): Promise<boolean> {
-		if (profileUpdateInFlight) return false;
-		setProfileUpdateInFlight(true);
-		setProfileNotice(null);
-		setProfileError(null);
+		if (userUpdateInFlight) return false;
+		setUserUpdateInFlight(true);
+		setUserNotice(null);
+		setUserError(null);
 		try {
-			const updatedProfile = await resolveClient().updateProfile(input);
-			setUpdatedProfile(updatedProfile);
-			setProfileNotice("Profile updated.");
+			const updatedUser = await resolveClient().updateUserName(input);
+			setUpdatedUser(updatedUser);
+			setUserNotice("User name updated.");
 			reloadSession();
-			track("user_profile_updated", { user_id: updatedProfile.id });
+			track("user_name_updated", { user_id: updatedUser.id });
 			return true;
-		} catch {
-			setProfileError("Unable to update profile. Please try again.");
+		} catch (error) {
+			setUserError(
+				error instanceof Error
+					? error.message
+					: "Unable to update User name. Please try again.",
+			);
 			return false;
 		} finally {
-			setProfileUpdateInFlight(false);
+			setUserUpdateInFlight(false);
 		}
 	}
 
@@ -212,10 +214,10 @@ export function useSettings(clientProp?: UsersApiClient): {
 			appVersion: Constants.expoConfig?.version ?? "Unknown",
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
-			profile,
-			profileNotice,
-			profileError,
-			profileUpdateInFlight,
+			user,
+			userNotice,
+			userError,
+			userUpdateInFlight,
 			privacyPolicyUrl,
 			termsUrl,
 		},
@@ -226,14 +228,14 @@ export function useSettings(clientProp?: UsersApiClient): {
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,
-			updateProfile,
+			updateUserName,
 		},
 	};
 }
 
-function profileFromSession(
+function userFromSession(
 	session: ReturnType<typeof useAuthenticatedAppSession>["session"],
-): SettingsUserProfile {
+): SettingsUser {
 	return {
 		id: session?.user.id ?? null,
 		email: session?.user.email ?? null,

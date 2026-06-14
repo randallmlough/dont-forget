@@ -6,7 +6,7 @@ import {
 	HOUSEHOLD_TOKEN_TTL_MS,
 } from "@/lib/bootstrap";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
-import type { ServerUserProfile } from "@/lib/server/auth";
+import type { ServerUserRecord } from "@/lib/server/auth";
 import {
 	createProductionHouseholdProvisioningService,
 	type HouseholdProvisioningService,
@@ -44,7 +44,7 @@ export function createProductionAuthenticatedAppSessionBootstrapDeps(
 }
 
 export async function bootstrapAuthenticatedAppSession(
-	profile: ServerUserProfile,
+	userRecord: ServerUserRecord,
 	deps: AuthenticatedAppSessionBootstrapDeps,
 ): Promise<BootstrapResponse> {
 	const userService = createUserService({ directory: deps.directory });
@@ -53,7 +53,7 @@ export async function bootstrapAuthenticatedAppSession(
 		directory: deps.directory,
 	});
 
-	const user = await userService.upsertUser(profile);
+	const user = await userService.upsertUser(userRecord);
 	const active = await deps.directory.transaction(async (tx) => {
 		const txMemberService = createMemberService({ directory: tx });
 		const txHouseholdService = createHouseholdService({ directory: tx });

@@ -14,12 +14,12 @@ export async function POST(request: Request): Promise<Response> {
 		]);
 		UnauthorizedError = auth.UnauthorizedError;
 
-		const profile = await auth.verifyClerkRequest(request);
+		const userRecord = await auth.verifyClerkRequest(request);
 		const client = db.directoryClient();
 
 		try {
 			const response = await bootstrap.bootstrapAuthenticatedAppSession(
-				profile,
+				userRecord,
 				bootstrap.createProductionAuthenticatedAppSessionBootstrapDeps(
 					db.directoryDb(client),
 				),

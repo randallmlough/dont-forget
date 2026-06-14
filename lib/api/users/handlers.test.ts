@@ -10,7 +10,7 @@ import {
 	handleRegisterPushToken,
 	handleSendTestNotification,
 	handleUnregisterPushToken,
-	handleUpdateProfile,
+	handleUpdateUserName,
 	type UserApiDeps,
 } from "./handlers";
 
@@ -28,10 +28,10 @@ const testUser = {
 };
 
 describe("Users API handlers", () => {
-	it("requires auth for profile updates", async () => {
+	it("requires auth for User name updates", async () => {
 		const directory = await createTestDirectoryDb();
 		try {
-			const response = await handleUpdateProfile(
+			const response = await handleUpdateUserName(
 				createApiRequest({
 					method: "PATCH",
 					body: { firstName: "Avery", lastName: "Chen" },
@@ -53,10 +53,10 @@ describe("Users API handlers", () => {
 		}
 	});
 
-	it("rejects profile updates with no first or last name", async () => {
+	it("rejects User name updates with no first or last name", async () => {
 		const directory = await createTestDirectoryDb();
 		try {
-			const response = await handleUpdateProfile(
+			const response = await handleUpdateUserName(
 				createApiRequest({
 					method: "PATCH",
 					body: { firstName: "   ", lastName: null },
@@ -73,7 +73,7 @@ describe("Users API handlers", () => {
 		}
 	});
 
-	it("updates Clerk with trimmed names and upserts the returned profile", async () => {
+	it("updates Clerk with trimmed names and stores the returned app User", async () => {
 		const directory = await createTestDirectoryDb();
 		const updateClerkUserName = jest.fn(async () => ({
 			clerkUserId: "user_avery",
@@ -83,7 +83,7 @@ describe("Users API handlers", () => {
 			displayName: "Avery Chen",
 		}));
 		try {
-			const response = await handleUpdateProfile(
+			const response = await handleUpdateUserName(
 				createApiRequest({
 					method: "PATCH",
 					body: { firstName: "  Avery  ", lastName: "  Chen  " },

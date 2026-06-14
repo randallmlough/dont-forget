@@ -5,7 +5,7 @@ import {
 	directoryDb,
 } from "@/db/server/client";
 import { requireEnv } from "@/lib/env";
-import type { ServerUserProfile } from "@/lib/server/auth";
+import type { ServerUserRecord } from "@/lib/server/auth";
 import { createUserService } from "@/lib/services/user/server";
 
 export const INVITATION_UNAVAILABLE_MESSAGE =
@@ -82,23 +82,23 @@ export async function authenticateApiUser(
 	}
 
 	const { verifyClerkRequest } = await import("@/lib/server/auth");
-	let profile: ServerUserProfile;
+	let userRecord: ServerUserRecord;
 	try {
-		profile = await verifyClerkRequest(request);
+		userRecord = await verifyClerkRequest(request);
 	} catch (error) {
 		if (isServerUnauthorizedError(error)) {
 			throw new ApiUnauthorizedError(error.message);
 		}
 		throw error;
 	}
-	return upsertAuthenticatedUser(profile, directory);
+	return upsertAuthenticatedUser(userRecord, directory);
 }
 
 export async function upsertAuthenticatedUser(
-	profile: ServerUserProfile,
+	userRecord: ServerUserRecord,
 	directory: DirectoryDb,
 ): Promise<User> {
-	return createUserService({ directory }).upsertUser(profile);
+	return createUserService({ directory }).upsertUser(userRecord);
 }
 
 export async function readJsonObject(request: Request): Promise<JsonObject> {

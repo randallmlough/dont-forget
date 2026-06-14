@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { type User, users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
-import type { ServerUserProfile } from "@/lib/server/auth";
+import type { ServerUserRecord } from "@/lib/server/auth";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -10,32 +10,55 @@ type DirectoryTransaction = Parameters<
 
 export type UserServiceDirectory = DirectoryDb | DirectoryTransaction;
 
+export type UpdateClerkUserName = (input: {
+	clerkUserId: string;
+	firstName: string | null;
+	lastName: string | null;
+}) => Promise<ServerUserRecord>;
+
 export type UserService = {
-	upsertUser(profile: ServerUserProfile): Promise<User>;
+	upsertUser(userRecord: ServerUserRecord): Promise<User>;
+	updateUserName(input: {
+		clerkUserId: string;
+		firstName: string | null;
+		lastName: string | null;
+	}): Promise<User>;
 };
 
 export type UserServiceDeps = {
 	directory: UserServiceDirectory;
+	updateClerkUserName?: UpdateClerkUserName;
 };
 
 export function createUserService(deps: UserServiceDeps): UserService {
 	return {
-		upsertUser(profile) {
-			return upsertUser(profile, deps.directory);
+		upsertUser(userRecord) {
+			return upsertUser(userRecord, deps.directory);
+		},
+		async updateUserName(input) {
+			const updateClerkUserName =
+				deps.updateClerkUserName ?? (await defaultUpdateClerkUserName());
+			const userRecord = await updateClerkUserName(input);
+			return upsertUser(userRecord, deps.directory);
 		},
 	};
 }
 
+async function defaultUpdateClerkUserName(): Promise<UpdateClerkUserName> {
+	const { updateClerkUserName } = await import("@/lib/server/auth");
+	return updateClerkUserName;
+}
+
 async function upsertUser(
-	profile: ServerUserProfile,
+	userRecord: ServerUserRecord,
 	directory: UserServiceDirectory,
 ): Promise<User> {
 	const now = Date.now();
-	const profileFields = {
-		email: profile.email,
-		firstName: profile.firstName,
-		lastName: profile.lastName,
-		displayName: profile.displayName,
+	const userRecordFields = {
+		email: userRecord.email,
+		firstName: userRecord.firstName,
+		lastName: userRecord.lastName,
+		displayName: userRecord.displayName,
 		updatedAt: now,
 	};
 
@@ -43,19 +66,19 @@ async function upsertUser(
 		.insert(users)
 		.values({
 			id: createAppId("usr"),
-			clerkUserId: profile.clerkUserId,
-			...profileFields,
+			clerkUserId: userRecord.clerkUserId,
+			...userRecordFields,
 			createdAt: now,
 		})
 		.onConflictDoUpdate({
 			target: users.clerkUserId,
-			set: profileFields,
+			set: userRecordFields,
 		});
 
 	const [user] = await directory
 		.select()
 		.from(users)
-		.where(eq(users.clerkUserId, profile.clerkUserId))
+		.where(eq(users.clerkUserId, userRecord.clerkUserId))
 		.limit(1);
 
 	if (!user) {

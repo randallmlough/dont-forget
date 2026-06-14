@@ -105,16 +105,16 @@ function settingsSections(
 
 	return [
 		{
-			id: "account",
-			title: "Account",
+			id: "user",
+			title: "User",
 			rows: [
-				<ProfileSettingsForm
-					key="profile"
-					profile={state.profile}
-					error={state.profileError}
-					notice={state.profileNotice}
-					updateInFlight={state.profileUpdateInFlight}
-					onSave={actions.updateProfile}
+				<UserNameSettingsForm
+					key="user-name"
+					user={state.user}
+					error={state.userError}
+					notice={state.userNotice}
+					updateInFlight={state.userUpdateInFlight}
+					onSave={actions.updateUserName}
 				/>,
 				<SettingsRow
 					key="household"
@@ -172,14 +172,14 @@ function settingsSections(
 	];
 }
 
-function ProfileSettingsForm({
-	profile,
+function UserNameSettingsForm({
+	user,
 	error,
 	notice,
 	updateInFlight,
 	onSave,
 }: {
-	profile: SettingsState["profile"];
+	user: SettingsState["user"];
 	error: string | null;
 	notice: string | null;
 	updateInFlight: boolean;
@@ -189,13 +189,13 @@ function ProfileSettingsForm({
 	}) => Promise<boolean>;
 }) {
 	const [expanded, setExpanded] = useState(false);
-	const [firstName, setFirstName] = useState(profile.firstName ?? "");
-	const [lastName, setLastName] = useState(profile.lastName ?? "");
+	const [firstName, setFirstName] = useState(user.firstName ?? "");
+	const [lastName, setLastName] = useState(user.lastName ?? "");
 	const [validationMessage, setValidationMessage] = useState<string | null>(
 		null,
 	);
 
-	async function saveProfile() {
+	async function saveUserName() {
 		const nextFirstName = emptyToNull(firstName);
 		const nextLastName = emptyToNull(lastName);
 		if (!nextFirstName && !nextLastName) {
@@ -203,20 +203,32 @@ function ProfileSettingsForm({
 			return;
 		}
 		setValidationMessage(null);
-		await onSave({
+		const saved = await onSave({
 			firstName: nextFirstName,
 			lastName: nextLastName,
 		});
+		if (saved) {
+			setFirstName(nextFirstName ?? "");
+			setLastName(nextLastName ?? "");
+		}
 	}
 
 	return (
-		<View style={styles.profileBlock}>
+		<View style={styles.userNameBlock}>
 			<Pressable
-				accessibilityLabel="Profile"
+				accessibilityLabel="User name"
 				accessibilityRole="button"
 				accessibilityState={{ expanded }}
 				onPress={() => {
-					setExpanded((current) => !current);
+					setExpanded((current) => {
+						const nextExpanded = !current;
+						if (nextExpanded) {
+							setFirstName(user.firstName ?? "");
+							setLastName(user.lastName ?? "");
+							setValidationMessage(null);
+						}
+						return nextExpanded;
+					});
 				}}
 				style={({ pressed }) => [
 					styles.row,
@@ -224,15 +236,15 @@ function ProfileSettingsForm({
 				]}
 			>
 				<View style={styles.rowTextGroup}>
-					<Text style={styles.rowTitle}>Profile</Text>
+					<Text style={styles.rowTitle}>User name</Text>
 					<Text style={styles.rowSubtitle}>
-						{profile.displayName ?? profile.email ?? "No name set"}
+						{user.displayName ?? user.email ?? "No name set"}
 					</Text>
 				</View>
 				<Text style={styles.chevron}>{expanded ? "⌃" : "›"}</Text>
 			</Pressable>
 			{expanded ? (
-				<View style={styles.profileForm}>
+				<View style={styles.userNameForm}>
 					<AuthTextInput
 						accessibilityLabel="First name"
 						autoCapitalize="words"
@@ -263,7 +275,7 @@ function ProfileSettingsForm({
 						accessibilityState={{ disabled: updateInFlight }}
 						disabled={updateInFlight}
 						onPress={() => {
-							void saveProfile();
+							void saveUserName();
 						}}
 						style={({ pressed }) => [
 							styles.primaryButton,
@@ -531,11 +543,11 @@ const styles = StyleSheet.create((theme) => ({
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
-	profileBlock: {
+	userNameBlock: {
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
-	profileForm: {
+	userNameForm: {
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
 		paddingBottom: theme.spacing(4),

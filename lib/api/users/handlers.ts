@@ -5,13 +5,16 @@ import type { DirectoryDb } from "@/db/server/client";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
-import type { ServerUserProfile } from "@/lib/server/auth";
 import {
 	createPushTokenService,
 	type PushMessage,
 	type PushTokenService,
 	sendPushNotifications,
 } from "@/lib/services/push/server";
+import {
+	createUserService,
+	type UpdateClerkUserName,
+} from "@/lib/services/user/server";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
@@ -22,26 +25,19 @@ import {
 	optionalStringField,
 	readJsonObject,
 	stringField,
-	upsertAuthenticatedUser,
 	withDirectory,
 } from "../shared";
 
 const EXPO_PUSH_TOKEN_PREFIX = "ExponentPushToken[";
 const MAX_NAME_LENGTH = 50;
 
-export type UserProfile = {
+export type CurrentUser = {
 	id: string;
 	email: string | null;
 	displayName: string | null;
 	firstName: string | null;
 	lastName: string | null;
 };
-
-export type UpdateClerkUserName = (input: {
-	clerkUserId: string;
-	firstName: string | null;
-	lastName: string | null;
-}) => Promise<ServerUserProfile>;
 
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
@@ -54,7 +50,7 @@ export type UsersApiDeps = ApiHandlerDeps & {
 
 export type UserApiDeps = UsersApiDeps;
 
-export async function handleUpdateProfile(
+export async function handleUpdateUserName(
 	request: Request,
 	deps?: UsersApiDeps,
 ): Promise<Response> {
@@ -62,20 +58,19 @@ export async function handleUpdateProfile(
 		return await withDirectory(deps, async (directory) => {
 			const user = await authenticateApiUser(request, directory, deps);
 			const body = await readJsonObject(request);
-			const input = updateProfileInput(body);
-			const updateName =
-				deps?.updateClerkUserName ?? (await defaultUpdateName());
-			const profile = await updateName({
+			const input = updateUserNameInput(body);
+			const updatedUser = await createUserService({
+				directory,
+				updateClerkUserName: deps?.updateClerkUserName,
+			}).updateUserName({
 				clerkUserId: user.clerkUserId,
-				firstName: input.firstName,
-				lastName: input.lastName,
+				...input,
 			});
-			const updatedUser = await upsertAuthenticatedUser(profile, directory);
 
-			return jsonResponse({ user: userProfileResponse(updatedUser, profile) });
+			return jsonResponse({ user: currentUserResponse(updatedUser) });
 		});
 	} catch (error) {
-		return usersErrorResponse(error, "Update User profile API failed");
+		return usersErrorResponse(error, "Update User name API failed");
 	}
 }
 
@@ -174,12 +169,7 @@ export async function handleSendTestNotification(
 	}
 }
 
-async function defaultUpdateName(): Promise<UpdateClerkUserName> {
-	const { updateClerkUserName } = await import("@/lib/server/auth");
-	return updateClerkUserName;
-}
-
-function updateProfileInput(body: Record<string, unknown>): {
+function updateUserNameInput(body: Record<string, unknown>): {
 	firstName: string | null;
 	lastName: string | null;
 } {
@@ -214,16 +204,13 @@ function nameLabel(key: "firstName" | "lastName"): string {
 	return key === "firstName" ? "First name" : "Last name";
 }
 
-function userProfileResponse(
-	user: User,
-	profile: ServerUserProfile,
-): UserProfile {
+function currentUserResponse(user: User): CurrentUser {
 	return {
 		id: user.id,
 		email: user.email,
 		displayName: user.displayName,
-		firstName: profile.firstName,
-		lastName: profile.lastName,
+		firstName: user.firstName,
+		lastName: user.lastName,
 	};
 }
 

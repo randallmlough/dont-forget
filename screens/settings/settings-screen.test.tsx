@@ -37,7 +37,7 @@ const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
 	disabled: 0,
 }));
-const mockUpdateProfile = jest.fn();
+const mockUpdateUserName = jest.fn();
 const devClientHeaderActionGutter = 56;
 const setAdaptiveThemesSpy = jest
 	.spyOn(UnistylesRuntime, "setAdaptiveThemes")
@@ -78,7 +78,7 @@ jest.mock("@/lib/client-api/users", () => ({
 		registerPushToken: jest.fn(async () => undefined),
 		unregisterPushToken: jest.fn(async () => undefined),
 		sendTestNotification: mockSendTestNotification,
-		updateProfile: mockUpdateProfile,
+		updateUserName: mockUpdateUserName,
 	})),
 }));
 
@@ -97,8 +97,8 @@ beforeEach(() => {
 	mockReloadSession.mockReset();
 	mockSignOut.mockClear();
 	mockSendTestNotification.mockClear();
-	mockUpdateProfile.mockReset();
-	mockUpdateProfile.mockResolvedValue({
+	mockUpdateUserName.mockReset();
+	mockUpdateUserName.mockResolvedValue({
 		id: "usr_1",
 		email: "avery@example.com",
 		displayName: "Avery Chen",
@@ -142,8 +142,8 @@ describe("SettingsScreen", () => {
 	it("renders settings sections and configured legal rows", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
-		expect(screen.getByText("Account")).toBeTruthy();
-		expect(screen.getByText("Profile")).toBeTruthy();
+		expect(screen.getByText("User")).toBeTruthy();
+		expect(screen.getByText("User name")).toBeTruthy();
 		expect(screen.getByText("Avery User")).toBeTruthy();
 		expect(screen.getByText("Household settings")).toBeTruthy();
 		expect(screen.getAllByText("Appearance").length).toBeGreaterThanOrEqual(1);
@@ -220,7 +220,7 @@ describe("SettingsScreen", () => {
 		expect(mockSignOut).toHaveBeenCalledTimes(1);
 	});
 
-	it("hydrates saved profile names from the authenticated app session", async () => {
+	it("hydrates saved User name from the authenticated app session", async () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "ready", refreshing: false },
 			session: sessionFixture({
@@ -236,16 +236,49 @@ describe("SettingsScreen", () => {
 
 		await renderWithSafeArea(<SettingsScreen />);
 
-		await fireEvent.press(screen.getByText("Profile"));
+		await fireEvent.press(screen.getByText("User name"));
 
 		expect(screen.getByLabelText("First name").props.value).toBe("QA006");
 		expect(screen.getByLabelText("Last name").props.value).toBe("Check");
 	});
 
-	it("saves trimmed profile names and shows a success notice", async () => {
+	it("hydrates User name when the authenticated app session becomes ready", async () => {
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "loading" },
+			session: null,
+			markOnboardingComplete() {},
+			retry() {},
+			reloadSession: mockReloadSession,
+			signOut: mockSignOut,
+		});
+		const rendered = await renderWithSafeArea(<SettingsScreen />);
+
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "ready", refreshing: false },
+			session: sessionFixture({
+				displayName: "Avery Chen",
+				firstName: "Avery",
+				lastName: "Chen",
+			}),
+			markOnboardingComplete() {},
+			retry() {},
+			reloadSession: mockReloadSession,
+			signOut: mockSignOut,
+		});
+		await act(async () => {
+			rendered.rerender(<SettingsScreen />);
+		});
+
+		await fireEvent.press(screen.getByText("User name"));
+
+		expect(screen.getByLabelText("First name").props.value).toBe("Avery");
+		expect(screen.getByLabelText("Last name").props.value).toBe("Chen");
+	});
+
+	it("saves trimmed User name and shows a success notice", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
-		await fireEvent.press(screen.getByText("Profile"));
+		await fireEvent.press(screen.getByText("User name"));
 		await fireEvent.changeText(
 			await screen.findByLabelText("First name"),
 			"  Avery  ",
@@ -254,26 +287,43 @@ describe("SettingsScreen", () => {
 		await fireEvent.press(screen.getByText("Save"));
 
 		await waitFor(() =>
-			expect(mockUpdateProfile).toHaveBeenCalledWith({
+			expect(mockUpdateUserName).toHaveBeenCalledWith({
 				firstName: "Avery",
 				lastName: "Chen",
 			}),
 		);
-		expect(await screen.findByText("Profile updated.")).toBeTruthy();
+		expect(await screen.findByText("User name updated.")).toBeTruthy();
+		expect(screen.getByLabelText("First name").props.value).toBe("Avery");
+		expect(screen.getByLabelText("Last name").props.value).toBe("Chen");
 		expect(mockReloadSession).toHaveBeenCalledTimes(1);
-		expect(track).toHaveBeenCalledWith("user_profile_updated", {
+		expect(track).toHaveBeenCalledWith("user_name_updated", {
 			user_id: "usr_1",
 		});
 	});
 
-	it("blocks profile saves with no first or last name", async () => {
+	it("shows User name validation errors returned by the API", async () => {
+		mockUpdateUserName.mockRejectedValueOnce(
+			new Error("First name must be 50 characters or fewer."),
+		);
 		await renderWithSafeArea(<SettingsScreen />);
 
-		await fireEvent.press(screen.getByText("Profile"));
+		await fireEvent.press(screen.getByText("User name"));
+		await fireEvent.changeText(screen.getByLabelText("First name"), "Avery");
+		await fireEvent.press(screen.getByText("Save"));
+
+		expect(
+			await screen.findByText("First name must be 50 characters or fewer."),
+		).toBeTruthy();
+	});
+
+	it("blocks User name saves with no first or last name", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("User name"));
 		await screen.findByLabelText("First name");
 		await fireEvent.press(screen.getByText("Save"));
 
-		expect(mockUpdateProfile).not.toHaveBeenCalled();
+		expect(mockUpdateUserName).not.toHaveBeenCalled();
 		expect(screen.getByText("Provide a first or last name.")).toBeTruthy();
 	});
 

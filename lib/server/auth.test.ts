@@ -27,7 +27,7 @@ describe("bearerToken", () => {
 });
 
 describe("updateClerkUserName", () => {
-	it("updates Clerk first and last name and returns the derived profile", async () => {
+	it("updates Clerk first and last name and returns the derived User record", async () => {
 		const updateUser = jest.fn(async () =>
 			clerkUser({
 				firstName: "Avery",
@@ -39,7 +39,7 @@ describe("updateClerkUserName", () => {
 			.mocked(createClerkClient)
 			.mockReturnValue(clerkClientWithUpdateUser(updateUser));
 
-		const profile = await updateClerkUserName({
+		const userRecord = await updateClerkUserName({
 			clerkUserId: "user_123",
 			firstName: "Avery",
 			lastName: "Chen",
@@ -49,7 +49,7 @@ describe("updateClerkUserName", () => {
 			firstName: "Avery",
 			lastName: "Chen",
 		});
-		expect(profile).toEqual({
+		expect(userRecord).toEqual({
 			clerkUserId: "user_123",
 			email: "avery@example.com",
 			firstName: "Avery",
@@ -70,7 +70,7 @@ describe("updateClerkUserName", () => {
 			.mocked(createClerkClient)
 			.mockReturnValue(clerkClientWithUpdateUser(updateUser));
 
-		const profile = await updateClerkUserName({
+		const userRecord = await updateClerkUserName({
 			clerkUserId: "user_123",
 			firstName: "Avery",
 			lastName: null,
@@ -80,7 +80,7 @@ describe("updateClerkUserName", () => {
 			firstName: "Avery",
 			lastName: "",
 		});
-		expect(profile.displayName).toBe("Avery");
+		expect(userRecord.displayName).toBe("Avery");
 	});
 });
 

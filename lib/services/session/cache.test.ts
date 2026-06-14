@@ -163,7 +163,7 @@ describe("createSessionCache", () => {
 		expect(analytics.track).not.toHaveBeenCalled();
 	});
 
-	it("keeps older cached User metadata compatible when profile fields are omitted", async () => {
+	it("keeps older cached User metadata compatible when User name fields are omitted", async () => {
 		const storage = memoryStorage();
 		const cache = createSessionCache({ storage });
 		const { householdDatabase: _householdDatabase, ...sessionMetadata } =
