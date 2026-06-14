@@ -58,6 +58,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			getToken: expect.any(Function),
 			authReady: true,
 			signedIn: true,
+			freshOnly: false,
 		});
 
 		await act(() => {
@@ -162,6 +163,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
 		expect(screen.queryByText("authenticated-app-session:1")).toBeNull();
 		expect(controller.activate).toHaveBeenCalledTimes(2);
+		expect(controller.invalidateCurrentSession).toHaveBeenCalledTimes(1);
 	});
 
 	it("stops exposing ready session data while loading has no previous session", async () => {
@@ -238,6 +240,25 @@ describe("AuthenticatedAppSessionProvider", () => {
 			signedIn: true,
 		});
 		await expect(activation?.getToken()).resolves.toBe("token");
+	});
+
+	it("can request a fresh-only Authenticated App Session reload", async () => {
+		const controller = authenticatedAppSessionControllerFixture();
+		await render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
+				<FreshOnlyReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Fresh reload" }));
+
+		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
+		expect(controller.activate.mock.calls.at(-1)?.[0]).toMatchObject({
+			freshOnly: true,
+		});
 	});
 
 	it("signs out in analytics, controller, local cleanup, Clerk order", async () => {
@@ -652,6 +673,18 @@ function ReloadState() {
 	);
 }
 
+function FreshOnlyReloadState() {
+	const { reloadSession } = useAuthenticatedAppSession();
+	return (
+		<Pressable
+			accessibilityRole="button"
+			onPress={() => reloadSession({ freshOnly: true })}
+		>
+			<Text>Fresh reload</Text>
+		</Pressable>
+	);
+}
+
 function RetireSessionState() {
 	const { state, session, reloadSession } = useAuthenticatedAppSession();
 	return (
@@ -756,6 +789,13 @@ function authenticatedAppSessionControllerFixture({
 			ReturnType<AuthenticatedAppSessionController["dispose"]>,
 			Parameters<AuthenticatedAppSessionController["dispose"]>
 		>(async () => ({ householdIdsForLocalDataDeletion: [] })),
+		invalidateCurrentSession: jest.fn<
+			ReturnType<AuthenticatedAppSessionController["invalidateCurrentSession"]>,
+			Parameters<AuthenticatedAppSessionController["invalidateCurrentSession"]>
+		>(async () => {
+			currentSnapshot = { status: "loading" };
+			for (const subscriber of subscribers) subscriber(currentSnapshot);
+		}),
 		getSnapshot: jest.fn<
 			ReturnType<AuthenticatedAppSessionController["getSnapshot"]>,
 			Parameters<AuthenticatedAppSessionController["getSnapshot"]>

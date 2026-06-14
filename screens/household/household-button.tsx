@@ -5,15 +5,21 @@ export function HouseholdButton({
 	label,
 	onPress,
 	disabled,
+	accessibilityHint,
+	accessibilityLabel,
 	variant = "secondary",
 }: {
 	label: string;
 	onPress: () => void;
 	disabled?: boolean;
+	accessibilityHint?: string;
+	accessibilityLabel?: string;
 	variant?: "primary" | "secondary" | "danger";
 }) {
 	return (
 		<Pressable
+			accessibilityHint={accessibilityHint}
+			accessibilityLabel={accessibilityLabel}
 			accessibilityRole="button"
 			accessibilityState={{ disabled: Boolean(disabled) }}
 			disabled={disabled}

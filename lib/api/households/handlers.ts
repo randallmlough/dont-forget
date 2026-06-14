@@ -37,7 +37,6 @@ import {
 	type MemberServiceDirectory,
 	SoleMemberError,
 } from "@/lib/services/member/server";
-import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 import {
 	ApiForbiddenError,
 	type ApiHandlerDeps,
@@ -191,18 +190,13 @@ export async function handleRemoveMember(
 	try {
 		return await withDirectory(deps, async (directory) => {
 			const user = await authenticateApiUser(request, directory, deps);
-			return runWithSqliteBusyRetry(() =>
-				directory.transaction(async (tx) => {
-					await lockHouseholdLifecycle(householdId, tx);
-					const service = memberService(tx, deps);
-					await service.removeMember({
-						householdId,
-						membershipId,
-						requestedByUserId: user.id,
-					});
-					return jsonResponse({ removed: true });
-				}),
-			);
+			const service = memberService(directory, deps);
+			await service.removeMember({
+				householdId,
+				membershipId,
+				requestedByUserId: user.id,
+			});
+			return jsonResponse({ removed: true });
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Remove Member API failed");
@@ -219,19 +213,14 @@ export async function handleChangeMemberRole(
 			const user = await authenticateApiUser(request, directory, deps);
 			const body = await readJsonObject(request);
 			const role = memberRoleField(body);
-			return runWithSqliteBusyRetry(() =>
-				directory.transaction(async (tx) => {
-					await lockHouseholdLifecycle(householdId, tx);
-					const service = memberService(tx, deps);
-					await service.changeMemberRole({
-						householdId,
-						membershipId,
-						role,
-						requestedByUserId: user.id,
-					});
-					return jsonResponse({ member: { membershipId, role } });
-				}),
-			);
+			const service = memberService(directory, deps);
+			await service.changeMemberRole({
+				householdId,
+				membershipId,
+				role,
+				requestedByUserId: user.id,
+			});
+			return jsonResponse({ member: { membershipId, role } });
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Change Member role API failed");
@@ -246,17 +235,12 @@ export async function handleLeaveHousehold(
 	try {
 		return await withDirectory(deps, async (directory) => {
 			const user = await authenticateApiUser(request, directory, deps);
-			return runWithSqliteBusyRetry(() =>
-				directory.transaction(async (tx) => {
-					await lockHouseholdLifecycle(householdId, tx);
-					const service = memberService(tx, deps);
-					const { promotedMembershipId } = await service.leaveHousehold({
-						householdId,
-						userId: user.id,
-					});
-					return jsonResponse({ left: true, promotedMembershipId });
-				}),
-			);
+			const service = memberService(directory, deps);
+			const { promotedMembershipId } = await service.leaveHousehold({
+				householdId,
+				userId: user.id,
+			});
+			return jsonResponse({ left: true, promotedMembershipId });
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Leave Household API failed");

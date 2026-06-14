@@ -7,9 +7,13 @@ import {
 	type User,
 } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
+import { runWithSqliteBusyRetry } from "@/db/utils";
 import type { AppEnv } from "@/lib/env";
 import { createAppId } from "@/lib/ids";
+import { serverServiceAnalytics } from "@/lib/server/analytics";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 import type { ActiveMembership } from "@/lib/services/member/server";
+import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 import {
 	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,
@@ -43,6 +47,7 @@ export type HouseholdService = {
 export type HouseholdServiceDeps = {
 	directory: HouseholdServiceDirectory;
 	generateJoinCode?: HouseholdJoinCodeGenerator;
+	analytics?: ServiceAnalytics;
 };
 
 export class HouseholdForbiddenError extends Error {
@@ -69,6 +74,8 @@ export class HouseholdNotFoundError extends Error {
 export function createHouseholdService(
 	deps: HouseholdServiceDeps,
 ): HouseholdService {
+	const analytics = deps.analytics ?? serverServiceAnalytics;
+
 	return {
 		findPendingCreatedHousehold(userId) {
 			return findPendingCreatedHousehold(userId, deps.directory);
@@ -77,7 +84,7 @@ export function createHouseholdService(
 			return createOwnedHousehold(input, deps.directory, deps.generateJoinCode);
 		},
 		renameHousehold(input) {
-			return renameHousehold(input, deps.directory);
+			return renameHousehold(input, deps.directory, analytics);
 		},
 		async markProvisioningCompleted(householdId) {
 			await deps.directory
@@ -157,28 +164,44 @@ async function createOwnedHousehold(
 async function renameHousehold(
 	input: { householdId: string; name: string; requestedByUserId: string },
 	directory: HouseholdServiceDirectory,
+	analytics: ServiceAnalytics,
 ): Promise<Household> {
 	const name = normalizeHouseholdName(input.name);
-	const household = await findActiveHousehold(input.householdId, directory);
-	if (!household) throw new HouseholdNotFoundError();
-
-	const requester = await findActiveOwnerMembership(
-		{
-			householdId: input.householdId,
-			userId: input.requestedByUserId,
-		},
+	const household = await runHouseholdCommand(
+		input.householdId,
 		directory,
+		async (tx) => {
+			const requester = await findActiveOwnerMembership(
+				{
+					householdId: input.householdId,
+					userId: input.requestedByUserId,
+				},
+				tx,
+			);
+			if (!requester) throw new HouseholdForbiddenError();
+
+			const [updated] = await tx
+				.update(households)
+				.set({ name })
+				.where(
+					and(
+						eq(households.id, input.householdId),
+						isNull(households.deletedAt),
+					),
+				)
+				.returning();
+			if (!updated) throw new HouseholdNotFoundError();
+
+			return updated;
+		},
 	);
-	if (!requester) throw new HouseholdForbiddenError();
 
-	await directory
-		.update(households)
-		.set({ name })
-		.where(
-			and(eq(households.id, input.householdId), isNull(households.deletedAt)),
-		);
+	analytics.track("household_renamed", {
+		household_id: household.id,
+		requested_by_user_id: input.requestedByUserId,
+	});
 
-	return { ...household, name };
+	return household;
 }
 
 function normalizeHouseholdName(name: string): string {
@@ -194,17 +217,22 @@ function normalizeHouseholdName(name: string): string {
 	return trimmed;
 }
 
-async function findActiveHousehold(
+async function runHouseholdCommand<T>(
 	householdId: string,
 	directory: HouseholdServiceDirectory,
-): Promise<Household | null> {
-	const [household] = await directory
-		.select()
-		.from(households)
-		.where(and(eq(households.id, householdId), isNull(households.deletedAt)))
-		.limit(1);
+	command: (directory: HouseholdServiceDirectory) => Promise<T>,
+): Promise<T> {
+	if ("transaction" in directory) {
+		return runWithSqliteBusyRetry(() =>
+			directory.transaction(async (tx) => {
+				await lockHouseholdLifecycle(householdId, tx);
+				return command(tx);
+			}),
+		);
+	}
 
-	return household ?? null;
+	await lockHouseholdLifecycle(householdId, directory);
+	return command(directory);
 }
 
 async function findActiveOwnerMembership(
@@ -214,19 +242,17 @@ async function findActiveOwnerMembership(
 	const [row] = await directory
 		.select()
 		.from(memberships)
-		.innerJoin(households, eq(households.id, memberships.householdId))
 		.where(
 			and(
 				eq(memberships.householdId, input.householdId),
 				eq(memberships.userId, input.userId),
 				eq(memberships.role, "owner"),
 				isNull(memberships.removedAt),
-				isNull(households.deletedAt),
 			),
 		)
 		.limit(1);
 
-	return row?.memberships ?? null;
+	return row ?? null;
 }
 
 function activeMembershipFrom(

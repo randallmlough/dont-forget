@@ -238,6 +238,7 @@ function controllerFixture(
 			snapshot = { status: "idle" };
 			return { householdIdsForLocalDataDeletion: [] };
 		}),
+		invalidateCurrentSession: jest.fn(async () => undefined),
 		getSnapshot: () => snapshot,
 		subscribe: jest.fn(() => ({ remove() {} })),
 	};

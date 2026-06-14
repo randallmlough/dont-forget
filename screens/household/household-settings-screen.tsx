@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import {
+	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/components/session";
@@ -60,7 +61,7 @@ function HouseholdSettingsContent({
 	reloadSession,
 }: {
 	session: AuthenticatedAppSession;
-	reloadSession: (options?: { retireCurrent?: boolean }) => void;
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
 }) {
 	const { state, actions } = useHouseholdSettings(
 		session,
@@ -263,8 +264,8 @@ function HouseholdNamePanel({
 					variant="primary"
 					label={disabled ? "Renaming" : "Rename"}
 					onPress={() => {
-						void actions.renameHousehold(draftName).then(() => {
-							setEditing(false);
+						void actions.renameHousehold(draftName).then((renamed) => {
+							if (renamed) setEditing(false);
 						});
 					}}
 					disabled={disabled}
@@ -399,6 +400,7 @@ function MemberRow({
 		operation.status === "changingRole" &&
 		operation.membershipId === member.membershipId;
 	const nextRole = member.role === "owner" ? "member" : "owner";
+	const memberName = member.displayName ?? "this Member";
 
 	return (
 		<View style={styles.row}>
@@ -413,11 +415,15 @@ function MemberRow({
 			{canManageMembers ? (
 				<View style={styles.memberActions}>
 					<HouseholdButton
+						accessibilityLabel={`Make ${memberName} ${
+							nextRole === "owner" ? "an Owner" : "a Member"
+						}`}
 						label={changingRole ? "Changing" : roleActionLabel(nextRole)}
 						onPress={() => confirmRoleChange(member, nextRole, actions)}
 						disabled={changingRole}
 					/>
 					<HouseholdButton
+						accessibilityLabel={`Remove ${memberName} from this Household`}
 						variant="danger"
 						label={removing ? "Removing" : "Remove"}
 						onPress={() => confirmRemoveMember(member, actions)}

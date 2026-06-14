@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import * as Clipboard from "expo-clipboard";
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { track } from "@/lib/analytics";
+import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
 import {
 	type CreateInvitationResponse,
 	createHouseholdApiClient,
@@ -39,7 +39,7 @@ export type HouseholdSettingsOperation =
 
 export type HouseholdSettingsActions = {
 	retry: () => void;
-	renameHousehold: (name: string) => Promise<void>;
+	renameHousehold: (name: string) => Promise<boolean>;
 	createInvitation: (email: string) => Promise<void>;
 	revokeInvitation: (invitationId: string) => Promise<void>;
 	removeMember: (membershipId: string) => Promise<void>;
@@ -110,8 +110,9 @@ type Action =
 export function useHouseholdSettings(
 	session: AuthenticatedAppSession,
 	clientProp?: HouseholdApiClient,
-	reloadSession: (options?: { retireCurrent?: boolean }) => void = () =>
-		undefined,
+	reloadSession: (
+		options?: AuthenticatedAppSessionReloadOptions,
+	) => void = () => undefined,
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
 	// Latest-ref pattern: the resolved client stays stable across getToken
@@ -175,21 +176,19 @@ export function useHouseholdSettings(
 		};
 	}, [householdId, loadAttempt, loadKey, resolveClient]);
 
-	async function renameHousehold(name: string) {
-		if (!startOperation({ status: "renamingHousehold" })) return;
+	async function renameHousehold(name: string): Promise<boolean> {
+		if (!startOperation({ status: "renamingHousehold" })) return false;
 		try {
 			const household = await resolveClient().renameHousehold({
 				householdId,
 				name,
 			});
 			dispatch({ type: "householdRenamed", loadKey, household });
-			track("household_renamed", {
-				household_id: household.id,
-				renamed_by_user_id: session.user.id,
-			});
-			reloadSession();
+			reloadSession({ freshOnly: true });
+			return true;
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			return false;
 		} finally {
 			operationInFlightRef.current = false;
 		}
@@ -241,11 +240,7 @@ export function useHouseholdSettings(
 			const members = await client.listMembers(householdId);
 			dispatch({ type: "membersChanged", loadKey, members });
 			dispatch({ type: "notice", loadKey, notice: "Member removed." });
-			track("member_removed", {
-				household_id: householdId,
-				membership_id: membershipId,
-				removed_by_user_id: session.user.id,
-			});
+			reloadSession();
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {
@@ -261,12 +256,7 @@ export function useHouseholdSettings(
 			const members = await client.listMembers(householdId);
 			dispatch({ type: "membersChanged", loadKey, members });
 			dispatch({ type: "notice", loadKey, notice: "Member role changed." });
-			track("member_role_changed", {
-				household_id: householdId,
-				membership_id: membershipId,
-				role,
-				changed_by_user_id: session.user.id,
-			});
+			reloadSession();
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {
@@ -277,12 +267,15 @@ export function useHouseholdSettings(
 	async function leaveHousehold() {
 		if (!startOperation({ status: "leavingHousehold" })) return;
 		try {
-			const response = await resolveClient().leaveHousehold(householdId);
-			track("household_left", {
-				household_id: householdId,
-				user_id: session.user.id,
-				promoted_membership_id: response.promotedMembershipId,
-			});
+			if (!(await syncCurrentHousehold(session))) {
+				dispatch({
+					type: "notice",
+					loadKey,
+					notice: "Unable to sync this Household before leaving. Try again.",
+				});
+				return;
+			}
+			await resolveClient().leaveHousehold(householdId);
 			reloadSession({ retireCurrent: true });
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
@@ -376,6 +369,19 @@ export function useHouseholdSettings(
 			clearNotice: () => dispatch({ type: "notice", loadKey, notice: null }),
 		},
 	};
+}
+
+async function syncCurrentHousehold(
+	session: AuthenticatedAppSession,
+): Promise<boolean> {
+	try {
+		const syncResult = await session.services.sync.requestSync({
+			reason: "manualRefresh",
+		});
+		return Boolean(syncResult);
+	} catch {
+		return false;
+	}
 }
 
 function initialResource(loadKey: string): Resource {

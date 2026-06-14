@@ -13,7 +13,7 @@ import {
 describe("createMemberService", () => {
 	it("finds the oldest active Membership and lists authenticated app session Members", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 
 		try {
 			await directory.db.insert(users).values([
@@ -141,7 +141,7 @@ describe("createMemberService", () => {
 
 	it("excludes removed Memberships from active lookup and associated Household listing", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 
 		try {
 			await directory.db.insert(users).values({
@@ -212,7 +212,7 @@ describe("createMemberService", () => {
 
 	it("creates one Owner Membership for a pending Household", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
 
 		try {
@@ -255,7 +255,7 @@ describe("createMemberService", () => {
 
 	it("finds active Household Membership and ensures one plain Member Membership", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_010_000);
 
 		try {
@@ -320,7 +320,8 @@ describe("createMemberService", () => {
 
 	it("lets an Owner remove a plain Member", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const analytics = analyticsFixture();
+		const service = memberService(directory.db, analytics);
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(100);
 
 		try {
@@ -348,15 +349,85 @@ describe("createMemberService", () => {
 					displayName: "Owner",
 				},
 			]);
+			expect(analytics.track).toHaveBeenCalledWith("member_removed", {
+				household_id: "hh_1",
+				membership_id: "mbr_member",
+				requested_by_user_id: "usr_owner",
+			});
 		} finally {
 			dateNow.mockRestore();
 			await directory.close();
 		}
 	});
 
+	it("locks Household lifecycle inside the public remove Member command before policy reads", async () => {
+		const events: string[] = [];
+		let readCount = 0;
+		let updateCount = 0;
+		const requester = {
+			id: "mbr_owner",
+			householdId: "hh_1",
+			userId: "usr_owner",
+			role: "owner" as const,
+			joinedAt: 1,
+			removedAt: null,
+		};
+		const target = {
+			id: "mbr_member",
+			householdId: "hh_1",
+			userId: "usr_member",
+			role: "member" as const,
+			joinedAt: 2,
+			removedAt: null,
+		};
+		const selectBuilder = {
+			from: () => selectBuilder,
+			innerJoin: () => selectBuilder,
+			where: () => selectBuilder,
+			limit: async () => {
+				events.push("read");
+				readCount += 1;
+				if (readCount === 1) return [{ memberships: requester }];
+				if (readCount === 2) return [{ memberships: target }];
+				return [];
+			},
+			orderBy: async () => {
+				events.push("read");
+				return [{ memberships: requester }, { memberships: target }];
+			},
+		};
+		const tx = {
+			select: () => selectBuilder,
+			update: () => {
+				updateCount += 1;
+				return {
+					set: () => ({
+						where: async () => {
+							events.push(updateCount === 1 ? "lock" : "mutate");
+						},
+					}),
+				};
+			},
+		};
+		const directory = {
+			transaction: async <T>(
+				operation: (transaction: typeof tx) => Promise<T>,
+			) => operation(tx),
+		};
+		const service = memberService(directory as unknown as DirectoryDb);
+
+		await service.removeMember({
+			householdId: "hh_1",
+			membershipId: "mbr_member",
+			requestedByUserId: "usr_owner",
+		});
+
+		expect(events).toEqual(["lock", "read", "read", "read", "mutate"]);
+	});
+
 	it("rejects removal by a plain Member and self-removal by an Owner", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 
 		try {
 			await seedMembers(directory.db, [
@@ -385,7 +456,7 @@ describe("createMemberService", () => {
 
 	it("allows removing an Owner only when another active Owner remains", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 
 		try {
 			await seedMembers(directory.db, [
@@ -431,7 +502,8 @@ describe("createMemberService", () => {
 
 	it("changes roles with last Owner protection and same-role no-op", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const analytics = analyticsFixture();
+		const service = memberService(directory.db, analytics);
 
 		try {
 			await seedMembers(directory.db, [
@@ -476,6 +548,27 @@ describe("createMemberService", () => {
 					expect.objectContaining({ id: "mbr_member", role: "owner" }),
 				]),
 			);
+			expect(analytics.track).toHaveBeenCalledTimes(2);
+			expect(analytics.track).toHaveBeenNthCalledWith(
+				1,
+				"member_role_changed",
+				{
+					household_id: "hh_1",
+					membership_id: "mbr_owner_b",
+					role: "member",
+					requested_by_user_id: "usr_owner_a",
+				},
+			);
+			expect(analytics.track).toHaveBeenNthCalledWith(
+				2,
+				"member_role_changed",
+				{
+					household_id: "hh_1",
+					membership_id: "mbr_member",
+					role: "owner",
+					requested_by_user_id: "usr_owner_a",
+				},
+			);
 		} finally {
 			await directory.close();
 		}
@@ -483,7 +576,7 @@ describe("createMemberService", () => {
 
 	it("lets a plain Member leave without promotion", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 
 		try {
 			await seedMembers(directory.db, [
@@ -504,7 +597,8 @@ describe("createMemberService", () => {
 
 	it("promotes the longest-tenured remaining Member when the last Owner leaves", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const analytics = analyticsFixture();
+		const service = memberService(directory.db, analytics);
 
 		try {
 			await seedMembers(directory.db, [
@@ -533,6 +627,11 @@ describe("createMemberService", () => {
 				.from(memberships)
 				.where(eq(memberships.id, "mbr_older_a"));
 			expect(promoted?.role).toBe("owner");
+			expect(analytics.track).toHaveBeenCalledWith("household_left", {
+				household_id: "hh_1",
+				user_id: "usr_owner",
+				promoted_membership_id: "mbr_older_a",
+			});
 		} finally {
 			await directory.close();
 		}
@@ -540,7 +639,7 @@ describe("createMemberService", () => {
 
 	it("rejects leaving as the sole Member", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 
 		try {
 			await seedMembers(directory.db, [
@@ -557,7 +656,7 @@ describe("createMemberService", () => {
 
 	it("ignores removed Memberships when computing last Owner and promotion tenure", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 
 		try {
 			await seedMembers(directory.db, [
@@ -597,7 +696,7 @@ describe("createMemberService", () => {
 
 	it("does not list or mutate Memberships for deleted Households", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createMemberService({ directory: directory.db });
+		const service = memberService(directory.db);
 
 		try {
 			await seedMembers(directory.db, [
@@ -677,4 +776,12 @@ function displayName(userId: string): string {
 		.split("_")
 		.map((part) => part[0]?.toUpperCase() + part.slice(1))
 		.join(" ");
+}
+
+function analyticsFixture() {
+	return { track: jest.fn() };
+}
+
+function memberService(directory: DirectoryDb, analytics = analyticsFixture()) {
+	return createMemberService({ directory, analytics });
 }

@@ -82,7 +82,8 @@ describe("createHouseholdService", () => {
 
 	it("renames a Household for an active Owner and trims the stored name", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createHouseholdService({ directory: directory.db });
+		const analytics = analyticsFixture();
+		const service = householdService(directory.db, analytics);
 
 		try {
 			await seedRenameScenario(directory.db);
@@ -99,14 +100,98 @@ describe("createHouseholdService", () => {
 				.where(eq(households.id, PRIMARY_HOUSEHOLD_SEED.household.id));
 			expect(renamed.name).toBe("Lake House");
 			expect(stored?.name).toBe("Lake House");
+			expect(analytics.track).toHaveBeenCalledWith("household_renamed", {
+				household_id: PRIMARY_HOUSEHOLD_SEED.household.id,
+				requested_by_user_id: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+			});
 		} finally {
 			await directory.close();
 		}
 	});
 
+	it("locks Household lifecycle inside the public rename command before policy reads", async () => {
+		const events: string[] = [];
+		let readCount = 0;
+		const requester = {
+			id: PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
+			householdId: "hh_1",
+			userId: "usr_owner",
+			role: "owner" as const,
+			joinedAt: 1,
+			removedAt: null,
+		};
+		const household = {
+			id: "hh_1",
+			name: "River House",
+			tursoDbName: "db-river-house",
+			createdByUserId: "usr_owner",
+			provisioningCompletedAt: 1,
+			createdAt: 1,
+			deletedAt: null,
+		};
+		type FakeSelectBuilder = {
+			from: () => FakeSelectBuilder;
+			where: () => FakeSelectBuilder;
+			limit: () => Promise<(typeof requester | typeof household)[]>;
+		};
+		type FakeExecutor = {
+			select: () => FakeSelectBuilder;
+			update: () => {
+				set: (values: Partial<typeof household>) => {
+					where: () => {
+						returning: () => Promise<(typeof household)[]>;
+					};
+				};
+			};
+			transaction: <T>(
+				operation: (transaction: FakeExecutor) => Promise<T>,
+			) => Promise<T>;
+		};
+		const selectBuilder: FakeSelectBuilder = {
+			from: () => selectBuilder,
+			where: () => selectBuilder,
+			limit: async () => {
+				events.push("read");
+				readCount += 1;
+				if (readCount === 1) return [requester];
+				return [household];
+			},
+		};
+		const executor: FakeExecutor = {
+			select: () => selectBuilder,
+			update: () => ({
+				set: (values: Partial<typeof household>) => ({
+					where: () => {
+						const event =
+							"id" in values && !("name" in values) ? "lock" : "mutate";
+						events.push(event);
+						return {
+							returning: async () =>
+								event === "mutate"
+									? [{ ...household, name: values.name ?? household.name }]
+									: [],
+						};
+					},
+				}),
+			}),
+			transaction: async <T>(
+				operation: (transaction: typeof executor) => Promise<T>,
+			) => operation(executor),
+		};
+		const service = householdService(executor as unknown as TestDirectory);
+
+		await service.renameHousehold({
+			householdId: "hh_1",
+			name: "Lake House",
+			requestedByUserId: "usr_owner",
+		});
+
+		expect(events).toEqual(["lock", "read", "mutate"]);
+	});
+
 	it("rejects Household rename by a plain Member", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createHouseholdService({ directory: directory.db });
+		const service = householdService(directory.db);
 
 		try {
 			await seedRenameScenario(directory.db);
@@ -125,7 +210,7 @@ describe("createHouseholdService", () => {
 
 	it("rejects empty and overlong Household names", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createHouseholdService({ directory: directory.db });
+		const service = householdService(directory.db);
 
 		try {
 			await seedRenameScenario(directory.db);
@@ -149,9 +234,9 @@ describe("createHouseholdService", () => {
 		}
 	});
 
-	it("rejects unknown and deleted Households", async () => {
+	it("rejects unknown Household ids without revealing existence to non-Members", async () => {
 		const directory = await createTestDirectoryDb();
-		const service = createHouseholdService({ directory: directory.db });
+		const service = householdService(directory.db);
 
 		try {
 			await seedRenameScenario(directory.db);
@@ -162,8 +247,18 @@ describe("createHouseholdService", () => {
 					name: "Lake House",
 					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
 				}),
-			).rejects.toBeInstanceOf(HouseholdNotFoundError);
+			).rejects.toBeInstanceOf(HouseholdForbiddenError);
+		} finally {
+			await directory.close();
+		}
+	});
 
+	it("rejects deleted Households for existing Owners", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = householdService(directory.db);
+
+		try {
+			await seedRenameScenario(directory.db);
 			await directory.db
 				.update(households)
 				.set({ deletedAt: PRIMARY_HOUSEHOLD_SEED.now + 1 })
@@ -183,6 +278,17 @@ describe("createHouseholdService", () => {
 });
 
 type TestDirectory = Awaited<ReturnType<typeof createTestDirectoryDb>>["db"];
+
+function analyticsFixture() {
+	return { track: jest.fn() };
+}
+
+function householdService(
+	directory: TestDirectory,
+	analytics = analyticsFixture(),
+) {
+	return createHouseholdService({ directory, analytics });
+}
 
 async function seedRenameScenario(directory: TestDirectory) {
 	await directory
