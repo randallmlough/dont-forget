@@ -39,7 +39,7 @@ export type HouseholdSettingsOperation =
 
 export type HouseholdSettingsActions = {
 	retry: () => void;
-	renameHousehold: (name: string) => Promise<void>;
+	renameHousehold: (name: string) => Promise<boolean>;
 	createInvitation: (email: string) => Promise<void>;
 	revokeInvitation: (invitationId: string) => Promise<void>;
 	removeMember: (membershipId: string) => Promise<void>;
@@ -175,8 +175,8 @@ export function useHouseholdSettings(
 		};
 	}, [householdId, loadAttempt, loadKey, resolveClient]);
 
-	async function renameHousehold(name: string) {
-		if (!startOperation({ status: "renamingHousehold" })) return;
+	async function renameHousehold(name: string): Promise<boolean> {
+		if (!startOperation({ status: "renamingHousehold" })) return false;
 		try {
 			const household = await resolveClient().renameHousehold({
 				householdId,
@@ -188,8 +188,10 @@ export function useHouseholdSettings(
 				renamed_by_user_id: session.user.id,
 			});
 			reloadSession();
+			return true;
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			return false;
 		} finally {
 			operationInFlightRef.current = false;
 		}

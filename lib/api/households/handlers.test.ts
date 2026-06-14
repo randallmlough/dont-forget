@@ -208,6 +208,43 @@ describe("Household API handlers", () => {
 		}
 	});
 
+	it("does not reveal Household existence to non-Members during rename", async () => {
+		const harness = await primaryHarness();
+		try {
+			const existing = await readJsonResponse(
+				await handleRenameHousehold(
+					createApiRequest({
+						method: "PATCH",
+						body: { name: "Lake House" },
+					}),
+					{ householdId: harness.scenario.household.id },
+					householdDeps(harness.directory, "user_casey"),
+				),
+			);
+			const missing = await readJsonResponse(
+				await handleRenameHousehold(
+					createApiRequest({
+						method: "PATCH",
+						body: { name: "Lake House" },
+					}),
+					{ householdId: "hh_missing" },
+					householdDeps(harness.directory, "user_casey"),
+				),
+			);
+
+			expect(existing).toMatchObject({
+				status: 403,
+				body: { error: "Forbidden" },
+			});
+			expect(missing).toMatchObject({
+				status: 403,
+				body: { error: "Forbidden" },
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
 	it("rejects invalid Household rename names", async () => {
 		const harness = await primaryHarness();
 		try {

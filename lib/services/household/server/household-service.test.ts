@@ -149,7 +149,7 @@ describe("createHouseholdService", () => {
 		}
 	});
 
-	it("rejects unknown and deleted Households", async () => {
+	it("rejects unknown Household ids without revealing existence to non-Members", async () => {
 		const directory = await createTestDirectoryDb();
 		const service = createHouseholdService({ directory: directory.db });
 
@@ -162,8 +162,18 @@ describe("createHouseholdService", () => {
 					name: "Lake House",
 					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
 				}),
-			).rejects.toBeInstanceOf(HouseholdNotFoundError);
+			).rejects.toBeInstanceOf(HouseholdForbiddenError);
+		} finally {
+			await directory.close();
+		}
+	});
 
+	it("rejects deleted Households for existing Owners", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
 			await directory.db
 				.update(households)
 				.set({ deletedAt: PRIMARY_HOUSEHOLD_SEED.now + 1 })

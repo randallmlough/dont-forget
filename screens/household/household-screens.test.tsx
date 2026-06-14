@@ -177,6 +177,35 @@ describe("HouseholdSettingsView", () => {
 		expect(actions.renameHousehold).toHaveBeenCalledWith("Lake House");
 	});
 
+	it("keeps the Household rename form open when save fails", async () => {
+		const client = readySettingsClient({
+			renameHousehold: jest.fn(async () => {
+				throw new Error("Household name is required.");
+			}),
+		});
+
+		function Harness() {
+			const settings = useHouseholdSettings(sessionFixture(), client);
+			return (
+				<HouseholdSettingsView
+					session={sessionFixture()}
+					state={settings.state}
+					actions={settings.actions}
+				/>
+			);
+		}
+
+		await render(<Harness />);
+		await screen.findByText("Rename");
+
+		await fireEvent.press(screen.getByText("Rename"));
+		await fireEvent.changeText(screen.getByLabelText("Household name"), "   ");
+		await fireEvent.press(screen.getByText("Rename"));
+
+		await screen.findByText("Household name is required.");
+		expect(screen.getByLabelText("Household name").props.value).toBe("   ");
+	});
+
 	it("uses refreshed session metadata after settings remount", async () => {
 		const session = {
 			...sessionFixture(),
@@ -1397,7 +1426,7 @@ function sessionFixture(): AuthenticatedAppSession {
 function settingsActions() {
 	return {
 		retry: jest.fn(),
-		renameHousehold: jest.fn(async () => undefined),
+		renameHousehold: jest.fn(async () => true),
 		createInvitation: jest.fn(),
 		revokeInvitation: jest.fn(),
 		removeMember: jest.fn(),

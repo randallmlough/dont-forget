@@ -159,9 +159,6 @@ async function renameHousehold(
 	directory: HouseholdServiceDirectory,
 ): Promise<Household> {
 	const name = normalizeHouseholdName(input.name);
-	const household = await findActiveHousehold(input.householdId, directory);
-	if (!household) throw new HouseholdNotFoundError();
-
 	const requester = await findActiveOwnerMembership(
 		{
 			householdId: input.householdId,
@@ -170,6 +167,9 @@ async function renameHousehold(
 		directory,
 	);
 	if (!requester) throw new HouseholdForbiddenError();
+
+	const household = await findActiveHousehold(input.householdId, directory);
+	if (!household) throw new HouseholdNotFoundError();
 
 	await directory
 		.update(households)
@@ -214,19 +214,17 @@ async function findActiveOwnerMembership(
 	const [row] = await directory
 		.select()
 		.from(memberships)
-		.innerJoin(households, eq(households.id, memberships.householdId))
 		.where(
 			and(
 				eq(memberships.householdId, input.householdId),
 				eq(memberships.userId, input.userId),
 				eq(memberships.role, "owner"),
 				isNull(memberships.removedAt),
-				isNull(households.deletedAt),
 			),
 		)
 		.limit(1);
 
-	return row?.memberships ?? null;
+	return row ?? null;
 }
 
 function activeMembershipFrom(

@@ -263,8 +263,8 @@ function HouseholdNamePanel({
 					variant="primary"
 					label={disabled ? "Renaming" : "Rename"}
 					onPress={() => {
-						void actions.renameHousehold(draftName).then(() => {
-							setEditing(false);
+						void actions.renameHousehold(draftName).then((renamed) => {
+							if (renamed) setEditing(false);
 						});
 					}}
 					disabled={disabled}
