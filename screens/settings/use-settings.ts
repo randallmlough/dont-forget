@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
 import { type AppEnv, readAppEnvFromExpoExtra } from "@/lib/env";
+import { useLogger } from "@/lib/logger";
 import {
 	type AppearancePreference,
 	readAppearancePreference,
@@ -15,6 +16,7 @@ export type SettingsState = {
 	appearancePreference: AppearancePreference;
 	appEnv: AppEnv;
 	appVersion: string;
+	notice: string | null;
 	privacyPolicyUrl: string | null;
 	termsUrl: string | null;
 };
@@ -31,29 +33,51 @@ export function useSettings(): {
 	actions: SettingsActions;
 } {
 	const { signOut } = useAuthenticatedAppSession();
+	const logger = useLogger();
 	const extra = Constants.expoConfig?.extra;
 	const [appearancePreference, setAppearancePreferenceState] =
 		useState<AppearancePreference>("system");
+	const [notice, setNotice] = useState<string | null>(null);
 	const privacyPolicyUrl = publicExtraString(extra, "privacyPolicyUrl");
 	const termsUrl = publicExtraString(extra, "termsUrl");
 
 	useEffect(() => {
-		track("settings_opened", { source: "home" });
 		let active = true;
-		void readAppearancePreference().then((preference) => {
-			if (active) setAppearancePreferenceState(preference);
-		});
+		void readAppearancePreference()
+			.then((preference) => {
+				if (active) setAppearancePreferenceState(preference);
+			})
+			.catch((error: unknown) => {
+				logger.error("settings appearance preference load failed", { error });
+			});
 		return () => {
 			active = false;
 		};
-	}, []);
+	}, [logger]);
 
 	async function setAppearancePreference(preference: AppearancePreference) {
-		await writeAppearancePreference(preference);
-		setAppearancePreferenceState(preference);
-		// Only the light Unistyles theme exists today. When a dark theme lands,
-		// apply this with UnistylesRuntime.setAdaptiveThemes(true) or setTheme(...).
-		track("appearance_preference_changed", { preference });
+		try {
+			await writeAppearancePreference(preference);
+			setAppearancePreferenceState(preference);
+			setNotice(null);
+			// Only the light Unistyles theme exists today. When a dark theme lands,
+			// apply this with UnistylesRuntime.setAdaptiveThemes(true) or setTheme(...).
+			track("appearance_preference_changed", { preference });
+		} catch (error) {
+			logger.error("settings appearance preference write failed", { error });
+			setNotice("Unable to update appearance. Try again.");
+		}
+	}
+
+	async function openConfiguredUrl(url: string | null): Promise<void> {
+		if (!url) return;
+		try {
+			await WebBrowser.openBrowserAsync(url);
+			setNotice(null);
+		} catch (error) {
+			logger.error("settings legal link failed", { error });
+			setNotice("Unable to open link. Try again.");
+		}
 	}
 
 	return {
@@ -61,6 +85,7 @@ export function useSettings(): {
 			appearancePreference,
 			appEnv: readAppEnvFromExpoExtra(extra),
 			appVersion: Constants.expoConfig?.version ?? "Unknown",
+			notice,
 			privacyPolicyUrl,
 			termsUrl,
 		},
@@ -79,9 +104,4 @@ function publicExtraString(
 ): string | null {
 	const value = extra?.[key];
 	return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-async function openConfiguredUrl(url: string | null): Promise<void> {
-	if (!url) return;
-	await WebBrowser.openBrowserAsync(url);
 }

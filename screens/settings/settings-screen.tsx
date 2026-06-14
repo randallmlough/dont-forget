@@ -51,6 +51,11 @@ export function SettingsScreenView({
 				<Text style={styles.headerTitle}>App settings</Text>
 			</View>
 			<ScrollView contentContainerStyle={styles.content}>
+				{state.notice ? (
+					<View style={styles.notice}>
+						<Text style={styles.noticeText}>{state.notice}</Text>
+					</View>
+				) : null}
 				{sections.map((section) => (
 					<View key={section.id} style={styles.section}>
 						<Text style={styles.sectionTitle}>{section.title}</Text>
@@ -98,8 +103,8 @@ function settingsSections(
 
 	return [
 		{
-			id: "account",
-			title: "Account",
+			id: "household",
+			title: "Household",
 			rows: [
 				<SettingsRow
 					key="household"
@@ -301,6 +306,18 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	section: {
 		gap: theme.spacing(2),
+	},
+	notice: {
+		paddingHorizontal: theme.spacing(4),
+		paddingVertical: theme.spacing(3),
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		borderRadius: theme.radii.card,
+		backgroundColor: theme.colors.surface,
+	},
+	noticeText: {
+		...theme.typography.callout,
+		color: theme.colors.text,
 	},
 	sectionTitle: {
 		...theme.typography.captionStrong,

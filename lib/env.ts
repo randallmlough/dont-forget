@@ -108,8 +108,11 @@ export function readPublicExpoConfig(
 		clerkPublishableKey,
 		posthogHost: optionalEnv("POSTHOG_HOST", source),
 		posthogProjectToken: optionalEnv("POSTHOG_PROJECT_TOKEN", source),
-		privacyPolicyUrl: optionalEnv("EXPO_PUBLIC_PRIVACY_POLICY_URL", source),
-		termsUrl: optionalEnv("EXPO_PUBLIC_TERMS_URL", source),
+		privacyPolicyUrl: optionalPublicHttpsUrl(
+			"EXPO_PUBLIC_PRIVACY_POLICY_URL",
+			source,
+		),
+		termsUrl: optionalPublicHttpsUrl("EXPO_PUBLIC_TERMS_URL", source),
 	};
 }
 
@@ -201,6 +204,27 @@ export function validateApiBaseUrlForEnv(
 			`EXPO_PUBLIC_API_BASE_URL must use https:// when APP_ENV=${appEnv}`,
 		);
 	}
+}
+
+function optionalPublicHttpsUrl(
+	key: string,
+	source: EnvSource = process.env,
+): string | undefined {
+	const value = optionalEnv(key, source);
+	if (!value) return undefined;
+
+	let parsed: URL;
+	try {
+		parsed = new URL(value);
+	} catch {
+		throw new Error(`${key} must be a valid URL`);
+	}
+
+	if (parsed.protocol !== "https:") {
+		throw new Error(`${key} must use https://`);
+	}
+
+	return parsed.href;
 }
 
 export function assertProductionConfirmation(

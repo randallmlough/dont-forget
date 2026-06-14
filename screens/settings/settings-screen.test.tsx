@@ -13,11 +13,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
+import { useLogger } from "@/lib/logger";
+import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
+let mockLogger: MockLogger;
 
 jest.mock("expo-constants", () => ({
 	__esModule: true,
@@ -45,7 +48,17 @@ jest.mock("@/lib/analytics", () =>
 	jest.requireActual("@/lib/test/mocks/analytics"),
 );
 
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
+
 beforeEach(() => {
+	mockLogger = createMockLogger();
+	jest.mocked(useLogger).mockReturnValue(mockLogger);
 	mockRouterPush.mockReset();
 	mockRouterReplace.mockReset();
 	mockSignOut.mockClear();
@@ -76,7 +89,7 @@ describe("SettingsScreen", () => {
 	it("renders settings sections and configured legal rows", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
-		expect(screen.getByText("Account")).toBeTruthy();
+		expect(screen.getByText("Household")).toBeTruthy();
 		expect(screen.getByText("Household settings")).toBeTruthy();
 		expect(screen.getAllByText("Appearance").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getByText("About")).toBeTruthy();
@@ -84,9 +97,9 @@ describe("SettingsScreen", () => {
 		expect(screen.getByText("Terms of Service")).toBeTruthy();
 		expect(screen.getByText("Version")).toBeTruthy();
 		expect(screen.getByText("1.2.3 (local)")).toBeTruthy();
-		await waitFor(() =>
-			expect(track).toHaveBeenCalledWith("settings_opened", { source: "home" }),
-		);
+		expect(track).not.toHaveBeenCalledWith("settings_opened", {
+			source: "home",
+		});
 	});
 
 	it("hides legal rows when public URLs are unset", async () => {
@@ -113,6 +126,24 @@ describe("SettingsScreen", () => {
 		);
 		expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(
 			"https://example.com/terms",
+		);
+	});
+
+	it("shows a notice when a legal URL cannot open", async () => {
+		const error = new Error("browser unavailable");
+		jest.mocked(WebBrowser.openBrowserAsync).mockRejectedValueOnce(error);
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Privacy Policy"));
+
+		expect(
+			await screen.findByText("Unable to open link. Try again."),
+		).toBeTruthy();
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"settings legal link failed",
+			{
+				error,
+			},
 		);
 	});
 
@@ -150,6 +181,40 @@ describe("SettingsScreen", () => {
 			"dark",
 		);
 		expect(track).toHaveBeenCalledWith("appearance_preference_changed", {
+			preference: "dark",
+		});
+	});
+
+	it("logs preference load failures and keeps the system default", async () => {
+		const error = new Error("storage unavailable");
+		jest.mocked(AsyncStorage.getItem).mockRejectedValueOnce(error);
+
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await waitFor(() =>
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				"settings appearance preference load failed",
+				{ error },
+			),
+		);
+		expect(screen.getAllByText("System").length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("shows a notice when appearance preference persistence fails", async () => {
+		const error = new Error("storage unavailable");
+		jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(error);
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Dark"));
+
+		expect(
+			await screen.findByText("Unable to update appearance. Try again."),
+		).toBeTruthy();
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"settings appearance preference write failed",
+			{ error },
+		);
+		expect(track).not.toHaveBeenCalledWith("appearance_preference_changed", {
 			preference: "dark",
 		});
 	});

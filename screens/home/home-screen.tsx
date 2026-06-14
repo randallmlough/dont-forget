@@ -7,6 +7,7 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/components/session";
+import { track } from "@/lib/analytics";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { HomeCurrentList, homeSessionMemberName } from "./home-current-list";
 import { HomeRetryButton, HomeStatus } from "./home-status";
@@ -28,7 +29,10 @@ export default function HomeScreen() {
 			state={state}
 			session={session}
 			onRetry={retry}
-			onOpenSettings={() => router.push("/settings")}
+			onOpenSettings={() => {
+				track("settings_opened", { source: "home" });
+				router.push("/settings");
+			}}
 			onOpenHouseholdSettings={() => router.push("/household/settings")}
 		/>
 	);

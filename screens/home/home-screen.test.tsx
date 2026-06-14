@@ -160,6 +160,7 @@ describe("HomeScreen", () => {
 		await fireEvent.press(screen.getByText("Try again"));
 		await fireEvent.press(screen.getByText("Settings"));
 		expect(retry).toHaveBeenCalledTimes(1);
+		expect(track).toHaveBeenCalledWith("settings_opened", { source: "home" });
 		expect(mockRouterPush).toHaveBeenCalledWith("/settings");
 	});
 });
