@@ -22,6 +22,17 @@ interface LoggerAdapter {
 	log(level: LogLevel, message: string, attributes: LogAttributes): void;
 }
 
+type RedactedLogRecord = {
+	level: LogLevel;
+	message: string;
+	attributes: LogAttributes;
+	error?: Error;
+};
+
+interface LoggerSink {
+	log(record: RedactedLogRecord): void;
+}
+
 class BaseLogger implements Logger {
 	constructor(
 		private readonly adapter: LoggerAdapter,
@@ -59,21 +70,39 @@ class BaseLogger implements Logger {
 	}
 }
 
-class PostHogLoggerAdapter implements LoggerAdapter {
+class DiagnosticsLoggerAdapter implements LoggerAdapter {
+	constructor(private readonly sinks: LoggerSink[]) {}
+
 	log(level: LogLevel, message: string, attributes: LogAttributes) {
-		const redactedMessage = redactString(message);
 		const redactedAttributes = redactAttributes(attributes);
-		posthog.logger[level](
-			redactedMessage,
-			redactedAttributes as PostHogLogAttributes,
-		);
-		if (level === "error") {
-			captureSentryLoggerError(
-				redactedMessage,
-				redactedAttributes,
-				redactedErrorFromAttributes(redactedAttributes),
-			);
+		const record = {
+			level,
+			message: redactString(message),
+			attributes: redactedAttributes,
+			error:
+				level === "error"
+					? redactedErrorFromAttributes(redactedAttributes)
+					: undefined,
+		};
+		for (const sink of this.sinks) {
+			sink.log(record);
 		}
+	}
+}
+
+class PostHogLoggerSink implements LoggerSink {
+	log(record: RedactedLogRecord) {
+		posthog.logger[record.level](
+			record.message,
+			record.attributes as PostHogLogAttributes,
+		);
+	}
+}
+
+class SentryErrorLoggerSink implements LoggerSink {
+	log(record: RedactedLogRecord) {
+		if (record.level !== "error") return;
+		captureSentryLoggerError(record.message, record.attributes, record.error);
 	}
 }
 
@@ -91,7 +120,12 @@ function redactedErrorFromAttributes(
 	return error;
 }
 
-export const logger: Logger = new BaseLogger(new PostHogLoggerAdapter());
+export const logger: Logger = new BaseLogger(
+	new DiagnosticsLoggerAdapter([
+		new PostHogLoggerSink(),
+		new SentryErrorLoggerSink(),
+	]),
+);
 
 export function useLogger(): Logger {
 	const { user } = useUser();

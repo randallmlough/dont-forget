@@ -4,6 +4,7 @@ const SENSITIVE_KEYS = new Set([
 	"secret",
 	"authorization",
 	"cookie",
+	"cookies",
 	"auth",
 	"apikey",
 	"email",

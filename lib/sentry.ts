@@ -1,4 +1,4 @@
-import type { Breadcrumb, ErrorEvent } from "@sentry/react-native";
+import type { ErrorEvent } from "@sentry/react-native";
 import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
 import { readAppEnvFromExpoExtra } from "@/lib/env";
@@ -70,22 +70,5 @@ function readSentryDsnFromExpoExtra(
 }
 
 function redactSentryEvent(event: ErrorEvent): ErrorEvent {
-	return {
-		...event,
-		extra: isRecord(event.extra) ? redactAttributes(event.extra) : event.extra,
-		breadcrumbs: event.breadcrumbs?.map(redactBreadcrumb),
-	};
-}
-
-function redactBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
-	return {
-		...breadcrumb,
-		data: isRecord(breadcrumb.data)
-			? (redactAttributes(breadcrumb.data) as Record<string, string>)
-			: breadcrumb.data,
-	};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+	return redactAttributes({ ...event }) as unknown as ErrorEvent;
 }
