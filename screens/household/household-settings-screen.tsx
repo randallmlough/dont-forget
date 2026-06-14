@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import {
+	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/components/session";
@@ -60,7 +61,7 @@ function HouseholdSettingsContent({
 	reloadSession,
 }: {
 	session: AuthenticatedAppSession;
-	reloadSession: (options?: { retireCurrent?: boolean }) => void;
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
 }) {
 	const { state, actions } = useHouseholdSettings(
 		session,

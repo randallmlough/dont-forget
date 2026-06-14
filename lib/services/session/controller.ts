@@ -71,6 +71,7 @@ export type AuthenticatedAppSessionActivation = {
 	getToken: GetSessionToken;
 	authReady: boolean;
 	signedIn: boolean;
+	freshOnly?: boolean;
 };
 
 type AuthenticatedAppSessionAuthState = "unknown" | "signedOut" | "signedIn";
@@ -255,6 +256,15 @@ export function createAuthenticatedAppSessionController(
 		};
 	}
 
+	function noCachedActivationAttempt(): CachedActivationAttempt {
+		return {
+			promise: Promise.resolve(false),
+			invalidateHousehold() {},
+			markFreshPublished() {},
+			throwDiscardCloseError() {},
+		};
+	}
+
 	async function handleSignedOutActivation(run: ActivationRunGuard) {
 		await Promise.allSettled([
 			drainCacheWrites(),
@@ -349,6 +359,7 @@ export function createAuthenticatedAppSessionController(
 			await recoverActivationFailure(error, run, cachedAttempt, {
 				invalidatedUnauthorizedCached,
 				attemptedFreshSession,
+				freshOnly: activation.freshOnly === true,
 			});
 		}
 	}
@@ -360,6 +371,7 @@ export function createAuthenticatedAppSessionController(
 		options: {
 			invalidatedUnauthorizedCached: boolean;
 			attemptedFreshSession: SessionBootstrap | null;
+			freshOnly: boolean;
 		},
 	) {
 		logger.error("authenticated app session activation failed", {
@@ -384,6 +396,7 @@ export function createAuthenticatedAppSessionController(
 		} else if (!publishedCached && run.isCurrent()) {
 			const previousSession = previousSessionFromSnapshot(snapshot);
 			if (
+				!options.freshOnly &&
 				previousSession &&
 				sessionMatchesAttemptedActiveHousehold(
 					previousSession,
@@ -401,6 +414,7 @@ export function createAuthenticatedAppSessionController(
 	return {
 		async activate(activation) {
 			const run = startActivationRun();
+			const freshOnly = activation.freshOnly === true;
 			const authState =
 				authenticatedAppSessionAuthStateFromActivation(activation);
 			if (authState === "signedOut") {
@@ -408,9 +422,13 @@ export function createAuthenticatedAppSessionController(
 				return;
 			}
 
-			publishLoading(previousSessionFromSnapshot(snapshot));
+			publishLoading(
+				freshOnly ? undefined : previousSessionFromSnapshot(snapshot),
+			);
 
-			const cachedAttempt = startCachedActivationAttempt(run);
+			const cachedAttempt = freshOnly
+				? noCachedActivationAttempt()
+				: startCachedActivationAttempt(run);
 			if (authState === "unknown") {
 				await cachedAttempt.promise;
 				return;

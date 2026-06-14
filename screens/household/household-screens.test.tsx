@@ -7,7 +7,10 @@ import {
 } from "@testing-library/react-native";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
-import type { AuthenticatedAppSessionContextValue } from "@/components/session";
+import type {
+	AuthenticatedAppSessionContextValue,
+	AuthenticatedAppSessionReloadOptions,
+} from "@/components/session";
 import type {
 	HouseholdApiClient,
 	HouseholdMember,
@@ -766,7 +769,7 @@ describe("useHouseholdSettings", () => {
 			name: "Lake House",
 		});
 		expect(screen.getByText("householdName:Lake House")).toBeTruthy();
-		expect(reloadSession).toHaveBeenCalledWith();
+		expect(reloadSession).toHaveBeenCalledWith({ freshOnly: true });
 	});
 
 	it("keeps the rename success notice visible after the session metadata reload refreshes settings", async () => {
@@ -1523,7 +1526,7 @@ function SettingsActionHarness({
 }: {
 	client: HouseholdApiClient;
 	action: "remove" | "role" | "leave" | "rename";
-	reloadSession?: (options?: { retireCurrent?: boolean }) => void;
+	reloadSession?: (options?: AuthenticatedAppSessionReloadOptions) => void;
 }) {
 	const { state, actions } = useHouseholdSettings(
 		sessionFixture(),

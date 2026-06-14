@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import * as Clipboard from "expo-clipboard";
 import { useCallback, useEffect, useReducer, useRef } from "react";
+import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
 import {
 	type CreateInvitationResponse,
 	createHouseholdApiClient,
@@ -109,8 +110,9 @@ type Action =
 export function useHouseholdSettings(
 	session: AuthenticatedAppSession,
 	clientProp?: HouseholdApiClient,
-	reloadSession: (options?: { retireCurrent?: boolean }) => void = () =>
-		undefined,
+	reloadSession: (
+		options?: AuthenticatedAppSessionReloadOptions,
+	) => void = () => undefined,
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
 	// Latest-ref pattern: the resolved client stays stable across getToken
@@ -182,7 +184,7 @@ export function useHouseholdSettings(
 				name,
 			});
 			dispatch({ type: "householdRenamed", loadKey, household });
-			reloadSession();
+			reloadSession({ freshOnly: true });
 			return true;
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });

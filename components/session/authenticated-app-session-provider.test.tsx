@@ -58,6 +58,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			getToken: expect.any(Function),
 			authReady: true,
 			signedIn: true,
+			freshOnly: false,
 		});
 
 		await act(() => {
@@ -239,6 +240,25 @@ describe("AuthenticatedAppSessionProvider", () => {
 			signedIn: true,
 		});
 		await expect(activation?.getToken()).resolves.toBe("token");
+	});
+
+	it("can request a fresh-only Authenticated App Session reload", async () => {
+		const controller = authenticatedAppSessionControllerFixture();
+		await render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
+				<FreshOnlyReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Fresh reload" }));
+
+		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
+		expect(controller.activate.mock.calls.at(-1)?.[0]).toMatchObject({
+			freshOnly: true,
+		});
 	});
 
 	it("signs out in analytics, controller, local cleanup, Clerk order", async () => {
@@ -649,6 +669,18 @@ function ReloadState() {
 	return (
 		<Pressable accessibilityRole="button" onPress={() => reloadSession()}>
 			<Text>Reload</Text>
+		</Pressable>
+	);
+}
+
+function FreshOnlyReloadState() {
+	const { reloadSession } = useAuthenticatedAppSession();
+	return (
+		<Pressable
+			accessibilityRole="button"
+			onPress={() => reloadSession({ freshOnly: true })}
+		>
+			<Text>Fresh reload</Text>
 		</Pressable>
 	);
 }
