@@ -13,6 +13,7 @@ export type UserServiceDirectory = DirectoryDb | DirectoryTransaction;
 
 export type UserService = {
 	anonymizeUser(input: UserDeletionIdentityInput): Promise<void>;
+	findUserForDeletionByClerkUserId(clerkUserId: string): Promise<User | null>;
 	markUserDeleted(input: UserDeletionIdentityInput): Promise<void>;
 	recordClerkDeleted(input: UserDeletionIdentityInput): Promise<void>;
 	upsertUser(profile: ServerUserProfile): Promise<User>;
@@ -39,6 +40,9 @@ export function createUserService(deps: UserServiceDeps): UserService {
 		anonymizeUser(input) {
 			return anonymizeUser(input, deps.directory);
 		},
+		findUserForDeletionByClerkUserId(clerkUserId) {
+			return findUserForDeletionByClerkUserId(clerkUserId, deps.directory);
+		},
 		markUserDeleted(input) {
 			return markUserDeleted(input, deps.directory);
 		},
@@ -49,6 +53,34 @@ export function createUserService(deps: UserServiceDeps): UserService {
 			return upsertUser(profile, deps.directory);
 		},
 	};
+}
+
+async function findUserForDeletionByClerkUserId(
+	clerkUserId: string,
+	directory: UserServiceDirectory,
+): Promise<User | null> {
+	const [userByClerkId] = await directory
+		.select()
+		.from(users)
+		.where(eq(users.clerkUserId, clerkUserId))
+		.limit(1);
+	if (userByClerkId) return userByClerkId;
+
+	const [deletedIdentity] = await directory
+		.select()
+		.from(deletedUserIdentities)
+		.where(
+			eq(deletedUserIdentities.clerkUserIdHash, clerkUserIdHash(clerkUserId)),
+		)
+		.limit(1);
+	if (!deletedIdentity) return null;
+
+	const [deletedUser] = await directory
+		.select()
+		.from(users)
+		.where(eq(users.id, deletedIdentity.userId))
+		.limit(1);
+	return deletedUser ?? null;
 }
 
 async function anonymizeUser(

@@ -25,24 +25,36 @@ export type ServerUserProfile = {
 export async function verifyClerkRequest(
 	request: Request,
 ): Promise<ServerUserProfile> {
+	const clerkUserId = await verifyClerkRequestUserId(request);
+	const config = readClerkServerConfig();
+	const clerk = createClerkClient({ secretKey: config.secretKey });
+	let user: ClerkUser;
+	try {
+		user = await clerk.users.getUser(clerkUserId);
+	} catch (error) {
+		if (isClerkNotFoundError(error)) {
+			throw new UnauthorizedError("Invalid Clerk session token");
+		}
+		throw error;
+	}
+	return profileFromClerkUser(user);
+}
+
+export async function verifyClerkRequestUserId(
+	request: Request,
+): Promise<string> {
 	const token = bearerToken(request.headers.get("authorization"));
 	const config = readClerkServerConfig();
 
-	let clerkUserId: string | undefined;
 	try {
 		const payload = await verifyToken(token, { secretKey: config.secretKey });
-		clerkUserId = payload.sub;
+		if (!payload.sub) {
+			throw new UnauthorizedError("Invalid Clerk session token");
+		}
+		return payload.sub;
 	} catch {
 		throw new UnauthorizedError("Invalid Clerk session token");
 	}
-
-	if (!clerkUserId) {
-		throw new UnauthorizedError("Invalid Clerk session token");
-	}
-
-	const clerk = createClerkClient({ secretKey: config.secretKey });
-	const user = await clerk.users.getUser(clerkUserId);
-	return profileFromClerkUser(user);
 }
 
 export async function updateClerkUserName(input: {
