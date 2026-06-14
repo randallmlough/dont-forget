@@ -194,6 +194,28 @@ describe("createSessionCache", () => {
 		expect(cached?.user.onboardingCompletedAt).toBe(0);
 	});
 
+	it("preserves explicit incomplete onboarding state in cached User metadata", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+		const { householdDatabase: _householdDatabase, ...sessionMetadata } =
+			sessionBootstrapFixture();
+		await storage.setItem(
+			SESSION_CACHE_KEY,
+			JSON.stringify({
+				...sessionMetadata,
+				householdDatabase: {
+					url: "libsql://example.turso.io",
+					expiresAt: 1_700_000_000_000,
+				},
+				initializedAt: 1_700_000_000_100,
+			}),
+		);
+
+		const cached = await cache.read();
+
+		expect(cached?.user.onboardingCompletedAt).toBeNull();
+	});
+
 	it("reports no unauthorized cached Authenticated App Session for matching fresh authorization without side effects", async () => {
 		const storage = memoryStorage();
 		const analytics = createMockAnalytics();

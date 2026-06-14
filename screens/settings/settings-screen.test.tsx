@@ -31,6 +31,7 @@ import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
+const mockReloadSession = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
 const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
@@ -93,6 +94,7 @@ jest.mock("@/lib/push/registration", () => ({
 beforeEach(() => {
 	mockRouterPush.mockReset();
 	mockRouterReplace.mockReset();
+	mockReloadSession.mockReset();
 	mockSignOut.mockClear();
 	mockSendTestNotification.mockClear();
 	mockUpdateProfile.mockReset();
@@ -123,7 +125,7 @@ beforeEach(() => {
 		session: sessionFixture(),
 		markOnboardingComplete() {},
 		retry() {},
-		reloadSession() {},
+		reloadSession: mockReloadSession,
 		signOut: mockSignOut,
 	});
 	setExpoConfig({
@@ -228,7 +230,7 @@ describe("SettingsScreen", () => {
 			}),
 			markOnboardingComplete() {},
 			retry() {},
-			reloadSession() {},
+			reloadSession: mockReloadSession,
 			signOut: mockSignOut,
 		});
 
@@ -258,6 +260,7 @@ describe("SettingsScreen", () => {
 			}),
 		);
 		expect(await screen.findByText("Profile updated.")).toBeTruthy();
+		expect(mockReloadSession).toHaveBeenCalledTimes(1);
 		expect(track).toHaveBeenCalledWith("user_profile_updated", {
 			user_id: "usr_1",
 		});

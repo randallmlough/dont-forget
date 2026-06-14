@@ -68,7 +68,7 @@ export function useSettings(clientProp?: UsersApiClient): {
 	actions: SettingsActions;
 } {
 	const { getToken } = useAuth();
-	const { session, signOut } = useAuthenticatedAppSession();
+	const { reloadSession, session, signOut } = useAuthenticatedAppSession();
 	const extra = Constants.expoConfig?.extra;
 	const [appearancePreference, setAppearancePreferenceState] =
 		useState<AppearancePreference>("system");
@@ -194,6 +194,7 @@ export function useSettings(clientProp?: UsersApiClient): {
 			const updatedProfile = await resolveClient().updateProfile(input);
 			setUpdatedProfile(updatedProfile);
 			setProfileNotice("Profile updated.");
+			reloadSession();
 			track("user_profile_updated", { user_id: updatedProfile.id });
 			return true;
 		} catch {

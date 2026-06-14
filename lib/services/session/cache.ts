@@ -25,7 +25,7 @@ const cachedSessionUserSchema = bootstrapResponseSchema.shape.user.extend({
 		.number()
 		.nullable()
 		.optional()
-		.transform((value) => value ?? 0),
+		.transform((value) => (value === undefined ? 0 : value)),
 });
 
 const cachedSessionBootstrapSchema = bootstrapResponseSchema
