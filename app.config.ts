@@ -11,7 +11,6 @@ import {
 import { loadEnvFile } from "./lib/load-env.ts";
 
 type SentryPluginOptions = {
-	disableAutoUpload: boolean;
 	organization?: string;
 	project?: string;
 };
@@ -105,9 +104,11 @@ export function sentryPluginOptionsForEnv(
 	const project = optionalConfigEnv(source.SENTRY_PROJECT);
 	const authToken = optionalConfigEnv(source.SENTRY_AUTH_TOKEN);
 
+	if (!isPersistentAppEnv(appEnv) || !organization || !project || !authToken) {
+		source.SENTRY_DISABLE_AUTO_UPLOAD = "true";
+	}
+
 	return {
-		disableAutoUpload:
-			!isPersistentAppEnv(appEnv) || !organization || !project || !authToken,
 		organization,
 		project,
 	};
