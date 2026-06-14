@@ -1,9 +1,20 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { z } from "zod";
 
-export type NotificationPreference = {
-	enabled: boolean;
-	expoPushToken: string | null;
-};
+const notificationPreferenceSchema = z.discriminatedUnion("enabled", [
+	z.object({
+		enabled: z.literal(false),
+		expoPushToken: z.null(),
+	}),
+	z.object({
+		enabled: z.literal(true),
+		expoPushToken: z.string().min(1),
+	}),
+]);
+
+export type NotificationPreference = z.infer<
+	typeof notificationPreferenceSchema
+>;
 
 const NOTIFICATION_PREFERENCE_KEY_PREFIX = "notification-preference";
 
@@ -16,18 +27,8 @@ export async function readNotificationPreference(
 
 	try {
 		const parsed: unknown = JSON.parse(value);
-		if (
-			typeof parsed === "object" &&
-			parsed !== null &&
-			"enabled" in parsed &&
-			typeof parsed.enabled === "boolean"
-		) {
-			const token =
-				"expoPushToken" in parsed && typeof parsed.expoPushToken === "string"
-					? parsed.expoPushToken
-					: null;
-			return { enabled: parsed.enabled, expoPushToken: token };
-		}
+		const result = notificationPreferenceSchema.safeParse(parsed);
+		if (result.success) return result.data;
 	} catch {
 		return disabledPreference();
 	}

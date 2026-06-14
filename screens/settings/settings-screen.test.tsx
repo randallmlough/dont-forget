@@ -388,6 +388,53 @@ describe("SettingsScreen", () => {
 			outcome: "unregistered",
 		});
 	});
+
+	it("shows retry copy when push unregistration fails", async () => {
+		jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => {
+			if (key === "notification-preference:usr_avery") {
+				return JSON.stringify({
+					enabled: true,
+					expoPushToken: "ExponentPushToken[one]",
+				});
+			}
+			return null;
+		});
+		jest
+			.mocked(unregisterPushNotifications)
+			.mockRejectedValue(new Error("network timeout"));
+
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("switch", { name: "Notifications" }),
+			).toBeTruthy(),
+		);
+		await act(async () => {
+			fireEvent(
+				screen.getByRole("switch", { name: "Notifications" }),
+				"valueChange",
+				false,
+			);
+		});
+
+		expect(
+			await screen.findByText(
+				"Notifications could not be disabled. Check your connection and try again.",
+			),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("switch", { name: "Notifications" }).props.value,
+		).toBe(true);
+		expect(AsyncStorage.setItem).not.toHaveBeenCalledWith(
+			"notification-preference:usr_avery",
+			JSON.stringify({ enabled: false, expoPushToken: null }),
+		);
+		expect(track).toHaveBeenCalledWith("push_registration_changed", {
+			enabled: true,
+			outcome: "failed",
+		});
+	});
 });
 
 function renderWithSafeArea(element: ReactElement) {

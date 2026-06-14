@@ -13,6 +13,12 @@ import {
 import { type AppEnv, readAppEnvFromExpoExtra } from "@/lib/env";
 import { useLogger } from "@/lib/logger";
 import {
+	disabledPreference,
+	type NotificationPreference,
+	readNotificationPreference,
+	writeNotificationPreference,
+} from "@/lib/push/notification-preference";
+import {
 	registerForPushNotifications,
 	unregisterPushNotifications,
 } from "@/lib/push/registration";
@@ -21,12 +27,6 @@ import {
 	readAppearancePreference,
 	writeAppearancePreference,
 } from "./appearance-preference";
-import {
-	disabledPreference,
-	type NotificationPreference,
-	readNotificationPreference,
-	writeNotificationPreference,
-} from "./notification-preference";
 
 export type SettingsState = {
 	appearancePreference: AppearancePreference;
@@ -111,17 +111,6 @@ export function useSettings(): {
 		}
 	}
 
-	async function openConfiguredUrl(url: string | null): Promise<void> {
-		if (!url) return;
-		try {
-			await WebBrowser.openBrowserAsync(url);
-			setNotice(null);
-		} catch (error) {
-			logger.error("settings legal link failed", { error });
-			setNotice("Unable to open link. Try again.");
-		}
-	}
-
 	async function setNotificationsEnabled(enabled: boolean) {
 		setNotificationNotice(null);
 		const client = usersClientRef.current;
@@ -132,10 +121,21 @@ export function useSettings(): {
 		}
 
 		if (!enabled) {
-			await unregisterPushNotifications({
-				client,
-				expoPushToken: notificationPreference.expoPushToken,
-			});
+			try {
+				await unregisterPushNotifications({
+					client,
+					expoPushToken: notificationPreference.expoPushToken,
+				});
+			} catch {
+				setNotificationNotice(
+					"Notifications could not be disabled. Check your connection and try again.",
+				);
+				track("push_registration_changed", {
+					enabled: true,
+					outcome: "failed",
+				});
+				return;
+			}
 			const preference = disabledPreference();
 			await writeNotificationPreference(userId, preference);
 			setNotificationPreferenceState(preference);
@@ -211,14 +211,44 @@ export function useSettings(): {
 			termsUrl,
 		},
 		actions: {
-			openPrivacyPolicy: () => openConfiguredUrl(privacyPolicyUrl),
+			openPrivacyPolicy: () =>
+				openConfiguredUrl(
+					privacyPolicyUrl,
+					() => setNotice(null),
+					(error) => {
+						logger.error("settings legal link failed", { error });
+						setNotice("Unable to open link. Try again.");
+					},
+				),
 			sendTestNotification,
-			openTerms: () => openConfiguredUrl(termsUrl),
+			openTerms: () =>
+				openConfiguredUrl(
+					termsUrl,
+					() => setNotice(null),
+					(error) => {
+						logger.error("settings legal link failed", { error });
+						setNotice("Unable to open link. Try again.");
+					},
+				),
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,
 		},
 	};
+}
+
+async function openConfiguredUrl(
+	url: string | null,
+	onSuccess: () => void,
+	onFailure: (error: unknown) => void,
+): Promise<void> {
+	if (!url) return;
+	try {
+		await WebBrowser.openBrowserAsync(url);
+		onSuccess();
+	} catch (error) {
+		onFailure(error);
+	}
 }
 
 function publicExtraString(

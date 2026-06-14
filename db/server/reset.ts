@@ -6,6 +6,7 @@ import {
 	households,
 	invitations,
 	memberships,
+	pushTokens,
 	users,
 } from "@/db/schema/directory";
 import { itemChecks, items, lists } from "@/db/schema/household";
@@ -50,6 +51,7 @@ export async function resetDirectoryDatabase(
 		await tx.delete(householdJoinCodes);
 		await tx.delete(invitations);
 		await tx.delete(memberships);
+		await tx.delete(pushTokens);
 		await tx.update(users).set({ activeHouseholdId: null });
 		await tx.delete(households);
 		await tx.delete(users);

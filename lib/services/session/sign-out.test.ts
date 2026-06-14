@@ -149,6 +149,59 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(auth.signOut).toHaveBeenCalledTimes(1);
 	});
 
+	it("clears push notifications for the signed-out User before Clerk sign-out", async () => {
+		const order: string[] = [];
+		const controller = controllerFixture(readySnapshot("usr_avery"));
+		const auth = authFixture({
+			signOut: jest.fn(async () => {
+				order.push("clerkSignOut");
+			}),
+		});
+		const signOutFlow = createAuthenticatedAppSessionSignOut({
+			controller,
+			getAuth: () => auth,
+			analytics: createMockAnalytics(),
+			clearSignedOutSessionData: jest.fn(async () => undefined),
+			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
+			clearPushNotificationsForUser: jest.fn(async ({ getToken, userId }) => {
+				order.push("clearPushNotifications");
+				expect(userId).toBe("usr_avery");
+				expect(await getToken()).toBe("session-token");
+				expect(controller.getSnapshot()).toEqual({ status: "idle" });
+			}),
+			logger: createMockLogger(),
+		});
+
+		await signOutFlow.run();
+
+		expect(order).toEqual(["clearPushNotifications", "clerkSignOut"]);
+	});
+
+	it("logs push notification cleanup failure and still attempts Clerk sign-out", async () => {
+		const cleanupFailure = new Error("push cleanup failed");
+		const logger = createMockLogger();
+		const auth = authFixture();
+		const signOutFlow = createAuthenticatedAppSessionSignOut({
+			controller: controllerFixture(readySnapshot("usr_avery")),
+			getAuth: () => auth,
+			analytics: createMockAnalytics(),
+			clearSignedOutSessionData: jest.fn(async () => undefined),
+			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
+			clearPushNotificationsForUser: jest.fn(async () => {
+				throw cleanupFailure;
+			}),
+			logger,
+		});
+
+		await signOutFlow.run();
+
+		expect(logger.error).toHaveBeenCalledWith(
+			"authenticated app session sign-out push notification cleanup failed",
+			{ error: cleanupFailure },
+		);
+		expect(auth.signOut).toHaveBeenCalledTimes(1);
+	});
+
 	it("preserves the sign-out order with selection cleanup after session data cleanup and before Clerk sign-out", async () => {
 		const order: string[] = [];
 		const analytics = createMockAnalytics();
@@ -182,6 +235,9 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 			clearCurrentListSelectionsForUser: jest.fn(async () => {
 				order.push("clearCurrentListSelections");
 			}),
+			clearPushNotificationsForUser: jest.fn(async () => {
+				order.push("clearPushNotifications");
+			}),
 			logger: createMockLogger(),
 		});
 
@@ -193,6 +249,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 			"dispose",
 			"clearSignedOutSessionData",
 			"clearCurrentListSelections",
+			"clearPushNotifications",
 			"clerkSignOut",
 		]);
 	});

@@ -42,4 +42,29 @@ describe("notification preference persistence", () => {
 			disabledPreference(),
 		);
 	});
+
+	it("ignores enabled stored preference without an Expo push token", async () => {
+		jest
+			.mocked(AsyncStorage.getItem)
+			.mockResolvedValueOnce(
+				JSON.stringify({ enabled: true, expoPushToken: null }),
+			);
+
+		await expect(readNotificationPreference("usr_avery")).resolves.toEqual(
+			disabledPreference(),
+		);
+	});
+
+	it("ignores malformed stored preference payloads", async () => {
+		jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce(
+			JSON.stringify({
+				enabled: "true",
+				expoPushToken: "ExponentPushToken[one]",
+			}),
+		);
+
+		await expect(readNotificationPreference("usr_avery")).resolves.toEqual(
+			disabledPreference(),
+		);
+	});
 });
