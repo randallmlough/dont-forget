@@ -36,6 +36,7 @@ export function authRedirectTarget({
 		if (
 			shouldRedirectToOnboarding({
 				pathname,
+				params,
 				isAuthLoaded,
 				isAuthenticatedAppSessionReady,
 				onboardingCompletedAt,
@@ -61,21 +62,31 @@ export function authRedirectTarget({
 
 function shouldRedirectToOnboarding({
 	pathname,
+	params,
 	isAuthLoaded,
 	isAuthenticatedAppSessionReady,
 	onboardingCompletedAt,
 }: {
 	pathname: string;
+	params: AuthRedirectParams;
 	isAuthLoaded: boolean;
 	isAuthenticatedAppSessionReady: boolean;
 	onboardingCompletedAt?: number | null;
 }): boolean {
-	return (
-		pathname === "/" &&
-		isAuthLoaded &&
-		isAuthenticatedAppSessionReady &&
-		onboardingCompletedAt === null
-	);
+	if (
+		!isAuthLoaded ||
+		!isAuthenticatedAppSessionReady ||
+		onboardingCompletedAt !== null ||
+		pathname === "/onboarding" ||
+		PUBLIC_AUTH_PRESERVING_PATHS.has(pathname)
+	) {
+		return false;
+	}
+	if (!AUTH_PATHS.has(pathname)) return true;
+
+	const next = internalNextPath(params.next);
+	if (!next) return true;
+	return !PUBLIC_AUTH_PRESERVING_PATHS.has(pathnameFromInternalPath(next));
 }
 
 export function internalNextPath(value: unknown): string | null {
