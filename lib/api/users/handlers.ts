@@ -21,7 +21,7 @@ import {
 	withDirectory,
 } from "../shared";
 
-const EXPO_PUSH_TOKEN_PREFIX = "ExponentPushToken[";
+const EXPO_PUSH_TOKEN_PREFIXES = ["ExponentPushToken[", "ExpoPushToken["];
 
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
@@ -116,7 +116,10 @@ function pushTokenService(
 
 function expoPushTokenField(body: Record<string, unknown>): string {
 	const token = stringField(body, "expoPushToken");
-	if (!token.startsWith(EXPO_PUSH_TOKEN_PREFIX) || !token.endsWith("]")) {
+	if (
+		!EXPO_PUSH_TOKEN_PREFIXES.some((prefix) => token.startsWith(prefix)) ||
+		!token.endsWith("]")
+	) {
 		throw new BadRequestError("Invalid expoPushToken");
 	}
 	return token;

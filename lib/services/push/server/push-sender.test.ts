@@ -118,4 +118,37 @@ describe("sendPushNotifications", () => {
 			}),
 		);
 	});
+
+	it("retries missing receipts before finalizing accepted tickets", async () => {
+		const sleep = jest.fn(async () => undefined);
+		const fetchFn = jest
+			.fn()
+			.mockResolvedValueOnce(
+				Response.json({
+					data: [{ status: "ok", id: "ticket-one" }],
+				}),
+			)
+			.mockResolvedValueOnce(Response.json({ data: {} }))
+			.mockResolvedValueOnce(
+				Response.json({
+					data: {
+						"ticket-one": {
+							status: "error",
+							message: "The device is not registered",
+							details: { error: "DeviceNotRegistered" },
+						},
+					},
+				}),
+			);
+
+		await expect(
+			sendPushNotifications(
+				[{ to: "ExponentPushToken[one]", title: "One", body: "First" }],
+				{ fetchFn, receiptRetryDelaysMs: [0], sleep },
+			),
+		).resolves.toEqual({ deadTokens: ["ExponentPushToken[one]"] });
+
+		expect(sleep).toHaveBeenCalledWith(0);
+		expect(fetchFn).toHaveBeenCalledTimes(3);
+	});
 });
