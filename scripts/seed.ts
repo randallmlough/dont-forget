@@ -36,6 +36,7 @@ export const SEED_TEST_PASSWORD = "testing1234";
 
 const TURSO_DATABASE_NAME_LIMIT = 51;
 const EMAIL_SEED_HASH_LENGTH = 16;
+const EMAIL_SEED_DB_BASE_HASH_LENGTH = 8;
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
 const seedEmailSchema = z.email();
@@ -184,11 +185,7 @@ export function emailBackedSeedTargetForMode(
 	const baseDbName =
 		seedHouseholdDbNameForDirectory(config.directoryUrl, config.org) ??
 		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName;
-	const dbSuffix = `-${slug}`;
-	const householdDbName = `${baseDbName.slice(
-		0,
-		TURSO_DATABASE_NAME_LIMIT - dbSuffix.length,
-	)}${dbSuffix}`;
+	const householdDbName = emailSeedHouseholdDbName(baseDbName, slug);
 
 	return {
 		householdDbName,
@@ -216,6 +213,19 @@ export function emailBackedSeedTargetForMode(
 			items: scopedSeedIds(PRIMARY_HOUSEHOLD_SEED.items, slug),
 		},
 	};
+}
+
+function emailSeedHouseholdDbName(baseDbName: string, slug: string): string {
+	const baseHash = createHash("sha256")
+		.update(baseDbName)
+		.digest("hex")
+		.slice(0, EMAIL_SEED_DB_BASE_HASH_LENGTH);
+	const dbSuffix = `-${baseHash}-${slug}`;
+
+	return `${baseDbName.slice(
+		0,
+		TURSO_DATABASE_NAME_LIMIT - dbSuffix.length,
+	)}${dbSuffix}`;
 }
 
 function scopedSeedIds<T extends Record<string, { id: string }>>(
@@ -279,13 +289,13 @@ async function ensureSeedClerkUsers(
 		lastName: "Owner",
 	});
 
+	let member: EnsuredSeedClerkUser;
 	try {
-		const member = await ensureSeedClerkUser(client, {
+		member = await ensureSeedClerkUser(client, {
 			email: mode.memberEmail,
 			firstName: "Seed",
 			lastName: "Member",
 		});
-		return { owner, member };
 	} catch (error) {
 		if (owner.created) {
 			await cleanupSeedClerkUsers(client, [
@@ -294,6 +304,23 @@ async function ensureSeedClerkUsers(
 		}
 		throw error;
 	}
+
+	if (owner.user.id === member.user.id) {
+		await cleanupSeedClerkUsers(
+			client,
+			[
+				owner.created ? { user: owner.user, email: mode.ownerEmail } : null,
+				member.created ? { user: member.user, email: mode.memberEmail } : null,
+			].filter((user): user is { user: SeedClerkUser; email: string } =>
+				Boolean(user),
+			),
+		);
+		throw new Error(
+			`Refusing to seed because Owner ${mode.ownerEmail} and Member ${mode.memberEmail} resolve to the same Clerk User ${owner.user.id}. Use an EMAIL whose derived +member address belongs to a separate Clerk User.`,
+		);
+	}
+
+	return { owner, member };
 }
 
 async function ensureSeedClerkUser(
@@ -452,7 +479,10 @@ async function seedEmailBackedLocalDatabases(
 			await assertSeedDataDoesNotExist({
 				directory,
 				household,
-				seedTarget: emailSeedDataTarget(seedTarget, seedMode),
+				seedTarget: emailSeedDataTarget(seedTarget, seedMode, [
+					clerkUsers.owner.user.id,
+					clerkUsers.member.user.id,
+				]),
 			});
 			const scenario = await seedEmailBackedPrimaryHouseholdScenario({
 				directory,
@@ -695,10 +725,16 @@ function deterministicSeedTarget(seedDbName: string): SeedDataTarget {
 	};
 }
 
-function emailSeedDataTarget(
+export function emailSeedDataTarget(
 	target: EmailBackedSeedTarget,
 	seedMode: Extract<SeedMode, { kind: "clerk" }>,
+	clerkUserIds: string[],
 ): SeedDataTarget {
+	const cameronClerkUserId = target.seed.users.cameron.clerkUserId;
+	if (!cameronClerkUserId) {
+		throw new Error("EMAIL seed target is missing Cameron Clerk User ID.");
+	}
+
 	return {
 		seedMode,
 		userIds: [
@@ -706,7 +742,7 @@ function emailSeedDataTarget(
 			target.seed.users.blake.id,
 			target.seed.users.cameron.id,
 		],
-		clerkUserIds: [],
+		clerkUserIds: [...clerkUserIds, cameronClerkUserId],
 		householdIds: [target.seed.household.id],
 		householdDbNames: [target.householdDbName],
 		membershipIds: [

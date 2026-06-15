@@ -2,6 +2,7 @@ import {
 	createSeedClerkUsers,
 	deriveSeedMemberEmail,
 	emailBackedSeedTargetForMode,
+	emailSeedDataTarget,
 	formatSeedConflictMessage,
 	normalizeSeedEmail,
 	parseOptionalSeedEmail,
@@ -133,7 +134,7 @@ describe("seed EMAIL helpers", () => {
 		);
 
 		expect(target.householdDbName).toMatch(
-			/^df-local-hh-seed-avery-[a-f0-9]+$/,
+			/^df-local-hh-seed-avery-[a-f0-9]{8}-[a-f0-9]+$/,
 		);
 		expect(target.householdDbName.length).toBeLessThanOrEqual(51);
 		expect(target.seed.users.avery.id).not.toBe("usr_avery");
@@ -198,6 +199,53 @@ describe("seed EMAIL helpers", () => {
 			]),
 		);
 		expect(secondIds.every((id) => !firstIds.has(id))).toBe(true);
+	});
+
+	it("preserves worktree-scoped email seed DB names after truncation", () => {
+		const mode = {
+			kind: "clerk" as const,
+			ownerEmail: "seedtest@example.com",
+			memberEmail: "seedtest+member@example.com",
+		};
+		const first = emailBackedSeedTargetForMode(mode, {
+			directoryUrl:
+				"libsql://df-local-wt-shared-email-seed-prefix-alpha-dir-randall.turso.io",
+			org: "randall",
+		});
+		const second = emailBackedSeedTargetForMode(mode, {
+			directoryUrl:
+				"libsql://df-local-wt-shared-email-seed-prefix-bravo-dir-randall.turso.io",
+			org: "randall",
+		});
+
+		expect(first.householdDbName).not.toBe(second.householdDbName);
+		expect(first.householdDbName.length).toBeLessThanOrEqual(51);
+		expect(second.householdDbName.length).toBeLessThanOrEqual(51);
+		expect(first.householdDbName).toMatch(/-[a-f0-9]{8}-[a-f0-9]{16}$/);
+		expect(second.householdDbName).toMatch(/-[a-f0-9]{8}-[a-f0-9]{16}$/);
+	});
+
+	it("preflights actual Clerk IDs for EMAIL seed users", () => {
+		const mode = {
+			kind: "clerk" as const,
+			ownerEmail: "owner@example.com",
+			memberEmail: "owner+member@example.com",
+		};
+		const target = emailBackedSeedTargetForMode(mode, {
+			directoryUrl: "libsql://df-local-randall.turso.io",
+			org: "randall",
+		});
+
+		expect(
+			emailSeedDataTarget(target, mode, [
+				"user_existing_owner",
+				"user_existing_member",
+			]).clerkUserIds,
+		).toEqual([
+			"user_existing_owner",
+			"user_existing_member",
+			target.seed.users.cameron.clerkUserId,
+		]);
 	});
 });
 
@@ -369,6 +417,36 @@ describe("seed Clerk adapter", () => {
 		);
 		expect(client.disableUserMFA).toHaveBeenNthCalledWith(1, owner.id);
 		expect(client.disableUserMFA).toHaveBeenNthCalledWith(2, member.id);
+	});
+
+	it("rejects Owner and Member emails that resolve to the same Clerk User", async () => {
+		const shared = {
+			...clerkUser("user_shared", "owner@example.com"),
+			emailAddresses: [
+				{ id: "owner_email", emailAddress: "owner@example.com" },
+				{ id: "member_email", emailAddress: "owner+member@example.com" },
+			],
+		};
+		const deleteUser = mockDeleteUser();
+		const client: SeedClerkClient = {
+			getUserList: jest.fn(async () => ({ data: [shared] })),
+			createUser: jest.fn(),
+			updateUser: mockUpdateUser()
+				.mockResolvedValueOnce(shared)
+				.mockResolvedValueOnce(shared),
+			disableUserMFA: jest.fn(),
+			updateEmailAddress: mockUpdateEmailAddress(),
+			deleteUser,
+		};
+
+		await expect(
+			createSeedClerkUsers(client, {
+				kind: "clerk",
+				ownerEmail: "owner@example.com",
+				memberEmail: "owner+member@example.com",
+			}),
+		).rejects.toThrow(/same Clerk User/);
+		expect(deleteUser).not.toHaveBeenCalled();
 	});
 
 	it("deletes the Owner when sign-inable Member creation fails", async () => {
