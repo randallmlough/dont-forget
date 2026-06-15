@@ -155,7 +155,6 @@ function sessionContextFixture(
 	return {
 		state: { status: "ready", refreshing: false },
 		session: sessionFixture(options),
-		markOnboardingComplete() {},
 		retry() {},
 		reloadSession() {},
 		signOut: async () => undefined,

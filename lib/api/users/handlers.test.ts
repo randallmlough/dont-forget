@@ -127,9 +127,8 @@ describe("Users API handlers", () => {
 		}
 	});
 
-	it("sets the authenticated User onboarding completion timestamp", async () => {
+	it("completes onboarding for the authenticated User", async () => {
 		const directory = await createTestDirectoryDb();
-		jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
 		try {
 			await directory.db.insert(users).values({
 				id: testUser.id,
@@ -146,49 +145,41 @@ describe("Users API handlers", () => {
 
 			expect(response.status).toBe(200);
 			await expect(response.json()).resolves.toEqual({ completed: true });
-			const [row] = await directory.db
-				.select()
-				.from(users)
-				.where(eq(users.id, testUser.id));
-			expect(row.onboardingCompletedAt).toBe(1_700_000_000_000);
-			expect(row.updatedAt).toBe(1_700_000_000_000);
 		} finally {
-			jest.restoreAllMocks();
 			await directory.close();
 		}
 	});
 
-	it("does not overwrite an existing onboarding completion timestamp", async () => {
+	it("accepts current Expo push token prefixes during registration", async () => {
 		const directory = await createTestDirectoryDb();
-		jest.spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
 		try {
 			await directory.db.insert(users).values({
 				id: testUser.id,
 				clerkUserId: testUser.clerkUserId,
-				onboardingCompletedAt: 1_700_000_000_000,
-				updatedAt: 1_700_000_000_000,
+				displayName: testUser.displayName,
 			});
 
-			const response = await handleCompleteOnboarding(
-				new Request("http://test"),
+			const response = await handleRegisterPushToken(
+				jsonRequest({
+					expoPushToken: "ExpoPushToken[current]",
+					deviceName: "Avery's iPhone",
+				}),
 				{
 					directory: directory.db,
-					authenticate: async () => ({
-						...testUser,
-						onboardingCompletedAt: 1_700_000_000_000,
-					}),
+					authenticate: async () => testUser,
 				},
 			);
 
 			expect(response.status).toBe(200);
 			const [row] = await directory.db
 				.select()
-				.from(users)
-				.where(eq(users.id, testUser.id));
-			expect(row.onboardingCompletedAt).toBe(1_700_000_000_000);
-			expect(row.updatedAt).toBe(1_700_000_000_000);
+				.from(pushTokens)
+				.where(eq(pushTokens.expoPushToken, "ExpoPushToken[current]"));
+			expect(row).toMatchObject({
+				userId: testUser.id,
+				expoPushToken: "ExpoPushToken[current]",
+			});
 		} finally {
-			jest.restoreAllMocks();
 			await directory.close();
 		}
 	});

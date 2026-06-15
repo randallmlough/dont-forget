@@ -46,8 +46,9 @@ export type AddItemComposerActions = {
 
 export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
-	const { theme } = useUnistyles();
+	const { rt, theme } = useUnistyles();
 	const placeholderColor = theme.colors.textSubtle;
+	const blurTint = rt.themeName === "dark" ? "dark" : "light";
 	const visibility = useSharedValue(0);
 	const keyboardHeight = useKeyboardHeight();
 
@@ -122,7 +123,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					},
 				]}
 			>
-				<BlurView intensity={34} tint="light" style={styles.tray}>
+				<BlurView intensity={34} tint={blurTint} style={styles.tray}>
 					<View style={styles.primaryRow}>
 						<TextInput
 							accessibilityLabel="Item name"

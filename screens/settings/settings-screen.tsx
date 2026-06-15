@@ -30,7 +30,16 @@ export function SettingsScreenView({
 	actions: SettingsActions;
 }) {
 	const router = useRouter();
-	const sections = settingsSections(state, actions, router.push);
+	const sections = settingsSections(
+		state,
+		{ ...actions, signOut: signOutFromSettings },
+		router.push,
+	);
+
+	async function signOutFromSettings() {
+		router.replace("/");
+		await actions.signOut();
+	}
 
 	return (
 		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
@@ -56,6 +65,11 @@ export function SettingsScreenView({
 				</View>
 			</View>
 			<ScrollView contentContainerStyle={styles.content}>
+				{state.notice ? (
+					<View style={styles.notice}>
+						<Text style={styles.noticeText}>{state.notice}</Text>
+					</View>
+				) : null}
 				{sections.map((section) => (
 					<View key={section.id} style={styles.section}>
 						<Text style={styles.sectionTitle}>{section.title}</Text>
@@ -380,6 +394,18 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(4),
 		paddingBottom: theme.spacing(12),
 		gap: theme.spacing(5),
+	},
+	notice: {
+		borderWidth: theme.borders.thin,
+		borderColor: theme.colors.border,
+		borderRadius: theme.radii.card,
+		backgroundColor: theme.colors.surface,
+		paddingHorizontal: theme.spacing(4),
+		paddingVertical: theme.spacing(3),
+	},
+	noticeText: {
+		...theme.typography.callout,
+		color: theme.colors.text,
 	},
 	section: {
 		gap: theme.spacing(2),

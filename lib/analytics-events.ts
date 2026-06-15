@@ -128,7 +128,12 @@ export type EventMap = {
 	};
 	push_registration_changed: {
 		enabled: boolean;
-		outcome: "registered" | "denied" | "unavailable" | "unregistered";
+		outcome:
+			| "registered"
+			| "denied"
+			| "unavailable"
+			| "unregistered"
+			| "failed";
 	};
 	onboarding_completed: {
 		skipped: boolean;

@@ -87,6 +87,35 @@ describe("authRedirectTarget", () => {
 		).toBeNull();
 	});
 
+	it("redirects a signed-in User from protected app routes to onboarding when the Authenticated App Session is incomplete", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/household/settings",
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+				isAuthenticatedAppSessionReady: true,
+				onboardingCompletedAt: null,
+			}),
+		).toBe("/onboarding");
+	});
+
+	it("redirects a signed-in User from protected auth next targets to onboarding when the Authenticated App Session is incomplete", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				params: { next: "/household/settings" },
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+				isAuthenticatedAppSessionReady: true,
+				onboardingCompletedAt: null,
+			}),
+		).toBe("/onboarding");
+	});
+
 	it("preserves safe internal next targets for signed-in Users on auth routes", () => {
 		expect(
 			authRedirectTarget({

@@ -11,6 +11,13 @@ import {
 	type UsersApiClient,
 } from "@/lib/client-api/users";
 import { type AppEnv, readAppEnvFromExpoExtra } from "@/lib/env";
+import { useLogger } from "@/lib/logger";
+import {
+	disabledPreference,
+	type NotificationPreference,
+	readNotificationPreference,
+	writeNotificationPreference,
+} from "@/lib/push/notification-preference";
 import {
 	registerForPushNotifications,
 	unregisterPushNotifications,
@@ -21,17 +28,12 @@ import {
 	readAppearancePreference,
 	writeAppearancePreference,
 } from "./appearance-preference";
-import {
-	disabledPreference,
-	type NotificationPreference,
-	readNotificationPreference,
-	writeNotificationPreference,
-} from "./notification-preference";
 
 export type SettingsState = {
 	appearancePreference: AppearancePreference;
 	appEnv: AppEnv;
 	appVersion: string;
+	notice: string | null;
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
 	privacyPolicyUrl: string | null;
@@ -52,7 +54,9 @@ export function useSettings(): {
 	actions: SettingsActions;
 } {
 	const { getToken } = useAuth();
-	const { signOut } = useAuthenticatedAppSession();
+	const { session, signOut } = useAuthenticatedAppSession();
+	const logger = useLogger();
+	const userId = session?.user.id ?? null;
 	const extra = Constants.expoConfig?.extra;
 	const [appearancePreference, setAppearancePreferenceState] =
 		useState<AppearancePreference>("system");
@@ -61,6 +65,7 @@ export function useSettings(): {
 	const [notificationNotice, setNotificationNotice] = useState<string | null>(
 		null,
 	);
+	const [notice, setNotice] = useState<string | null>(null);
 	const getTokenRef = useRef(getToken);
 	useEffect(() => {
 		getTokenRef.current = getToken;
@@ -74,39 +79,69 @@ export function useSettings(): {
 
 	useEffect(() => {
 		track("settings_opened", { source: "home" });
+	}, []);
+
+	useEffect(() => {
 		let active = true;
-		void Promise.all([
-			readAppearancePreference(),
-			readNotificationPreference(),
-		]).then(([appearance, notifications]) => {
-			if (!active) return;
-			setAppearancePreferenceState(appearance);
-			setNotificationPreferenceState(notifications);
-		});
+		void readAppearancePreference()
+			.then((appearance) => {
+				if (active) setAppearancePreferenceState(appearance);
+			})
+			.catch((error: unknown) => {
+				logger.error("settings appearance preference load failed", { error });
+			});
+		void readNotificationPreference(userId)
+			.then((notifications) => {
+				if (active) setNotificationPreferenceState(notifications);
+			})
+			.catch((error: unknown) => {
+				logger.error("settings notification preference load failed", { error });
+			});
 		return () => {
 			active = false;
 		};
-	}, []);
+	}, [logger, userId]);
 
 	async function setAppearancePreference(preference: AppearancePreference) {
-		await writeAppearancePreference(preference);
-		applyAppearancePreference(preference);
-		setAppearancePreferenceState(preference);
-		track("appearance_preference_changed", { preference });
+		try {
+			await writeAppearancePreference(preference);
+			applyAppearancePreference(preference);
+			setAppearancePreferenceState(preference);
+			setNotice(null);
+			track("appearance_preference_changed", { preference });
+		} catch (error) {
+			logger.error("settings appearance preference write failed", { error });
+			setNotice("Unable to update appearance. Try again.");
+		}
 	}
 
 	async function setNotificationsEnabled(enabled: boolean) {
 		setNotificationNotice(null);
 		const client = usersClientRef.current;
 		if (!client) return;
+		if (!userId) {
+			setNotificationNotice("Sign in again to update notification settings.");
+			return;
+		}
 
 		if (!enabled) {
-			await unregisterPushNotifications({
-				client,
-				expoPushToken: notificationPreference.expoPushToken,
-			});
+			try {
+				await unregisterPushNotifications({
+					client,
+					expoPushToken: notificationPreference.expoPushToken,
+				});
+			} catch {
+				setNotificationNotice(
+					"Notifications could not be disabled. Check your connection and try again.",
+				);
+				track("push_registration_changed", {
+					enabled: true,
+					outcome: "failed",
+				});
+				return;
+			}
 			const preference = disabledPreference();
-			await writeNotificationPreference(preference);
+			await writeNotificationPreference(userId, preference);
 			setNotificationPreferenceState(preference);
 			track("push_registration_changed", {
 				enabled: false,
@@ -115,13 +150,28 @@ export function useSettings(): {
 			return;
 		}
 
-		const result = await registerForPushNotifications({ client });
+		let result: Awaited<ReturnType<typeof registerForPushNotifications>>;
+		try {
+			result = await registerForPushNotifications({ client });
+		} catch {
+			const preference = disabledPreference();
+			await writeNotificationPreference(userId, preference);
+			setNotificationPreferenceState(preference);
+			setNotificationNotice(
+				"Notifications could not be enabled. Check your connection and try again.",
+			);
+			track("push_registration_changed", {
+				enabled: false,
+				outcome: "failed",
+			});
+			return;
+		}
 		if (result.status === "registered") {
-			const preference = {
+			const preference: NotificationPreference = {
 				enabled: true,
 				expoPushToken: result.expoPushToken,
 			};
-			await writeNotificationPreference(preference);
+			await writeNotificationPreference(userId, preference);
 			setNotificationPreferenceState(preference);
 			track("push_registration_changed", {
 				enabled: true,
@@ -131,7 +181,7 @@ export function useSettings(): {
 		}
 
 		const preference = disabledPreference();
-		await writeNotificationPreference(preference);
+		await writeNotificationPreference(userId, preference);
 		setNotificationPreferenceState(preference);
 		if (result.status === "denied") {
 			setNotificationNotice(
@@ -158,20 +208,51 @@ export function useSettings(): {
 			appearancePreference,
 			appEnv: readAppEnvFromExpoExtra(extra),
 			appVersion: Constants.expoConfig?.version ?? "Unknown",
+			notice,
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
 			privacyPolicyUrl,
 			termsUrl,
 		},
 		actions: {
-			openPrivacyPolicy: () => openConfiguredUrl(privacyPolicyUrl),
+			openPrivacyPolicy: () =>
+				openConfiguredUrl(
+					privacyPolicyUrl,
+					() => setNotice(null),
+					(error) => {
+						logger.error("settings legal link failed", { error });
+						setNotice("Unable to open link. Try again.");
+					},
+				),
 			sendTestNotification,
-			openTerms: () => openConfiguredUrl(termsUrl),
+			openTerms: () =>
+				openConfiguredUrl(
+					termsUrl,
+					() => setNotice(null),
+					(error) => {
+						logger.error("settings legal link failed", { error });
+						setNotice("Unable to open link. Try again.");
+					},
+				),
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,
 		},
 	};
+}
+
+async function openConfiguredUrl(
+	url: string | null,
+	onSuccess: () => void,
+	onFailure: (error: unknown) => void,
+): Promise<void> {
+	if (!url) return;
+	try {
+		await WebBrowser.openBrowserAsync(url);
+		onSuccess();
+	} catch (error) {
+		onFailure(error);
+	}
 }
 
 function publicExtraString(
@@ -180,9 +261,4 @@ function publicExtraString(
 ): string | null {
 	const value = extra?.[key];
 	return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-async function openConfiguredUrl(url: string | null): Promise<void> {
-	if (!url) return;
-	await WebBrowser.openBrowserAsync(url);
 }

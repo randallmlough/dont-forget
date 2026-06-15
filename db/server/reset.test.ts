@@ -5,6 +5,7 @@ import {
 	households,
 	invitations,
 	memberships,
+	pushTokens,
 	users,
 } from "@/db/schema/directory";
 import { itemChecks, items, lists } from "@/db/schema/household";
@@ -74,6 +75,14 @@ describe("database reset", () => {
 				windowStartedAt: 1_700_000_000_000,
 				lastFailedAt: 1_700_000_000_000,
 			});
+			await directory.db.insert(pushTokens).values({
+				id: "pst_1",
+				userId: "usr_1",
+				expoPushToken: "ExponentPushToken[one]",
+				platform: "ios",
+				createdAt: 1,
+				updatedAt: 1,
+			});
 
 			expect(await householdDatabasesForReset(directory.db)).toEqual([
 				{ id: "hh_1", tursoDbName: "df-test-hh-1" },
@@ -92,6 +101,7 @@ describe("database reset", () => {
 			);
 			expect(await directory.db.select().from(invitations)).toHaveLength(0);
 			expect(await directory.db.select().from(memberships)).toHaveLength(0);
+			expect(await directory.db.select().from(pushTokens)).toHaveLength(0);
 			expect(await directory.db.select().from(households)).toHaveLength(0);
 			expect(await directory.db.select().from(users)).toHaveLength(0);
 		} finally {

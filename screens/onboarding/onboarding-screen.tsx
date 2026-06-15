@@ -36,6 +36,11 @@ export function OnboardingScreenView({
 				</Text>
 				<Text style={styles.title}>{state.currentStep.title}</Text>
 				<Text style={styles.body}>{state.currentStep.body}</Text>
+				{state.completionError ? (
+					<Text accessibilityRole="alert" style={styles.errorText}>
+						{state.completionError}
+					</Text>
+				) : null}
 				{StepContent ? <StepContent /> : null}
 			</View>
 
@@ -57,12 +62,16 @@ export function OnboardingScreenView({
 				<View style={styles.actions} testID="onboarding-footer-actions">
 					<Pressable
 						accessibilityRole="button"
-						accessibilityState={{ disabled: state.isFirstStep }}
-						disabled={state.isFirstStep}
+						accessibilityState={{
+							disabled: state.isFirstStep || state.isCompleting,
+						}}
+						disabled={state.isFirstStep || state.isCompleting}
 						onPress={actions.back}
 						style={({ pressed }) => [
 							styles.secondaryButton,
-							state.isFirstStep ? styles.buttonDisabled : undefined,
+							state.isFirstStep || state.isCompleting
+								? styles.buttonDisabled
+								: undefined,
 							pressed ? styles.buttonPressed : undefined,
 						]}
 					>
@@ -70,9 +79,14 @@ export function OnboardingScreenView({
 					</Pressable>
 					<Pressable
 						accessibilityRole="button"
+						accessibilityState={{ disabled: !state.canComplete }}
+						disabled={!state.canComplete || state.isCompleting}
 						onPress={actions.skip}
 						style={({ pressed }) => [
 							styles.secondaryButton,
+							!state.canComplete || state.isCompleting
+								? styles.buttonDisabled
+								: undefined,
 							pressed ? styles.buttonPressed : undefined,
 						]}
 					>
@@ -80,14 +94,28 @@ export function OnboardingScreenView({
 					</Pressable>
 					<Pressable
 						accessibilityRole="button"
+						accessibilityState={{
+							disabled:
+								state.isCompleting || (state.isLastStep && !state.canComplete),
+						}}
+						disabled={
+							state.isCompleting || (state.isLastStep && !state.canComplete)
+						}
 						onPress={state.isLastStep ? actions.finish : actions.next}
 						style={({ pressed }) => [
 							styles.primaryButton,
+							state.isCompleting || (state.isLastStep && !state.canComplete)
+								? styles.buttonDisabled
+								: undefined,
 							pressed ? styles.buttonPressed : undefined,
 						]}
 					>
 						<Text style={styles.primaryButtonLabel}>
-							{state.isLastStep ? "Done" : "Next"}
+							{state.isCompleting
+								? "Saving"
+								: state.isLastStep
+									? "Done"
+									: "Next"}
 						</Text>
 					</Pressable>
 				</View>
@@ -144,6 +172,10 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.body,
 		color: theme.colors.textMuted,
 		lineHeight: theme.spacing(6),
+	},
+	errorText: {
+		...theme.typography.callout,
+		color: theme.colors.destructive,
 	},
 	footer: {
 		gap: theme.spacing(4),

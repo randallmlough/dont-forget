@@ -1,6 +1,3 @@
-import { and, eq, isNull } from "drizzle-orm";
-
-import { users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
@@ -11,6 +8,10 @@ import {
 	type PushTokenService,
 	sendPushNotifications,
 } from "@/lib/services/push/server";
+import {
+	createUserService,
+	type UserService,
+} from "@/lib/services/user/server";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
@@ -24,11 +25,14 @@ import {
 	withDirectory,
 } from "../shared";
 
-const EXPO_PUSH_TOKEN_PREFIX = "ExponentPushToken[";
+const EXPO_PUSH_TOKEN_PREFIXES = ["ExponentPushToken[", "ExpoPushToken["];
 
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
 	createPushTokenService?: (directory: DirectoryDb) => PushTokenService;
+	createUserService?: (
+		directory: DirectoryDb,
+	) => Pick<UserService, "completeOnboarding">;
 	sendPushNotifications?: (
 		messages: PushMessage[],
 	) => Promise<{ deadTokens: string[] }>;
@@ -62,14 +66,7 @@ export async function handleCompleteOnboarding(
 	try {
 		return await withDirectory(deps, async (directory) => {
 			const user = await authenticateApiUser(request, directory, deps);
-			const completedAt = Date.now();
-			await directory
-				.update(users)
-				.set({
-					onboardingCompletedAt: completedAt,
-					updatedAt: completedAt,
-				})
-				.where(and(eq(users.id, user.id), isNull(users.onboardingCompletedAt)));
+			await userService(directory, deps).completeOnboarding(user.id);
 			return jsonResponse({ completed: true });
 		});
 	} catch (error) {
@@ -139,9 +136,21 @@ function pushTokenService(
 	);
 }
 
+function userService(
+	directory: DirectoryDb,
+	deps: UsersApiDeps | undefined,
+): Pick<UserService, "completeOnboarding"> {
+	return (
+		deps?.createUserService?.(directory) ?? createUserService({ directory })
+	);
+}
+
 function expoPushTokenField(body: Record<string, unknown>): string {
 	const token = stringField(body, "expoPushToken");
-	if (!token.startsWith(EXPO_PUSH_TOKEN_PREFIX) || !token.endsWith("]")) {
+	if (
+		!EXPO_PUSH_TOKEN_PREFIXES.some((prefix) => token.startsWith(prefix)) ||
+		!token.endsWith("]")
+	) {
 		throw new BadRequestError("Invalid expoPushToken");
 	}
 	return token;
