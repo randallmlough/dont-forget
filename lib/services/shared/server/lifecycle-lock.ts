@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { households, users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
+import { DeletedUserError } from "@/lib/services/user/server/user-service";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -28,4 +29,19 @@ export async function lockUserLifecycle(
 		.update(users)
 		.set({ id: sql`${users.id}` })
 		.where(eq(users.id, userId));
+}
+
+export async function assertActiveUserLifecycle(
+	userId: string,
+	directory: LifecycleLockExecutor,
+) {
+	await lockUserLifecycle(userId, directory);
+	const [user] = await directory
+		.select({ deletedAt: users.deletedAt })
+		.from(users)
+		.where(eq(users.id, userId))
+		.limit(1);
+	if (!user || user.deletedAt !== null) {
+		throw new DeletedUserError();
+	}
 }

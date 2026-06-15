@@ -4,7 +4,7 @@ import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 
 export type ApiGetToken = () => Promise<string | null>;
 
-export const userProfileSchema = z.object({
+export const currentUserSchema = z.object({
 	id: z.string(),
 	email: z.string().nullable(),
 	displayName: z.string().nullable(),
@@ -12,11 +12,11 @@ export const userProfileSchema = z.object({
 	lastName: z.string().nullable(),
 });
 
-const updateProfileResponseSchema = z.object({
-	user: userProfileSchema,
+const updateUserNameResponseSchema = z.object({
+	user: currentUserSchema,
 });
 
-const deleteAccountResponseSchema = z.object({
+const deleteUserResponseSchema = z.object({
 	deleted: z.literal(true),
 	deletedHouseholdCount: z.number(),
 });
@@ -26,21 +26,21 @@ const testNotificationResponseSchema = z.object({
 	disabled: z.number(),
 });
 
-export type UserProfile = z.infer<typeof userProfileSchema>;
+export type CurrentUser = z.infer<typeof currentUserSchema>;
 
 export type UsersApiClient = {
 	completeOnboarding(): Promise<void>;
-	deleteAccount(): Promise<{ deletedHouseholdCount: number }>;
+	deleteUser(): Promise<{ deletedHouseholdCount: number }>;
 	registerPushToken(input: {
 		expoPushToken: string;
 		deviceName?: string | null;
 	}): Promise<void>;
 	unregisterPushToken(input: { expoPushToken: string }): Promise<void>;
 	sendTestNotification(): Promise<{ sent: number; disabled: number }>;
-	updateProfile(input: {
+	updateUserName(input: {
 		firstName: string | null;
 		lastName: string | null;
-	}): Promise<UserProfile>;
+	}): Promise<CurrentUser>;
 };
 
 export type UserApiClient = UsersApiClient;
@@ -63,11 +63,11 @@ export function createUsersApiClient({
 				method: "POST",
 			});
 		},
-		async deleteAccount() {
+		async deleteUser() {
 			const payload = await authed("/api/users/me", {
 				method: "DELETE",
 			});
-			const result = deleteAccountResponseSchema.parse(payload);
+			const result = deleteUserResponseSchema.parse(payload);
 			return { deletedHouseholdCount: result.deletedHouseholdCount };
 		},
 		async registerPushToken(input) {
@@ -88,12 +88,12 @@ export function createUsersApiClient({
 			});
 			return testNotificationResponseSchema.parse(payload);
 		},
-		async updateProfile(input) {
+		async updateUserName(input) {
 			const payload = await authed("/api/users/me", {
 				method: "PATCH",
 				body: JSON.stringify(input),
 			});
-			return updateProfileResponseSchema.parse(payload).user;
+			return updateUserNameResponseSchema.parse(payload).user;
 		},
 	};
 }

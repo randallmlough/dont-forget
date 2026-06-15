@@ -34,12 +34,12 @@ export type SettingsState = {
 	appVersion: string;
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
-	accountDeletionError: string | null;
-	accountDeletionInFlight: boolean;
-	profile: SettingsUserProfile;
-	profileNotice: string | null;
-	profileError: string | null;
-	profileUpdateInFlight: boolean;
+	user: SettingsUser;
+	userDeletionError: string | null;
+	userDeletionInFlight: boolean;
+	userNotice: string | null;
+	userError: string | null;
+	userUpdateInFlight: boolean;
 	privacyPolicyUrl: string | null;
 	termsUrl: string | null;
 };
@@ -48,17 +48,17 @@ export type SettingsActions = {
 	openPrivacyPolicy: () => Promise<void>;
 	sendTestNotification: () => Promise<void>;
 	openTerms: () => Promise<void>;
-	deleteAccount: () => Promise<boolean>;
+	deleteUser: () => Promise<boolean>;
 	setAppearancePreference: (preference: AppearancePreference) => Promise<void>;
 	setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 	signOut: () => Promise<void>;
-	updateProfile: (input: {
+	updateUserName: (input: {
 		firstName: string | null;
 		lastName: string | null;
 	}) => Promise<boolean>;
 };
 
-export type SettingsUserProfile = {
+export type SettingsUser = {
 	id: string | null;
 	email: string | null;
 	displayName: string | null;
@@ -80,20 +80,18 @@ export function useSettings(clientProp?: UsersApiClient): {
 	const [notificationNotice, setNotificationNotice] = useState<string | null>(
 		null,
 	);
-	const [accountDeletionError, setAccountDeletionError] = useState<
-		string | null
-	>(null);
-	const [accountDeletionInFlight, setAccountDeletionInFlight] = useState(false);
-	const [updatedProfile, setUpdatedProfile] =
-		useState<SettingsUserProfile | null>(null);
-	const [profileNotice, setProfileNotice] = useState<string | null>(null);
-	const [profileError, setProfileError] = useState<string | null>(null);
-	const [profileUpdateInFlight, setProfileUpdateInFlight] = useState(false);
+	const [userDeletionError, setUserDeletionError] = useState<string | null>(
+		null,
+	);
+	const [userDeletionInFlight, setUserDeletionInFlight] = useState(false);
+	const [updatedUser, setUpdatedUser] = useState<SettingsUser | null>(null);
+	const [userNotice, setUserNotice] = useState<string | null>(null);
+	const [userError, setUserError] = useState<string | null>(null);
+	const [userUpdateInFlight, setUserUpdateInFlight] = useState(false);
 	const privacyPolicyUrl = publicExtraString(extra, "privacyPolicyUrl");
 	const termsUrl = publicExtraString(extra, "termsUrl");
-	const sessionProfile = profileFromSession(session);
-	const profile =
-		updatedProfile?.id === sessionProfile.id ? updatedProfile : sessionProfile;
+	const sessionUser = userFromSession(session);
+	const user = updatedUser?.id === sessionUser.id ? updatedUser : sessionUser;
 	const getTokenRef = useRef(getToken);
 	const usersClientRef = useRef<UsersApiClient | null>(null);
 
@@ -189,25 +187,22 @@ export function useSettings(clientProp?: UsersApiClient): {
 		await resolveClient().sendTestNotification();
 	}
 
-	async function deleteAccount(): Promise<boolean> {
-		if (accountDeletionInFlight) return false;
-		if (!profile.id) {
-			setAccountDeletionError("Account deletion failed. Please try again.");
-			return false;
-		}
-		setAccountDeletionInFlight(true);
-		setAccountDeletionError(null);
+	async function deleteUser(): Promise<boolean> {
+		if (userDeletionInFlight) return false;
+		setUserDeletionInFlight(true);
+		setUserDeletionError(null);
 		try {
-			const result = await resolveClient().deleteAccount();
-			track("account_deleted", {
-				user_id: profile.id,
+			const result = await resolveClient().deleteUser();
+			const properties = {
+				...(user.id ? { user_id: user.id } : {}),
 				deleted_household_count: result.deletedHouseholdCount,
-			});
+			};
+			track("user_deleted", properties);
 		} catch {
-			setAccountDeletionError("Account deletion failed. Please try again.");
+			setUserDeletionError("User deletion failed. Please try again.");
 			return false;
 		} finally {
-			setAccountDeletionInFlight(false);
+			setUserDeletionInFlight(false);
 		}
 
 		try {
@@ -219,25 +214,25 @@ export function useSettings(clientProp?: UsersApiClient): {
 		return true;
 	}
 
-	async function updateProfile(input: {
+	async function updateUserName(input: {
 		firstName: string | null;
 		lastName: string | null;
 	}): Promise<boolean> {
-		if (profileUpdateInFlight) return false;
-		setProfileUpdateInFlight(true);
-		setProfileNotice(null);
-		setProfileError(null);
+		if (userUpdateInFlight) return false;
+		setUserUpdateInFlight(true);
+		setUserNotice(null);
+		setUserError(null);
 		try {
-			const updatedProfile = await resolveClient().updateProfile(input);
-			setUpdatedProfile(updatedProfile);
-			setProfileNotice("Profile updated.");
-			track("user_profile_updated", { user_id: updatedProfile.id });
+			const updatedUser = await resolveClient().updateUserName(input);
+			setUpdatedUser(updatedUser);
+			setUserNotice("User name updated.");
+			track("user_name_updated", { user_id: updatedUser.id });
 			return true;
 		} catch {
-			setProfileError("Unable to update profile. Please try again.");
+			setUserError("Unable to update User name. Please try again.");
 			return false;
 		} finally {
-			setProfileUpdateInFlight(false);
+			setUserUpdateInFlight(false);
 		}
 	}
 
@@ -248,12 +243,12 @@ export function useSettings(clientProp?: UsersApiClient): {
 			appVersion: Constants.expoConfig?.version ?? "Unknown",
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
-			accountDeletionError,
-			accountDeletionInFlight,
-			profile,
-			profileNotice,
-			profileError,
-			profileUpdateInFlight,
+			user,
+			userDeletionError,
+			userDeletionInFlight,
+			userNotice,
+			userError,
+			userUpdateInFlight,
 			privacyPolicyUrl,
 			termsUrl,
 		},
@@ -261,18 +256,18 @@ export function useSettings(clientProp?: UsersApiClient): {
 			openPrivacyPolicy: () => openConfiguredUrl(privacyPolicyUrl),
 			sendTestNotification,
 			openTerms: () => openConfiguredUrl(termsUrl),
-			deleteAccount,
+			deleteUser,
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,
-			updateProfile,
+			updateUserName,
 		},
 	};
 }
 
-function profileFromSession(
+function userFromSession(
 	session: ReturnType<typeof useAuthenticatedAppSession>["session"],
-): SettingsUserProfile {
+): SettingsUser {
 	return {
 		id: session?.user.id ?? null,
 		email: session?.user.email ?? null,

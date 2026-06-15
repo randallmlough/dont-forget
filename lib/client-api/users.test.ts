@@ -1,7 +1,7 @@
 import { createUsersApiClient } from "./users";
 
 describe("createUsersApiClient", () => {
-	it("DELETEs the current User account and parses the deleted Household count", async () => {
+	it("DELETEs the current User and parses the deleted Household count", async () => {
 		let capturedInput: string | undefined;
 		let capturedInit: RequestInit | undefined;
 		const fetcher: typeof globalThis.fetch = async (input, init) => {
@@ -18,7 +18,7 @@ describe("createUsersApiClient", () => {
 			apiBaseUrl: () => "https://api.example.test",
 		});
 
-		await expect(client.deleteAccount()).resolves.toEqual({
+		await expect(client.deleteUser()).resolves.toEqual({
 			deletedHouseholdCount: 2,
 		});
 
@@ -31,7 +31,7 @@ describe("createUsersApiClient", () => {
 		);
 	});
 
-	it("PATCHes the current User profile and parses the returned profile", async () => {
+	it("PATCHes the current User name and parses the returned User", async () => {
 		let capturedInput: string | undefined;
 		let capturedInit: RequestInit | undefined;
 		const fetcher: typeof globalThis.fetch = async (input, init) => {
@@ -54,7 +54,7 @@ describe("createUsersApiClient", () => {
 		});
 
 		await expect(
-			client.updateProfile({ firstName: "Avery", lastName: "Chen" }),
+			client.updateUserName({ firstName: "Avery", lastName: "Chen" }),
 		).resolves.toEqual({
 			id: "usr_123",
 			email: "avery@example.com",
@@ -87,7 +87,7 @@ describe("createUsersApiClient", () => {
 		});
 
 		await expect(
-			client.updateProfile({ firstName: null, lastName: null }),
+			client.updateUserName({ firstName: null, lastName: null }),
 		).rejects.toThrow("Provide a first or last name");
 	});
 });

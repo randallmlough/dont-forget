@@ -105,16 +105,16 @@ function settingsSections(
 
 	return [
 		{
-			id: "account",
-			title: "Account",
+			id: "user",
+			title: "User",
 			rows: [
-				<ProfileSettingsForm
-					key="profile"
-					profile={state.profile}
-					error={state.profileError}
-					notice={state.profileNotice}
-					updateInFlight={state.profileUpdateInFlight}
-					onSave={actions.updateProfile}
+				<UserNameSettingsForm
+					key="user-name"
+					user={state.user}
+					error={state.userError}
+					notice={state.userNotice}
+					updateInFlight={state.userUpdateInFlight}
+					onSave={actions.updateUserName}
 				/>,
 				<SettingsRow
 					key="household"
@@ -122,11 +122,11 @@ function settingsSections(
 					onPress={() => navigate("/household/settings")}
 					showChevron
 				/>,
-				<DeleteAccountControl
-					key="delete-account"
-					error={state.accountDeletionError}
-					deleteInFlight={state.accountDeletionInFlight}
-					onDelete={actions.deleteAccount}
+				<DeleteUserControl
+					key="delete-user"
+					error={state.userDeletionError}
+					deleteInFlight={state.userDeletionInFlight}
+					onDelete={actions.deleteUser}
 				/>,
 			],
 		},
@@ -178,14 +178,14 @@ function settingsSections(
 	];
 }
 
-function ProfileSettingsForm({
-	profile,
+function UserNameSettingsForm({
+	user,
 	error,
 	notice,
 	updateInFlight,
 	onSave,
 }: {
-	profile: SettingsState["profile"];
+	user: SettingsState["user"];
 	error: string | null;
 	notice: string | null;
 	updateInFlight: boolean;
@@ -195,13 +195,13 @@ function ProfileSettingsForm({
 	}) => Promise<boolean>;
 }) {
 	const [expanded, setExpanded] = useState(false);
-	const [firstName, setFirstName] = useState(profile.firstName ?? "");
-	const [lastName, setLastName] = useState(profile.lastName ?? "");
+	const [firstName, setFirstName] = useState(user.firstName ?? "");
+	const [lastName, setLastName] = useState(user.lastName ?? "");
 	const [validationMessage, setValidationMessage] = useState<string | null>(
 		null,
 	);
 
-	async function saveProfile() {
+	async function saveUserName() {
 		const nextFirstName = emptyToNull(firstName);
 		const nextLastName = emptyToNull(lastName);
 		if (!nextFirstName && !nextLastName) {
@@ -216,9 +216,9 @@ function ProfileSettingsForm({
 	}
 
 	return (
-		<View style={styles.profileBlock}>
+		<View style={styles.userNameBlock}>
 			<Pressable
-				accessibilityLabel="Profile"
+				accessibilityLabel="Name"
 				accessibilityRole="button"
 				accessibilityState={{ expanded }}
 				onPress={() => {
@@ -230,15 +230,15 @@ function ProfileSettingsForm({
 				]}
 			>
 				<View style={styles.rowTextGroup}>
-					<Text style={styles.rowTitle}>Profile</Text>
+					<Text style={styles.rowTitle}>Name</Text>
 					<Text style={styles.rowSubtitle}>
-						{profile.displayName ?? profile.email ?? "No name set"}
+						{user.displayName ?? user.email ?? "No name set"}
 					</Text>
 				</View>
 				<Text style={styles.chevron}>{expanded ? "⌃" : "›"}</Text>
 			</Pressable>
 			{expanded ? (
-				<View style={styles.profileForm}>
+				<View style={styles.userNameForm}>
 					<AuthTextInput
 						accessibilityLabel="First name"
 						autoCapitalize="words"
@@ -269,7 +269,7 @@ function ProfileSettingsForm({
 						accessibilityState={{ disabled: updateInFlight }}
 						disabled={updateInFlight}
 						onPress={() => {
-							void saveProfile();
+							void saveUserName();
 						}}
 						style={({ pressed }) => [
 							styles.primaryButton,
@@ -287,7 +287,7 @@ function ProfileSettingsForm({
 	);
 }
 
-function DeleteAccountControl({
+function DeleteUserControl({
 	error,
 	deleteInFlight,
 	onDelete,
@@ -300,13 +300,13 @@ function DeleteAccountControl({
 	const [confirmation, setConfirmation] = useState("");
 	const confirmed = confirmation === "DELETE";
 
-	async function deleteAccount() {
+	async function deleteUser() {
 		if (!confirmed || deleteInFlight) return;
 		await onDelete();
 	}
 
 	return (
-		<View style={styles.deleteAccountBlock}>
+		<View style={styles.deleteUserBlock}>
 			<Pressable
 				accessibilityLabel="Delete Account"
 				accessibilityRole="button"
@@ -325,8 +325,8 @@ function DeleteAccountControl({
 				<Text style={styles.chevron}>{expanded ? "⌃" : "›"}</Text>
 			</Pressable>
 			{expanded ? (
-				<View style={styles.deleteAccountForm}>
-					<Text style={styles.deleteAccountCopy}>
+				<View style={styles.deleteUserForm}>
+					<Text style={styles.deleteUserCopy}>
 						Your account, your Memberships, and any Household where you are the
 						only Member — including all of its Lists — are permanently deleted.
 						This cannot be undone.
@@ -348,7 +348,7 @@ function DeleteAccountControl({
 						accessibilityState={{ disabled: !confirmed || deleteInFlight }}
 						disabled={!confirmed || deleteInFlight}
 						onPress={() => {
-							void deleteAccount();
+							void deleteUser();
 						}}
 						style={({ pressed }) => [
 							styles.destructiveButton,
@@ -616,25 +616,25 @@ const styles = StyleSheet.create((theme) => ({
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
-	profileBlock: {
+	userNameBlock: {
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
-	deleteAccountBlock: {
+	deleteUserBlock: {
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
-	profileForm: {
+	userNameForm: {
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
 		paddingBottom: theme.spacing(4),
 	},
-	deleteAccountForm: {
+	deleteUserForm: {
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
 		paddingBottom: theme.spacing(4),
 	},
-	deleteAccountCopy: {
+	deleteUserCopy: {
 		...theme.typography.callout,
 		color: theme.colors.text,
 	},

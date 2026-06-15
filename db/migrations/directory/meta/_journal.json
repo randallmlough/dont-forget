@@ -43,6 +43,13 @@
       "when": 1781395751046,
       "tag": "0005_open_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781487935282,
+      "tag": "0006_early_miracleman",
+      "breakpoints": true
     }
   ]
 }

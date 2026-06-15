@@ -74,7 +74,7 @@ describe("createUserDeletionService", () => {
 		}
 	});
 
-	it("promotes a sole plain Member before deleting their orphaned Household", async () => {
+	it("rejects a sole plain Member Household invariant during User deletion", async () => {
 		const directory = await createTestDirectoryDb();
 
 		try {
@@ -91,21 +91,23 @@ describe("createUserDeletionService", () => {
 				role: "member",
 			});
 
-			const summary = await createUserDeletionService({
-				directory: directory.db,
-				tursoPlatform: () => tursoPlatform(),
-				deleteClerkUser: async () => undefined,
-				anonymizeUser: async () => undefined,
-			}).deleteUser({ user, clerkUserId: "clerk_avery" });
-
-			expect(summary.deletedHouseholdIds).toEqual(["hh_orphan"]);
+			await expect(
+				createUserDeletionService({
+					directory: directory.db,
+					tursoPlatform: () => tursoPlatform(),
+					deleteClerkUser: async () => undefined,
+					anonymizeUser: async () => undefined,
+				}).deleteUser({ user, clerkUserId: "clerk_avery" }),
+			).rejects.toThrow(
+				"Sole active Member must be an Owner before User deletion can delete the Household",
+			);
 			const [membership] = await directory.db
 				.select()
 				.from(memberships)
 				.where(eq(memberships.id, "mbr_orphan"));
 			expect(membership).toMatchObject({
-				role: "owner",
-				removedAt: expect.any(Number),
+				role: "member",
+				removedAt: null,
 			});
 		} finally {
 			await directory.close();
@@ -345,7 +347,7 @@ describe("createUserDeletionService", () => {
 		}
 	});
 
-	it("records Turso teardown failures without failing account deletion", async () => {
+	it("records Turso teardown failures without failing User deletion", async () => {
 		const directory = await createTestDirectoryDb();
 		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
@@ -377,9 +379,57 @@ describe("createUserDeletionService", () => {
 
 			expect(summary.databasesNotDeleted).toEqual(["df-test-hh-solo"]);
 			expect(errorSpy).toHaveBeenCalledWith(
-				"Delete account Household database teardown failed",
+				"Delete User Household database teardown failed",
 				expect.objectContaining({ turso_db_name: "df-test-hh-solo" }),
 			);
+		} finally {
+			errorSpy.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("retries a failed Turso teardown for a previously deleted Household", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const deleteDatabase = jest
+			.fn()
+			.mockRejectedValueOnce(new Error("delete failed"))
+			.mockResolvedValueOnce(undefined);
+
+		try {
+			const user = await seedUser(directory.db, "usr_avery", "clerk_avery");
+			await seedHousehold(directory.db, {
+				id: "hh_solo",
+				tursoDbName: "df-test-hh-solo",
+				createdByUserId: user.id,
+			});
+			await seedMembership(directory.db, {
+				id: "mbr_solo",
+				householdId: "hh_solo",
+				userId: user.id,
+				role: "owner",
+			});
+			const service = createUserDeletionService({
+				directory: directory.db,
+				tursoPlatform: () => tursoPlatform(deleteDatabase),
+				deleteClerkUser: async () => undefined,
+				anonymizeUser: async () => undefined,
+			});
+
+			const firstSummary = await service.deleteUser({
+				user,
+				clerkUserId: "clerk_avery",
+			});
+			const retriedSummary = await service.deleteUser({
+				user,
+				clerkUserId: "clerk_avery",
+			});
+
+			expect(firstSummary.databasesNotDeleted).toEqual(["df-test-hh-solo"]);
+			expect(retriedSummary.databasesNotDeleted).toEqual([]);
+			expect(deleteDatabase).toHaveBeenCalledTimes(2);
+			expect(deleteDatabase).toHaveBeenNthCalledWith(1, "df-test-hh-solo");
+			expect(deleteDatabase).toHaveBeenNthCalledWith(2, "df-test-hh-solo");
 		} finally {
 			errorSpy.mockRestore();
 			await directory.close();

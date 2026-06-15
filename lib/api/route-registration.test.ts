@@ -29,8 +29,8 @@ import {
 	DELETE as unregisterPushToken,
 } from "@/app/api/users/me/push-tokens+api";
 import {
-	DELETE as deleteAccount,
-	PATCH as updateProfile,
+	DELETE as deleteUser,
+	PATCH as updateUserName,
 } from "@/app/api/users/me+api";
 
 jest.mock("@/lib/api/invitations/handlers", () => {
@@ -69,7 +69,7 @@ describe("Stage 5 API route wrappers", () => {
 		expect(typeof registerPushToken).toBe("function");
 		expect(typeof unregisterPushToken).toBe("function");
 		expect(typeof sendTestNotification).toBe("function");
-		expect(typeof updateProfile).toBe("function");
-		expect(typeof deleteAccount).toBe("function");
+		expect(typeof updateUserName).toBe("function");
+		expect(typeof deleteUser).toBe("function");
 	});
 });

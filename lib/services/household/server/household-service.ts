@@ -148,6 +148,8 @@ async function createOwnedHousehold(
 		provisioningCompletedAt: null,
 		createdAt: now,
 		deletedAt: null,
+		databaseDeletedAt: null,
+		databaseDeletionFailedAt: null,
 	};
 
 	await directory.insert(households).values(household);

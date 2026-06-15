@@ -12,9 +12,11 @@ import {
 	type PushTokenService,
 	sendPushNotifications,
 } from "@/lib/services/push/server";
+import { assertActiveUserLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 import {
 	createUserDeletionService,
 	createUserService,
+	DeletedUserError,
 	type UserDeletionService,
 } from "@/lib/services/user/server";
 import {
@@ -35,7 +37,7 @@ import {
 const EXPO_PUSH_TOKEN_PREFIX = "ExponentPushToken[";
 const MAX_NAME_LENGTH = 50;
 
-export type UserProfile = {
+export type CurrentUser = {
 	id: string;
 	email: string | null;
 	displayName: string | null;
@@ -64,7 +66,7 @@ export type UsersApiDeps = ApiHandlerDeps & {
 
 export type UserApiDeps = UsersApiDeps;
 
-export async function handleUpdateProfile(
+export async function handleUpdateUserName(
 	request: Request,
 	deps?: UsersApiDeps,
 ): Promise<Response> {
@@ -72,7 +74,8 @@ export async function handleUpdateProfile(
 		return await withDirectory(deps, async (directory) => {
 			const user = await authenticateApiUser(request, directory, deps);
 			const body = await readJsonObject(request);
-			const input = updateProfileInput(body);
+			const input = updateUserNameInput(body);
+			await assertActiveUserLifecycle(user.id, directory);
 			const updateName =
 				deps?.updateClerkUserName ?? (await defaultUpdateName());
 			const profile = await updateName({
@@ -82,14 +85,14 @@ export async function handleUpdateProfile(
 			});
 			const updatedUser = await upsertAuthenticatedUser(profile, directory);
 
-			return jsonResponse({ user: userProfileResponse(updatedUser, profile) });
+			return jsonResponse({ user: currentUserResponse(updatedUser, profile) });
 		});
 	} catch (error) {
-		return usersErrorResponse(error, "Update User profile API failed");
+		return usersErrorResponse(error, "Update User name API failed");
 	}
 }
 
-export async function handleDeleteAccount(
+export async function handleDeleteUser(
 	request: Request,
 	deps?: UsersApiDeps,
 ): Promise<Response> {
@@ -104,13 +107,16 @@ export async function handleDeleteAccount(
 				user,
 				clerkUserId,
 			});
+			if (summary.databasesNotDeleted.length > 0) {
+				throw new Error("Household database teardown pending");
+			}
 			return jsonResponse({
 				deleted: true,
 				deletedHouseholdCount: summary.deletedHouseholdIds.length,
 			});
 		});
 	} catch (error) {
-		return usersErrorResponse(error, "Delete account API failed");
+		return usersErrorResponse(error, "Delete User API failed");
 	}
 }
 
@@ -149,7 +155,13 @@ export async function handleCompleteOnboarding(
 					onboardingCompletedAt: completedAt,
 					updatedAt: completedAt,
 				})
-				.where(and(eq(users.id, user.id), isNull(users.onboardingCompletedAt)));
+				.where(
+					and(
+						eq(users.id, user.id),
+						isNull(users.onboardingCompletedAt),
+						isNull(users.deletedAt),
+					),
+				);
 			return jsonResponse({ completed: true });
 		});
 	} catch (error) {
@@ -246,7 +258,7 @@ async function defaultVerifyClerkRequestUserId(): Promise<VerifyClerkRequestUser
 	return verifyClerkRequestUserId;
 }
 
-function updateProfileInput(body: Record<string, unknown>): {
+function updateUserNameInput(body: Record<string, unknown>): {
 	firstName: string | null;
 	lastName: string | null;
 } {
@@ -281,10 +293,10 @@ function nameLabel(key: "firstName" | "lastName"): string {
 	return key === "firstName" ? "First name" : "Last name";
 }
 
-function userProfileResponse(
+function currentUserResponse(
 	user: User,
 	profile: ServerUserProfile,
-): UserProfile {
+): CurrentUser {
 	return {
 		id: user.id,
 		email: user.email,
@@ -330,6 +342,9 @@ function expoPushTokenField(body: Record<string, unknown>): string {
 
 function usersErrorResponse(error: unknown, logMessage: string): Response {
 	if (isApiUnauthorizedError(error)) return errorResponse(error.message, 401);
+	if (error instanceof DeletedUserError) {
+		return errorResponse("User has been deleted.", 401);
+	}
 	if (error instanceof BadRequestError)
 		return errorResponse(error.message, 400);
 	console.error(logMessage, redactAttributes({ error: asError(error) }));

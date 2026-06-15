@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 
 import {
 	households,
@@ -68,6 +68,11 @@ type DirectoryDeletionResult = {
 	tursoDbNames: string[];
 };
 
+type HouseholdDatabaseDeletionResult = {
+	databasesDeleted: string[];
+	databasesNotDeleted: string[];
+};
+
 type ActiveUserMembership = {
 	householdId: string;
 	role: "owner" | "member";
@@ -84,10 +89,21 @@ export function createUserDeletionService(
 					deleteDirectoryUserData(input, tx, deps),
 				),
 			);
-			const databasesNotDeleted = await deleteHouseholdDatabases(
+			const databaseDeletionResult = await deleteHouseholdDatabases(
 				directoryResult.tursoDbNames,
 				deps,
 			);
+			await recordHouseholdDatabaseDeletionResult(
+				databaseDeletionResult,
+				deps.directory,
+			);
+			if (databaseDeletionResult.databasesNotDeleted.length > 0) {
+				return {
+					leftHouseholdIds: directoryResult.leftHouseholdIds,
+					deletedHouseholdIds: directoryResult.deletedHouseholdIds,
+					databasesNotDeleted: databaseDeletionResult.databasesNotDeleted,
+				};
+			}
 			await deps.deleteClerkUser(input.clerkUserId);
 			await createUserService({ directory: deps.directory }).recordClerkDeleted(
 				{
@@ -105,7 +121,7 @@ export function createUserDeletionService(
 			return {
 				leftHouseholdIds: directoryResult.leftHouseholdIds,
 				deletedHouseholdIds: directoryResult.deletedHouseholdIds,
-				databasesNotDeleted,
+				databasesNotDeleted: databaseDeletionResult.databasesNotDeleted,
 			};
 		},
 	};
@@ -121,7 +137,9 @@ async function deleteDirectoryUserData(
 	const activeMemberships = await listActiveUserMemberships(user.id, tx);
 	const leftHouseholdIds: string[] = [];
 	const deletedHouseholdIds: string[] = [];
-	const tursoDbNames: string[] = [];
+	const tursoDbNames = new Set<string>(
+		await listPendingHouseholdDatabaseNames(user.id, tx),
+	);
 
 	for (const membership of activeMemberships) {
 		await lockHouseholdLifecycle(membership.householdId, tx);
@@ -135,23 +153,16 @@ async function deleteDirectoryUserData(
 
 		if (otherMemberCount === 0) {
 			if (membership.role !== "owner") {
-				await tx
-					.update(memberships)
-					.set({ role: "owner" })
-					.where(
-						and(
-							eq(memberships.householdId, membership.householdId),
-							eq(memberships.userId, user.id),
-							isNull(memberships.removedAt),
-						),
-					);
+				throw new Error(
+					"Sole active Member must be an Owner before User deletion can delete the Household",
+				);
 			}
 			const { tursoDbName } = await householdService(tx, deps).deleteHousehold({
 				householdId: membership.householdId,
 				requestedByUserId: user.id,
 			});
 			deletedHouseholdIds.push(membership.householdId);
-			tursoDbNames.push(tursoDbName);
+			tursoDbNames.add(tursoDbName);
 			continue;
 		}
 
@@ -179,7 +190,11 @@ async function deleteDirectoryUserData(
 			),
 		);
 
-	return { leftHouseholdIds, deletedHouseholdIds, tursoDbNames };
+	return {
+		leftHouseholdIds,
+		deletedHouseholdIds,
+		tursoDbNames: [...tursoDbNames],
+	};
 }
 
 function userService(
@@ -214,6 +229,24 @@ async function listActiveUserMemberships(
 		);
 }
 
+async function listPendingHouseholdDatabaseNames(
+	userId: string,
+	directory: DirectoryTransaction,
+): Promise<string[]> {
+	const rows = await directory
+		.select({ tursoDbName: households.tursoDbName })
+		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
+		.where(
+			and(
+				eq(memberships.userId, userId),
+				isNull(households.databaseDeletedAt),
+				isNotNull(households.deletedAt),
+			),
+		);
+	return rows.map((row) => row.tursoDbName);
+}
+
 async function countOtherActiveMembers(
 	input: { householdId: string; userId: string },
 	directory: DirectoryTransaction,
@@ -234,23 +267,49 @@ async function countOtherActiveMembers(
 async function deleteHouseholdDatabases(
 	tursoDbNames: string[],
 	deps: UserDeletionServiceDeps,
-): Promise<string[]> {
-	if (tursoDbNames.length === 0) return [];
+): Promise<HouseholdDatabaseDeletionResult> {
+	if (tursoDbNames.length === 0) {
+		return { databasesDeleted: [], databasesNotDeleted: [] };
+	}
 
 	const databasesNotDeleted: string[] = [];
+	const databasesDeleted: string[] = [];
 	const turso = deps.tursoPlatform?.() ?? createTursoPlatformClient();
 	for (const tursoDbName of tursoDbNames) {
 		try {
 			await turso.deleteDatabase(tursoDbName);
+			databasesDeleted.push(tursoDbName);
 		} catch (error) {
 			databasesNotDeleted.push(tursoDbName);
 			console.error(
-				"Delete account Household database teardown failed",
+				"Delete User Household database teardown failed",
 				redactAttributes({ error: asError(error), turso_db_name: tursoDbName }),
 			);
 		}
 	}
-	return databasesNotDeleted;
+	return { databasesDeleted, databasesNotDeleted };
+}
+
+async function recordHouseholdDatabaseDeletionResult(
+	result: HouseholdDatabaseDeletionResult,
+	directory: DirectoryDb,
+): Promise<void> {
+	const now = Date.now();
+	if (result.databasesDeleted.length > 0) {
+		await directory
+			.update(households)
+			.set({
+				databaseDeletedAt: now,
+				databaseDeletionFailedAt: null,
+			})
+			.where(inArray(households.tursoDbName, result.databasesDeleted));
+	}
+	if (result.databasesNotDeleted.length > 0) {
+		await directory
+			.update(households)
+			.set({ databaseDeletionFailedAt: now })
+			.where(inArray(households.tursoDbName, result.databasesNotDeleted));
+	}
 }
 
 function memberService(
