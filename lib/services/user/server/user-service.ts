@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import { deletedUserIdentities, type User, users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
@@ -193,6 +193,7 @@ async function upsertUser(
 		.onConflictDoUpdate({
 			target: users.clerkUserId,
 			set: profileFields,
+			setWhere: isNull(users.deletedAt),
 		});
 
 	const [user] = await directory
@@ -203,6 +204,9 @@ async function upsertUser(
 
 	if (!user) {
 		throw new Error("Unable to load bootstrapped User");
+	}
+	if (user.deletedAt !== null) {
+		throw new DeletedUserError();
 	}
 
 	return user;

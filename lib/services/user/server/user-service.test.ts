@@ -281,6 +281,76 @@ describe("createUserService", () => {
 		}
 	});
 
+	it("rejects upserts when deletion commits before the conflict update", async () => {
+		const directory = await createTestDirectoryDb();
+		let deleteBeforeConflictUpdate = true;
+		const racingDirectory = new Proxy(directory.db, {
+			get(target, prop, receiver) {
+				if (prop === "insert") {
+					return (table: Parameters<typeof directory.db.insert>[0]) => {
+						const insertBuilder = directory.db.insert(table);
+						if (table !== users) return insertBuilder;
+						return {
+							values(values: Parameters<typeof insertBuilder.values>[0]) {
+								const valuesBuilder = insertBuilder.values(values);
+								return {
+									async onConflictDoUpdate(
+										config: Parameters<
+											typeof valuesBuilder.onConflictDoUpdate
+										>[0],
+									) {
+										if (deleteBeforeConflictUpdate) {
+											deleteBeforeConflictUpdate = false;
+											await directory.db
+												.update(users)
+												.set({
+													email: null,
+													firstName: null,
+													lastName: null,
+													displayName: null,
+													deletedAt: 1_700_000_002_000,
+												})
+												.where(eq(users.clerkUserId, "clerk_avery"));
+										}
+										return valuesBuilder.onConflictDoUpdate(config);
+									},
+								};
+							},
+						};
+					};
+				}
+				const value = Reflect.get(target, prop, receiver);
+				return typeof value === "function" ? value.bind(target) : value;
+			},
+		});
+		const service = createUserService({ directory: racingDirectory });
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				email: "avery@example.com",
+				firstName: "Avery",
+				lastName: "Chen",
+				displayName: "Avery Chen",
+			});
+
+			await expect(service.upsertUser(averyProfile)).rejects.toBeInstanceOf(
+				DeletedUserError,
+			);
+			const [user] = await directory.db.select().from(users);
+			expect(user).toMatchObject({
+				email: null,
+				firstName: null,
+				lastName: null,
+				displayName: null,
+				deletedAt: 1_700_000_002_000,
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
 	it("creates and updates an app User from a Clerk profile", async () => {
 		const directory = await createTestDirectoryDb();
 		const service = createUserService({ directory: directory.db });
