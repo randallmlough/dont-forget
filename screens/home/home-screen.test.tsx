@@ -69,7 +69,6 @@ const testLogger = createMockLogger();
 const devClientHeaderActionGutter = 56;
 testLogger.with.mockReturnValue(testLogger);
 const noopProviderActions = {
-	markOnboardingComplete() {},
 	retry() {},
 	reloadSession() {},
 	async signOut() {},
@@ -153,7 +152,6 @@ describe("HomeScreen", () => {
 				message: "Unable to prepare your Household. Please try again.",
 			},
 			session: null,
-			markOnboardingComplete() {},
 			retry,
 			reloadSession() {},
 			async signOut() {},

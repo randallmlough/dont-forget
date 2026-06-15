@@ -68,7 +68,6 @@ beforeEach(() => {
 	mockAuthenticatedAppSession = {
 		state: { status: "ready", refreshing: false },
 		session: sessionFixture(),
-		markOnboardingComplete: jest.fn(),
 		retry: mockRetrySession,
 		reloadSession: mockReloadSession,
 		signOut: jest.fn(async () => undefined),

@@ -9,6 +9,9 @@ import { ONBOARDING_STEPS } from "./steps";
 export type OnboardingState = {
 	currentStepIndex: number;
 	currentStep: (typeof ONBOARDING_STEPS)[number];
+	canComplete: boolean;
+	completionError: string | null;
+	isCompleting: boolean;
 	isFirstStep: boolean;
 	isLastStep: boolean;
 	steps: typeof ONBOARDING_STEPS;
@@ -27,25 +30,39 @@ export function useOnboarding(): {
 } {
 	const { getToken } = useAuth();
 	const router = useRouter();
-	const { markOnboardingComplete } = useAuthenticatedAppSession();
+	const {
+		reloadSession,
+		session,
+		state: sessionState,
+	} = useAuthenticatedAppSession();
 	const [currentStepIndex, setCurrentStepIndex] = useState(0);
+	const [completionState, setCompletionState] = useState<
+		"idle" | "submitting" | "error"
+	>("idle");
 	const completedRef = useRef(false);
 	const currentStep = ONBOARDING_STEPS[currentStepIndex] ?? ONBOARDING_STEPS[0];
 	const isFirstStep = currentStepIndex === 0;
 	const isLastStep = currentStepIndex === ONBOARDING_STEPS.length - 1;
+	const isCompleting = completionState === "submitting";
+	const canComplete = sessionState.status === "ready" && session !== null;
 
-	function complete(skipped: boolean) {
-		if (completedRef.current) return;
+	async function complete(skipped: boolean) {
+		if (completedRef.current || !canComplete) return;
 		completedRef.current = true;
-		markOnboardingComplete();
-		track("onboarding_completed", {
-			skipped,
-			last_step: currentStep.key,
-		});
-		const usersClient = createUsersApiClient({ getToken });
-		// Best-effort only: a failed request re-offers onboarding on the next app session.
-		void usersClient.completeOnboarding().catch(() => undefined);
-		router.replace("/");
+		setCompletionState("submitting");
+		try {
+			const usersClient = createUsersApiClient({ getToken });
+			await usersClient.completeOnboarding();
+			track("onboarding_completed", {
+				skipped,
+				last_step: currentStep.key,
+			});
+			reloadSession({ retireCurrent: true });
+			router.replace("/");
+		} catch {
+			completedRef.current = false;
+			setCompletionState("error");
+		}
 	}
 
 	function back() {
@@ -66,6 +83,12 @@ export function useOnboarding(): {
 		state: {
 			currentStepIndex,
 			currentStep,
+			canComplete,
+			completionError:
+				completionState === "error"
+					? "Unable to finish onboarding. Please try again."
+					: null,
+			isCompleting,
 			isFirstStep,
 			isLastStep,
 			steps: ONBOARDING_STEPS,

@@ -75,8 +75,10 @@ function mockRootLayoutDependencies() {
 	jest.doMock("@/lib/unistyles/navigation-theme", () => ({
 		navigationThemeFor: jest.fn(() => ({ colors: {} })),
 	}));
-	jest.doMock("@/screens/settings/appearance-preference", () => ({
-		applyAppearancePreference: jest.fn(),
-		readAppearancePreference: jest.fn(async () => "system"),
+	jest.doMock("@/lib/logger", () => ({
+		logger: { error: jest.fn() },
+	}));
+	jest.doMock("@/lib/unistyles/appearance-preference", () => ({
+		loadAndApplyAppearancePreference: jest.fn(async () => undefined),
 	}));
 }

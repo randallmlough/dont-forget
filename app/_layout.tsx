@@ -20,15 +20,13 @@ import {
 import { AuthenticatedAppSessionProvider } from "@/components/session";
 import { screen } from "@/lib/analytics";
 import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
+import { logger } from "@/lib/logger";
 import { posthog } from "@/lib/posthog";
 import "@/lib/push/notification-handler";
 import { tokenCache } from "@/lib/token-cache";
 import "@/lib/unistyles/unistyles";
+import { loadAndApplyAppearancePreference } from "@/lib/unistyles/appearance-preference";
 import { navigationThemeFor } from "@/lib/unistyles/navigation-theme";
-import {
-	applyAppearancePreference,
-	readAppearancePreference,
-} from "@/screens/settings/appearance-preference";
 
 export const unstable_settings = {
 	anchor: "(app)",
@@ -73,9 +71,9 @@ export default function RootLayout() {
 	useEffect(() => {
 		let active = true;
 
-		void readAppearancePreference().then((preference) => {
-			if (!active) return;
-			applyAppearancePreference(preference);
+		void loadAndApplyAppearancePreference({
+			isActive: () => active,
+			logger,
 		});
 
 		return () => {

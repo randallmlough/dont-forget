@@ -184,6 +184,16 @@ describe("createSessionCache", () => {
 		expect(cached?.user.onboardingCompletedAt).toBe(0);
 	});
 
+	it("preserves incomplete onboarding metadata when caching a fresh Authenticated App Session", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+
+		await cache.save(sessionBootstrapFixture());
+		const cached = await cache.read();
+
+		expect(cached?.user.onboardingCompletedAt).toBeNull();
+	});
+
 	it("reports no unauthorized cached Authenticated App Session for matching fresh authorization without side effects", async () => {
 		const storage = memoryStorage();
 		const analytics = createMockAnalytics();

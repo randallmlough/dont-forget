@@ -23,7 +23,7 @@ AsyncStorage is asynchronous, so it cannot feed Unistyles' synchronous
 `initialTheme` setting.
 
 At boot, `app/_layout.tsx` reads the stored Appearance preference and applies it
-through `screens/settings/appearance-preference.ts`:
+through `lib/unistyles/appearance-preference.ts`:
 
 - `system` calls `UnistylesRuntime.setAdaptiveThemes(true)`.
 - `light` and `dark` call `setAdaptiveThemes(false)` and then
@@ -52,7 +52,7 @@ Appearance changes apply immediately after they are persisted.
    - iOS bundle identifier and asset files under `assets/`.
 5. Leave `navigationThemeFor` alone unless the semantic theme contract changes;
    navigation chrome derives from the active app theme.
-6. Run Storybook and review auth, active List, add Item composer, Home, and
+6. Run Storybook and review auth, Current List, add Item composer, Home, and
    Settings states in both light and dark themes.
 
 ## Guardrails
@@ -62,4 +62,3 @@ rule `dont-forget/no-raw-color-literals` reports raw hex, rgb/rgba, and hsl/hsla
 strings in `app/`, `components/`, and `screens/`. When a new color is needed,
 add or reuse a palette primitive, map it into a semantic theme token, and consume
 that token from the component.
-
