@@ -16,7 +16,7 @@ const updateUserNameResponseSchema = z.object({
 	user: currentUserSchema,
 });
 
-const deleteAccountResponseSchema = z.object({
+const deleteUserResponseSchema = z.object({
 	deleted: z.literal(true),
 	deletedHouseholdCount: z.number(),
 });
@@ -30,7 +30,7 @@ export type CurrentUser = z.infer<typeof currentUserSchema>;
 
 export type UsersApiClient = {
 	completeOnboarding(): Promise<void>;
-	deleteAccount(): Promise<{ deletedHouseholdCount: number }>;
+	deleteUser(): Promise<{ deletedHouseholdCount: number }>;
 	registerPushToken(input: {
 		expoPushToken: string;
 		deviceName?: string | null;
@@ -63,11 +63,11 @@ export function createUsersApiClient({
 				method: "POST",
 			});
 		},
-		async deleteAccount() {
+		async deleteUser() {
 			const payload = await authed("/api/users/me", {
 				method: "DELETE",
 			});
-			const result = deleteAccountResponseSchema.parse(payload);
+			const result = deleteUserResponseSchema.parse(payload);
 			return { deletedHouseholdCount: result.deletedHouseholdCount };
 		},
 		async registerPushToken(input) {

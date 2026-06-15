@@ -155,7 +155,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 			});
 
 			await expect(
-				bootstrapAuthenticatedAppSession(averyProfile, harness.deps),
+				bootstrapAuthenticatedAppSession(averyUserRecord, harness.deps),
 			).rejects.toBeInstanceOf(DeletedUserBootstrapError);
 
 			expect(await harness.directory.db.select().from(users)).toHaveLength(1);

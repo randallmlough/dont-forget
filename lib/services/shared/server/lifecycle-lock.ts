@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { households, users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { runWithSqliteBusyRetry } from "@/db/utils";
+import { DeletedUserError } from "@/lib/services/user/server/user-service";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -47,6 +48,21 @@ export async function runHouseholdLifecycleCommand<T>(input: {
 
 	await lockHouseholdLifecycle(input.householdId, input.directory);
 	return input.command(input.directory);
+}
+
+export async function assertActiveUserLifecycle(
+	userId: string,
+	directory: LifecycleLockExecutor,
+) {
+	await lockUserLifecycle(userId, directory);
+	const [user] = await directory
+		.select({ deletedAt: users.deletedAt })
+		.from(users)
+		.where(eq(users.id, userId))
+		.limit(1);
+	if (!user || user.deletedAt !== null) {
+		throw new DeletedUserError();
+	}
 }
 
 function hasTransaction(

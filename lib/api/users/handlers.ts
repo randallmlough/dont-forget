@@ -9,9 +9,11 @@ import {
 	type PushTokenService,
 	sendPushNotifications,
 } from "@/lib/services/push/server";
+import { assertActiveUserLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 import {
 	createUserDeletionService,
 	createUserService,
+	DeletedUserError,
 	type UpdateClerkUserName,
 	type UserDeletionService,
 	type UserService,
@@ -45,8 +47,8 @@ export type VerifyClerkRequestUserId = (request: Request) => Promise<string>;
 
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
-	createUserDeletionService?: (directory: DirectoryDb) => UserDeletionService;
 	createPushTokenService?: (directory: DirectoryDb) => PushTokenService;
+	createUserDeletionService?: (directory: DirectoryDb) => UserDeletionService;
 	createUserService?: (
 		directory: DirectoryDb,
 	) => Pick<UserService, "completeOnboarding">;
@@ -68,6 +70,7 @@ export async function handleUpdateUserName(
 			const user = await authenticateApiUser(request, directory, deps);
 			const body = await readJsonObject(request);
 			const input = updateUserNameInput(body);
+			await assertActiveUserLifecycle(user.id, directory);
 			const updatedUser = await createUserService({
 				directory,
 				updateClerkUserName: deps?.updateClerkUserName,
@@ -83,7 +86,7 @@ export async function handleUpdateUserName(
 	}
 }
 
-export async function handleDeleteAccount(
+export async function handleDeleteUser(
 	request: Request,
 	deps?: UsersApiDeps,
 ): Promise<Response> {
@@ -98,13 +101,16 @@ export async function handleDeleteAccount(
 				user,
 				clerkUserId,
 			});
+			if (summary.databasesNotDeleted.length > 0) {
+				throw new Error("Household database teardown pending");
+			}
 			return jsonResponse({
 				deleted: true,
 				deletedHouseholdCount: summary.deletedHouseholdIds.length,
 			});
 		});
 	} catch (error) {
-		return usersErrorResponse(error, "Delete account API failed");
+		return usersErrorResponse(error, "Delete User API failed");
 	}
 }
 
@@ -321,6 +327,9 @@ function expoPushTokenField(body: Record<string, unknown>): string {
 
 function usersErrorResponse(error: unknown, logMessage: string): Response {
 	if (isApiUnauthorizedError(error)) return errorResponse(error.message, 401);
+	if (error instanceof DeletedUserError) {
+		return errorResponse("User has been deleted.", 401);
+	}
 	if (error instanceof BadRequestError)
 		return errorResponse(error.message, 400);
 	console.error(logMessage, redactAttributes({ error: asError(error) }));

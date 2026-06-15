@@ -131,11 +131,11 @@ function settingsSections(
 					onPress={() => navigate("/household/settings")}
 					showChevron
 				/>,
-				<DeleteAccountControl
-					key="delete-account"
-					error={state.accountDeletionError}
-					deleteInFlight={state.accountDeletionInFlight}
-					onDelete={actions.deleteAccount}
+				<DeleteUserControl
+					key="delete-user"
+					error={state.userDeletionError}
+					deleteInFlight={state.userDeletionInFlight}
+					onDelete={actions.deleteUser}
 				/>,
 			],
 		},
@@ -231,7 +231,7 @@ function UserNameSettingsForm({
 	return (
 		<View style={styles.userNameBlock}>
 			<Pressable
-				accessibilityLabel="User name"
+				accessibilityLabel="Name"
 				accessibilityRole="button"
 				accessibilityState={{ expanded }}
 				onPress={() => {
@@ -251,7 +251,7 @@ function UserNameSettingsForm({
 				]}
 			>
 				<View style={styles.rowTextGroup}>
-					<Text style={styles.rowTitle}>User name</Text>
+					<Text style={styles.rowTitle}>Name</Text>
 					<Text style={styles.rowSubtitle}>
 						{user.displayName ?? user.email ?? "No name set"}
 					</Text>
@@ -308,7 +308,7 @@ function UserNameSettingsForm({
 	);
 }
 
-function DeleteAccountControl({
+function DeleteUserControl({
 	error,
 	deleteInFlight,
 	onDelete,
@@ -321,13 +321,13 @@ function DeleteAccountControl({
 	const [confirmation, setConfirmation] = useState("");
 	const confirmed = confirmation === "DELETE";
 
-	async function deleteAccount() {
+	async function deleteUser() {
 		if (!confirmed || deleteInFlight) return;
 		await onDelete();
 	}
 
 	return (
-		<View style={styles.deleteAccountBlock}>
+		<View style={styles.deleteUserBlock}>
 			<Pressable
 				accessibilityLabel="Delete Account"
 				accessibilityRole="button"
@@ -346,8 +346,8 @@ function DeleteAccountControl({
 				<Text style={styles.chevron}>{expanded ? "⌃" : "›"}</Text>
 			</Pressable>
 			{expanded ? (
-				<View style={styles.deleteAccountForm}>
-					<Text style={styles.deleteAccountCopy}>
+				<View style={styles.deleteUserForm}>
+					<Text style={styles.deleteUserCopy}>
 						Your account, your Memberships, and any Household where you are the
 						only Member — including all of its Lists — are permanently deleted.
 						This cannot be undone.
@@ -369,7 +369,7 @@ function DeleteAccountControl({
 						accessibilityState={{ disabled: !confirmed || deleteInFlight }}
 						disabled={!confirmed || deleteInFlight}
 						onPress={() => {
-							void deleteAccount();
+							void deleteUser();
 						}}
 						style={({ pressed }) => [
 							styles.destructiveButton,
@@ -630,7 +630,7 @@ const styles = StyleSheet.create((theme) => ({
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
-	deleteAccountBlock: {
+	deleteUserBlock: {
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
@@ -639,12 +639,12 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(4),
 		paddingBottom: theme.spacing(4),
 	},
-	deleteAccountForm: {
+	deleteUserForm: {
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
 		paddingBottom: theme.spacing(4),
 	},
-	deleteAccountCopy: {
+	deleteUserCopy: {
 		...theme.typography.callout,
 		color: theme.colors.text,
 	},

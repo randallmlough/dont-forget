@@ -35,9 +35,9 @@ export type SettingsState = {
 	notice: string | null;
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
-	accountDeletionError: string | null;
-	accountDeletionInFlight: boolean;
 	user: SettingsUser;
+	userDeletionError: string | null;
+	userDeletionInFlight: boolean;
 	userNotice: string | null;
 	userError: string | null;
 	userUpdateInFlight: boolean;
@@ -49,7 +49,7 @@ export type SettingsActions = {
 	openPrivacyPolicy: () => Promise<void>;
 	sendTestNotification: () => Promise<void>;
 	openTerms: () => Promise<void>;
-	deleteAccount: () => Promise<boolean>;
+	deleteUser: () => Promise<boolean>;
 	setAppearancePreference: (preference: AppearancePreference) => Promise<void>;
 	setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 	signOut: () => Promise<void>;
@@ -83,10 +83,10 @@ export function useSettings(clientProp?: UsersApiClient): {
 	const [notificationNotice, setNotificationNotice] = useState<string | null>(
 		null,
 	);
-	const [accountDeletionError, setAccountDeletionError] = useState<
-		string | null
-	>(null);
-	const [accountDeletionInFlight, setAccountDeletionInFlight] = useState(false);
+	const [userDeletionError, setUserDeletionError] = useState<string | null>(
+		null,
+	);
+	const [userDeletionInFlight, setUserDeletionInFlight] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [updatedUser, setUpdatedUser] = useState<SettingsUser | null>(null);
 	const [userNotice, setUserNotice] = useState<string | null>(null);
@@ -251,25 +251,21 @@ export function useSettings(clientProp?: UsersApiClient): {
 		await resolveClient().sendTestNotification();
 	}
 
-	async function deleteAccount(): Promise<boolean> {
-		if (accountDeletionInFlight) return false;
-		if (!user.id) {
-			setAccountDeletionError("Account deletion failed. Please try again.");
-			return false;
-		}
-		setAccountDeletionInFlight(true);
-		setAccountDeletionError(null);
+	async function deleteUser(): Promise<boolean> {
+		if (userDeletionInFlight) return false;
+		setUserDeletionInFlight(true);
+		setUserDeletionError(null);
 		try {
-			const result = await resolveClient().deleteAccount();
-			track("account_deleted", {
-				user_id: user.id,
+			const result = await resolveClient().deleteUser();
+			track("user_deleted", {
+				...(user.id ? { user_id: user.id } : {}),
 				deleted_household_count: result.deletedHouseholdCount,
 			});
 		} catch {
-			setAccountDeletionError("Account deletion failed. Please try again.");
+			setUserDeletionError("User deletion failed. Please try again.");
 			return false;
 		} finally {
-			setAccountDeletionInFlight(false);
+			setUserDeletionInFlight(false);
 		}
 
 		try {
@@ -316,9 +312,9 @@ export function useSettings(clientProp?: UsersApiClient): {
 			notice,
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
-			accountDeletionError,
-			accountDeletionInFlight,
 			user,
+			userDeletionError,
+			userDeletionInFlight,
 			userNotice,
 			userError,
 			userUpdateInFlight,
@@ -345,7 +341,7 @@ export function useSettings(clientProp?: UsersApiClient): {
 						setNotice("Unable to open link. Try again.");
 					},
 				),
-			deleteAccount,
+			deleteUser,
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,

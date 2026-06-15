@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { pushTokens, users } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/server/test";
+import { DeletedUserError } from "@/lib/services/user/server";
 import { createPushTokenService } from "./push-token-service";
 
 describe("createPushTokenService", () => {
@@ -54,6 +55,29 @@ describe("createPushTokenService", () => {
 			});
 		} finally {
 			now.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("rejects push-token registration for a deleted User", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createPushTokenService({ directory: directory.db });
+
+		try {
+			await directory.db.insert(users).values({
+				id: "usr_avery",
+				clerkUserId: "clerk_avery",
+				deletedAt: 1_700_000_000_000,
+			});
+
+			await expect(
+				service.registerToken({
+					userId: "usr_avery",
+					expoPushToken: "ExponentPushToken[one]",
+				}),
+			).rejects.toBeInstanceOf(DeletedUserError);
+			await expect(directory.db.select().from(pushTokens)).resolves.toEqual([]);
+		} finally {
 			await directory.close();
 		}
 	});

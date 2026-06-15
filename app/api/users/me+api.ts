@@ -4,6 +4,6 @@ export async function PATCH(request: Request): Promise<Response> {
 }
 
 export async function DELETE(request: Request): Promise<Response> {
-	const { handleDeleteAccount } = await import("@/lib/api/users/handlers");
-	return handleDeleteAccount(request);
+	const { handleDeleteUser } = await import("@/lib/api/users/handlers");
+	return handleDeleteUser(request);
 }

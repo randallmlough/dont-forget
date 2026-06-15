@@ -28,9 +28,9 @@ import {
 	POST as registerPushToken,
 	DELETE as unregisterPushToken,
 } from "@/app/api/users/me/push-tokens+api";
-import { PATCH as updateUserName } from "@/app/api/users/me+api";
 import {
 	DELETE as deleteAccount,
+	PATCH as updateUserName,
 } from "@/app/api/users/me+api";
 
 jest.mock("@/lib/api/invitations/handlers", () => {

@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { pushTokens } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
+import { assertActiveUserLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -55,31 +56,33 @@ export function createPushTokenService(
 
 	return {
 		async registerToken(input) {
-			const now = Date.now();
-			const [row] = await directory
-				.insert(pushTokens)
-				.values({
-					id: createAppId("pst"),
-					userId: input.userId,
-					expoPushToken: input.expoPushToken,
-					deviceName: normalizeDeviceName(input.deviceName),
-					platform: "ios",
-					createdAt: now,
-					updatedAt: now,
-					disabledAt: null,
-				})
-				.onConflictDoUpdate({
-					target: pushTokens.expoPushToken,
-					set: {
+			return runUserMutation(directory, input.userId, async (executor) => {
+				const now = Date.now();
+				const [row] = await executor
+					.insert(pushTokens)
+					.values({
+						id: createAppId("pst"),
 						userId: input.userId,
+						expoPushToken: input.expoPushToken,
 						deviceName: normalizeDeviceName(input.deviceName),
 						platform: "ios",
+						createdAt: now,
 						updatedAt: now,
 						disabledAt: null,
-					},
-				})
-				.returning();
-			return row;
+					})
+					.onConflictDoUpdate({
+						target: pushTokens.expoPushToken,
+						set: {
+							userId: input.userId,
+							deviceName: normalizeDeviceName(input.deviceName),
+							platform: "ios",
+							updatedAt: now,
+							disabledAt: null,
+						},
+					})
+					.returning();
+				return row;
+			});
 		},
 
 		async disableToken(input) {
@@ -136,6 +139,24 @@ export function createPushTokenService(
 				);
 		},
 	};
+}
+
+async function runUserMutation<T>(
+	directory: PushTokenServiceDirectory,
+	userId: string,
+	operation: (directory: PushTokenServiceDirectory) => Promise<T>,
+): Promise<T> {
+	if (
+		"transaction" in directory &&
+		typeof directory.transaction === "function"
+	) {
+		return directory.transaction(async (tx) => {
+			await assertActiveUserLifecycle(userId, tx);
+			return operation(tx);
+		});
+	}
+	await assertActiveUserLifecycle(userId, directory);
+	return operation(directory);
 }
 
 function normalizeDeviceName(
