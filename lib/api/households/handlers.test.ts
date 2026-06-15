@@ -552,6 +552,59 @@ describe("Household API handlers", () => {
 		}
 	});
 
+	it("retries Turso teardown for a tombstoned Household after an initial teardown failure", async () => {
+		const harness = await primaryHarness();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const deleteDatabase = jest
+			.fn()
+			.mockRejectedValueOnce(new Error("temporary Turso outage"))
+			.mockResolvedValueOnce(undefined);
+		try {
+			const first = await readJsonResponse(
+				await handleDeleteHousehold(
+					createApiRequest({ method: "DELETE" }),
+					{ householdId: harness.scenario.household.id },
+					{
+						...householdDeps(
+							harness.directory,
+							harness.scenario.users.avery.clerkUserId,
+						),
+						...tursoPlatformDeps(deleteDatabase),
+					},
+				),
+			);
+			const retry = await readJsonResponse(
+				await handleDeleteHousehold(
+					createApiRequest({ method: "DELETE" }),
+					{ householdId: harness.scenario.household.id },
+					{
+						...householdDeps(
+							harness.directory,
+							harness.scenario.users.avery.clerkUserId,
+						),
+						...tursoPlatformDeps(deleteDatabase),
+					},
+				),
+			);
+
+			expect(first).toMatchObject({
+				status: 200,
+				body: { deleted: true, databaseDeleted: false },
+			});
+			expect(retry).toMatchObject({
+				status: 200,
+				body: { deleted: true, databaseDeleted: true },
+			});
+			expect(deleteDatabase).toHaveBeenCalledTimes(2);
+			expect(deleteDatabase).toHaveBeenCalledWith(
+				harness.scenario.household.tursoDbName,
+			);
+		} finally {
+			errorSpy.mockRestore();
+			await harness.close();
+		}
+	});
+
 	it("requires auth for Member management", async () => {
 		const directory = await createTestDirectoryDb();
 		try {
@@ -1135,19 +1188,10 @@ function householdDeps(
 
 function tursoPlatformDeps(
 	deleteDatabase: (databaseName: string) => Promise<void>,
-): Pick<HouseholdApiDeps, "createTursoPlatformClient"> {
+): Pick<HouseholdApiDeps, "createHouseholdProvisioningService"> {
 	return {
-		createTursoPlatformClient: () => ({
-			ensureDatabase: jest.fn(async () => ({
-				name: "unused",
-				url: "libsql://unused",
-			})),
-			getDatabase: jest.fn(async () => ({
-				name: "unused",
-				url: "libsql://unused",
-			})),
-			createDatabaseAuthToken: jest.fn(async () => "unused-token"),
-			deleteDatabase,
+		createHouseholdProvisioningService: () => ({
+			deleteHouseholdDatabase: deleteDatabase,
 		}),
 	};
 }

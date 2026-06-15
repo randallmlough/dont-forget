@@ -1,8 +1,4 @@
 import type { DirectoryDb } from "@/db/server/client";
-import {
-	createTursoPlatformClient,
-	type TursoPlatformClient,
-} from "@/db/server/turso-platform";
 import { runWithSqliteBusyRetry } from "@/db/utils";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
@@ -18,6 +14,7 @@ import {
 	createActiveHouseholdService,
 	createHouseholdJoinCodeService,
 	createHouseholdService,
+	createProductionHouseholdProvisioningService,
 	HouseholdForbiddenError,
 	HouseholdJoinCodeMembershipRequiredError,
 	type HouseholdJoinCodeService,
@@ -26,6 +23,7 @@ import {
 	HouseholdJoinCodeUnavailableError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,
+	type HouseholdProvisioningService,
 	type HouseholdService,
 } from "@/lib/services/household/server";
 import type { ActiveHouseholdServiceDirectory } from "@/lib/services/household/server/active-household-service";
@@ -75,7 +73,10 @@ export type HouseholdApiDeps = ApiHandlerDeps & {
 		directory: HouseholdServiceDirectory,
 	) => HouseholdService;
 	createMemberService?: (directory: MemberServiceDirectory) => MemberService;
-	createTursoPlatformClient?: () => TursoPlatformClient;
+	createHouseholdProvisioningService?: () => Pick<
+		HouseholdProvisioningService,
+		"deleteHouseholdDatabase"
+	>;
 };
 
 export async function handleCreateHousehold(
@@ -196,7 +197,7 @@ export async function handleDeleteHousehold(
 	try {
 		return await withDirectory(deps, async (directory) => {
 			const user = await authenticateApiUser(request, directory, deps);
-			const { tursoDbName } = await runWithSqliteBusyRetry(() =>
+			const deletion = await runWithSqliteBusyRetry(() =>
 				directory.transaction(async (tx) => {
 					await lockHouseholdLifecycle(householdId, tx);
 					return householdService(tx, deps).deleteHousehold({
@@ -206,17 +207,34 @@ export async function handleDeleteHousehold(
 				}),
 			);
 
-			let databaseDeleted = true;
+			if (!deletion.requiresDatabaseTeardown) {
+				return jsonResponse({
+					deleted: true,
+					databaseDeleted: deletion.databaseDeleted,
+				});
+			}
+
+			let databaseDeleted = false;
 			try {
-				await tursoPlatformClient(deps).deleteDatabase(tursoDbName);
+				await householdProvisioningService(deps).deleteHouseholdDatabase(
+					deletion.tursoDbName,
+				);
+				await householdService(
+					directory,
+					deps,
+				).markHouseholdDatabaseTeardownSucceeded(householdId);
+				databaseDeleted = true;
 			} catch (error) {
-				databaseDeleted = false;
+				await householdService(
+					directory,
+					deps,
+				).markHouseholdDatabaseTeardownFailed(householdId);
 				console.error(
 					"Delete Household database API failed",
 					redactAttributes({
 						error: asError(error),
 						household_id: householdId,
-						turso_db_name: tursoDbName,
+						turso_db_name: deletion.tursoDbName,
 					}),
 				);
 			}
@@ -499,9 +517,13 @@ function householdService(
 	return createHouseholdService({ directory });
 }
 
-function tursoPlatformClient(deps?: HouseholdApiDeps): TursoPlatformClient {
-	if (deps?.createTursoPlatformClient) return deps.createTursoPlatformClient();
-	return createTursoPlatformClient();
+function householdProvisioningService(
+	deps?: HouseholdApiDeps,
+): Pick<HouseholdProvisioningService, "deleteHouseholdDatabase"> {
+	if (deps?.createHouseholdProvisioningService) {
+		return deps.createHouseholdProvisioningService();
+	}
+	return createProductionHouseholdProvisioningService();
 }
 
 function productionJoinCodeServiceDeps(

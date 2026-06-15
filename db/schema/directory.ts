@@ -41,6 +41,8 @@ export const households = sqliteTable("households", {
 	provisioningCompletedAt: integer("provisioning_completed_at"),
 	createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
 	deletedAt: integer("deleted_at"),
+	databaseDeletedAt: integer("database_deleted_at"),
+	databaseDeletionFailedAt: integer("database_deletion_failed_at"),
 });
 
 export const memberships = sqliteTable(

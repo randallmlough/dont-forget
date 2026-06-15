@@ -13,7 +13,10 @@ import { redactAttributes } from "@/lib/redact";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createActiveHouseholdService } from "@/lib/services/household/server/active-household-service";
-import { createMemberService } from "@/lib/services/member/server";
+import {
+	type ActiveMembership,
+	createMemberService,
+} from "@/lib/services/member/server";
 import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -199,14 +202,11 @@ async function createInvitation(
 ): Promise<CreateInvitationResult> {
 	const now = Date.now();
 	const normalizedEmail = normalizeInvitationEmail(input.email);
-	const memberService = createMemberService({ directory });
-	const membership = await memberService.findActiveMembership({
-		userId: input.createdByUserId,
-		householdId: input.householdId,
-	});
-	if (!membership) throw new InvitationMembershipRequiredError();
-
-	const { invitation: record, reusedExisting } = await findOrCreateInvitation(
+	const {
+		invitation: record,
+		membership,
+		reusedExisting,
+	} = await findOrCreateInvitation(
 		{
 			householdId: input.householdId,
 			createdByUserId: input.createdByUserId,
@@ -443,26 +443,35 @@ async function findOrCreateInvitation(
 	},
 	directory: DirectoryDb,
 	generateToken: InvitationTokenGenerator,
-): Promise<{ invitation: Invitation; reusedExisting: boolean }> {
-	if (!input.email) {
-		return {
-			invitation: await createNewInvitation(input, directory, generateToken),
-			reusedExisting: false,
-		};
-	}
+): Promise<{
+	invitation: Invitation;
+	membership: ActiveMembership;
+	reusedExisting: boolean;
+}> {
 	const email = input.email;
 
 	return directory.transaction(async (tx) => {
 		await lockHouseholdLifecycle(input.householdId, tx);
+		const membership = await createMemberService({
+			directory: tx,
+		}).findActiveMembership({
+			userId: input.createdByUserId,
+			householdId: input.householdId,
+		});
+		if (!membership) throw new InvitationMembershipRequiredError();
 
-		const reusable = await findReusablePendingInvitation(
-			{ householdId: input.householdId, email, now: input.now },
-			tx,
-		);
-		if (reusable) return { invitation: reusable, reusedExisting: true };
+		if (email) {
+			const reusable = await findReusablePendingInvitation(
+				{ householdId: input.householdId, email, now: input.now },
+				tx,
+			);
+			if (reusable)
+				return { invitation: reusable, membership, reusedExisting: true };
+		}
 
 		return {
 			invitation: await createNewInvitation(input, tx, generateToken),
+			membership,
 			reusedExisting: false,
 		};
 	});

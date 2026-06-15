@@ -214,6 +214,8 @@ describe("createHouseholdService", () => {
 			});
 
 			expect(result).toEqual({
+				databaseDeleted: false,
+				requiresDatabaseTeardown: true,
 				tursoDbName: PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
 			});
 			expect(storedHousehold?.deletedAt).toBe(1_700_000_100_000);
