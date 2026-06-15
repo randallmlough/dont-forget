@@ -234,6 +234,7 @@ async function upsertUser(
 		.onConflictDoUpdate({
 			target: users.clerkUserId,
 			set: userRecordFields,
+			setWhere: isNull(users.deletedAt),
 		});
 
 	const [user] = await directory
@@ -244,6 +245,9 @@ async function upsertUser(
 
 	if (!user) {
 		throw new Error("Unable to load bootstrapped User");
+	}
+	if (user.deletedAt !== null) {
+		throw new DeletedUserError();
 	}
 
 	return user;
