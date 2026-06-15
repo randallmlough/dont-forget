@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
-import type { AppearancePreference } from "./appearance-preference";
+import type { AppearancePreference } from "@/lib/unistyles/appearance-preference";
 import {
 	type SettingsActions,
 	type SettingsState,

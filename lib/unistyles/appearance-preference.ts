@@ -1,7 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { UnistylesRuntime } from "react-native-unistyles";
 
+import type { Logger } from "@/lib/logger";
+
 export type AppearancePreference = "system" | "light" | "dark";
+
+type LoadAppearancePreferenceOptions = {
+	isActive?: () => boolean;
+	logger?: Pick<Logger, "error">;
+};
 
 const APPEARANCE_PREFERENCE_KEY = "appearance-preference";
 const APPEARANCE_PREFERENCES = new Set<AppearancePreference>([
@@ -33,6 +40,19 @@ export function applyAppearancePreference(
 			UnistylesRuntime.setAdaptiveThemes(false);
 			UnistylesRuntime.setTheme(preference);
 			return;
+	}
+}
+
+export async function loadAndApplyAppearancePreference({
+	isActive,
+	logger,
+}: LoadAppearancePreferenceOptions = {}): Promise<void> {
+	try {
+		const preference = await readAppearancePreference();
+		if (isActive?.() === false) return;
+		applyAppearancePreference(preference);
+	} catch (error) {
+		logger?.error("appearance preference startup failed", { error });
 	}
 }
 

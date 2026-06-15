@@ -1,6 +1,7 @@
 const { filenameFromContext } = require("./path-utils");
 
-const RAW_COLOR_PATTERN = /^#[0-9a-fA-F]{3,8}$|\b(?:rgb|rgba|hsl|hsla)\(/;
+const RAW_COLOR_PATTERN =
+	/(?:^|[^A-Za-z0-9_])#[0-9a-fA-F]{3,8}(?![A-Za-z0-9_])|\b(?:rgb|rgba|hsl|hsla)\(/;
 
 module.exports = {
 	meta: {

@@ -3,6 +3,7 @@ import { UnistylesRuntime } from "react-native-unistyles";
 
 import {
 	applyAppearancePreference,
+	loadAndApplyAppearancePreference,
 	readAppearancePreference,
 	writeAppearancePreference,
 } from "./appearance-preference";
@@ -54,5 +55,20 @@ describe("appearance preference persistence", () => {
 
 		expect(UnistylesRuntime.setAdaptiveThemes).toHaveBeenCalledWith(false);
 		expect(UnistylesRuntime.setTheme).toHaveBeenCalledWith("dark");
+	});
+
+	it("logs startup failures without applying a stale preference", async () => {
+		const error = new Error("storage unavailable");
+		const logger = { error: jest.fn() };
+		jest.mocked(AsyncStorage.getItem).mockRejectedValueOnce(error);
+
+		await loadAndApplyAppearancePreference({ logger });
+
+		expect(logger.error).toHaveBeenCalledWith(
+			"appearance preference startup failed",
+			{ error },
+		);
+		expect(UnistylesRuntime.setAdaptiveThemes).not.toHaveBeenCalled();
+		expect(UnistylesRuntime.setTheme).not.toHaveBeenCalled();
 	});
 });

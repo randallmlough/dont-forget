@@ -27,7 +27,7 @@ import {
 	applyAppearancePreference,
 	readAppearancePreference,
 	writeAppearancePreference,
-} from "./appearance-preference";
+} from "@/lib/unistyles/appearance-preference";
 
 export type SettingsState = {
 	appearancePreference: AppearancePreference;

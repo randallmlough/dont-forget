@@ -38,8 +38,18 @@ ruleTester.run("no-raw-color-literals", rule, {
 			errors: [{ messageId: "rawColor" }],
 		},
 		{
+			filename: "/repo/components/card.tsx",
+			code: `const styles = { boxShadow: "0 2px 8px #000000" };`,
+			errors: [{ messageId: "rawColor" }],
+		},
+		{
 			filename: "/repo/app/_layout.tsx",
 			code: "const color = `hsl(120, 50%, 50%)`;",
+			errors: [{ messageId: "rawColor" }],
+		},
+		{
+			filename: "/repo/components/card.tsx",
+			code: "const shadow = `0 2px 8px #000000`;",
 			errors: [{ messageId: "rawColor" }],
 		},
 	],
