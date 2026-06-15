@@ -16,10 +16,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
 import { createUsersApiClient } from "@/lib/client-api/users";
+import { useLogger } from "@/lib/logger";
 import {
 	registerForPushNotifications,
 	unregisterPushNotifications,
 } from "@/lib/push/registration";
+import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { sessionBootstrapFixture } from "@/lib/services/session/bootstrap.test-helpers";
+import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
@@ -29,6 +33,7 @@ const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
 	disabled: 0,
 }));
+let mockLogger: MockLogger;
 
 jest.mock("expo-constants", () => ({
 	__esModule: true,
@@ -68,12 +73,22 @@ jest.mock("@/lib/analytics", () =>
 	jest.requireActual("@/lib/test/mocks/analytics"),
 );
 
+jest.mock("@/lib/logger", () =>
+	jest
+		.requireActual<typeof import("@/lib/test/mocks/logger")>(
+			"@/lib/test/mocks/logger",
+		)
+		.createMockLoggerModule(),
+);
+
 jest.mock("@/lib/push/registration", () => ({
 	registerForPushNotifications: jest.fn(),
 	unregisterPushNotifications: jest.fn(async () => undefined),
 }));
 
 beforeEach(() => {
+	mockLogger = createMockLogger();
+	jest.mocked(useLogger).mockReturnValue(mockLogger);
 	mockRouterPush.mockReset();
 	mockRouterReplace.mockReset();
 	mockSignOut.mockClear();
@@ -93,8 +108,7 @@ beforeEach(() => {
 	});
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
-		session: null,
-		markOnboardingComplete() {},
+		session: appSessionFixture(),
 		retry() {},
 		reloadSession() {},
 		signOut: mockSignOut,
@@ -158,6 +172,22 @@ describe("SettingsScreen", () => {
 		);
 	});
 
+	it("shows a notice when a legal URL cannot open", async () => {
+		const error = new Error("browser unavailable");
+		jest.mocked(WebBrowser.openBrowserAsync).mockRejectedValueOnce(error);
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Privacy Policy"));
+
+		expect(
+			await screen.findByText("Unable to open link. Try again."),
+		).toBeTruthy();
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"settings legal link failed",
+			{ error },
+		);
+	});
+
 	it("navigates to Household settings", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
@@ -184,6 +214,17 @@ describe("SettingsScreen", () => {
 		expect(mockSignOut).toHaveBeenCalledTimes(1);
 	});
 
+	it("clears the Settings return target before signing out", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		expect(mockRouterReplace).toHaveBeenCalledWith("/");
+		expect(mockRouterReplace.mock.invocationCallOrder[0]).toBeLessThan(
+			mockSignOut.mock.invocationCallOrder[0],
+		);
+	});
+
 	it("persists and tracks appearance changes", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
@@ -194,6 +235,40 @@ describe("SettingsScreen", () => {
 			"dark",
 		);
 		expect(track).toHaveBeenCalledWith("appearance_preference_changed", {
+			preference: "dark",
+		});
+	});
+
+	it("logs preference load failures and keeps the system default", async () => {
+		const error = new Error("storage unavailable");
+		jest.mocked(AsyncStorage.getItem).mockRejectedValueOnce(error);
+
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await waitFor(() =>
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				"settings appearance preference load failed",
+				{ error },
+			),
+		);
+		expect(screen.getAllByText("System").length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("shows a notice when appearance preference persistence fails", async () => {
+		const error = new Error("storage unavailable");
+		jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(error);
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Dark"));
+
+		expect(
+			await screen.findByText("Unable to update appearance. Try again."),
+		).toBeTruthy();
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"settings appearance preference write failed",
+			{ error },
+		);
+		expect(track).not.toHaveBeenCalledWith("appearance_preference_changed", {
 			preference: "dark",
 		});
 	});
@@ -213,7 +288,7 @@ describe("SettingsScreen", () => {
 			expect(registerForPushNotifications).toHaveBeenCalledTimes(1),
 		);
 		expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-			"notification-preference",
+			"notification-preference:usr_avery",
 			JSON.stringify({
 				enabled: true,
 				expoPushToken: "ExponentPushToken[one]",
@@ -249,9 +324,38 @@ describe("SettingsScreen", () => {
 		});
 	});
 
+	it("shows retry copy when push registration fails", async () => {
+		jest
+			.mocked(registerForPushNotifications)
+			.mockRejectedValue(new Error("network timeout"));
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await act(async () => {
+			fireEvent(
+				screen.getByRole("switch", { name: "Notifications" }),
+				"valueChange",
+				true,
+			);
+		});
+
+		expect(
+			await screen.findByText(
+				"Notifications could not be enabled. Check your connection and try again.",
+			),
+		).toBeTruthy();
+		expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+			"notification-preference:usr_avery",
+			JSON.stringify({ enabled: false, expoPushToken: null }),
+		);
+		expect(track).toHaveBeenCalledWith("push_registration_changed", {
+			enabled: false,
+			outcome: "failed",
+		});
+	});
+
 	it("unregisters push notifications from the toggle", async () => {
 		jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => {
-			if (key === "notification-preference") {
+			if (key === "notification-preference:usr_avery") {
 				return JSON.stringify({
 					enabled: true,
 					expoPushToken: "ExponentPushToken[one]",
@@ -286,6 +390,53 @@ describe("SettingsScreen", () => {
 			outcome: "unregistered",
 		});
 	});
+
+	it("shows retry copy when push unregistration fails", async () => {
+		jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => {
+			if (key === "notification-preference:usr_avery") {
+				return JSON.stringify({
+					enabled: true,
+					expoPushToken: "ExponentPushToken[one]",
+				});
+			}
+			return null;
+		});
+		jest
+			.mocked(unregisterPushNotifications)
+			.mockRejectedValue(new Error("network timeout"));
+
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("switch", { name: "Notifications" }),
+			).toBeTruthy(),
+		);
+		await act(async () => {
+			fireEvent(
+				screen.getByRole("switch", { name: "Notifications" }),
+				"valueChange",
+				false,
+			);
+		});
+
+		expect(
+			await screen.findByText(
+				"Notifications could not be disabled. Check your connection and try again.",
+			),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("switch", { name: "Notifications" }).props.value,
+		).toBe(true);
+		expect(AsyncStorage.setItem).not.toHaveBeenCalledWith(
+			"notification-preference:usr_avery",
+			JSON.stringify({ enabled: false, expoPushToken: null }),
+		);
+		expect(track).toHaveBeenCalledWith("push_registration_changed", {
+			enabled: true,
+			outcome: "failed",
+		});
+	});
 });
 
 function renderWithSafeArea(element: ReactElement) {
@@ -310,4 +461,43 @@ function setExpoConfig(config: {
 	extra: Record<string, unknown>;
 }) {
 	(Constants as { expoConfig: unknown }).expoConfig = config;
+}
+
+function appSessionFixture(): AuthenticatedAppSession {
+	return {
+		...sessionBootstrapFixture(),
+		resourceKey: "resource:usr_avery",
+		services: {
+			lists: {
+				createList: async () => {
+					throw new Error("unused");
+				},
+				getList: async () => {
+					throw new Error("unused");
+				},
+				renameList: async () => {
+					throw new Error("unused");
+				},
+				deleteList: async () => {
+					throw new Error("unused");
+				},
+				listLists: async () => [],
+			},
+			items: {
+				listItems: async () => [],
+				addItem: async () => {
+					throw new Error("unused");
+				},
+				setItemChecked: async () => undefined,
+			},
+			changes: {
+				subscribe: () => ({ remove() {} }),
+			},
+			sync: {
+				getStatus: () => "synced",
+				subscribe: () => ({ remove() {} }),
+				requestSync: async () => null,
+			},
+		},
+	};
 }

@@ -91,34 +91,6 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(1));
 	});
 
-	it("marks onboarding complete locally for the current session", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
-		const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
-		try {
-			await render(
-				<AuthenticatedAppSessionProvider
-					controller={controller}
-					auth={authFixture()}
-				>
-					<OnboardingCompletionState />
-				</AuthenticatedAppSessionProvider>,
-			);
-
-			await act(() => {
-				controller.publish({ status: "ready", session: appSessionFixture() });
-			});
-			expect(screen.getByText("incomplete")).toBeTruthy();
-
-			await fireEvent.press(
-				screen.getByRole("button", { name: "Complete onboarding" }),
-			);
-
-			expect(screen.getByText("1700000000000")).toBeTruthy();
-		} finally {
-			nowSpy.mockRestore();
-		}
-	});
-
 	it("does not reactivate when only the token callback identity changes", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		const firstAuth = authFixture();
@@ -650,20 +622,6 @@ function CatchingSignOutButton() {
 		>
 			<Text>Sign out</Text>
 		</Pressable>
-	);
-}
-
-function OnboardingCompletionState() {
-	const { session, markOnboardingComplete } = useAuthenticatedAppSession();
-	return (
-		<>
-			<Text>
-				{session?.user.onboardingCompletedAt?.toString() ?? "incomplete"}
-			</Text>
-			<Pressable accessibilityRole="button" onPress={markOnboardingComplete}>
-				<Text>Complete onboarding</Text>
-			</Pressable>
-		</>
 	);
 }
 

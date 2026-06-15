@@ -67,7 +67,6 @@ jest.mock("@/lib/logger", () =>
 const testLogger = createMockLogger();
 testLogger.with.mockReturnValue(testLogger);
 const noopProviderActions = {
-	markOnboardingComplete() {},
 	retry() {},
 	reloadSession() {},
 	async signOut() {},
@@ -151,7 +150,6 @@ describe("HomeScreen", () => {
 				message: "Unable to prepare your Household. Please try again.",
 			},
 			session: null,
-			markOnboardingComplete() {},
 			retry,
 			reloadSession() {},
 			async signOut() {},

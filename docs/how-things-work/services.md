@@ -4,7 +4,7 @@ Services are the primary entrypoint for querying and mutating product data in Do
 
 ## Folder Shape
 
-Use the domain noun from `CONTEXT.md` as the service folder name. Runtime/session code gets its own session folder because it composes multiple domains for the signed-in app shell.
+Use the domain noun from `CONTEXT.md` as the service folder name. Runtime/session code gets its own session folder because it composes multiple domains for the signed-in app shell. Push Notification delivery uses `push` because token storage is User-scoped directory data while delivery is provider infrastructure.
 
 ```txt
 lib/services/
@@ -26,6 +26,11 @@ lib/services/
     server/
       index.ts
       member-service.ts
+  push/
+    server/
+      index.ts
+      push-sender.ts
+      push-token-service.ts
   session/
     index.ts
     bootstrap.ts
