@@ -1,4 +1,9 @@
 import { eq } from "drizzle-orm";
+import type {
+	NewHousehold,
+	NewMembership,
+	NewUser,
+} from "@/db/schema/directory";
 import {
 	householdJoinCodeAttempts,
 	householdJoinCodes,
@@ -29,6 +34,27 @@ type PrimaryHouseholdScenarioOptions = {
 	householdTursoDbName?: string;
 };
 
+export type EmailBackedPrimaryHouseholdScenarioSeed = {
+	users: {
+		avery: { id: string };
+		blake: { id: string };
+		cameron: { id: string; clerkUserId?: string; email?: string };
+	};
+	household: { id: string };
+	memberships: {
+		avery: { id: string };
+		blake: { id: string };
+		cameron: { id: string };
+	};
+	joinCode: { id: string; code: string };
+	lists?: SeedIds<typeof PRIMARY_HOUSEHOLD_SEED.lists>;
+	items?: SeedIds<typeof PRIMARY_HOUSEHOLD_SEED.items>;
+};
+
+type SeedIds<T extends Record<string, { id: string }>> = {
+	[K in keyof T]: { id: string };
+};
+
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
 >[0];
@@ -38,31 +64,51 @@ function buildPrimaryDirectoryHouseholdFacts(input: {
 	includeCameron?: boolean;
 	blakeJoinedAt?: number;
 	cameronJoinedAt?: number;
+	householdTursoDbName?: string;
+	householdOverrides?: Partial<NewHousehold>;
+	membershipOverrides?: {
+		avery?: Partial<NewMembership>;
+		blake?: Partial<NewMembership>;
+		cameron?: Partial<NewMembership>;
+	};
+	userOverrides?: {
+		avery?: Partial<NewUser>;
+		blake?: Partial<NewUser>;
+		cameron?: Partial<NewUser>;
+	};
 }) {
 	const { now } = input;
 	const avery = userFixture({
 		...PRIMARY_HOUSEHOLD_SEED.users.avery,
+		...input.userOverrides?.avery,
 		createdAt: now,
 		updatedAt: now,
 	});
 	const blake = userFixture({
 		...PRIMARY_HOUSEHOLD_SEED.users.blake,
+		...input.userOverrides?.blake,
 		createdAt: now,
 		updatedAt: now,
 	});
 	const cameron = userFixture({
 		...PRIMARY_HOUSEHOLD_SEED.users.cameron,
+		...input.userOverrides?.cameron,
 		createdAt: now,
 		updatedAt: now,
 	});
 	const household = householdFixture({
 		...PRIMARY_HOUSEHOLD_SEED.household,
+		tursoDbName:
+			input.householdTursoDbName ??
+			PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
+		...input.householdOverrides,
 		createdByUserId: avery.id,
 		provisioningCompletedAt: now,
 		createdAt: now,
 	});
 	const averyMembership = membershipFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
+		...input.membershipOverrides?.avery,
 		householdId: household.id,
 		userId: avery.id,
 		role: "owner",
@@ -70,6 +116,7 @@ function buildPrimaryDirectoryHouseholdFacts(input: {
 	});
 	const blakeMembership = membershipFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
+		...input.membershipOverrides?.blake,
 		householdId: household.id,
 		userId: blake.id,
 		role: "member",
@@ -77,6 +124,7 @@ function buildPrimaryDirectoryHouseholdFacts(input: {
 	});
 	const cameronMembership = membershipFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.memberships.cameron.id,
+		...input.membershipOverrides?.cameron,
 		householdId: household.id,
 		userId: cameron.id,
 		role: "member",
@@ -323,6 +371,340 @@ export async function seedPrimaryHouseholdScenario(
 			groceriesListId: groceries.id,
 		},
 	};
+}
+
+export type EmailBackedPrimaryHouseholdScenario = Awaited<
+	ReturnType<typeof seedEmailBackedPrimaryHouseholdScenario>
+>;
+
+export async function seedEmailBackedPrimaryHouseholdScenario(
+	input: {
+		directory: DirectoryDb;
+		household: HouseholdDb;
+		ownerClerkUserId: string;
+		ownerEmail: string;
+		memberClerkUserId: string;
+		memberEmail: string;
+		seed?: EmailBackedPrimaryHouseholdScenarioSeed;
+	} & PrimaryHouseholdScenarioOptions,
+) {
+	const now = input.now ?? PRIMARY_HOUSEHOLD_SEED.now;
+	const seed = input.seed;
+	const facts = buildPrimaryDirectoryHouseholdFacts({
+		now,
+		includeCameron: true,
+		householdTursoDbName: input.householdTursoDbName,
+		householdOverrides: seed
+			? {
+					id: seed.household.id,
+				}
+			: undefined,
+		membershipOverrides: seed
+			? {
+					avery: { id: seed.memberships.avery.id },
+					blake: { id: seed.memberships.blake.id },
+					cameron: { id: seed.memberships.cameron.id },
+				}
+			: undefined,
+		userOverrides: {
+			avery: {
+				...(seed ? { id: seed.users.avery.id } : {}),
+				clerkUserId: input.ownerClerkUserId,
+				email: input.ownerEmail,
+				firstName: "Seed",
+				lastName: "Owner",
+				displayName: "Seed Owner",
+			},
+			blake: {
+				...(seed ? { id: seed.users.blake.id } : {}),
+				clerkUserId: input.memberClerkUserId,
+				email: input.memberEmail,
+				firstName: "Seed",
+				lastName: "Member",
+				displayName: "Seed Member",
+			},
+			cameron: seed
+				? emailBackedCameronUserOverrides(seed.users.cameron)
+				: undefined,
+		},
+	});
+	const { avery, blake } = facts.users;
+	const { household } = facts;
+	const joinCode = householdJoinCodeFixture({
+		id: seed?.joinCode.id ?? PRIMARY_HOUSEHOLD_SEED.joinCodes.active.id,
+		code: seed?.joinCode.code ?? PRIMARY_HOUSEHOLD_SEED.joinCodes.active.code,
+		householdId: household.id,
+		createdByUserId: avery.id,
+		createdAt: now + 2,
+	});
+	const groceries = listFixture({
+		id: seedListId(seed, "groceries"),
+		name: PRIMARY_HOUSEHOLD_SEED.lists.groceries.name,
+		createdByUserId: avery.id,
+		createdAt: now,
+		updatedAt: now,
+	});
+	const hardware = listFixture({
+		id: seedListId(seed, "hardware"),
+		name: PRIMARY_HOUSEHOLD_SEED.lists.hardware.name,
+		createdByUserId: avery.id,
+		createdAt: now + 1,
+		updatedAt: now + 1,
+	});
+	const pharmacy = listFixture({
+		id: seedListId(seed, "pharmacy"),
+		name: PRIMARY_HOUSEHOLD_SEED.lists.pharmacy.name,
+		createdByUserId: blake.id,
+		createdAt: now + 2,
+		updatedAt: now + 2,
+	});
+	const archivedList = listFixture({
+		id: seedListId(seed, "archived"),
+		name: PRIMARY_HOUSEHOLD_SEED.lists.archived.name,
+		createdByUserId: avery.id,
+		createdAt: now + 3,
+		updatedAt: now + 60,
+		archivedAt: now + 60,
+	});
+	const deletedList = listFixture({
+		id: seedListId(seed, "deleted"),
+		name: PRIMARY_HOUSEHOLD_SEED.lists.deleted.name,
+		createdByUserId: avery.id,
+		createdAt: now + 4,
+		updatedAt: now + 70,
+		deletedAt: now + 70,
+	});
+	const uncheckedItem = itemFixture({
+		id: seedItemId(seed, "unchecked"),
+		listId: groceries.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.unchecked.name,
+		position: 0,
+		createdByUserId: avery.id,
+		createdAt: now + 10,
+		updatedAt: now + 10,
+	});
+	const checkedByAveryItem = itemFixture({
+		id: seedItemId(seed, "checkedByAvery"),
+		listId: groceries.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.checkedByAvery.name,
+		position: 1,
+		createdByUserId: avery.id,
+		createdAt: now + 20,
+		updatedAt: now + 20,
+	});
+	const checkedByBlakeItem = itemFixture({
+		id: seedItemId(seed, "checkedByBlake"),
+		listId: groceries.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.checkedByBlake.name,
+		position: 2,
+		createdByUserId: blake.id,
+		createdAt: now + 30,
+		updatedAt: now + 30,
+	});
+	const tombstonedItem = itemFixture({
+		id: seedItemId(seed, "tombstoned"),
+		listId: groceries.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.tombstoned.name,
+		position: 3,
+		createdByUserId: avery.id,
+		createdAt: now + 40,
+		updatedAt: now + 50,
+		deletedAt: now + 50,
+	});
+	const hardwareBatteries = itemFixture({
+		id: seedItemId(seed, "hardwareBatteries"),
+		listId: hardware.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.hardwareBatteries.name,
+		position: 0,
+		createdByUserId: avery.id,
+		createdAt: now + 11,
+		updatedAt: now + 11,
+	});
+	const hardwarePaintersTape = itemFixture({
+		id: seedItemId(seed, "hardwarePaintersTape"),
+		listId: hardware.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.hardwarePaintersTape.name,
+		position: 1,
+		createdByUserId: blake.id,
+		createdAt: now + 21,
+		updatedAt: now + 21,
+	});
+	const hardwareLightBulbs = itemFixture({
+		id: seedItemId(seed, "hardwareLightBulbs"),
+		listId: hardware.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.hardwareLightBulbs.name,
+		position: 2,
+		createdByUserId: avery.id,
+		createdAt: now + 31,
+		updatedAt: now + 31,
+	});
+	const pharmacyIbuprofen = itemFixture({
+		id: seedItemId(seed, "pharmacyIbuprofen"),
+		listId: pharmacy.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.pharmacyIbuprofen.name,
+		position: 0,
+		createdByUserId: blake.id,
+		createdAt: now + 12,
+		updatedAt: now + 12,
+	});
+	const pharmacyBandages = itemFixture({
+		id: seedItemId(seed, "pharmacyBandages"),
+		listId: pharmacy.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.pharmacyBandages.name,
+		position: 1,
+		createdByUserId: avery.id,
+		createdAt: now + 22,
+		updatedAt: now + 22,
+	});
+	const pharmacyAllergyTablets = itemFixture({
+		id: seedItemId(seed, "pharmacyAllergyTablets"),
+		listId: pharmacy.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.pharmacyAllergyTablets.name,
+		position: 2,
+		createdByUserId: blake.id,
+		createdAt: now + 32,
+		updatedAt: now + 32,
+	});
+	const archivedCranberrySauce = itemFixture({
+		id: seedItemId(seed, "archivedCranberrySauce"),
+		listId: archivedList.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.archivedCranberrySauce.name,
+		position: 0,
+		createdByUserId: avery.id,
+		createdAt: now + 13,
+		updatedAt: now + 13,
+	});
+	const archivedPieCrust = itemFixture({
+		id: seedItemId(seed, "archivedPieCrust"),
+		listId: archivedList.id,
+		name: PRIMARY_HOUSEHOLD_SEED.items.archivedPieCrust.name,
+		position: 1,
+		createdByUserId: blake.id,
+		createdAt: now + 23,
+		updatedAt: now + 23,
+	});
+	const checkedByAvery = itemCheckFixture({
+		itemId: checkedByAveryItem.id,
+		userId: avery.id,
+		checkedAt: now + 100,
+		updatedAt: now + 100,
+	});
+	const checkedByBlake = itemCheckFixture({
+		itemId: checkedByBlakeItem.id,
+		userId: blake.id,
+		checkedAt: now + 110,
+		updatedAt: now + 110,
+	});
+	const hardwareCheckedByBlake = itemCheckFixture({
+		itemId: hardwareLightBulbs.id,
+		userId: blake.id,
+		checkedAt: now + 120,
+		updatedAt: now + 120,
+	});
+
+	await input.directory.transaction(async (tx) => {
+		await tx.insert(users).values(facts.rows.users);
+		await tx.insert(households).values(household);
+		await tx.insert(memberships).values(facts.rows.memberships);
+		await tx.insert(householdJoinCodes).values(joinCode);
+		await setActiveHouseholdForUsers(
+			tx,
+			facts.rows.users.map((user) => user.id),
+			household.id,
+		);
+	});
+	await input.household.transaction(async (tx) => {
+		await tx
+			.insert(lists)
+			.values([groceries, hardware, pharmacy, archivedList, deletedList]);
+		await tx
+			.insert(items)
+			.values([
+				uncheckedItem,
+				checkedByAveryItem,
+				checkedByBlakeItem,
+				tombstonedItem,
+				hardwareBatteries,
+				hardwarePaintersTape,
+				hardwareLightBulbs,
+				pharmacyIbuprofen,
+				pharmacyBandages,
+				pharmacyAllergyTablets,
+				archivedCranberrySauce,
+				archivedPieCrust,
+			]);
+		await tx
+			.insert(itemChecks)
+			.values([checkedByAvery, checkedByBlake, hardwareCheckedByBlake]);
+	});
+
+	return {
+		users: facts.activeUsers,
+		household,
+		members: facts.members,
+		memberships: facts.memberships,
+		joinCodes: { active: joinCode },
+		lists: {
+			groceries,
+			hardware,
+			pharmacy,
+			archived: archivedList,
+			deleted: deletedList,
+		},
+		items: {
+			unchecked: uncheckedItem,
+			checkedByAvery: checkedByAveryItem,
+			checkedByBlake: checkedByBlakeItem,
+			tombstoned: tombstonedItem,
+			hardwareBatteries,
+			hardwarePaintersTape,
+			hardwareLightBulbs,
+			pharmacyIbuprofen,
+			pharmacyBandages,
+			pharmacyAllergyTablets,
+			archivedCranberrySauce,
+			archivedPieCrust,
+		},
+		itemChecks: { checkedByAvery, checkedByBlake, hardwareCheckedByBlake },
+		ids: {
+			averyUserId: avery.id,
+			blakeUserId: blake.id,
+			cameronUserId: facts.users.cameron.id,
+			householdId: household.id,
+			groceriesListId: groceries.id,
+		},
+	};
+}
+
+function emailBackedCameronUserOverrides(
+	seedUser: EmailBackedPrimaryHouseholdScenarioSeed["users"]["cameron"],
+): Partial<NewUser> {
+	return {
+		id: seedUser.id,
+		clerkUserId: seedUser.clerkUserId ?? syntheticClerkUserId(seedUser.id),
+		email: seedUser.email ?? `${seedUser.id}@example.com`,
+	};
+}
+
+function seedListId(
+	seed: EmailBackedPrimaryHouseholdScenarioSeed | undefined,
+	key: keyof typeof PRIMARY_HOUSEHOLD_SEED.lists,
+): string {
+	return seed?.lists?.[key]?.id ?? PRIMARY_HOUSEHOLD_SEED.lists[key].id;
+}
+
+function seedItemId(
+	seed: EmailBackedPrimaryHouseholdScenarioSeed | undefined,
+	key: keyof typeof PRIMARY_HOUSEHOLD_SEED.items,
+): string {
+	return seed?.items?.[key]?.id ?? PRIMARY_HOUSEHOLD_SEED.items[key].id;
+}
+
+function syntheticClerkUserId(userId: string): string {
+	if (userId.startsWith("usr_")) {
+		return `user_${userId.slice("usr_".length)}`;
+	}
+	return `user_${userId}`;
 }
 
 export type MultiHouseholdUserScenario = Awaited<

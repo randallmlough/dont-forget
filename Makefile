@@ -130,11 +130,11 @@ db-reset: ## Delete app data from configured databases
 
 .PHONY: db-seed
 db-seed: ## Seed local deterministic data without resetting (requires migrated seed DB)
-	@APP_ENV="$(APP_ENV)" $(PNPM) db:seed
+	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) db:seed
 
 .PHONY: db-reseed
 db-reseed: ## Reset, migrate, and seed local deterministic development data
-	@APP_ENV="$(APP_ENV)" CONFIRM_DB_RESET="$(CONFIRM_DB_RESET)" $(PNPM) db:reseed
+	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) db:reseed
 
 # ==================================================================================== #
 # UTILITIES
