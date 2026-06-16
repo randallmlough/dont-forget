@@ -403,9 +403,18 @@ export async function cleanupSeedClerkUsers(
 	}
 }
 
-export async function seedLocalDatabases(): Promise<void> {
+export function readLocalSeedMode(): SeedMode {
 	loadLocalSeedEnv();
-	const seedMode = parseOptionalSeedEmail();
+	return parseOptionalSeedEmail();
+}
+
+export async function seedLocalDatabases(): Promise<void> {
+	await seedLocalDatabasesForMode(readLocalSeedMode());
+}
+
+export async function seedLocalDatabasesForMode(
+	seedMode: SeedMode,
+): Promise<void> {
 	if (seedMode.kind === "clerk") {
 		await seedEmailBackedLocalDatabases(seedMode);
 		return;
@@ -533,7 +542,7 @@ export function loadLocalSeedEnv(): AppEnv {
 
 type SeedTursoOperatorConfig = ReturnType<typeof readTursoOperatorConfig>;
 
-async function ensureSeedHouseholdDatabase(
+export async function ensureSeedHouseholdDatabase(
 	tursoDbName: string,
 	config: SeedTursoOperatorConfig,
 ): Promise<boolean> {

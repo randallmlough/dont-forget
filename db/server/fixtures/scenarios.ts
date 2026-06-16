@@ -186,39 +186,12 @@ export async function seedPrimaryHouseholdScenario(
 	} & PrimaryHouseholdScenarioOptions,
 ) {
 	const now = input.now ?? PRIMARY_HOUSEHOLD_SEED.now;
-	const avery = userFixture({
-		...PRIMARY_HOUSEHOLD_SEED.users.avery,
-		createdAt: now,
-		updatedAt: now,
+	const facts = buildPrimaryDirectoryHouseholdFacts({
+		now,
+		householdTursoDbName: input.householdTursoDbName,
 	});
-	const blake = userFixture({
-		...PRIMARY_HOUSEHOLD_SEED.users.blake,
-		createdAt: now,
-		updatedAt: now,
-	});
-	const household = householdFixture({
-		...PRIMARY_HOUSEHOLD_SEED.household,
-		tursoDbName:
-			input.householdTursoDbName ??
-			PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
-		createdByUserId: avery.id,
-		provisioningCompletedAt: now,
-		createdAt: now,
-	});
-	const averyMembership = membershipFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
-		householdId: household.id,
-		userId: avery.id,
-		role: "owner",
-		joinedAt: now,
-	});
-	const blakeMembership = membershipFixture({
-		id: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
-		householdId: household.id,
-		userId: blake.id,
-		role: "member",
-		joinedAt: now + 1,
-	});
+	const { avery, blake } = facts.users;
+	const { household } = facts;
 	const joinCode = householdJoinCodeFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.id,
 		householdId: household.id,
@@ -313,18 +286,15 @@ export async function seedPrimaryHouseholdScenario(
 	});
 
 	await input.directory.transaction(async (tx) => {
-		await tx.insert(users).values([avery, blake]);
+		await tx.insert(users).values(facts.rows.users);
 		await tx.insert(households).values(household);
-		await tx.insert(memberships).values([averyMembership, blakeMembership]);
+		await tx.insert(memberships).values(facts.rows.memberships);
 		await tx.insert(householdJoinCodes).values(joinCode);
-		await tx
-			.update(users)
-			.set({ activeHouseholdId: household.id })
-			.where(eq(users.id, avery.id));
-		await tx
-			.update(users)
-			.set({ activeHouseholdId: household.id })
-			.where(eq(users.id, blake.id));
+		await setActiveHouseholdForUsers(
+			tx,
+			facts.rows.users.map((user) => user.id),
+			household.id,
+		);
 	});
 	await input.household.transaction(async (tx) => {
 		await tx
@@ -343,12 +313,15 @@ export async function seedPrimaryHouseholdScenario(
 
 	return {
 		users: {
-			avery: { ...avery, activeHouseholdId: household.id },
-			blake: { ...blake, activeHouseholdId: household.id },
+			avery: facts.activeUsers.avery,
+			blake: facts.activeUsers.blake,
 		},
 		household,
-		members: { avery: averyMembership, blake: blakeMembership },
-		memberships: { avery: averyMembership, blake: blakeMembership },
+		members: { avery: facts.members.avery, blake: facts.members.blake },
+		memberships: {
+			avery: facts.memberships.avery,
+			blake: facts.memberships.blake,
+		},
 		joinCodes: { active: joinCode },
 		lists: {
 			groceries,
