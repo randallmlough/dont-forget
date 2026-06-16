@@ -1,4 +1,6 @@
 import {
+	assertLocalSeedPrerequisites,
+	assertLocalSeedTursoTarget,
 	createSeedClerkUsers,
 	deriveSeedMemberEmail,
 	emailBackedSeedTargetForMode,
@@ -54,6 +56,13 @@ function mockUpdateEmailAddress() {
 		Parameters<SeedClerkClient["updateEmailAddress"]>
 	>();
 }
+
+const localTursoTarget = {
+	appEnv: "local" as const,
+	directoryUrl: "libsql://dont-forget-local-directory-dont-forget.turso.io",
+	group: "dont-forget-local",
+	org: "dont-forget",
+};
 
 describe("seed EMAIL helpers", () => {
 	it("returns deterministic mode when EMAIL is missing", () => {
@@ -246,6 +255,65 @@ describe("seed EMAIL helpers", () => {
 			"user_existing_member",
 			target.seed.users.cameron.clerkUserId,
 		]);
+	});
+
+	it("accepts documented local Turso seed targets", () => {
+		expect(() => assertLocalSeedTursoTarget(localTursoTarget)).not.toThrow();
+		expect(() =>
+			assertLocalSeedTursoTarget({
+				...localTursoTarget,
+				directoryUrl: "libsql://df-local-wt-branch-dir-dont-forget.turso.io",
+			}),
+		).not.toThrow();
+	});
+
+	it("rejects inherited non-local Turso directory targets", () => {
+		expect(() =>
+			assertLocalSeedTursoTarget({
+				...localTursoTarget,
+				directoryUrl:
+					"libsql://dont-forget-production-directory-dont-forget.turso.io",
+			}),
+		).toThrow(/non-local Turso directory database/);
+	});
+
+	it("rejects inherited non-local Turso groups", () => {
+		expect(() =>
+			assertLocalSeedTursoTarget({
+				...localTursoTarget,
+				group: "dont-forget-production",
+			}),
+		).toThrow(/non-local Turso group/);
+	});
+
+	it("preflights Clerk server config for EMAIL seed mode", () => {
+		const seedMode = {
+			kind: "clerk" as const,
+			ownerEmail: "owner@example.com",
+			memberEmail: "owner+member@example.com",
+		};
+
+		expect(() =>
+			assertLocalSeedPrerequisites({
+				seedMode,
+				turso: localTursoTarget,
+				env: { APP_ENV: "local", CLERK_SECRET_KEY: "sk_live_wrong" },
+			}),
+		).toThrow(/CLERK_SECRET_KEY/);
+		expect(() =>
+			assertLocalSeedPrerequisites({
+				seedMode,
+				turso: localTursoTarget,
+				env: { APP_ENV: "local" },
+			}),
+		).toThrow(/CLERK_SECRET_KEY/);
+		expect(() =>
+			assertLocalSeedPrerequisites({
+				seedMode,
+				turso: localTursoTarget,
+				env: { APP_ENV: "local", CLERK_SECRET_KEY: "sk_test_valid" },
+			}),
+		).not.toThrow();
 	});
 });
 

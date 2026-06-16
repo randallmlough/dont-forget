@@ -30,7 +30,10 @@ import {
 	type TursoMigrationConfig,
 } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
-import { seedHouseholdDbNameForDirectory } from "./worktree-db";
+import {
+	directoryDbNameFromUrl,
+	seedHouseholdDbNameForDirectory,
+} from "./worktree-db";
 
 export const SEED_TEST_PASSWORD = "testing1234";
 
@@ -44,6 +47,8 @@ const seedEmailSchema = z.email();
 export type SeedMode =
 	| { kind: "deterministic" }
 	| { kind: "clerk"; ownerEmail: string; memberEmail: string };
+
+type SeedEnvSource = Record<string, string | undefined>;
 
 export type SeedClerkUser = {
 	id: string;
@@ -427,6 +432,7 @@ async function seedDeterministicLocalDatabases(
 	seedMode: Extract<SeedMode, { kind: "deterministic" }>,
 ): Promise<void> {
 	const config = readTursoMigrationConfig();
+	assertLocalSeedTursoTarget(config);
 	const seedDbName =
 		seedHouseholdDbNameForDirectory(config.directoryUrl, config.org) ??
 		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName;
@@ -461,6 +467,7 @@ async function seedEmailBackedLocalDatabases(
 	seedMode: Extract<SeedMode, { kind: "clerk" }>,
 ): Promise<void> {
 	const config = readTursoOperatorConfig();
+	assertLocalSeedPrerequisites({ seedMode, turso: config });
 	const seedTarget = emailBackedSeedTargetForMode(seedMode, config);
 	const clerkClient = await createProductionSeedClerkClient();
 
@@ -538,6 +545,48 @@ export function loadLocalSeedEnv(): AppEnv {
 	const appEnv = loadEnvFile();
 	assertLocalSeedEnvironment(appEnv);
 	return appEnv;
+}
+
+type LocalSeedTursoTarget = Pick<
+	TursoMigrationConfig,
+	"appEnv" | "directoryUrl" | "group" | "org"
+>;
+
+export function assertLocalSeedTursoTarget(config: LocalSeedTursoTarget): void {
+	assertLocalSeedEnvironment(config.appEnv);
+	if (!config.group.startsWith("dont-forget-local")) {
+		throw new Error(
+			`Refusing to seed non-local Turso group ${config.group}. Local seed data requires a dont-forget-local* Turso group.`,
+		);
+	}
+
+	const directoryDbName = directoryDbNameFromUrl(
+		config.directoryUrl,
+		config.org,
+	);
+	if (!isLocalDirectoryDbName(directoryDbName)) {
+		throw new Error(
+			`Refusing to seed non-local Turso directory database ${directoryDbName}. Local seed data requires a local directory database.`,
+		);
+	}
+}
+
+function isLocalDirectoryDbName(directoryDbName: string): boolean {
+	return (
+		directoryDbName.startsWith("dont-forget-local") ||
+		directoryDbName.startsWith("df-local-")
+	);
+}
+
+export function assertLocalSeedPrerequisites(input: {
+	seedMode: SeedMode;
+	turso: LocalSeedTursoTarget;
+	env?: SeedEnvSource;
+}): void {
+	assertLocalSeedTursoTarget(input.turso);
+	if (input.seedMode.kind === "clerk") {
+		readClerkServerConfig(input.env);
+	}
 }
 
 type SeedTursoOperatorConfig = ReturnType<typeof readTursoOperatorConfig>;

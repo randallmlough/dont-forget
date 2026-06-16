@@ -11,6 +11,7 @@ import {
 } from "@/db/server/reset";
 import { readTursoOperatorConfig } from "@/lib/env";
 import {
+	assertLocalSeedPrerequisites,
 	ensureSeedHouseholdDatabase,
 	readLocalSeedMode,
 	seedLocalDatabasesForMode,
@@ -22,6 +23,7 @@ const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
 export async function reseedLocalDatabases(): Promise<void> {
 	const seedMode = readLocalSeedMode();
 	const config = readTursoOperatorConfig();
+	assertLocalSeedPrerequisites({ seedMode, turso: config });
 	const directoryClientInstance = directoryClient();
 
 	try {
