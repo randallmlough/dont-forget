@@ -125,10 +125,27 @@ POST /api/invitations
 Household settings:
 
 ```http
+PATCH /api/households/:householdId
 GET /api/households/:householdId/members
 GET /api/households/:householdId/invitations
 PATCH /api/invitations/:invitationId
 ```
+
+Household rename body:
+
+```json
+{ "name": "Lake House" }
+```
+
+Household rename response:
+
+```json
+{ "household": { "id": "...", "name": "Lake House" } }
+```
+
+Only Owners can rename a Household. Invalid names return `400`, unauthorized
+requests return `401`, non-Owners and non-Members return `403`, and deleted
+Households return `404` for existing Owners.
 
 Invitation revoke body:
 
@@ -177,6 +194,7 @@ Track product outcomes at the service or API boundary that knows the outcome hap
 - `household_join_code_enabled`
 - `household_join_code_used`
 - `household_switched`
+- `household_renamed`
 
 Analytics properties must be safe and minimal. Include Household, Member role, or source context only when useful. Never include email addresses, visible Household Join Codes, Invitation tokens, or other bearer secrets.
 

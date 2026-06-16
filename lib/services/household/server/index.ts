@@ -29,6 +29,9 @@ export {
 } from "./household-provisioning-service";
 export {
 	createHouseholdService,
+	HouseholdForbiddenError,
+	HouseholdNameInvalidError,
+	HouseholdNotFoundError,
 	type HouseholdService,
 	type HouseholdServiceDeps,
 	householdDatabaseName,

@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import * as Clipboard from "expo-clipboard";
 import { useCallback, useEffect, useReducer, useRef } from "react";
+import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
 import {
 	type CreateInvitationResponse,
 	createHouseholdApiClient,
@@ -19,12 +20,14 @@ export type HouseholdSettingsState =
 			members: HouseholdMember[];
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
+			renamedHouseholdName: string | null;
 			notice: string | null;
 			operation: HouseholdSettingsOperation;
 	  };
 
 export type HouseholdSettingsOperation =
 	| { status: "idle" }
+	| { status: "renamingHousehold" }
 	| { status: "creatingInvitation" }
 	| { status: "revokingInvitation"; invitationId: string }
 	| { status: "removingMember"; membershipId: string }
@@ -36,6 +39,7 @@ export type HouseholdSettingsOperation =
 
 export type HouseholdSettingsActions = {
 	retry: () => void;
+	renameHousehold: (name: string) => Promise<boolean>;
 	createInvitation: (email: string) => Promise<void>;
 	revokeInvitation: (invitationId: string) => Promise<void>;
 	removeMember: (membershipId: string) => Promise<void>;
@@ -51,7 +55,12 @@ export type HouseholdSettingsActions = {
 };
 
 type Resource =
-	| { status: "loading"; loadKey: string; attempt: number }
+	| {
+			status: "loading";
+			loadKey: string;
+			attempt: number;
+			preservedNotice: HouseholdSettingsNotice | null;
+	  }
 	| { status: "error"; loadKey: string; attempt: number; message: string }
 	| {
 			status: "ready";
@@ -60,9 +69,15 @@ type Resource =
 			members: HouseholdMember[];
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
-			notice: string | null;
+			renamedHouseholdName: string | null;
+			notice: HouseholdSettingsNotice | null;
 			operation: HouseholdSettingsOperation;
 	  };
+
+type HouseholdSettingsNotice = {
+	message: string;
+	preserveAcrossLoad: boolean;
+};
 
 type Action =
 	| { type: "loadStarted"; loadKey: string; attempt: number }
@@ -88,6 +103,11 @@ type Action =
 			response: CreateInvitationResponse;
 			invitations: PendingInvitation[];
 	  }
+	| {
+			type: "householdRenamed";
+			loadKey: string;
+			household: { id: string; name: string };
+	  }
 	| { type: "invitationRevoked"; loadKey: string; invitationId: string }
 	| { type: "membersChanged"; loadKey: string; members: HouseholdMember[] }
 	| { type: "joinCodeChanged"; loadKey: string; joinCode: HouseholdJoinCode };
@@ -95,8 +115,9 @@ type Action =
 export function useHouseholdSettings(
 	session: AuthenticatedAppSession,
 	clientProp?: HouseholdApiClient,
-	reloadSession: (options?: { retireCurrent?: boolean }) => void = () =>
-		undefined,
+	reloadSession: (
+		options?: AuthenticatedAppSessionReloadOptions,
+	) => void = () => undefined,
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
 	// Latest-ref pattern: the resolved client stays stable across getToken
@@ -159,6 +180,24 @@ export function useHouseholdSettings(
 			cancelled = true;
 		};
 	}, [householdId, loadAttempt, loadKey, resolveClient]);
+
+	async function renameHousehold(name: string): Promise<boolean> {
+		if (!startOperation({ status: "renamingHousehold" })) return false;
+		try {
+			const household = await resolveClient().renameHousehold({
+				householdId,
+				name,
+			});
+			dispatch({ type: "householdRenamed", loadKey, household });
+			reloadSession({ mode: "freshOnly" });
+			return true;
+		} catch (error) {
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			return false;
+		} finally {
+			operationInFlightRef.current = false;
+		}
+	}
 
 	async function createInvitation(email: string) {
 		const normalizedEmail = normalizeInvitationEmailInput(email);
@@ -242,7 +281,7 @@ export function useHouseholdSettings(
 				return;
 			}
 			await resolveClient().leaveHousehold(householdId);
-			reloadSession({ retireCurrent: true });
+			reloadSession({ mode: "retireCurrent" });
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {
@@ -323,6 +362,7 @@ export function useHouseholdSettings(
 		state: stateFromResource(resource, loadKey),
 		actions: {
 			retry: () => dispatch({ type: "retry", loadKey }),
+			renameHousehold,
 			createInvitation,
 			revokeInvitation,
 			removeMember,
@@ -350,7 +390,7 @@ async function syncCurrentHousehold(
 }
 
 function initialResource(loadKey: string): Resource {
-	return { status: "loading", loadKey, attempt: 0 };
+	return { status: "loading", loadKey, attempt: 0, preservedNotice: null };
 }
 
 function reducer(state: Resource, action: Action): Resource {
@@ -359,6 +399,7 @@ function reducer(state: Resource, action: Action): Resource {
 			status: "loading",
 			loadKey: action.loadKey,
 			attempt: action.attempt,
+			preservedNotice: noticePreservedAcrossLoad(state),
 		};
 	}
 
@@ -367,6 +408,7 @@ function reducer(state: Resource, action: Action): Resource {
 			status: "loading",
 			loadKey: action.loadKey,
 			attempt: state.loadKey === action.loadKey ? state.attempt + 1 : 0,
+			preservedNotice: noticePreservedAcrossLoad(state),
 		};
 	}
 
@@ -379,9 +421,14 @@ function reducer(state: Resource, action: Action): Resource {
 
 	if (action.type === "loaded") {
 		return {
-			...action,
 			status: "ready",
-			notice: null,
+			loadKey: action.loadKey,
+			attempt: action.attempt,
+			members: action.members,
+			invitations: action.invitations,
+			joinCode: action.joinCode,
+			renamedHouseholdName: null,
+			notice: state.status === "loading" ? state.preservedNotice : null,
 			operation: { status: "idle" },
 		};
 	}
@@ -399,13 +446,28 @@ function reducer(state: Resource, action: Action): Resource {
 		return { ...state, operation: action.operation };
 	}
 	if (action.type === "notice") {
-		return { ...state, notice: action.notice, operation: { status: "idle" } };
+		return {
+			...state,
+			notice: noticeFromMessage(action.notice, false),
+			operation: { status: "idle" },
+		};
 	}
 	if (action.type === "invitationCreated") {
 		return {
 			...state,
 			invitations: action.invitations,
-			notice: invitationCreatedNotice(action.response),
+			notice: noticeFromMessage(
+				invitationCreatedNotice(action.response),
+				false,
+			),
+			operation: { status: "idle" },
+		};
+	}
+	if (action.type === "householdRenamed") {
+		return {
+			...state,
+			renamedHouseholdName: action.household.name,
+			notice: noticeFromMessage("Household renamed.", true),
 			operation: { status: "idle" },
 		};
 	}
@@ -415,7 +477,7 @@ function reducer(state: Resource, action: Action): Resource {
 			invitations: state.invitations.filter(
 				(invitation) => invitation.id !== action.invitationId,
 			),
-			notice: "Invitation revoked.",
+			notice: noticeFromMessage("Invitation revoked.", false),
 			operation: { status: "idle" },
 		};
 	}
@@ -423,6 +485,23 @@ function reducer(state: Resource, action: Action): Resource {
 		return { ...state, members: action.members, operation: { status: "idle" } };
 	}
 	return { ...state, joinCode: action.joinCode, operation: { status: "idle" } };
+}
+
+function noticeFromMessage(
+	message: string | null,
+	preserveAcrossLoad: boolean,
+): HouseholdSettingsNotice | null {
+	return message ? { message, preserveAcrossLoad } : null;
+}
+
+function noticePreservedAcrossLoad(
+	state: Resource,
+): HouseholdSettingsNotice | null {
+	if (state.status === "ready" && state.notice?.preserveAcrossLoad) {
+		return state.notice;
+	}
+	if (state.status === "loading") return state.preservedNotice;
+	return null;
 }
 
 function stateFromResource(
@@ -435,7 +514,15 @@ function stateFromResource(
 	if (resource.status === "error") {
 		return { status: "error", message: resource.message };
 	}
-	return resource;
+	return {
+		status: "ready",
+		members: resource.members,
+		invitations: resource.invitations,
+		joinCode: resource.joinCode,
+		renamedHouseholdName: resource.renamedHouseholdName,
+		notice: resource.notice?.message ?? null,
+		operation: resource.operation,
+	};
 }
 
 function invitationCreatedNotice(response: CreateInvitationResponse): string {

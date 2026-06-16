@@ -36,6 +36,7 @@ import {
 	handlePreviewJoinCode,
 	handleRegenerateJoinCode,
 	handleRemoveMember,
+	handleRenameHousehold,
 	handleSetJoinCodeEnabled,
 	handleSwitchActiveHousehold,
 } from "./handlers";
@@ -151,6 +152,124 @@ describe("Household API handlers", () => {
 				),
 			);
 			expect(forbidden.status).toBe(403);
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("requires auth for Household rename", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleRename({
+				householdId: "hh_avery",
+				deps: {
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError("Invalid Clerk session token");
+					},
+				},
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Invalid Clerk session token" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects Household rename by plain Members", async () => {
+		const harness = await primaryHarness();
+		try {
+			const response = await handleRename({
+				householdId: harness.scenario.household.id,
+				deps: householdDeps(
+					harness.directory,
+					harness.scenario.users.blake.clerkUserId,
+				),
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 403,
+				body: { error: "Forbidden" },
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("does not reveal Household existence to non-Members during rename", async () => {
+		const harness = await primaryHarness();
+		try {
+			const existing = await readJsonResponse(
+				await handleRename({
+					householdId: harness.scenario.household.id,
+					deps: householdDeps(harness.directory, "user_casey"),
+				}),
+			);
+			const missing = await readJsonResponse(
+				await handleRename({
+					householdId: "hh_missing",
+					deps: householdDeps(harness.directory, "user_casey"),
+				}),
+			);
+
+			expect(existing).toMatchObject({
+				status: 403,
+				body: { error: "Forbidden" },
+			});
+			expect(missing).toMatchObject({
+				status: 403,
+				body: { error: "Forbidden" },
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("rejects invalid Household rename names", async () => {
+		const harness = await primaryHarness();
+		try {
+			const response = await handleRename({
+				householdId: harness.scenario.household.id,
+				name: "a".repeat(81),
+				deps: householdDeps(
+					harness.directory,
+					harness.scenario.users.avery.clerkUserId,
+				),
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 400,
+				body: { error: "Household name must be 80 characters or fewer." },
+			});
+		} finally {
+			await harness.close();
+		}
+	});
+
+	it("renames Households and returns the updated name", async () => {
+		const harness = await primaryHarness();
+		try {
+			const response = await handleRename({
+				householdId: harness.scenario.household.id,
+				name: "  Lake House  ",
+				deps: householdDeps(
+					harness.directory,
+					harness.scenario.users.avery.clerkUserId,
+				),
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 200,
+				body: {
+					household: {
+						id: harness.scenario.household.id,
+						name: "Lake House",
+					},
+				},
+			});
 		} finally {
 			await harness.close();
 		}
@@ -656,6 +775,25 @@ describe("Household API handlers", () => {
 		}
 	});
 });
+
+function renameRequest(name = "Lake House"): Request {
+	return createApiRequest({
+		method: "PATCH",
+		body: { name },
+	});
+}
+
+function handleRename(input: {
+	householdId: string;
+	deps: HouseholdApiDeps;
+	name?: string;
+}): Promise<Response> {
+	return handleRenameHousehold(
+		renameRequest(input.name),
+		{ householdId: input.householdId },
+		input.deps,
+	);
+}
 
 function householdDeps(
 	directory: TestDirectoryDb,

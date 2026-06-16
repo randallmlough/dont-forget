@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import {
+	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/components/session";
@@ -30,6 +31,7 @@ import {
 } from "./use-household-settings";
 
 type SettingsRow =
+	| { type: "householdName" }
 	| { type: "invitationForm" }
 	| { type: "joinCode" }
 	| { type: "section"; id: string; title: string }
@@ -59,7 +61,7 @@ function HouseholdSettingsContent({
 	reloadSession,
 }: {
 	session: AuthenticatedAppSession;
-	reloadSession: (options?: { retireCurrent?: boolean }) => void;
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
 }) {
 	const { state, actions } = useHouseholdSettings(
 		session,
@@ -82,9 +84,10 @@ export function HouseholdSettingsView({
 	actions: HouseholdSettingsActions;
 }) {
 	const router = useRouter();
+	const householdName = householdNameForSettings(state, session);
 
 	return (
-		<HouseholdSettingsShell title={session.activeHousehold.name}>
+		<HouseholdSettingsShell title={householdName}>
 			<View style={styles.topActions}>
 				<HouseholdButton label="Home" onPress={() => router.replace("/")} />
 				<HouseholdButton
@@ -106,22 +109,37 @@ export function HouseholdSettingsView({
 					/>
 				</CenteredStatus>
 			) : (
-				<SettingsList session={session} state={state} actions={actions} />
+				<SettingsList
+					session={session}
+					state={state}
+					householdName={householdName}
+					actions={actions}
+				/>
 			)}
 		</HouseholdSettingsShell>
 	);
 }
 
+function householdNameForSettings(
+	state: HouseholdSettingsState,
+	session: AuthenticatedAppSession,
+): string {
+	if (state.status !== "ready") return session.activeHousehold.name;
+	return state.renamedHouseholdName ?? session.activeHousehold.name;
+}
+
 function SettingsList({
 	session,
 	state,
+	householdName,
 	actions,
 }: {
 	session: AuthenticatedAppSession;
 	state: Extract<HouseholdSettingsState, { status: "ready" }>;
+	householdName: string;
 	actions: HouseholdSettingsActions;
 }) {
-	const rows = settingsRows(state);
+	const rows = settingsRows(state, session.activeMember.role === "owner");
 
 	return (
 		<FlatList
@@ -134,6 +152,7 @@ function SettingsList({
 					row={item}
 					session={session}
 					state={state}
+					householdName={householdName}
 					actions={actions}
 				/>
 			)}
@@ -152,11 +171,13 @@ function SettingsRowView({
 	row,
 	session,
 	state,
+	householdName,
 	actions,
 }: {
 	row: SettingsRow;
 	session: AuthenticatedAppSession;
 	state: Extract<HouseholdSettingsState, { status: "ready" }>;
+	householdName: string;
 	actions: HouseholdSettingsActions;
 }) {
 	if (row.type === "section") {
@@ -170,6 +191,15 @@ function SettingsRowView({
 			<MemberRow
 				member={row.member}
 				session={session}
+				operation={state.operation}
+				actions={actions}
+			/>
+		);
+	}
+	if (row.type === "householdName") {
+		return (
+			<HouseholdNamePanel
+				name={householdName}
 				operation={state.operation}
 				actions={actions}
 			/>
@@ -197,6 +227,68 @@ function SettingsRowView({
 		);
 	}
 	return <CreateInvitationForm operation={state.operation} actions={actions} />;
+}
+
+function HouseholdNamePanel({
+	name,
+	operation,
+	actions,
+}: {
+	name: string;
+	operation: HouseholdSettingsOperation;
+	actions: HouseholdSettingsActions;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [draftName, setDraftName] = useState(name);
+	const disabled = operation.status === "renamingHousehold";
+
+	if (!editing) {
+		return (
+			<View style={styles.panel}>
+				<Text style={styles.panelTitle}>Household Name</Text>
+				<Text style={styles.nameText}>{name}</Text>
+				<HouseholdButton
+					label="Rename"
+					onPress={() => {
+						setDraftName(name);
+						setEditing(true);
+					}}
+				/>
+			</View>
+		);
+	}
+
+	return (
+		<View style={styles.panel}>
+			<Text style={styles.panelTitle}>Household Name</Text>
+			<TextInput
+				accessibilityLabel="Household name"
+				autoCapitalize="words"
+				editable={!disabled}
+				onChangeText={setDraftName}
+				placeholder="Household name"
+				style={styles.input}
+				value={draftName}
+			/>
+			<View style={styles.rowActions}>
+				<HouseholdButton
+					variant="primary"
+					label={disabled ? "Renaming" : "Rename"}
+					onPress={() => {
+						void actions.renameHousehold(draftName).then((renamed) => {
+							if (renamed) setEditing(false);
+						});
+					}}
+					disabled={disabled}
+				/>
+				<HouseholdButton
+					label="Cancel"
+					onPress={() => setEditing(false)}
+					disabled={disabled}
+				/>
+			</View>
+		</View>
+	);
 }
 
 function CreateInvitationForm({
@@ -481,12 +573,15 @@ function CenteredStatus({
 
 function settingsRows(
 	state: Extract<HouseholdSettingsState, { status: "ready" }>,
+	canRenameHousehold: boolean,
 ) {
-	const rows: SettingsRow[] = [
+	const rows: SettingsRow[] = [];
+	if (canRenameHousehold) rows.push({ type: "householdName" });
+	rows.push(
 		{ type: "invitationForm" },
 		{ type: "joinCode" },
 		{ type: "section", id: "members", title: "Members" },
-	];
+	);
 	for (const member of state.members) rows.push({ type: "member", member });
 	if (state.members.length === 0) {
 		rows.push({
@@ -648,6 +743,10 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	codeText: {
 		...theme.typography.title,
+		color: theme.colors.text,
+	},
+	nameText: {
+		...theme.typography.body,
 		color: theme.colors.text,
 	},
 	mutedText: {

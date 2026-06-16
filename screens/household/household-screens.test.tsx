@@ -5,9 +5,12 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
-import type { AuthenticatedAppSessionContextValue } from "@/components/session";
+import type {
+	AuthenticatedAppSessionContextValue,
+	AuthenticatedAppSessionReloadOptions,
+} from "@/components/session";
 import type {
 	HouseholdApiClient,
 	HouseholdMember,
@@ -106,6 +109,7 @@ describe("HouseholdSettingsView", () => {
 						createdAt: 1,
 					},
 					notice: null,
+					renamedHouseholdName: null,
 					operation: { status: "idle" },
 				}}
 				actions={actions}
@@ -157,6 +161,83 @@ describe("HouseholdSettingsView", () => {
 		expect(screen.getByText("Leave Household")).toBeTruthy();
 	});
 
+	it("renames Households from the Owner-only rename form", async () => {
+		const actions = settingsActions();
+
+		await render(
+			<HouseholdSettingsView
+				session={sessionFixture()}
+				state={readySettingsState([])}
+				actions={actions}
+			/>,
+		);
+
+		await fireEvent.press(screen.getByText("Rename"));
+		await fireEvent.changeText(
+			screen.getByLabelText("Household name"),
+			"Lake House",
+		);
+		await fireEvent.press(screen.getByText("Rename"));
+
+		expect(actions.renameHousehold).toHaveBeenCalledWith("Lake House");
+	});
+
+	it("keeps the Household rename form open when save fails", async () => {
+		const client = readySettingsClient({
+			renameHousehold: jest.fn(async () => {
+				throw new Error("Household name is required.");
+			}),
+		});
+
+		function Harness() {
+			const settings = useHouseholdSettings(sessionFixture(), client);
+			return (
+				<HouseholdSettingsView
+					session={sessionFixture()}
+					state={settings.state}
+					actions={settings.actions}
+				/>
+			);
+		}
+
+		await render(<Harness />);
+		await screen.findByText("Rename");
+
+		await fireEvent.press(screen.getByText("Rename"));
+		await fireEvent.changeText(screen.getByLabelText("Household name"), "   ");
+		await fireEvent.press(screen.getByText("Rename"));
+
+		await screen.findByText("Household name is required.");
+		expect(screen.getByLabelText("Household name").props.value).toBe("   ");
+	});
+
+	it("uses refreshed session metadata after settings remount", async () => {
+		const session = {
+			...sessionFixture(),
+			activeHousehold: { id: "hh_1", name: "Silver Spoon PR117 QA" },
+			households: [
+				{
+					id: "hh_1",
+					name: "Silver Spoon PR117 QA",
+					role: "owner" as const,
+					isActive: true,
+				},
+			],
+		};
+
+		await render(
+			<HouseholdSettingsView
+				session={session}
+				state={readySettingsState([])}
+				actions={settingsActions()}
+			/>,
+		);
+
+		expect(screen.getAllByText("Silver Spoon PR117 QA").length).toBeGreaterThan(
+			0,
+		);
+	});
+
 	it("hides Member management actions from plain Members", async () => {
 		const session = {
 			...sessionFixture(),
@@ -186,6 +267,28 @@ describe("HouseholdSettingsView", () => {
 		expect(screen.queryByText("Make Owner")).toBeNull();
 		expect(screen.queryByText("Remove")).toBeNull();
 		expect(screen.getByText("Leave Household")).toBeTruthy();
+	});
+
+	it("hides the Household rename affordance from plain Members", async () => {
+		const session = {
+			...sessionFixture(),
+			activeMember: {
+				id: "mbr_1",
+				userId: "usr_1",
+				role: "member" as const,
+				displayName: "Avery",
+			},
+		};
+
+		await render(
+			<HouseholdSettingsView
+				session={session}
+				state={readySettingsState([])}
+				actions={settingsActions()}
+			/>,
+		);
+
+		expect(screen.queryByText("Rename")).toBeNull();
 	});
 
 	it("confirms before leaving a Household", async () => {
@@ -640,6 +743,139 @@ describe("useHouseholdSettings", () => {
 		expect(client.listMembers).toHaveBeenCalledTimes(1);
 	});
 
+	it("renames a Household, surfaces the updated name, and reloads session metadata", async () => {
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			renameHousehold: jest.fn(async () => ({
+				id: "hh_1",
+				name: "Lake House",
+			})),
+		});
+
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="rename"
+				reloadSession={reloadSession}
+			/>,
+		);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Rename action"));
+
+		await screen.findByText("Household renamed.");
+		expect(client.renameHousehold).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			name: "Lake House",
+		});
+		expect(screen.getByText("renamedHouseholdName:Lake House")).toBeTruthy();
+		expect(reloadSession).toHaveBeenCalledWith({ mode: "freshOnly" });
+	});
+
+	it("keeps the rename success notice visible after the session metadata reload refreshes settings", async () => {
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			renameHousehold: jest.fn(async () => ({
+				id: "hh_1",
+				name: "Lake House",
+			})),
+		});
+
+		function Harness() {
+			const [session, setSession] = useState(sessionFixture());
+			const freshSession = {
+				...sessionFixture(),
+				activeHousehold: { id: "hh_1", name: "Lake House" },
+				households: [
+					{
+						id: "hh_1",
+						name: "Lake House",
+						role: "owner" as const,
+						isActive: true,
+					},
+				],
+				resourceKey: "authenticated-app-session:2",
+			};
+			const { state, actions } = useHouseholdSettings(session, client, () => {
+				reloadSession();
+				setSession(freshSession);
+			});
+			if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+			return (
+				<>
+					<PressableText
+						label="Rename action"
+						onPress={() => void actions.renameHousehold("Lake House")}
+					/>
+					<TextNode>{`resourceKey:${session.resourceKey}`}</TextNode>
+					<TextNode>{`renamedHouseholdName:${state.renamedHouseholdName ?? "none"}`}</TextNode>
+					{state.notice ? <TextNode>{state.notice}</TextNode> : null}
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await screen.findByText("resourceKey:authenticated-app-session:1");
+
+		await fireEvent.press(screen.getByText("Rename action"));
+
+		await screen.findByText("resourceKey:authenticated-app-session:2");
+		expect(screen.getByText("Household renamed.")).toBeTruthy();
+		expect(screen.getByText("renamedHouseholdName:none")).toBeTruthy();
+		expect(client.renameHousehold).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			name: "Lake House",
+		});
+		expect(reloadSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not preserve non-rename notices after the session metadata reload refreshes settings", async () => {
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			setMemberRole: jest.fn(async () => undefined),
+			listMembers: jest.fn(async () => [
+				{
+					membershipId: "mbr_2",
+					userId: "usr_2",
+					role: "owner" as const,
+					displayName: "Blake",
+				},
+			]),
+		});
+
+		function Harness() {
+			const [session, setSession] = useState(sessionFixture());
+			const freshSession = {
+				...sessionFixture(),
+				resourceKey: "authenticated-app-session:2",
+			};
+			const { state, actions } = useHouseholdSettings(session, client, () => {
+				reloadSession();
+				setSession(freshSession);
+			});
+			if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+			return (
+				<>
+					<PressableText
+						label="Change role"
+						onPress={() => void actions.setMemberRole("mbr_2", "owner")}
+					/>
+					<TextNode>{`resourceKey:${session.resourceKey}`}</TextNode>
+					{state.notice ? <TextNode>{state.notice}</TextNode> : null}
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await screen.findByText("resourceKey:authenticated-app-session:1");
+
+		await fireEvent.press(screen.getByText("Change role"));
+
+		await screen.findByText("resourceKey:authenticated-app-session:2");
+		expect(screen.queryByText("Member role changed.")).toBeNull();
+		expect(reloadSession).toHaveBeenCalledTimes(1);
+	});
+
 	it("retires and reloads the session after leaving without routing Home", async () => {
 		const reloadSession = jest.fn();
 		const client = readySettingsClient({
@@ -661,7 +897,7 @@ describe("useHouseholdSettings", () => {
 		await fireEvent.press(screen.getByText("Leave"));
 
 		await waitFor(() =>
-			expect(reloadSession).toHaveBeenCalledWith({ retireCurrent: true }),
+			expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" }),
 		);
 		expect(mockReplace).not.toHaveBeenCalledWith("/");
 	});
@@ -1287,6 +1523,7 @@ function sessionFixture(): AuthenticatedAppSession {
 function settingsActions() {
 	return {
 		retry: jest.fn(),
+		renameHousehold: jest.fn(async () => true),
 		createInvitation: jest.fn(),
 		revokeInvitation: jest.fn(),
 		removeMember: jest.fn(),
@@ -1308,6 +1545,7 @@ function readySettingsState(members: HouseholdMember[]) {
 			enabled: false as const,
 			householdId: "hh_1",
 		},
+		renamedHouseholdName: null,
 		notice: null,
 		operation: { status: "idle" as const },
 	};
@@ -1334,8 +1572,8 @@ function SettingsActionHarness({
 	reloadSession = jest.fn(),
 }: {
 	client: HouseholdApiClient;
-	action: "remove" | "role" | "leave";
-	reloadSession?: (options?: { retireCurrent?: boolean }) => void;
+	action: "remove" | "role" | "leave" | "rename";
+	reloadSession?: (options?: AuthenticatedAppSessionReloadOptions) => void;
 }) {
 	const { state, actions } = useHouseholdSettings(
 		sessionFixture(),
@@ -1345,6 +1583,12 @@ function SettingsActionHarness({
 	if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
 	return (
 		<>
+			<PressableText
+				label="Rename action"
+				onPress={() => {
+					if (action === "rename") void actions.renameHousehold("Lake House");
+				}}
+			/>
 			<PressableText
 				label="Remove"
 				onPress={() => {
@@ -1364,6 +1608,7 @@ function SettingsActionHarness({
 				}}
 			/>
 			<TextNode>{state.operation.status}</TextNode>
+			<TextNode>{`renamedHouseholdName:${state.renamedHouseholdName ?? "none"}`}</TextNode>
 			<TextNode>{`members:${state.members.length}`}</TextNode>
 			<TextNode>{`firstRole:${state.members[0]?.role ?? "none"}`}</TextNode>
 			{state.notice ? <TextNode>{state.notice}</TextNode> : null}
@@ -1373,6 +1618,7 @@ function SettingsActionHarness({
 
 function emptyClient(): HouseholdApiClient {
 	return {
+		renameHousehold: jest.fn(),
 		listMembers: jest.fn(),
 		removeMember: jest.fn(),
 		setMemberRole: jest.fn(),

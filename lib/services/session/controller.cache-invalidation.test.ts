@@ -1,6 +1,53 @@
 import * as h from "./controller.test-helpers";
 
 describe("createAuthenticatedAppSessionController cache invalidation", () => {
+	it("does not publish cached metadata during fresh-only activation", async () => {
+		const cached = h.cachedSessionBootstrapFixture({
+			householdId: "hh_1",
+			householdName: "Old Name",
+		});
+		const fresh = h.sessionBootstrapFixture({
+			householdId: "hh_1",
+			householdName: "New Name",
+		});
+		const freshSession = h.deferred<h.SessionBootstrap>();
+		const sessionService = h.sessionRuntimeFixture({
+			read: jest.fn().mockResolvedValue(cached),
+			getSession: jest.fn(() => freshSession.promise),
+		});
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest
+				.fn()
+				.mockReturnValue(h.sessionDataServicesFixture()),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		const activation = controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+			cachePolicy: "freshOnly",
+		});
+		await Promise.resolve();
+
+		expect(sessionService.cache.read).not.toHaveBeenCalled();
+		expect(controller.getSnapshot()).toEqual({ status: "loading" });
+
+		freshSession.resolve(fresh);
+		await activation;
+
+		expect(controller.getSnapshot()).toMatchObject({
+			status: "ready",
+			session: {
+				activeHousehold: { id: "hh_1", name: "New Name" },
+			},
+		});
+	});
+
 	it("deletes unauthorized cached Household data before publishing fresh state", async () => {
 		const cached = h.cachedSessionBootstrapFixture({
 			householdId: "hh_old",

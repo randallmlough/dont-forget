@@ -2,6 +2,7 @@ export { hasCachedAuthenticatedAppSession } from "./cache";
 export {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionActivation,
+	type AuthenticatedAppSessionCachePolicy,
 	type AuthenticatedAppSessionController,
 	type AuthenticatedAppSessionControllerDeps,
 	type AuthenticatedAppSessionDisposal,

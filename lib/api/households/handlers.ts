@@ -11,11 +11,16 @@ import {
 	type ActiveHouseholdService,
 	createActiveHouseholdService,
 	createHouseholdJoinCodeService,
+	createHouseholdService,
+	HouseholdForbiddenError,
 	HouseholdJoinCodeMembershipRequiredError,
 	type HouseholdJoinCodeService,
 	type HouseholdJoinCodeServiceDeps,
 	HouseholdJoinCodeThrottledError,
 	HouseholdJoinCodeUnavailableError,
+	HouseholdNameInvalidError,
+	HouseholdNotFoundError,
+	type HouseholdService,
 } from "@/lib/services/household/server";
 import {
 	createMemberService,
@@ -54,6 +59,7 @@ export type HouseholdApiDeps = ApiHandlerDeps & {
 	createHouseholdJoinCodeService?: (
 		directory: DirectoryDb,
 	) => HouseholdJoinCodeService;
+	createHouseholdService?: (directory: DirectoryDb) => HouseholdService;
 	createMemberService?: (directory: MemberServiceDirectory) => MemberService;
 };
 
@@ -99,6 +105,31 @@ export async function handleListMembers(
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "List Members API failed");
+	}
+}
+
+export async function handleRenameHousehold(
+	request: Request,
+	{ householdId }: { householdId: string },
+	deps?: HouseholdApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const body = await readJsonObject(request);
+			const household = await householdService(directory, deps).renameHousehold(
+				{
+					householdId,
+					name: stringField(body, "name"),
+					requestedByUserId: user.id,
+				},
+			);
+			return jsonResponse({
+				household: { id: household.id, name: household.name },
+			});
+		});
+	} catch (error) {
+		return householdErrorResponse(error, "Rename Household API failed");
 	}
 }
 
@@ -338,6 +369,15 @@ function memberService(
 	return createMemberService({ directory });
 }
 
+function householdService(
+	directory: DirectoryDb,
+	deps?: HouseholdApiDeps,
+): HouseholdService {
+	if (deps?.createHouseholdService)
+		return deps.createHouseholdService(directory);
+	return createHouseholdService({ directory });
+}
+
 function productionJoinCodeServiceDeps(
 	directory: DirectoryDb,
 ): HouseholdJoinCodeServiceDeps {
@@ -361,12 +401,19 @@ function householdErrorResponse(error: unknown, context: string): Response {
 	if (
 		error instanceof ActiveHouseholdMembershipRequiredError ||
 		error instanceof HouseholdJoinCodeMembershipRequiredError ||
-		error instanceof MemberManagementForbiddenError
+		error instanceof MemberManagementForbiddenError ||
+		error instanceof HouseholdForbiddenError
 	) {
 		return errorResponse("Forbidden", 403);
 	}
-	if (error instanceof MemberNotFoundError) {
+	if (
+		error instanceof MemberNotFoundError ||
+		error instanceof HouseholdNotFoundError
+	) {
 		return errorResponse(error.message, 404);
+	}
+	if (error instanceof HouseholdNameInvalidError) {
+		return errorResponse(error.message, 400);
 	}
 	if (
 		error instanceof LastOwnerError ||

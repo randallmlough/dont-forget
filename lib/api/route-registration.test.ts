@@ -10,6 +10,7 @@ import {
 } from "@/app/api/households/[householdId]/members/[membershipId]+api";
 import { POST as leaveHousehold } from "@/app/api/households/[householdId]/members/me/leave+api";
 import { GET as listMembers } from "@/app/api/households/[householdId]/members+api";
+import { PATCH as renameHousehold } from "@/app/api/households/[householdId]+api";
 import { POST as joinByCode } from "@/app/api/households/join-code/join+api";
 import { GET as previewJoinCode } from "@/app/api/households/join-code/preview+api";
 import { PATCH as revokeInvitation } from "@/app/api/invitations/[invitationId]+api";
@@ -37,6 +38,7 @@ describe("Stage 5 API route wrappers", () => {
 		expect(typeof removeMember).toBe("function");
 		expect(typeof setMemberRole).toBe("function");
 		expect(typeof leaveHousehold).toBe("function");
+		expect(typeof renameHousehold).toBe("function");
 		expect(typeof getJoinCode).toBe("function");
 		expect(typeof setJoinCodeEnabled).toBe("function");
 		expect(typeof regenerateJoinCode).toBe("function");

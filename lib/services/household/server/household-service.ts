@@ -3,22 +3,24 @@ import {
 	type Household,
 	households,
 	type Membership,
+	memberships,
 	type User,
 } from "@/db/schema/directory";
-import type { DirectoryDb } from "@/db/server/client";
 import type { AppEnv } from "@/lib/env";
 import { createAppId } from "@/lib/ids";
+import { serverServiceAnalytics } from "@/lib/server/analytics";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
 import type { ActiveMembership } from "@/lib/services/member/server";
+import {
+	type LifecycleLockExecutor,
+	runHouseholdLifecycleCommand,
+} from "@/lib/services/shared/server/lifecycle-lock";
 import {
 	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,
 } from "./household-join-code-service";
 
-type DirectoryTransaction = Parameters<
-	Parameters<DirectoryDb["transaction"]>[0]
->[0];
-
-export type HouseholdServiceDirectory = DirectoryDb | DirectoryTransaction;
+export type HouseholdServiceDirectory = LifecycleLockExecutor;
 
 export type HouseholdService = {
 	findPendingCreatedHousehold(userId: string): Promise<Household | null>;
@@ -26,6 +28,11 @@ export type HouseholdService = {
 		appEnv: AppEnv;
 		user: User;
 		name: string;
+	}): Promise<Household>;
+	renameHousehold(input: {
+		householdId: string;
+		name: string;
+		requestedByUserId: string;
 	}): Promise<Household>;
 	markProvisioningCompleted(householdId: string): Promise<void>;
 	activeMembershipFrom(
@@ -37,17 +44,44 @@ export type HouseholdService = {
 export type HouseholdServiceDeps = {
 	directory: HouseholdServiceDirectory;
 	generateJoinCode?: HouseholdJoinCodeGenerator;
+	analytics?: ServiceAnalytics;
 };
+
+export class HouseholdForbiddenError extends Error {
+	constructor() {
+		super("Forbidden");
+		this.name = "HouseholdForbiddenError";
+	}
+}
+
+export class HouseholdNameInvalidError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "HouseholdNameInvalidError";
+	}
+}
+
+export class HouseholdNotFoundError extends Error {
+	constructor() {
+		super("Household not found.");
+		this.name = "HouseholdNotFoundError";
+	}
+}
 
 export function createHouseholdService(
 	deps: HouseholdServiceDeps,
 ): HouseholdService {
+	const analytics = deps.analytics ?? serverServiceAnalytics;
+
 	return {
 		findPendingCreatedHousehold(userId) {
 			return findPendingCreatedHousehold(userId, deps.directory);
 		},
 		createOwnedHousehold(input) {
 			return createOwnedHousehold(input, deps.directory, deps.generateJoinCode);
+		},
+		renameHousehold(input) {
+			return renameHousehold(input, deps.directory, analytics);
 		},
 		async markProvisioningCompleted(householdId) {
 			await deps.directory
@@ -122,6 +156,82 @@ async function createOwnedHousehold(
 		generateJoinCode,
 	);
 	return household;
+}
+
+async function renameHousehold(
+	input: { householdId: string; name: string; requestedByUserId: string },
+	directory: HouseholdServiceDirectory,
+	analytics: ServiceAnalytics,
+): Promise<Household> {
+	const name = normalizeHouseholdName(input.name);
+	const household = await runHouseholdLifecycleCommand({
+		householdId: input.householdId,
+		directory,
+		command: async (tx) => {
+			const requester = await findActiveOwnerMembership(
+				{
+					householdId: input.householdId,
+					userId: input.requestedByUserId,
+				},
+				tx,
+			);
+			if (!requester) throw new HouseholdForbiddenError();
+
+			const [updated] = await tx
+				.update(households)
+				.set({ name })
+				.where(
+					and(
+						eq(households.id, input.householdId),
+						isNull(households.deletedAt),
+					),
+				)
+				.returning();
+			if (!updated) throw new HouseholdNotFoundError();
+
+			return updated;
+		},
+	});
+
+	analytics.track("household_renamed", {
+		household_id: household.id,
+		requested_by_user_id: input.requestedByUserId,
+	});
+
+	return household;
+}
+
+function normalizeHouseholdName(name: string): string {
+	const trimmed = name.trim();
+	if (!trimmed) {
+		throw new HouseholdNameInvalidError("Household name is required.");
+	}
+	if (trimmed.length > 80) {
+		throw new HouseholdNameInvalidError(
+			"Household name must be 80 characters or fewer.",
+		);
+	}
+	return trimmed;
+}
+
+async function findActiveOwnerMembership(
+	input: { householdId: string; userId: string },
+	directory: HouseholdServiceDirectory,
+): Promise<Membership | null> {
+	const [row] = await directory
+		.select()
+		.from(memberships)
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				eq(memberships.userId, input.userId),
+				eq(memberships.role, "owner"),
+				isNull(memberships.removedAt),
+			),
+		)
+		.limit(1);
+
+	return row ?? null;
 }
 
 function activeMembershipFrom(

@@ -30,9 +30,13 @@ export type AuthenticatedAppSessionContextValue = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
 	retry: () => void;
-	reloadSession: (options?: { retireCurrent?: boolean }) => void;
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
 	signOut: () => Promise<void>;
 };
+
+export type AuthenticatedAppSessionReloadOptions =
+	| { mode: "freshOnly" }
+	| { mode: "retireCurrent" };
 
 type AuthenticatedAppSessionProviderAuth = AuthenticatedAppSessionActivation & {
 	signOut: () => Promise<void>;
@@ -85,8 +89,14 @@ export function AuthenticatedAppSessionProvider({
 			controller.getSnapshot(),
 		);
 	const [activationRequest, requestActivation] = useReducer(
-		(attempt: number) => attempt + 1,
-		0,
+		(
+			_request: { attempt: number; mode: "normal" | "freshOnly" },
+			mode: "normal" | "freshOnly" = "normal",
+		) => ({
+			attempt: _request.attempt + 1,
+			mode,
+		}),
+		{ attempt: 0, mode: "normal" as const },
 	);
 	const [signOutRunningState] = useState(() => ({ running: false }));
 	const getToken = useEffectEvent(() => auth.getToken());
@@ -106,11 +116,13 @@ export function AuthenticatedAppSessionProvider({
 
 	useEffect(() => {
 		if (signOutRunningState.running) return;
-		if (!activationEnabled && activationRequest === 0) return;
+		if (!activationEnabled && activationRequest.attempt === 0) return;
 		void controller.activate({
 			getToken,
 			authReady,
 			signedIn,
+			cachePolicy:
+				activationRequest.mode === "freshOnly" ? "freshOnly" : "allowCached",
 		});
 	}, [
 		activationEnabled,
@@ -131,12 +143,14 @@ export function AuthenticatedAppSessionProvider({
 		requestActivation();
 	}
 
-	function reloadSession(options?: { retireCurrent?: boolean }) {
-		if (options?.retireCurrent) {
-			void controller.invalidateCurrentSession().finally(requestActivation);
+	function reloadSession(options?: AuthenticatedAppSessionReloadOptions) {
+		if (options?.mode === "retireCurrent") {
+			void controller
+				.invalidateCurrentSession()
+				.finally(() => requestActivation("normal"));
 			return;
 		}
-		requestActivation();
+		requestActivation(options?.mode === "freshOnly" ? "freshOnly" : "normal");
 	}
 
 	const value: AuthenticatedAppSessionContextValue = {

@@ -71,9 +71,11 @@ export type AuthenticatedAppSessionActivation = {
 	getToken: GetSessionToken;
 	authReady: boolean;
 	signedIn: boolean;
+	cachePolicy?: AuthenticatedAppSessionCachePolicy;
 };
 
 type AuthenticatedAppSessionAuthState = "unknown" | "signedOut" | "signedIn";
+export type AuthenticatedAppSessionCachePolicy = "allowCached" | "freshOnly";
 
 type AuthenticatedAppSessionSubscriber = (
 	snapshot: AuthenticatedAppSessionStateSnapshot,
@@ -255,6 +257,23 @@ export function createAuthenticatedAppSessionController(
 		};
 	}
 
+	function noCachedActivationAttempt(): CachedActivationAttempt {
+		return {
+			promise: Promise.resolve(false),
+			invalidateHousehold() {},
+			markFreshPublished() {},
+			throwDiscardCloseError() {},
+		};
+	}
+
+	function cachedActivationAttemptForPolicy(
+		cachePolicy: AuthenticatedAppSessionCachePolicy,
+		run: ActivationRunGuard,
+	): CachedActivationAttempt {
+		if (cachePolicy === "freshOnly") return noCachedActivationAttempt();
+		return startCachedActivationAttempt(run);
+	}
+
 	async function handleSignedOutActivation(run: ActivationRunGuard) {
 		await Promise.allSettled([
 			drainCacheWrites(),
@@ -330,6 +349,7 @@ export function createAuthenticatedAppSessionController(
 		activation: AuthenticatedAppSessionActivation,
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
+		cachePolicy: AuthenticatedAppSessionCachePolicy,
 	) {
 		let invalidatedUnauthorizedCached = false;
 		let attemptedFreshSession: SessionBootstrap | null = null;
@@ -349,6 +369,7 @@ export function createAuthenticatedAppSessionController(
 			await recoverActivationFailure(error, run, cachedAttempt, {
 				invalidatedUnauthorizedCached,
 				attemptedFreshSession,
+				cachePolicy,
 			});
 		}
 	}
@@ -360,6 +381,7 @@ export function createAuthenticatedAppSessionController(
 		options: {
 			invalidatedUnauthorizedCached: boolean;
 			attemptedFreshSession: SessionBootstrap | null;
+			cachePolicy: AuthenticatedAppSessionCachePolicy;
 		},
 	) {
 		logger.error("authenticated app session activation failed", {
@@ -384,6 +406,7 @@ export function createAuthenticatedAppSessionController(
 		} else if (!publishedCached && run.isCurrent()) {
 			const previousSession = previousSessionFromSnapshot(snapshot);
 			if (
+				canRecoverFromPreviousSession(options.cachePolicy) &&
 				previousSession &&
 				sessionMatchesAttemptedActiveHousehold(
 					previousSession,
@@ -401,6 +424,7 @@ export function createAuthenticatedAppSessionController(
 	return {
 		async activate(activation) {
 			const run = startActivationRun();
+			const cachePolicy = activation.cachePolicy ?? "allowCached";
 			const authState =
 				authenticatedAppSessionAuthStateFromActivation(activation);
 			if (authState === "signedOut") {
@@ -408,15 +432,20 @@ export function createAuthenticatedAppSessionController(
 				return;
 			}
 
-			publishLoading(previousSessionFromSnapshot(snapshot));
+			publishLoading(previousSessionForActivation(cachePolicy, snapshot));
 
-			const cachedAttempt = startCachedActivationAttempt(run);
+			const cachedAttempt = cachedActivationAttemptForPolicy(cachePolicy, run);
 			if (authState === "unknown") {
 				await cachedAttempt.promise;
 				return;
 			}
 
-			await handleSignedInActivation(activation, run, cachedAttempt);
+			await handleSignedInActivation(
+				activation,
+				run,
+				cachedAttempt,
+				cachePolicy,
+			);
 		},
 
 		async invalidateCurrentSession() {
@@ -479,6 +508,20 @@ function previousSessionFromSnapshot(
 		return snapshot.previous;
 	}
 	return undefined;
+}
+
+function previousSessionForActivation(
+	cachePolicy: AuthenticatedAppSessionCachePolicy,
+	snapshot: AuthenticatedAppSessionStateSnapshot,
+): AuthenticatedAppSession | undefined {
+	if (cachePolicy === "freshOnly") return undefined;
+	return previousSessionFromSnapshot(snapshot);
+}
+
+function canRecoverFromPreviousSession(
+	cachePolicy: AuthenticatedAppSessionCachePolicy,
+): boolean {
+	return cachePolicy === "allowCached";
 }
 
 function authenticatedAppSessionAuthStateFromActivation(

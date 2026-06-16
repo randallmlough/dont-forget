@@ -6,18 +6,15 @@ import {
 	type User,
 	users,
 } from "@/db/schema/directory";
-import type { DirectoryDb } from "@/db/server/client";
-import { runWithSqliteBusyRetry } from "@/db/utils";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
-import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
+import {
+	type LifecycleLockExecutor,
+	runHouseholdLifecycleCommand,
+} from "@/lib/services/shared/server/lifecycle-lock";
 
-type DirectoryTransaction = Parameters<
-	Parameters<DirectoryDb["transaction"]>[0]
->[0];
-
-export type MemberServiceDirectory = DirectoryDb | DirectoryTransaction;
+export type MemberServiceDirectory = LifecycleLockExecutor;
 
 export type ActiveMembership = {
 	membershipId: string;
@@ -146,11 +143,11 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 			return listHouseholdMembers(householdId, deps.directory);
 		},
 		async removeMember(input) {
-			await runMemberManagementCommand(
-				input.householdId,
-				deps.directory,
-				(tx) => removeMemberInTransaction(input, tx),
-			);
+			await runHouseholdLifecycleCommand({
+				householdId: input.householdId,
+				directory: deps.directory,
+				command: (tx) => removeMemberInTransaction(input, tx),
+			});
 			analytics.track("member_removed", {
 				household_id: input.householdId,
 				membership_id: input.membershipId,
@@ -158,11 +155,11 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 			});
 		},
 		async changeMemberRole(input) {
-			const changed = await runMemberManagementCommand(
-				input.householdId,
-				deps.directory,
-				(tx) => changeMemberRoleInTransaction(input, tx),
-			);
+			const changed = await runHouseholdLifecycleCommand({
+				householdId: input.householdId,
+				directory: deps.directory,
+				command: (tx) => changeMemberRoleInTransaction(input, tx),
+			});
 			if (changed) {
 				analytics.track("member_role_changed", {
 					household_id: input.householdId,
@@ -173,11 +170,11 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 			}
 		},
 		async leaveHousehold(input) {
-			const result = await runMemberManagementCommand(
-				input.householdId,
-				deps.directory,
-				(tx) => leaveHouseholdInTransaction(input, tx),
-			);
+			const result = await runHouseholdLifecycleCommand({
+				householdId: input.householdId,
+				directory: deps.directory,
+				command: (tx) => leaveHouseholdInTransaction(input, tx),
+			});
 			analytics.track("household_left", {
 				household_id: input.householdId,
 				user_id: input.userId,
@@ -186,30 +183,6 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 			return result;
 		},
 	};
-}
-
-async function runMemberManagementCommand<T>(
-	householdId: string,
-	directory: MemberServiceDirectory,
-	command: (tx: DirectoryTransaction) => Promise<T>,
-): Promise<T> {
-	if (hasTransaction(directory)) {
-		return runWithSqliteBusyRetry(() =>
-			directory.transaction(async (tx) => {
-				await lockHouseholdLifecycle(householdId, tx);
-				return command(tx);
-			}),
-		);
-	}
-
-	await lockHouseholdLifecycle(householdId, directory);
-	return command(directory);
-}
-
-function hasTransaction(
-	directory: MemberServiceDirectory,
-): directory is DirectoryDb {
-	return "transaction" in directory;
 }
 
 async function findOldestActiveMembership(
