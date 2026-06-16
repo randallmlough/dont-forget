@@ -109,7 +109,7 @@ describe("HouseholdSettingsView", () => {
 						createdAt: 1,
 					},
 					notice: null,
-					householdName: null,
+					renamedHouseholdName: null,
 					operation: { status: "idle" },
 				}}
 				actions={actions}
@@ -768,8 +768,8 @@ describe("useHouseholdSettings", () => {
 			householdId: "hh_1",
 			name: "Lake House",
 		});
-		expect(screen.getByText("householdName:Lake House")).toBeTruthy();
-		expect(reloadSession).toHaveBeenCalledWith({ freshOnly: true });
+		expect(screen.getByText("renamedHouseholdName:Lake House")).toBeTruthy();
+		expect(reloadSession).toHaveBeenCalledWith({ mode: "freshOnly" });
 	});
 
 	it("keeps the rename success notice visible after the session metadata reload refreshes settings", async () => {
@@ -808,7 +808,7 @@ describe("useHouseholdSettings", () => {
 						onPress={() => void actions.renameHousehold("Lake House")}
 					/>
 					<TextNode>{`resourceKey:${session.resourceKey}`}</TextNode>
-					<TextNode>{`householdName:${state.householdName ?? "none"}`}</TextNode>
+					<TextNode>{`renamedHouseholdName:${state.renamedHouseholdName ?? "none"}`}</TextNode>
 					{state.notice ? <TextNode>{state.notice}</TextNode> : null}
 				</>
 			);
@@ -821,11 +821,58 @@ describe("useHouseholdSettings", () => {
 
 		await screen.findByText("resourceKey:authenticated-app-session:2");
 		expect(screen.getByText("Household renamed.")).toBeTruthy();
-		expect(screen.getByText("householdName:none")).toBeTruthy();
+		expect(screen.getByText("renamedHouseholdName:none")).toBeTruthy();
 		expect(client.renameHousehold).toHaveBeenCalledWith({
 			householdId: "hh_1",
 			name: "Lake House",
 		});
+		expect(reloadSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not preserve non-rename notices after the session metadata reload refreshes settings", async () => {
+		const reloadSession = jest.fn();
+		const client = readySettingsClient({
+			setMemberRole: jest.fn(async () => undefined),
+			listMembers: jest.fn(async () => [
+				{
+					membershipId: "mbr_2",
+					userId: "usr_2",
+					role: "owner" as const,
+					displayName: "Blake",
+				},
+			]),
+		});
+
+		function Harness() {
+			const [session, setSession] = useState(sessionFixture());
+			const freshSession = {
+				...sessionFixture(),
+				resourceKey: "authenticated-app-session:2",
+			};
+			const { state, actions } = useHouseholdSettings(session, client, () => {
+				reloadSession();
+				setSession(freshSession);
+			});
+			if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
+			return (
+				<>
+					<PressableText
+						label="Change role"
+						onPress={() => void actions.setMemberRole("mbr_2", "owner")}
+					/>
+					<TextNode>{`resourceKey:${session.resourceKey}`}</TextNode>
+					{state.notice ? <TextNode>{state.notice}</TextNode> : null}
+				</>
+			);
+		}
+
+		await render(<Harness />);
+		await screen.findByText("resourceKey:authenticated-app-session:1");
+
+		await fireEvent.press(screen.getByText("Change role"));
+
+		await screen.findByText("resourceKey:authenticated-app-session:2");
+		expect(screen.queryByText("Member role changed.")).toBeNull();
 		expect(reloadSession).toHaveBeenCalledTimes(1);
 	});
 
@@ -850,7 +897,7 @@ describe("useHouseholdSettings", () => {
 		await fireEvent.press(screen.getByText("Leave"));
 
 		await waitFor(() =>
-			expect(reloadSession).toHaveBeenCalledWith({ retireCurrent: true }),
+			expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" }),
 		);
 		expect(mockReplace).not.toHaveBeenCalledWith("/");
 	});
@@ -1498,7 +1545,7 @@ function readySettingsState(members: HouseholdMember[]) {
 			enabled: false as const,
 			householdId: "hh_1",
 		},
-		householdName: null,
+		renamedHouseholdName: null,
 		notice: null,
 		operation: { status: "idle" as const },
 	};
@@ -1561,7 +1608,7 @@ function SettingsActionHarness({
 				}}
 			/>
 			<TextNode>{state.operation.status}</TextNode>
-			<TextNode>{`householdName:${state.householdName ?? "none"}`}</TextNode>
+			<TextNode>{`renamedHouseholdName:${state.renamedHouseholdName ?? "none"}`}</TextNode>
 			<TextNode>{`members:${state.members.length}`}</TextNode>
 			<TextNode>{`firstRole:${state.members[0]?.role ?? "none"}`}</TextNode>
 			{state.notice ? <TextNode>{state.notice}</TextNode> : null}

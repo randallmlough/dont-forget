@@ -20,7 +20,7 @@ export type HouseholdSettingsState =
 			members: HouseholdMember[];
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
-			householdName: string | null;
+			renamedHouseholdName: string | null;
 			notice: string | null;
 			operation: HouseholdSettingsOperation;
 	  };
@@ -59,7 +59,7 @@ type Resource =
 			status: "loading";
 			loadKey: string;
 			attempt: number;
-			preservedNotice: string | null;
+			preservedNotice: HouseholdSettingsNotice | null;
 	  }
 	| { status: "error"; loadKey: string; attempt: number; message: string }
 	| {
@@ -69,10 +69,15 @@ type Resource =
 			members: HouseholdMember[];
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
-			householdName: string | null;
-			notice: string | null;
+			renamedHouseholdName: string | null;
+			notice: HouseholdSettingsNotice | null;
 			operation: HouseholdSettingsOperation;
 	  };
+
+type HouseholdSettingsNotice = {
+	message: string;
+	preserveAcrossLoad: boolean;
+};
 
 type Action =
 	| { type: "loadStarted"; loadKey: string; attempt: number }
@@ -184,7 +189,7 @@ export function useHouseholdSettings(
 				name,
 			});
 			dispatch({ type: "householdRenamed", loadKey, household });
-			reloadSession({ freshOnly: true });
+			reloadSession({ mode: "freshOnly" });
 			return true;
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
@@ -276,7 +281,7 @@ export function useHouseholdSettings(
 				return;
 			}
 			await resolveClient().leaveHousehold(householdId);
-			reloadSession({ retireCurrent: true });
+			reloadSession({ mode: "retireCurrent" });
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {
@@ -416,9 +421,13 @@ function reducer(state: Resource, action: Action): Resource {
 
 	if (action.type === "loaded") {
 		return {
-			...action,
 			status: "ready",
-			householdName: null,
+			loadKey: action.loadKey,
+			attempt: action.attempt,
+			members: action.members,
+			invitations: action.invitations,
+			joinCode: action.joinCode,
+			renamedHouseholdName: null,
 			notice: state.status === "loading" ? state.preservedNotice : null,
 			operation: { status: "idle" },
 		};
@@ -437,21 +446,28 @@ function reducer(state: Resource, action: Action): Resource {
 		return { ...state, operation: action.operation };
 	}
 	if (action.type === "notice") {
-		return { ...state, notice: action.notice, operation: { status: "idle" } };
+		return {
+			...state,
+			notice: noticeFromMessage(action.notice, false),
+			operation: { status: "idle" },
+		};
 	}
 	if (action.type === "invitationCreated") {
 		return {
 			...state,
 			invitations: action.invitations,
-			notice: invitationCreatedNotice(action.response),
+			notice: noticeFromMessage(
+				invitationCreatedNotice(action.response),
+				false,
+			),
 			operation: { status: "idle" },
 		};
 	}
 	if (action.type === "householdRenamed") {
 		return {
 			...state,
-			householdName: action.household.name,
-			notice: "Household renamed.",
+			renamedHouseholdName: action.household.name,
+			notice: noticeFromMessage("Household renamed.", true),
 			operation: { status: "idle" },
 		};
 	}
@@ -461,7 +477,7 @@ function reducer(state: Resource, action: Action): Resource {
 			invitations: state.invitations.filter(
 				(invitation) => invitation.id !== action.invitationId,
 			),
-			notice: "Invitation revoked.",
+			notice: noticeFromMessage("Invitation revoked.", false),
 			operation: { status: "idle" },
 		};
 	}
@@ -471,8 +487,17 @@ function reducer(state: Resource, action: Action): Resource {
 	return { ...state, joinCode: action.joinCode, operation: { status: "idle" } };
 }
 
-function noticePreservedAcrossLoad(state: Resource): string | null {
-	if (state.status === "ready" && state.notice === "Household renamed.") {
+function noticeFromMessage(
+	message: string | null,
+	preserveAcrossLoad: boolean,
+): HouseholdSettingsNotice | null {
+	return message ? { message, preserveAcrossLoad } : null;
+}
+
+function noticePreservedAcrossLoad(
+	state: Resource,
+): HouseholdSettingsNotice | null {
+	if (state.status === "ready" && state.notice?.preserveAcrossLoad) {
 		return state.notice;
 	}
 	if (state.status === "loading") return state.preservedNotice;
@@ -489,7 +514,15 @@ function stateFromResource(
 	if (resource.status === "error") {
 		return { status: "error", message: resource.message };
 	}
-	return resource;
+	return {
+		status: "ready",
+		members: resource.members,
+		invitations: resource.invitations,
+		joinCode: resource.joinCode,
+		renamedHouseholdName: resource.renamedHouseholdName,
+		notice: resource.notice?.message ?? null,
+		operation: resource.operation,
+	};
 }
 
 function invitationCreatedNotice(response: CreateInvitationResponse): string {

@@ -34,10 +34,9 @@ export type AuthenticatedAppSessionContextValue = {
 	signOut: () => Promise<void>;
 };
 
-export type AuthenticatedAppSessionReloadOptions = {
-	retireCurrent?: boolean;
-	freshOnly?: boolean;
-};
+export type AuthenticatedAppSessionReloadOptions =
+	| { mode: "freshOnly" }
+	| { mode: "retireCurrent" };
 
 type AuthenticatedAppSessionProviderAuth = AuthenticatedAppSessionActivation & {
 	signOut: () => Promise<void>;
@@ -91,13 +90,13 @@ export function AuthenticatedAppSessionProvider({
 		);
 	const [activationRequest, requestActivation] = useReducer(
 		(
-			_request: { attempt: number; freshOnly: boolean },
-			options?: { freshOnly?: boolean },
+			_request: { attempt: number; mode: "normal" | "freshOnly" },
+			mode: "normal" | "freshOnly" = "normal",
 		) => ({
 			attempt: _request.attempt + 1,
-			freshOnly: options?.freshOnly === true,
+			mode,
 		}),
-		{ attempt: 0, freshOnly: false },
+		{ attempt: 0, mode: "normal" as const },
 	);
 	const [signOutRunningState] = useState(() => ({ running: false }));
 	const getToken = useEffectEvent(() => auth.getToken());
@@ -122,7 +121,8 @@ export function AuthenticatedAppSessionProvider({
 			getToken,
 			authReady,
 			signedIn,
-			freshOnly: activationRequest.freshOnly,
+			cachePolicy:
+				activationRequest.mode === "freshOnly" ? "freshOnly" : "allowCached",
 		});
 	}, [
 		activationEnabled,
@@ -144,15 +144,13 @@ export function AuthenticatedAppSessionProvider({
 	}
 
 	function reloadSession(options?: AuthenticatedAppSessionReloadOptions) {
-		if (options?.retireCurrent) {
+		if (options?.mode === "retireCurrent") {
 			void controller
 				.invalidateCurrentSession()
-				.finally(() =>
-					requestActivation({ freshOnly: options.freshOnly === true }),
-				);
+				.finally(() => requestActivation("normal"));
 			return;
 		}
-		requestActivation({ freshOnly: options?.freshOnly === true });
+		requestActivation(options?.mode === "freshOnly" ? "freshOnly" : "normal");
 	}
 
 	const value: AuthenticatedAppSessionContextValue = {

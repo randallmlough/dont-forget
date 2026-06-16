@@ -6,24 +6,21 @@ import {
 	memberships,
 	type User,
 } from "@/db/schema/directory";
-import type { DirectoryDb } from "@/db/server/client";
-import { runWithSqliteBusyRetry } from "@/db/utils";
 import type { AppEnv } from "@/lib/env";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import type { ActiveMembership } from "@/lib/services/member/server";
-import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
+import {
+	type LifecycleLockExecutor,
+	runHouseholdLifecycleCommand,
+} from "@/lib/services/shared/server/lifecycle-lock";
 import {
 	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,
 } from "./household-join-code-service";
 
-type DirectoryTransaction = Parameters<
-	Parameters<DirectoryDb["transaction"]>[0]
->[0];
-
-export type HouseholdServiceDirectory = DirectoryDb | DirectoryTransaction;
+export type HouseholdServiceDirectory = LifecycleLockExecutor;
 
 export type HouseholdService = {
 	findPendingCreatedHousehold(userId: string): Promise<Household | null>;
@@ -167,10 +164,10 @@ async function renameHousehold(
 	analytics: ServiceAnalytics,
 ): Promise<Household> {
 	const name = normalizeHouseholdName(input.name);
-	const household = await runHouseholdCommand(
-		input.householdId,
+	const household = await runHouseholdLifecycleCommand({
+		householdId: input.householdId,
 		directory,
-		async (tx) => {
+		command: async (tx) => {
 			const requester = await findActiveOwnerMembership(
 				{
 					householdId: input.householdId,
@@ -194,7 +191,7 @@ async function renameHousehold(
 
 			return updated;
 		},
-	);
+	});
 
 	analytics.track("household_renamed", {
 		household_id: household.id,
@@ -215,24 +212,6 @@ function normalizeHouseholdName(name: string): string {
 		);
 	}
 	return trimmed;
-}
-
-async function runHouseholdCommand<T>(
-	householdId: string,
-	directory: HouseholdServiceDirectory,
-	command: (directory: HouseholdServiceDirectory) => Promise<T>,
-): Promise<T> {
-	if ("transaction" in directory) {
-		return runWithSqliteBusyRetry(() =>
-			directory.transaction(async (tx) => {
-				await lockHouseholdLifecycle(householdId, tx);
-				return command(tx);
-			}),
-		);
-	}
-
-	await lockHouseholdLifecycle(householdId, directory);
-	return command(directory);
 }
 
 async function findActiveOwnerMembership(
