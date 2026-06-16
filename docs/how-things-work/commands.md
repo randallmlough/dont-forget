@@ -75,6 +75,8 @@ make ios PORT=8090
 | `make db-generate` | Generate migrations for every Drizzle config in `db/drizzle`. |
 | `make db-migrate APP_ENV=staging` | Apply migrations to the selected environment. Only run when intentionally migrating real configured targets. Production also requires `CONFIRM_APP_ENV=production`. |
 | `make db-reset APP_ENV=local CONFIRM_DB_RESET=local` | Delete app data from the directory DB and every known Household DB in the selected environment. Production also requires `CONFIRM_APP_ENV=production`. |
+| `make db-seed` | Seed local data without resetting. Pass `EMAIL=<address>` to add an email-scoped Clerk-backed seed Household for Owner and plain Member sign-in. |
+| `make db-reseed` | Reset, migrate, and seed local deterministic development data. Pass `EMAIL=<address>` only when you intentionally want the destructive reset followed by the Clerk-backed seed path. |
 
 <!-- ==================================================================================== -->
 <!-- UTILITIES                                                                             -->
