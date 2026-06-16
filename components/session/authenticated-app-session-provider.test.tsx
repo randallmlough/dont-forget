@@ -58,7 +58,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			getToken: expect.any(Function),
 			authReady: true,
 			signedIn: true,
-			freshOnly: false,
+			cachePolicy: "allowCached",
 		});
 
 		await act(() => {
@@ -257,7 +257,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
 		expect(controller.activate.mock.calls.at(-1)?.[0]).toMatchObject({
-			freshOnly: true,
+			cachePolicy: "freshOnly",
 		});
 	});
 
@@ -678,7 +678,7 @@ function FreshOnlyReloadState() {
 	return (
 		<Pressable
 			accessibilityRole="button"
-			onPress={() => reloadSession({ freshOnly: true })}
+			onPress={() => reloadSession({ mode: "freshOnly" })}
 		>
 			<Text>Fresh reload</Text>
 		</Pressable>
@@ -692,7 +692,7 @@ function RetireSessionState() {
 			<Text>{session ? session.resourceKey : state.status}</Text>
 			<Pressable
 				accessibilityRole="button"
-				onPress={() => reloadSession({ retireCurrent: true })}
+				onPress={() => reloadSession({ mode: "retireCurrent" })}
 			>
 				<Text>Retire</Text>
 			</Pressable>

@@ -95,6 +95,23 @@ export const PRIMARY_HOUSEHOLD_SEED = {
 		checkedByAvery: { id: "itm_seed_eggs", name: "Eggs" },
 		checkedByBlake: { id: "itm_seed_bread", name: "Bread" },
 		tombstoned: { id: "itm_seed_coffee", name: "Coffee" },
+		hardwareBatteries: { id: "itm_seed_batteries", name: "Batteries" },
+		hardwarePaintersTape: {
+			id: "itm_seed_painters_tape",
+			name: "Painter's tape",
+		},
+		hardwareLightBulbs: { id: "itm_seed_light_bulbs", name: "Light bulbs" },
+		pharmacyIbuprofen: { id: "itm_seed_ibuprofen", name: "Ibuprofen" },
+		pharmacyBandages: { id: "itm_seed_bandages", name: "Bandages" },
+		pharmacyAllergyTablets: {
+			id: "itm_seed_allergy_tablets",
+			name: "Allergy tablets",
+		},
+		archivedCranberrySauce: {
+			id: "itm_seed_cranberry_sauce",
+			name: "Cranberry sauce",
+		},
+		archivedPieCrust: { id: "itm_seed_pie_crust", name: "Pie crust" },
 	},
 } as const;
 

@@ -84,13 +84,10 @@ export function HouseholdSettingsView({
 	actions: HouseholdSettingsActions;
 }) {
 	const router = useRouter();
-	const title =
-		state.status === "ready"
-			? (state.householdName ?? session.activeHousehold.name)
-			: session.activeHousehold.name;
+	const householdName = householdNameForSettings(state, session);
 
 	return (
-		<HouseholdSettingsShell title={title}>
+		<HouseholdSettingsShell title={householdName}>
 			<View style={styles.topActions}>
 				<HouseholdButton label="Home" onPress={() => router.replace("/")} />
 				<HouseholdButton
@@ -112,23 +109,37 @@ export function HouseholdSettingsView({
 					/>
 				</CenteredStatus>
 			) : (
-				<SettingsList session={session} state={state} actions={actions} />
+				<SettingsList
+					session={session}
+					state={state}
+					householdName={householdName}
+					actions={actions}
+				/>
 			)}
 		</HouseholdSettingsShell>
 	);
 }
 
+function householdNameForSettings(
+	state: HouseholdSettingsState,
+	session: AuthenticatedAppSession,
+): string {
+	if (state.status !== "ready") return session.activeHousehold.name;
+	return state.renamedHouseholdName ?? session.activeHousehold.name;
+}
+
 function SettingsList({
 	session,
 	state,
+	householdName,
 	actions,
 }: {
 	session: AuthenticatedAppSession;
 	state: Extract<HouseholdSettingsState, { status: "ready" }>;
+	householdName: string;
 	actions: HouseholdSettingsActions;
 }) {
 	const rows = settingsRows(state, session.activeMember.role === "owner");
-	const householdName = state.householdName ?? session.activeHousehold.name;
 
 	return (
 		<FlatList

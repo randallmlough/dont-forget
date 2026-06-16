@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { type Dispatch, useMemo, useReducer } from "react";
+import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
 import { track } from "@/lib/analytics";
 import {
 	createHouseholdApiClient,
@@ -29,7 +30,7 @@ type Action =
 
 export function useHouseholdSwitch(
 	session: AuthenticatedAppSession,
-	reloadSession: (options?: { retireCurrent?: boolean }) => void,
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void,
 	clientProp?: HouseholdApiClient,
 ): {
 	state: HouseholdSwitchState;
@@ -189,9 +190,9 @@ function messageFromError(error: unknown): string {
 }
 
 function finishHouseholdChange(
-	reloadSession: (options?: { retireCurrent?: boolean }) => void,
+	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void,
 	router: ReturnType<typeof useRouter>,
 ): void {
-	reloadSession({ retireCurrent: true });
+	reloadSession({ mode: "retireCurrent" });
 	router.replace("/");
 }

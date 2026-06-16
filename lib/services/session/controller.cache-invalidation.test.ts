@@ -30,7 +30,7 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			getToken: async () => "token",
 			authReady: true,
 			signedIn: true,
-			freshOnly: true,
+			cachePolicy: "freshOnly",
 		});
 		await Promise.resolve();
 
