@@ -81,7 +81,19 @@ a worktree directory DB, `make db-reseed`/`make db-seed` target
 `df-local-wt-<worktree>-hh-seed` instead of the shared seed Household DB, so a
 worktree carrying Household migrations can reseed without touching (or being
 poisoned by) shared local state. The seed Household row records that scoped
-name, so `make worktree-db-destroy` deletes it with the rest.
+name, so `make worktree-db-destroy` deletes it with the rest. Passing
+`EMAIL=<address>` to seed/reseed creates email-scoped local Clerk development
+Users and a seed Household database for Owner and plain Member sign-in, while
+leaving the seeded Household database worktree-scoped. If those Clerk
+development Users already exist, the seed flow reuses them, resets them to the
+local seed password, marks their primary email addresses verified through the
+Clerk backend API, and disables their MFA methods so fake local emails never
+require an inbox-backed sign-in code. Email-backed List and Item fixture IDs are
+also scoped from the EMAIL value, while deterministic seed fixtures keep stable
+IDs so duplicate deterministic seed data is caught intentionally.
+When `db-seed EMAIL=<address>` is rerun for an EMAIL whose local seed rows
+already exist, the Clerk development Users are repaired before the duplicate
+seed-data check refuses to insert another copy.
 
 Tear it down when the branch is done:
 
@@ -98,6 +110,12 @@ not named `df-local-wt-*`.
 Clerk only exposes development and production environments. Production uses Clerk production keys. `local`, `test`, and `staging` use Clerk development keys.
 
 Config validation should enforce this split so production never boots with development Clerk keys, and non-production never boots with production Clerk keys.
+
+Local email-backed seed sign-in relies on normal Clerk email/password sessions,
+so the local Clerk development application should keep Client Trust and Bot
+sign-up protection disabled. If staging needs production-like auth hardening,
+use a separate Clerk development application for staging instead of sharing the
+local Clerk application.
 
 ## Email
 

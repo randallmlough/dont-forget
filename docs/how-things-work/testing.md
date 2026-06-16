@@ -98,13 +98,19 @@ Invitation service behavior is intentionally deferred until Invitation behavior 
 Local development seed data uses the same persisted fixture facts but is operationally separate from tests:
 
 ```bash
-make db-seed APP_ENV=local
-make db-reseed APP_ENV=local CONFIRM_DB_RESET=local
+make db-seed
+make db-reseed
+make db-seed EMAIL=email@email.com
+make db-reseed EMAIL=email@email.com
 ```
 
-- `db-seed` runs `scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist. It assumes the deterministic seed Household DB already exists and has Household migrations applied. Use `db-reseed` for a first local setup after an empty reset.
-- `db-reseed` is the explicit destructive fast path: reset local app data, migrate the directory DB, ensure and migrate the deterministic seed Household DB, then seed.
-- `db-reset` still means reset to empty.
+- `db-seed` runs `scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist in the no-`EMAIL` path. It assumes the deterministic seed Household DB already exists and has Household migrations applied.
+- Without `EMAIL`, seed/reseed keep the deterministic DB-only seed behavior.
+- With `EMAIL`, `db-seed` is additive: it creates an email-scoped seed Household without resetting unrelated local Users or Households. It creates or reuses two Clerk development Users: the supplied email as the Owner and the derived `+member` email as a plain Member. Both use password `testing1234`.
+- Existing matching Clerk development Users are reused and repaired before the local duplicate seed-data check runs.
+- `EMAIL` mode seeds 3 Members total: the Owner, the sign-inable plain Member, and Cameron as an app-only plain Member for Member-list UI coverage.
+- `db-reseed` is the explicit local destructive rebuild path: reset local app data, migrate the directory DB, ensure the deterministic seed Household DB, then seed. It defaults to local and no longer requires `CONFIRM_DB_RESET`.
+- `db-reset` still means reset to empty and remains confirmation-gated.
 - Seed/reseed commands fail closed outside `APP_ENV=local`; staging and production are not seed sandboxes.
 
 ## File Layout

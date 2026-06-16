@@ -138,7 +138,7 @@ async function resetHouseholdDatabases(
 	}
 }
 
-async function resetHouseholdDatabaseByName(
+export async function resetHouseholdDatabaseByName(
 	tursoDbName: string,
 	config: ReturnType<typeof readTursoMigrationConfig>,
 ): Promise<void> {

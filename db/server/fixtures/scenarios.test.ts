@@ -9,7 +9,7 @@ import {
 	memberships,
 	users,
 } from "@/db/schema/directory";
-import { lists } from "@/db/schema/household";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {
@@ -19,6 +19,7 @@ import {
 	householdJoinCodeUseFixture,
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
+	seedEmailBackedPrimaryHouseholdScenario,
 	seedHouseholdJoinCodeAuditScenario,
 	seedInvitationVariantsScenario,
 	seedMultiHouseholdUserScenario,
@@ -157,6 +158,235 @@ describe("database fixture scenarios", () => {
 			]);
 		} finally {
 			await household.close();
+			await directory.close();
+		}
+	});
+
+	it("seeds an email-backed primary Household with three Members and rich Items", async () => {
+		const directory = await createTestDirectoryDb();
+		const household = await createTestHouseholdDb();
+
+		try {
+			const scenario = await seedEmailBackedPrimaryHouseholdScenario({
+				directory: directory.db,
+				household: household.db,
+				ownerClerkUserId: "user_clerk_owner",
+				ownerEmail: "owner@example.com",
+				memberClerkUserId: "user_clerk_member",
+				memberEmail: "owner+member@example.com",
+			});
+
+			const directoryUsers = await directory.db.select().from(users);
+			const directoryMemberships = await directory.db
+				.select()
+				.from(memberships);
+			const listRows = await household.db.select().from(lists);
+			const itemRows = await household.db.select().from(items);
+			const itemCheckRows = await household.db.select().from(itemChecks);
+
+			const membershipFor = (userId: string) => {
+				const membership = directoryMemberships.find(
+					(row) => row.userId === userId,
+				);
+				if (!membership) {
+					throw new Error(`Missing Membership for ${userId}`);
+				}
+				return membership;
+			};
+
+			expect(directoryUsers).toHaveLength(3);
+			expect(directoryMemberships).toHaveLength(3);
+			expect(directoryUsers).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: scenario.users.avery.id,
+						clerkUserId: "user_clerk_owner",
+						email: "owner@example.com",
+						activeHouseholdId: scenario.household.id,
+					}),
+					expect.objectContaining({
+						id: scenario.users.blake.id,
+						clerkUserId: "user_clerk_member",
+						email: "owner+member@example.com",
+						activeHouseholdId: scenario.household.id,
+					}),
+					expect.objectContaining({
+						id: scenario.users.cameron.id,
+						clerkUserId: PRIMARY_HOUSEHOLD_SEED.users.cameron.clerkUserId,
+						activeHouseholdId: scenario.household.id,
+					}),
+				]),
+			);
+			expect(membershipFor(scenario.users.avery.id)).toEqual(
+				expect.objectContaining({ role: "owner" }),
+			);
+			expect(membershipFor(scenario.users.blake.id)).toEqual(
+				expect.objectContaining({ role: "member" }),
+			);
+			expect(membershipFor(scenario.users.cameron.id)).toEqual(
+				expect.objectContaining({ role: "member" }),
+			);
+
+			const activeLists = listRows.filter(
+				(row) => row.archivedAt === null && row.deletedAt === null,
+			);
+			const archivedLists = listRows.filter(
+				(row) => row.archivedAt !== null && row.deletedAt === null,
+			);
+			const deletedLists = listRows.filter((row) => row.deletedAt !== null);
+
+			expect(listRows).toHaveLength(5);
+			expect(activeLists).toHaveLength(3);
+			expect(archivedLists).toHaveLength(1);
+			expect(deletedLists).toHaveLength(1);
+			for (const list of activeLists) {
+				expect(
+					itemRows.filter(
+						(item) => item.listId === list.id && item.deletedAt === null,
+					).length,
+				).toBeGreaterThanOrEqual(2);
+			}
+			expect(
+				itemRows.filter(
+					(item) =>
+						item.listId === archivedLists[0]?.id && item.deletedAt === null,
+				).length,
+			).toBeGreaterThanOrEqual(1);
+			expect(
+				itemRows.filter((item) => item.listId === deletedLists[0]?.id),
+			).toHaveLength(0);
+			expect(
+				itemCheckRows.some((row) => row.userId === scenario.users.avery.id),
+			).toBe(true);
+			expect(
+				itemCheckRows.some((row) => row.userId === scenario.users.blake.id),
+			).toBe(true);
+		} finally {
+			await household.close();
+			await directory.close();
+		}
+	});
+
+	it("seeds an email-backed primary Household alongside existing deterministic seed rows", async () => {
+		const directory = await createTestDirectoryDb();
+		const deterministicHousehold = await createTestHouseholdDb();
+		const emailHousehold = await createTestHouseholdDb();
+
+		try {
+			await seedPrimaryHouseholdScenario({
+				directory: directory.db,
+				household: deterministicHousehold.db,
+			});
+			const scenario = await seedEmailBackedPrimaryHouseholdScenario({
+				directory: directory.db,
+				household: emailHousehold.db,
+				householdTursoDbName: "df-local-hh-seed-email-test",
+				ownerClerkUserId: "user_email_owner",
+				ownerEmail: "owner@example.com",
+				memberClerkUserId: "user_email_member",
+				memberEmail: "owner+member@example.com",
+				seed: {
+					users: {
+						avery: { id: "usr_email_owner" },
+						blake: { id: "usr_email_member" },
+						cameron: { id: "usr_email_cameron" },
+					},
+					household: { id: "hh_email_seed" },
+					memberships: {
+						avery: { id: "mbr_email_owner" },
+						blake: { id: "mbr_email_member" },
+						cameron: { id: "mbr_email_cameron" },
+					},
+					joinCode: { id: "hjc_email_seed", code: "BCDEFGHJ" },
+				},
+			});
+
+			expect(await directory.db.select().from(users)).toHaveLength(5);
+			expect(await directory.db.select().from(households)).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						id: PRIMARY_HOUSEHOLD_SEED.household.id,
+					}),
+					expect.objectContaining({
+						id: scenario.household.id,
+						tursoDbName: "df-local-hh-seed-email-test",
+					}),
+				]),
+			);
+			expect(await directory.db.select().from(memberships)).toHaveLength(5);
+			expect(await deterministicHousehold.db.select().from(lists)).toHaveLength(
+				5,
+			);
+			expect(await emailHousehold.db.select().from(lists)).toHaveLength(5);
+		} finally {
+			await emailHousehold.close();
+			await deterministicHousehold.close();
+			await directory.close();
+		}
+	});
+
+	it("seeds multiple email-backed primary Households with unique app-only Member identities", async () => {
+		const directory = await createTestDirectoryDb();
+		const firstHousehold = await createTestHouseholdDb();
+		const secondHousehold = await createTestHouseholdDb();
+
+		try {
+			await seedEmailBackedPrimaryHouseholdScenario({
+				directory: directory.db,
+				household: firstHousehold.db,
+				householdTursoDbName: "df-local-hh-seed-email-first",
+				ownerClerkUserId: "user_email_first_owner",
+				ownerEmail: "first@example.com",
+				memberClerkUserId: "user_email_first_member",
+				memberEmail: "first+member@example.com",
+				seed: {
+					users: {
+						avery: { id: "usr_email_first_owner" },
+						blake: { id: "usr_email_first_member" },
+						cameron: { id: "usr_email_first_cameron" },
+					},
+					household: { id: "hh_email_first" },
+					memberships: {
+						avery: { id: "mbr_email_first_owner" },
+						blake: { id: "mbr_email_first_member" },
+						cameron: { id: "mbr_email_first_cameron" },
+					},
+					joinCode: { id: "hjc_email_first", code: "BCDEFGHJ" },
+				},
+			});
+
+			await seedEmailBackedPrimaryHouseholdScenario({
+				directory: directory.db,
+				household: secondHousehold.db,
+				householdTursoDbName: "df-local-hh-seed-email-second",
+				ownerClerkUserId: "user_email_second_owner",
+				ownerEmail: "second@example.com",
+				memberClerkUserId: "user_email_second_member",
+				memberEmail: "second+member@example.com",
+				seed: {
+					users: {
+						avery: { id: "usr_email_second_owner" },
+						blake: { id: "usr_email_second_member" },
+						cameron: { id: "usr_email_second_cameron" },
+					},
+					household: { id: "hh_email_second" },
+					memberships: {
+						avery: { id: "mbr_email_second_owner" },
+						blake: { id: "mbr_email_second_member" },
+						cameron: { id: "mbr_email_second_cameron" },
+					},
+					joinCode: { id: "hjc_email_second", code: "CDEFGHJK" },
+				},
+			});
+
+			const directoryUsers = await directory.db.select().from(users);
+			const clerkUserIds = directoryUsers.map((user) => user.clerkUserId);
+
+			expect(directoryUsers).toHaveLength(6);
+			expect(new Set(clerkUserIds).size).toBe(clerkUserIds.length);
+		} finally {
+			await secondHousehold.close();
+			await firstHousehold.close();
 			await directory.close();
 		}
 	});
