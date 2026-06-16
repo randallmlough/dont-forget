@@ -27,6 +27,9 @@ export type HouseholdSettingsOperation =
 	| { status: "idle" }
 	| { status: "creatingInvitation" }
 	| { status: "revokingInvitation"; invitationId: string }
+	| { status: "removingMember"; membershipId: string }
+	| { status: "changingRole"; membershipId: string }
+	| { status: "leavingHousehold" }
 	| { status: "regeneratingJoinCode" }
 	| { status: "settingJoinCodeEnabled" }
 	| { status: "copyingText" };
@@ -35,6 +38,12 @@ export type HouseholdSettingsActions = {
 	retry: () => void;
 	createInvitation: (email: string) => Promise<void>;
 	revokeInvitation: (invitationId: string) => Promise<void>;
+	removeMember: (membershipId: string) => Promise<void>;
+	setMemberRole: (
+		membershipId: string,
+		role: "owner" | "member",
+	) => Promise<void>;
+	leaveHousehold: () => Promise<void>;
 	regenerateJoinCode: () => Promise<void>;
 	setJoinCodeEnabled: (enabled: boolean) => Promise<void>;
 	copyText: (text: string, notice: string) => Promise<void>;
@@ -80,11 +89,14 @@ type Action =
 			invitations: PendingInvitation[];
 	  }
 	| { type: "invitationRevoked"; loadKey: string; invitationId: string }
+	| { type: "membersChanged"; loadKey: string; members: HouseholdMember[] }
 	| { type: "joinCodeChanged"; loadKey: string; joinCode: HouseholdJoinCode };
 
 export function useHouseholdSettings(
 	session: AuthenticatedAppSession,
 	clientProp?: HouseholdApiClient,
+	reloadSession: (options?: { retireCurrent?: boolean }) => void = () =>
+		undefined,
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
 	// Latest-ref pattern: the resolved client stays stable across getToken
@@ -186,6 +198,58 @@ export function useHouseholdSettings(
 		}
 	}
 
+	async function removeMember(membershipId: string) {
+		if (!startOperation({ status: "removingMember", membershipId })) return;
+		try {
+			const client = resolveClient();
+			await client.removeMember({ householdId, membershipId });
+			const members = await client.listMembers(householdId);
+			dispatch({ type: "membersChanged", loadKey, members });
+			dispatch({ type: "notice", loadKey, notice: "Member removed." });
+			reloadSession();
+		} catch (error) {
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
+		}
+	}
+
+	async function setMemberRole(membershipId: string, role: "owner" | "member") {
+		if (!startOperation({ status: "changingRole", membershipId })) return;
+		try {
+			const client = resolveClient();
+			await client.setMemberRole({ householdId, membershipId, role });
+			const members = await client.listMembers(householdId);
+			dispatch({ type: "membersChanged", loadKey, members });
+			dispatch({ type: "notice", loadKey, notice: "Member role changed." });
+			reloadSession();
+		} catch (error) {
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
+		}
+	}
+
+	async function leaveHousehold() {
+		if (!startOperation({ status: "leavingHousehold" })) return;
+		try {
+			if (!(await syncCurrentHousehold(session))) {
+				dispatch({
+					type: "notice",
+					loadKey,
+					notice: "Unable to sync this Household before leaving. Try again.",
+				});
+				return;
+			}
+			await resolveClient().leaveHousehold(householdId);
+			reloadSession({ retireCurrent: true });
+		} catch (error) {
+			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+		} finally {
+			operationInFlightRef.current = false;
+		}
+	}
+
 	async function regenerateJoinCode() {
 		if (!startOperation({ status: "regeneratingJoinCode" })) return;
 		try {
@@ -261,12 +325,28 @@ export function useHouseholdSettings(
 			retry: () => dispatch({ type: "retry", loadKey }),
 			createInvitation,
 			revokeInvitation,
+			removeMember,
+			setMemberRole,
+			leaveHousehold,
 			regenerateJoinCode,
 			setJoinCodeEnabled,
 			copyText,
 			clearNotice: () => dispatch({ type: "notice", loadKey, notice: null }),
 		},
 	};
+}
+
+async function syncCurrentHousehold(
+	session: AuthenticatedAppSession,
+): Promise<boolean> {
+	try {
+		const syncResult = await session.services.sync.requestSync({
+			reason: "manualRefresh",
+		});
+		return Boolean(syncResult);
+	} catch {
+		return false;
+	}
 }
 
 function initialResource(loadKey: string): Resource {
@@ -338,6 +418,9 @@ function reducer(state: Resource, action: Action): Resource {
 			notice: "Invitation revoked.",
 			operation: { status: "idle" },
 		};
+	}
+	if (action.type === "membersChanged") {
+		return { ...state, members: action.members, operation: { status: "idle" } };
 	}
 	return { ...state, joinCode: action.joinCode, operation: { status: "idle" } };
 }

@@ -7,7 +7,11 @@ import {
 	users,
 } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
+import { runWithSqliteBusyRetry } from "@/db/utils";
 import { createAppId } from "@/lib/ids";
+import { serverServiceAnalytics } from "@/lib/server/analytics";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
+import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -36,6 +40,41 @@ export type EnsurePlainMemberMembershipResult = {
 	created: boolean;
 };
 
+export class MemberManagementForbiddenError extends Error {
+	constructor() {
+		super("Only Owners can manage Members.");
+		this.name = "MemberManagementForbiddenError";
+	}
+}
+
+export class MemberManagementInvalidError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "MemberManagementInvalidError";
+	}
+}
+
+export class MemberNotFoundError extends Error {
+	constructor() {
+		super("Member not found.");
+		this.name = "MemberNotFoundError";
+	}
+}
+
+export class LastOwnerError extends Error {
+	constructor() {
+		super("A Household must have at least one Owner.");
+		this.name = "LastOwnerError";
+	}
+}
+
+export class SoleMemberError extends Error {
+	constructor() {
+		super("The only Member cannot leave the Household.");
+		this.name = "SoleMemberError";
+	}
+}
+
 export type AssociatedHousehold = {
 	id: string;
 	name: string;
@@ -63,13 +102,30 @@ export type MemberService = {
 		joinedAt?: number;
 	}): Promise<EnsurePlainMemberMembershipResult>;
 	listHouseholdMembers(householdId: string): Promise<HouseholdMember[]>;
+	removeMember(input: {
+		householdId: string;
+		membershipId: string;
+		requestedByUserId: string;
+	}): Promise<void>;
+	changeMemberRole(input: {
+		householdId: string;
+		membershipId: string;
+		role: "owner" | "member";
+		requestedByUserId: string;
+	}): Promise<void>;
+	leaveHousehold(input: {
+		householdId: string;
+		userId: string;
+	}): Promise<{ promotedMembershipId: string | null }>;
 };
 
 export type MemberServiceDeps = {
 	directory: MemberServiceDirectory;
+	analytics?: ServiceAnalytics;
 };
 
 export function createMemberService(deps: MemberServiceDeps): MemberService {
+	const analytics = deps.analytics ?? serverServiceAnalytics;
 	return {
 		findOldestActiveMembership(userId) {
 			return findOldestActiveMembership(userId, deps.directory);
@@ -89,7 +145,71 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 		listHouseholdMembers(householdId) {
 			return listHouseholdMembers(householdId, deps.directory);
 		},
+		async removeMember(input) {
+			await runMemberManagementCommand(
+				input.householdId,
+				deps.directory,
+				(tx) => removeMemberInTransaction(input, tx),
+			);
+			analytics.track("member_removed", {
+				household_id: input.householdId,
+				membership_id: input.membershipId,
+				requested_by_user_id: input.requestedByUserId,
+			});
+		},
+		async changeMemberRole(input) {
+			const changed = await runMemberManagementCommand(
+				input.householdId,
+				deps.directory,
+				(tx) => changeMemberRoleInTransaction(input, tx),
+			);
+			if (changed) {
+				analytics.track("member_role_changed", {
+					household_id: input.householdId,
+					membership_id: input.membershipId,
+					role: input.role,
+					requested_by_user_id: input.requestedByUserId,
+				});
+			}
+		},
+		async leaveHousehold(input) {
+			const result = await runMemberManagementCommand(
+				input.householdId,
+				deps.directory,
+				(tx) => leaveHouseholdInTransaction(input, tx),
+			);
+			analytics.track("household_left", {
+				household_id: input.householdId,
+				user_id: input.userId,
+				promoted_membership_id: result.promotedMembershipId,
+			});
+			return result;
+		},
 	};
+}
+
+async function runMemberManagementCommand<T>(
+	householdId: string,
+	directory: MemberServiceDirectory,
+	command: (tx: DirectoryTransaction) => Promise<T>,
+): Promise<T> {
+	if (hasTransaction(directory)) {
+		return runWithSqliteBusyRetry(() =>
+			directory.transaction(async (tx) => {
+				await lockHouseholdLifecycle(householdId, tx);
+				return command(tx);
+			}),
+		);
+	}
+
+	await lockHouseholdLifecycle(householdId, directory);
+	return command(directory);
+}
+
+function hasTransaction(
+	directory: MemberServiceDirectory,
+): directory is DirectoryDb {
+	return "transaction" in directory;
 }
 
 async function findOldestActiveMembership(
@@ -244,16 +364,18 @@ async function findActiveMembershipRow(
 	const [existing] = await directory
 		.select()
 		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
 		.where(
 			and(
 				eq(memberships.householdId, input.householdId),
 				eq(memberships.userId, input.userId),
 				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
 			),
 		)
 		.limit(1);
 
-	return existing ?? null;
+	return existing?.memberships ?? null;
 }
 
 async function listHouseholdMembers(
@@ -270,13 +392,197 @@ async function listHouseholdMembers(
 		})
 		.from(memberships)
 		.innerJoin(users, eq(users.id, memberships.userId))
+		.innerJoin(households, eq(households.id, memberships.householdId))
 		.where(
 			and(
 				eq(memberships.householdId, householdId),
 				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
 			),
 		)
 		.orderBy(asc(memberships.joinedAt), asc(memberships.id));
 
 	return rows.map(({ joinedAt: _joinedAt, ...row }) => row);
+}
+
+async function removeMemberInTransaction(
+	input: {
+		householdId: string;
+		membershipId: string;
+		requestedByUserId: string;
+	},
+	directory: MemberServiceDirectory,
+): Promise<void> {
+	const requester = await findActiveMembershipRow(
+		{
+			householdId: input.householdId,
+			userId: input.requestedByUserId,
+		},
+		directory,
+	);
+	if (requester?.role !== "owner") {
+		throw new MemberManagementForbiddenError();
+	}
+
+	const target = await findActiveMembershipById(
+		{
+			householdId: input.householdId,
+			membershipId: input.membershipId,
+		},
+		directory,
+	);
+	if (!target) throw new MemberNotFoundError();
+	if (target.userId === input.requestedByUserId) {
+		throw new MemberManagementInvalidError(
+			"Use Leave Household to remove your own Membership.",
+		);
+	}
+
+	const activeMembers = await listActiveMembershipRows(
+		input.householdId,
+		directory,
+	);
+	if (
+		target.role === "owner" &&
+		activeMembers.some((member) => member.id !== target.id) &&
+		!activeMembers.some(
+			(member) => member.id !== target.id && member.role === "owner",
+		)
+	) {
+		throw new LastOwnerError();
+	}
+
+	await directory
+		.update(memberships)
+		.set({ removedAt: Date.now() })
+		.where(eq(memberships.id, target.id));
+}
+
+async function changeMemberRoleInTransaction(
+	input: {
+		householdId: string;
+		membershipId: string;
+		role: "owner" | "member";
+		requestedByUserId: string;
+	},
+	directory: MemberServiceDirectory,
+): Promise<boolean> {
+	const requester = await findActiveMembershipRow(
+		{
+			householdId: input.householdId,
+			userId: input.requestedByUserId,
+		},
+		directory,
+	);
+	if (requester?.role !== "owner") {
+		throw new MemberManagementForbiddenError();
+	}
+
+	const target = await findActiveMembershipById(
+		{
+			householdId: input.householdId,
+			membershipId: input.membershipId,
+		},
+		directory,
+	);
+	if (!target) throw new MemberNotFoundError();
+	if (target.role === input.role) return false;
+
+	const activeMembers = await listActiveMembershipRows(
+		input.householdId,
+		directory,
+	);
+	if (
+		target.role === "owner" &&
+		input.role === "member" &&
+		!activeMembers.some(
+			(member) => member.id !== target.id && member.role === "owner",
+		)
+	) {
+		throw new LastOwnerError();
+	}
+
+	await directory
+		.update(memberships)
+		.set({ role: input.role })
+		.where(eq(memberships.id, target.id));
+	return true;
+}
+
+async function leaveHouseholdInTransaction(
+	input: { householdId: string; userId: string },
+	directory: MemberServiceDirectory,
+): Promise<{ promotedMembershipId: string | null }> {
+	const membership = await findActiveMembershipRow(input, directory);
+	if (!membership) throw new MemberNotFoundError();
+
+	const activeMembers = await listActiveMembershipRows(
+		input.householdId,
+		directory,
+	);
+	const remainingMembers = activeMembers.filter(
+		(member) => member.id !== membership.id,
+	);
+	if (remainingMembers.length === 0) throw new SoleMemberError();
+
+	let promotedMembershipId: string | null = null;
+	if (
+		membership.role === "owner" &&
+		!remainingMembers.some((member) => member.role === "owner")
+	) {
+		const [promoted] = remainingMembers;
+		if (!promoted) throw new SoleMemberError();
+		await directory
+			.update(memberships)
+			.set({ role: "owner" })
+			.where(eq(memberships.id, promoted.id));
+		promotedMembershipId = promoted.id;
+	}
+
+	await directory
+		.update(memberships)
+		.set({ removedAt: Date.now() })
+		.where(eq(memberships.id, membership.id));
+
+	return { promotedMembershipId };
+}
+
+async function findActiveMembershipById(
+	input: { householdId: string; membershipId: string },
+	directory: MemberServiceDirectory,
+): Promise<Membership | null> {
+	const [membership] = await directory
+		.select()
+		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				eq(memberships.id, input.membershipId),
+				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
+			),
+		)
+		.limit(1);
+
+	return membership?.memberships ?? null;
+}
+
+async function listActiveMembershipRows(
+	householdId: string,
+	directory: MemberServiceDirectory,
+): Promise<Membership[]> {
+	return directory
+		.select()
+		.from(memberships)
+		.innerJoin(households, eq(households.id, memberships.householdId))
+		.where(
+			and(
+				eq(memberships.householdId, householdId),
+				isNull(memberships.removedAt),
+				isNull(households.deletedAt),
+			),
+		)
+		.orderBy(asc(memberships.joinedAt), asc(memberships.id))
+		.then((rows) => rows.map((row) => row.memberships));
 }

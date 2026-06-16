@@ -30,7 +30,7 @@ export type AuthenticatedAppSessionContextValue = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
 	retry: () => void;
-	reloadSession: () => void;
+	reloadSession: (options?: { retireCurrent?: boolean }) => void;
 	signOut: () => Promise<void>;
 };
 
@@ -131,7 +131,11 @@ export function AuthenticatedAppSessionProvider({
 		requestActivation();
 	}
 
-	function reloadSession() {
+	function reloadSession(options?: { retireCurrent?: boolean }) {
+		if (options?.retireCurrent) {
+			void controller.invalidateCurrentSession().finally(requestActivation);
+			return;
+		}
 		requestActivation();
 	}
 

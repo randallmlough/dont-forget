@@ -143,6 +143,44 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		expect(syncCoordinator.start).toHaveBeenCalledTimes(1);
 	});
 
+	it("invalidates the current session resource without previous-session fallback", async () => {
+		const dataServices = h.sessionDataServicesFixture();
+		const syncCoordinator = h.syncCoordinatorFixture();
+		const controller = h.createAuthenticatedAppSessionController({
+			...h.sessionRuntimeFixture().deps,
+			createDataServices: jest.fn().mockReturnValue(dataServices),
+			createSyncCoordinator: jest.fn().mockReturnValue(syncCoordinator),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+		});
+		const ready = controller.getSnapshot();
+		if (ready.status !== "ready") {
+			throw new Error("Expected ready session");
+		}
+
+		await controller.invalidateCurrentSession();
+
+		expect(controller.getSnapshot()).toEqual({ status: "loading" });
+		expect(syncCoordinator.stop).toHaveBeenCalledTimes(1);
+		expect(dataServices.close).toHaveBeenCalledTimes(1);
+		await expect(
+			ready.session.services.items.addItem({
+				listId: "lst_1",
+				userId: "usr_avery",
+				name: "Milk",
+				quantity: null,
+				notes: null,
+			}),
+		).rejects.toMatchObject({
+			code: "stale_authenticated_app_session_resource",
+		});
+	});
+
 	it("waits for in-flight cache persistence during dispose", async () => {
 		const cacheSave = h.deferred<h.CachedSessionBootstrap>();
 		const sessionService = h.sessionRuntimeFixture();

@@ -82,6 +82,11 @@ const createInvitationResponseSchema = z.object({
 	reusedExisting: z.boolean(),
 });
 
+const leaveHouseholdResponseSchema = z.object({
+	left: z.literal(true),
+	promotedMembershipId: z.string().nullable(),
+});
+
 export type HouseholdMember = z.infer<typeof householdMemberSchema>;
 export type PendingInvitation = z.infer<typeof pendingInvitationSchema>;
 export type InvitationRecord = z.infer<typeof invitationRecordSchema>;
@@ -91,9 +96,22 @@ export type CreateInvitationResponse = z.infer<
 export type HouseholdJoinCode = z.infer<typeof joinCodeSchema>;
 export type InvitationPreview = z.infer<typeof invitationPreviewSchema>;
 export type HouseholdJoinCodePreview = z.infer<typeof joinCodePreviewSchema>;
+export type LeaveHouseholdResponse = z.infer<
+	typeof leaveHouseholdResponseSchema
+>;
 
 export type HouseholdApiClient = {
 	listMembers(householdId: string): Promise<HouseholdMember[]>;
+	removeMember(input: {
+		householdId: string;
+		membershipId: string;
+	}): Promise<void>;
+	setMemberRole(input: {
+		householdId: string;
+		membershipId: string;
+		role: "owner" | "member";
+	}): Promise<void>;
+	leaveHousehold(householdId: string): Promise<LeaveHouseholdResponse>;
 	listInvitations(householdId: string): Promise<PendingInvitation[]>;
 	createInvitation(input: {
 		householdId: string;
@@ -134,6 +152,30 @@ export function createHouseholdApiClient({
 			return z
 				.object({ members: z.array(householdMemberSchema) })
 				.parse(payload).members;
+		},
+		async removeMember(input) {
+			await authed(
+				`/api/households/${input.householdId}/members/${input.membershipId}`,
+				{ method: "DELETE" },
+			);
+		},
+		async setMemberRole(input) {
+			await authed(
+				`/api/households/${input.householdId}/members/${input.membershipId}`,
+				{
+					method: "PATCH",
+					body: JSON.stringify({ role: input.role }),
+				},
+			);
+		},
+		async leaveHousehold(householdId) {
+			const payload = await authed(
+				`/api/households/${householdId}/members/me/leave`,
+				{
+					method: "POST",
+				},
+			);
+			return leaveHouseholdResponseSchema.parse(payload);
 		},
 		async listInvitations(householdId) {
 			const payload = await authed(
