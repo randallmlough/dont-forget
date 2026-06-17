@@ -21,6 +21,7 @@ export const bootstrapResponseSchema = z.object({
 		displayName: z.string().nullable(),
 		firstName: z.string().nullable(),
 		lastName: z.string().nullable(),
+		onboardingCompletedAt: z.number().nullable(),
 	}),
 	activeHousehold: z.object({
 		id: z.string(),

@@ -124,6 +124,7 @@ export async function bootstrapAuthenticatedAppSession(
 			displayName: user.displayName,
 			firstName: user.firstName,
 			lastName: user.lastName,
+			onboardingCompletedAt: user.onboardingCompletedAt,
 		},
 		activeHousehold: {
 			id: active.householdId,

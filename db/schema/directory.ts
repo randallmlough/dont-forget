@@ -20,6 +20,7 @@ export const users = sqliteTable(
 		activeHouseholdId: text("active_household_id").references(
 			(): AnySQLiteColumn => households.id,
 		),
+		onboardingCompletedAt: integer("onboarding_completed_at"),
 		createdAt: integer("created_at")
 			.notNull()
 			.default(sql`(unixepoch() * 1000)`),

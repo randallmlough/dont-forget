@@ -2,6 +2,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { Stack, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useReducer } from "react";
+import { useAuthenticatedAppSession } from "@/components/session";
 import { useAnalyticsIdentity } from "@/lib/analytics";
 import { hasCachedAuthenticatedAppSession } from "@/lib/services/session";
 import { type AuthRedirectParams, authRedirectTarget } from "./redirect-policy";
@@ -17,6 +18,7 @@ export function AuthGate({
 }) {
 	const { isSignedIn, isLoaded } = useAuth();
 	const { replace } = useRouter();
+	const { state: sessionState, session } = useAuthenticatedAppSession();
 	const [cachedSessionStatus, dispatchCachedSessionStatus] = useReducer(
 		cachedSessionStatusReducer,
 		"checking",
@@ -60,6 +62,8 @@ export function AuthGate({
 			isAuthLoaded: Boolean(isLoaded),
 			checkedCachedSession,
 			hasCachedSession,
+			isAuthenticatedAppSessionReady: sessionState.status === "ready",
+			onboardingCompletedAt: session?.user.onboardingCompletedAt,
 		});
 		if (target) replace(target);
 	}, [
@@ -70,6 +74,8 @@ export function AuthGate({
 		params,
 		pathname,
 		replace,
+		session,
+		sessionState.status,
 	]);
 
 	// Warm up the OAuth browser once while truly signed-out so the first SSO tap is snappy.

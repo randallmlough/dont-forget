@@ -25,6 +25,7 @@ export function sessionBootstrapFixture(
 			displayName: "Avery Chen",
 			firstName: "Avery",
 			lastName: "Chen",
+			onboardingCompletedAt: null,
 		},
 		activeHousehold: {
 			id: overrides.householdId ?? "hh_avery",
@@ -69,6 +70,10 @@ export function cachedSessionBootstrapFixture(
 
 	return {
 		...sessionMetadata,
+		user: {
+			...sessionMetadata.user,
+			onboardingCompletedAt: sessionMetadata.user.onboardingCompletedAt ?? 0,
+		},
 		householdDatabase: {
 			url: overrides.householdDatabaseUrl ?? "libsql://example.turso.io",
 			expiresAt: overrides.householdDatabaseExpiresAt ?? 1_700_000_000_000,

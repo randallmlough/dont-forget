@@ -1690,6 +1690,7 @@ function sessionFixture(): AuthenticatedAppSession {
 			displayName: "Avery",
 			firstName: "Avery",
 			lastName: null,
+			onboardingCompletedAt: null,
 		},
 		activeHousehold: { id: "hh_1", name: "River House" },
 		households: [
