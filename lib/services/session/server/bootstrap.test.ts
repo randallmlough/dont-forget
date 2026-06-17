@@ -7,7 +7,7 @@ import {
 	type TestHouseholdDb,
 } from "@/db/server/test";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
-import type { ServerUserProfile } from "@/lib/server/auth";
+import type { ServerUserRecord } from "@/lib/server/auth";
 import { createHouseholdProvisioningService } from "@/lib/services/household/server";
 import {
 	type AuthenticatedAppSessionBootstrapDeps,
@@ -33,13 +33,15 @@ describe("bootstrapAuthenticatedAppSession", () => {
 
 		try {
 			const response = await bootstrapAuthenticatedAppSession(
-				averyProfile,
+				averyUserRecord,
 				harness.deps,
 			);
 
 			expect(response.user).toMatchObject({
 				id: expect.stringMatching(/^usr_/),
 				displayName: "Avery Chen",
+				firstName: "Avery",
+				lastName: "Chen",
 			});
 			expect(response.activeHousehold).toEqual({
 				id: expect.stringMatching(/^hh_/),
@@ -112,10 +114,10 @@ describe("bootstrapAuthenticatedAppSession", () => {
 
 		try {
 			const response = await bootstrapAuthenticatedAppSession(
-				averyProfile,
+				averyUserRecord,
 				harness.deps,
 			);
-			await bootstrapAuthenticatedAppSession(averyProfile, harness.deps);
+			await bootstrapAuthenticatedAppSession(averyUserRecord, harness.deps);
 
 			expect(await harness.directory.db.select().from(users)).toHaveLength(1);
 			expect(await harness.directory.db.select().from(households)).toHaveLength(
@@ -186,7 +188,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 				.where(eq(users.id, "usr_existing"));
 
 			const response = await bootstrapAuthenticatedAppSession(
-				averyProfile,
+				averyUserRecord,
 				harness.deps,
 			);
 
@@ -263,7 +265,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 				.where(eq(users.id, "usr_existing"));
 
 			const response = await bootstrapAuthenticatedAppSession(
-				averyProfile,
+				averyUserRecord,
 				harness.deps,
 			);
 
@@ -334,7 +336,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 			]);
 
 			const response = await bootstrapAuthenticatedAppSession(
-				averyProfile,
+				averyUserRecord,
 				harness.deps,
 			);
 
@@ -375,7 +377,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 			});
 
 			const response = await bootstrapAuthenticatedAppSession(
-				averyProfile,
+				averyUserRecord,
 				harness.deps,
 			);
 
@@ -408,7 +410,7 @@ describe("bootstrapAuthenticatedAppSession", () => {
 	});
 });
 
-const averyProfile: ServerUserProfile = {
+const averyUserRecord: ServerUserRecord = {
 	clerkUserId: "clerk_avery",
 	email: "avery@example.com",
 	firstName: "Avery",

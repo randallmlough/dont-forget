@@ -43,6 +43,10 @@ describe("createSessionCache", () => {
 			url: "libsql://example.turso.io",
 			expiresAt: 1_700_000_000_000,
 		});
+		expect(metadata.user).toMatchObject({
+			firstName: "Avery",
+			lastName: "Chen",
+		});
 		expect(metadata.initializedAt).toBe(1_700_000_000_100);
 		expect(Object.hasOwn(metadata.householdDatabase, "authToken")).toBe(false);
 		expect(analytics.track).toHaveBeenCalledWith(
@@ -159,13 +163,17 @@ describe("createSessionCache", () => {
 		expect(analytics.track).not.toHaveBeenCalled();
 	});
 
-	it("treats cached onboarding metadata as completed when older payloads omit it", async () => {
+	it("keeps older cached User metadata compatible when User name fields are omitted", async () => {
 		const storage = memoryStorage();
 		const cache = createSessionCache({ storage });
 		const { householdDatabase: _householdDatabase, ...sessionMetadata } =
 			sessionBootstrapFixture();
-		const { onboardingCompletedAt: _onboardingCompletedAt, ...legacyUser } =
-			sessionMetadata.user;
+		const {
+			firstName: _firstName,
+			lastName: _lastName,
+			onboardingCompletedAt: _onboardingCompletedAt,
+			...legacyUser
+		} = sessionMetadata.user;
 		await storage.setItem(
 			SESSION_CACHE_KEY,
 			JSON.stringify({
@@ -181,6 +189,8 @@ describe("createSessionCache", () => {
 
 		const cached = await cache.read();
 
+		expect(cached?.user.firstName).toBeNull();
+		expect(cached?.user.lastName).toBeNull();
 		expect(cached?.user.onboardingCompletedAt).toBe(0);
 	});
 
@@ -189,6 +199,29 @@ describe("createSessionCache", () => {
 		const cache = createSessionCache({ storage });
 
 		await cache.save(sessionBootstrapFixture());
+
+		const cached = await cache.read();
+
+		expect(cached?.user.onboardingCompletedAt).toBeNull();
+	});
+
+	it("preserves explicit incomplete onboarding state in cached User metadata", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+		const { householdDatabase: _householdDatabase, ...sessionMetadata } =
+			sessionBootstrapFixture();
+		await storage.setItem(
+			SESSION_CACHE_KEY,
+			JSON.stringify({
+				...sessionMetadata,
+				householdDatabase: {
+					url: "libsql://example.turso.io",
+					expiresAt: 1_700_000_000_000,
+				},
+				initializedAt: 1_700_000_000_100,
+			}),
+		);
+
 		const cached = await cache.read();
 
 		expect(cached?.user.onboardingCompletedAt).toBeNull();
@@ -433,6 +466,8 @@ describe("createSessionCache", () => {
 				id: "usr_blake",
 				email: "blake@example.com",
 				displayName: "Blake Rivera",
+				firstName: "Blake",
+				lastName: "Rivera",
 				onboardingCompletedAt: null,
 			},
 		};

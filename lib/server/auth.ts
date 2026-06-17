@@ -13,7 +13,7 @@ export class UnauthorizedError extends Error {
 	}
 }
 
-export type ServerUserProfile = {
+export type ServerUserRecord = {
 	clerkUserId: string;
 	email: string | null;
 	firstName: string | null;
@@ -23,7 +23,7 @@ export type ServerUserProfile = {
 
 export async function verifyClerkRequest(
 	request: Request,
-): Promise<ServerUserProfile> {
+): Promise<ServerUserRecord> {
 	const token = bearerToken(request.headers.get("authorization"));
 	const config = readClerkServerConfig();
 
@@ -41,7 +41,21 @@ export async function verifyClerkRequest(
 
 	const clerk = createClerkClient({ secretKey: config.secretKey });
 	const user = await clerk.users.getUser(clerkUserId);
-	return profileFromClerkUser(user);
+	return serverUserFromClerkUser(user);
+}
+
+export async function updateClerkUserName(input: {
+	clerkUserId: string;
+	firstName: string | null;
+	lastName: string | null;
+}): Promise<ServerUserRecord> {
+	const config = readClerkServerConfig();
+	const clerk = createClerkClient({ secretKey: config.secretKey });
+	const user = await clerk.users.updateUser(input.clerkUserId, {
+		firstName: input.firstName ?? "",
+		lastName: input.lastName ?? "",
+	});
+	return serverUserFromClerkUser(user);
 }
 
 export function bearerToken(authorization: string | null): string {
@@ -57,7 +71,7 @@ export function bearerToken(authorization: string | null): string {
 	return token;
 }
 
-function profileFromClerkUser(user: ClerkUser): ServerUserProfile {
+function serverUserFromClerkUser(user: ClerkUser): ServerUserRecord {
 	const email = primaryEmailAddress(user);
 	const firstName = emptyToNull(user.firstName);
 	const lastName = emptyToNull(user.lastName);

@@ -1875,6 +1875,8 @@ async function createHomeSessionHarness(
 			id: scenario.users.avery.id,
 			email: scenario.users.avery.email ?? null,
 			displayName: scenario.users.avery.displayName ?? null,
+			firstName: scenario.users.avery.firstName ?? null,
+			lastName: scenario.users.avery.lastName ?? null,
 			onboardingCompletedAt: null,
 		},
 		activeHousehold: {
@@ -2026,6 +2028,8 @@ function homeListSwitcherSession({
 			id: "usr_1",
 			email: "member@example.com",
 			displayName: "Member One",
+			firstName: "Member",
+			lastName: "One",
 			onboardingCompletedAt: null,
 		},
 		activeHousehold: { id: "hh_1", name: "Test Household" },

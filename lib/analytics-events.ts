@@ -144,6 +144,9 @@ export type EventMap = {
 		skipped: boolean;
 		last_step: string;
 	};
+	user_name_updated: {
+		user_id: string;
+	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };
 	user_email_verified: Record<string, never>;

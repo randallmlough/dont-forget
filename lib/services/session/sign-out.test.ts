@@ -31,6 +31,9 @@ beforeEach(() => {
 		registerPushToken: jest.fn(async () => undefined),
 		unregisterPushToken: jest.fn(async () => undefined),
 		sendTestNotification: jest.fn(async () => ({ sent: 0, disabled: 0 })),
+		updateUserName: jest.fn(async () => {
+			throw new Error("unused");
+		}),
 	});
 });
 
@@ -239,6 +242,9 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 				throw unregisterFailure;
 			}),
 			sendTestNotification: jest.fn(async () => ({ sent: 0, disabled: 0 })),
+			updateUserName: jest.fn(async () => {
+				throw new Error("unused");
+			}),
 		});
 		const auth = authFixture();
 		const signOutFlow = createAuthenticatedAppSessionSignOut({

@@ -3,12 +3,15 @@ import { eq } from "drizzle-orm";
 import { pushTokens, users } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/server/test";
 import type { PushTokenService } from "@/lib/services/push/server";
-import { ApiUnauthorizedError } from "../shared";
+import { createApiRequest, readJsonResponse } from "@/lib/test/api";
+import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
 	handleCompleteOnboarding,
 	handleRegisterPushToken,
 	handleSendTestNotification,
 	handleUnregisterPushToken,
+	handleUpdateUserName,
+	type UserApiDeps,
 } from "./handlers";
 
 const testUser = {
@@ -25,6 +28,101 @@ const testUser = {
 };
 
 describe("Users API handlers", () => {
+	it("requires auth for User name updates", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleUpdateUserName(
+				createApiRequest({
+					method: "PATCH",
+					body: { firstName: "Avery", lastName: "Chen" },
+				}),
+				{
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError("Invalid Clerk session token");
+					},
+				},
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Invalid Clerk session token" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects User name updates with no first or last name", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleUpdateUserName(
+				createApiRequest({
+					method: "PATCH",
+					body: { firstName: "   ", lastName: null },
+				}),
+				userDeps(directory, "user_avery"),
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 400,
+				body: { error: "Provide a first or last name" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("updates Clerk with trimmed names and stores the returned app User", async () => {
+		const directory = await createTestDirectoryDb();
+		const updateClerkUserName = jest.fn(async () => ({
+			clerkUserId: "user_avery",
+			email: "avery@example.com",
+			firstName: "Avery",
+			lastName: "Chen",
+			displayName: "Avery Chen",
+		}));
+		try {
+			const response = await handleUpdateUserName(
+				createApiRequest({
+					method: "PATCH",
+					body: { firstName: "  Avery  ", lastName: "  Chen  " },
+				}),
+				userDeps(directory, "user_avery", updateClerkUserName),
+			);
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 200,
+				body: {
+					user: {
+						id: expect.stringMatching(/^usr_/),
+						email: "avery@example.com",
+						firstName: "Avery",
+						lastName: "Chen",
+						displayName: "Avery Chen",
+					},
+				},
+			});
+			expect(updateClerkUserName).toHaveBeenCalledWith({
+				clerkUserId: "user_avery",
+				firstName: "Avery",
+				lastName: "Chen",
+			});
+			const [storedUser] = await directory.db
+				.select()
+				.from(users)
+				.where(eq(users.clerkUserId, "user_avery"));
+			expect(storedUser).toMatchObject({
+				email: "avery@example.com",
+				firstName: "Avery",
+				lastName: "Chen",
+				displayName: "Avery Chen",
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
 	it("requires authentication for push token registration", async () => {
 		const directory = await createTestDirectoryDb();
 		try {
@@ -293,4 +391,26 @@ function jsonRequest(body: unknown): Request {
 		body: JSON.stringify(body),
 		headers: { "Content-Type": "application/json" },
 	});
+}
+
+function userDeps(
+	directory: Awaited<ReturnType<typeof createTestDirectoryDb>>,
+	clerkUserId: string,
+	updateClerkUserName?: UserApiDeps["updateClerkUserName"],
+): UserApiDeps {
+	return {
+		directory: directory.db,
+		updateClerkUserName,
+		authenticate: async (_request, db) =>
+			upsertAuthenticatedUser(
+				{
+					clerkUserId,
+					email: "old@example.com",
+					firstName: "Old",
+					lastName: "Name",
+					displayName: "Old Name",
+				},
+				db,
+			),
+	};
 }

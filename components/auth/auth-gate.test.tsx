@@ -171,6 +171,8 @@ function sessionFixture({
 			id: "usr_avery",
 			email: "avery@example.com",
 			displayName: "Avery",
+			firstName: "Avery",
+			lastName: null,
 			onboardingCompletedAt,
 		},
 		activeHousehold: { id: "hh_avery", name: "Avery" },

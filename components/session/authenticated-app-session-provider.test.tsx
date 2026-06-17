@@ -720,6 +720,8 @@ function appSessionFixture(): AuthenticatedAppSession {
 			id: "usr_avery",
 			email: "avery@example.com",
 			displayName: "Avery Chen",
+			firstName: "Avery",
+			lastName: "Chen",
 			onboardingCompletedAt: null,
 		},
 		activeHousehold: { id: "hh_avery", name: "Avery" },

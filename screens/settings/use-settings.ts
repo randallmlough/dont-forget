@@ -35,6 +35,10 @@ export type SettingsState = {
 	notice: string | null;
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
+	user: SettingsUser;
+	userNotice: string | null;
+	userError: string | null;
+	userUpdateInFlight: boolean;
 	privacyPolicyUrl: string | null;
 	termsUrl: string | null;
 };
@@ -46,14 +50,26 @@ export type SettingsActions = {
 	setAppearancePreference: (preference: AppearancePreference) => Promise<void>;
 	setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 	signOut: () => Promise<void>;
+	updateUserName: (input: {
+		firstName: string | null;
+		lastName: string | null;
+	}) => Promise<boolean>;
 };
 
-export function useSettings(): {
+export type SettingsUser = {
+	id: string | null;
+	email: string | null;
+	displayName: string | null;
+	firstName: string | null;
+	lastName: string | null;
+};
+
+export function useSettings(clientProp?: UsersApiClient): {
 	state: SettingsState;
 	actions: SettingsActions;
 } {
 	const { getToken } = useAuth();
-	const { session, signOut } = useAuthenticatedAppSession();
+	const { reloadSession, session, signOut } = useAuthenticatedAppSession();
 	const logger = useLogger();
 	const userId = session?.user.id ?? null;
 	const extra = Constants.expoConfig?.extra;
@@ -65,16 +81,28 @@ export function useSettings(): {
 		null,
 	);
 	const [notice, setNotice] = useState<string | null>(null);
+	const [updatedUser, setUpdatedUser] = useState<SettingsUser | null>(null);
+	const [userNotice, setUserNotice] = useState<string | null>(null);
+	const [userError, setUserError] = useState<string | null>(null);
+	const [userUpdateInFlight, setUserUpdateInFlight] = useState(false);
+	const privacyPolicyUrl = publicExtraString(extra, "privacyPolicyUrl");
+	const termsUrl = publicExtraString(extra, "termsUrl");
+	const sessionUser = userFromSession(session);
+	const user = updatedUser?.id === sessionUser.id ? updatedUser : sessionUser;
 	const getTokenRef = useRef(getToken);
+	const usersClientRef = useRef<UsersApiClient | null>(null);
+
 	useEffect(() => {
 		getTokenRef.current = getToken;
 	}, [getToken]);
-	const usersClientRef = useRef<UsersApiClient | null>(null);
-	usersClientRef.current ??= createUsersApiClient({
-		getToken: () => getTokenRef.current(),
-	});
-	const privacyPolicyUrl = publicExtraString(extra, "privacyPolicyUrl");
-	const termsUrl = publicExtraString(extra, "termsUrl");
+
+	function resolveClient(): UsersApiClient {
+		if (clientProp) return clientProp;
+		usersClientRef.current ??= createUsersApiClient({
+			getToken: () => getTokenRef.current(),
+		});
+		return usersClientRef.current;
+	}
 
 	useEffect(() => {
 		let active = true;
@@ -102,8 +130,6 @@ export function useSettings(): {
 			await writeAppearancePreference(preference);
 			setAppearancePreferenceState(preference);
 			setNotice(null);
-			// Only the light Unistyles theme exists today. When a dark theme lands,
-			// apply this with UnistylesRuntime.setAdaptiveThemes(true) or setTheme(...).
 			track("appearance_preference_changed", { preference });
 		} catch (error) {
 			logger.error("settings appearance preference write failed", { error });
@@ -113,8 +139,7 @@ export function useSettings(): {
 
 	async function setNotificationsEnabled(enabled: boolean) {
 		setNotificationNotice(null);
-		const client = usersClientRef.current;
-		if (!client) return;
+		const client = resolveClient();
 		if (!userId) {
 			setNotificationNotice("Sign in again to update notification settings.");
 			return;
@@ -216,7 +241,34 @@ export function useSettings(): {
 	}
 
 	async function sendTestNotification() {
-		await usersClientRef.current?.sendTestNotification();
+		await resolveClient().sendTestNotification();
+	}
+
+	async function updateUserName(input: {
+		firstName: string | null;
+		lastName: string | null;
+	}): Promise<boolean> {
+		if (userUpdateInFlight) return false;
+		setUserUpdateInFlight(true);
+		setUserNotice(null);
+		setUserError(null);
+		try {
+			const updatedUser = await resolveClient().updateUserName(input);
+			setUpdatedUser(updatedUser);
+			setUserNotice("User name updated.");
+			reloadSession();
+			track("user_name_updated", { user_id: updatedUser.id });
+			return true;
+		} catch (error) {
+			setUserError(
+				error instanceof Error
+					? error.message
+					: "Unable to update User name. Please try again.",
+			);
+			return false;
+		} finally {
+			setUserUpdateInFlight(false);
+		}
 	}
 
 	return {
@@ -227,6 +279,10 @@ export function useSettings(): {
 			notice,
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
+			user,
+			userNotice,
+			userError,
+			userUpdateInFlight,
 			privacyPolicyUrl,
 			termsUrl,
 		},
@@ -253,6 +309,7 @@ export function useSettings(): {
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,
+			updateUserName,
 		},
 	};
 }
@@ -269,6 +326,18 @@ async function openConfiguredUrl(
 	} catch (error) {
 		onFailure(error);
 	}
+}
+
+function userFromSession(
+	session: ReturnType<typeof useAuthenticatedAppSession>["session"],
+): SettingsUser {
+	return {
+		id: session?.user.id ?? null,
+		email: session?.user.email ?? null,
+		displayName: session?.user.displayName ?? null,
+		firstName: session?.user.firstName ?? null,
+		lastName: session?.user.lastName ?? null,
+	};
 }
 
 function publicExtraString(

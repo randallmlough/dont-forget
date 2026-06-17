@@ -28,11 +28,13 @@ import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
+const mockReloadSession = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
 const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
 	disabled: 0,
 }));
+const mockUpdateUserName = jest.fn();
 let mockLogger: MockLogger;
 
 jest.mock("expo-constants", () => ({
@@ -63,9 +65,11 @@ jest.mock("@/components/session", () => ({
 
 jest.mock("@/lib/client-api/users", () => ({
 	createUsersApiClient: jest.fn(() => ({
+		completeOnboarding: jest.fn(async () => undefined),
 		registerPushToken: jest.fn(async () => undefined),
 		unregisterPushToken: jest.fn(async () => undefined),
 		sendTestNotification: mockSendTestNotification,
+		updateUserName: mockUpdateUserName,
 	})),
 }));
 
@@ -91,8 +95,17 @@ beforeEach(() => {
 	jest.mocked(useLogger).mockReturnValue(mockLogger);
 	mockRouterPush.mockReset();
 	mockRouterReplace.mockReset();
+	mockReloadSession.mockReset();
 	mockSignOut.mockClear();
 	mockSendTestNotification.mockClear();
+	mockUpdateUserName.mockReset();
+	mockUpdateUserName.mockResolvedValue({
+		id: "usr_avery",
+		email: "avery@example.com",
+		displayName: "Avery Chen",
+		firstName: "Avery",
+		lastName: "Chen",
+	});
 	jest.mocked(createUsersApiClient).mockClear();
 	jest.mocked(track).mockClear();
 	jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
@@ -110,7 +123,7 @@ beforeEach(() => {
 		state: { status: "ready", refreshing: false },
 		session: appSessionFixture(),
 		retry() {},
-		reloadSession() {},
+		reloadSession: mockReloadSession,
 		signOut: mockSignOut,
 	});
 	setExpoConfig({
@@ -127,7 +140,9 @@ describe("SettingsScreen", () => {
 	it("renders settings sections and configured legal rows", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
-		expect(screen.getByText("Household")).toBeTruthy();
+		expect(screen.getByText("User")).toBeTruthy();
+		expect(screen.getByText("User name")).toBeTruthy();
+		expect(screen.getByText("Avery Chen")).toBeTruthy();
 		expect(screen.getByText("Household settings")).toBeTruthy();
 		expect(screen.getAllByText("Appearance").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getAllByText("Notifications").length).toBeGreaterThanOrEqual(
@@ -221,6 +236,112 @@ describe("SettingsScreen", () => {
 		expect(mockRouterReplace.mock.invocationCallOrder[0]).toBeLessThan(
 			mockSignOut.mock.invocationCallOrder[0],
 		);
+	});
+
+	it("hydrates saved User name from the authenticated app session", async () => {
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "ready", refreshing: false },
+			session: appSessionFixture({
+				displayName: "QA006 Check",
+				firstName: "QA006",
+				lastName: "Check",
+			}),
+			retry() {},
+			reloadSession: mockReloadSession,
+			signOut: mockSignOut,
+		});
+
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("User name"));
+
+		expect(screen.getByLabelText("First name").props.value).toBe("QA006");
+		expect(screen.getByLabelText("Last name").props.value).toBe("Check");
+	});
+
+	it("hydrates User name when the authenticated app session becomes ready", async () => {
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "loading" },
+			session: null,
+			retry() {},
+			reloadSession: mockReloadSession,
+			signOut: mockSignOut,
+		});
+		const rendered = await renderWithSafeArea(<SettingsScreen />);
+
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "ready", refreshing: false },
+			session: appSessionFixture({
+				displayName: "Avery Chen",
+				firstName: "Avery",
+				lastName: "Chen",
+			}),
+			retry() {},
+			reloadSession: mockReloadSession,
+			signOut: mockSignOut,
+		});
+		await act(async () => {
+			rendered.rerender(<SettingsScreen />);
+		});
+
+		await fireEvent.press(screen.getByText("User name"));
+
+		expect(screen.getByLabelText("First name").props.value).toBe("Avery");
+		expect(screen.getByLabelText("Last name").props.value).toBe("Chen");
+	});
+
+	it("saves trimmed User name and shows a success notice", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("User name"));
+		await fireEvent.changeText(
+			await screen.findByLabelText("First name"),
+			"  Avery  ",
+		);
+		await fireEvent.changeText(screen.getByLabelText("Last name"), "  Chen  ");
+		await fireEvent.press(screen.getByText("Save"));
+
+		await waitFor(() =>
+			expect(mockUpdateUserName).toHaveBeenCalledWith({
+				firstName: "Avery",
+				lastName: "Chen",
+			}),
+		);
+		expect(await screen.findByText("User name updated.")).toBeTruthy();
+		expect(screen.getByLabelText("First name").props.value).toBe("Avery");
+		expect(screen.getByLabelText("Last name").props.value).toBe("Chen");
+		expect(mockReloadSession).toHaveBeenCalledTimes(1);
+		expect(track).toHaveBeenCalledWith("user_name_updated", {
+			user_id: "usr_avery",
+		});
+	});
+
+	it("shows User name validation errors returned by the API", async () => {
+		mockUpdateUserName.mockRejectedValueOnce(
+			new Error("First name must be 50 characters or fewer."),
+		);
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("User name"));
+		await fireEvent.changeText(screen.getByLabelText("First name"), "Avery");
+		await fireEvent.press(screen.getByText("Save"));
+
+		expect(
+			await screen.findByText("First name must be 50 characters or fewer."),
+		).toBeTruthy();
+	});
+
+	it("blocks User name saves with no first or last name", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("User name"));
+		await screen.findByLabelText("First name");
+		await fireEvent.changeText(screen.getByLabelText("First name"), "");
+		await fireEvent.changeText(screen.getByLabelText("Last name"), "");
+		await fireEvent.press(screen.getByText("Save"));
+
+		expect(mockUpdateUserName).not.toHaveBeenCalled();
+		expect(screen.getByText("Provide a first or last name.")).toBeTruthy();
 	});
 
 	it("persists and tracks appearance changes", async () => {
@@ -499,10 +620,19 @@ function setExpoConfig(config: {
 	(Constants as { expoConfig: unknown }).expoConfig = config;
 }
 
-function appSessionFixture(): AuthenticatedAppSession {
+function appSessionFixture(
+	userOverrides: Partial<AuthenticatedAppSession["user"]> = {},
+): AuthenticatedAppSession {
+	const bootstrap = sessionBootstrapFixture();
+	const user = { ...bootstrap.user, ...userOverrides };
 	return {
-		...sessionBootstrapFixture(),
+		...bootstrap,
+		user,
 		resourceKey: "resource:usr_avery",
+		activeMember: {
+			...bootstrap.activeMember,
+			displayName: user.displayName,
+		},
 		services: {
 			lists: {
 				createList: async () => {
