@@ -119,6 +119,29 @@ describe("sendPushNotifications", () => {
 		);
 	});
 
+	it("resolves accepted tickets when receipts are not ready before retry timeout", async () => {
+		const sleep = jest.fn(async () => undefined);
+		const fetchFn = jest
+			.fn()
+			.mockResolvedValueOnce(
+				Response.json({
+					data: [{ status: "ok", id: "ticket-one" }],
+				}),
+			)
+			.mockResolvedValueOnce(Response.json({ data: {} }))
+			.mockResolvedValueOnce(Response.json({ data: {} }));
+
+		await expect(
+			sendPushNotifications(
+				[{ to: "ExponentPushToken[one]", title: "One", body: "First" }],
+				{ fetchFn, receiptRetryDelaysMs: [0], sleep },
+			),
+		).resolves.toEqual({ deadTokens: [] });
+
+		expect(sleep).toHaveBeenCalledWith(0);
+		expect(fetchFn).toHaveBeenCalledTimes(3);
+	});
+
 	it("retries missing receipts before finalizing accepted tickets", async () => {
 		const sleep = jest.fn(async () => undefined);
 		const fetchFn = jest

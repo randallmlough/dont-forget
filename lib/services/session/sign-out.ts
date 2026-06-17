@@ -163,20 +163,14 @@ async function defaultClearPushNotificationsForUser({
 	userId: string;
 }): Promise<void> {
 	const preference = await readNotificationPreference(userId);
-	let unregisterError: unknown;
 	if (preference.enabled) {
 		const client = createUsersApiClient({ getToken });
-		try {
-			await client.unregisterPushToken({
-				expoPushToken: preference.expoPushToken,
-			});
-		} catch (error) {
-			unregisterError = error;
-		}
+		await client.unregisterPushToken({
+			expoPushToken: preference.expoPushToken,
+		});
 	}
 
 	await writeNotificationPreference(userId, disabledPreference());
-	if (unregisterError) throw unregisterError;
 }
 
 function sessionUserIdFromSnapshot(

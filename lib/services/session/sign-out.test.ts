@@ -1,3 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import { createUsersApiClient } from "@/lib/client-api/users";
 import { createCurrentListSelectionStore } from "@/lib/local-storage/current-list-selection";
 import { createMockAnalytics } from "@/lib/test/mocks/analytics";
 import { createMockLogger } from "@/lib/test/mocks/logger";
@@ -15,6 +18,20 @@ import {
 	type AuthenticatedAppSessionSignOutAuth,
 	createAuthenticatedAppSessionSignOut,
 } from "./sign-out";
+
+jest.mock("@/lib/client-api/users", () => ({
+	createUsersApiClient: jest.fn(),
+}));
+
+beforeEach(() => {
+	jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
+	jest.mocked(AsyncStorage.setItem).mockResolvedValue(undefined);
+	jest.mocked(createUsersApiClient).mockReturnValue({
+		registerPushToken: jest.fn(async () => undefined),
+		unregisterPushToken: jest.fn(async () => undefined),
+		sendTestNotification: jest.fn(async () => ({ sent: 0, disabled: 0 })),
+	});
+});
 
 describe("createAuthenticatedAppSessionSignOut", () => {
 	it("clears the signed-out User's Current List selections and leaves other Users' selections untouched", async () => {
@@ -198,6 +215,48 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(logger.error).toHaveBeenCalledWith(
 			"authenticated app session sign-out push notification cleanup failed",
 			{ error: cleanupFailure },
+		);
+		expect(auth.signOut).toHaveBeenCalledTimes(1);
+	});
+
+	it("preserves an enabled push notification token when remote unregister fails", async () => {
+		const unregisterFailure = new Error("network timeout");
+		const logger = createMockLogger();
+		jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => {
+			if (key === "notification-preference:usr_avery") {
+				return JSON.stringify({
+					enabled: true,
+					expoPushToken: "ExponentPushToken[one]",
+				});
+			}
+			return null;
+		});
+		jest.mocked(createUsersApiClient).mockReturnValue({
+			registerPushToken: jest.fn(async () => undefined),
+			unregisterPushToken: jest.fn(async () => {
+				throw unregisterFailure;
+			}),
+			sendTestNotification: jest.fn(async () => ({ sent: 0, disabled: 0 })),
+		});
+		const auth = authFixture();
+		const signOutFlow = createAuthenticatedAppSessionSignOut({
+			controller: controllerFixture(readySnapshot("usr_avery")),
+			getAuth: () => auth,
+			analytics: createMockAnalytics(),
+			clearSignedOutSessionData: jest.fn(async () => undefined),
+			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
+			logger,
+		});
+
+		await signOutFlow.run();
+
+		expect(AsyncStorage.setItem).not.toHaveBeenCalledWith(
+			"notification-preference:usr_avery",
+			JSON.stringify({ enabled: false, expoPushToken: null }),
+		);
+		expect(logger.error).toHaveBeenCalledWith(
+			"authenticated app session sign-out push notification cleanup failed",
+			{ error: unregisterFailure },
 		);
 		expect(auth.signOut).toHaveBeenCalledTimes(1);
 	});

@@ -130,7 +130,7 @@ async function fetchDeadReceiptTokens(
 		if (pendingTickets.length === 0) return deadTokens;
 		const retryDelayMs = deps.retryDelaysMs[attempt];
 		if (retryDelayMs === undefined) {
-			throw new PushSendError("Expo push receipts were not ready");
+			return deadTokens;
 		}
 		await deps.sleep(retryDelayMs);
 	}

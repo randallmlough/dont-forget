@@ -167,7 +167,27 @@ export function useSettings(): {
 				enabled: true,
 				expoPushToken: result.expoPushToken,
 			};
-			await writeNotificationPreference(userId, preference);
+			try {
+				await writeNotificationPreference(userId, preference);
+			} catch {
+				await unregisterPushNotifications({
+					client,
+					expoPushToken: result.expoPushToken,
+				}).catch((error: unknown) => {
+					logger.error("settings push registration rollback failed", {
+						error,
+					});
+				});
+				setNotificationPreferenceState(disabledPreference());
+				setNotificationNotice(
+					"Notifications could not be enabled. Check your connection and try again.",
+				);
+				track("push_registration_changed", {
+					enabled: false,
+					outcome: "failed",
+				});
+				return;
+			}
 			setNotificationPreferenceState(preference);
 			track("push_registration_changed", {
 				enabled: true,

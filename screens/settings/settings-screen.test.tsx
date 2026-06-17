@@ -298,6 +298,44 @@ describe("SettingsScreen", () => {
 		});
 	});
 
+	it("rolls back push registration when local preference persistence fails", async () => {
+		jest
+			.mocked(AsyncStorage.setItem)
+			.mockRejectedValueOnce(new Error("storage unavailable"));
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await act(async () => {
+			fireEvent(
+				screen.getByRole("switch", { name: "Notifications" }),
+				"valueChange",
+				true,
+			);
+		});
+
+		await waitFor(() =>
+			expect(unregisterPushNotifications).toHaveBeenCalledWith({
+				client: expect.any(Object),
+				expoPushToken: "ExponentPushToken[one]",
+			}),
+		);
+		expect(
+			await screen.findByText(
+				"Notifications could not be enabled. Check your connection and try again.",
+			),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("switch", { name: "Notifications" }).props.value,
+		).toBe(false);
+		expect(track).toHaveBeenCalledWith("push_registration_changed", {
+			enabled: false,
+			outcome: "failed",
+		});
+		expect(track).not.toHaveBeenCalledWith("push_registration_changed", {
+			enabled: true,
+			outcome: "registered",
+		});
+	});
+
 	it("opens iOS Settings when push permission is denied", async () => {
 		jest.mocked(registerForPushNotifications).mockResolvedValue({
 			status: "denied",
