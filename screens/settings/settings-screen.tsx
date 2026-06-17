@@ -2,9 +2,9 @@ import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
-import type { AppearancePreference } from "./appearance-preference";
+import type { AppearancePreference } from "@/lib/unistyles/appearance-preference";
 import {
 	type SettingsActions,
 	type SettingsState,
@@ -44,20 +44,25 @@ export function SettingsScreenView({
 	return (
 		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
 			<View style={styles.header}>
-				<View style={styles.headerTopRow}>
+				<View style={styles.headerTextGroup}>
 					<Text style={styles.headerLabel}>Settings</Text>
+					<Text style={styles.headerTitle} numberOfLines={1}>
+						App settings
+					</Text>
+				</View>
+				<View style={styles.headerAction} testID="settings-header-action">
 					<Pressable
+						accessibilityLabel="Back to Home"
 						accessibilityRole="button"
 						onPress={() => router.replace("/")}
 						style={({ pressed }) => [
-							styles.homeButton,
-							pressed ? styles.rowPressed : undefined,
+							styles.headerButton,
+							pressed ? styles.headerButtonPressed : undefined,
 						]}
 					>
-						<Text style={styles.homeButtonLabel}>Home</Text>
+						<Text style={styles.headerButtonLabel}>Home</Text>
 					</Pressable>
 				</View>
-				<Text style={styles.headerTitle}>App settings</Text>
 			</View>
 			<ScrollView contentContainerStyle={styles.content}>
 				{state.notice ? (
@@ -157,15 +162,23 @@ function AppearancePreferenceControl({
 	preference: AppearancePreference;
 	onChange: (preference: AppearancePreference) => Promise<void>;
 }) {
+	const { rt } = useUnistyles();
+	const selectedPreference = runtimeAppearancePreference(preference, {
+		hasAdaptiveThemes: rt.hasAdaptiveThemes,
+		themeName: rt.themeName,
+	});
+
 	return (
 		<View style={styles.preferenceRow}>
 			<View style={styles.rowTextGroup}>
 				<Text style={styles.rowTitle}>Appearance</Text>
-				<Text style={styles.rowSubtitle}>{appearanceLabel(preference)}</Text>
+				<Text style={styles.rowSubtitle}>
+					{appearanceLabel(selectedPreference)}
+				</Text>
 			</View>
 			<View style={styles.segmentedControl}>
 				{(["system", "light", "dark"] as const).map((option) => {
-					const selected = option === preference;
+					const selected = option === selectedPreference;
 					return (
 						<Pressable
 							key={option}
@@ -194,6 +207,17 @@ function AppearancePreferenceControl({
 			</View>
 		</View>
 	);
+}
+
+function runtimeAppearancePreference(
+	fallback: AppearancePreference,
+	runtime: { hasAdaptiveThemes: boolean; themeName?: string },
+): AppearancePreference {
+	if (runtime.hasAdaptiveThemes) return "system";
+	if (runtime.themeName === "light" || runtime.themeName === "dark") {
+		return runtime.themeName;
+	}
+	return fallback;
 }
 
 function SettingsRow({
@@ -271,6 +295,10 @@ const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.background,
 	},
 	header: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(5),
 		paddingTop: theme.spacing(4.5),
 		paddingBottom: theme.spacing(3),
@@ -278,12 +306,12 @@ const styles = StyleSheet.create((theme) => ({
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
-	headerTopRow: {
-		minHeight: theme.spacing(11),
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: theme.spacing(3),
+	headerTextGroup: {
+		flex: 1,
+		minWidth: 0,
+	},
+	headerAction: {
+		paddingRight: theme.spacing(14),
 	},
 	headerLabel: {
 		...theme.typography.captionStrong,
@@ -293,20 +321,24 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.headline,
 		color: theme.colors.text,
 	},
-	homeButton: {
+	headerButton: {
 		minHeight: theme.spacing(11),
+		paddingHorizontal: theme.spacing(3),
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
 		alignItems: "center",
 		justifyContent: "center",
-		paddingHorizontal: theme.spacing(3),
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.border,
-		borderRadius: theme.radii.control,
 		backgroundColor: theme.colors.surface,
 	},
-	homeButtonLabel: {
+	headerButtonPressed: {
+		opacity: theme.opacities.pressed,
+	},
+	headerButtonLabel: {
 		...theme.typography.callout,
 		color: theme.colors.text,
-		fontWeight: theme.fontWeights.semibold,
+		fontWeight: theme.fontWeights.bold,
 	},
 	content: {
 		padding: theme.spacing(4),

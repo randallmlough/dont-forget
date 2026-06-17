@@ -9,7 +9,9 @@ import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { WebBrowserResultType } from "expo-web-browser";
 import type { PropsWithChildren, ReactElement } from "react";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { UnistylesRuntime } from "react-native-unistyles";
 
 import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
@@ -20,6 +22,13 @@ import SettingsScreen from "./settings-screen";
 const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
+const devClientHeaderActionGutter = 56;
+const setAdaptiveThemesSpy = jest
+	.spyOn(UnistylesRuntime, "setAdaptiveThemes")
+	.mockImplementation(() => undefined);
+const setThemeSpy = jest
+	.spyOn(UnistylesRuntime, "setTheme")
+	.mockImplementation(() => undefined);
 let mockLogger: MockLogger;
 
 jest.mock("expo-constants", () => ({
@@ -62,6 +71,8 @@ beforeEach(() => {
 	mockRouterPush.mockReset();
 	mockRouterReplace.mockReset();
 	mockSignOut.mockClear();
+	setAdaptiveThemesSpy.mockClear();
+	setThemeSpy.mockClear();
 	jest.mocked(track).mockClear();
 	jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
 	jest.mocked(AsyncStorage.setItem).mockResolvedValue(undefined);
@@ -158,7 +169,14 @@ describe("SettingsScreen", () => {
 	it("shows a visible Home action for returning to the Current List", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
-		await fireEvent.press(screen.getByRole("button", { name: "Home" }));
+		const headerAction = screen.getByTestId("settings-header-action");
+
+		expect(StyleSheet.flatten(headerAction.props.style)).toMatchObject({
+			paddingRight: devClientHeaderActionGutter,
+		});
+		expect(screen.getByText("Home")).toBeTruthy();
+
+		await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
 
 		expect(mockRouterReplace).toHaveBeenCalledWith("/");
 	});
@@ -187,13 +205,36 @@ describe("SettingsScreen", () => {
 
 		await fireEvent.press(screen.getByText("Dark"));
 
-		expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-			"appearance-preference",
-			"dark",
+		await waitFor(() =>
+			expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+				"appearance-preference",
+				"dark",
+			),
 		);
+		expect(setAdaptiveThemesSpy).toHaveBeenCalledWith(false);
+		expect(setThemeSpy).toHaveBeenCalledWith("dark");
 		expect(track).toHaveBeenCalledWith("appearance_preference_changed", {
 			preference: "dark",
 		});
+	});
+
+	it("applies each appearance option through Unistyles runtime", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByText("Light"));
+
+		await waitFor(() => expect(setThemeSpy).toHaveBeenCalledWith("light"));
+		expect(setAdaptiveThemesSpy).toHaveBeenCalledWith(false);
+
+		setAdaptiveThemesSpy.mockClear();
+		setThemeSpy.mockClear();
+
+		await fireEvent.press(screen.getByText("System"));
+
+		await waitFor(() =>
+			expect(setAdaptiveThemesSpy).toHaveBeenCalledWith(true),
+		);
+		expect(setThemeSpy).not.toHaveBeenCalled();
 	});
 
 	it("logs preference load failures and keeps the system default", async () => {
