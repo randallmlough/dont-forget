@@ -56,7 +56,7 @@ export function HomeScreenView({
 						{displayMemberName}
 					</Text>
 				</View>
-				<View style={styles.memberActions}>
+				<View style={styles.memberActions} testID="home-header-actions">
 					{onOpenHouseholdSettings ? (
 						<Pressable
 							accessibilityRole="button"
@@ -126,6 +126,7 @@ const styles = StyleSheet.create((theme) => ({
 	memberActions: {
 		flexDirection: "row",
 		gap: theme.spacing(2),
+		paddingRight: theme.spacing(14),
 	},
 	memberLabel: {
 		...theme.typography.captionStrong,

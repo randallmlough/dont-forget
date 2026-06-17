@@ -1,17 +1,19 @@
 import { DefaultTheme, type Theme } from "expo-router/react-navigation";
 
-import { lightTheme } from "@/lib/unistyles/unistyles";
+import type { AppTheme } from "@/lib/unistyles/theme-contract";
 
-export const navigationTheme: Theme = {
-	...DefaultTheme,
-	dark: false,
-	colors: {
-		...DefaultTheme.colors,
-		background: lightTheme.colors.background,
-		border: lightTheme.colors.border,
-		card: lightTheme.colors.surface,
-		notification: lightTheme.colors.destructive,
-		primary: lightTheme.colors.primary,
-		text: lightTheme.colors.text,
-	},
-};
+export function navigationThemeFor(theme: AppTheme, dark: boolean): Theme {
+	return {
+		...DefaultTheme,
+		dark,
+		colors: {
+			...DefaultTheme.colors,
+			background: theme.colors.background,
+			border: theme.colors.border,
+			card: theme.colors.surface,
+			notification: theme.colors.destructive,
+			primary: theme.colors.primary,
+			text: theme.colors.text,
+		},
+	};
+}

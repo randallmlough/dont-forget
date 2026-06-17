@@ -8,9 +8,10 @@ import { type AppEnv, readAppEnvFromExpoExtra } from "@/lib/env";
 import { useLogger } from "@/lib/logger";
 import {
 	type AppearancePreference,
+	applyAppearancePreference,
 	readAppearancePreference,
 	writeAppearancePreference,
-} from "./appearance-preference";
+} from "@/lib/unistyles/appearance-preference";
 
 export type SettingsState = {
 	appearancePreference: AppearancePreference;
@@ -58,10 +59,9 @@ export function useSettings(): {
 	async function setAppearancePreference(preference: AppearancePreference) {
 		try {
 			await writeAppearancePreference(preference);
+			applyAppearancePreference(preference);
 			setAppearancePreferenceState(preference);
 			setNotice(null);
-			// Only the light Unistyles theme exists today. When a dark theme lands,
-			// apply this with UnistylesRuntime.setAdaptiveThemes(true) or setTheme(...).
 			track("appearance_preference_changed", { preference });
 		} catch (error) {
 			logger.error("settings appearance preference write failed", { error });
