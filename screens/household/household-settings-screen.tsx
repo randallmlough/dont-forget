@@ -37,6 +37,7 @@ type SettingsRow =
 	| { type: "section"; id: string; title: string }
 	| { type: "member"; member: HouseholdMember }
 	| { type: "leaveHousehold" }
+	| { type: "deleteHousehold" }
 	| { type: "invitation"; invitation: PendingInvitation }
 	| { type: "empty"; id: string; label: string };
 
@@ -207,6 +208,9 @@ function SettingsRowView({
 	}
 	if (row.type === "leaveHousehold") {
 		return <LeaveHouseholdRow operation={state.operation} actions={actions} />;
+	}
+	if (row.type === "deleteHousehold") {
+		return <DeleteHouseholdRow operation={state.operation} actions={actions} />;
 	}
 	if (row.type === "invitation") {
 		return (
@@ -470,6 +474,32 @@ function LeaveHouseholdRow({
 	);
 }
 
+function DeleteHouseholdRow({
+	operation,
+	actions,
+}: {
+	operation: HouseholdSettingsOperation;
+	actions: HouseholdSettingsActions;
+}) {
+	const deleting = operation.status === "deletingHousehold";
+	return (
+		<View style={styles.row}>
+			<View style={styles.rowTextGroup}>
+				<Text style={styles.dangerTitle}>Delete Household</Text>
+				<Text style={styles.rowSubtitle}>
+					Permanently delete this Household for every Member
+				</Text>
+			</View>
+			<HouseholdButton
+				variant="danger"
+				label={deleting ? "Deleting" : "Delete"}
+				onPress={() => confirmDeleteHousehold(actions)}
+				disabled={deleting}
+			/>
+		</View>
+	);
+}
+
 function InvitationRow({
 	invitation,
 	operation,
@@ -573,10 +603,10 @@ function CenteredStatus({
 
 function settingsRows(
 	state: Extract<HouseholdSettingsState, { status: "ready" }>,
-	canRenameHousehold: boolean,
+	canManageHousehold: boolean,
 ) {
 	const rows: SettingsRow[] = [];
-	if (canRenameHousehold) rows.push({ type: "householdName" });
+	if (canManageHousehold) rows.push({ type: "householdName" });
 	rows.push(
 		{ type: "invitationForm" },
 		{ type: "joinCode" },
@@ -606,6 +636,7 @@ function settingsRows(
 			label: "No pending Invitations.",
 		});
 	}
+	if (canManageHousehold) rows.push({ type: "deleteHousehold" });
 	return rows;
 }
 
@@ -673,6 +704,23 @@ function confirmLeaveHousehold(actions: HouseholdSettingsActions) {
 				style: "destructive",
 				onPress: () => {
 					void actions.leaveHousehold();
+				},
+			},
+		],
+	);
+}
+
+function confirmDeleteHousehold(actions: HouseholdSettingsActions) {
+	Alert.alert(
+		"Delete Household",
+		"This permanently deletes the Household and its Lists for every Member. This cannot be undone.",
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Delete Household",
+				style: "destructive",
+				onPress: () => {
+					void actions.deleteHousehold();
 				},
 			},
 		],
@@ -782,6 +830,11 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.body,
 		fontWeight: theme.fontWeights.semibold,
 		color: theme.colors.text,
+	},
+	dangerTitle: {
+		...theme.typography.body,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.destructive,
 	},
 	rowSubtitle: {
 		...theme.typography.caption,

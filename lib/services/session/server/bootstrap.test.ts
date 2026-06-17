@@ -451,6 +451,9 @@ async function createBootstrapHarness() {
 			async createHouseholdDatabaseToken(tursoDbName) {
 				return `token-${tursoDbName}`;
 			},
+			async deleteHouseholdDatabase() {
+				return undefined;
+			},
 			householdDatabaseUrl(tursoDbName) {
 				return `file:${householdDbs.get(tursoDbName)?.path ?? tursoDbName}`;
 			},

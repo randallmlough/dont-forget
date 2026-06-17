@@ -101,6 +101,11 @@ const leaveHouseholdResponseSchema = z.object({
 	promotedMembershipId: z.string().nullable(),
 });
 
+const deleteHouseholdResponseSchema = z.object({
+	deleted: z.literal(true),
+	databaseDeleted: z.boolean(),
+});
+
 export type HouseholdMember = z.infer<typeof householdMemberSchema>;
 export type PendingInvitation = z.infer<typeof pendingInvitationSchema>;
 export type InvitationRecord = z.infer<typeof invitationRecordSchema>;
@@ -122,6 +127,7 @@ export type HouseholdApiClient = {
 		householdId: string;
 		name: string;
 	}): Promise<{ id: string; name: string }>;
+	deleteHousehold(householdId: string): Promise<void>;
 	listMembers(householdId: string): Promise<HouseholdMember[]>;
 	removeMember(input: {
 		householdId: string;
@@ -181,6 +187,12 @@ export function createHouseholdApiClient({
 				body: JSON.stringify({ name: input.name }),
 			});
 			return renameHouseholdResponseSchema.parse(payload).household;
+		},
+		async deleteHousehold(householdId) {
+			const payload = await authed(`/api/households/${householdId}`, {
+				method: "DELETE",
+			});
+			deleteHouseholdResponseSchema.parse(payload);
 		},
 		async listMembers(householdId) {
 			const payload = await authed(`/api/households/${householdId}/members`);

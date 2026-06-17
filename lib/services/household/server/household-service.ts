@@ -22,6 +22,12 @@ import {
 
 export type HouseholdServiceDirectory = LifecycleLockExecutor;
 
+export type DeleteHouseholdResult = {
+	databaseDeleted: boolean;
+	requiresDatabaseTeardown: boolean;
+	tursoDbName: string;
+};
+
 export type HouseholdService = {
 	findPendingCreatedHousehold(userId: string): Promise<Household | null>;
 	createOwnedHousehold(input: {
@@ -34,6 +40,12 @@ export type HouseholdService = {
 		name: string;
 		requestedByUserId: string;
 	}): Promise<Household>;
+	deleteHousehold(input: {
+		householdId: string;
+		requestedByUserId: string;
+	}): Promise<DeleteHouseholdResult>;
+	markHouseholdDatabaseTeardownFailed(householdId: string): Promise<void>;
+	markHouseholdDatabaseTeardownSucceeded(householdId: string): Promise<void>;
 	markProvisioningCompleted(householdId: string): Promise<void>;
 	activeMembershipFrom(
 		household: Household,
@@ -82,6 +94,24 @@ export function createHouseholdService(
 		},
 		renameHousehold(input) {
 			return renameHousehold(input, deps.directory, analytics);
+		},
+		deleteHousehold(input) {
+			return deleteHousehold(input, deps.directory);
+		},
+		async markHouseholdDatabaseTeardownFailed(householdId) {
+			await deps.directory
+				.update(households)
+				.set({ databaseDeletionFailedAt: Date.now() })
+				.where(eq(households.id, householdId));
+		},
+		async markHouseholdDatabaseTeardownSucceeded(householdId) {
+			await deps.directory
+				.update(households)
+				.set({
+					databaseDeletedAt: Date.now(),
+					databaseDeletionFailedAt: null,
+				})
+				.where(eq(households.id, householdId));
 		},
 		async markProvisioningCompleted(householdId) {
 			await deps.directory
@@ -143,6 +173,8 @@ async function createOwnedHousehold(
 		provisioningCompletedAt: null,
 		createdAt: now,
 		deletedAt: null,
+		databaseDeletedAt: null,
+		databaseDeletionFailedAt: null,
 	};
 
 	await directory.insert(households).values(household);
@@ -201,6 +233,68 @@ async function renameHousehold(
 	return household;
 }
 
+async function deleteHousehold(
+	input: { householdId: string; requestedByUserId: string },
+	directory: HouseholdServiceDirectory,
+): Promise<DeleteHouseholdResult> {
+	const household = await findHousehold(input.householdId, directory);
+	if (!household) throw new HouseholdNotFoundError();
+
+	if (household.deletedAt !== null) {
+		if (
+			household.databaseDeletedAt !== null ||
+			household.databaseDeletionFailedAt === null
+		) {
+			throw new HouseholdNotFoundError();
+		}
+		const historicalOwner = await findHistoricalOwnerMembership(
+			{
+				householdId: input.householdId,
+				userId: input.requestedByUserId,
+			},
+			directory,
+		);
+		if (!historicalOwner) throw new HouseholdForbiddenError();
+		return {
+			databaseDeleted: false,
+			requiresDatabaseTeardown: true,
+			tursoDbName: household.tursoDbName,
+		};
+	}
+
+	const requester = await findActiveOwnerMembership(
+		{
+			householdId: input.householdId,
+			userId: input.requestedByUserId,
+		},
+		directory,
+	);
+	if (!requester) throw new HouseholdForbiddenError();
+
+	const now = Date.now();
+	await directory
+		.update(households)
+		.set({ deletedAt: now })
+		.where(
+			and(eq(households.id, input.householdId), isNull(households.deletedAt)),
+		);
+	await directory
+		.update(memberships)
+		.set({ removedAt: now })
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				isNull(memberships.removedAt),
+			),
+		);
+
+	return {
+		databaseDeleted: false,
+		requiresDatabaseTeardown: true,
+		tursoDbName: household.tursoDbName,
+	};
+}
+
 function normalizeHouseholdName(name: string): string {
 	const trimmed = name.trim();
 	if (!trimmed) {
@@ -212,6 +306,19 @@ function normalizeHouseholdName(name: string): string {
 		);
 	}
 	return trimmed;
+}
+
+async function findHousehold(
+	householdId: string,
+	directory: HouseholdServiceDirectory,
+): Promise<Household | null> {
+	const [household] = await directory
+		.select()
+		.from(households)
+		.where(eq(households.id, householdId))
+		.limit(1);
+
+	return household ?? null;
 }
 
 async function findActiveOwnerMembership(
@@ -227,6 +334,25 @@ async function findActiveOwnerMembership(
 				eq(memberships.userId, input.userId),
 				eq(memberships.role, "owner"),
 				isNull(memberships.removedAt),
+			),
+		)
+		.limit(1);
+
+	return row ?? null;
+}
+
+async function findHistoricalOwnerMembership(
+	input: { householdId: string; userId: string },
+	directory: HouseholdServiceDirectory,
+): Promise<Membership | null> {
+	const [row] = await directory
+		.select()
+		.from(memberships)
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				eq(memberships.userId, input.userId),
+				eq(memberships.role, "owner"),
 			),
 		)
 		.limit(1);

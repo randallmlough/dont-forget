@@ -95,6 +95,11 @@ export type EventMap = {
 		household_id: string;
 		requested_by_user_id: string;
 	};
+	household_deleted: {
+		household_id: string;
+		deleted_by_user_id: string;
+		member_count: number;
+	};
 	household_created: {
 		household_id: string;
 		created_by_user_id: string;

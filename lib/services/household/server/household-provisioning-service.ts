@@ -21,6 +21,7 @@ export type HouseholdProvisioningService = {
 		provisioningCompletedAt: number | null;
 	}): Promise<HouseholdDatabaseProvisioningResult>;
 	createHouseholdDatabaseToken(tursoDbName: string): Promise<string>;
+	deleteHouseholdDatabase(tursoDbName: string): Promise<void>;
 };
 
 export type HouseholdProvisioningServiceDeps = {
@@ -30,6 +31,7 @@ export type HouseholdProvisioningServiceDeps = {
 		now: number;
 	}) => Promise<{ url: string }>;
 	createHouseholdDatabaseToken: (tursoDbName: string) => Promise<string>;
+	deleteHouseholdDatabase: (tursoDbName: string) => Promise<void>;
 	householdDatabaseUrl: (tursoDbName: string) => string;
 };
 
@@ -54,6 +56,9 @@ export function createHouseholdProvisioningService(
 		},
 		createHouseholdDatabaseToken(tursoDbName) {
 			return deps.createHouseholdDatabaseToken(tursoDbName);
+		},
+		deleteHouseholdDatabase(tursoDbName) {
+			return deps.deleteHouseholdDatabase(tursoDbName);
 		},
 	};
 }
@@ -80,6 +85,8 @@ export function createProductionHouseholdProvisioningService(): HouseholdProvisi
 		},
 		createHouseholdDatabaseToken: (tursoDbName) =>
 			platform.createDatabaseAuthToken(tursoDbName, "24h"),
+		deleteHouseholdDatabase: (tursoDbName) =>
+			platform.deleteDatabase(tursoDbName),
 		householdDatabaseUrl: (tursoDbName) =>
 			householdDbUrl(tursoDbName, config.org),
 	});

@@ -37,6 +37,9 @@ describe("createHouseholdProvisioningService", () => {
 			await expect(
 				service.createHouseholdDatabaseToken("db-pending"),
 			).resolves.toBe("token-db-pending");
+			await expect(
+				service.deleteHouseholdDatabase("db-pending"),
+			).resolves.toBeUndefined();
 			expect(deps.provisionHouseholdDatabase).toHaveBeenCalledWith({
 				tursoDbName: "db-pending",
 				createdByUserId: "usr_avery",
@@ -56,6 +59,7 @@ function createProvisioningDeps() {
 		createHouseholdDatabaseToken: jest.fn(async (tursoDbName) => {
 			return `token-${tursoDbName}`;
 		}),
+		deleteHouseholdDatabase: jest.fn(async () => undefined),
 		householdDatabaseUrl: jest.fn((tursoDbName) => {
 			return `libsql://${tursoDbName}`;
 		}),

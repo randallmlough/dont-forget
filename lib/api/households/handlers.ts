@@ -39,6 +39,7 @@ import {
 	type MemberServiceDirectory,
 	SoleMemberError,
 } from "@/lib/services/member/server";
+import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 import {
 	ApiForbiddenError,
 	type ApiHandlerDeps,
@@ -195,6 +196,63 @@ export async function handleRenameHousehold(
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Rename Household API failed");
+	}
+}
+
+export async function handleDeleteHousehold(
+	request: Request,
+	{ householdId }: { householdId: string },
+	deps?: HouseholdApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const deletion = await runWithSqliteBusyRetry(() =>
+				directory.transaction(async (tx) => {
+					await lockHouseholdLifecycle(householdId, tx);
+					return householdService(tx, deps).deleteHousehold({
+						householdId,
+						requestedByUserId: user.id,
+					});
+				}),
+			);
+
+			if (!deletion.requiresDatabaseTeardown) {
+				return jsonResponse({
+					deleted: true,
+					databaseDeleted: deletion.databaseDeleted,
+				});
+			}
+
+			let databaseDeleted = false;
+			try {
+				await householdProvisioningService(deps).deleteHouseholdDatabase(
+					deletion.tursoDbName,
+				);
+				await householdService(
+					directory,
+					deps,
+				).markHouseholdDatabaseTeardownSucceeded(householdId);
+				databaseDeleted = true;
+			} catch (error) {
+				await householdService(
+					directory,
+					deps,
+				).markHouseholdDatabaseTeardownFailed(householdId);
+				console.error(
+					"Delete Household database API failed",
+					redactAttributes({
+						error: asError(error),
+						household_id: householdId,
+						turso_db_name: deletion.tursoDbName,
+					}),
+				);
+			}
+
+			return jsonResponse({ deleted: true, databaseDeleted });
+		});
+	} catch (error) {
+		return householdErrorResponse(error, "Delete Household API failed");
 	}
 }
 
