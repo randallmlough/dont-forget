@@ -2,7 +2,7 @@
 
 ## Domain Language
 
-- **Must** use the domain language from `CONTEXT.md`: Household, Member, Owner, User, List, Item, Invitation, Household Join Code, Home, and Authenticated App Session.
+- **Must** use the domain language from `CONTEXT.md`: Household, Member, Owner, User, List, Item, Invitation, Household Join Code, Push Notification, Home, and Authenticated App Session.
 - **Must** not introduce replacement language such as group, team, account, todo, task, invite link, dashboard, or landing page unless the glossary changes first.
 - **Should** name components, props, events, logs, and tests with product language instead of generic placeholders.
 
@@ -25,7 +25,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 
 ## Service Layer
 
-- **Must** choose the service folder by domain or app-runtime boundary first: `auth`, `household`, `invitation`, `item`, `list`, `member`, `session`, or `user`.
+- **Must** choose the service folder by domain, app-runtime, or provider-infrastructure boundary first: `auth`, `household`, `invitation`, `item`, `list`, `member`, `push`, `session`, or `user`.
 - **Must** use factory-based service construction with explicit dependency types: `create<Domain>Service`, `<Domain>Service`, and `<Domain>ServiceDeps`.
 - **Must** keep server-only service code under `lib/services/<domain>/server/`.
 - **Must** not add a root `lib/services/index.ts` barrel.

@@ -40,6 +40,10 @@ _Avoid_: invite link, share, request
 A reusable Household-scoped code and join URL that lets an authenticated User become a Member of the Household. Separate from **Invitation**; reusable manual code entry belongs here, not on Invitations.
 _Avoid_: reusable Invitation, Invitation code, short code
 
+**Push Notification**:
+A platform-delivered notification sent to a User's registered device through Expo/APNs. Push Notification token storage is User-scoped directory data; delivery is provider infrastructure, not Household/List data.
+_Avoid_: alert, message, device subscription
+
 **Home**:
 The current route that renders the Authenticated App Session's Current List while the app is still early in development.
 _Avoid_: dashboard, landing page

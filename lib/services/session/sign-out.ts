@@ -1,9 +1,16 @@
 import { reset, track } from "@/lib/analytics";
+import { createUsersApiClient } from "@/lib/client-api/users";
 import { asError } from "@/lib/errors";
 import { clearUserCurrentListSelections } from "@/lib/local-storage/current-list-selection";
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
+import {
+	disabledPreference,
+	readNotificationPreference,
+	writeNotificationPreference,
+} from "@/lib/push/notification-preference";
 import type { ServiceResetAnalytics } from "@/lib/services/analytics";
+import type { GetSessionToken } from "./bootstrap";
 import { clearSignedOutSessionData as defaultClearSignedOutSessionData } from "./cache";
 import type {
 	AuthenticatedAppSessionActivation,
@@ -28,12 +35,18 @@ export type AuthenticatedAppSessionSignOutRunningState = {
 	running: boolean;
 };
 
+export type ClearPushNotificationsForUser = (input: {
+	getToken: GetSessionToken;
+	userId: string;
+}) => Promise<void>;
+
 export type AuthenticatedAppSessionSignOutDeps = {
 	controller: AuthenticatedAppSessionController;
 	getAuth: () => AuthenticatedAppSessionSignOutAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearSignedOutSessionData?: typeof defaultClearSignedOutSessionData;
 	clearCurrentListSelectionsForUser?: (userId: string) => Promise<void>;
+	clearPushNotificationsForUser?: ClearPushNotificationsForUser;
 	logger?: Logger;
 	runningState?: AuthenticatedAppSessionSignOutRunningState;
 };
@@ -49,6 +62,7 @@ export function createAuthenticatedAppSessionSignOut({
 	analytics = defaultAnalytics,
 	clearSignedOutSessionData = defaultClearSignedOutSessionData,
 	clearCurrentListSelectionsForUser = clearUserCurrentListSelections,
+	clearPushNotificationsForUser = defaultClearPushNotificationsForUser,
 	logger = defaultLogger,
 	runningState,
 }: AuthenticatedAppSessionSignOutDeps): AuthenticatedAppSessionSignOut {
@@ -98,6 +112,18 @@ export function createAuthenticatedAppSessionSignOut({
 					{ error: asError(error) },
 				);
 			}
+
+			try {
+				await clearPushNotificationsForUser({
+					getToken: getAuth().getToken,
+					userId: signedOutUserId,
+				});
+			} catch (error) {
+				logger.error(
+					"authenticated app session sign-out push notification cleanup failed",
+					{ error: asError(error) },
+				);
+			}
 		}
 
 		try {
@@ -127,6 +153,24 @@ export function createAuthenticatedAppSessionSignOut({
 		isRunning: () => state.running,
 		run,
 	};
+}
+
+async function defaultClearPushNotificationsForUser({
+	getToken,
+	userId,
+}: {
+	getToken: GetSessionToken;
+	userId: string;
+}): Promise<void> {
+	const preference = await readNotificationPreference(userId);
+	if (preference.enabled) {
+		const client = createUsersApiClient({ getToken });
+		await client.unregisterPushToken({
+			expoPushToken: preference.expoPushToken,
+		});
+	}
+
+	await writeNotificationPreference(userId, disabledPreference());
 }
 
 function sessionUserIdFromSnapshot(
