@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
 	fireEvent,
@@ -15,13 +16,24 @@ import { UnistylesRuntime } from "react-native-unistyles";
 
 import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
+import { createUsersApiClient } from "@/lib/client-api/users";
 import { useLogger } from "@/lib/logger";
+import type { AuthenticatedAppSession } from "@/lib/services/session";
 import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
+const mockGetToken = jest.fn(async () => "session-token");
+const mockReloadSession = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
+const mockUpdateUserName = jest.fn(async () => ({
+	id: "usr_avery",
+	email: "avery@example.com",
+	displayName: "Avery Lough",
+	firstName: "Avery",
+	lastName: "Lough",
+}));
 const devClientHeaderActionGutter = 56;
 const setAdaptiveThemesSpy = jest
 	.spyOn(UnistylesRuntime, "setAdaptiveThemes")
@@ -49,8 +61,16 @@ jest.mock("expo-router", () => ({
 	useRouter: () => ({ push: mockRouterPush, replace: mockRouterReplace }),
 }));
 
+jest.mock("@clerk/clerk-expo", () => ({
+	useAuth: jest.fn(),
+}));
+
 jest.mock("@/components/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
+}));
+
+jest.mock("@/lib/client-api/users", () => ({
+	createUsersApiClient: jest.fn(),
 }));
 
 jest.mock("@/lib/analytics", () =>
@@ -70,7 +90,16 @@ beforeEach(() => {
 	jest.mocked(useLogger).mockReturnValue(mockLogger);
 	mockRouterPush.mockReset();
 	mockRouterReplace.mockReset();
+	mockGetToken.mockClear();
+	mockReloadSession.mockClear();
 	mockSignOut.mockClear();
+	mockUpdateUserName.mockClear();
+	jest.mocked(useAuth).mockReturnValue({
+		getToken: mockGetToken,
+	} as unknown as ReturnType<typeof useAuth>);
+	jest.mocked(createUsersApiClient).mockReturnValue({
+		updateUserName: mockUpdateUserName,
+	});
 	setAdaptiveThemesSpy.mockClear();
 	setThemeSpy.mockClear();
 	jest.mocked(track).mockClear();
@@ -81,9 +110,9 @@ beforeEach(() => {
 	});
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
-		session: null,
+		session: authenticatedAppSessionFixture(),
 		retry() {},
-		reloadSession() {},
+		reloadSession: mockReloadSession,
 		signOut: mockSignOut,
 	});
 	setExpoConfig({
@@ -100,7 +129,9 @@ describe("SettingsScreen", () => {
 	it("renders settings sections and configured legal rows", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
-		expect(screen.getByText("Household")).toBeTruthy();
+		expect(screen.getByText("User")).toBeTruthy();
+		expect(screen.getByText("User name")).toBeTruthy();
+		expect(screen.getByText("Avery Chen")).toBeTruthy();
 		expect(screen.getByText("Household settings")).toBeTruthy();
 		expect(screen.getAllByText("Appearance").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getByText("About")).toBeTruthy();
@@ -187,6 +218,39 @@ describe("SettingsScreen", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		expect(mockSignOut).toHaveBeenCalledTimes(1);
+	});
+
+	it("updates the User name from Settings", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByRole("button", { name: "User name" }));
+		await fireEvent.changeText(screen.getByLabelText("First name"), "Avery");
+		await fireEvent.changeText(screen.getByLabelText("Last name"), "Lough");
+		await fireEvent.press(screen.getByText("Save"));
+
+		await waitFor(() =>
+			expect(mockUpdateUserName).toHaveBeenCalledWith({
+				firstName: "Avery",
+				lastName: "Lough",
+			}),
+		);
+		expect(mockReloadSession).toHaveBeenCalledTimes(1);
+		expect(track).toHaveBeenCalledWith("user_name_updated", {
+			user_id: "usr_avery",
+		});
+		expect(await screen.findByText("User name updated.")).toBeTruthy();
+	});
+
+	it("requires a first or last name before saving", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByRole("button", { name: "User name" }));
+		await fireEvent.changeText(screen.getByLabelText("First name"), " ");
+		await fireEvent.changeText(screen.getByLabelText("Last name"), " ");
+		await fireEvent.press(screen.getByText("Save"));
+
+		expect(mockUpdateUserName).not.toHaveBeenCalled();
+		expect(screen.getByText("Provide a first or last name.")).toBeTruthy();
 	});
 
 	it("clears the Settings return target before signing out", async () => {
@@ -294,4 +358,61 @@ function setExpoConfig(config: {
 	extra: Record<string, unknown>;
 }) {
 	(Constants as { expoConfig: unknown }).expoConfig = config;
+}
+
+function authenticatedAppSessionFixture(): AuthenticatedAppSession {
+	const unusedServiceCall = async () => {
+		throw new Error("Unexpected Settings session service call");
+	};
+
+	return {
+		user: {
+			id: "usr_avery",
+			email: "avery@example.com",
+			displayName: "Avery Chen",
+			firstName: "Avery",
+			lastName: "Chen",
+		},
+		activeHousehold: { id: "hh_avery", name: "Avery" },
+		households: [
+			{ id: "hh_avery", name: "Avery", role: "owner", isActive: true },
+		],
+		activeMember: {
+			id: "mbr_avery",
+			userId: "usr_avery",
+			role: "owner",
+			displayName: "Avery Chen",
+		},
+		members: [
+			{
+				membershipId: "mbr_avery",
+				userId: "usr_avery",
+				role: "owner",
+				displayName: "Avery Chen",
+			},
+		],
+		resourceKey: "settings-test-session",
+		services: {
+			lists: {
+				createList: unusedServiceCall,
+				deleteList: unusedServiceCall,
+				getList: unusedServiceCall,
+				listLists: unusedServiceCall,
+				renameList: unusedServiceCall,
+			},
+			items: {
+				addItem: unusedServiceCall,
+				listItems: unusedServiceCall,
+				setItemChecked: unusedServiceCall,
+			},
+			changes: {
+				subscribe: () => ({ remove() {} }),
+			},
+			sync: {
+				getStatus: () => "synced",
+				requestSync: async () => null,
+				subscribe: () => ({ remove() {} }),
+			},
+		},
+	};
 }

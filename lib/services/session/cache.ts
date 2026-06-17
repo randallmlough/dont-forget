@@ -10,9 +10,23 @@ export const SESSION_CACHE_KEY = "dont-forget:authenticated-app-session:v1";
 const SIGNED_OUT_LOCAL_DATA_DELETION_KEY =
 	"dont-forget:signed-out-local-household-deletions:v1";
 
+const cachedSessionUserSchema = bootstrapResponseSchema.shape.user.extend({
+	firstName: z
+		.string()
+		.nullable()
+		.optional()
+		.transform((value) => value ?? null),
+	lastName: z
+		.string()
+		.nullable()
+		.optional()
+		.transform((value) => value ?? null),
+});
+
 const cachedSessionBootstrapSchema = bootstrapResponseSchema
 	.omit({ householdDatabase: true })
 	.extend({
+		user: cachedSessionUserSchema,
 		householdDatabase: z.object({
 			url: z.string(),
 			expiresAt: z.number(),

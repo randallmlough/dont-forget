@@ -35,6 +35,43 @@ describe("createUserService", () => {
 			await directory.close();
 		}
 	});
+
+	it("updates a User name through Clerk and persists the returned profile", async () => {
+		const directory = await createTestDirectoryDb();
+		const updateClerkUserName = jest.fn(async () => ({
+			...averyProfile,
+			lastName: "Lough",
+			displayName: "Avery Lough",
+		}));
+		const service = createUserService({
+			directory: directory.db,
+			updateClerkUserName,
+		});
+
+		try {
+			const updated = await service.updateUserName({
+				clerkUserId: "clerk_avery",
+				firstName: "Avery",
+				lastName: "Lough",
+			});
+
+			expect(updateClerkUserName).toHaveBeenCalledWith({
+				clerkUserId: "clerk_avery",
+				firstName: "Avery",
+				lastName: "Lough",
+			});
+			expect(updated).toMatchObject({
+				clerkUserId: "clerk_avery",
+				email: "avery@example.com",
+				firstName: "Avery",
+				lastName: "Lough",
+				displayName: "Avery Lough",
+			});
+			expect(await directory.db.select().from(users)).toHaveLength(1);
+		} finally {
+			await directory.close();
+		}
+	});
 });
 
 const averyProfile: ServerUserProfile = {

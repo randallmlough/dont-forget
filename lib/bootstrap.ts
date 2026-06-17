@@ -19,6 +19,8 @@ export const bootstrapResponseSchema = z.object({
 		id: z.string(),
 		email: z.string().nullable(),
 		displayName: z.string().nullable(),
+		firstName: z.string().nullable(),
+		lastName: z.string().nullable(),
 	}),
 	activeHousehold: z.object({
 		id: z.string(),

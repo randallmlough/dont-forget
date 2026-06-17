@@ -10,12 +10,24 @@ type DirectoryTransaction = Parameters<
 
 export type UserServiceDirectory = DirectoryDb | DirectoryTransaction;
 
+export type UpdateClerkUserName = (input: {
+	clerkUserId: string;
+	firstName: string | null;
+	lastName: string | null;
+}) => Promise<ServerUserProfile>;
+
 export type UserService = {
 	upsertUser(profile: ServerUserProfile): Promise<User>;
+	updateUserName(input: {
+		clerkUserId: string;
+		firstName: string | null;
+		lastName: string | null;
+	}): Promise<User>;
 };
 
 export type UserServiceDeps = {
 	directory: UserServiceDirectory;
+	updateClerkUserName?: UpdateClerkUserName;
 };
 
 export function createUserService(deps: UserServiceDeps): UserService {
@@ -23,7 +35,18 @@ export function createUserService(deps: UserServiceDeps): UserService {
 		upsertUser(profile) {
 			return upsertUser(profile, deps.directory);
 		},
+		async updateUserName(input) {
+			const updateClerkUserName =
+				deps.updateClerkUserName ?? (await defaultUpdateClerkUserName());
+			const profile = await updateClerkUserName(input);
+			return upsertUser(profile, deps.directory);
+		},
 	};
+}
+
+async function defaultUpdateClerkUserName(): Promise<UpdateClerkUserName> {
+	const { updateClerkUserName } = await import("@/lib/server/auth");
+	return updateClerkUserName;
 }
 
 async function upsertUser(

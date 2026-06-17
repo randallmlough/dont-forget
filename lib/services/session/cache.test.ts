@@ -398,6 +398,8 @@ describe("createSessionCache", () => {
 				id: "usr_blake",
 				email: "blake@example.com",
 				displayName: "Blake Rivera",
+				firstName: "Blake",
+				lastName: "Rivera",
 			},
 		};
 
