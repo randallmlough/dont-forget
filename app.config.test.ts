@@ -1,6 +1,13 @@
-import { sentryPluginOptionsForEnv } from "./app.config";
+import {
+	sentryPluginOptionsForEnv,
+	setSentryDisableAutoUploadForIosBuildPhases,
+} from "./app.config";
 
 type TestConfigEnv = Record<string, string | undefined>;
+type TestBuildPhase = {
+	name?: string;
+	shellScript?: string;
+};
 
 describe("Sentry Expo config plugin options", () => {
 	const completeUploadConfig: TestConfigEnv = {
@@ -56,5 +63,57 @@ describe("Sentry Expo config plugin options", () => {
 			project: "ios",
 		});
 		expect(productionConfig.SENTRY_DISABLE_AUTO_UPLOAD).toBeUndefined();
+	});
+});
+
+describe("Sentry iOS build phase auto-upload disabling", () => {
+	const nodeBinaryFallback = "$" + "{NODE_BINARY:-node}";
+
+	it("exports SENTRY_DISABLE_AUTO_UPLOAD in Sentry iOS shell phases", () => {
+		const buildPhases: Record<string, TestBuildPhase> = {
+			uploadSourceMaps: {
+				name: "Bundle React Native code and images",
+				shellScript:
+					"\"/bin/sh `\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('@sentry/react-native/package.json')) + '/scripts/sentry-xcode.sh'\"`\"",
+			},
+			uploadDebugSymbols: {
+				name: "Upload Debug Symbols to Sentry",
+				shellScript: `"/bin/sh \`${nodeBinaryFallback} --print "require('path').dirname(require.resolve('@sentry/react-native/package.json')) + '/scripts/sentry-xcode-debug-files.sh'"\`"`,
+			},
+			other: {
+				name: "Other",
+				shellScript: '"echo ok"',
+			},
+		};
+
+		setSentryDisableAutoUploadForIosBuildPhases({
+			pbxShellScriptBuildPhaseObj: () => buildPhases,
+		});
+
+		expect(buildPhases.uploadSourceMaps?.shellScript).toContain(
+			'"export SENTRY_DISABLE_AUTO_UPLOAD=true\\n/bin/sh',
+		);
+		expect(buildPhases.uploadDebugSymbols?.shellScript).toContain(
+			'"export SENTRY_DISABLE_AUTO_UPLOAD=true\\n/bin/sh',
+		);
+		expect(buildPhases.other?.shellScript).toBe('"echo ok"');
+	});
+
+	it("does not duplicate an existing SENTRY_DISABLE_AUTO_UPLOAD export", () => {
+		const buildPhases: Record<string, TestBuildPhase> = {
+			uploadDebugSymbols: {
+				shellScript: `"export SENTRY_DISABLE_AUTO_UPLOAD=true\\n/bin/sh \`${nodeBinaryFallback} --print "require('path').dirname(require.resolve('@sentry/react-native/package.json')) + '/scripts/sentry-xcode-debug-files.sh'"\`"`,
+			},
+		};
+
+		setSentryDisableAutoUploadForIosBuildPhases({
+			pbxShellScriptBuildPhaseObj: () => buildPhases,
+		});
+
+		expect(
+			buildPhases.uploadDebugSymbols?.shellScript?.match(
+				/export SENTRY_DISABLE_AUTO_UPLOAD=true/g,
+			),
+		).toHaveLength(1);
 	});
 });
