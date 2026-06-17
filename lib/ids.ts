@@ -5,6 +5,7 @@ export type AppIdPrefix =
 	| "inv"
 	| "hjc"
 	| "hjcu"
+	| "dui"
 	| "pst"
 	| "lst"
 	| "itm";

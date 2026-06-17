@@ -9,13 +9,18 @@ import {
 	type PushTokenService,
 	sendPushNotifications,
 } from "@/lib/services/push/server";
+import { assertActiveUserLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 import {
+	createUserDeletionService,
 	createUserService,
+	DeletedUserError,
 	type UpdateClerkUserName,
+	type UserDeletionService,
 	type UserService,
 } from "@/lib/services/user/server";
 import {
 	type ApiHandlerDeps,
+	ApiUnauthorizedError,
 	authenticateApiUser,
 	BadRequestError,
 	errorResponse,
@@ -38,9 +43,12 @@ export type CurrentUser = {
 	lastName: string | null;
 };
 
+export type VerifyClerkRequestUserId = (request: Request) => Promise<string>;
+
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
 	createPushTokenService?: (directory: DirectoryDb) => PushTokenService;
+	createUserDeletionService?: (directory: DirectoryDb) => UserDeletionService;
 	createUserService?: (
 		directory: DirectoryDb,
 	) => Pick<UserService, "completeOnboarding">;
@@ -48,6 +56,7 @@ export type UsersApiDeps = ApiHandlerDeps & {
 		messages: PushMessage[],
 	) => Promise<{ deadTokens: string[] }>;
 	updateClerkUserName?: UpdateClerkUserName;
+	verifyClerkRequestUserId?: VerifyClerkRequestUserId;
 };
 
 export type UserApiDeps = UsersApiDeps;
@@ -61,6 +70,7 @@ export async function handleUpdateUserName(
 			const user = await authenticateApiUser(request, directory, deps);
 			const body = await readJsonObject(request);
 			const input = updateUserNameInput(body);
+			await assertActiveUserLifecycle(user.id, directory);
 			const updatedUser = await createUserService({
 				directory,
 				updateClerkUserName: deps?.updateClerkUserName,
@@ -73,6 +83,34 @@ export async function handleUpdateUserName(
 		});
 	} catch (error) {
 		return usersErrorResponse(error, "Update User name API failed");
+	}
+}
+
+export async function handleDeleteUser(
+	request: Request,
+	deps?: UsersApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const { user, clerkUserId } = await authenticateDeleteUser(
+				request,
+				directory,
+				deps,
+			);
+			const summary = await userDeletionService(directory, deps).deleteUser({
+				user,
+				clerkUserId,
+			});
+			if (summary.databasesNotDeleted.length > 0) {
+				throw new Error("Household database teardown pending");
+			}
+			return jsonResponse({
+				deleted: true,
+				deletedHouseholdCount: summary.deletedHouseholdIds.length,
+			});
+		});
+	} catch (error) {
+		return usersErrorResponse(error, "Delete User API failed");
 	}
 }
 
@@ -176,6 +214,38 @@ function updateUserNameInput(body: Record<string, unknown>): {
 	return { firstName, lastName };
 }
 
+async function authenticateDeleteUser(
+	request: Request,
+	directory: DirectoryDb,
+	deps: UsersApiDeps | undefined,
+): Promise<{ user: User; clerkUserId: string }> {
+	const verifyUserId =
+		deps?.verifyClerkRequestUserId ?? (await defaultVerifyClerkRequestUserId());
+	let clerkUserId: string;
+	try {
+		clerkUserId = await verifyUserId(request);
+	} catch (error) {
+		if (isServerUnauthorizedError(error)) {
+			throw new ApiUnauthorizedError(error.message);
+		}
+		throw error;
+	}
+
+	const user = await createUserService({
+		directory,
+	}).findUserForDeletionByClerkUserId(clerkUserId);
+	if (!user) {
+		throw new ApiUnauthorizedError("Unauthorized");
+	}
+
+	return { user, clerkUserId };
+}
+
+async function defaultVerifyClerkRequestUserId(): Promise<VerifyClerkRequestUserId> {
+	const { verifyClerkRequestUserId } = await import("@/lib/server/auth");
+	return verifyClerkRequestUserId;
+}
+
 function nullableNameField(
 	body: Record<string, unknown>,
 	key: "firstName" | "lastName",
@@ -228,6 +298,22 @@ function userService(
 	);
 }
 
+function userDeletionService(
+	directory: DirectoryDb,
+	deps: UsersApiDeps | undefined,
+): UserDeletionService {
+	if (deps?.createUserDeletionService) {
+		return deps.createUserDeletionService(directory);
+	}
+	return createUserDeletionService({
+		directory,
+		deleteClerkUser: async (clerkUserId) => {
+			const { deleteClerkUser } = await import("@/lib/server/auth");
+			await deleteClerkUser(clerkUserId);
+		},
+	});
+}
+
 function expoPushTokenField(body: Record<string, unknown>): string {
 	const token = stringField(body, "expoPushToken");
 	if (
@@ -241,8 +327,15 @@ function expoPushTokenField(body: Record<string, unknown>): string {
 
 function usersErrorResponse(error: unknown, logMessage: string): Response {
 	if (isApiUnauthorizedError(error)) return errorResponse(error.message, 401);
+	if (error instanceof DeletedUserError) {
+		return errorResponse("User has been deleted.", 401);
+	}
 	if (error instanceof BadRequestError)
 		return errorResponse(error.message, 400);
 	console.error(logMessage, redactAttributes({ error: asError(error) }));
 	return errorResponse("Something went wrong.", 500);
+}
+
+function isServerUnauthorizedError(error: unknown): error is Error {
+	return error instanceof Error && error.name === "UnauthorizedError";
 }

@@ -40,6 +40,7 @@ import {
 	SoleMemberError,
 } from "@/lib/services/member/server";
 import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
+import { DeletedUserError } from "@/lib/services/user/server";
 import {
 	ApiForbiddenError,
 	type ApiHandlerDeps,
@@ -537,6 +538,9 @@ function householdErrorResponse(error: unknown, context: string): Response {
 	}
 	if (isApiUnauthorizedError(error)) {
 		return errorResponse(error.message, 401);
+	}
+	if (error instanceof DeletedUserError) {
+		return errorResponse("User has been deleted.", 401);
 	}
 	if (isApiForbiddenError(error)) {
 		return errorResponse(error.message, 403);

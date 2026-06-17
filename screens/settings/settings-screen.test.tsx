@@ -30,6 +30,7 @@ const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockReloadSession = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
+const mockDeleteUser = jest.fn(async () => ({ deletedHouseholdCount: 1 }));
 const mockSendTestNotification = jest.fn(async () => ({
 	sent: 1,
 	disabled: 0,
@@ -66,6 +67,7 @@ jest.mock("@/components/session", () => ({
 jest.mock("@/lib/client-api/users", () => ({
 	createUsersApiClient: jest.fn(() => ({
 		completeOnboarding: jest.fn(async () => undefined),
+		deleteUser: mockDeleteUser,
 		registerPushToken: jest.fn(async () => undefined),
 		unregisterPushToken: jest.fn(async () => undefined),
 		sendTestNotification: mockSendTestNotification,
@@ -97,6 +99,8 @@ beforeEach(() => {
 	mockRouterReplace.mockReset();
 	mockReloadSession.mockReset();
 	mockSignOut.mockClear();
+	mockDeleteUser.mockClear();
+	mockDeleteUser.mockResolvedValue({ deletedHouseholdCount: 1 });
 	mockSendTestNotification.mockClear();
 	mockUpdateUserName.mockReset();
 	mockUpdateUserName.mockResolvedValue({
@@ -141,9 +145,10 @@ describe("SettingsScreen", () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
 		expect(screen.getByText("User")).toBeTruthy();
-		expect(screen.getByText("User name")).toBeTruthy();
+		expect(screen.getByText("Name")).toBeTruthy();
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 		expect(screen.getByText("Household settings")).toBeTruthy();
+		expect(screen.getByText("Delete Account")).toBeTruthy();
 		expect(screen.getAllByText("Appearance").length).toBeGreaterThanOrEqual(1);
 		expect(screen.getAllByText("Notifications").length).toBeGreaterThanOrEqual(
 			1,
@@ -238,6 +243,136 @@ describe("SettingsScreen", () => {
 		);
 	});
 
+	it("requires typed confirmation before deleting the User", async () => {
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Account" }),
+		);
+
+		const deleteButton = screen.getByRole("button", {
+			name: "Permanently delete account",
+		});
+		expect(deleteButton.props.accessibilityState).toMatchObject({
+			disabled: true,
+		});
+
+		await fireEvent.changeText(
+			screen.getByLabelText("Type DELETE to confirm"),
+			"delete",
+		);
+		expect(deleteButton.props.accessibilityState).toMatchObject({
+			disabled: true,
+		});
+
+		await fireEvent.changeText(
+			screen.getByLabelText("Type DELETE to confirm"),
+			"DELETE",
+		);
+		expect(deleteButton.props.accessibilityState).toMatchObject({
+			disabled: false,
+		});
+	});
+
+	it("deletes the User, tracks the outcome, then signs out", async () => {
+		mockDeleteUser.mockResolvedValue({ deletedHouseholdCount: 2 });
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Account" }),
+		);
+		await fireEvent.changeText(
+			screen.getByLabelText("Type DELETE to confirm"),
+			"DELETE",
+		);
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Permanently delete account" }),
+		);
+
+		await waitFor(() => expect(mockDeleteUser).toHaveBeenCalledTimes(1));
+		expect(track).toHaveBeenCalledWith("user_deleted", {
+			user_id: "usr_avery",
+			deleted_household_count: 2,
+		});
+		expect(mockSignOut).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not show server deletion failure copy when sign-out cleanup fails after deletion", async () => {
+		mockSignOut.mockRejectedValueOnce(new Error("local cleanup failed"));
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Account" }),
+		);
+		await fireEvent.changeText(
+			screen.getByLabelText("Type DELETE to confirm"),
+			"DELETE",
+		);
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Permanently delete account" }),
+		);
+
+		await waitFor(() => expect(mockDeleteUser).toHaveBeenCalledTimes(1));
+		expect(track).toHaveBeenCalledWith("user_deleted", {
+			user_id: "usr_avery",
+			deleted_household_count: 1,
+		});
+		expect(mockSignOut).toHaveBeenCalledTimes(1);
+		expect(
+			screen.queryByText("User deletion failed. Please try again."),
+		).toBeNull();
+	});
+
+	it("retries User deletion when the deleted User no longer has an app session", async () => {
+		mockDeleteUser.mockResolvedValue({ deletedHouseholdCount: 0 });
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "error", message: "User has been deleted." },
+			session: null,
+			retry() {},
+			reloadSession() {},
+			signOut: mockSignOut,
+		});
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Account" }),
+		);
+		await fireEvent.changeText(
+			screen.getByLabelText("Type DELETE to confirm"),
+			"DELETE",
+		);
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Permanently delete account" }),
+		);
+
+		await waitFor(() => expect(mockDeleteUser).toHaveBeenCalledTimes(1));
+		expect(track).toHaveBeenCalledWith("user_deleted", {
+			deleted_household_count: 0,
+		});
+		expect(mockSignOut).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows a notice when User deletion fails", async () => {
+		mockDeleteUser.mockRejectedValue(new Error("server down"));
+		await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Account" }),
+		);
+		await fireEvent.changeText(
+			screen.getByLabelText("Type DELETE to confirm"),
+			"DELETE",
+		);
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Permanently delete account" }),
+		);
+
+		expect(
+			await screen.findByText("User deletion failed. Please try again."),
+		).toBeTruthy();
+		expect(mockSignOut).not.toHaveBeenCalled();
+	});
+
 	it("hydrates saved User name from the authenticated app session", async () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "ready", refreshing: false },
@@ -253,7 +388,7 @@ describe("SettingsScreen", () => {
 
 		await renderWithSafeArea(<SettingsScreen />);
 
-		await fireEvent.press(screen.getByText("User name"));
+		await fireEvent.press(screen.getByText("Name"));
 
 		expect(screen.getByLabelText("First name").props.value).toBe("QA006");
 		expect(screen.getByLabelText("Last name").props.value).toBe("Check");
@@ -284,7 +419,7 @@ describe("SettingsScreen", () => {
 			rendered.rerender(<SettingsScreen />);
 		});
 
-		await fireEvent.press(screen.getByText("User name"));
+		await fireEvent.press(screen.getByText("Name"));
 
 		expect(screen.getByLabelText("First name").props.value).toBe("Avery");
 		expect(screen.getByLabelText("Last name").props.value).toBe("Chen");
@@ -293,7 +428,7 @@ describe("SettingsScreen", () => {
 	it("saves trimmed User name and shows a success notice", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
-		await fireEvent.press(screen.getByText("User name"));
+		await fireEvent.press(screen.getByText("Name"));
 		await fireEvent.changeText(
 			await screen.findByLabelText("First name"),
 			"  Avery  ",
@@ -322,7 +457,7 @@ describe("SettingsScreen", () => {
 		);
 		await renderWithSafeArea(<SettingsScreen />);
 
-		await fireEvent.press(screen.getByText("User name"));
+		await fireEvent.press(screen.getByText("Name"));
 		await fireEvent.changeText(screen.getByLabelText("First name"), "Avery");
 		await fireEvent.press(screen.getByText("Save"));
 
@@ -334,7 +469,7 @@ describe("SettingsScreen", () => {
 	it("blocks User name saves with no first or last name", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
-		await fireEvent.press(screen.getByText("User name"));
+		await fireEvent.press(screen.getByText("Name"));
 		await screen.findByLabelText("First name");
 		await fireEvent.changeText(screen.getByLabelText("First name"), "");
 		await fireEvent.changeText(screen.getByLabelText("Last name"), "");

@@ -9,6 +9,7 @@ import {
 	type InvitationServiceDeps,
 	InvitationUnavailableError,
 } from "@/lib/services/invitation/server";
+import { DeletedUserError } from "@/lib/services/user/server";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
@@ -173,6 +174,9 @@ function invitationErrorResponse(error: unknown, context: string): Response {
 	}
 	if (isApiUnauthorizedError(error)) {
 		return errorResponse(error.message, 401);
+	}
+	if (error instanceof DeletedUserError) {
+		return errorResponse("User has been deleted.", 401);
 	}
 	if (error instanceof InvitationMembershipRequiredError) {
 		return errorResponse("Forbidden", 403);

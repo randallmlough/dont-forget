@@ -3,6 +3,7 @@ import {
 	createClerkClient,
 	verifyToken,
 } from "@clerk/backend";
+import { isClerkAPIResponseError } from "@clerk/backend/errors";
 
 import { readClerkServerConfig } from "@/lib/env";
 
@@ -24,24 +25,36 @@ export type ServerUserRecord = {
 export async function verifyClerkRequest(
 	request: Request,
 ): Promise<ServerUserRecord> {
+	const clerkUserId = await verifyClerkRequestUserId(request);
+	const config = readClerkServerConfig();
+	const clerk = createClerkClient({ secretKey: config.secretKey });
+	let user: ClerkUser;
+	try {
+		user = await clerk.users.getUser(clerkUserId);
+	} catch (error) {
+		if (isClerkNotFoundError(error)) {
+			throw new UnauthorizedError("Invalid Clerk session token");
+		}
+		throw error;
+	}
+	return serverUserFromClerkUser(user);
+}
+
+export async function verifyClerkRequestUserId(
+	request: Request,
+): Promise<string> {
 	const token = bearerToken(request.headers.get("authorization"));
 	const config = readClerkServerConfig();
 
-	let clerkUserId: string | undefined;
 	try {
 		const payload = await verifyToken(token, { secretKey: config.secretKey });
-		clerkUserId = payload.sub;
+		if (!payload.sub) {
+			throw new UnauthorizedError("Invalid Clerk session token");
+		}
+		return payload.sub;
 	} catch {
 		throw new UnauthorizedError("Invalid Clerk session token");
 	}
-
-	if (!clerkUserId) {
-		throw new UnauthorizedError("Invalid Clerk session token");
-	}
-
-	const clerk = createClerkClient({ secretKey: config.secretKey });
-	const user = await clerk.users.getUser(clerkUserId);
-	return serverUserFromClerkUser(user);
 }
 
 export async function updateClerkUserName(input: {
@@ -56,6 +69,17 @@ export async function updateClerkUserName(input: {
 		lastName: input.lastName ?? "",
 	});
 	return serverUserFromClerkUser(user);
+}
+
+export async function deleteClerkUser(clerkUserId: string): Promise<void> {
+	const config = readClerkServerConfig();
+	const clerk = createClerkClient({ secretKey: config.secretKey });
+	try {
+		await clerk.users.deleteUser(clerkUserId);
+	} catch (error) {
+		if (isClerkNotFoundError(error)) return;
+		throw error;
+	}
 }
 
 export function bearerToken(authorization: string | null): string {
@@ -100,4 +124,8 @@ function emptyToNull(value: string | null | undefined): string | null {
 	if (!value) return null;
 	const trimmed = value.trim();
 	return trimmed.length > 0 ? trimmed : null;
+}
+
+function isClerkNotFoundError(error: unknown): boolean {
+	return isClerkAPIResponseError(error) && error.status === 404;
 }

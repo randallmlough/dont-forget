@@ -3,6 +3,12 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { pushTokens } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
+import { assertActiveUserLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
+
+type DirectoryTransaction = Parameters<
+	Parameters<DirectoryDb["transaction"]>[0]
+>[0];
+type PushTokenServiceDirectory = DirectoryDb | DirectoryTransaction;
 
 export type PushTokenRecord = {
 	id: string;
@@ -34,11 +40,13 @@ export type PushTokenService = {
 	registerToken(input: RegisterPushTokenInput): Promise<PushTokenRecord>;
 	disableToken(input: DisablePushTokenInput): Promise<void>;
 	disableTokens(input: DisablePushTokensInput): Promise<void>;
+	disableTokensForUser(userId: string): Promise<void>;
+	deleteTokensForUser(userId: string): Promise<void>;
 	listActiveTokensForUsers(userIds: string[]): Promise<PushTokenRecord[]>;
 };
 
 export type PushTokenServiceDeps = {
-	directory: DirectoryDb;
+	directory: PushTokenServiceDirectory;
 };
 
 export function createPushTokenService(
@@ -48,31 +56,33 @@ export function createPushTokenService(
 
 	return {
 		async registerToken(input) {
-			const now = Date.now();
-			const [row] = await directory
-				.insert(pushTokens)
-				.values({
-					id: createAppId("pst"),
-					userId: input.userId,
-					expoPushToken: input.expoPushToken,
-					deviceName: normalizeDeviceName(input.deviceName),
-					platform: "ios",
-					createdAt: now,
-					updatedAt: now,
-					disabledAt: null,
-				})
-				.onConflictDoUpdate({
-					target: pushTokens.expoPushToken,
-					set: {
+			return runUserMutation(directory, input.userId, async (executor) => {
+				const now = Date.now();
+				const [row] = await executor
+					.insert(pushTokens)
+					.values({
+						id: createAppId("pst"),
 						userId: input.userId,
+						expoPushToken: input.expoPushToken,
 						deviceName: normalizeDeviceName(input.deviceName),
 						platform: "ios",
+						createdAt: now,
 						updatedAt: now,
 						disabledAt: null,
-					},
-				})
-				.returning();
-			return row;
+					})
+					.onConflictDoUpdate({
+						target: pushTokens.expoPushToken,
+						set: {
+							userId: input.userId,
+							deviceName: normalizeDeviceName(input.deviceName),
+							platform: "ios",
+							updatedAt: now,
+							disabledAt: null,
+						},
+					})
+					.returning();
+				return row;
+			});
 		},
 
 		async disableToken(input) {
@@ -102,6 +112,20 @@ export function createPushTokenService(
 				);
 		},
 
+		async disableTokensForUser(userId) {
+			const now = Date.now();
+			await directory
+				.update(pushTokens)
+				.set({ disabledAt: now, updatedAt: now })
+				.where(
+					and(eq(pushTokens.userId, userId), isNull(pushTokens.disabledAt)),
+				);
+		},
+
+		async deleteTokensForUser(userId) {
+			await directory.delete(pushTokens).where(eq(pushTokens.userId, userId));
+		},
+
 		async listActiveTokensForUsers(userIds) {
 			if (userIds.length === 0) return [];
 			return directory
@@ -115,6 +139,24 @@ export function createPushTokenService(
 				);
 		},
 	};
+}
+
+async function runUserMutation<T>(
+	directory: PushTokenServiceDirectory,
+	userId: string,
+	operation: (directory: PushTokenServiceDirectory) => Promise<T>,
+): Promise<T> {
+	if (
+		"transaction" in directory &&
+		typeof directory.transaction === "function"
+	) {
+		return directory.transaction(async (tx) => {
+			await assertActiveUserLifecycle(userId, tx);
+			return operation(tx);
+		});
+	}
+	await assertActiveUserLifecycle(userId, directory);
+	return operation(directory);
 }
 
 function normalizeDeviceName(

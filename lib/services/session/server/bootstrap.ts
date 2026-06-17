@@ -20,7 +20,17 @@ import {
 	type ActiveMembership,
 	createMemberService,
 } from "@/lib/services/member/server";
-import { createUserService } from "@/lib/services/user/server";
+import {
+	createUserService,
+	DeletedUserError,
+} from "@/lib/services/user/server";
+
+export class DeletedUserBootstrapError extends Error {
+	constructor() {
+		super("User has been deleted.");
+		this.name = "DeletedUserBootstrapError";
+	}
+}
 
 export type AuthenticatedAppSessionBootstrapDeps = {
 	appEnv: AppEnv;
@@ -53,7 +63,15 @@ export async function bootstrapAuthenticatedAppSession(
 		directory: deps.directory,
 	});
 
-	const user = await userService.upsertUser(userRecord);
+	let user: User;
+	try {
+		user = await userService.upsertUser(userRecord);
+	} catch (error) {
+		if (error instanceof DeletedUserError) {
+			throw new DeletedUserBootstrapError();
+		}
+		throw error;
+	}
 	const active = await deps.directory.transaction(async (tx) => {
 		const txMemberService = createMemberService({ directory: tx });
 		const txHouseholdService = createHouseholdService({ directory: tx });

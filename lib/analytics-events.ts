@@ -147,6 +147,10 @@ export type EventMap = {
 	user_name_updated: {
 		user_id: string;
 	};
+	user_deleted: {
+		user_id?: string;
+		deleted_household_count: number;
+	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };
 	user_email_verified: Record<string, never>;

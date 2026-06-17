@@ -19,6 +19,7 @@ _Avoid_: admin, host, creator
 **User**:
 A person known to Don't Forget, authenticated by Clerk and stored in the directory DB as an app-owned User record linked to `clerk_user_id`. Exists independently of any Household.
 _Avoid_: account, person, profile
+Exception: visible destructive-action copy may say "Delete Account" when it names the user-facing authentication account deletion action; code, events, logs, tests, and docs still use **User**.
 
 **List**:
 A named collection of Items, owned by a Household. Every Member of the Household can read and write the List.

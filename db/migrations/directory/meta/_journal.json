@@ -36,6 +36,20 @@
       "when": 1781485713486,
       "tag": "0004_naive_clea",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781723517537,
+      "tag": "0005_chubby_rachel_grey",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781723796327,
+      "tag": "0006_premium_gravity",
+      "breakpoints": true
     }
   ]
 }

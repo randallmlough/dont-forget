@@ -28,6 +28,7 @@ beforeEach(() => {
 	jest.mocked(AsyncStorage.setItem).mockResolvedValue(undefined);
 	jest.mocked(createUsersApiClient).mockReturnValue({
 		completeOnboarding: jest.fn(async () => undefined),
+		deleteUser: jest.fn(async () => ({ deletedHouseholdCount: 0 })),
 		registerPushToken: jest.fn(async () => undefined),
 		unregisterPushToken: jest.fn(async () => undefined),
 		sendTestNotification: jest.fn(async () => ({ sent: 0, disabled: 0 })),
@@ -237,6 +238,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		});
 		jest.mocked(createUsersApiClient).mockReturnValue({
 			completeOnboarding: jest.fn(async () => undefined),
+			deleteUser: jest.fn(async () => ({ deletedHouseholdCount: 0 })),
 			registerPushToken: jest.fn(async () => undefined),
 			unregisterPushToken: jest.fn(async () => {
 				throw unregisterFailure;

@@ -36,6 +36,8 @@ export type SettingsState = {
 	notificationsEnabled: boolean;
 	notificationNotice: string | null;
 	user: SettingsUser;
+	userDeletionError: string | null;
+	userDeletionInFlight: boolean;
 	userNotice: string | null;
 	userError: string | null;
 	userUpdateInFlight: boolean;
@@ -47,6 +49,7 @@ export type SettingsActions = {
 	openPrivacyPolicy: () => Promise<void>;
 	sendTestNotification: () => Promise<void>;
 	openTerms: () => Promise<void>;
+	deleteUser: () => Promise<boolean>;
 	setAppearancePreference: (preference: AppearancePreference) => Promise<void>;
 	setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 	signOut: () => Promise<void>;
@@ -80,6 +83,10 @@ export function useSettings(clientProp?: UsersApiClient): {
 	const [notificationNotice, setNotificationNotice] = useState<string | null>(
 		null,
 	);
+	const [userDeletionError, setUserDeletionError] = useState<string | null>(
+		null,
+	);
+	const [userDeletionInFlight, setUserDeletionInFlight] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [updatedUser, setUpdatedUser] = useState<SettingsUser | null>(null);
 	const [userNotice, setUserNotice] = useState<string | null>(null);
@@ -244,6 +251,32 @@ export function useSettings(clientProp?: UsersApiClient): {
 		await resolveClient().sendTestNotification();
 	}
 
+	async function deleteUser(): Promise<boolean> {
+		if (userDeletionInFlight) return false;
+		setUserDeletionInFlight(true);
+		setUserDeletionError(null);
+		try {
+			const result = await resolveClient().deleteUser();
+			track("user_deleted", {
+				...(user.id ? { user_id: user.id } : {}),
+				deleted_household_count: result.deletedHouseholdCount,
+			});
+		} catch {
+			setUserDeletionError("User deletion failed. Please try again.");
+			return false;
+		} finally {
+			setUserDeletionInFlight(false);
+		}
+
+		try {
+			await signOut();
+		} catch {
+			// Server-side deletion is complete; local cleanup recovery belongs to the
+			// centralized sign-out runner rather than this destructive action notice.
+		}
+		return true;
+	}
+
 	async function updateUserName(input: {
 		firstName: string | null;
 		lastName: string | null;
@@ -280,6 +313,8 @@ export function useSettings(clientProp?: UsersApiClient): {
 			notificationsEnabled: notificationPreference.enabled,
 			notificationNotice,
 			user,
+			userDeletionError,
+			userDeletionInFlight,
 			userNotice,
 			userError,
 			userUpdateInFlight,
@@ -306,6 +341,7 @@ export function useSettings(clientProp?: UsersApiClient): {
 						setNotice("Unable to open link. Try again.");
 					},
 				),
+			deleteUser,
 			setAppearancePreference,
 			setNotificationsEnabled,
 			signOut,

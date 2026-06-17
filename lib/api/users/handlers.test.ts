@@ -3,10 +3,12 @@ import { eq } from "drizzle-orm";
 import { pushTokens, users } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/server/test";
 import type { PushTokenService } from "@/lib/services/push/server";
+import { createUserDeletionService } from "@/lib/services/user/server";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
 import {
 	handleCompleteOnboarding,
+	handleDeleteUser,
 	handleRegisterPushToken,
 	handleSendTestNotification,
 	handleUnregisterPushToken,
@@ -25,9 +27,183 @@ const testUser = {
 	onboardingCompletedAt: null,
 	createdAt: 1,
 	updatedAt: 1,
+	deletedAt: null,
 };
 
 describe("Users API handlers", () => {
+	it("requires auth for User deletion", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleDeleteUser(new Request("http://test"), {
+				directory: directory.db,
+				verifyClerkRequestUserId: async () => {
+					throw new ApiUnauthorizedError("Invalid Clerk session token");
+				},
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Invalid Clerk session token" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("deletes the authenticated User", async () => {
+		const directory = await createTestDirectoryDb();
+		const deleteUser = jest.fn(async () => ({
+			leftHouseholdIds: ["hh_shared"],
+			deletedHouseholdIds: ["hh_solo"],
+			databasesNotDeleted: [],
+		}));
+		try {
+			await directory.db.insert(users).values(testUser);
+
+			const response = await handleDeleteUser(new Request("http://test"), {
+				directory: directory.db,
+				verifyClerkRequestUserId: async () => "clerk_avery",
+				createUserDeletionService: () => ({ deleteUser }),
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 200,
+				body: { deleted: true, deletedHouseholdCount: 1 },
+			});
+			expect(deleteUser).toHaveBeenCalledWith({
+				user: expect.objectContaining({ id: testUser.id }),
+				clerkUserId: "clerk_avery",
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("returns a server failure when User deletion leaves Household database teardown pending", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const deleteUser = jest.fn(async () => ({
+			leftHouseholdIds: [],
+			deletedHouseholdIds: ["hh_solo"],
+			databasesNotDeleted: ["df-test-hh-solo"],
+		}));
+
+		try {
+			await directory.db.insert(users).values(testUser);
+
+			const response = await handleDeleteUser(new Request("http://test"), {
+				directory: directory.db,
+				verifyClerkRequestUserId: async () => "clerk_avery",
+				createUserDeletionService: () => ({ deleteUser }),
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 500,
+				body: { error: "Something went wrong." },
+			});
+		} finally {
+			errorSpy.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("resumes User deletion after directory deletion committed before Clerk failed", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const deleteClerkUser = jest
+			.fn()
+			.mockRejectedValueOnce(new Error("Clerk unavailable"))
+			.mockResolvedValueOnce(undefined);
+
+		try {
+			await directory.db.insert(users).values(testUser);
+			const deps: UserApiDeps = {
+				directory: directory.db,
+				verifyClerkRequestUserId: async () => "clerk_avery",
+				createUserDeletionService: (db) =>
+					createUserDeletionService({ directory: db, deleteClerkUser }),
+			};
+
+			const failedResponse = await handleDeleteUser(
+				new Request("http://test"),
+				deps,
+			);
+			await expect(readJsonResponse(failedResponse)).resolves.toMatchObject({
+				status: 500,
+				body: { error: "Something went wrong." },
+			});
+
+			const retriedResponse = await handleDeleteUser(
+				new Request("http://test"),
+				deps,
+			);
+
+			await expect(readJsonResponse(retriedResponse)).resolves.toMatchObject({
+				status: 200,
+				body: { deleted: true, deletedHouseholdCount: 0 },
+			});
+			expect(deleteClerkUser).toHaveBeenCalledTimes(2);
+			expect(deleteClerkUser).toHaveBeenNthCalledWith(1, "clerk_avery");
+			expect(deleteClerkUser).toHaveBeenNthCalledWith(2, "clerk_avery");
+			const [storedUser] = await directory.db.select().from(users);
+			expect(storedUser).toMatchObject({
+				id: "usr_avery",
+				clerkUserId: "deleted_usr_avery",
+				deletedAt: expect.any(Number),
+			});
+		} finally {
+			errorSpy.mockRestore();
+			await directory.close();
+		}
+	});
+
+	it("returns unauthorized when the verified Clerk subject has no User", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleDeleteUser(new Request("http://test"), {
+				directory: directory.db,
+				verifyClerkRequestUserId: async () => "clerk_missing",
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 401,
+				body: { error: "Unauthorized" },
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("returns a generic server failure when User deletion fails", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			await directory.db.insert(users).values(testUser);
+
+			const response = await handleDeleteUser(new Request("http://test"), {
+				directory: directory.db,
+				verifyClerkRequestUserId: async () => "clerk_avery",
+				createUserDeletionService: () => ({
+					deleteUser: async () => {
+						throw new Error("Clerk unavailable");
+					},
+				}),
+			});
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 500,
+				body: { error: "Something went wrong." },
+			});
+			expect(errorSpy).toHaveBeenCalledWith(
+				"Delete User API failed",
+				expect.objectContaining({ error_message: "Clerk unavailable" }),
+			);
+		} finally {
+			errorSpy.mockRestore();
+			await directory.close();
+		}
+	});
+
 	it("requires auth for User name updates", async () => {
 		const directory = await createTestDirectoryDb();
 		try {
@@ -73,7 +249,7 @@ describe("Users API handlers", () => {
 		}
 	});
 
-	it("updates Clerk with trimmed names and stores the returned app User", async () => {
+	it("updates Clerk with trimmed names and upserts the returned User", async () => {
 		const directory = await createTestDirectoryDb();
 		const updateClerkUserName = jest.fn(async () => ({
 			clerkUserId: "user_avery",
@@ -296,6 +472,8 @@ describe("Users API handlers", () => {
 			}),
 			disableToken: jest.fn(),
 			disableTokens: jest.fn(),
+			disableTokensForUser: jest.fn(),
+			deleteTokensForUser: jest.fn(),
 			listActiveTokensForUsers: jest.fn(),
 		};
 

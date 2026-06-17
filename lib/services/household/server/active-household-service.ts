@@ -3,6 +3,7 @@ import { households, memberships, users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
+import { assertActiveUserLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -158,15 +159,35 @@ async function setActiveHousehold(
 	input: SwitchActiveHouseholdInput,
 	directory: ActiveHouseholdServiceDirectory,
 ): Promise<ActiveHouseholdSelection> {
-	const selection = await findActiveMembershipSelection(input, directory);
-	if (!selection) throw new ActiveHouseholdMembershipRequiredError();
+	return runUserMutation(directory, input.userId, async (executor) => {
+		const selection = await findActiveMembershipSelection(input, executor);
+		if (!selection) throw new ActiveHouseholdMembershipRequiredError();
 
-	await directory
-		.update(users)
-		.set({ activeHouseholdId: selection.householdId, updatedAt: Date.now() })
-		.where(eq(users.id, input.userId));
+		await executor
+			.update(users)
+			.set({ activeHouseholdId: selection.householdId, updatedAt: Date.now() })
+			.where(eq(users.id, input.userId));
 
-	return selection;
+		return selection;
+	});
+}
+
+async function runUserMutation<T>(
+	directory: ActiveHouseholdServiceDirectory,
+	userId: string,
+	operation: (directory: ActiveHouseholdServiceDirectory) => Promise<T>,
+): Promise<T> {
+	if (
+		"transaction" in directory &&
+		typeof directory.transaction === "function"
+	) {
+		return directory.transaction(async (tx) => {
+			await assertActiveUserLifecycle(userId, tx);
+			return operation(tx);
+		});
+	}
+	await assertActiveUserLifecycle(userId, directory);
+	return operation(directory);
 }
 
 async function findOldestActiveMembershipSelection(
