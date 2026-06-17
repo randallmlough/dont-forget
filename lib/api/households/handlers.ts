@@ -14,6 +14,7 @@ import {
 	createActiveHouseholdService,
 	createHouseholdJoinCodeService,
 	createHouseholdService,
+	createProductionHouseholdProvisioningService,
 	HouseholdForbiddenError,
 	HouseholdJoinCodeMembershipRequiredError,
 	type HouseholdJoinCodeService,
@@ -22,6 +23,7 @@ import {
 	HouseholdJoinCodeUnavailableError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,
+	type HouseholdProvisioningService,
 	type HouseholdService,
 } from "@/lib/services/household/server";
 import type { ActiveHouseholdServiceDirectory } from "@/lib/services/household/server/active-household-service";
@@ -69,6 +71,7 @@ export type HouseholdApiDeps = ApiHandlerDeps & {
 	createHouseholdService?: (
 		directory: HouseholdServiceDirectory,
 	) => HouseholdService;
+	createHouseholdProvisioningService?: () => HouseholdProvisioningService;
 	createMemberService?: (directory: MemberServiceDirectory) => MemberService;
 };
 
@@ -82,16 +85,29 @@ export async function handleCreateHousehold(
 			const body = await readJsonObject(request);
 			const name = createHouseholdNameFromBody(body);
 			const appEnv = deps?.appEnv ?? readTursoOperatorConfig().appEnv;
-			return runWithSqliteBusyRetry(() =>
+			const household = await runWithSqliteBusyRetry(() =>
 				directory.transaction(async (tx) => {
-					const household = await householdService(
-						tx,
-						deps,
-					).createOwnedHousehold({
+					return householdService(tx, deps).createOwnedHousehold({
 						appEnv,
 						user,
 						name,
 					});
+				}),
+			);
+
+			const provisioning = householdProvisioningService(deps);
+			await provisioning.ensureHouseholdDatabase({
+				tursoDbName: household.tursoDbName,
+				createdByUserId: user.id,
+				provisioningCompletedAt: household.provisioningCompletedAt,
+			});
+			await provisioning.createHouseholdDatabaseToken(household.tursoDbName);
+
+			return runWithSqliteBusyRetry(() =>
+				directory.transaction(async (tx) => {
+					await householdService(tx, deps).markProvisioningCompleted(
+						household.id,
+					);
 					await memberService(tx, deps).ensureOwnerMembership({
 						householdId: household.id,
 						user,
@@ -419,6 +435,15 @@ function householdJoinCodeService(
 	return createHouseholdJoinCodeService(
 		productionJoinCodeServiceDeps(directory),
 	);
+}
+
+function householdProvisioningService(
+	deps?: HouseholdApiDeps,
+): HouseholdProvisioningService {
+	if (deps?.createHouseholdProvisioningService) {
+		return deps.createHouseholdProvisioningService();
+	}
+	return createProductionHouseholdProvisioningService();
 }
 
 function memberService(
