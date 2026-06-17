@@ -159,6 +159,41 @@ describe("createSessionCache", () => {
 		expect(analytics.track).not.toHaveBeenCalled();
 	});
 
+	it("treats cached onboarding metadata as completed when older payloads omit it", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+		const { householdDatabase: _householdDatabase, ...sessionMetadata } =
+			sessionBootstrapFixture();
+		const { onboardingCompletedAt: _onboardingCompletedAt, ...legacyUser } =
+			sessionMetadata.user;
+		await storage.setItem(
+			SESSION_CACHE_KEY,
+			JSON.stringify({
+				...sessionMetadata,
+				user: legacyUser,
+				householdDatabase: {
+					url: "libsql://example.turso.io",
+					expiresAt: 1_700_000_000_000,
+				},
+				initializedAt: 1_700_000_000_100,
+			}),
+		);
+
+		const cached = await cache.read();
+
+		expect(cached?.user.onboardingCompletedAt).toBe(0);
+	});
+
+	it("preserves incomplete onboarding metadata when caching a fresh Authenticated App Session", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+
+		await cache.save(sessionBootstrapFixture());
+		const cached = await cache.read();
+
+		expect(cached?.user.onboardingCompletedAt).toBeNull();
+	});
+
 	it("reports no unauthorized cached Authenticated App Session for matching fresh authorization without side effects", async () => {
 		const storage = memoryStorage();
 		const analytics = createMockAnalytics();
@@ -398,6 +433,7 @@ describe("createSessionCache", () => {
 				id: "usr_blake",
 				email: "blake@example.com",
 				displayName: "Blake Rivera",
+				onboardingCompletedAt: null,
 			},
 		};
 

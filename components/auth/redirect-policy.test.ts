@@ -31,6 +31,91 @@ describe("authRedirectTarget", () => {
 		).toBeNull();
 	});
 
+	it("redirects a signed-in User from Home to onboarding when a fresh Authenticated App Session is incomplete", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/",
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+				isAuthenticatedAppSessionReady: true,
+				onboardingCompletedAt: null,
+			}),
+		).toBe("/onboarding");
+	});
+
+	it("does not redirect a signed-in User after onboarding is complete", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/",
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+				isAuthenticatedAppSessionReady: true,
+				onboardingCompletedAt: 1_700_000_000_000,
+			}),
+		).toBeNull();
+	});
+
+	it("does not redirect from cached Authenticated App Session startup", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/",
+				isSignedIn: false,
+				isAuthLoaded: false,
+				checkedCachedSession: true,
+				hasCachedSession: true,
+				isAuthenticatedAppSessionReady: true,
+				onboardingCompletedAt: null,
+			}),
+		).toBeNull();
+	});
+
+	it("does not redirect while already on onboarding", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/onboarding",
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+				isAuthenticatedAppSessionReady: true,
+				onboardingCompletedAt: null,
+			}),
+		).toBeNull();
+	});
+
+	it("redirects a signed-in User from protected app routes to onboarding when the Authenticated App Session is incomplete", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/household/settings",
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+				isAuthenticatedAppSessionReady: true,
+				onboardingCompletedAt: null,
+			}),
+		).toBe("/onboarding");
+	});
+
+	it("redirects a signed-in User from protected auth next targets to onboarding when the Authenticated App Session is incomplete", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				params: { next: "/household/settings" },
+				isSignedIn: true,
+				isAuthLoaded: true,
+				checkedCachedSession: true,
+				hasCachedSession: false,
+				isAuthenticatedAppSessionReady: true,
+				onboardingCompletedAt: null,
+			}),
+		).toBe("/onboarding");
+	});
+
 	it("preserves safe internal next targets for signed-in Users on auth routes", () => {
 		expect(
 			authRedirectTarget({

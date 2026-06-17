@@ -9,6 +9,10 @@ import {
 	sendPushNotifications,
 } from "@/lib/services/push/server";
 import {
+	createUserService,
+	type UserService,
+} from "@/lib/services/user/server";
+import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
 	BadRequestError,
@@ -26,6 +30,9 @@ const EXPO_PUSH_TOKEN_PREFIXES = ["ExponentPushToken[", "ExpoPushToken["];
 export type UsersApiDeps = ApiHandlerDeps & {
 	appEnv?: AppEnv;
 	createPushTokenService?: (directory: DirectoryDb) => PushTokenService;
+	createUserService?: (
+		directory: DirectoryDb,
+	) => Pick<UserService, "completeOnboarding">;
 	sendPushNotifications?: (
 		messages: PushMessage[],
 	) => Promise<{ deadTokens: string[] }>;
@@ -49,6 +56,21 @@ export async function handleRegisterPushToken(
 		});
 	} catch (error) {
 		return usersErrorResponse(error, "Register push token API failed");
+	}
+}
+
+export async function handleCompleteOnboarding(
+	request: Request,
+	deps?: UsersApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			await userService(directory, deps).completeOnboarding(user.id);
+			return jsonResponse({ completed: true });
+		});
+	} catch (error) {
+		return usersErrorResponse(error, "Complete onboarding API failed");
 	}
 }
 
@@ -111,6 +133,15 @@ function pushTokenService(
 	return (
 		deps?.createPushTokenService?.(directory) ??
 		createPushTokenService({ directory })
+	);
+}
+
+function userService(
+	directory: DirectoryDb,
+	deps: UsersApiDeps | undefined,
+): Pick<UserService, "completeOnboarding"> {
+	return (
+		deps?.createUserService?.(directory) ?? createUserService({ directory })
 	);
 }
 

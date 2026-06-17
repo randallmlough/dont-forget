@@ -5,6 +5,7 @@ import { createTestDirectoryDb } from "@/db/server/test";
 import type { PushTokenService } from "@/lib/services/push/server";
 import { ApiUnauthorizedError } from "../shared";
 import {
+	handleCompleteOnboarding,
 	handleRegisterPushToken,
 	handleSendTestNotification,
 	handleUnregisterPushToken,
@@ -18,6 +19,7 @@ const testUser = {
 	lastName: null,
 	displayName: "Avery",
 	activeHouseholdId: null,
+	onboardingCompletedAt: null,
 	createdAt: 1,
 	updatedAt: 1,
 };
@@ -101,6 +103,48 @@ describe("Users API handlers", () => {
 				.from(pushTokens)
 				.where(eq(pushTokens.expoPushToken, "ExponentPushToken[one]"));
 			expect(row.disabledAt).toEqual(expect.any(Number));
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("requires authentication for onboarding completion", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleCompleteOnboarding(
+				new Request("http://test"),
+				{
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError();
+					},
+				},
+			);
+
+			expect(response.status).toBe(401);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("completes onboarding for the authenticated User", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			await directory.db.insert(users).values({
+				id: testUser.id,
+				clerkUserId: testUser.clerkUserId,
+			});
+
+			const response = await handleCompleteOnboarding(
+				new Request("http://test"),
+				{
+					directory: directory.db,
+					authenticate: async () => testUser,
+				},
+			);
+
+			expect(response.status).toBe(200);
+			await expect(response.json()).resolves.toEqual({ completed: true });
 		} finally {
 			await directory.close();
 		}

@@ -283,6 +283,7 @@ function sessionFixture(): AuthenticatedAppSession & {
 			id: "usr_avery",
 			email: "avery@example.com",
 			displayName: "Avery Chen",
+			onboardingCompletedAt: null,
 		},
 		activeHousehold: { id: "hh_avery", name: "Avery" },
 		households: [
