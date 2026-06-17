@@ -31,6 +31,8 @@ import { createSessionDataServices } from "@/lib/services/session/services";
 import { deferred } from "@/lib/test/async";
 import { createMockLogger } from "@/lib/test/mocks/logger";
 
+const mockRouterPush = jest.fn();
+
 jest.mock("@/components/session", () => ({
 	...jest.requireActual<typeof import("@/components/session")>(
 		"@/components/session",
@@ -47,7 +49,7 @@ jest.mock("@/lib/local-storage/current-list-selection", () => ({
 }));
 
 jest.mock("expo-router", () => ({
-	useRouter: () => ({ push: jest.fn() }),
+	useRouter: () => ({ push: mockRouterPush }),
 }));
 
 jest.mock("@/lib/analytics", () =>
@@ -89,6 +91,7 @@ beforeEach(() => {
 		.mockReset()
 		.mockResolvedValue(false);
 	jest.mocked(track).mockClear();
+	mockRouterPush.mockReset();
 });
 
 function listSwitchedTrackCalls() {
@@ -139,9 +142,8 @@ describe("HomeScreen", () => {
 		}
 	});
 
-	it("wires retry and sign out actions from the provider", async () => {
+	it("wires retry and Settings navigation from the provider", async () => {
 		const retry = jest.fn();
-		const signOut = jest.fn(async () => undefined);
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: {
 				status: "error",
@@ -150,15 +152,16 @@ describe("HomeScreen", () => {
 			session: null,
 			retry,
 			reloadSession() {},
-			signOut,
+			async signOut() {},
 		});
 
 		await renderWithSafeArea(<HomeScreen />);
 
 		await fireEvent.press(screen.getByText("Try again"));
-		await fireEvent.press(screen.getByText("Sign out"));
+		await fireEvent.press(screen.getByText("Settings"));
 		expect(retry).toHaveBeenCalledTimes(1);
-		expect(signOut).toHaveBeenCalledTimes(1);
+		expect(track).toHaveBeenCalledWith("settings_opened", { source: "home" });
+		expect(mockRouterPush).toHaveBeenCalledWith("/settings");
 	});
 });
 
@@ -584,7 +587,7 @@ describe("HomeScreenView", () => {
 				<HomeScreenView
 					state={{ status: "ready", refreshing: false }}
 					session={harness.session}
-					onSignOut={() => {}}
+					onOpenSettings={() => {}}
 				/>,
 			);
 

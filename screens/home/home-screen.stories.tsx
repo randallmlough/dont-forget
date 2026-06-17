@@ -40,7 +40,7 @@ export const EmptyList: Story = {
 	args: {
 		state: { status: "ready", refreshing: false },
 		session: readySession(emptyActiveListState),
-		onSignOut: noop,
+		onOpenSettings: noop,
 	},
 };
 
@@ -48,7 +48,7 @@ export const WithItems: Story = {
 	args: {
 		state: { status: "ready", refreshing: false },
 		session: readySession(populatedActiveListState),
-		onSignOut: noop,
+		onOpenSettings: noop,
 	},
 };
 
@@ -56,7 +56,7 @@ export const Loading: Story = {
 	args: {
 		state: { status: "loading" },
 		session: null,
-		onSignOut: noop,
+		onOpenSettings: noop,
 	},
 };
 
@@ -68,7 +68,7 @@ export const AuthenticatedAppSessionError: Story = {
 		},
 		session: null,
 		onRetry: noop,
-		onSignOut: noop,
+		onOpenSettings: noop,
 	},
 };
 
