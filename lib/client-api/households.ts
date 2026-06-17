@@ -89,6 +89,13 @@ const renameHouseholdResponseSchema = z.object({
 	}),
 });
 
+const createHouseholdResponseSchema = z.object({
+	household: z.object({
+		id: z.string(),
+		name: z.string(),
+	}),
+});
+
 const leaveHouseholdResponseSchema = z.object({
 	left: z.literal(true),
 	promotedMembershipId: z.string().nullable(),
@@ -108,6 +115,9 @@ export type LeaveHouseholdResponse = z.infer<
 >;
 
 export type HouseholdApiClient = {
+	createHousehold(input: {
+		name?: string;
+	}): Promise<{ id: string; name: string }>;
 	renameHousehold(input: {
 		householdId: string;
 		name: string;
@@ -158,6 +168,13 @@ export function createHouseholdApiClient({
 		requestJson(path, { ...init, fetcher, apiBaseUrl });
 
 	return {
+		async createHousehold(input) {
+			const payload = await authed("/api/households", {
+				method: "POST",
+				body: JSON.stringify({ name: input.name }),
+			});
+			return createHouseholdResponseSchema.parse(payload).household;
+		},
 		async renameHousehold(input) {
 			const payload = await authed(`/api/households/${input.householdId}`, {
 				method: "PATCH",

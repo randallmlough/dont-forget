@@ -13,6 +13,7 @@ import { GET as listMembers } from "@/app/api/households/[householdId]/members+a
 import { PATCH as renameHousehold } from "@/app/api/households/[householdId]+api";
 import { POST as joinByCode } from "@/app/api/households/join-code/join+api";
 import { GET as previewJoinCode } from "@/app/api/households/join-code/preview+api";
+import { POST as createHousehold } from "@/app/api/households+api";
 import { PATCH as revokeInvitation } from "@/app/api/invitations/[invitationId]+api";
 import { POST as acceptInvitation } from "@/app/api/invitations/accept+api";
 import { GET as previewInvitation } from "@/app/api/invitations/preview+api";
@@ -39,6 +40,7 @@ describe("Stage 5 API route wrappers", () => {
 		expect(typeof setMemberRole).toBe("function");
 		expect(typeof leaveHousehold).toBe("function");
 		expect(typeof renameHousehold).toBe("function");
+		expect(typeof createHousehold).toBe("function");
 		expect(typeof getJoinCode).toBe("function");
 		expect(typeof setJoinCodeEnabled).toBe("function");
 		expect(typeof regenerateJoinCode).toBe("function");

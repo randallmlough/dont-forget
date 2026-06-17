@@ -1,4 +1,6 @@
 import type { DirectoryDb } from "@/db/server/client";
+import { runWithSqliteBusyRetry } from "@/db/utils";
+import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
 import {
 	type HouseholdJoinCodeSource,
@@ -12,6 +14,7 @@ import {
 	createActiveHouseholdService,
 	createHouseholdJoinCodeService,
 	createHouseholdService,
+	createProductionHouseholdProvisioningService,
 	HouseholdForbiddenError,
 	HouseholdJoinCodeMembershipRequiredError,
 	type HouseholdJoinCodeService,
@@ -20,8 +23,12 @@ import {
 	HouseholdJoinCodeUnavailableError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,
+	type HouseholdProvisioningService,
 	type HouseholdService,
 } from "@/lib/services/household/server";
+import type { ActiveHouseholdServiceDirectory } from "@/lib/services/household/server/active-household-service";
+import type { HouseholdServiceDirectory } from "@/lib/services/household/server/household-service";
+import { generateInitialHouseholdName } from "@/lib/services/household/server/initial-household-name";
 import {
 	createMemberService,
 	LastOwnerError,
@@ -43,6 +50,7 @@ import {
 	isApiForbiddenError,
 	isApiUnauthorizedError,
 	jsonResponse,
+	optionalStringField,
 	publicAppLinkBuilders,
 	queryStringField,
 	readJsonObject,
@@ -53,15 +61,72 @@ import {
 } from "../shared";
 
 export type HouseholdApiDeps = ApiHandlerDeps & {
+	appEnv?: AppEnv;
 	createActiveHouseholdService?: (
-		directory: DirectoryDb,
+		directory: ActiveHouseholdServiceDirectory,
 	) => ActiveHouseholdService;
 	createHouseholdJoinCodeService?: (
 		directory: DirectoryDb,
 	) => HouseholdJoinCodeService;
-	createHouseholdService?: (directory: DirectoryDb) => HouseholdService;
+	createHouseholdService?: (
+		directory: HouseholdServiceDirectory,
+	) => HouseholdService;
+	createHouseholdProvisioningService?: () => HouseholdProvisioningService;
 	createMemberService?: (directory: MemberServiceDirectory) => MemberService;
 };
+
+export async function handleCreateHousehold(
+	request: Request,
+	deps?: HouseholdApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			const body = await readJsonObject(request);
+			const name = createHouseholdNameFromBody(body);
+			const appEnv = deps?.appEnv ?? readTursoOperatorConfig().appEnv;
+			const household = await runWithSqliteBusyRetry(() =>
+				directory.transaction(async (tx) => {
+					return householdService(tx, deps).createOwnedHousehold({
+						appEnv,
+						user,
+						name,
+					});
+				}),
+			);
+
+			const provisioning = householdProvisioningService(deps);
+			await provisioning.ensureHouseholdDatabase({
+				tursoDbName: household.tursoDbName,
+				createdByUserId: user.id,
+				provisioningCompletedAt: household.provisioningCompletedAt,
+			});
+			await provisioning.createHouseholdDatabaseToken(household.tursoDbName);
+
+			return runWithSqliteBusyRetry(() =>
+				directory.transaction(async (tx) => {
+					await householdService(tx, deps).markProvisioningCompleted(
+						household.id,
+					);
+					await memberService(tx, deps).ensureOwnerMembership({
+						householdId: household.id,
+						user,
+					});
+					await activeHouseholdService(tx, deps).setActiveHousehold({
+						userId: user.id,
+						householdId: household.id,
+					});
+					return jsonResponse(
+						{ household: { id: household.id, name: household.name } },
+						201,
+					);
+				}),
+			);
+		});
+	} catch (error) {
+		return householdErrorResponse(error, "Create Household API failed");
+	}
+}
 
 export async function handleSwitchActiveHousehold(
 	request: Request,
@@ -339,8 +404,19 @@ function memberRoleField(body: Record<string, unknown>): "owner" | "member" {
 	throw new BadRequestError("Invalid Member role");
 }
 
+function createHouseholdNameFromBody(body: Record<string, unknown>): string {
+	const rawName = optionalStringField(body, "name")?.trim();
+	if (!rawName) return generateInitialHouseholdName();
+	if (rawName.length > 80) {
+		throw new HouseholdNameInvalidError(
+			"Household name must be 80 characters or fewer.",
+		);
+	}
+	return rawName;
+}
+
 function activeHouseholdService(
-	directory: DirectoryDb,
+	directory: ActiveHouseholdServiceDirectory,
 	deps?: HouseholdApiDeps,
 ): ActiveHouseholdService {
 	if (deps?.createActiveHouseholdService) {
@@ -361,6 +437,15 @@ function householdJoinCodeService(
 	);
 }
 
+function householdProvisioningService(
+	deps?: HouseholdApiDeps,
+): HouseholdProvisioningService {
+	if (deps?.createHouseholdProvisioningService) {
+		return deps.createHouseholdProvisioningService();
+	}
+	return createProductionHouseholdProvisioningService();
+}
+
 function memberService(
 	directory: MemberServiceDirectory,
 	deps?: HouseholdApiDeps,
@@ -370,7 +455,7 @@ function memberService(
 }
 
 function householdService(
-	directory: DirectoryDb,
+	directory: HouseholdServiceDirectory,
 	deps?: HouseholdApiDeps,
 ): HouseholdService {
 	if (deps?.createHouseholdService)
