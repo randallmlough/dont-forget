@@ -29,6 +29,7 @@ export {
 } from "./household-provisioning-service";
 export {
 	createHouseholdService,
+	type DeleteHouseholdResult,
 	HouseholdForbiddenError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,

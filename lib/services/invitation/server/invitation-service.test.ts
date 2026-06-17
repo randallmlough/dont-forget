@@ -353,6 +353,76 @@ describe("createInvitationService", () => {
 			await directory.close();
 		}
 	});
+
+	it("does not create or send Invitations after Household deletion wins the lifecycle lock", async () => {
+		const directory = await createTestDirectoryDb();
+		const analytics = { track: jest.fn() };
+		const emailSender = {
+			sendInvitationEmail: jest.fn(async () => ({ status: "sent" as const })),
+		};
+		let deleteBeforeLockedCreate = true;
+
+		try {
+			await seedInvitationHousehold(directory.db);
+			const racingDirectory = new Proxy(directory.db, {
+				get(target, prop, receiver) {
+					if (prop === "transaction") {
+						return async (
+							operation: Parameters<DirectoryDb["transaction"]>[0],
+						) => {
+							if (deleteBeforeLockedCreate) {
+								deleteBeforeLockedCreate = false;
+								await directory.db
+									.update(households)
+									.set({ deletedAt: 1_700_000_011_000 })
+									.where(
+										eq(households.id, PRIMARY_HOUSEHOLD_SEED.household.id),
+									);
+								await directory.db
+									.update(memberships)
+									.set({ removedAt: 1_700_000_011_000 })
+									.where(
+										eq(
+											memberships.householdId,
+											PRIMARY_HOUSEHOLD_SEED.household.id,
+										),
+									);
+							}
+							return directory.db.transaction(operation);
+						};
+					}
+					const value = Reflect.get(target, prop, receiver);
+					return typeof value === "function" ? value.bind(target) : value;
+				},
+			});
+			const service = createInvitationService({
+				directory: racingDirectory,
+				buildAcceptUrl: testAcceptUrl,
+				generateToken: createTokenGenerator(["late-token"]),
+				emailSender,
+				analytics,
+			});
+
+			await expect(
+				service.createInvitation({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+					email: "late.member@example.com",
+				}),
+			).rejects.toBeInstanceOf(InvitationMembershipRequiredError);
+
+			await expect(
+				directory.db.select().from(invitations),
+			).resolves.toHaveLength(0);
+			expect(emailSender.sendInvitationEmail).not.toHaveBeenCalled();
+			expect(analytics.track).not.toHaveBeenCalledWith(
+				"invitation_created",
+				expect.anything(),
+			);
+		} finally {
+			await directory.close();
+		}
+	});
 });
 
 async function seedInvitationHousehold(directory: DirectoryDb) {
