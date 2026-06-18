@@ -3,8 +3,7 @@ import { isSensitiveKey } from "./sensitive-keys";
 const BEARER_TOKEN_RE = /Bearer\s+[A-Za-z0-9_\-.=]+/g;
 const JWT_RE = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const QUERY_PARAM_RE =
-	/(^|[?&\s])((?:[A-Za-z0-9_.+\-[\]]|%[A-Fa-f0-9]{2})+)=([^&#\s]*)/g;
+const QUERY_PARAM_RE = /(^|[?&\s])([^=?&#\s]+)=([^&#\s]*)/g;
 
 export function redactString(value: string): string {
 	return redactSensitiveQueryParams(value)

@@ -5,8 +5,6 @@
 PNPM ?= pnpm
 APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
 PORT_ARG = $(if $(PORT),--port $(PORT),)
-SENTRY_UPLOAD_CONFIG_PRESENT = $(and $(SENTRY_ORG),$(SENTRY_PROJECT),$(SENTRY_AUTH_TOKEN))
-SENTRY_AUTO_UPLOAD_ENV = $(if $(filter staging production,$(APP_ENV_VALUE)),$(if $(SENTRY_UPLOAD_CONFIG_PRESENT),,SENTRY_DISABLE_AUTO_UPLOAD=true),SENTRY_DISABLE_AUTO_UPLOAD=true)
 
 .DEFAULT_GOAL := help
 
@@ -34,11 +32,11 @@ start: ## Start Expo for normal app development *common*
 
 .PHONY: ios
 ios: ## Run the native iOS target *common*
-	@APP_ENV="$(APP_ENV_VALUE)" $(SENTRY_AUTO_UPLOAD_ENV) $(PNPM) expo run:ios $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo run:ios $(PORT_ARG)
 
 .PHONY: prebuild
 prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to pass --clean
-	@APP_ENV="$(APP_ENV_VALUE)" $(SENTRY_AUTO_UPLOAD_ENV) $(PNPM) expo prebuild --platform ios $(if $(filter --clean,$(MAKECMDGOALS)),--clean,)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo prebuild --platform ios $(if $(filter --clean,$(MAKECMDGOALS)),--clean,)
 
 .PHONY: --clean
 --clean:
