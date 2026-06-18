@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+	act,
 	fireEvent,
 	render,
 	screen,
@@ -239,6 +240,44 @@ describe("SettingsScreen", () => {
 			user_id: "usr_avery",
 		});
 		expect(await screen.findByText("User name updated.")).toBeTruthy();
+	});
+
+	it("preserves arrived session name parts when saving an expanded User name draft", async () => {
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "ready", refreshing: false },
+			session: null,
+			retry() {},
+			reloadSession: mockReloadSession,
+			signOut: mockSignOut,
+		});
+		const { rerender } = await renderWithSafeArea(<SettingsScreen />);
+
+		await fireEvent.press(screen.getByRole("button", { name: "User name" }));
+		await fireEvent.changeText(screen.getByLabelText("First name"), "Ava");
+
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "ready", refreshing: false },
+			session: authenticatedAppSessionFixture(),
+			retry() {},
+			reloadSession: mockReloadSession,
+			signOut: mockSignOut,
+		});
+		await act(async () => {
+			rerender(<SettingsScreen />);
+		});
+
+		expect(screen.getByLabelText("First name").props.value).toBe("Ava");
+		await waitFor(() =>
+			expect(screen.getByLabelText("Last name").props.value).toBe("Chen"),
+		);
+		await fireEvent.press(screen.getByText("Save"));
+
+		await waitFor(() =>
+			expect(mockUpdateUserName).toHaveBeenCalledWith({
+				firstName: "Ava",
+				lastName: "Chen",
+			}),
+		);
 	});
 
 	it("requires a first or last name before saving", async () => {

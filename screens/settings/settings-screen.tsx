@@ -181,11 +181,15 @@ function UserNameSettingsForm({
 	user: SettingsState["user"];
 }) {
 	const [expanded, setExpanded] = useState(false);
-	const [firstName, setFirstName] = useState(user.firstName ?? "");
-	const [lastName, setLastName] = useState(user.lastName ?? "");
+	const [firstNameDraft, setFirstNameDraft] = useState<string | null>(null);
+	const [lastNameDraft, setLastNameDraft] = useState<string | null>(null);
 	const [validationMessage, setValidationMessage] = useState<string | null>(
 		null,
 	);
+	const userFirstName = user.firstName ?? "";
+	const userLastName = user.lastName ?? "";
+	const firstName = firstNameDraft ?? userFirstName;
+	const lastName = lastNameDraft ?? userLastName;
 
 	async function saveUserName() {
 		const nextFirstName = emptyToNull(firstName);
@@ -200,8 +204,8 @@ function UserNameSettingsForm({
 			lastName: nextLastName,
 		});
 		if (saved) {
-			setFirstName(nextFirstName ?? "");
-			setLastName(nextLastName ?? "");
+			setFirstNameDraft(nextFirstName ?? "");
+			setLastNameDraft(nextLastName ?? "");
 		}
 	}
 
@@ -215,8 +219,8 @@ function UserNameSettingsForm({
 					setExpanded((current) => {
 						const nextExpanded = !current;
 						if (nextExpanded) {
-							setFirstName(user.firstName ?? "");
-							setLastName(user.lastName ?? "");
+							setFirstNameDraft(null);
+							setLastNameDraft(null);
 							setValidationMessage(null);
 						}
 						return nextExpanded;
@@ -242,7 +246,9 @@ function UserNameSettingsForm({
 						autoCapitalize="words"
 						autoComplete="given-name"
 						editable={!updateInFlight}
-						onChangeText={setFirstName}
+						onChangeText={(text) => {
+							setFirstNameDraft(text);
+						}}
 						placeholder="First name"
 						returnKeyType="next"
 						value={firstName}
@@ -252,7 +258,9 @@ function UserNameSettingsForm({
 						autoCapitalize="words"
 						autoComplete="family-name"
 						editable={!updateInFlight}
-						onChangeText={setLastName}
+						onChangeText={(text) => {
+							setLastNameDraft(text);
+						}}
 						placeholder="Last name"
 						returnKeyType="done"
 						value={lastName}
