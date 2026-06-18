@@ -1,4 +1,5 @@
 import {
+	deletedUserIdentities,
 	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
@@ -83,6 +84,12 @@ describe("database reset", () => {
 				createdAt: 1,
 				updatedAt: 1,
 			});
+			await directory.db.insert(deletedUserIdentities).values({
+				id: "dui_1",
+				userId: "usr_1",
+				clerkUserIdHash: "hash_clerk_user_1",
+				directoryDeletedAt: 1,
+			});
 
 			expect(await householdDatabasesForReset(directory.db)).toEqual([
 				{ id: "hh_1", tursoDbName: "df-test-hh-1" },
@@ -103,6 +110,9 @@ describe("database reset", () => {
 			expect(await directory.db.select().from(memberships)).toHaveLength(0);
 			expect(await directory.db.select().from(pushTokens)).toHaveLength(0);
 			expect(await directory.db.select().from(households)).toHaveLength(0);
+			expect(
+				await directory.db.select().from(deletedUserIdentities),
+			).toHaveLength(0);
 			expect(await directory.db.select().from(users)).toHaveLength(0);
 		} finally {
 			await directory.close();

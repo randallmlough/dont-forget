@@ -133,6 +133,10 @@ async function deleteDirectoryUserData(
 	const tursoDbNames = new Set<string>(
 		await listPendingHouseholdDatabaseNames(user.id, tx),
 	);
+	const pendingCreatedHouseholds = await listPendingCreatedHouseholds(
+		user.id,
+		tx,
+	);
 
 	for (const membership of activeMemberships) {
 		await lockHouseholdLifecycle(membership.householdId, tx);
@@ -164,6 +168,16 @@ async function deleteDirectoryUserData(
 			userId: user.id,
 		});
 		leftHouseholdIds.push(membership.householdId);
+	}
+
+	for (const household of pendingCreatedHouseholds) {
+		await lockHouseholdLifecycle(household.id, tx);
+		await tombstonePendingCreatedHousehold(
+			{ householdId: household.id, userId: user.id },
+			tx,
+		);
+		deletedHouseholdIds.push(household.id);
+		tursoDbNames.add(household.tursoDbName);
 	}
 
 	await createPushTokenService({ directory: tx }).deleteTokensForUser(user.id);
@@ -222,11 +236,55 @@ async function listActiveUserMemberships(
 		);
 }
 
+async function listPendingCreatedHouseholds(
+	userId: string,
+	directory: DirectoryTransaction,
+): Promise<{ id: string; tursoDbName: string }[]> {
+	const rows = await directory
+		.select({ id: households.id, tursoDbName: households.tursoDbName })
+		.from(households)
+		.leftJoin(
+			memberships,
+			and(
+				eq(memberships.householdId, households.id),
+				eq(memberships.userId, userId),
+				isNull(memberships.removedAt),
+			),
+		)
+		.where(
+			and(
+				eq(households.createdByUserId, userId),
+				isNull(households.provisioningCompletedAt),
+				isNull(households.deletedAt),
+				isNull(memberships.id),
+			),
+		)
+		.orderBy(asc(households.createdAt), asc(households.id));
+	return rows;
+}
+
+async function tombstonePendingCreatedHousehold(
+	input: { householdId: string; userId: string },
+	directory: DirectoryTransaction,
+): Promise<void> {
+	await directory
+		.update(households)
+		.set({ deletedAt: Date.now() })
+		.where(
+			and(
+				eq(households.id, input.householdId),
+				eq(households.createdByUserId, input.userId),
+				isNull(households.provisioningCompletedAt),
+				isNull(households.deletedAt),
+			),
+		);
+}
+
 async function listPendingHouseholdDatabaseNames(
 	userId: string,
 	directory: DirectoryTransaction,
 ): Promise<string[]> {
-	const rows = await directory
+	const membershipRows = await directory
 		.select({ tursoDbName: households.tursoDbName })
 		.from(memberships)
 		.innerJoin(households, eq(households.id, memberships.householdId))
@@ -237,7 +295,20 @@ async function listPendingHouseholdDatabaseNames(
 				isNotNull(households.deletedAt),
 			),
 		);
-	return rows.map((row) => row.tursoDbName);
+	const pendingCreatedRows = await directory
+		.select({ tursoDbName: households.tursoDbName })
+		.from(households)
+		.where(
+			and(
+				eq(households.createdByUserId, userId),
+				isNotNull(households.deletedAt),
+				isNull(households.databaseDeletedAt),
+				isNull(households.provisioningCompletedAt),
+			),
+		);
+	return [...membershipRows, ...pendingCreatedRows].map(
+		(row) => row.tursoDbName,
+	);
 }
 
 async function countOtherActiveMembers(

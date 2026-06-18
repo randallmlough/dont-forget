@@ -285,6 +285,75 @@ describe("createUserDeletionService", () => {
 		}
 	});
 
+	it("deletes pending created Households without active Memberships", async () => {
+		const directory = await createTestDirectoryDb();
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+		const deleteDatabase = jest
+			.fn()
+			.mockRejectedValueOnce(new Error("delete failed"))
+			.mockResolvedValueOnce(undefined);
+
+		try {
+			const user = await seedUser(directory.db, "usr_avery", "clerk_avery");
+			await seedHousehold(directory.db, {
+				id: "hh_pending",
+				tursoDbName: "df-test-hh-pending",
+				createdByUserId: user.id,
+			});
+			const service = createUserDeletionService({
+				directory: directory.db,
+				tursoPlatform: () => tursoPlatform(deleteDatabase),
+				deleteClerkUser: async () => undefined,
+			});
+
+			const firstSummary = await service.deleteUser({
+				user,
+				clerkUserId: "clerk_avery",
+			});
+			const [failedHousehold] = await directory.db
+				.select()
+				.from(households)
+				.where(eq(households.id, "hh_pending"));
+
+			expect(firstSummary).toEqual({
+				leftHouseholdIds: [],
+				deletedHouseholdIds: ["hh_pending"],
+				databasesNotDeleted: ["df-test-hh-pending"],
+			});
+			expect(failedHousehold).toMatchObject({
+				deletedAt: expect.any(Number),
+				databaseDeletedAt: null,
+				databaseDeletionFailedAt: expect.any(Number),
+			});
+
+			const retriedSummary = await service.deleteUser({
+				user,
+				clerkUserId: "clerk_avery",
+			});
+			const [retriedHousehold] = await directory.db
+				.select()
+				.from(households)
+				.where(eq(households.id, "hh_pending"));
+
+			expect(retriedSummary).toEqual({
+				leftHouseholdIds: [],
+				deletedHouseholdIds: [],
+				databasesNotDeleted: [],
+			});
+			expect(deleteDatabase).toHaveBeenCalledTimes(2);
+			expect(deleteDatabase).toHaveBeenNthCalledWith(1, "df-test-hh-pending");
+			expect(deleteDatabase).toHaveBeenNthCalledWith(2, "df-test-hh-pending");
+			expect(retriedHousehold).toMatchObject({
+				deletedAt: expect.any(Number),
+				databaseDeletedAt: expect.any(Number),
+				databaseDeletionFailedAt: null,
+			});
+		} finally {
+			errorSpy.mockRestore();
+			await directory.close();
+		}
+	});
+
 	it("deletes push token identifiers for the deleted User inside the directory transaction", async () => {
 		const directory = await createTestDirectoryDb();
 

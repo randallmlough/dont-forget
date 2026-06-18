@@ -1,5 +1,6 @@
 import { asc } from "drizzle-orm";
 import {
+	deletedUserIdentities,
 	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
@@ -54,6 +55,7 @@ export async function resetDirectoryDatabase(
 		await tx.delete(pushTokens);
 		await tx.update(users).set({ activeHouseholdId: null });
 		await tx.delete(households);
+		await tx.delete(deletedUserIdentities);
 		await tx.delete(users);
 	});
 }
