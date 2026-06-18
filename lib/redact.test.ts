@@ -89,6 +89,24 @@ describe("redaction", () => {
 		expect(redactString("/callback?access_token=access-secret&state=ok")).toBe(
 			"/callback?access_token=[REDACTED]&state=ok",
 		);
+		expect(redactString("/callback?access+token=access-secret&state=ok")).toBe(
+			"/callback?access+token=[REDACTED]&state=ok",
+		);
+		expect(redactString("/callback?access:token=access-secret&state=ok")).toBe(
+			"/callback?access:token=[REDACTED]&state=ok",
+		);
+		expect(redactString("/callback?access/token=access-secret&state=ok")).toBe(
+			"/callback?access/token=[REDACTED]&state=ok",
+		);
+		expect(
+			redactString("/callback?access_token[]=access-secret&state=ok"),
+		).toBe("/callback?access_token[]=[REDACTED]&state=ok");
+		expect(redactString("/callback?auth[token]=access-secret&state=ok")).toBe(
+			"/callback?auth[token]=[REDACTED]&state=ok",
+		);
+		expect(
+			redactString("/callback?access%5Ftoken=access-secret&state=ok"),
+		).toBe("/callback?access%5Ftoken=[REDACTED]&state=ok");
 	});
 
 	it("redacts circular attribute graphs without throwing", () => {

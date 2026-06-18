@@ -1,4 +1,5 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const { withSentryConfig } = require("@sentry/react-native/metro");
 const { withStorybook } = require("@storybook/react-native/withStorybook");
 
 const config = getDefaultConfig(__dirname);
@@ -19,4 +20,4 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 	return context.resolveRequest(context, moduleName, platform);
 };
 
-module.exports = withStorybook(config);
+module.exports = withSentryConfig(withStorybook(config));

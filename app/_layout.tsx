@@ -1,4 +1,5 @@
 import { ClerkProvider } from "@clerk/clerk-expo";
+import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
 import { useGlobalSearchParams, usePathname } from "expo-router";
 import { ThemeProvider } from "expo-router/react-navigation";
@@ -17,11 +18,15 @@ import {
 	AUTH_PATHS,
 	PUBLIC_AUTH_PRESERVING_PATHS,
 } from "@/components/auth/redirect-policy";
-import { AuthenticatedAppSessionProvider } from "@/components/session";
+import {
+	AuthenticatedAppSessionProvider,
+	useAuthenticatedAppSession,
+} from "@/components/session";
 import { screen } from "@/lib/analytics";
 import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { posthog } from "@/lib/posthog";
+import { clearSentryUser, initSentry, setSentryUser } from "@/lib/sentry";
 import { tokenCache } from "@/lib/token-cache";
 import "@/lib/unistyles/unistyles";
 import { loadAndApplyAppearancePreference } from "@/lib/unistyles/appearance-preference";
@@ -46,7 +51,9 @@ validateClerkKeyForEnv(
 	publishableKey,
 );
 
-export default function RootLayout() {
+initSentry();
+
+function RootLayout() {
 	const pathname = usePathname();
 	const params = useGlobalSearchParams();
 	const previousPathname = useRef<string | undefined>(undefined);
@@ -97,6 +104,7 @@ export default function RootLayout() {
 								pathname,
 							)}
 						>
+							<SentryUserSync />
 							<AuthGate pathname={pathname} params={params} />
 						</AuthenticatedAppSessionProvider>
 						<StatusBar style={isDarkTheme ? "light" : "dark"} />
@@ -105,6 +113,23 @@ export default function RootLayout() {
 			</SafeAreaProvider>
 		</PostHogProvider>
 	);
+}
+
+export default Sentry.wrap(RootLayout);
+
+function SentryUserSync() {
+	const { session } = useAuthenticatedAppSession();
+	const userId = session?.user.id;
+
+	useEffect(() => {
+		if (userId) {
+			setSentryUser(userId);
+			return;
+		}
+		clearSentryUser();
+	}, [userId]);
+
+	return null;
 }
 
 function shouldActivateAuthenticatedAppSession(pathname: string): boolean {

@@ -17,6 +17,7 @@ export type PublicExpoConfig = {
 	posthogHost?: string;
 	posthogProjectToken?: string;
 	privacyPolicyUrl?: string;
+	sentryDsn?: string;
 	termsUrl?: string;
 };
 
@@ -112,6 +113,7 @@ export function readPublicExpoConfig(
 			"EXPO_PUBLIC_PRIVACY_POLICY_URL",
 			source,
 		),
+		sentryDsn: optionalEnv("EXPO_PUBLIC_SENTRY_DSN", source),
 		termsUrl: optionalPublicHttpsUrl("EXPO_PUBLIC_TERMS_URL", source),
 	};
 }

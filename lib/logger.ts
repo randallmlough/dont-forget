@@ -3,6 +3,7 @@ import { useMemo } from "react";
 
 import { posthog } from "./posthog";
 import { redactAttributes, redactString } from "./redact";
+import { captureSentryLoggerError } from "./sentry";
 
 type PostHogLogAttributes = Parameters<typeof posthog.logger.info>[1];
 
@@ -19,6 +20,17 @@ export interface Logger {
 
 interface LoggerAdapter {
 	log(level: LogLevel, message: string, attributes: LogAttributes): void;
+}
+
+type RedactedLogRecord = {
+	level: LogLevel;
+	message: string;
+	attributes: LogAttributes;
+	error?: Error;
+};
+
+interface LoggerSink {
+	log(record: RedactedLogRecord): void;
 }
 
 class BaseLogger implements Logger {
@@ -58,16 +70,62 @@ class BaseLogger implements Logger {
 	}
 }
 
-class PostHogLoggerAdapter implements LoggerAdapter {
+class DiagnosticsLoggerAdapter implements LoggerAdapter {
+	constructor(private readonly sinks: LoggerSink[]) {}
+
 	log(level: LogLevel, message: string, attributes: LogAttributes) {
-		posthog.logger[level](
-			redactString(message),
-			redactAttributes(attributes) as PostHogLogAttributes,
+		const redactedAttributes = redactAttributes(attributes);
+		const record = {
+			level,
+			message: redactString(message),
+			attributes: redactedAttributes,
+			error:
+				level === "error"
+					? redactedErrorFromAttributes(redactedAttributes)
+					: undefined,
+		};
+		for (const sink of this.sinks) {
+			sink.log(record);
+		}
+	}
+}
+
+class PostHogLoggerSink implements LoggerSink {
+	log(record: RedactedLogRecord) {
+		posthog.logger[record.level](
+			record.message,
+			record.attributes as PostHogLogAttributes,
 		);
 	}
 }
 
-export const logger: Logger = new BaseLogger(new PostHogLoggerAdapter());
+class SentryErrorLoggerSink implements LoggerSink {
+	log(record: RedactedLogRecord) {
+		if (record.level !== "error") return;
+		captureSentryLoggerError(record.message, record.attributes, record.error);
+	}
+}
+
+function redactedErrorFromAttributes(
+	attributes: LogAttributes,
+): Error | undefined {
+	const message = attributes.error_message;
+	if (typeof message !== "string") return undefined;
+
+	const error = new Error(message);
+	const name = attributes.error_name;
+	const stack = attributes.error_stack;
+	if (typeof name === "string") error.name = name;
+	if (typeof stack === "string") error.stack = stack;
+	return error;
+}
+
+export const logger: Logger = new BaseLogger(
+	new DiagnosticsLoggerAdapter([
+		new PostHogLoggerSink(),
+		new SentryErrorLoggerSink(),
+	]),
+);
 
 export function useLogger(): Logger {
 	const { user } = useUser();
