@@ -100,6 +100,7 @@ beforeEach(() => {
 	} as unknown as ReturnType<typeof useAuth>);
 	jest.mocked(createUsersApiClient).mockReturnValue({
 		updateUserName: mockUpdateUserName,
+		completeOnboarding: jest.fn(async () => undefined),
 	});
 	setAdaptiveThemesSpy.mockClear();
 	setThemeSpy.mockClear();
@@ -411,6 +412,7 @@ function authenticatedAppSessionFixture(): AuthenticatedAppSession {
 			displayName: "Avery Chen",
 			firstName: "Avery",
 			lastName: "Chen",
+			onboardingCompletedAt: 1_700_000_000_000,
 		},
 		activeHousehold: { id: "hh_avery", name: "Avery" },
 		households: [

@@ -31,6 +31,9 @@ export type AuthenticatedAppSessionContextValue = {
 	session: AuthenticatedAppSession | null;
 	retry: () => void;
 	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
+	reloadSessionAndWait?: (
+		options?: AuthenticatedAppSessionReloadOptions,
+	) => Promise<AuthenticatedAppSession | null>;
 	signOut: () => Promise<void>;
 };
 
@@ -153,10 +156,29 @@ export function AuthenticatedAppSessionProvider({
 		requestActivation(options?.mode === "freshOnly" ? "freshOnly" : "normal");
 	}
 
+	async function reloadSessionAndWait(
+		options?: AuthenticatedAppSessionReloadOptions,
+	): Promise<AuthenticatedAppSession | null> {
+		if (signOutRunningState.running) return null;
+		if (options?.mode === "retireCurrent") {
+			await controller.invalidateCurrentSession();
+		}
+		await controller.activate({
+			getToken: () => auth.getToken(),
+			authReady,
+			signedIn,
+			cachePolicy: "freshOnly",
+			waitForFreshCachePersistence: true,
+		});
+		const nextSnapshot = controller.getSnapshot();
+		return nextSnapshot.status === "ready" ? nextSnapshot.session : null;
+	}
+
 	const value: AuthenticatedAppSessionContextValue = {
 		...publicStateFromSnapshot(snapshot),
 		retry,
 		reloadSession,
+		reloadSessionAndWait,
 		signOut: signOutFlow.run,
 	};
 

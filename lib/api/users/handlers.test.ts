@@ -1,6 +1,7 @@
+import { users } from "@/db/schema/directory";
 import { createTestDirectoryDb } from "@/db/server/test";
 import { ApiUnauthorizedError } from "../shared";
-import { handleUpdateUserName } from "./handlers";
+import { handleCompleteOnboarding, handleUpdateUserName } from "./handlers";
 
 const testUser = {
 	id: "usr_avery",
@@ -10,6 +11,7 @@ const testUser = {
 	lastName: "Chen",
 	displayName: "Avery Chen",
 	activeHouseholdId: null,
+	onboardingCompletedAt: null,
 	createdAt: 1,
 	updatedAt: 1,
 };
@@ -100,6 +102,48 @@ describe("Users API handlers", () => {
 			await expect(longResponse.json()).resolves.toEqual({
 				error: "First name must be 50 characters or fewer.",
 			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("requires authentication for onboarding completion", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			const response = await handleCompleteOnboarding(
+				new Request("http://test"),
+				{
+					directory: directory.db,
+					authenticate: async () => {
+						throw new ApiUnauthorizedError();
+					},
+				},
+			);
+
+			expect(response.status).toBe(401);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("completes onboarding for the authenticated User", async () => {
+		const directory = await createTestDirectoryDb();
+		try {
+			await directory.db.insert(users).values({
+				id: testUser.id,
+				clerkUserId: testUser.clerkUserId,
+			});
+
+			const response = await handleCompleteOnboarding(
+				new Request("http://test"),
+				{
+					directory: directory.db,
+					authenticate: async () => testUser,
+				},
+			);
+
+			expect(response.status).toBe(200);
+			await expect(response.json()).resolves.toEqual({ completed: true });
 		} finally {
 			await directory.close();
 		}

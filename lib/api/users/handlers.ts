@@ -31,7 +31,7 @@ export type CurrentUser = {
 export type UsersApiDeps = ApiHandlerDeps & {
 	createUserService?: (
 		directory: DirectoryDb,
-	) => Pick<UserService, "updateUserName">;
+	) => Partial<Pick<UserService, "completeOnboarding" | "updateUserName">>;
 	updateClerkUserName?: UpdateClerkUserName;
 };
 
@@ -46,10 +46,12 @@ export async function handleUpdateUserName(
 			const user = await authenticateApiUser(request, directory, deps);
 			const body = await readJsonObject(request);
 			const input = updateUserNameInput(body);
-			const updatedUser = await userService(directory, deps).updateUserName({
-				clerkUserId: user.clerkUserId,
-				...input,
-			});
+			const updatedUser = await userNameService(directory, deps).updateUserName(
+				{
+					clerkUserId: user.clerkUserId,
+					...input,
+				},
+			);
 
 			return jsonResponse({ user: currentUserResponse(updatedUser) });
 		});
@@ -103,17 +105,44 @@ function currentUserResponse(user: User): CurrentUser {
 	};
 }
 
-function userService(
+export async function handleCompleteOnboarding(
+	request: Request,
+	deps?: UsersApiDeps,
+): Promise<Response> {
+	try {
+		return await withDirectory(deps, async (directory) => {
+			const user = await authenticateApiUser(request, directory, deps);
+			await onboardingService(directory, deps).completeOnboarding(user.id);
+			return jsonResponse({ completed: true });
+		});
+	} catch (error) {
+		return usersErrorResponse(error, "Complete onboarding API failed");
+	}
+}
+
+function userNameService(
 	directory: DirectoryDb,
 	deps: UsersApiDeps | undefined,
 ): Pick<UserService, "updateUserName"> {
-	if (deps?.createUserService) {
-		return deps.createUserService(directory);
+	const service = deps?.createUserService?.(directory);
+	if (service?.updateUserName) {
+		return { updateUserName: service.updateUserName };
 	}
 	return createUserService({
 		directory,
 		updateClerkUserName: deps?.updateClerkUserName,
 	});
+}
+
+function onboardingService(
+	directory: DirectoryDb,
+	deps: UsersApiDeps | undefined,
+): Pick<UserService, "completeOnboarding"> {
+	const service = deps?.createUserService?.(directory);
+	if (service?.completeOnboarding) {
+		return { completeOnboarding: service.completeOnboarding };
+	}
+	return createUserService({ directory });
 }
 
 function usersErrorResponse(error: unknown, logMessage: string): Response {

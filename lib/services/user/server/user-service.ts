@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { type User, users } from "@/db/schema/directory";
 import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
@@ -17,6 +17,7 @@ export type UpdateClerkUserName = (input: {
 }) => Promise<ServerUserProfile>;
 
 export type UserService = {
+	completeOnboarding(userId: string): Promise<void>;
 	upsertUser(profile: ServerUserProfile): Promise<User>;
 	updateUserName(input: {
 		clerkUserId: string;
@@ -32,6 +33,9 @@ export type UserServiceDeps = {
 
 export function createUserService(deps: UserServiceDeps): UserService {
 	return {
+		completeOnboarding(userId) {
+			return completeOnboarding(userId, deps.directory);
+		},
 		upsertUser(profile) {
 			return upsertUser(profile, deps.directory);
 		},
@@ -47,6 +51,20 @@ export function createUserService(deps: UserServiceDeps): UserService {
 async function defaultUpdateClerkUserName(): Promise<UpdateClerkUserName> {
 	const { updateClerkUserName } = await import("@/lib/server/auth");
 	return updateClerkUserName;
+}
+
+async function completeOnboarding(
+	userId: string,
+	directory: UserServiceDirectory,
+): Promise<void> {
+	const completedAt = Date.now();
+	await directory
+		.update(users)
+		.set({
+			onboardingCompletedAt: completedAt,
+			updatedAt: completedAt,
+		})
+		.where(and(eq(users.id, userId), isNull(users.onboardingCompletedAt)));
 }
 
 async function upsertUser(

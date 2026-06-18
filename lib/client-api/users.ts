@@ -23,6 +23,7 @@ export type UsersApiClient = {
 		firstName: string | null;
 		lastName: string | null;
 	}): Promise<CurrentUser>;
+	completeOnboarding(): Promise<void>;
 };
 
 export type UserApiClient = UsersApiClient;
@@ -46,6 +47,11 @@ export function createUsersApiClient({
 				body: JSON.stringify(input),
 			});
 			return updateUserNameResponseSchema.parse(payload).user;
+		},
+		async completeOnboarding() {
+			await authed("/api/users/me/onboarding", {
+				method: "POST",
+			});
 		},
 	};
 }

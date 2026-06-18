@@ -21,6 +21,11 @@ const cachedSessionUserSchema = bootstrapResponseSchema.shape.user.extend({
 		.nullable()
 		.optional()
 		.transform((value) => value ?? null),
+	onboardingCompletedAt: z
+		.number()
+		.nullable()
+		.optional()
+		.transform((value) => (value === undefined ? 0 : value)),
 });
 
 const cachedSessionBootstrapSchema = bootstrapResponseSchema

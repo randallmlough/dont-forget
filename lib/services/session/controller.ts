@@ -72,6 +72,7 @@ export type AuthenticatedAppSessionActivation = {
 	authReady: boolean;
 	signedIn: boolean;
 	cachePolicy?: AuthenticatedAppSessionCachePolicy;
+	waitForFreshCachePersistence?: boolean;
 };
 
 type AuthenticatedAppSessionAuthState = "unknown" | "signedOut" | "signedIn";
@@ -145,13 +146,14 @@ export function createAuthenticatedAppSessionController(
 		}
 	}
 
-	function saveFreshSession(session: SessionBootstrap) {
+	function saveFreshSession(session: SessionBootstrap): Promise<void> {
 		const write = cacheWriteQueue
 			.catch(() => undefined)
 			.then(async () => {
-				await cache.save(session).catch(() => undefined);
+				await cache.save(session);
 			});
-		cacheWriteQueue = write;
+		cacheWriteQueue = write.catch(() => undefined);
+		return write;
 	}
 
 	async function drainCacheWrites() {
@@ -325,7 +327,8 @@ export function createAuthenticatedAppSessionController(
 		session: SessionBootstrap,
 		run: ActivationRunGuard,
 		cachedAttempt: CachedActivationAttempt,
-	) {
+		options: { waitForCachePersistence: boolean },
+	): Promise<boolean> {
 		publishLoadingFromCurrentSession();
 		const opened = await resources.openSessionResource(session);
 		if (!run.isCurrent()) {
@@ -333,16 +336,21 @@ export function createAuthenticatedAppSessionController(
 				startSync: false,
 				shouldPublish: () => false,
 			});
-			return;
+			return false;
 		}
 
-		await publishOpened(opened, session, run.id, {
+		let cachePersistence: Promise<void> | null = null;
+		const published = await publishOpened(opened, session, run.id, {
 			startSync: true,
 			onPublished: () => {
-				saveFreshSession(session);
+				cachePersistence = saveFreshSession(session);
 				cachedAttempt.markFreshPublished();
 			},
 		});
+		if (published && options.waitForCachePersistence) {
+			await cachePersistence;
+		}
+		return published;
 	}
 
 	async function handleSignedInActivation(
@@ -364,7 +372,10 @@ export function createAuthenticatedAppSessionController(
 					cachedAttempt,
 				);
 			if (!run.isCurrent()) return;
-			await publishFreshSessionForRun(session, run, cachedAttempt);
+			await publishFreshSessionForRun(session, run, cachedAttempt, {
+				waitForCachePersistence:
+					activation.waitForFreshCachePersistence === true,
+			});
 		} catch (error) {
 			await recoverActivationFailure(error, run, cachedAttempt, {
 				invalidatedUnauthorizedCached,

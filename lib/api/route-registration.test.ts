@@ -19,6 +19,7 @@ import { POST as acceptInvitation } from "@/app/api/invitations/accept+api";
 import { GET as previewInvitation } from "@/app/api/invitations/preview+api";
 import { POST as createInvitation } from "@/app/api/invitations+api";
 import { PATCH as switchActiveHousehold } from "@/app/api/users/me/active-household+api";
+import { POST as completeOnboarding } from "@/app/api/users/me/onboarding+api";
 import { PATCH as updateUserName } from "@/app/api/users/me+api";
 
 jest.mock("@/lib/api/invitations/handlers", () => {
@@ -52,6 +53,7 @@ describe("Stage 5 API route wrappers", () => {
 		expect(typeof previewJoinCode).toBe("function");
 		expect(typeof joinByCode).toBe("function");
 		expect(typeof switchActiveHousehold).toBe("function");
+		expect(typeof completeOnboarding).toBe("function");
 		expect(typeof updateUserName).toBe("function");
 	});
 });

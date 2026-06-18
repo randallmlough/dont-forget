@@ -127,6 +127,10 @@ export type EventMap = {
 		preference: "system" | "light" | "dark";
 	};
 	user_name_updated: { user_id: string };
+	onboarding_completed: {
+		skipped: boolean;
+		last_step: string;
+	};
 	user_signed_in: { method: "email" | "apple" | "google" };
 	user_signed_up: { method: "email" | "apple" | "google" };
 	user_email_verified: Record<string, never>;
