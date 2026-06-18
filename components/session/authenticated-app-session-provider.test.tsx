@@ -5,6 +5,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
+import { useState } from "react";
 import { Pressable, Text } from "react-native";
 import { useLogger } from "@/lib/logger";
 import type {
@@ -259,6 +260,55 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(controller.activate.mock.calls.at(-1)?.[0]).toMatchObject({
 			cachePolicy: "freshOnly",
 		});
+	});
+
+	it("can retire and await a durable fresh Authenticated App Session reload", async () => {
+		const activationFinished = deferred<void>();
+		const controller = authenticatedAppSessionControllerFixture({
+			snapshot: { status: "ready", session: appSessionFixture() },
+		});
+		controller.activate.mockImplementationOnce(async () => {
+			await activationFinished.promise;
+			controller.publish({
+				status: "ready",
+				session: appSessionFixture({
+					resourceKey: "authenticated-app-session:2",
+				}),
+			});
+		});
+		await render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+				activationEnabled={false}
+			>
+				<AwaitableRetireSessionState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Await retire" }));
+
+		await waitFor(() =>
+			expect(controller.invalidateCurrentSession).toHaveBeenCalledTimes(1),
+		);
+		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(1));
+		expect(controller.activate).toHaveBeenCalledWith({
+			getToken: expect.any(Function),
+			authReady: true,
+			signedIn: true,
+			cachePolicy: "freshOnly",
+			waitForFreshCachePersistence: true,
+		});
+		expect(screen.getByText("waiting")).toBeTruthy();
+
+		activationFinished.resolve(undefined);
+
+		await waitFor(() =>
+			expect(screen.getByText("authenticated-app-session:2")).toBeTruthy(),
+		);
+		expect(
+			controller.invalidateCurrentSession.mock.invocationCallOrder[0],
+		).toBeLessThan(controller.activate.mock.invocationCallOrder[0]);
 	});
 
 	it("signs out in analytics, controller, local cleanup, Clerk order", async () => {
@@ -700,6 +750,27 @@ function RetireSessionState() {
 	);
 }
 
+function AwaitableRetireSessionState() {
+	const { reloadSessionAndWait } = useAuthenticatedAppSession();
+	const [result, setResult] = useState("waiting");
+	if (!reloadSessionAndWait) return <Text>missing reload</Text>;
+	return (
+		<>
+			<Text>{result}</Text>
+			<Pressable
+				accessibilityRole="button"
+				onPress={() =>
+					void reloadSessionAndWait({ mode: "retireCurrent" }).then((session) =>
+						setResult(session?.resourceKey ?? "missing"),
+					)
+				}
+			>
+				<Text>Await retire</Text>
+			</Pressable>
+		</>
+	);
+}
+
 function authFixture(
 	overrides: Partial<
 		AuthenticatedAppSessionActivation & { signOut: () => Promise<void> }
@@ -714,7 +785,11 @@ function authFixture(
 	};
 }
 
-function appSessionFixture(): AuthenticatedAppSession {
+function appSessionFixture({
+	resourceKey = "authenticated-app-session:1",
+}: {
+	resourceKey?: string;
+} = {}): AuthenticatedAppSession {
 	return {
 		user: {
 			id: "usr_avery",
@@ -742,7 +817,7 @@ function appSessionFixture(): AuthenticatedAppSession {
 				displayName: "Avery Chen",
 			},
 		],
-		resourceKey: "authenticated-app-session:1",
+		resourceKey,
 		services: {
 			lists: {
 				createList: unusedSessionService,

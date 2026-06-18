@@ -9,10 +9,15 @@ import { useAuthenticatedAppSession } from "@/components/session";
 import { track } from "@/lib/analytics";
 import { createUsersApiClient } from "@/lib/client-api/users";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { deferred } from "@/lib/test/async";
 import OnboardingScreen from "./onboarding-screen";
 
 const mockReplace = jest.fn();
 const mockCompleteOnboarding = jest.fn(async () => undefined);
+const mockReloadSessionAndWait = jest.fn<
+	Promise<AuthenticatedAppSession | null>,
+	[]
+>(async () => sessionFixture({ onboardingCompletedAt: 1 }));
 
 jest.mock("@clerk/clerk-expo", () => ({
 	useAuth: () => ({ getToken: async () => "token" }),
@@ -40,12 +45,17 @@ beforeEach(() => {
 	mockReplace.mockReset();
 	mockCompleteOnboarding.mockReset();
 	mockCompleteOnboarding.mockResolvedValue(undefined);
+	mockReloadSessionAndWait.mockReset();
+	mockReloadSessionAndWait.mockResolvedValue(
+		sessionFixture({ onboardingCompletedAt: 1 }),
+	);
 	jest.mocked(track).mockClear();
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: sessionFixture(),
 		retry() {},
 		reloadSession() {},
+		reloadSessionAndWait: mockReloadSessionAndWait,
 		signOut: async () => undefined,
 	});
 	jest.mocked(createUsersApiClient).mockClear();
@@ -69,15 +79,25 @@ describe("OnboardingScreen", () => {
 	});
 
 	it("skips onboarding, completes persistence, tracks completion, and navigates Home", async () => {
+		const durableReload = deferred<AuthenticatedAppSession | null>();
+		mockReloadSessionAndWait.mockReturnValueOnce(durableReload.promise);
 		await render(<OnboardingScreen />);
 
 		const footerActions = screen.getByTestId("onboarding-footer-actions");
 
-		await fireEvent.press(within(footerActions).getByText("Skip"));
+		fireEvent.press(within(footerActions).getByText("Skip"));
 
 		await waitFor(() =>
 			expect(mockCompleteOnboarding).toHaveBeenCalledTimes(1),
 		);
+		expect(mockReloadSessionAndWait).toHaveBeenCalledWith({
+			mode: "retireCurrent",
+		});
+		expect(track).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		durableReload.resolve(sessionFixture({ onboardingCompletedAt: 1 }));
+
 		await waitFor(() =>
 			expect(track).toHaveBeenCalledWith("onboarding_completed", {
 				skipped: true,
@@ -135,12 +155,33 @@ describe("OnboardingScreen", () => {
 		);
 	});
 
+	it("stays on onboarding when durable reload does not confirm completion", async () => {
+		mockReloadSessionAndWait.mockResolvedValueOnce(sessionFixture());
+		await render(<OnboardingScreen />);
+
+		await fireEvent.press(screen.getByText("Skip"));
+
+		await waitFor(() =>
+			expect(mockReloadSessionAndWait).toHaveBeenCalledWith({
+				mode: "retireCurrent",
+			}),
+		);
+		expect(track).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to finish onboarding. Please try again."),
+			).toBeTruthy(),
+		);
+	});
+
 	it("does not complete while the Authenticated App Session is unavailable", async () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "loading" },
 			session: null,
 			retry() {},
 			reloadSession() {},
+			reloadSessionAndWait: mockReloadSessionAndWait,
 			signOut: async () => undefined,
 		});
 		await render(<OnboardingScreen />);
@@ -155,7 +196,11 @@ describe("OnboardingScreen", () => {
 	});
 });
 
-function sessionFixture(): AuthenticatedAppSession {
+function sessionFixture({
+	onboardingCompletedAt = null,
+}: {
+	onboardingCompletedAt?: number | null;
+} = {}): AuthenticatedAppSession {
 	return {
 		user: {
 			id: "usr_avery",
@@ -163,7 +208,7 @@ function sessionFixture(): AuthenticatedAppSession {
 			displayName: "Avery",
 			firstName: "Avery",
 			lastName: null,
-			onboardingCompletedAt: null,
+			onboardingCompletedAt,
 		},
 		activeHousehold: { id: "hh_avery", name: "Avery" },
 		households: [

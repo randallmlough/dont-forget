@@ -31,7 +31,7 @@ export function useOnboarding(): {
 	const { getToken } = useAuth();
 	const router = useRouter();
 	const {
-		reloadSession,
+		reloadSessionAndWait,
 		session,
 		state: sessionState,
 	} = useAuthenticatedAppSession();
@@ -53,11 +53,22 @@ export function useOnboarding(): {
 		try {
 			const usersClient = createUsersApiClient({ getToken });
 			await usersClient.completeOnboarding();
+			if (!reloadSessionAndWait) {
+				throw new Error("Durable session reload is unavailable");
+			}
+			const freshSession = await reloadSessionAndWait({
+				mode: "retireCurrent",
+			});
+			if (
+				freshSession === null ||
+				freshSession.user.onboardingCompletedAt === null
+			) {
+				throw new Error("Onboarding completion was not confirmed");
+			}
 			track("onboarding_completed", {
 				skipped,
 				last_step: currentStep.key,
 			});
-			reloadSession({ mode: "retireCurrent" });
 			router.replace("/");
 		} catch {
 			completedRef.current = false;

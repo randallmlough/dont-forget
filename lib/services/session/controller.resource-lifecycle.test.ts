@@ -108,6 +108,51 @@ describe("createAuthenticatedAppSessionController resource lifecycle", () => {
 		await activation;
 	});
 
+	it("waits for fresh cache persistence when explicitly requested", async () => {
+		const cacheSave = h.deferred<h.CachedSessionBootstrap>();
+		const sessionService = h.sessionRuntimeFixture();
+		sessionService.cache.save = jest.fn(() => cacheSave.promise);
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest
+				.fn()
+				.mockReturnValue(h.sessionDataServicesFixture()),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		let activationFinished = false;
+		const activation = controller
+			.activate({
+				getToken: async () => "token",
+				authReady: true,
+				signedIn: true,
+				cachePolicy: "freshOnly",
+				waitForFreshCachePersistence: true,
+			})
+			.then(() => {
+				activationFinished = true;
+			});
+
+		await h.waitForAsync(() =>
+			expect(controller.getSnapshot()).toMatchObject({
+				status: "ready",
+				session: { resourceKey: "authenticated-app-session:1" },
+			}),
+		);
+		await Promise.resolve();
+
+		expect(activationFinished).toBe(false);
+		expect(sessionService.cache.save).toHaveBeenCalledTimes(1);
+
+		cacheSave.resolve(h.cachedSessionBootstrapFixture());
+		await activation;
+
+		expect(activationFinished).toBe(true);
+	});
+
 	it("does not publish or cache a fresh session before the HouseholdStore opens", async () => {
 		const dataServicesOpened =
 			h.deferred<ReturnType<typeof h.sessionDataServicesFixture>>();
