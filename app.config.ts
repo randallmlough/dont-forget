@@ -75,26 +75,28 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 	};
 };
 
-function withLocalConfigPlugins(
+export function withLocalConfigPlugins(
 	plugins: ExpoConfig["plugins"],
 	appEnv: AppEnv,
 ): ExpoConfig["plugins"] {
 	const resolvedPlugins: LocalExpoPlugin[] = [...(plugins ?? [])];
 	const sentryPlugin = "@sentry/react-native/expo";
 	const disableSentryAutoUpload = shouldDisableSentryAutoUpload(appEnv);
-
-	if (
-		!resolvedPlugins.some(
-			(plugin) =>
-				plugin === sentryPlugin ||
-				(Array.isArray(plugin) && plugin[0] === sentryPlugin),
-		)
-	) {
-		resolvedPlugins.push([sentryPlugin, sentryPluginOptionsForEnv(appEnv)]);
-	}
+	const sentryPluginIndex = resolvedPlugins.findIndex(isSentryExpoPluginEntry);
 
 	if (disableSentryAutoUpload) {
-		resolvedPlugins.push(withSentryDisableAutoUploadBuildPhases);
+		if (sentryPluginIndex === -1) {
+			resolvedPlugins.push(withSentryDisableAutoUploadBuildPhases);
+			resolvedPlugins.push([sentryPlugin, sentryPluginOptionsForEnv(appEnv)]);
+		} else {
+			resolvedPlugins.splice(
+				sentryPluginIndex,
+				0,
+				withSentryDisableAutoUploadBuildPhases,
+			);
+		}
+	} else if (sentryPluginIndex === -1) {
+		resolvedPlugins.push([sentryPlugin, sentryPluginOptionsForEnv(appEnv)]);
 	}
 
 	if (process.env.EXPO_WITH_ROCKETSIM_CONNECT !== "1") {
@@ -128,6 +130,13 @@ function expoPluginsForConfig(
 	// Dynamic app config accepts function config plugins, but ExpoConfig's type
 	// only models serializable plugin entries.
 	return plugins as ExpoConfig["plugins"];
+}
+
+function isSentryExpoPluginEntry(plugin: LocalExpoPlugin): boolean {
+	return (
+		plugin === "@sentry/react-native/expo" ||
+		(Array.isArray(plugin) && plugin[0] === "@sentry/react-native/expo")
+	);
 }
 
 export function sentryPluginOptionsForEnv(

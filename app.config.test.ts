@@ -1,6 +1,7 @@
 import {
 	sentryPluginOptionsForEnv,
 	setSentryDisableAutoUploadForIosBuildPhases,
+	withLocalConfigPlugins,
 } from "./app.config";
 
 type TestConfigEnv = Record<string, string | undefined>;
@@ -68,6 +69,28 @@ describe("Sentry Expo config plugin options", () => {
 
 describe("Sentry iOS build phase auto-upload disabling", () => {
 	const nodeBinaryFallback = "$" + "{NODE_BINARY:-node}";
+
+	it("inserts the disable plugin before an appended Sentry plugin", () => {
+		const plugins = withLocalConfigPlugins([], "local") ?? [];
+
+		expect(plugins[0]).toEqual(expect.any(Function));
+		expect(plugins[1]).toEqual([
+			"@sentry/react-native/expo",
+			expect.any(Object),
+		]);
+	});
+
+	it("inserts the disable plugin before a pre-existing Sentry plugin", () => {
+		const sentryPlugin: [string, { project: string }] = [
+			"@sentry/react-native/expo",
+			{ project: "existing-ios" },
+		];
+
+		const plugins = withLocalConfigPlugins([sentryPlugin], "local") ?? [];
+
+		expect(plugins[0]).toEqual(expect.any(Function));
+		expect(plugins[1]).toBe(sentryPlugin);
+	});
 
 	it("exports SENTRY_DISABLE_AUTO_UPLOAD in Sentry iOS shell phases", () => {
 		const buildPhases: Record<string, TestBuildPhase> = {
