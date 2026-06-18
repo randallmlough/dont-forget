@@ -79,9 +79,8 @@ describe("Users API handlers", () => {
 		}
 	});
 
-	it("returns a server failure when User deletion leaves Household database teardown pending", async () => {
+	it("returns success when User deletion leaves Household database teardown pending", async () => {
 		const directory = await createTestDirectoryDb();
-		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 		const deleteUser = jest.fn(async () => ({
 			leftHouseholdIds: [],
 			deletedHouseholdIds: ["hh_solo"],
@@ -98,11 +97,14 @@ describe("Users API handlers", () => {
 			});
 
 			await expect(readJsonResponse(response)).resolves.toMatchObject({
-				status: 500,
-				body: { error: "Something went wrong." },
+				status: 200,
+				body: { deleted: true, deletedHouseholdCount: 1 },
+			});
+			expect(deleteUser).toHaveBeenCalledWith({
+				user: expect.objectContaining({ id: testUser.id }),
+				clerkUserId: "clerk_avery",
 			});
 		} finally {
-			errorSpy.mockRestore();
 			await directory.close();
 		}
 	});

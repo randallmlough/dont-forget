@@ -101,9 +101,6 @@ export async function handleDeleteUser(
 				user,
 				clerkUserId,
 			});
-			if (summary.databasesNotDeleted.length > 0) {
-				throw new Error("Household database teardown pending");
-			}
 			return jsonResponse({
 				deleted: true,
 				deletedHouseholdCount: summary.deletedHouseholdIds.length,

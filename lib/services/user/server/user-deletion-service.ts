@@ -29,7 +29,11 @@ import {
 	lockHouseholdLifecycle,
 	lockUserLifecycle,
 } from "@/lib/services/shared/server/lifecycle-lock";
-import { createUserService, type UserService } from "./user-service";
+import {
+	createUserService,
+	type UserService,
+	type UserServiceDirectory,
+} from "./user-service";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -59,7 +63,7 @@ export type UserDeletionServiceDeps = {
 		clerkUserId: string;
 	}) => Promise<void>;
 	transactionRunner?: <T>(operation: () => Promise<T>) => Promise<T>;
-	userService?: (directory: DirectoryTransaction) => UserService;
+	userService?: (directory: UserServiceDirectory) => UserService;
 };
 
 type DirectoryDeletionResult = {
@@ -97,27 +101,16 @@ export function createUserDeletionService(
 				databaseDeletionResult,
 				deps.directory,
 			);
-			if (databaseDeletionResult.databasesNotDeleted.length > 0) {
-				return {
-					leftHouseholdIds: directoryResult.leftHouseholdIds,
-					deletedHouseholdIds: directoryResult.deletedHouseholdIds,
-					databasesNotDeleted: databaseDeletionResult.databasesNotDeleted,
-				};
-			}
-			await deps.deleteClerkUser(input.clerkUserId);
-			await createUserService({ directory: deps.directory }).recordClerkDeleted(
-				{
-					userId: input.user.id,
-					clerkUserId: input.clerkUserId,
-				},
+			const deletionIdentity = {
+				userId: input.user.id,
+				clerkUserId: input.clerkUserId,
+			};
+			const finalUserService = userService(deps.directory, deps);
+			await (deps.anonymizeUser ?? finalUserService.anonymizeUser)(
+				deletionIdentity,
 			);
-			await (
-				deps.anonymizeUser ??
-				((identity) =>
-					createUserService({ directory: deps.directory }).anonymizeUser(
-						identity,
-					))
-			)({ userId: input.user.id, clerkUserId: input.clerkUserId });
+			await deps.deleteClerkUser(input.clerkUserId);
+			await finalUserService.recordClerkDeleted(deletionIdentity);
 			return {
 				leftHouseholdIds: directoryResult.leftHouseholdIds,
 				deletedHouseholdIds: directoryResult.deletedHouseholdIds,
@@ -198,7 +191,7 @@ async function deleteDirectoryUserData(
 }
 
 function userService(
-	directory: DirectoryTransaction,
+	directory: UserServiceDirectory,
 	deps: UserDeletionServiceDeps,
 ): UserService {
 	return deps.userService?.(directory) ?? createUserService({ directory });
