@@ -105,6 +105,66 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 		expect(controller.getSnapshot()).toEqual({ status: "loading" });
 	});
 
+	it("serializes deleted Household cache clearing after pending cache saves", async () => {
+		const fresh = h.sessionBootstrapFixture({
+			householdId: "hh_deleted",
+			householdName: "Deleted",
+		});
+		const save = h.deferred<h.CachedSessionBootstrap>();
+		const events: string[] = [];
+		const dataServices = h.sessionDataServicesFixture();
+		const sessionService = h.sessionRuntimeFixture({
+			getSession: jest.fn().mockResolvedValue(fresh),
+			save: jest.fn(async (session) => {
+				events.push(`save:${session.activeHousehold.id}:start`);
+				const result = await save.promise;
+				events.push(`save:${session.activeHousehold.id}:done`);
+				return result;
+			}),
+			clearDeletedHouseholdData: jest.fn(async () => {
+				events.push("clear:deleted");
+			}),
+		});
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest.fn().mockReturnValue(dataServices),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+			cachePolicy: "freshOnly",
+		});
+		await h.waitForAsync(() =>
+			expect(events).toEqual(["save:hh_deleted:start"]),
+		);
+
+		const deletion = controller.deleteHouseholdSession("hh_deleted");
+		await Promise.resolve();
+
+		expect(
+			sessionService.cache.clearDeletedHouseholdData,
+		).not.toHaveBeenCalled();
+		save.resolve(
+			h.cachedSessionBootstrapFixture({ householdId: "hh_deleted" }),
+		);
+		await deletion;
+
+		expect(events).toEqual([
+			"save:hh_deleted:start",
+			"save:hh_deleted:done",
+			"clear:deleted",
+		]);
+		expect(sessionService.cache.clearDeletedHouseholdData).toHaveBeenCalledWith(
+			"hh_deleted",
+		);
+	});
+
 	it("deletes unauthorized cached Household data before publishing fresh state", async () => {
 		const cached = h.cachedSessionBootstrapFixture({
 			householdId: "hh_old",

@@ -159,6 +159,14 @@ export function createAuthenticatedAppSessionController(
 		await cacheWriteQueue.catch(() => undefined);
 	}
 
+	function clearDeletedHouseholdCacheData(householdId: string) {
+		const write = cacheWriteQueue
+			.catch(() => undefined)
+			.then(() => cache.clearDeletedHouseholdData(householdId));
+		cacheWriteQueue = write;
+		return write;
+	}
+
 	async function publishOpened(
 		opened: OpenedSessionResource,
 		session: SessionResourceBootstrap,
@@ -490,7 +498,7 @@ export function createAuthenticatedAppSessionController(
 			if (rejectedClose) throw rejectedClose.reason;
 
 			const deleteResult = await Promise.allSettled([
-				cache.clearDeletedHouseholdData(householdId),
+				clearDeletedHouseholdCacheData(householdId),
 			]);
 			const rejectedDelete = deleteResult.find(
 				(result): result is PromiseRejectedResult =>
