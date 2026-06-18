@@ -65,7 +65,10 @@ export function SettingsScreenView({
 					</Pressable>
 				</View>
 			</View>
-			<ScrollView contentContainerStyle={styles.content}>
+			<ScrollView
+				contentContainerStyle={styles.content}
+				keyboardShouldPersistTaps="handled"
+			>
 				{state.notice ? (
 					<View style={styles.notice}>
 						<Text style={styles.noticeText}>{state.notice}</Text>
