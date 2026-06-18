@@ -468,12 +468,11 @@ export function createAuthenticatedAppSessionController(
 		async deleteHouseholdSession(householdId) {
 			activationRun += 1;
 			publish({ status: "loading" });
-			const results = await Promise.allSettled([
+			const closeResults = await Promise.allSettled([
 				resources.closeOpeningResources(),
 				resources.closeActiveResource(),
-				cache.clearDeletedHouseholdData(householdId),
 			]);
-			for (const result of results) {
+			for (const result of closeResults) {
 				if (result.status === "rejected") {
 					logger.error(
 						"authenticated app session deleted Household cleanup failed",
@@ -484,11 +483,29 @@ export function createAuthenticatedAppSessionController(
 					);
 				}
 			}
-			const rejected = results.find(
+			const rejectedClose = closeResults.find(
 				(result): result is PromiseRejectedResult =>
 					result.status === "rejected",
 			);
-			if (rejected) throw rejected.reason;
+			if (rejectedClose) throw rejectedClose.reason;
+
+			const deleteResult = await Promise.allSettled([
+				cache.clearDeletedHouseholdData(householdId),
+			]);
+			const rejectedDelete = deleteResult.find(
+				(result): result is PromiseRejectedResult =>
+					result.status === "rejected",
+			);
+			if (rejectedDelete) {
+				logger.error(
+					"authenticated app session deleted Household cleanup failed",
+					{
+						error: asError(rejectedDelete.reason),
+						household_id: householdId,
+					},
+				);
+				throw rejectedDelete.reason;
+			}
 		},
 
 		async dispose() {

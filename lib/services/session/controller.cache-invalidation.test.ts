@@ -54,9 +54,12 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			householdName: "Deleted",
 		});
 		const events: string[] = [];
+		const activeClose = h.deferred<void>();
 		const dataServices = h.sessionDataServicesFixture({
 			close: jest.fn(async () => {
-				events.push("close:active");
+				events.push("close:active:start");
+				await activeClose.promise;
+				events.push("close:active:done");
 			}),
 		});
 		const sessionService = h.sessionRuntimeFixture({
@@ -81,12 +84,21 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 			cachePolicy: "freshOnly",
 		});
 
-		await controller.deleteHouseholdSession("hh_deleted");
+		const deletion = controller.deleteHouseholdSession("hh_deleted");
 
-		expect(events).toEqual(
-			expect.arrayContaining(["close:active", "clear:deleted"]),
-		);
-		expect(events).toHaveLength(2);
+		await h.waitForAsync(() => expect(events).toEqual(["close:active:start"]));
+		expect(
+			sessionService.cache.clearDeletedHouseholdData,
+		).not.toHaveBeenCalled();
+
+		activeClose.resolve();
+		await deletion;
+
+		expect(events).toEqual([
+			"close:active:start",
+			"close:active:done",
+			"clear:deleted",
+		]);
 		expect(sessionService.cache.clearDeletedHouseholdData).toHaveBeenCalledWith(
 			"hh_deleted",
 		);
