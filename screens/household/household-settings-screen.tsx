@@ -42,7 +42,8 @@ type SettingsRow =
 	| { type: "empty"; id: string; label: string };
 
 export default function HouseholdSettingsScreen() {
-	const { state, session, retry, reloadSession } = useAuthenticatedAppSession();
+	const { state, session, retry, reloadSession, deleteHouseholdSession } =
+		useAuthenticatedAppSession();
 
 	if (!session) {
 		return (
@@ -53,21 +54,28 @@ export default function HouseholdSettingsScreen() {
 	}
 
 	return (
-		<HouseholdSettingsContent session={session} reloadSession={reloadSession} />
+		<HouseholdSettingsContent
+			session={session}
+			reloadSession={reloadSession}
+			deleteHouseholdSession={deleteHouseholdSession}
+		/>
 	);
 }
 
 function HouseholdSettingsContent({
 	session,
 	reloadSession,
+	deleteHouseholdSession,
 }: {
 	session: AuthenticatedAppSession;
 	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
+	deleteHouseholdSession: (householdId: string) => Promise<void>;
 }) {
 	const { state, actions } = useHouseholdSettings(
 		session,
 		undefined,
 		reloadSession,
+		deleteHouseholdSession,
 	);
 
 	return (

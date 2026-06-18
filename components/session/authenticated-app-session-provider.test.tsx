@@ -166,6 +166,37 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(controller.invalidateCurrentSession).toHaveBeenCalledTimes(1);
 	});
 
+	it("clears deleted Household session data before fresh-only activation", async () => {
+		const controller = authenticatedAppSessionControllerFixture({
+			snapshot: { status: "ready", session: appSessionFixture() },
+		});
+		await render(
+			<AuthenticatedAppSessionProvider
+				controller={controller}
+				auth={authFixture()}
+			>
+				<DeleteHouseholdSessionState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		expect(screen.getByText("authenticated-app-session:1")).toBeTruthy();
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Household session" }),
+		);
+
+		await waitFor(() =>
+			expect(controller.deleteHouseholdSession).toHaveBeenCalledWith("hh_1"),
+		);
+		await waitFor(() =>
+			expect(controller.activate).toHaveBeenLastCalledWith({
+				getToken: expect.any(Function),
+				authReady: true,
+				signedIn: true,
+				cachePolicy: "freshOnly",
+			}),
+		);
+	});
+
 	it("stops exposing ready session data while loading has no previous session", async () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		await render(
@@ -700,6 +731,24 @@ function RetireSessionState() {
 	);
 }
 
+function DeleteHouseholdSessionState() {
+	const { state, session, deleteHouseholdSession } =
+		useAuthenticatedAppSession();
+	return (
+		<>
+			<Text>{session ? session.resourceKey : state.status}</Text>
+			<Pressable
+				accessibilityRole="button"
+				onPress={() => {
+					void deleteHouseholdSession("hh_1");
+				}}
+			>
+				<Text>Delete Household session</Text>
+			</Pressable>
+		</>
+	);
+}
+
 function authFixture(
 	overrides: Partial<
 		AuthenticatedAppSessionActivation & { signOut: () => Promise<void> }
@@ -784,6 +833,10 @@ function authenticatedAppSessionControllerFixture({
 		activate: jest.fn<
 			ReturnType<AuthenticatedAppSessionController["activate"]>,
 			Parameters<AuthenticatedAppSessionController["activate"]>
+		>(async () => undefined),
+		deleteHouseholdSession: jest.fn<
+			ReturnType<AuthenticatedAppSessionController["deleteHouseholdSession"]>,
+			Parameters<AuthenticatedAppSessionController["deleteHouseholdSession"]>
 		>(async () => undefined),
 		dispose: jest.fn<
 			ReturnType<AuthenticatedAppSessionController["dispose"]>,

@@ -31,6 +31,7 @@ export type AuthenticatedAppSessionContextValue = {
 	session: AuthenticatedAppSession | null;
 	retry: () => void;
 	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
+	deleteHouseholdSession: (householdId: string) => Promise<void>;
 	signOut: () => Promise<void>;
 };
 
@@ -153,10 +154,16 @@ export function AuthenticatedAppSessionProvider({
 		requestActivation(options?.mode === "freshOnly" ? "freshOnly" : "normal");
 	}
 
+	async function deleteHouseholdSession(householdId: string) {
+		await controller.deleteHouseholdSession(householdId);
+		requestActivation("freshOnly");
+	}
+
 	const value: AuthenticatedAppSessionContextValue = {
 		...publicStateFromSnapshot(snapshot),
 		retry,
 		reloadSession,
+		deleteHouseholdSession,
 		signOut: signOutFlow.run,
 	};
 

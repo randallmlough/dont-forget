@@ -309,6 +309,50 @@ describe("createSessionCache", () => {
 		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
 	});
 
+	it("clears deleted Household cached metadata and local data", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+		await cache.save(
+			sessionBootstrapFixture({
+				householdId: "hh_deleted",
+				householdName: "Deleted",
+			}),
+		);
+
+		await cache.clearDeletedHouseholdData("hh_deleted");
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith(
+			"hh_deleted",
+		);
+		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
+	});
+
+	it("keeps a deleted Household local data deletion retry when local deletion fails", async () => {
+		const storage = memoryStorage();
+		const cache = createSessionCache({ storage });
+		await cache.save(
+			sessionBootstrapFixture({
+				householdId: "hh_deleted",
+				householdName: "Deleted",
+			}),
+		);
+		mockDeleteLocalHouseholdStoreData
+			.mockRejectedValueOnce(new Error("delete failed"))
+			.mockResolvedValue(undefined);
+
+		await expect(cache.clearDeletedHouseholdData("hh_deleted")).rejects.toThrow(
+			"delete failed",
+		);
+		await expect(storage.getItem(SESSION_CACHE_KEY)).resolves.toBeNull();
+
+		mockDeleteLocalHouseholdStoreData.mockClear();
+		await cache.clearSignedOutData();
+
+		expect(mockDeleteLocalHouseholdStoreData).toHaveBeenCalledWith(
+			"hh_deleted",
+		);
+	});
+
 	it("keeps a local data deletion retry when local deletion fails", async () => {
 		const storage = memoryStorage();
 		const cache = createSessionCache({ storage });

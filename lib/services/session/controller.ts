@@ -95,6 +95,7 @@ type CachedActivationAttempt = {
 
 export type AuthenticatedAppSessionController = {
 	activate: (activation: AuthenticatedAppSessionActivation) => Promise<void>;
+	deleteHouseholdSession: (householdId: string) => Promise<void>;
 	dispose: () => Promise<AuthenticatedAppSessionDisposal>;
 	getSnapshot: () => AuthenticatedAppSessionStateSnapshot;
 	invalidateCurrentSession: () => Promise<void>;
@@ -462,6 +463,32 @@ export function createAuthenticatedAppSessionController(
 					});
 				}
 			}
+		},
+
+		async deleteHouseholdSession(householdId) {
+			activationRun += 1;
+			publish({ status: "loading" });
+			const results = await Promise.allSettled([
+				resources.closeOpeningResources(),
+				resources.closeActiveResource(),
+				cache.clearDeletedHouseholdData(householdId),
+			]);
+			for (const result of results) {
+				if (result.status === "rejected") {
+					logger.error(
+						"authenticated app session deleted Household cleanup failed",
+						{
+							error: asError(result.reason),
+							household_id: householdId,
+						},
+					);
+				}
+			}
+			const rejected = results.find(
+				(result): result is PromiseRejectedResult =>
+					result.status === "rejected",
+			);
+			if (rejected) throw rejected.reason;
 		},
 
 		async dispose() {

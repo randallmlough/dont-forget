@@ -84,6 +84,7 @@ beforeEach(() => {
 		session: null,
 		retry() {},
 		reloadSession() {},
+		async deleteHouseholdSession() {},
 		signOut: mockSignOut,
 	});
 	setExpoConfig({

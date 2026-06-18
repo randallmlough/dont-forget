@@ -35,6 +35,7 @@ export type SessionCache = {
 	readUnauthorized: (
 		freshSession: SessionBootstrap,
 	) => Promise<CachedSessionBootstrap | null>;
+	clearDeletedHouseholdData: (householdId: string) => Promise<void>;
 	clearUnauthorizedMetadata: (
 		cached: CachedSessionBootstrap,
 		freshSession: SessionBootstrap,
@@ -58,8 +59,7 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 	const deleteLocalDataForHousehold =
 		deps.deleteLocalHouseholdStoreData ?? deleteLocalHouseholdStoreData;
 
-	async function read(): Promise<CachedSessionBootstrap | null> {
-		await drainPendingSignedOutLocalDataDeletions().catch(() => undefined);
+	async function readCachedMetadata(): Promise<CachedSessionBootstrap | null> {
 		const raw = await storage.getItem(SESSION_CACHE_KEY);
 		if (!raw) return null;
 
@@ -68,6 +68,11 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 		} catch {
 			return null;
 		}
+	}
+
+	async function read(): Promise<CachedSessionBootstrap | null> {
+		await drainPendingSignedOutLocalDataDeletions().catch(() => undefined);
+		return readCachedMetadata();
 	}
 
 	async function clearCachedMetadata(): Promise<void> {
@@ -181,6 +186,16 @@ export function createSessionCache(deps: SessionCacheDeps = {}): SessionCache {
 		read,
 
 		readUnauthorized,
+
+		async clearDeletedHouseholdData(householdId) {
+			const cached = await readCachedMetadata();
+			if (
+				cached?.households.some((household) => household.id === householdId)
+			) {
+				await clearCachedMetadata();
+			}
+			await drainPendingSignedOutLocalDataDeletions([householdId]);
+		},
 
 		clearUnauthorizedMetadata,
 

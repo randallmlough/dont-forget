@@ -48,6 +48,51 @@ describe("createAuthenticatedAppSessionController cache invalidation", () => {
 		});
 	});
 
+	it("closes resources and clears deleted Household cache data", async () => {
+		const fresh = h.sessionBootstrapFixture({
+			householdId: "hh_deleted",
+			householdName: "Deleted",
+		});
+		const events: string[] = [];
+		const dataServices = h.sessionDataServicesFixture({
+			close: jest.fn(async () => {
+				events.push("close:active");
+			}),
+		});
+		const sessionService = h.sessionRuntimeFixture({
+			getSession: jest.fn().mockResolvedValue(fresh),
+			clearDeletedHouseholdData: jest.fn(async () => {
+				events.push("clear:deleted");
+			}),
+		});
+		const controller = h.createAuthenticatedAppSessionController({
+			...sessionService.deps,
+			createDataServices: jest.fn().mockReturnValue(dataServices),
+			createSyncCoordinator: jest
+				.fn()
+				.mockReturnValue(h.syncCoordinatorFixture()),
+			logger: h.loggerFixture(),
+		});
+
+		await controller.activate({
+			getToken: async () => "token",
+			authReady: true,
+			signedIn: true,
+			cachePolicy: "freshOnly",
+		});
+
+		await controller.deleteHouseholdSession("hh_deleted");
+
+		expect(events).toEqual(
+			expect.arrayContaining(["close:active", "clear:deleted"]),
+		);
+		expect(events).toHaveLength(2);
+		expect(sessionService.cache.clearDeletedHouseholdData).toHaveBeenCalledWith(
+			"hh_deleted",
+		);
+		expect(controller.getSnapshot()).toEqual({ status: "loading" });
+	});
+
 	it("deletes unauthorized cached Household data before publishing fresh state", async () => {
 		const cached = h.cachedSessionBootstrapFixture({
 			householdId: "hh_old",

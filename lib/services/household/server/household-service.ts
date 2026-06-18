@@ -237,31 +237,6 @@ async function deleteHousehold(
 	input: { householdId: string; requestedByUserId: string },
 	directory: HouseholdServiceDirectory,
 ): Promise<DeleteHouseholdResult> {
-	const household = await findHousehold(input.householdId, directory);
-	if (!household) throw new HouseholdNotFoundError();
-
-	if (household.deletedAt !== null) {
-		if (
-			household.databaseDeletedAt !== null ||
-			household.databaseDeletionFailedAt === null
-		) {
-			throw new HouseholdNotFoundError();
-		}
-		const historicalOwner = await findHistoricalOwnerMembership(
-			{
-				householdId: input.householdId,
-				userId: input.requestedByUserId,
-			},
-			directory,
-		);
-		if (!historicalOwner) throw new HouseholdForbiddenError();
-		return {
-			databaseDeleted: false,
-			requiresDatabaseTeardown: true,
-			tursoDbName: household.tursoDbName,
-		};
-	}
-
 	const requester = await findActiveOwnerMembership(
 		{
 			householdId: input.householdId,
@@ -269,7 +244,45 @@ async function deleteHousehold(
 		},
 		directory,
 	);
-	if (!requester) throw new HouseholdForbiddenError();
+	if (!requester) {
+		const activeMember = await findActiveMembership(
+			{
+				householdId: input.householdId,
+				userId: input.requestedByUserId,
+			},
+			directory,
+		);
+		if (activeMember) throw new HouseholdForbiddenError();
+
+		const historicalOwner = await findHistoricalOwnerMembership(
+			{
+				householdId: input.householdId,
+				userId: input.requestedByUserId,
+			},
+			directory,
+		);
+		if (!historicalOwner) throw new HouseholdNotFoundError();
+
+		const household = await findHousehold(input.householdId, directory);
+		if (
+			!household ||
+			household.deletedAt === null ||
+			household.databaseDeletedAt !== null
+		) {
+			throw new HouseholdNotFoundError();
+		}
+
+		return {
+			databaseDeleted: false,
+			requiresDatabaseTeardown: true,
+			tursoDbName: household.tursoDbName,
+		};
+	}
+
+	const household = await findHousehold(input.householdId, directory);
+	if (!household || household.deletedAt !== null) {
+		throw new HouseholdNotFoundError();
+	}
 
 	const now = Date.now();
 	await directory
@@ -333,6 +346,25 @@ async function findActiveOwnerMembership(
 				eq(memberships.householdId, input.householdId),
 				eq(memberships.userId, input.userId),
 				eq(memberships.role, "owner"),
+				isNull(memberships.removedAt),
+			),
+		)
+		.limit(1);
+
+	return row ?? null;
+}
+
+async function findActiveMembership(
+	input: { householdId: string; userId: string },
+	directory: HouseholdServiceDirectory,
+): Promise<Membership | null> {
+	const [row] = await directory
+		.select()
+		.from(memberships)
+		.where(
+			and(
+				eq(memberships.householdId, input.householdId),
+				eq(memberships.userId, input.userId),
 				isNull(memberships.removedAt),
 			),
 		)

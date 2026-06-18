@@ -602,10 +602,24 @@ describe("Household API handlers", () => {
 					),
 				),
 			);
+			const nonMemberExisting = await readJsonResponse(
+				await handleDeleteHousehold(
+					createApiRequest({ method: "DELETE" }),
+					{ householdId: harness.scenario.household.id },
+					householdDeps(harness.directory, "user_casey"),
+				),
+			);
+			const nonMemberMissing = await readJsonResponse(
+				await handleDeleteHousehold(
+					createApiRequest({ method: "DELETE" }),
+					{ householdId: "hh_missing" },
+					householdDeps(harness.directory, "user_casey"),
+				),
+			);
 
 			await harness.directory.db
 				.update(households)
-				.set({ deletedAt: now })
+				.set({ deletedAt: now, databaseDeletedAt: now + 1 })
 				.where(eq(households.id, harness.scenario.household.id));
 			const deletedHousehold = await readJsonResponse(
 				await handleDeleteHousehold(
@@ -621,6 +635,14 @@ describe("Household API handlers", () => {
 			expect(plainMember).toMatchObject({
 				status: 403,
 				body: { error: "Forbidden" },
+			});
+			expect(nonMemberExisting).toMatchObject({
+				status: 404,
+				body: { error: "Household not found." },
+			});
+			expect(nonMemberMissing).toMatchObject({
+				status: 404,
+				body: { error: "Household not found." },
 			});
 			expect(deletedHousehold).toMatchObject({
 				status: 404,
@@ -718,6 +740,45 @@ describe("Household API handlers", () => {
 			);
 		} finally {
 			errorSpy.mockRestore();
+			await harness.close();
+		}
+	});
+
+	it("retries Turso teardown for a pending tombstone without a failure marker", async () => {
+		const harness = await primaryHarness();
+		const deleteDatabase = jest.fn(async () => undefined);
+		try {
+			await harness.directory.db
+				.update(households)
+				.set({ deletedAt: now })
+				.where(eq(households.id, harness.scenario.household.id));
+			await harness.directory.db
+				.update(memberships)
+				.set({ removedAt: now })
+				.where(eq(memberships.householdId, harness.scenario.household.id));
+
+			const retry = await readJsonResponse(
+				await handleDeleteHousehold(
+					createApiRequest({ method: "DELETE" }),
+					{ householdId: harness.scenario.household.id },
+					{
+						...householdDeps(
+							harness.directory,
+							harness.scenario.users.avery.clerkUserId,
+						),
+						...tursoPlatformDeps(deleteDatabase),
+					},
+				),
+			);
+
+			expect(retry).toMatchObject({
+				status: 200,
+				body: { deleted: true, databaseDeleted: true },
+			});
+			expect(deleteDatabase).toHaveBeenCalledWith(
+				harness.scenario.household.tursoDbName,
+			);
+		} finally {
 			await harness.close();
 		}
 	});

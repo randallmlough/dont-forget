@@ -234,6 +234,7 @@ function controllerFixture(
 
 	return {
 		activate: jest.fn(async () => undefined),
+		deleteHouseholdSession: jest.fn(async () => undefined),
 		dispose: jest.fn(async () => {
 			snapshot = { status: "idle" };
 			return { householdIdsForLocalDataDeletion: [] };

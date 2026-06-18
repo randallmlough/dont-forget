@@ -73,6 +73,7 @@ beforeEach(() => {
 		session: sessionFixture(),
 		retry: mockRetrySession,
 		reloadSession: mockReloadSession,
+		deleteHouseholdSession: jest.fn(async () => undefined),
 		signOut: jest.fn(async () => undefined),
 	};
 });
@@ -1051,8 +1052,9 @@ describe("useHouseholdSettings", () => {
 		expect(mockReplace).not.toHaveBeenCalledWith("/");
 	});
 
-	it("retires and reloads the session after deleting a Household", async () => {
+	it("clears deleted Household session data after deleting a Household", async () => {
 		const reloadSession = jest.fn();
+		const deleteHouseholdSession = jest.fn(async () => undefined);
 		const members = [
 			{
 				membershipId: "mbr_1",
@@ -1068,7 +1070,10 @@ describe("useHouseholdSettings", () => {
 			},
 		];
 		const client = readySettingsClient({
-			deleteHousehold: jest.fn(async () => undefined),
+			deleteHousehold: jest.fn(async () => ({
+				deleted: true as const,
+				databaseDeleted: true,
+			})),
 			listMembers: jest.fn(async () => members),
 		});
 
@@ -1077,6 +1082,7 @@ describe("useHouseholdSettings", () => {
 				client={client}
 				action="delete"
 				reloadSession={reloadSession}
+				deleteHouseholdSession={deleteHouseholdSession}
 			/>,
 		);
 		await screen.findByText("idle");
@@ -1084,14 +1090,77 @@ describe("useHouseholdSettings", () => {
 		await fireEvent.press(screen.getByText("Delete action"));
 
 		await waitFor(() =>
-			expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" }),
+			expect(deleteHouseholdSession).toHaveBeenCalledWith("hh_1"),
 		);
+		expect(reloadSession).not.toHaveBeenCalled();
 		expect(client.deleteHousehold).toHaveBeenCalledWith("hh_1");
 		expect(track).toHaveBeenCalledWith("household_deleted", {
 			household_id: "hh_1",
 			deleted_by_user_id: "usr_1",
 			member_count: 2,
 		});
+	});
+
+	it("keeps Settings open for retry when Household database cleanup is pending", async () => {
+		const reloadSession = jest.fn();
+		const deleteHouseholdSession = jest.fn(async () => undefined);
+		const client = readySettingsClient({
+			deleteHousehold: jest.fn(async () => ({
+				deleted: true as const,
+				databaseDeleted: false,
+			})),
+		});
+
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="delete"
+				reloadSession={reloadSession}
+				deleteHouseholdSession={deleteHouseholdSession}
+			/>,
+		);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Delete action"));
+
+		await screen.findByText(
+			"Household deletion is waiting on database cleanup. Try deleting again.",
+		);
+		expect(deleteHouseholdSession).not.toHaveBeenCalled();
+		expect(reloadSession).not.toHaveBeenCalled();
+		expect(track).not.toHaveBeenCalledWith(
+			"household_deleted",
+			expect.any(Object),
+		);
+	});
+
+	it("surfaces deleted Household session cleanup failures without reloading", async () => {
+		const reloadSession = jest.fn();
+		const deleteHouseholdSession = jest.fn(async () => {
+			throw new Error("Unable to clear deleted Household data.");
+		});
+		const client = readySettingsClient({
+			deleteHousehold: jest.fn(async () => ({
+				deleted: true as const,
+				databaseDeleted: true,
+			})),
+		});
+
+		await render(
+			<SettingsActionHarness
+				client={client}
+				action="delete"
+				reloadSession={reloadSession}
+				deleteHouseholdSession={deleteHouseholdSession}
+			/>,
+		);
+		await screen.findByText("idle");
+
+		await fireEvent.press(screen.getByText("Delete action"));
+
+		await screen.findByText("Unable to clear deleted Household data.");
+		expect(deleteHouseholdSession).toHaveBeenCalledWith("hh_1");
+		expect(reloadSession).not.toHaveBeenCalled();
 	});
 
 	it("surfaces Household delete failures without retiring", async () => {
@@ -1900,15 +1969,18 @@ function SettingsActionHarness({
 	client,
 	action,
 	reloadSession = jest.fn(),
+	deleteHouseholdSession,
 }: {
 	client: HouseholdApiClient;
 	action: "remove" | "role" | "leave" | "rename" | "delete";
 	reloadSession?: (options?: AuthenticatedAppSessionReloadOptions) => void;
+	deleteHouseholdSession?: (householdId: string) => Promise<void>;
 }) {
 	const { state, actions } = useHouseholdSettings(
 		sessionFixture(),
 		client,
 		reloadSession,
+		deleteHouseholdSession,
 	);
 	if (state.status !== "ready") return <TextNode>{state.status}</TextNode>;
 	return (
@@ -1956,7 +2028,10 @@ function emptyClient(): HouseholdApiClient {
 	return {
 		createHousehold: jest.fn(),
 		renameHousehold: jest.fn(),
-		deleteHousehold: jest.fn(),
+		deleteHousehold: jest.fn(async () => ({
+			deleted: true as const,
+			databaseDeleted: true,
+		})),
 		listMembers: jest.fn(),
 		removeMember: jest.fn(),
 		setMemberRole: jest.fn(),

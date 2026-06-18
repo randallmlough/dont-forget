@@ -133,6 +133,7 @@ export function sessionRuntimeFixture(
 		save: jest.fn().mockResolvedValue(cachedSessionBootstrapFixture()),
 		read: jest.fn().mockResolvedValue(null),
 		readUnauthorized: jest.fn().mockResolvedValue(null),
+		clearDeletedHouseholdData: jest.fn().mockResolvedValue(undefined),
 		clearUnauthorizedMetadata: jest.fn().mockResolvedValue(undefined),
 		clearSignedOutData: jest.fn().mockResolvedValue(undefined),
 		deleteLocalData: jest.fn().mockResolvedValue(undefined),
@@ -160,6 +161,9 @@ function pickCacheOverrides(
 		...(overrides.read ? { read: overrides.read } : {}),
 		...(overrides.readUnauthorized
 			? { readUnauthorized: overrides.readUnauthorized }
+			: {}),
+		...(overrides.clearDeletedHouseholdData
+			? { clearDeletedHouseholdData: overrides.clearDeletedHouseholdData }
 			: {}),
 		...(overrides.clearUnauthorizedMetadata
 			? { clearUnauthorizedMetadata: overrides.clearUnauthorizedMetadata }

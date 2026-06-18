@@ -118,6 +118,9 @@ export type HouseholdJoinCodePreview = z.infer<typeof joinCodePreviewSchema>;
 export type LeaveHouseholdResponse = z.infer<
 	typeof leaveHouseholdResponseSchema
 >;
+export type DeleteHouseholdResponse = z.infer<
+	typeof deleteHouseholdResponseSchema
+>;
 
 export type HouseholdApiClient = {
 	createHousehold(input: {
@@ -127,7 +130,7 @@ export type HouseholdApiClient = {
 		householdId: string;
 		name: string;
 	}): Promise<{ id: string; name: string }>;
-	deleteHousehold(householdId: string): Promise<void>;
+	deleteHousehold(householdId: string): Promise<DeleteHouseholdResponse>;
 	listMembers(householdId: string): Promise<HouseholdMember[]>;
 	removeMember(input: {
 		householdId: string;
@@ -192,7 +195,7 @@ export function createHouseholdApiClient({
 			const payload = await authed(`/api/households/${householdId}`, {
 				method: "DELETE",
 			});
-			deleteHouseholdResponseSchema.parse(payload);
+			return deleteHouseholdResponseSchema.parse(payload);
 		},
 		async listMembers(householdId) {
 			const payload = await authed(`/api/households/${householdId}/members`);

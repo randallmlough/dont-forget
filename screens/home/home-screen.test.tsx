@@ -71,6 +71,7 @@ testLogger.with.mockReturnValue(testLogger);
 const noopProviderActions = {
 	retry() {},
 	reloadSession() {},
+	async deleteHouseholdSession() {},
 	async signOut() {},
 };
 
@@ -154,6 +155,7 @@ describe("HomeScreen", () => {
 			session: null,
 			retry,
 			reloadSession() {},
+			async deleteHouseholdSession() {},
 			async signOut() {},
 		});
 

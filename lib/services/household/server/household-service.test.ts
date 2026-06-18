@@ -351,7 +351,41 @@ describe("createHouseholdService", () => {
 		}
 	});
 
-	it("rejects already-deleted Households during deletion", async () => {
+	it("hides active Household existence from non-Members during deletion", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
+			await directory.db.insert(users).values(
+				userFixture({
+					id: PRIMARY_HOUSEHOLD_SEED.users.cameron.id,
+					clerkUserId: PRIMARY_HOUSEHOLD_SEED.users.cameron.clerkUserId,
+					email: PRIMARY_HOUSEHOLD_SEED.users.cameron.email,
+					firstName: PRIMARY_HOUSEHOLD_SEED.users.cameron.firstName,
+					lastName: PRIMARY_HOUSEHOLD_SEED.users.cameron.lastName,
+					displayName: PRIMARY_HOUSEHOLD_SEED.users.cameron.displayName,
+				}),
+			);
+
+			await expect(
+				service.deleteHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.cameron.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdNotFoundError);
+			await expect(
+				service.deleteHousehold({
+					householdId: "hh_missing",
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.cameron.id,
+				}),
+			).rejects.toBeInstanceOf(HouseholdNotFoundError);
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("returns pending database teardown metadata for tombstone retry by historical Owners", async () => {
 		const directory = await createTestDirectoryDb();
 		const service = createHouseholdService({ directory: directory.db });
 
@@ -360,6 +394,41 @@ describe("createHouseholdService", () => {
 			await directory.db
 				.update(households)
 				.set({ deletedAt: PRIMARY_HOUSEHOLD_SEED.now + 1 })
+				.where(eq(households.id, PRIMARY_HOUSEHOLD_SEED.household.id));
+			await directory.db
+				.update(memberships)
+				.set({ removedAt: PRIMARY_HOUSEHOLD_SEED.now + 1 })
+				.where(
+					eq(memberships.householdId, PRIMARY_HOUSEHOLD_SEED.household.id),
+				);
+
+			await expect(
+				service.deleteHousehold({
+					householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
+					requestedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+				}),
+			).resolves.toEqual({
+				databaseDeleted: false,
+				requiresDatabaseTeardown: true,
+				tursoDbName: PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
+			});
+		} finally {
+			await directory.close();
+		}
+	});
+
+	it("rejects fully-deleted Households during deletion", async () => {
+		const directory = await createTestDirectoryDb();
+		const service = createHouseholdService({ directory: directory.db });
+
+		try {
+			await seedRenameScenario(directory.db);
+			await directory.db
+				.update(households)
+				.set({
+					deletedAt: PRIMARY_HOUSEHOLD_SEED.now + 1,
+					databaseDeletedAt: PRIMARY_HOUSEHOLD_SEED.now + 2,
+				})
 				.where(eq(households.id, PRIMARY_HOUSEHOLD_SEED.household.id));
 
 			await expect(

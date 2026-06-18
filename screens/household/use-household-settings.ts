@@ -121,6 +121,9 @@ export function useHouseholdSettings(
 	reloadSession: (
 		options?: AuthenticatedAppSessionReloadOptions,
 	) => void = () => undefined,
+	deleteHouseholdSession: (householdId: string) => Promise<void> = async () => {
+		throw new Error("Deleted Household session cleanup is unavailable.");
+	},
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
 	// Latest-ref pattern: the resolved client stays stable across getToken
@@ -299,13 +302,22 @@ export function useHouseholdSettings(
 				: session.members.length;
 		if (!startOperation({ status: "deletingHousehold" })) return;
 		try {
-			await resolveClient().deleteHousehold(householdId);
+			const deletion = await resolveClient().deleteHousehold(householdId);
+			if (!deletion.databaseDeleted) {
+				dispatch({
+					type: "notice",
+					loadKey,
+					notice:
+						"Household deletion is waiting on database cleanup. Try deleting again.",
+				});
+				return;
+			}
 			track("household_deleted", {
 				household_id: householdId,
 				deleted_by_user_id: session.user.id,
 				member_count: memberCount,
 			});
-			reloadSession({ mode: "retireCurrent" });
+			await deleteHouseholdSession(householdId);
 		} catch (error) {
 			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
 		} finally {
