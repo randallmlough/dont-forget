@@ -80,6 +80,8 @@ function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 			id: "usr_avery",
 			email: "avery@example.com",
 			displayName: "Avery Chen",
+			firstName: "Avery",
+			lastName: "Chen",
 		},
 		activeHousehold: { id: "hh_story", name: initialList.householdName },
 		households: [

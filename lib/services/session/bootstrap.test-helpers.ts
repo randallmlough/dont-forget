@@ -23,6 +23,8 @@ export function sessionBootstrapFixture(
 			id: "usr_avery",
 			email: "avery@example.com",
 			displayName: "Avery Chen",
+			firstName: "Avery",
+			lastName: "Chen",
 		},
 		activeHousehold: {
 			id: overrides.householdId ?? "hh_avery",

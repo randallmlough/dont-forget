@@ -1,9 +1,10 @@
 import { useRouter } from "expo-router";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
+import { AuthTextInput } from "@/components/auth/auth-text-input";
 import type { AppearancePreference } from "@/lib/unistyles/appearance-preference";
 import {
 	type SettingsActions,
@@ -64,7 +65,10 @@ export function SettingsScreenView({
 					</Pressable>
 				</View>
 			</View>
-			<ScrollView contentContainerStyle={styles.content}>
+			<ScrollView
+				contentContainerStyle={styles.content}
+				keyboardShouldPersistTaps="handled"
+			>
 				{state.notice ? (
 					<View style={styles.notice}>
 						<Text style={styles.noticeText}>{state.notice}</Text>
@@ -117,9 +121,17 @@ function settingsSections(
 
 	return [
 		{
-			id: "household",
-			title: "Household",
+			id: "user",
+			title: "User",
 			rows: [
+				<UserNameSettingsForm
+					key="user-name"
+					error={state.userError}
+					notice={state.userNotice}
+					onSave={actions.updateUserName}
+					updateInFlight={state.userUpdateInFlight}
+					user={state.user}
+				/>,
 				<SettingsRow
 					key="household"
 					label="Household settings"
@@ -153,6 +165,135 @@ function settingsSections(
 			],
 		},
 	];
+}
+
+function UserNameSettingsForm({
+	error,
+	notice,
+	onSave,
+	updateInFlight,
+	user,
+}: {
+	error: string | null;
+	notice: string | null;
+	onSave: (input: {
+		firstName: string | null;
+		lastName: string | null;
+	}) => Promise<boolean>;
+	updateInFlight: boolean;
+	user: SettingsState["user"];
+}) {
+	const [expanded, setExpanded] = useState(false);
+	const [firstNameDraft, setFirstNameDraft] = useState<string | null>(null);
+	const [lastNameDraft, setLastNameDraft] = useState<string | null>(null);
+	const [validationMessage, setValidationMessage] = useState<string | null>(
+		null,
+	);
+	const userFirstName = user.firstName ?? "";
+	const userLastName = user.lastName ?? "";
+	const firstName = firstNameDraft ?? userFirstName;
+	const lastName = lastNameDraft ?? userLastName;
+
+	async function saveUserName() {
+		const nextFirstName = emptyToNull(firstName);
+		const nextLastName = emptyToNull(lastName);
+		if (!nextFirstName && !nextLastName) {
+			setValidationMessage("Provide a first or last name.");
+			return;
+		}
+		setValidationMessage(null);
+		const saved = await onSave({
+			firstName: nextFirstName,
+			lastName: nextLastName,
+		});
+		if (saved) {
+			setFirstNameDraft(nextFirstName ?? "");
+			setLastNameDraft(nextLastName ?? "");
+		}
+	}
+
+	return (
+		<View style={styles.userNameBlock}>
+			<Pressable
+				accessibilityLabel="User name"
+				accessibilityRole="button"
+				accessibilityState={{ expanded }}
+				onPress={() => {
+					setExpanded((current) => {
+						const nextExpanded = !current;
+						if (nextExpanded) {
+							setFirstNameDraft(null);
+							setLastNameDraft(null);
+							setValidationMessage(null);
+						}
+						return nextExpanded;
+					});
+				}}
+				style={({ pressed }) => [
+					styles.row,
+					pressed ? styles.rowPressed : undefined,
+				]}
+			>
+				<View style={styles.rowTextGroup}>
+					<Text style={styles.rowTitle}>User name</Text>
+					<Text style={styles.rowSubtitle}>
+						{user.displayName ?? user.email ?? "No name set"}
+					</Text>
+				</View>
+				<Text style={styles.chevron}>{expanded ? "⌃" : "›"}</Text>
+			</Pressable>
+			{expanded ? (
+				<View style={styles.userNameForm}>
+					<AuthTextInput
+						accessibilityLabel="First name"
+						autoCapitalize="words"
+						autoComplete="given-name"
+						editable={!updateInFlight}
+						onChangeText={(text) => {
+							setFirstNameDraft(text);
+						}}
+						placeholder="First name"
+						returnKeyType="next"
+						value={firstName}
+					/>
+					<AuthTextInput
+						accessibilityLabel="Last name"
+						autoCapitalize="words"
+						autoComplete="family-name"
+						editable={!updateInFlight}
+						onChangeText={(text) => {
+							setLastNameDraft(text);
+						}}
+						placeholder="Last name"
+						returnKeyType="done"
+						value={lastName}
+					/>
+					{validationMessage ? (
+						<Text style={styles.formError}>{validationMessage}</Text>
+					) : null}
+					{error ? <Text style={styles.formError}>{error}</Text> : null}
+					{notice ? <Text style={styles.formNotice}>{notice}</Text> : null}
+					<Pressable
+						accessibilityRole="button"
+						accessibilityState={{ disabled: updateInFlight }}
+						disabled={updateInFlight}
+						onPress={() => {
+							void saveUserName();
+						}}
+						style={({ pressed }) => [
+							styles.primaryButton,
+							pressed ? styles.rowPressed : undefined,
+							updateInFlight ? styles.disabledButton : undefined,
+						]}
+					>
+						<Text style={styles.primaryButtonText}>
+							{updateInFlight ? "Saving" : "Save"}
+						</Text>
+					</Pressable>
+				</View>
+			) : null}
+		</View>
+	);
 }
 
 function AppearancePreferenceControl({
@@ -289,6 +430,11 @@ function versionLabel(
 	return `${version} (${appEnv})`;
 }
 
+function emptyToNull(value: string): string | null {
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : null;
+}
+
 const styles = StyleSheet.create((theme) => ({
 	root: {
 		flex: 1,
@@ -383,6 +529,15 @@ const styles = StyleSheet.create((theme) => ({
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
 	},
+	userNameBlock: {
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.border,
+	},
+	userNameForm: {
+		gap: theme.spacing(3),
+		paddingHorizontal: theme.spacing(4),
+		paddingBottom: theme.spacing(4),
+	},
 	preferenceRow: {
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
@@ -421,6 +576,29 @@ const styles = StyleSheet.create((theme) => ({
 	destructiveText: {
 		color: theme.colors.destructive,
 		fontWeight: theme.fontWeights.bold,
+	},
+	formError: {
+		...theme.typography.caption,
+		color: theme.colors.destructive,
+	},
+	formNotice: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
+	},
+	primaryButton: {
+		minHeight: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: theme.radii.control,
+		borderCurve: "continuous",
+		backgroundColor: theme.colors.text,
+	},
+	primaryButtonText: {
+		...theme.typography.controlLabel,
+		color: theme.colors.inverseText,
+	},
+	disabledButton: {
+		opacity: theme.opacities.disabled,
 	},
 	segmentedControl: {
 		flexDirection: "row",

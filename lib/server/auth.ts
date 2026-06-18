@@ -44,6 +44,20 @@ export async function verifyClerkRequest(
 	return profileFromClerkUser(user);
 }
 
+export async function updateClerkUserName(input: {
+	clerkUserId: string;
+	firstName: string | null;
+	lastName: string | null;
+}): Promise<ServerUserProfile> {
+	const config = readClerkServerConfig();
+	const clerk = createClerkClient({ secretKey: config.secretKey });
+	const user = await clerk.users.updateUser(input.clerkUserId, {
+		firstName: input.firstName ?? "",
+		lastName: input.lastName ?? "",
+	});
+	return profileFromClerkUser(user);
+}
+
 export function bearerToken(authorization: string | null): string {
 	if (!authorization) {
 		throw new UnauthorizedError("Missing bearer token");
