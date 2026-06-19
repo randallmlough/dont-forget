@@ -12,6 +12,8 @@
 // PowerSync returns PSYNC_S2105 (missing aud). Pass the JWT template name
 // (e.g. `powersync`, body {"aud":"powersync"}) to get a token PowerSync ACCEPTS.
 
+import { Buffer } from "node:buffer";
+
 const SK = process.env.CLERK_SECRET_KEY;
 const PK = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const POWERSYNC_URL = process.argv[2] || "http://localhost:8089";
