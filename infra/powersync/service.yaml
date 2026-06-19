@@ -30,15 +30,16 @@ sync_config:
   path: sync-config.yaml
 
 client_auth:
-  # Clerk frontend-API JWKS URL. The domain is PUBLIC (embedded in any web
-  # bundle, derivable from the pk_test_/pk_live_ publishable key) — NOT a
-  # secret. Derive it with:
-  #   node -e "const pk=process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY; \
-  #     console.log(Buffer.from(pk.replace(/^pk_(test|live)_/,''),'base64').toString().replace(/\$$/,''))"
-  # then the JWKS URL is https://<domain>/.well-known/jwks.json
-  jwks_uri: https://<clerk-frontend-api-domain>/.well-known/jwks.json
-  # PowerSync REQUIRES the JWT carry an `aud` in this list. A Clerk JWT template
-  # named `powersync` (body {"aud":"powersync"}) supplies it.
+  # Clerk frontend-API JWKS URL for THIS environment's Clerk instance, e.g.
+  # https://<subdomain>.clerk.accounts.dev/.well-known/jwks.json (dev) or the
+  # production Clerk domain. The domain is PUBLIC (derivable from the
+  # pk_test_/pk_live_ publishable key) but environment-specific, so it is
+  # injected via the PS_CLERK_JWKS_URI env var. (PowerSync only substitutes env
+  # vars whose names start with PS_.) Set it per-env in .env / the deploy env.
+  jwks_uri: !env PS_CLERK_JWKS_URI
+  # PowerSync REQUIRES the JWT carry an `aud` in this list. The Clerk JWT
+  # template named `powersync` (aud: powersync) supplies it; same value in every
+  # environment.
   audience: ["powersync"]
 
 system:
