@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-schema@latest/json-schema/powersync-config.json
+#
+# PowerSync self-hosted service config (production form).
+# - replication: single source Postgres (all Households).
+# - storage: separate Postgres (bucket storage; no MongoDB).
+# - client_auth: ONLY the Clerk frontend-API JWKS (no static dev key). Clerk
+#   session tokens are verified against the remote JWKS. PowerSync REQUIRES the
+#   JWT carry an `aud` in client_auth.audience; a Clerk JWT template named
+#   `powersync` (aud: powersync) supplies it.
+
+_type: self-hosted
+
+telemetry:
+  disable_telemetry_sharing: false
+
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_DATA_SOURCE_URI
+      sslmode: disable
+
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_SOURCE_URI
+  sslmode: disable
+
+port: !env PS_PORT
+
+sync_config:
+  path: sync-config.yaml
+
+client_auth:
+  # Clerk frontend-API JWKS URL. The domain is PUBLIC (embedded in any web
+  # bundle, derivable from the pk_test_/pk_live_ publishable key) — NOT a
+  # secret. Derive it with:
+  #   node -e "const pk=process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY; \
+  #     console.log(Buffer.from(pk.replace(/^pk_(test|live)_/,''),'base64').toString().replace(/\$$/,''))"
+  # then the JWKS URL is https://<domain>/.well-known/jwks.json
+  jwks_uri: https://<clerk-frontend-api-domain>/.well-known/jwks.json
+  # PowerSync REQUIRES the JWT carry an `aud` in this list. A Clerk JWT template
+  # named `powersync` (body {"aud":"powersync"}) supplies it.
+  audience: ["powersync"]
+
+system:
+  logging:
+    level: info
+    format: text
