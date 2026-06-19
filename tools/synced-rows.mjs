@@ -4,7 +4,8 @@
 // scoping reaches a connected Member and a non-Member receives nothing.
 //
 // SECRETS POLICY: mints a real Clerk session token via the Clerk Backend API at
-// RUNTIME ONLY (no static key, no jose). Reads CLERK_SECRET_KEY from env.
+// RUNTIME ONLY: no static signing key, no extra crypto dependency. Reads
+// CLERK_SECRET_KEY from env.
 //
 // Usage:
 //   set -a; source <(grep -E '^CLERK_SECRET_KEY=' /path/to/.env.local); set +a
