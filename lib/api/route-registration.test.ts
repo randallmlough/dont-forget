@@ -1,3 +1,4 @@
+import { POST as uploadData } from "@/app/api/data+api";
 import { GET as listInvitations } from "@/app/api/households/[householdId]/invitations+api";
 import { POST as regenerateJoinCode } from "@/app/api/households/[householdId]/join-code/regenerate+api";
 import {
@@ -33,6 +34,10 @@ jest.mock("@/lib/api/users/handlers", () => {
 	throw new Error("Users API handler imported during route registration");
 });
 
+jest.mock("@/lib/api/data/handler", () => {
+	throw new Error("Data API handler imported during route registration");
+});
+
 describe("Stage 5 API route wrappers", () => {
 	it("do not load lib/api handlers during route registration", () => {
 		expect(typeof createInvitation).toBe("function");
@@ -53,5 +58,6 @@ describe("Stage 5 API route wrappers", () => {
 		expect(typeof joinByCode).toBe("function");
 		expect(typeof switchActiveHousehold).toBe("function");
 		expect(typeof updateUserName).toBe("function");
+		expect(typeof uploadData).toBe("function");
 	});
 });
