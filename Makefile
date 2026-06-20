@@ -5,6 +5,7 @@
 PNPM ?= pnpm
 APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
 PORT_ARG = $(if $(PORT),--port $(PORT),)
+COMPOSE = docker compose --env-file .env.local -f infra/docker-compose.yaml
 
 .DEFAULT_GOAL := help
 
@@ -135,6 +136,53 @@ db-seed: ## Seed local deterministic data without resetting (requires migrated s
 .PHONY: db-reseed
 db-reseed: ## Reset, migrate, and seed local deterministic development data
 	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) db:reseed
+
+##@ PowerSync
+
+.PHONY: infra-up
+infra-up: ## Start the local PowerSync stack (source + storage Postgres, service)
+	@$(COMPOSE) up -d
+
+.PHONY: infra-down
+infra-down: ## Stop the PowerSync stack (keeps data volumes)
+	@$(COMPOSE) down
+
+.PHONY: infra-destroy
+infra-destroy: ## Stop the stack and DELETE its Postgres volumes
+	@$(COMPOSE) down --volumes
+
+.PHONY: infra-restart
+infra-restart: ## Restart the stack. Optional: SERVICE=powersync
+	@$(COMPOSE) restart $(SERVICE)
+
+.PHONY: infra-ps
+infra-ps: ## Show PowerSync stack container status
+	@$(COMPOSE) ps
+
+.PHONY: infra-logs
+infra-logs: ## Follow stack logs. Optional: SERVICE=powersync
+	@$(COMPOSE) logs --follow $(SERVICE)
+
+.PHONY: infra-pull
+infra-pull: ## Pull the latest stack images
+	@$(COMPOSE) pull
+
+.PHONY: pg-migrate
+pg-migrate: ## Apply Postgres migrations + the powersync publication (reads DATABASE_URL)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) exec drizzle-kit migrate --config=db/drizzle/postgres.migrate.ts
+
+.PHONY: pg-shell
+pg-shell: ## Open psql on the source Postgres
+	@$(COMPOSE) exec pg-source sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+
+.PHONY: ps-token-test
+ps-token-test: ## Probe PowerSync /sync/stream with a real Clerk token (powersync JWT template)
+	@set -a; . ./.env.local; set +a; node tools/clerk-token-test.mjs "http://localhost:$${PS_PORT:-8089}" powersync
+
+.PHONY: ps-synced-rows
+ps-synced-rows: ## Show rows a user receives from PowerSync. Usage: make ps-synced-rows USER=<clerk-user-id>
+	@test -n "$(USER)" || (echo "Usage: make ps-synced-rows USER=<clerk-user-id>" && exit 1)
+	@set -a; . ./.env.local; set +a; node tools/synced-rows.mjs "$(USER)" "http://localhost:$${PS_PORT:-8089}"
 
 # ==================================================================================== #
 # UTILITIES

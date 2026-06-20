@@ -1,5 +1,7 @@
 # App-owned ordering with `checked` state split into its own table
 
+_Checked-state data model superseded by [ADR-0015](0015-shared-per-item-check-with-attribution.md): on the Postgres + PowerSync substrate, `checked` is a single shared row per Item (synthetic `id` PK, `UNIQUE(item_id)`, `checked_by_user_id`) rather than per-`(item_id, user_id)`. The split-table isolation, app-owned `updated_at` ordering, and tombstone rationale below remain in force._
+
 Concurrent edits to the same Item row can still lose data under Turso Sync's documented **last-push-wins** transport behavior (e.g., Bob checks "milk" while Alice renames it; the later push can determine what remote state wins for overlapping row changes). We split the `checked` state into a separate `item_checks` table keyed by `(item_id, user_id)` because checking off Items is by far the highest-collision field. App writes maintain app-owned `updated_at` timestamps for ordering, latest checked-state display, recovery upserts, and future migration paths; these timestamps are not Turso's merge clock. Cross-device clock skew is acceptable for Household List data. All replicated tables use **tombstone-based soft-delete** (`deleted_at`) so app delete paths can sync and be reasoned about without hard deletes.
 
 ## Considered alternatives

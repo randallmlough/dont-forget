@@ -41,6 +41,11 @@ export type ClerkServerConfig = {
 	secretKey: string;
 };
 
+export type PostgresConfig = {
+	appEnv: AppEnv;
+	databaseUrl: string;
+};
+
 export function requireEnv(
 	key: string,
 	source: EnvSource = process.env,
@@ -142,6 +147,16 @@ export function readTursoOperatorConfig(
 	return {
 		...readTursoMigrationConfig(source),
 		platformApiToken: requireEnv("TURSO_PLATFORM_API_TOKEN", source),
+	};
+}
+
+export function readPostgresConfig(
+	source: EnvSource = process.env,
+): PostgresConfig {
+	const appEnv = readAppEnv(source);
+	return {
+		appEnv,
+		databaseUrl: requireEnv("DATABASE_URL", source),
 	};
 }
 
