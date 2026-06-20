@@ -72,9 +72,11 @@ export type DataTransaction = {
 		data: Record<string, unknown>,
 	): Promise<void>;
 	// Tombstone (non-item_checks) or uncheck (item_checks). The applicator
-	// decides which based on the table; the transaction performs the SQL.
-	tombstone(table: DataTable, id: string): Promise<void>;
-	uncheckItemCheck(id: string): Promise<void>;
+	// decides which based on the table; the transaction performs the SQL. Both
+	// stamp updated_at (and deleted_at) with the clamped incoming client clock,
+	// never now(), so a stale delete/uncheck loses to a newer write.
+	tombstone(table: DataTable, id: string, updatedAt: Date): Promise<void>;
+	uncheckItemCheck(id: string, updatedAt: Date): Promise<void>;
 };
 
 export type DataDeps = {
@@ -173,12 +175,17 @@ async function applyOp(
 	}
 
 	if (op.op === "DELETE") {
+		// A DELETE/uncheck must carry the client clock so the LWW guard above can
+		// compare it: a stale offline delete must not overwrite a newer edit.
+		if (!incomingUpdatedAt) {
+			throw new DataClientError("DELETE requires updated_at", 400);
+		}
 		// item_checks (Decision 9): uncheck — keep the row, set checked_at NULL.
 		if (table === "item_checks") {
-			await tx.uncheckItemCheck(op.id);
+			await tx.uncheckItemCheck(op.id, incomingUpdatedAt);
 			return;
 		}
-		await tx.tombstone(table, op.id);
+		await tx.tombstone(table, op.id, incomingUpdatedAt);
 		return;
 	}
 
@@ -216,10 +223,11 @@ async function assertAuthorized(
 	userId: string,
 	op: DataOp,
 ): Promise<void> {
-	if (HOUSEHOLD_RESOLUTION[op.table as DataTable] === "unscoped") {
-		return;
-	}
 	const householdIds = await tx.householdsForOp(op);
+	// Fail closed: an op we cannot resolve to any Household is never authorized.
+	if (householdIds.length === 0) {
+		throw new DataClientError("Could not resolve Household", 403);
+	}
 	for (const householdId of householdIds) {
 		if (!(await tx.isActiveMember(userId, householdId))) {
 			throw new DataClientError("Not an active Member of the Household", 403);
@@ -336,66 +344,62 @@ async function defaultWithTransaction<T>(
 	}
 }
 
-type PgQueryClient = {
+export type PgQueryClient = {
 	query(
 		text: string,
 		params?: unknown[],
 	): Promise<{ rows: Record<string, unknown>[] }>;
 };
 
-function pgDataTransaction(client: PgQueryClient): DataTransaction {
+export function pgDataTransaction(client: PgQueryClient): DataTransaction {
 	return {
 		async householdsForOp(op) {
+			// Authorize against the STORED row by op.id whenever it already exists,
+			// so a caller cannot mutate someone else's row by pointing the payload
+			// parent at a Household they belong to. Only a brand-new create (no
+			// stored row) falls back to the payload parent.
 			const resolution = HOUSEHOLD_RESOLUTION[op.table as DataTable];
+			const fromHouseholdId = (rows: Record<string, unknown>[]): string[] =>
+				rows
+					.map((x) => x.household_id)
+					.filter((v): v is string => typeof v === "string");
+
 			if (resolution === "row-household-id") {
-				const onRow = op.data.household_id;
-				if (typeof onRow === "string") return [onRow];
-				const r = await client.query(
+				const stored = await client.query(
 					`SELECT household_id FROM ${op.table} WHERE id = $1`,
 					[op.id],
 				);
-				return r.rows
-					.map((x) => x.household_id)
-					.filter((v): v is string => typeof v === "string");
+				if (stored.rows.length > 0) return fromHouseholdId(stored.rows);
+				const onRow = op.data.household_id;
+				return typeof onRow === "string" ? [onRow] : [];
 			}
 			if (resolution === "via-list") {
-				const listId = op.data.list_id;
-				if (typeof listId === "string") {
-					const r = await client.query(
-						"SELECT household_id FROM lists WHERE id = $1",
-						[listId],
-					);
-					return r.rows
-						.map((x) => x.household_id)
-						.filter((v): v is string => typeof v === "string");
-				}
-				const r = await client.query(
+				const stored = await client.query(
 					"SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
 					[op.id],
 				);
-				return r.rows
-					.map((x) => x.household_id)
-					.filter((v): v is string => typeof v === "string");
-			}
-			if (resolution === "via-item") {
-				let itemId = op.data.item_id;
-				if (typeof itemId !== "string") {
-					const r0 = await client.query(
-						"SELECT item_id FROM item_checks WHERE id = $1",
-						[op.id],
-					);
-					itemId = r0.rows[0]?.item_id;
-				}
-				if (typeof itemId !== "string") return [];
+				if (stored.rows.length > 0) return fromHouseholdId(stored.rows);
+				const listId = op.data.list_id;
+				if (typeof listId !== "string") return [];
 				const r = await client.query(
-					"SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
-					[itemId],
+					"SELECT household_id FROM lists WHERE id = $1",
+					[listId],
 				);
-				return r.rows
-					.map((x) => x.household_id)
-					.filter((v): v is string => typeof v === "string");
+				return fromHouseholdId(r.rows);
 			}
-			return [];
+			// via-item (item_checks)
+			const stored = await client.query(
+				"SELECT l.household_id FROM item_checks c JOIN items i ON i.id = c.item_id JOIN lists l ON l.id = i.list_id WHERE c.id = $1",
+				[op.id],
+			);
+			if (stored.rows.length > 0) return fromHouseholdId(stored.rows);
+			const itemId = op.data.item_id;
+			if (typeof itemId !== "string") return [];
+			const r = await client.query(
+				"SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
+				[itemId],
+			);
+			return fromHouseholdId(r.rows);
 		},
 		async isActiveMember(userId, householdId) {
 			const r = await client.query(
@@ -424,15 +428,25 @@ function pgDataTransaction(client: PgQueryClient): DataTransaction {
 			const cols = ["id", ...Object.keys(data).filter((c) => c !== "id")];
 			const vals = cols.map((c) => (c === "id" ? id : data[c]));
 			const placeholders = cols.map((_, i) => `$${i + 1}`);
+			// item_checks has UNIQUE(item_id): a new synthetic id can collide on an
+			// existing Item's row, so it conflicts on item_id (not id) and merges
+			// last-writer-wins by updated_at. All other tables conflict on the id PK.
+			const conflict = table === "item_checks" ? "(item_id)" : "(id)";
+			const isKey = (c: string) =>
+				c === "id" || (table === "item_checks" && c === "item_id");
 			const updates = cols
-				.filter((c) => c !== "id")
+				.filter((c) => !isKey(c))
 				.map((c) => `${c} = EXCLUDED.${c}`);
+			const lwwGuard =
+				table === "item_checks"
+					? " WHERE item_checks.updated_at <= EXCLUDED.updated_at"
+					: "";
 			const setClause =
 				updates.length > 0
-					? `DO UPDATE SET ${updates.join(", ")}`
+					? `DO UPDATE SET ${updates.join(", ")}${lwwGuard}`
 					: "DO NOTHING";
 			await client.query(
-				`INSERT INTO ${table} (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) ON CONFLICT (id) ${setClause}`,
+				`INSERT INTO ${table} (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) ON CONFLICT ${conflict} ${setClause}`,
 				vals,
 			);
 		},
@@ -445,16 +459,16 @@ function pgDataTransaction(client: PgQueryClient): DataTransaction {
 				[...cols.map((c) => data[c]), id],
 			);
 		},
-		async tombstone(table, id) {
+		async tombstone(table, id, updatedAt) {
 			await client.query(
-				`UPDATE ${table} SET deleted_at = now(), updated_at = now() WHERE id = $1`,
-				[id],
+				`UPDATE ${table} SET deleted_at = $2, updated_at = $2 WHERE id = $1`,
+				[id, updatedAt.toISOString()],
 			);
 		},
-		async uncheckItemCheck(id) {
+		async uncheckItemCheck(id, updatedAt) {
 			await client.query(
-				"UPDATE item_checks SET checked_at = NULL, checked_by_user_id = NULL, updated_at = now() WHERE id = $1",
-				[id],
+				"UPDATE item_checks SET checked_at = NULL, checked_by_user_id = NULL, updated_at = $2 WHERE id = $1",
+				[id, updatedAt.toISOString()],
 			);
 		},
 	};

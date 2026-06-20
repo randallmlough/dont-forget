@@ -2,43 +2,14 @@
 // These mirror the pg schema (db/schema/postgres/*) exactly and are kept as
 // data so the handler stays readable and tests can assert the allow-list.
 
-export type DataTable =
-	| "users"
-	| "households"
-	| "memberships"
-	| "lists"
-	| "items"
-	| "item_checks";
+export type DataTable = "lists" | "items" | "item_checks";
 
 // Writable column names per table. Any incoming data key outside this set is
 // rejected (closes the Object.keys(data) -> SQL injection-of-columns hole).
+// Only product tables are writable here; users/households/memberships are
+// directory tables whose Owner-aware mutations live in the household and member
+// domain services, never on /api/data.
 export const WRITABLE_COLUMNS: Record<DataTable, ReadonlySet<string>> = {
-	users: new Set([
-		"id",
-		"clerk_user_id",
-		"email",
-		"first_name",
-		"last_name",
-		"display_name",
-		"active_household_id",
-		"created_at",
-		"updated_at",
-	]),
-	households: new Set([
-		"id",
-		"name",
-		"created_by_user_id",
-		"created_at",
-		"deleted_at",
-	]),
-	memberships: new Set([
-		"id",
-		"household_id",
-		"user_id",
-		"role",
-		"joined_at",
-		"removed_at",
-	]),
 	lists: new Set([
 		"id",
 		"household_id",
@@ -75,17 +46,9 @@ export const WRITABLE_COLUMNS: Record<DataTable, ReadonlySet<string>> = {
 //   - "via-list": items resolve through list_id -> lists.household_id.
 //   - "via-item": item_checks resolve through item_id -> items.list_id ->
 //     lists.household_id.
-//   - "unscoped": not membership-scoped (users, households).
-export type HouseholdResolution =
-	| "row-household-id"
-	| "via-list"
-	| "via-item"
-	| "unscoped";
+export type HouseholdResolution = "row-household-id" | "via-list" | "via-item";
 
 export const HOUSEHOLD_RESOLUTION: Record<DataTable, HouseholdResolution> = {
-	users: "unscoped",
-	households: "unscoped",
-	memberships: "row-household-id",
 	lists: "row-household-id",
 	items: "via-list",
 	item_checks: "via-item",
