@@ -34,7 +34,7 @@ describe("pgDataTransaction Household resolution", () => {
 			},
 		};
 		const op: DataOp = { op: "PATCH", table, id: "row1", data: { ...data } };
-		const resolved = await pgDataTransaction(client).householdsForOp(op);
+		const resolved = await pgDataTransaction(client).householdsForOp(table, op);
 		// Order-insensitive: stored parent is always included (anti-hijack), and
 		// the destination parent is unioned in (anti-move).
 		expect(new Set(resolved)).toEqual(new Set(["h_b", "h_a"]));
@@ -58,7 +58,7 @@ describe("pgDataTransaction Household resolution", () => {
 			data: { household_id: "h_a", name: "x" },
 		};
 		await expect(
-			pgDataTransaction(client).householdsForOp(op),
+			pgDataTransaction(client).householdsForOp("lists", op),
 		).resolves.toEqual(["h_a"]);
 	});
 

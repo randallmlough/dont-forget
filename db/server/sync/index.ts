@@ -8,11 +8,6 @@ export {
 	DataClientError,
 	type DataOp,
 	type DataTransaction,
-	type StoredRowState,
 } from "./applicator";
 export { DataAuthError, defaultAuthenticate } from "./authenticate";
-export {
-	defaultWithTransaction,
-	type PgQueryClient,
-	pgDataTransaction,
-} from "./pg-transaction";
+export { defaultWithTransaction } from "./pg-transaction";

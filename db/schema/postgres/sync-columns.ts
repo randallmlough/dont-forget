@@ -6,7 +6,7 @@
 // drift from the actual columns: a column added to the schema is writable unless
 // it is named in EXCLUDE.
 
-import { getTableColumns } from "drizzle-orm";
+import { getTableColumns, type Table } from "drizzle-orm";
 import { itemChecks, items, lists } from "./product";
 
 export type DataTable = "lists" | "items" | "item_checks";
@@ -24,7 +24,7 @@ const EXCLUDE: Record<DataTable, ReadonlySet<string>> = {
 // getTableColumns(...).name is the snake_case SQL column name (not the JS key),
 // which is what incoming op.data keys are. Allow-by-default minus EXCLUDE.
 function writable(
-	table: Parameters<typeof getTableColumns>[0],
+	table: Table,
 	exclude: ReadonlySet<string>,
 ): ReadonlySet<string> {
 	return new Set(

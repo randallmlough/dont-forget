@@ -49,8 +49,9 @@ export type StoredRowState = {
 // Tests provide a fake; production wires it to a pg transaction.
 export type DataTransaction = {
 	// Resolve the Household id(s) a write touches (for authz). Empty array means
-	// the targeted row could not be resolved to any Household.
-	householdsForOp(op: DataOp): Promise<string[]>;
+	// the targeted row could not be resolved to any Household. `table` is the
+	// validated DataTable (op.table after the isDataTable guard).
+	householdsForOp(table: DataTable, op: DataOp): Promise<string[]>;
 	// Active membership == memberships.removed_at IS NULL.
 	isActiveMember(userId: string, householdId: string): Promise<boolean>;
 	// Stored LWW/tombstone state for a row keyed on the synthetic id.
@@ -99,7 +100,7 @@ export async function applyOp(
 
 	assertColumnsAllowed(table, op.data);
 
-	await assertAuthorized(tx, userId, op);
+	await assertAuthorized(tx, userId, table, op);
 
 	const incomingUpdatedAt = clampUpdatedAt(op.data);
 	const stored = await tx.storedRowState(table, op.id);
@@ -160,9 +161,10 @@ function assertColumnsAllowed(
 async function assertAuthorized(
 	tx: DataTransaction,
 	userId: string,
+	table: DataTable,
 	op: DataOp,
 ): Promise<void> {
-	const householdIds = await tx.householdsForOp(op);
+	const householdIds = await tx.householdsForOp(table, op);
 	// Fail closed: an op we cannot resolve to any Household is never authorized.
 	if (householdIds.length === 0) {
 		throw new DataClientError("Could not resolve Household", 403);

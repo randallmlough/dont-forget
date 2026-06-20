@@ -28,7 +28,7 @@ export async function handleDataUpload(
 ): Promise<Response> {
 	let userId: string;
 	try {
-		userId = await authenticate(request, deps);
+		userId = await (deps?.authenticate ?? defaultAuthenticate)(request);
 	} catch (error) {
 		if (error instanceof DataAuthError) {
 			return errorResponse(error.message, 401);
@@ -50,7 +50,7 @@ export async function handleDataUpload(
 	}
 
 	try {
-		await withTransaction(deps, async (tx) => {
+		await (deps?.withTransaction ?? defaultWithTransaction)(async (tx) => {
 			for (const op of batch) {
 				await applyOp(tx, userId, op);
 			}
@@ -66,26 +66,6 @@ export async function handleDataUpload(
 	}
 
 	return Response.json({ ok: true }, { status: 200 });
-}
-
-async function authenticate(
-	request: Request,
-	deps?: DataDeps,
-): Promise<string> {
-	if (deps?.authenticate) {
-		return deps.authenticate(request);
-	}
-	return defaultAuthenticate(request);
-}
-
-async function withTransaction<T>(
-	deps: DataDeps | undefined,
-	run: (tx: DataTransaction) => Promise<T>,
-): Promise<T> {
-	if (deps?.withTransaction) {
-		return deps.withTransaction(run);
-	}
-	return defaultWithTransaction(run);
 }
 
 async function parseBatch(request: Request): Promise<DataOp[]> {

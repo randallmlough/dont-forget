@@ -1,8 +1,4 @@
-import {
-	DataAuthError,
-	type DataOp,
-	type DataTransaction,
-} from "@/db/server/sync";
+import { DataAuthError, type DataTransaction } from "@/db/server/sync";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api/requests";
 import { type DataDeps, handleDataUpload } from "./handler";
 
@@ -30,7 +26,7 @@ type RecordedCall =
 function fakeTransaction(config: FakeTransactionConfig) {
 	const calls: RecordedCall[] = [];
 	const tx: DataTransaction = {
-		async householdsForOp(op: DataOp) {
+		async householdsForOp(_table, op) {
 			if (config.throwOnQuery) throw new Error("db down");
 			return config.households?.[op.id] ?? [];
 		},

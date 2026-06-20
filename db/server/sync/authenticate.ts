@@ -7,6 +7,7 @@
 // not service/api layers), so the downward arrow lib/api -> db is preserved.
 
 import { eq } from "drizzle-orm";
+import { users } from "@/db/schema/postgres";
 import { postgresDb, postgresPool } from "@/db/server/pg-client";
 
 // Auth failure (401).
@@ -40,7 +41,6 @@ export async function defaultAuthenticate(request: Request): Promise<string> {
 		throw new DataAuthError("Invalid Clerk session token");
 	}
 
-	const { users } = await import("@/db/schema/postgres");
 	const pool = postgresPool();
 	try {
 		const db = postgresDb(pool);

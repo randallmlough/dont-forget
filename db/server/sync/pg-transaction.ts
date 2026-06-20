@@ -5,10 +5,7 @@
 // (./applicator) decides intent and calls these methods through the
 // DataTransaction interface. Lives in the db layer (ADR-0014).
 
-import {
-	type DataTable,
-	HOUSEHOLD_RESOLUTION,
-} from "@/db/schema/postgres/sync-columns";
+import { HOUSEHOLD_RESOLUTION } from "@/db/schema/postgres/sync-columns";
 import { postgresPool } from "@/db/server/pg-client";
 import type { DataTransaction } from "./applicator";
 
@@ -43,7 +40,7 @@ export async function defaultWithTransaction<T>(
 
 export function pgDataTransaction(client: PgQueryClient): DataTransaction {
 	return {
-		async householdsForOp(op) {
+		async householdsForOp(table, op) {
 			// Authorize the STORED row's Household (so a caller cannot mutate
 			// someone else's row) AND the DESTINATION Household the payload scoping
 			// FK points at (so a Member of A cannot move an existing row into B by
@@ -53,7 +50,7 @@ export function pgDataTransaction(client: PgQueryClient): DataTransaction {
 			// the caller belongs to both. A pure non-FK edit carries no scoping FK,
 			// so the destination is empty and only the stored Household is checked.
 			// A brand-new create (no stored row) resolves from the payload parent.
-			const resolution = HOUSEHOLD_RESOLUTION[op.table as DataTable];
+			const resolution = HOUSEHOLD_RESOLUTION[table];
 			const fromHouseholdId = (rows: Record<string, unknown>[]): string[] =>
 				rows
 					.map((x) => x.household_id)
