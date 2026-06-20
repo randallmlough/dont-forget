@@ -1,14 +1,18 @@
 // Production authentication for /api/data: sub-only Clerk verification, then
 // resolve the internal users.id by clerk_user_id from the pg directory.
 //
-// This lives in the db layer (ADR-0014) and stays lint-clean: the no-services-
-// imports-in-db rule only bars @/lib/services and @/lib/api imports, and these
-// dynamic imports are @/lib/server/auth + @/lib/env (cross-cutting lib utilities,
-// not service/api layers), so the downward arrow lib/api -> db is preserved.
+// Lives in the db layer (ADR-0014). @/lib/server/auth and @clerk/backend are
+// imported dynamically so the heavy, server-only Clerk SDK loads only when a
+// request is actually authenticated — a caller that injects its own auth (e.g.
+// the handler tests) never pulls it in. The other deps (drizzle, the pg schema,
+// @/lib/env) are already in this module's static graph via @/db/server/pg-client,
+// so importing them statically defers nothing. db/ importing @/lib/* is
+// lint-clean: no-services-imports-in-db bars only @/lib/services and @/lib/api.
 
 import { eq } from "drizzle-orm";
 import { users } from "@/db/schema/postgres";
 import { postgresDb, postgresPool } from "@/db/server/pg-client";
+import { readClerkServerConfig } from "@/lib/env";
 
 // Auth failure (401).
 export class DataAuthError extends Error {
@@ -21,12 +25,10 @@ export class DataAuthError extends Error {
 // Sub-only Clerk verification: verifyToken (no Backend-API getUser round-trip),
 // then resolve the internal users.id by clerk_user_id from the pg directory.
 export async function defaultAuthenticate(request: Request): Promise<string> {
-	const [{ bearerToken }, { verifyToken }, { readClerkServerConfig }] =
-		await Promise.all([
-			import("@/lib/server/auth"),
-			import("@clerk/backend"),
-			import("@/lib/env"),
-		]);
+	const [{ bearerToken }, { verifyToken }] = await Promise.all([
+		import("@/lib/server/auth"),
+		import("@clerk/backend"),
+	]);
 
 	let clerkUserId: string | undefined;
 	try {
