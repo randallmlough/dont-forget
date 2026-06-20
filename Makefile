@@ -169,7 +169,7 @@ infra-pull: ## Pull the latest stack images
 
 .PHONY: pg-migrate
 pg-migrate: ## Apply Postgres migrations + the powersync publication (reads DATABASE_URL)
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) exec drizzle-kit migrate --config=db/drizzle/postgres.migrate.config.ts
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) exec drizzle-kit migrate --config=db/drizzle/postgres.migrate.ts
 
 .PHONY: pg-shell
 pg-shell: ## Open psql on the source Postgres

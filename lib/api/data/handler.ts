@@ -354,52 +354,75 @@ export type PgQueryClient = {
 export function pgDataTransaction(client: PgQueryClient): DataTransaction {
 	return {
 		async householdsForOp(op) {
-			// Authorize against the STORED row by op.id whenever it already exists,
-			// so a caller cannot mutate someone else's row by pointing the payload
-			// parent at a Household they belong to. Only a brand-new create (no
-			// stored row) falls back to the payload parent.
+			// Authorize the STORED row's Household (so a caller cannot mutate
+			// someone else's row) AND the DESTINATION Household the payload scoping
+			// FK points at (so a Member of A cannot move an existing row into B by
+			// PATCHing its list_id/household_id/item_id). When a stored row exists
+			// we return the dedup union of both; assertAuthorized fails closed on
+			// every returned Household, so a cross-Household move is blocked unless
+			// the caller belongs to both. A pure non-FK edit carries no scoping FK,
+			// so the destination is empty and only the stored Household is checked.
+			// A brand-new create (no stored row) resolves from the payload parent.
 			const resolution = HOUSEHOLD_RESOLUTION[op.table as DataTable];
 			const fromHouseholdId = (rows: Record<string, unknown>[]): string[] =>
 				rows
 					.map((x) => x.household_id)
 					.filter((v): v is string => typeof v === "string");
+			const union = (...lists: string[][]): string[] => [
+				...new Set(lists.flat()),
+			];
 
 			if (resolution === "row-household-id") {
+				const destIds = async (): Promise<string[]> => {
+					const onRow = op.data.household_id;
+					return typeof onRow === "string" ? [onRow] : [];
+				};
 				const stored = await client.query(
 					`SELECT household_id FROM ${op.table} WHERE id = $1`,
 					[op.id],
 				);
-				if (stored.rows.length > 0) return fromHouseholdId(stored.rows);
-				const onRow = op.data.household_id;
-				return typeof onRow === "string" ? [onRow] : [];
+				if (stored.rows.length > 0) {
+					return union(fromHouseholdId(stored.rows), await destIds());
+				}
+				return destIds();
 			}
 			if (resolution === "via-list") {
+				const destIds = async (): Promise<string[]> => {
+					const listId = op.data.list_id;
+					if (typeof listId !== "string") return [];
+					const r = await client.query(
+						"SELECT household_id FROM lists WHERE id = $1",
+						[listId],
+					);
+					return fromHouseholdId(r.rows);
+				};
 				const stored = await client.query(
 					"SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
 					[op.id],
 				);
-				if (stored.rows.length > 0) return fromHouseholdId(stored.rows);
-				const listId = op.data.list_id;
-				if (typeof listId !== "string") return [];
-				const r = await client.query(
-					"SELECT household_id FROM lists WHERE id = $1",
-					[listId],
-				);
-				return fromHouseholdId(r.rows);
+				if (stored.rows.length > 0) {
+					return union(fromHouseholdId(stored.rows), await destIds());
+				}
+				return destIds();
 			}
 			// via-item (item_checks)
+			const destIds = async (): Promise<string[]> => {
+				const itemId = op.data.item_id;
+				if (typeof itemId !== "string") return [];
+				const r = await client.query(
+					"SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
+					[itemId],
+				);
+				return fromHouseholdId(r.rows);
+			};
 			const stored = await client.query(
 				"SELECT l.household_id FROM item_checks c JOIN items i ON i.id = c.item_id JOIN lists l ON l.id = i.list_id WHERE c.id = $1",
 				[op.id],
 			);
-			if (stored.rows.length > 0) return fromHouseholdId(stored.rows);
-			const itemId = op.data.item_id;
-			if (typeof itemId !== "string") return [];
-			const r = await client.query(
-				"SELECT l.household_id FROM items i JOIN lists l ON l.id = i.list_id WHERE i.id = $1",
-				[itemId],
-			);
-			return fromHouseholdId(r.rows);
+			if (stored.rows.length > 0) {
+				return union(fromHouseholdId(stored.rows), await destIds());
+			}
+			return destIds();
 		},
 		async isActiveMember(userId, householdId) {
 			const r = await client.query(
@@ -454,20 +477,37 @@ export function pgDataTransaction(client: PgQueryClient): DataTransaction {
 			const cols = Object.keys(data).filter((c) => c !== "id");
 			if (cols.length === 0) return;
 			const set = cols.map((c, i) => `${c} = $${i + 1}`);
+			const params: unknown[] = [...cols.map((c) => data[c]), id];
+			let where = `WHERE id = $${cols.length + 1}`;
+			// SQL-level LWW guard, closing the READ COMMITTED race: the JS LWW check
+			// reads a stale row version, so two concurrent uploads can both pass it
+			// before either commits. Postgres re-evaluates this WHERE against the
+			// freshly committed row (EvalPlanQual) once the lock releases, dropping a
+			// PATCH whose clock is older than the now-committed row. A guard-less
+			// PATCH omits updated_at (no client clock to compare), so it falls
+			// through to the plain id predicate.
+			if (data.updated_at !== undefined) {
+				params.push(data.updated_at);
+				where += ` AND updated_at <= $${params.length}`;
+			}
 			await client.query(
-				`UPDATE ${table} SET ${set.join(", ")} WHERE id = $${cols.length + 1}`,
-				[...cols.map((c) => data[c]), id],
+				`UPDATE ${table} SET ${set.join(", ")} ${where}`,
+				params,
 			);
 		},
 		async tombstone(table, id, updatedAt) {
+			// SQL-level LWW guard (see patch): a stale tombstone whose clock is older
+			// than the concurrently committed row version is dropped by EvalPlanQual.
 			await client.query(
-				`UPDATE ${table} SET deleted_at = $2, updated_at = $2 WHERE id = $1`,
+				`UPDATE ${table} SET deleted_at = $2, updated_at = $2 WHERE id = $1 AND updated_at <= $2`,
 				[id, updatedAt.toISOString()],
 			);
 		},
 		async uncheckItemCheck(id, updatedAt) {
+			// SQL-level LWW guard (see patch): a stale uncheck whose clock is older
+			// than the concurrently committed row version is dropped by EvalPlanQual.
 			await client.query(
-				"UPDATE item_checks SET checked_at = NULL, checked_by_user_id = NULL, updated_at = $2 WHERE id = $1",
+				"UPDATE item_checks SET checked_at = NULL, checked_by_user_id = NULL, updated_at = $2 WHERE id = $1 AND updated_at <= $2",
 				[id, updatedAt.toISOString()],
 			);
 		},
