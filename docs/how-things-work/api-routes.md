@@ -18,6 +18,8 @@ Responsibilities:
 
 `lib/api` is not a data-access layer. If an API handler needs directory DB or Household DB access, call the appropriate service instead of adding SQL to the handler.
 
+The PowerSync write endpoint `/api/data` follows this rule with no exception. Its handler (`lib/api/data/handler.ts`) is a thin HTTP shim — authenticate, parse the batch, run the applicator in one transaction, map errors to status codes. The write logic, the batch contract, and the SQL live in `db/server/sync` as data-store infrastructure ([ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md)), which the shim imports downward (`lib/api -> db`). The applicator is a generic, schema-agnostic write engine for the sync transport, not domain data access, so it is not a domain service.
+
 Request and response schemas can live in `lib/api/**` when they are only HTTP-boundary contracts. Put schemas in an app-safe module only when client code must parse the same shape.
 
 ## Legacy Exception

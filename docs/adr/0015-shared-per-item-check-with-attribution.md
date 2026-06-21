@@ -13,7 +13,7 @@ We will model checked state as a single shared row per Item in Postgres ("Decisi
 - `checked_at IS NULL` means unchecked. Uncheck NULLs `checked_at` and `checked_by_user_id` on the existing row rather than deleting it, so the synthetic `id` and `item_id` survive for sync and future LWW comparison.
 - App-owned `updated_at` remains the application-level last-writer-wins clock for the row. Because two Members can produce different synthetic `id`s for the same `item_id`, the server applicator conflicts on `item_id` (not `id`) and merges by `updated_at`, so a stale check/uncheck loses to a newer one.
 
-This is the authoritative checked-state data model for the Postgres substrate. It is already reflected in the Postgres schema (`db/schema/postgres/product.ts`) and enforced by the `/api/data` write applicator (`lib/api/data/`).
+This is the authoritative checked-state data model for the Postgres substrate. It is already reflected in the Postgres schema (`db/schema/postgres/product.ts`) and enforced by the `/api/data` write applicator (`db/server/sync/`; relocated there by [ADR-0016](0016-data-write-applicator-in-db-layer.md)).
 
 ## Considered options
 
