@@ -27,11 +27,16 @@
 		"doctor": "npx react-doctor@latest"
 	},
 	"dependencies": {
+		"@azure/core-asynciterator-polyfill": "^1.0.2",
 		"@babel/core": "^7.29.0",
 		"@clerk/backend": "^3.4.7",
 		"@clerk/clerk-expo": "^2.19.36",
 		"@expo/ui": "~56.0.18",
 		"@libsql/client": "^0.17.3",
+		"@op-engineering/op-sqlite": "^16.2.0",
+		"@powersync/op-sqlite": "^0.9.10",
+		"@powersync/react": "^1.10.0",
+		"@powersync/react-native": "^1.35.4",
 		"@react-native-async-storage/async-storage": "^2.2.0",
 		"@react-native-community/datetimepicker": "^9.1.0",
 		"@react-native-community/netinfo": "^12.0.1",
@@ -71,6 +76,7 @@
 		"react-dom": "19.2.3",
 		"react-native": "0.85.3",
 		"react-native-gesture-handler": "~2.31.2",
+		"react-native-get-random-values": "~1.11.0",
 		"react-native-nitro-modules": "0.35.9",
 		"react-native-reanimated": "~4.3.1",
 		"react-native-safe-area-context": "~5.7.0",
@@ -83,6 +89,7 @@
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
+		"@babel/plugin-transform-async-generator-functions": "^7.29.7",
 		"@biomejs/biome": "^2.4.15",
 		"@react-native/jest-preset": "^0.85.0",
 		"@testing-library/react-native": "^14.0.0",

@@ -19,4 +19,14 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 	return context.resolveRequest(context, moduleName, platform);
 };
 
+config.transformer.getTransformOptions = async () => ({
+	transform: {
+		inlineRequires: {
+			blockList: {
+				[require.resolve("@powersync/react-native")]: true,
+			},
+		},
+	},
+});
+
 module.exports = withStorybook(config);
