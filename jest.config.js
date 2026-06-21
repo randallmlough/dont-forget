@@ -20,7 +20,7 @@ module.exports = {
 	transformIgnorePatterns: [
 		// pnpm encodes the scope separator as `+` inside `.pnpm` (e.g. `@expo+ui@...`),
 		// so scoped allowlist entries must accept both `/` and `+`.
-		"node_modules/(?!(?:.pnpm/)?((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?[/+].*|expo-router|@expo-google-fonts[/+].*|react-native-svg|@clerk[/+].*))",
+		"node_modules/(?!(?:.pnpm/)?((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?[/+].*|expo-router|@expo-google-fonts[/+].*|react-native-svg|@clerk[/+].*|@powersync[/+].*))",
 	],
 	collectCoverageFrom: [
 		"app/**/*.{ts,tsx}",
