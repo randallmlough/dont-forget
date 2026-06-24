@@ -87,6 +87,17 @@ describe("PowerSyncConnector", () => {
 		expect(tx.complete).toHaveBeenCalledTimes(1);
 	});
 
+	it("discards terminal 400 uploads by completing the transaction", async () => {
+		const { connector } = createConnector();
+		const tx = createTransaction();
+		const database = createDatabase(tx);
+		fetchMock.mockResolvedValue(responseWithStatus(400));
+
+		await connector.uploadData(database);
+
+		expect(tx.complete).toHaveBeenCalledTimes(1);
+	});
+
 	it("throws and keeps the transaction queued for transient 5xx and network failures", async () => {
 		const { connector } = createConnector();
 		const serverTx = createTransaction();
@@ -114,6 +125,18 @@ describe("PowerSyncConnector", () => {
 
 		await expect(connector.uploadData(database)).rejects.toThrow(
 			"Data upload failed with status 429",
+		);
+		expect(tx.complete).not.toHaveBeenCalled();
+	});
+
+	it("throws and keeps the transaction queued for 401 (refreshable auth)", async () => {
+		const { connector } = createConnector();
+		const tx = createTransaction();
+		const database = createDatabase(tx);
+		fetchMock.mockResolvedValue(responseWithStatus(401));
+
+		await expect(connector.uploadData(database)).rejects.toThrow(
+			"Data upload failed with status 401",
 		);
 		expect(tx.complete).not.toHaveBeenCalled();
 	});

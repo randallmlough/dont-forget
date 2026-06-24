@@ -31,9 +31,12 @@ export type PowerSyncConnectorDeps = {
 	powersyncUrl: string;
 };
 
-const TERMINAL_CLIENT_STATUSES: ReadonlySet<number> = new Set([
-	400, 401, 403, 409,
-]);
+// 401 is intentionally NOT terminal: auth is refreshable. The connector
+// fetches a new session token each attempt (see uploadData), so throwing
+// keeps the transaction queued and a later retry can present a valid token.
+// 400/403/409 are deterministic server rejections a retry cannot fix, so we
+// discard to avoid wedging the FIFO upload queue on a poison-pill transaction.
+const TERMINAL_CLIENT_STATUSES: ReadonlySet<number> = new Set([400, 403, 409]);
 
 export class PowerSyncConnector implements PowerSyncBackendConnector {
 	private readonly powersyncGetToken: GetToken;
