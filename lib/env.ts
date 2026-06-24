@@ -16,6 +16,7 @@ export type PublicExpoConfig = {
 	clerkPublishableKey: string;
 	posthogHost?: string;
 	posthogProjectToken?: string;
+	powersyncUrl?: string;
 	privacyPolicyUrl?: string;
 	termsUrl?: string;
 };
@@ -95,6 +96,7 @@ export function readPublicExpoConfig(
 	);
 
 	const apiBaseUrl = optionalEnv("EXPO_PUBLIC_API_BASE_URL", source);
+	const powersyncUrl = optionalEnv("EXPO_PUBLIC_POWERSYNC_URL", source);
 	// local builds derive the API base URL from the Expo dev server at
 	// runtime (see lib/client-api/api-base-url.ts); only deployed envs need
 	// it configured. Tests inject their own API dependencies.
@@ -113,6 +115,7 @@ export function readPublicExpoConfig(
 		clerkPublishableKey,
 		posthogHost: optionalEnv("POSTHOG_HOST", source),
 		posthogProjectToken: optionalEnv("POSTHOG_PROJECT_TOKEN", source),
+		powersyncUrl,
 		privacyPolicyUrl: optionalPublicHttpsUrl(
 			"EXPO_PUBLIC_PRIVACY_POLICY_URL",
 			source,
