@@ -56,10 +56,12 @@ export class PowerSyncConnector implements PowerSyncBackendConnector {
 		this.powersyncUrl = powersyncUrl;
 	}
 
-	async fetchCredentials(): Promise<PowerSyncCredentials> {
+	async fetchCredentials(): Promise<PowerSyncCredentials | null> {
 		const token = await this.powersyncGetToken();
 		if (!token) {
-			throw new Error("Sign in to continue.");
+			// PowerSync's contract: null = signed out (disconnect cleanly);
+			// a throw is treated as a transient failure and retried every ~5s.
+			return null;
 		}
 
 		return { endpoint: this.powersyncUrl, token };

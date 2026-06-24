@@ -162,12 +162,10 @@ describe("PowerSyncConnector", () => {
 		expectFetchAuthorization("Bearer session-token");
 	});
 
-	it("rejects sync credentials when Clerk returns no PowerSync token", async () => {
+	it("returns null sync credentials when Clerk returns no PowerSync token", async () => {
 		const { connector } = createConnector({ powersyncToken: null });
 
-		await expect(connector.fetchCredentials()).rejects.toThrow(
-			"Sign in to continue.",
-		);
+		await expect(connector.fetchCredentials()).resolves.toBeNull();
 	});
 
 	it("returns without uploading when no CRUD transaction is queued", async () => {
