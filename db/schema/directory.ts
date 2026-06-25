@@ -1,14 +1,16 @@
 import { sql } from "drizzle-orm";
 import {
-	type AnySQLiteColumn,
+	type AnyPgColumn,
+	bigint,
 	index,
-	integer,
-	sqliteTable,
+	pgTable,
 	text,
 	uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
-export const users = sqliteTable(
+const nowEpochMillis = sql`(extract(epoch from now()) * 1000)::bigint`;
+
+export const users = pgTable(
 	"users",
 	{
 		id: text("id").primaryKey(),
@@ -18,31 +20,35 @@ export const users = sqliteTable(
 		lastName: text("last_name"),
 		displayName: text("display_name"),
 		activeHouseholdId: text("active_household_id").references(
-			(): AnySQLiteColumn => households.id,
+			(): AnyPgColumn => households.id,
 		),
-		createdAt: integer("created_at")
+		createdAt: bigint("created_at", { mode: "number" })
 			.notNull()
-			.default(sql`(unixepoch() * 1000)`),
-		updatedAt: integer("updated_at")
+			.default(nowEpochMillis),
+		updatedAt: bigint("updated_at", { mode: "number" })
 			.notNull()
-			.default(sql`(unixepoch() * 1000)`),
+			.default(nowEpochMillis),
 	},
 	(t) => [uniqueIndex("users_clerk_user_id_unique").on(t.clerkUserId)],
 );
 
-export const households = sqliteTable("households", {
+export const households = pgTable("households", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
 	tursoDbName: text("turso_db_name").notNull().unique(),
 	createdByUserId: text("created_by_user_id")
 		.notNull()
-		.references((): AnySQLiteColumn => users.id),
-	provisioningCompletedAt: integer("provisioning_completed_at"),
-	createdAt: integer("created_at").notNull().default(sql`(unixepoch() * 1000)`),
-	deletedAt: integer("deleted_at"),
+		.references((): AnyPgColumn => users.id),
+	provisioningCompletedAt: bigint("provisioning_completed_at", {
+		mode: "number",
+	}),
+	createdAt: bigint("created_at", { mode: "number" })
+		.notNull()
+		.default(nowEpochMillis),
+	deletedAt: bigint("deleted_at", { mode: "number" }),
 });
 
-export const memberships = sqliteTable(
+export const memberships = pgTable(
 	"memberships",
 	{
 		id: text("id").primaryKey(),
@@ -53,8 +59,10 @@ export const memberships = sqliteTable(
 			.notNull()
 			.references(() => users.id),
 		role: text("role", { enum: ["owner", "member"] }).notNull(),
-		joinedAt: integer("joined_at").notNull().default(sql`(unixepoch() * 1000)`),
-		removedAt: integer("removed_at"),
+		joinedAt: bigint("joined_at", { mode: "number" })
+			.notNull()
+			.default(nowEpochMillis),
+		removedAt: bigint("removed_at", { mode: "number" }),
 	},
 	(t) => [
 		index("memberships_user_idx").on(t.userId),
@@ -65,7 +73,7 @@ export const memberships = sqliteTable(
 	],
 );
 
-export const invitations = sqliteTable(
+export const invitations = pgTable(
 	"invitations",
 	{
 		id: text("id").primaryKey(),
@@ -77,18 +85,18 @@ export const invitations = sqliteTable(
 		createdByUserId: text("created_by_user_id")
 			.notNull()
 			.references(() => users.id),
-		createdAt: integer("created_at")
+		createdAt: bigint("created_at", { mode: "number" })
 			.notNull()
-			.default(sql`(unixepoch() * 1000)`),
-		expiresAt: integer("expires_at").notNull(),
-		acceptedAt: integer("accepted_at"),
+			.default(nowEpochMillis),
+		expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+		acceptedAt: bigint("accepted_at", { mode: "number" }),
 		acceptedByUserId: text("accepted_by_user_id").references(() => users.id),
-		revokedAt: integer("revoked_at"),
+		revokedAt: bigint("revoked_at", { mode: "number" }),
 	},
 	(t) => [index("invitations_household_idx").on(t.householdId)],
 );
 
-export const householdJoinCodes = sqliteTable(
+export const householdJoinCodes = pgTable(
 	"household_join_codes",
 	{
 		id: text("id").primaryKey(),
@@ -99,12 +107,12 @@ export const householdJoinCodes = sqliteTable(
 		createdByUserId: text("created_by_user_id")
 			.notNull()
 			.references(() => users.id),
-		createdAt: integer("created_at")
+		createdAt: bigint("created_at", { mode: "number" })
 			.notNull()
-			.default(sql`(unixepoch() * 1000)`),
-		disabledAt: integer("disabled_at"),
+			.default(nowEpochMillis),
+		disabledAt: bigint("disabled_at", { mode: "number" }),
 		disabledByUserId: text("disabled_by_user_id").references(() => users.id),
-		replacedAt: integer("replaced_at"),
+		replacedAt: bigint("replaced_at", { mode: "number" }),
 		replacedByUserId: text("replaced_by_user_id").references(() => users.id),
 	},
 	(t) => [
@@ -116,7 +124,7 @@ export const householdJoinCodes = sqliteTable(
 	],
 );
 
-export const householdJoinCodeUses = sqliteTable(
+export const householdJoinCodeUses = pgTable(
 	"household_join_code_uses",
 	{
 		id: text("id").primaryKey(),
@@ -132,25 +140,15 @@ export const householdJoinCodeUses = sqliteTable(
 		membershipId: text("membership_id")
 			.notNull()
 			.references(() => memberships.id),
-		usedAt: integer("used_at").notNull().default(sql`(unixepoch() * 1000)`),
+		usedAt: bigint("used_at", { mode: "number" })
+			.notNull()
+			.default(nowEpochMillis),
 	},
 	(t) => [
 		index("household_join_code_uses_code_idx").on(t.householdJoinCodeId),
 		index("household_join_code_uses_household_idx").on(t.householdId),
 		index("household_join_code_uses_user_idx").on(t.userId),
 	],
-);
-
-export const householdJoinCodeAttempts = sqliteTable(
-	"household_join_code_attempts",
-	{
-		userId: text("user_id")
-			.primaryKey()
-			.references(() => users.id),
-		failedCount: integer("failed_count").notNull(),
-		windowStartedAt: integer("window_started_at").notNull(),
-		lastFailedAt: integer("last_failed_at").notNull(),
-	},
 );
 
 export type User = typeof users.$inferSelect;
@@ -165,7 +163,3 @@ export type HouseholdJoinCode = typeof householdJoinCodes.$inferSelect;
 export type NewHouseholdJoinCode = typeof householdJoinCodes.$inferInsert;
 export type HouseholdJoinCodeUse = typeof householdJoinCodeUses.$inferSelect;
 export type NewHouseholdJoinCodeUse = typeof householdJoinCodeUses.$inferInsert;
-export type HouseholdJoinCodeAttempt =
-	typeof householdJoinCodeAttempts.$inferSelect;
-export type NewHouseholdJoinCodeAttempt =
-	typeof householdJoinCodeAttempts.$inferInsert;

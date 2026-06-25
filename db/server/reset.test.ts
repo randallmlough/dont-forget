@@ -1,5 +1,4 @@
 import {
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
@@ -68,12 +67,6 @@ describe("database reset", () => {
 				userId: "usr_1",
 				membershipId: "mbr_1",
 			});
-			await directory.db.insert(householdJoinCodeAttempts).values({
-				userId: "usr_1",
-				failedCount: 1,
-				windowStartedAt: 1_700_000_000_000,
-				lastFailedAt: 1_700_000_000_000,
-			});
 
 			expect(await householdDatabasesForReset(directory.db)).toEqual([
 				{ id: "hh_1", tursoDbName: "df-test-hh-1" },
@@ -83,9 +76,6 @@ describe("database reset", () => {
 
 			expect(
 				await directory.db.select().from(householdJoinCodeUses),
-			).toHaveLength(0);
-			expect(
-				await directory.db.select().from(householdJoinCodeAttempts),
 			).toHaveLength(0);
 			expect(await directory.db.select().from(householdJoinCodes)).toHaveLength(
 				0,

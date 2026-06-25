@@ -1,5 +1,4 @@
-import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { directoryClient, directoryDb } from "@/db/server/client";
 import { PRIMARY_HOUSEHOLD_SEED } from "@/db/server/fixtures";
@@ -9,6 +8,7 @@ import {
 	resetDirectoryDatabase,
 	resetHouseholdDatabaseByName,
 } from "@/db/server/reset";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import { readTursoOperatorConfig } from "@/lib/env";
 import {
 	assertLocalSeedPrerequisites,
@@ -37,11 +37,12 @@ export async function reseedLocalDatabases(): Promise<void> {
 		console.log("[directory] resetting app data");
 		await resetDirectoryDatabase(directory);
 		console.log("[directory] migrating");
-		await migrate(drizzle(directoryClientInstance), {
+		await migrate(directory, {
 			migrationsFolder: DIRECTORY_MIGRATIONS,
+			migrationsTable: DRIZZLE_MIGRATIONS_TABLE,
 		});
 	} finally {
-		await directoryClientInstance.close();
+		await directoryClientInstance.end();
 	}
 
 	if (seedMode.kind === "deterministic") {

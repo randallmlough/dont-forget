@@ -1,14 +1,14 @@
 import { isNull } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { households } from "@/db/schema/directory";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import {
 	assertProductionConfirmation,
+	readPostgresConfig,
 	readTursoMigrationConfig,
 } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
-import { directoryClient } from "./client";
+import { type DirectoryDb, directoryClient, directoryDb } from "./client";
 import { migrateHouseholdDb } from "./household-migrations";
 
 const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
@@ -19,31 +19,33 @@ async function main(): Promise<void> {
 	assertProductionConfirmation(appEnv, {
 		CONFIRM_APP_ENV: productionConfirmation,
 	});
-	const config = readTursoMigrationConfig();
+	const postgresConfig = readPostgresConfig();
+	const tursoConfig = readTursoMigrationConfig();
 
-	console.log(`[env] ${config.appEnv}`);
-	console.log(`[directory] ${config.directoryUrl}`);
+	console.log(`[env] ${postgresConfig.appEnv}`);
+	console.log("[directory] PostgreSQL");
 
-	const directory = directoryClient();
+	const directoryPool = directoryClient();
 	try {
+		const directory = directoryDb(directoryPool);
 		console.log("[directory] migrating…");
-		await migrate(drizzle(directory), {
+		await migrate(directory, {
 			migrationsFolder: DIRECTORY_MIGRATIONS,
 			migrationsTable: DRIZZLE_MIGRATIONS_TABLE,
 		});
 		console.log("[directory] done");
 
-		await migrateAllHouseholds(directory, config);
+		await migrateAllHouseholds(directory, tursoConfig);
 	} finally {
-		await directory.close();
+		await directoryPool.end();
 	}
 }
 
 async function migrateAllHouseholds(
-	directory: ReturnType<typeof directoryClient>,
+	directory: DirectoryDb,
 	config: ReturnType<typeof readTursoMigrationConfig>,
 ): Promise<void> {
-	const rows = await drizzle(directory)
+	const rows = await directory
 		.select({ id: households.id, tursoDbName: households.tursoDbName })
 		.from(households)
 		.where(isNull(households.deletedAt));

@@ -1,7 +1,6 @@
 import type {
 	NewHousehold,
 	NewHouseholdJoinCode,
-	NewHouseholdJoinCodeAttempt,
 	NewHouseholdJoinCodeUse,
 	NewInvitation,
 	NewMembership,
@@ -212,19 +211,6 @@ export function householdJoinCodeUseFixture(
 		userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
 		membershipId: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
 		usedAt: now + 200,
-		...overrides,
-	};
-}
-
-export function householdJoinCodeAttemptFixture(
-	overrides: Partial<NewHouseholdJoinCodeAttempt> = {},
-): NewHouseholdJoinCodeAttempt {
-	const now = PRIMARY_HOUSEHOLD_SEED.now;
-	return {
-		userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
-		failedCount: 1,
-		windowStartedAt: now,
-		lastFailedAt: now,
 		...overrides,
 	};
 }

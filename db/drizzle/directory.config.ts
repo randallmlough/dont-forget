@@ -7,9 +7,8 @@ loadEnvFile({ requireAppEnv: false });
 export default defineConfig({
 	schema: "./db/schema/directory.ts",
 	out: "./db/migrations/directory",
-	dialect: "turso",
+	dialect: "postgresql",
 	dbCredentials: {
-		url: requireEnv("TURSO_DIRECTORY_URL"),
-		authToken: requireEnv("TURSO_DIRECTORY_AUTH_TOKEN"),
+		url: requireEnv("DATABASE_URL"),
 	},
 });

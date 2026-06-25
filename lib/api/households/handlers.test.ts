@@ -1,12 +1,6 @@
 import { eq } from "drizzle-orm";
+import { households, memberships, users } from "@/db/schema/directory";
 import {
-	householdJoinCodeAttempts,
-	households,
-	memberships,
-	users,
-} from "@/db/schema/directory";
-import {
-	householdJoinCodeAttemptFixture,
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
 	seedHouseholdJoinCodeAuditScenario,
@@ -853,24 +847,15 @@ describe("Household API handlers", () => {
 				},
 			});
 
-			await directory.db.delete(householdJoinCodeAttempts);
-			await directory.db.insert(householdJoinCodeAttempts).values(
-				householdJoinCodeAttemptFixture({
-					userId: scenario.users.blake.id,
-					failedCount: 5,
-					windowStartedAt: now,
-					lastFailedAt: now,
-				}),
-			);
-			const throttled = await readJsonResponse(
+			const unavailableMissingJoin = await readJsonResponse(
 				await handleJoinByCode(
 					createApiRequest({ body: { code: "NOPE0000" } }),
 					householdDeps(directory, scenario.users.blake.clerkUserId),
 				),
 			);
-			expect(throttled).toMatchObject({
-				status: 429,
-				body: { error: "Too many attempts. Try again later." },
+			expect(unavailableMissingJoin).toMatchObject({
+				status: 404,
+				body: { error: "This Household code is not available." },
 			});
 			const unavailableJoin = await readJsonResponse(
 				await handleJoinByCode(

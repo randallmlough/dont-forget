@@ -1,6 +1,5 @@
 import { asc } from "drizzle-orm";
 import {
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
@@ -46,7 +45,6 @@ export async function resetDirectoryDatabase(
 ): Promise<void> {
 	await directory.transaction(async (tx) => {
 		await tx.delete(householdJoinCodeUses);
-		await tx.delete(householdJoinCodeAttempts);
 		await tx.delete(householdJoinCodes);
 		await tx.delete(invitations);
 		await tx.delete(memberships);
@@ -105,7 +103,7 @@ async function main(): Promise<void> {
 		await resetDirectoryDatabase(directory);
 		console.log("[directory] done");
 	} finally {
-		await directoryClientInstance.close();
+		await directoryClientInstance.end();
 	}
 }
 

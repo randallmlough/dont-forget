@@ -1,5 +1,4 @@
 import type { DirectoryDb } from "@/db/server/client";
-import { runWithSqliteBusyRetry } from "@/db/utils";
 import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
 import {
@@ -19,7 +18,6 @@ import {
 	HouseholdJoinCodeMembershipRequiredError,
 	type HouseholdJoinCodeService,
 	type HouseholdJoinCodeServiceDeps,
-	HouseholdJoinCodeThrottledError,
 	HouseholdJoinCodeUnavailableError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,
@@ -46,7 +44,6 @@ import {
 	BadRequestError,
 	booleanField,
 	errorResponse,
-	householdJoinCodeThrottledResponse,
 	isApiForbiddenError,
 	isApiUnauthorizedError,
 	jsonResponse,
@@ -85,15 +82,13 @@ export async function handleCreateHousehold(
 			const body = await readJsonObject(request);
 			const name = createHouseholdNameFromBody(body);
 			const appEnv = deps?.appEnv ?? readTursoOperatorConfig().appEnv;
-			const household = await runWithSqliteBusyRetry(() =>
-				directory.transaction(async (tx) => {
-					return householdService(tx, deps).createOwnedHousehold({
-						appEnv,
-						user,
-						name,
-					});
-				}),
-			);
+			const household = await directory.transaction(async (tx) => {
+				return householdService(tx, deps).createOwnedHousehold({
+					appEnv,
+					user,
+					name,
+				});
+			});
 
 			const provisioning = householdProvisioningService(deps);
 			await provisioning.ensureHouseholdDatabase({
@@ -103,25 +98,23 @@ export async function handleCreateHousehold(
 			});
 			await provisioning.createHouseholdDatabaseToken(household.tursoDbName);
 
-			return runWithSqliteBusyRetry(() =>
-				directory.transaction(async (tx) => {
-					await householdService(tx, deps).markProvisioningCompleted(
-						household.id,
-					);
-					await memberService(tx, deps).ensureOwnerMembership({
-						householdId: household.id,
-						user,
-					});
-					await activeHouseholdService(tx, deps).setActiveHousehold({
-						userId: user.id,
-						householdId: household.id,
-					});
-					return jsonResponse(
-						{ household: { id: household.id, name: household.name } },
-						201,
-					);
-				}),
-			);
+			return directory.transaction(async (tx) => {
+				await householdService(tx, deps).markProvisioningCompleted(
+					household.id,
+				);
+				await memberService(tx, deps).ensureOwnerMembership({
+					householdId: household.id,
+					user,
+				});
+				await activeHouseholdService(tx, deps).setActiveHousehold({
+					userId: user.id,
+					householdId: household.id,
+				});
+				return jsonResponse(
+					{ household: { id: household.id, name: household.name } },
+					201,
+				);
+			});
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Create Household API failed");
@@ -509,9 +502,6 @@ function householdErrorResponse(error: unknown, context: string): Response {
 	}
 	if (error instanceof HouseholdJoinCodeUnavailableError) {
 		return unavailableErrorResponse("householdJoinCode");
-	}
-	if (error instanceof HouseholdJoinCodeThrottledError) {
-		return householdJoinCodeThrottledResponse();
 	}
 
 	console.error(context, redactAttributes({ error: asError(error) }));

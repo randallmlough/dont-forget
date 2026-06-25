@@ -62,6 +62,9 @@ function isDatabaseImport(source) {
 		source.startsWith("drizzle-orm/") ||
 		source === "@libsql/client" ||
 		source.startsWith("@libsql/client/") ||
+		source === "@electric-sql/pglite" ||
+		source.startsWith("@electric-sql/pglite/") ||
+		source === "pg" ||
 		source === "@tursodatabase/sync-react-native" ||
 		source === "@tursodatabase/sync" ||
 		source === "@tursodatabase/database" ||

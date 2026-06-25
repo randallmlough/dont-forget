@@ -26,7 +26,7 @@ export async function POST(request: Request): Promise<Response> {
 			);
 			return Response.json(response);
 		} finally {
-			await client.close();
+			await client.end();
 		}
 	} catch (error) {
 		if (UnauthorizedError && error instanceof UnauthorizedError) {

@@ -43,6 +43,16 @@ ruleTester.run("no-db-imports-outside-services", rule, {
 			errors: [{ messageId: "useServices" }],
 		},
 		{
+			filename: "/repo/screens/home/use-home-content.ts",
+			code: `import { Pool } from "pg";`,
+			errors: [{ messageId: "useServices" }],
+		},
+		{
+			filename: "/repo/components/active-list/index.tsx",
+			code: `import { PGlite } from "@electric-sql/pglite";`,
+			errors: [{ messageId: "useServices" }],
+		},
+		{
 			filename: "/repo/app/(app)/index.tsx",
 			code: `import { directoryClient } from "@/db/client";`,
 			errors: [{ messageId: "useServices" }],

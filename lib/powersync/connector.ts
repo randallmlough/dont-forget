@@ -1,7 +1,7 @@
-import {
-	type PowerSyncBackendConnector,
-	type PowerSyncCredentials,
-	UpdateType,
+import { UpdateType } from "@powersync/common";
+import type {
+	PowerSyncBackendConnector,
+	PowerSyncCredentials,
 } from "@powersync/react-native";
 
 type GetToken = () => Promise<string | null>;

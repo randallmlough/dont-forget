@@ -459,7 +459,7 @@ async function seedDeterministicLocalDatabases(
 		logSeedSummary({ scenario, seedMode });
 	} finally {
 		await householdClientInstance.close();
-		await directoryClientInstance.close();
+		await directoryClientInstance.end();
 	}
 }
 
@@ -529,7 +529,7 @@ async function seedEmailBackedLocalDatabases(
 		}
 	} finally {
 		await householdClientInstance?.close();
-		await directoryClientInstance.close();
+		await directoryClientInstance.end();
 	}
 }
 
