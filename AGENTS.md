@@ -4,6 +4,7 @@
 
 - This is **Don't Forget**, an iOS-only Expo/React Native shared shopping-list app.
 - Before non-trivial work, search `CONTEXT.md` and `docs/`, then confirm behavior in source. `CONTEXT.md` owns domain language: `Household`, `Member`, `Owner`, `User`, `List`, `Item`, and `Invitation`; do not replace them with group/team/account/todo/invite link terminology.
+- For library, framework, SDK, API, CLI, or cloud-service questions, go directly to official upstream sources: vendor docs, API references, release notes, source repositories, and source code. If the source URL is unknown or likely stale, use web search only to find the official source, then rely on that source instead of aggregators or third-party summaries.
 
 ## Stack And Layout
 
