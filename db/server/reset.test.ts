@@ -5,6 +5,9 @@ import {
 	households,
 	invitations,
 	memberships,
+	itemChecks as pgItemChecks,
+	items as pgItems,
+	lists as pgLists,
 	users,
 } from "@/db/schema/postgres";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
@@ -67,6 +70,24 @@ describe("database reset", () => {
 				userId: "usr_1",
 				membershipId: "mbr_1",
 			});
+			await directory.db.insert(pgLists).values({
+				id: "lst_1",
+				householdId: "hh_1",
+				name: "Groceries",
+				createdByUserId: "usr_1",
+			});
+			await directory.db.insert(pgItems).values({
+				id: "itm_1",
+				listId: "lst_1",
+				name: "Milk",
+				position: 0,
+				createdByUserId: "usr_1",
+			});
+			await directory.db.insert(pgItemChecks).values({
+				id: "ick_1",
+				itemId: "itm_1",
+				checkedByUserId: "usr_1",
+			});
 
 			expect(await householdDatabasesForReset(directory.db)).toEqual([
 				{ id: "hh_1", tursoDbName: "df-test-hh-1" },
@@ -82,6 +103,9 @@ describe("database reset", () => {
 			);
 			expect(await directory.db.select().from(invitations)).toHaveLength(0);
 			expect(await directory.db.select().from(memberships)).toHaveLength(0);
+			expect(await directory.db.select().from(pgItemChecks)).toHaveLength(0);
+			expect(await directory.db.select().from(pgItems)).toHaveLength(0);
+			expect(await directory.db.select().from(pgLists)).toHaveLength(0);
 			expect(await directory.db.select().from(households)).toHaveLength(0);
 			expect(await directory.db.select().from(users)).toHaveLength(0);
 		} finally {

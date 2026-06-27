@@ -6,6 +6,9 @@ import {
 	households,
 	invitations,
 	memberships,
+	itemChecks as pgItemChecks,
+	items as pgItems,
+	lists as pgLists,
 	users,
 } from "@/db/schema/postgres";
 import {
@@ -44,6 +47,9 @@ export async function resetDirectoryDatabase(
 	directory: DirectoryDb,
 ): Promise<void> {
 	await directory.transaction(async (tx) => {
+		await tx.delete(pgItemChecks);
+		await tx.delete(pgItems);
+		await tx.delete(pgLists);
 		await tx.delete(householdJoinCodeUses);
 		await tx.delete(householdJoinCodes);
 		await tx.delete(invitations);
