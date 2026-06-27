@@ -311,19 +311,23 @@ async function ensurePlainMemberMembership(
 		removedAt: null,
 	};
 
-	try {
-		await directory.insert(memberships).values(membership);
-		return { membership, created: true };
-	} catch (error) {
-		const createdByConcurrentRequest = await findActiveMembershipRow(
-			input,
-			directory,
-		);
-		if (createdByConcurrentRequest) {
-			return { membership: createdByConcurrentRequest, created: false };
-		}
-		throw error;
+	const [inserted] = await directory
+		.insert(memberships)
+		.values(membership)
+		.onConflictDoNothing()
+		.returning();
+	if (inserted) return { membership: inserted, created: true };
+
+	const createdByConcurrentRequest = await findActiveMembershipRow(
+		input,
+		directory,
+	);
+	if (createdByConcurrentRequest) {
+		return { membership: createdByConcurrentRequest, created: false };
 	}
+	throw new Error(
+		"Suppressed membership insert conflict left no active Membership row.",
+	);
 }
 
 async function findActiveMembershipRow(

@@ -15,6 +15,7 @@ import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createMemberService } from "@/lib/services/member/server";
+import { lockHouseholdRow } from "@/lib/services/shared/server/directory-transaction";
 import { createActiveHouseholdService } from "./active-household-service";
 
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -239,6 +240,8 @@ async function regenerateJoinCode(
 	await requireActiveHouseholdMember(input, directory);
 
 	const result = await directory.transaction(async (tx) => {
+		await lockHouseholdRow(tx, input.householdId);
+
 		await tx
 			.update(householdJoinCodes)
 			.set({ replacedAt: now, replacedByUserId: input.requestedByUserId })
@@ -280,6 +283,8 @@ async function disableJoinCode(
 	await requireActiveHouseholdMember(input, directory);
 
 	const disabledCode = await directory.transaction(async (tx) => {
+		await lockHouseholdRow(tx, input.householdId);
+
 		const [updated] = await tx
 			.update(householdJoinCodes)
 			.set({ disabledAt: now, disabledByUserId: input.requestedByUserId })
