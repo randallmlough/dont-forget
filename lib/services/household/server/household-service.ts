@@ -5,7 +5,7 @@ import {
 	type Membership,
 	memberships,
 	type User,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import type { AppEnv } from "@/lib/env";
 import { createAppId } from "@/lib/ids";
@@ -13,13 +13,13 @@ import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import type { ActiveMembership } from "@/lib/services/member/server";
 import {
+	type DirectoryTransaction,
+	runDirectoryTransaction,
+} from "@/lib/services/shared/server/directory-transaction";
+import {
 	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,
 } from "./household-join-code-service";
-
-type DirectoryTransaction = Parameters<
-	Parameters<DirectoryDb["transaction"]>[0]
->[0];
 
 export type HouseholdServiceDirectory = DirectoryDb | DirectoryTransaction;
 
@@ -193,23 +193,6 @@ async function renameHousehold(
 	});
 
 	return household;
-}
-
-async function runDirectoryTransaction<T>(
-	directory: HouseholdServiceDirectory,
-	command: (directory: HouseholdServiceDirectory) => Promise<T>,
-): Promise<T> {
-	if (hasTransaction(directory)) {
-		return directory.transaction(command);
-	}
-
-	return command(directory);
-}
-
-function hasTransaction(
-	directory: HouseholdServiceDirectory,
-): directory is DirectoryDb {
-	return "transaction" in directory;
 }
 
 function normalizeHouseholdName(name: string): string {

@@ -1,12 +1,14 @@
 import { sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
+	bigint,
 	index,
 	pgTable,
 	text,
-	timestamp,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+const nowEpochMillis = sql`(extract(epoch from now()) * 1000)::bigint`;
 
 export const users = pgTable(
 	"users",
@@ -20,29 +22,30 @@ export const users = pgTable(
 		activeHouseholdId: text("active_household_id").references(
 			(): AnyPgColumn => households.id,
 		),
-		createdAt: timestamp("created_at", { withTimezone: true })
+		createdAt: bigint("created_at", { mode: "number" })
 			.notNull()
-			.defaultNow(),
-		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.default(nowEpochMillis),
+		updatedAt: bigint("updated_at", { mode: "number" })
 			.notNull()
-			.defaultNow(),
+			.default(nowEpochMillis),
 	},
 	(t) => [uniqueIndex("users_clerk_user_id_unique").on(t.clerkUserId)],
 );
 
-// NOTE: the pg households table deliberately omits turso_db_name and
-// provisioning_completed_at — those are libsql/Turso-only and survive in the
-// libsql directory through PR-C1; they are not migrated here.
 export const households = pgTable("households", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
+	tursoDbName: text("turso_db_name").notNull().unique(),
 	createdByUserId: text("created_by_user_id")
 		.notNull()
 		.references((): AnyPgColumn => users.id),
-	createdAt: timestamp("created_at", { withTimezone: true })
+	provisioningCompletedAt: bigint("provisioning_completed_at", {
+		mode: "number",
+	}),
+	createdAt: bigint("created_at", { mode: "number" })
 		.notNull()
-		.defaultNow(),
-	deletedAt: timestamp("deleted_at", { withTimezone: true }),
+		.default(nowEpochMillis),
+	deletedAt: bigint("deleted_at", { mode: "number" }),
 });
 
 export const memberships = pgTable(
@@ -56,10 +59,10 @@ export const memberships = pgTable(
 			.notNull()
 			.references(() => users.id),
 		role: text("role", { enum: ["owner", "member"] }).notNull(),
-		joinedAt: timestamp("joined_at", { withTimezone: true })
+		joinedAt: bigint("joined_at", { mode: "number" })
 			.notNull()
-			.defaultNow(),
-		removedAt: timestamp("removed_at", { withTimezone: true }),
+			.default(nowEpochMillis),
+		removedAt: bigint("removed_at", { mode: "number" }),
 	},
 	(t) => [
 		index("memberships_user_idx").on(t.userId),
@@ -82,13 +85,13 @@ export const invitations = pgTable(
 		createdByUserId: text("created_by_user_id")
 			.notNull()
 			.references(() => users.id),
-		createdAt: timestamp("created_at", { withTimezone: true })
+		createdAt: bigint("created_at", { mode: "number" })
 			.notNull()
-			.defaultNow(),
-		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-		acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+			.default(nowEpochMillis),
+		expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+		acceptedAt: bigint("accepted_at", { mode: "number" }),
 		acceptedByUserId: text("accepted_by_user_id").references(() => users.id),
-		revokedAt: timestamp("revoked_at", { withTimezone: true }),
+		revokedAt: bigint("revoked_at", { mode: "number" }),
 	},
 	(t) => [index("invitations_household_idx").on(t.householdId)],
 );
@@ -104,12 +107,12 @@ export const householdJoinCodes = pgTable(
 		createdByUserId: text("created_by_user_id")
 			.notNull()
 			.references(() => users.id),
-		createdAt: timestamp("created_at", { withTimezone: true })
+		createdAt: bigint("created_at", { mode: "number" })
 			.notNull()
-			.defaultNow(),
-		disabledAt: timestamp("disabled_at", { withTimezone: true }),
+			.default(nowEpochMillis),
+		disabledAt: bigint("disabled_at", { mode: "number" }),
 		disabledByUserId: text("disabled_by_user_id").references(() => users.id),
-		replacedAt: timestamp("replaced_at", { withTimezone: true }),
+		replacedAt: bigint("replaced_at", { mode: "number" }),
 		replacedByUserId: text("replaced_by_user_id").references(() => users.id),
 	},
 	(t) => [
@@ -137,7 +140,9 @@ export const householdJoinCodeUses = pgTable(
 		membershipId: text("membership_id")
 			.notNull()
 			.references(() => memberships.id),
-		usedAt: timestamp("used_at", { withTimezone: true }).notNull().defaultNow(),
+		usedAt: bigint("used_at", { mode: "number" })
+			.notNull()
+			.default(nowEpochMillis),
 	},
 	(t) => [
 		index("household_join_code_uses_code_idx").on(t.householdJoinCodeId),

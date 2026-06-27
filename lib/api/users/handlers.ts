@@ -1,4 +1,4 @@
-import type { User } from "@/db/schema/directory";
+import type { User } from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";

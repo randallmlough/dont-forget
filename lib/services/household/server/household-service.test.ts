@@ -5,7 +5,7 @@ import {
 	households,
 	memberships,
 	users,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import {
 	householdFixture,
 	membershipFixture,

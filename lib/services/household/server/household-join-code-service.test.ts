@@ -5,7 +5,7 @@ import {
 	households,
 	memberships,
 	users,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import {
 	householdFixture,
@@ -223,6 +223,10 @@ describe("createHouseholdJoinCodeService", () => {
 		}
 	});
 
+	// NOTE: the "concurrent"/"race" tests below run against a single PGlite
+	// connection whose worker serializes transactions, so they exercise 23505
+	// unique-conflict handling against the partial unique index — not true
+	// DB-level concurrent interleaving of two in-flight transactions.
 	it("lets two different Users use the same active reusable code concurrently", async () => {
 		const directory = await createTestDirectoryDb();
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_400_000);

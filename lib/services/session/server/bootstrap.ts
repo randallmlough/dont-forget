@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { type User, users } from "@/db/schema/directory";
+import { type User, users } from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import {
 	type BootstrapResponse,

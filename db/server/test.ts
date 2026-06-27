@@ -9,11 +9,11 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { type Client, createClient } from "@libsql/client/node";
 import { drizzle as pgliteDrizzle } from "drizzle-orm/pglite";
-import * as directorySchema from "@/db/schema/directory";
+import * as directorySchema from "@/db/schema/postgres";
 import { type directoryDb, householdDb } from "@/db/server/client";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 
-const DIRECTORY_MIGRATIONS = "db/migrations/directory";
+const DIRECTORY_MIGRATIONS = "db/migrations/postgres";
 const HOUSEHOLD_MIGRATIONS = "db/migrations/household";
 const execFileAsync = promisify(execFile);
 let pgliteTemplateFilePromise: Promise<string> | undefined;

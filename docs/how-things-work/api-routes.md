@@ -68,7 +68,6 @@ Use these status-code meanings consistently across Invitation, Household Join Co
 | `403` | Authenticated User is not an active Member authorized for the target Household management action. |
 | `404` | Unavailable Invitation token or Household Join Code, returned with generic copy. |
 | `409` | True management state conflict, not token or code guessing outcomes. |
-| `429` | Too many Household Join Code attempts. |
 | `500` | Unexpected server failure with no sensitive details in the response. |
 
 Generic user-facing copy:
@@ -76,7 +75,6 @@ Generic user-facing copy:
 ```txt
 This Invitation is no longer available.
 This Household code is not available.
-Too many attempts. Try again later.
 ```
 
 ## Current Route Contracts

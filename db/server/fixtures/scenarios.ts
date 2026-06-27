@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import type {
 	NewHousehold,
 	NewMembership,
 	NewUser,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import {
 	householdJoinCodes,
 	householdJoinCodeUses,
@@ -11,8 +12,7 @@ import {
 	invitations,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import type { DirectoryDb, HouseholdDb } from "@/db/server/client";
 import {
 	householdFixture,

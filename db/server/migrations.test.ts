@@ -1,13 +1,12 @@
 import { asc, eq } from "drizzle-orm";
-
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import {
 	createTestDirectoryDb,
 	createTestHouseholdDb,

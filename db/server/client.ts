@@ -2,8 +2,8 @@ import { type Client, createClient } from "@libsql/client/http";
 import { drizzle as libsqlDrizzle } from "drizzle-orm/libsql";
 import { drizzle as nodePgDrizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
-import * as directorySchema from "@/db/schema/directory";
 import * as householdSchema from "@/db/schema/household";
+import * as directorySchema from "@/db/schema/postgres";
 import { readTursoConfig } from "@/lib/env";
 import { postgresPool } from "./pg-client";
 

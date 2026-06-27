@@ -18,7 +18,7 @@ import {
 } from "./seed";
 import { seedHouseholdDbNameForDirectory } from "./worktree-db";
 
-const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
+const DIRECTORY_MIGRATIONS = "./db/migrations/postgres";
 
 export async function reseedLocalDatabases(): Promise<void> {
 	const seedMode = readLocalSeedMode();

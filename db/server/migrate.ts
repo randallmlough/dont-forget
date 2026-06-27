@@ -1,6 +1,6 @@
 import { isNull } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { households } from "@/db/schema/directory";
+import { households } from "@/db/schema/postgres";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import {
 	assertProductionConfirmation,
@@ -11,7 +11,7 @@ import { loadEnvFile } from "@/lib/load-env";
 import { type DirectoryDb, directoryClient, directoryDb } from "./client";
 import { migrateHouseholdDb } from "./household-migrations";
 
-const DIRECTORY_MIGRATIONS = "./db/migrations/directory";
+const DIRECTORY_MIGRATIONS = "./db/migrations/postgres";
 
 async function main(): Promise<void> {
 	const productionConfirmation = process.env.CONFIRM_APP_ENV;

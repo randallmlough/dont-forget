@@ -1,4 +1,4 @@
-import type { User } from "@/db/schema/directory";
+import type { User } from "@/db/schema/postgres";
 import {
 	type DirectoryDb,
 	directoryClient,

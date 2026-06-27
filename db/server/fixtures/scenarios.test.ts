@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	householdJoinCodes,
 	householdJoinCodeUses,
@@ -7,8 +7,7 @@ import {
 	invitations,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {

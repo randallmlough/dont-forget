@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { inArray, or } from "drizzle-orm";
 import { z } from "zod";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	householdJoinCodes,
 	households,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import {
 	directoryClient,
 	directoryDb,

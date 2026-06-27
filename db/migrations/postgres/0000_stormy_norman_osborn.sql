@@ -65,6 +65,39 @@ CREATE TABLE "users" (
 	"updated_at" bigint DEFAULT (extract(epoch from now()) * 1000)::bigint NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "item_checks" (
+	"id" text PRIMARY KEY NOT NULL,
+	"item_id" text NOT NULL,
+	"checked_at" timestamp with time zone,
+	"checked_by_user_id" text,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "item_checks_item_id_unique" UNIQUE("item_id")
+);
+--> statement-breakpoint
+CREATE TABLE "items" (
+	"id" text PRIMARY KEY NOT NULL,
+	"list_id" text NOT NULL,
+	"name" text NOT NULL,
+	"quantity" text,
+	"notes" text,
+	"position" double precision NOT NULL,
+	"created_by_user_id" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"deleted_at" timestamp with time zone
+);
+--> statement-breakpoint
+CREATE TABLE "lists" (
+	"id" text PRIMARY KEY NOT NULL,
+	"household_id" text NOT NULL,
+	"name" text NOT NULL,
+	"created_by_user_id" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"archived_at" timestamp with time zone,
+	"deleted_at" timestamp with time zone
+);
+--> statement-breakpoint
 ALTER TABLE "household_join_code_uses" ADD CONSTRAINT "household_join_code_uses_household_join_code_id_household_join_codes_id_fk" FOREIGN KEY ("household_join_code_id") REFERENCES "public"."household_join_codes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "household_join_code_uses" ADD CONSTRAINT "household_join_code_uses_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "household_join_code_uses" ADD CONSTRAINT "household_join_code_uses_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -80,6 +113,9 @@ ALTER TABLE "invitations" ADD CONSTRAINT "invitations_accepted_by_user_id_users_
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "memberships" ADD CONSTRAINT "memberships_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_active_household_id_households_id_fk" FOREIGN KEY ("active_household_id") REFERENCES "public"."households"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "item_checks" ADD CONSTRAINT "item_checks_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "items" ADD CONSTRAINT "items_list_id_lists_id_fk" FOREIGN KEY ("list_id") REFERENCES "public"."lists"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "lists" ADD CONSTRAINT "lists_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "household_join_code_uses_code_idx" ON "household_join_code_uses" USING btree ("household_join_code_id");--> statement-breakpoint
 CREATE INDEX "household_join_code_uses_household_idx" ON "household_join_code_uses" USING btree ("household_id");--> statement-breakpoint
 CREATE INDEX "household_join_code_uses_user_idx" ON "household_join_code_uses" USING btree ("user_id");--> statement-breakpoint
@@ -90,4 +126,7 @@ CREATE INDEX "invitations_household_idx" ON "invitations" USING btree ("househol
 CREATE INDEX "memberships_user_idx" ON "memberships" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "memberships_household_idx" ON "memberships" USING btree ("household_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "memberships_active_unique" ON "memberships" USING btree ("household_id","user_id") WHERE "memberships"."removed_at" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "users_clerk_user_id_unique" ON "users" USING btree ("clerk_user_id");
+CREATE UNIQUE INDEX "users_clerk_user_id_unique" ON "users" USING btree ("clerk_user_id");--> statement-breakpoint
+CREATE INDEX "items_list_idx" ON "items" USING btree ("list_id");--> statement-breakpoint
+CREATE INDEX "items_deleted_idx" ON "items" USING btree ("deleted_at");--> statement-breakpoint
+CREATE INDEX "lists_by_household_idx" ON "lists" USING btree ("household_id");

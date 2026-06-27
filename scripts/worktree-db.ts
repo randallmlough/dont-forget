@@ -4,12 +4,9 @@
  *
  * Run with: make worktree-db
  */
-import path from "node:path";
 import { loadEnvFile } from "@/lib/load-env";
 
-export const ENV_FILE = ".env.local";
 export const WORKTREE_DB_PREFIX = "df-local-wt-";
-export const ORIGINAL_PREFIX = "# worktree-db original ";
 
 async function main(): Promise<void> {
 	const appEnv = loadEnvFile();
@@ -19,20 +16,6 @@ async function main(): Promise<void> {
 	throw new Error(
 		"worktree directory isolation is not supported on Postgres yet (see PR-E).",
 	);
-}
-
-export function worktreeDirectoryDbName(worktreePath: string): string {
-	const slug = path
-		.basename(worktreePath)
-		.toLowerCase()
-		.replace(/[^a-z0-9-]+/g, "-")
-		.replace(/^-+|-+$/g, "");
-	if (!slug) {
-		throw new Error("Could not derive a worktree slug for the directory DB");
-	}
-	// Turso database names are limited to 51 characters.
-	const maxSlug = 51 - WORKTREE_DB_PREFIX.length - "-dir".length;
-	return `${WORKTREE_DB_PREFIX}${slug.slice(0, maxSlug)}-dir`;
 }
 
 export function directoryDbNameFromUrl(url: string, org: string): string {

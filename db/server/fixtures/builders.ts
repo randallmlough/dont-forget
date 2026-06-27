@@ -1,3 +1,4 @@
+import type { NewItem, NewItemCheck, NewList } from "@/db/schema/household";
 import type {
 	NewHousehold,
 	NewHouseholdJoinCode,
@@ -5,8 +6,7 @@ import type {
 	NewInvitation,
 	NewMembership,
 	NewUser,
-} from "@/db/schema/directory";
-import type { NewItem, NewItemCheck, NewList } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 
 export const PRIMARY_HOUSEHOLD_SEED = {

@@ -5,15 +5,16 @@ import {
 	memberships,
 	type User,
 	users,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
-
-type DirectoryTransaction = Parameters<
-	Parameters<DirectoryDb["transaction"]>[0]
->[0];
+import {
+	type DirectoryTransaction,
+	lockHouseholdRow,
+	runDirectoryTransaction,
+} from "@/lib/services/shared/server/directory-transaction";
 
 export type MemberServiceDirectory = DirectoryDb | DirectoryTransaction;
 
@@ -178,23 +179,6 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 			return result;
 		},
 	};
-}
-
-async function runDirectoryTransaction<T>(
-	directory: MemberServiceDirectory,
-	command: (directory: MemberServiceDirectory) => Promise<T>,
-): Promise<T> {
-	if (hasTransaction(directory)) {
-		return directory.transaction(command);
-	}
-
-	return command(directory);
-}
-
-function hasTransaction(
-	directory: MemberServiceDirectory,
-): directory is DirectoryDb {
-	return "transaction" in directory;
 }
 
 async function findOldestActiveMembership(
@@ -398,6 +382,8 @@ async function removeMemberInTransaction(
 	},
 	directory: MemberServiceDirectory,
 ): Promise<void> {
+	await lockHouseholdRow(directory, input.householdId);
+
 	const requester = await findActiveMembershipRow(
 		{
 			householdId: input.householdId,
@@ -452,6 +438,8 @@ async function changeMemberRoleInTransaction(
 	},
 	directory: MemberServiceDirectory,
 ): Promise<boolean> {
+	await lockHouseholdRow(directory, input.householdId);
+
 	const requester = await findActiveMembershipRow(
 		{
 			householdId: input.householdId,
@@ -498,6 +486,8 @@ async function leaveHouseholdInTransaction(
 	input: { householdId: string; userId: string },
 	directory: MemberServiceDirectory,
 ): Promise<{ promotedMembershipId: string | null }> {
+	await lockHouseholdRow(directory, input.householdId);
+
 	const membership = await findActiveMembershipRow(input, directory);
 	if (!membership) throw new MemberNotFoundError();
 
