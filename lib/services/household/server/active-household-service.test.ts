@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { memberships, users } from "@/db/schema/directory";
+import { memberships, users } from "@/db/schema/postgres";
 import { seedMultiHouseholdUserScenario } from "@/db/server/fixtures";
 import { createTestDirectoryDb } from "@/db/server/test";
 import {

@@ -4,6 +4,7 @@
 
 - This is **Don't Forget**, an iOS-only Expo/React Native shared shopping-list app.
 - Before non-trivial work, search `CONTEXT.md` and `docs/`, then confirm behavior in source. `CONTEXT.md` owns domain language: `Household`, `Member`, `Owner`, `User`, `List`, `Item`, and `Invitation`; do not replace them with group/team/account/todo/invite link terminology.
+- For library, framework, SDK, API, CLI, or cloud-service questions, go directly to official upstream sources: vendor docs, API references, release notes, source repositories, and source code. If the source URL is unknown or likely stale, use web search only to find the official source, then rely on that source instead of aggregators or third-party summaries.
 
 ## Stack And Layout
 
@@ -12,13 +13,13 @@
 - `screens/<surface>/` — screen-owned views, hooks, and containers.
 - `components/` — shared UI, styled with Unistyles theme tokens.
 - `lib/services/<domain>/` — domain-first services; all product data access and SQL live here.
-- `db/` — Drizzle schema and migrations (libsql/Turso).
+- `db/` — Drizzle schema and migrations (directory on Postgres; per-Household product data on libsql/Turso during the migration).
 
 ## Commands
 
 - `make format` — apply Biome formatting and safe fixes; run before verification.
 - `make verify` — typecheck, Biome, ESLint, and tests; the standard final proof for any change.
-- In a git worktree, run `make worktree-env` before starting the app; `make worktree-db` for an isolated database.
+- In a git worktree, run `make worktree-env` before starting the app. Isolated-DB worktrees are not yet supported on Postgres (pending PR-E), so `make worktree-db` currently errors.
 - `make help` — list all other targets (db, simulator, Storybook, etc.).
 
 ## Code Standards (read BEFORE writing code)

@@ -1,4 +1,4 @@
-import type { User } from "@/db/schema/directory";
+import type { User } from "@/db/schema/postgres";
 import {
 	type DirectoryDb,
 	directoryClient,
@@ -12,11 +12,8 @@ export const INVITATION_UNAVAILABLE_MESSAGE =
 	"This Invitation is no longer available.";
 export const HOUSEHOLD_CODE_UNAVAILABLE_MESSAGE =
 	"This Household code is not available.";
-export const HOUSEHOLD_CODE_THROTTLED_MESSAGE =
-	"Too many attempts. Try again later.";
 
 const UNAVAILABLE_STATUS = 404;
-const THROTTLED_STATUS = 429;
 
 type UnavailableResource = "invitation" | "householdJoinCode";
 
@@ -68,7 +65,7 @@ export async function withDirectory<T>(
 	try {
 		return await handler(directoryDb(client));
 	} finally {
-		await client.close();
+		await client.end();
 	}
 }
 
@@ -168,10 +165,6 @@ export function unavailableErrorResponse(
 	resource: UnavailableResource,
 ): Response {
 	return errorResponse(UNAVAILABLE_MESSAGES[resource], UNAVAILABLE_STATUS);
-}
-
-export function householdJoinCodeThrottledResponse(): Response {
-	return errorResponse(HOUSEHOLD_CODE_THROTTLED_MESSAGE, THROTTLED_STATUS);
 }
 
 export function isApiUnauthorizedError(

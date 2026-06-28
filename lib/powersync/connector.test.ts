@@ -1,4 +1,4 @@
-import { UpdateType } from "@powersync/react-native";
+import { UpdateType } from "@powersync/common";
 
 import {
 	PowerSyncConnector,

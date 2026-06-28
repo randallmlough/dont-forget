@@ -4,7 +4,7 @@ CREATE TABLE "household_join_code_uses" (
 	"household_id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"membership_id" text NOT NULL,
-	"used_at" timestamp with time zone DEFAULT now() NOT NULL
+	"used_at" bigint DEFAULT (extract(epoch from now()) * 1000)::bigint NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "household_join_codes" (
@@ -12,19 +12,22 @@ CREATE TABLE "household_join_codes" (
 	"household_id" text NOT NULL,
 	"code" text NOT NULL,
 	"created_by_user_id" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"disabled_at" timestamp with time zone,
+	"created_at" bigint DEFAULT (extract(epoch from now()) * 1000)::bigint NOT NULL,
+	"disabled_at" bigint,
 	"disabled_by_user_id" text,
-	"replaced_at" timestamp with time zone,
+	"replaced_at" bigint,
 	"replaced_by_user_id" text
 );
 --> statement-breakpoint
 CREATE TABLE "households" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
+	"turso_db_name" text NOT NULL,
 	"created_by_user_id" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"deleted_at" timestamp with time zone
+	"provisioning_completed_at" bigint,
+	"created_at" bigint DEFAULT (extract(epoch from now()) * 1000)::bigint NOT NULL,
+	"deleted_at" bigint,
+	CONSTRAINT "households_turso_db_name_unique" UNIQUE("turso_db_name")
 );
 --> statement-breakpoint
 CREATE TABLE "invitations" (
@@ -33,11 +36,11 @@ CREATE TABLE "invitations" (
 	"token" text NOT NULL,
 	"email" text,
 	"created_by_user_id" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL,
-	"accepted_at" timestamp with time zone,
+	"created_at" bigint DEFAULT (extract(epoch from now()) * 1000)::bigint NOT NULL,
+	"expires_at" bigint NOT NULL,
+	"accepted_at" bigint,
 	"accepted_by_user_id" text,
-	"revoked_at" timestamp with time zone,
+	"revoked_at" bigint,
 	CONSTRAINT "invitations_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
@@ -46,8 +49,8 @@ CREATE TABLE "memberships" (
 	"household_id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"role" text NOT NULL,
-	"joined_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"removed_at" timestamp with time zone
+	"joined_at" bigint DEFAULT (extract(epoch from now()) * 1000)::bigint NOT NULL,
+	"removed_at" bigint
 );
 --> statement-breakpoint
 CREATE TABLE "users" (
@@ -58,8 +61,8 @@ CREATE TABLE "users" (
 	"last_name" text,
 	"display_name" text,
 	"active_household_id" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" bigint DEFAULT (extract(epoch from now()) * 1000)::bigint NOT NULL,
+	"updated_at" bigint DEFAULT (extract(epoch from now()) * 1000)::bigint NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "item_checks" (

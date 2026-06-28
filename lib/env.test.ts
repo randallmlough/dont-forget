@@ -1,4 +1,5 @@
 import {
+	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
 	parseAppEnv,
 	readPublicExpoConfig,
@@ -156,6 +157,54 @@ describe("environment config", () => {
 		expect(() =>
 			assertProductionConfirmation("production", {
 				CONFIRM_APP_ENV: "production",
+			}),
+		).not.toThrow();
+	});
+
+	it("accepts loopback Postgres directory targets for local data scripts", () => {
+		expect(() =>
+			assertLocalDirectoryDatabaseUrl({
+				appEnv: "local",
+				databaseUrl: "postgresql://app:app@localhost:5432/dontforget",
+			}),
+		).not.toThrow();
+		expect(() =>
+			assertLocalDirectoryDatabaseUrl({
+				appEnv: "local",
+				databaseUrl: "postgresql://app:app@127.0.0.1:5432/dontforget",
+			}),
+		).not.toThrow();
+	});
+
+	it("rejects non-local Postgres directory targets for local data scripts", () => {
+		expect(() =>
+			assertLocalDirectoryDatabaseUrl({
+				appEnv: "local",
+				databaseUrl: "postgresql://app:app@db.example.com:5432/dontforget",
+			}),
+		).toThrow(/non-local Postgres directory database/);
+	});
+
+	it("rejects malformed DATABASE_URL for local data scripts", () => {
+		expect(() =>
+			assertLocalDirectoryDatabaseUrl({
+				appEnv: "local",
+				databaseUrl: "not a url",
+			}),
+		).toThrow(/must be a valid URL/);
+	});
+
+	it("does not constrain the Postgres target outside local", () => {
+		expect(() =>
+			assertLocalDirectoryDatabaseUrl({
+				appEnv: "production",
+				databaseUrl: "postgresql://app:app@db.example.com:5432/dontforget",
+			}),
+		).not.toThrow();
+		expect(() =>
+			assertLocalDirectoryDatabaseUrl({
+				appEnv: "staging",
+				databaseUrl: "postgresql://app:app@db.example.com:5432/dontforget",
 			}),
 		).not.toThrow();
 	});

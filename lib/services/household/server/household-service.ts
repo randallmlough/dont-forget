@@ -5,22 +5,23 @@ import {
 	type Membership,
 	memberships,
 	type User,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
+import type { DirectoryDb } from "@/db/server/client";
 import type { AppEnv } from "@/lib/env";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import type { ActiveMembership } from "@/lib/services/member/server";
 import {
-	type LifecycleLockExecutor,
-	runHouseholdLifecycleCommand,
-} from "@/lib/services/shared/server/lifecycle-lock";
+	type DirectoryTransaction,
+	runDirectoryTransaction,
+} from "@/lib/services/shared/server/directory-transaction";
 import {
 	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,
 } from "./household-join-code-service";
 
-export type HouseholdServiceDirectory = LifecycleLockExecutor;
+export type HouseholdServiceDirectory = DirectoryDb | DirectoryTransaction;
 
 export type HouseholdService = {
 	findPendingCreatedHousehold(userId: string): Promise<Household | null>;
@@ -164,33 +165,26 @@ async function renameHousehold(
 	analytics: ServiceAnalytics,
 ): Promise<Household> {
 	const name = normalizeHouseholdName(input.name);
-	const household = await runHouseholdLifecycleCommand({
-		householdId: input.householdId,
-		directory,
-		command: async (tx) => {
-			const requester = await findActiveOwnerMembership(
-				{
-					householdId: input.householdId,
-					userId: input.requestedByUserId,
-				},
-				tx,
-			);
-			if (!requester) throw new HouseholdForbiddenError();
+	const household = await runDirectoryTransaction(directory, async (tx) => {
+		const requester = await findActiveOwnerMembership(
+			{
+				householdId: input.householdId,
+				userId: input.requestedByUserId,
+			},
+			tx,
+		);
+		if (!requester) throw new HouseholdForbiddenError();
 
-			const [updated] = await tx
-				.update(households)
-				.set({ name })
-				.where(
-					and(
-						eq(households.id, input.householdId),
-						isNull(households.deletedAt),
-					),
-				)
-				.returning();
-			if (!updated) throw new HouseholdNotFoundError();
+		const [updated] = await tx
+			.update(households)
+			.set({ name })
+			.where(
+				and(eq(households.id, input.householdId), isNull(households.deletedAt)),
+			)
+			.returning();
+		if (!updated) throw new HouseholdNotFoundError();
 
-			return updated;
-		},
+		return updated;
 	});
 
 	analytics.track("household_renamed", {

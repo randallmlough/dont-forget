@@ -1,17 +1,21 @@
 import { asc } from "drizzle-orm";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
 	invitations,
 	memberships,
+	itemChecks as pgItemChecks,
+	items as pgItems,
+	lists as pgLists,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import {
 	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
+	readPostgresConfig,
 	readTursoMigrationConfig,
 } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
@@ -45,8 +49,10 @@ export async function resetDirectoryDatabase(
 	directory: DirectoryDb,
 ): Promise<void> {
 	await directory.transaction(async (tx) => {
+		await tx.delete(pgItemChecks);
+		await tx.delete(pgItems);
+		await tx.delete(pgLists);
 		await tx.delete(householdJoinCodeUses);
-		await tx.delete(householdJoinCodeAttempts);
 		await tx.delete(householdJoinCodes);
 		await tx.delete(invitations);
 		await tx.delete(memberships);
@@ -80,6 +86,15 @@ export function assertDatabaseResetConfirmation(
 	);
 }
 
+function postgresTarget(databaseUrl: string): string {
+	try {
+		const parsed = new URL(databaseUrl);
+		return `${parsed.host}${parsed.pathname}`;
+	} catch {
+		return "<invalid DATABASE_URL>";
+	}
+}
+
 async function main(): Promise<void> {
 	const productionConfirmation = process.env.CONFIRM_APP_ENV;
 	const resetConfirmation = process.env.CONFIRM_DB_RESET;
@@ -91,9 +106,11 @@ async function main(): Promise<void> {
 		CONFIRM_DB_RESET: resetConfirmation,
 	});
 	const config = readTursoMigrationConfig();
+	const postgresConfig = readPostgresConfig();
+	assertLocalDirectoryDatabaseUrl(postgresConfig);
 
 	console.log(`[env] ${config.appEnv}`);
-	console.log(`[directory] ${config.directoryUrl}`);
+	console.log(`[directory] ${postgresTarget(postgresConfig.databaseUrl)}`);
 
 	const directoryClientInstance = directoryClient();
 	try {
@@ -105,7 +122,7 @@ async function main(): Promise<void> {
 		await resetDirectoryDatabase(directory);
 		console.log("[directory] done");
 	} finally {
-		await directoryClientInstance.close();
+		await directoryClientInstance.end();
 	}
 }
 

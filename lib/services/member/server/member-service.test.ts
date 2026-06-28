@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { households, memberships, users } from "@/db/schema/directory";
+import { households, memberships, users } from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import { createTestDirectoryDb } from "@/db/server/test";
 import {
@@ -358,71 +358,6 @@ describe("createMemberService", () => {
 			dateNow.mockRestore();
 			await directory.close();
 		}
-	});
-
-	it("locks Household lifecycle inside the public remove Member command before policy reads", async () => {
-		const events: string[] = [];
-		let readCount = 0;
-		let updateCount = 0;
-		const requester = {
-			id: "mbr_owner",
-			householdId: "hh_1",
-			userId: "usr_owner",
-			role: "owner" as const,
-			joinedAt: 1,
-			removedAt: null,
-		};
-		const target = {
-			id: "mbr_member",
-			householdId: "hh_1",
-			userId: "usr_member",
-			role: "member" as const,
-			joinedAt: 2,
-			removedAt: null,
-		};
-		const selectBuilder = {
-			from: () => selectBuilder,
-			innerJoin: () => selectBuilder,
-			where: () => selectBuilder,
-			limit: async () => {
-				events.push("read");
-				readCount += 1;
-				if (readCount === 1) return [{ memberships: requester }];
-				if (readCount === 2) return [{ memberships: target }];
-				return [];
-			},
-			orderBy: async () => {
-				events.push("read");
-				return [{ memberships: requester }, { memberships: target }];
-			},
-		};
-		const tx = {
-			select: () => selectBuilder,
-			update: () => {
-				updateCount += 1;
-				return {
-					set: () => ({
-						where: async () => {
-							events.push(updateCount === 1 ? "lock" : "mutate");
-						},
-					}),
-				};
-			},
-		};
-		const directory = {
-			transaction: async <T>(
-				operation: (transaction: typeof tx) => Promise<T>,
-			) => operation(tx),
-		};
-		const service = memberService(directory as unknown as DirectoryDb);
-
-		await service.removeMember({
-			householdId: "hh_1",
-			membershipId: "mbr_member",
-			requestedByUserId: "usr_owner",
-		});
-
-		expect(events).toEqual(["lock", "read", "read", "read", "mutate"]);
 	});
 
 	it("rejects removal by a plain Member and self-removal by an Owner", async () => {

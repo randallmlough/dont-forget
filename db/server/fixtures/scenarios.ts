@@ -1,23 +1,21 @@
 import { eq } from "drizzle-orm";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import type {
 	NewHousehold,
 	NewMembership,
 	NewUser,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import {
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
 	invitations,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import type { DirectoryDb, HouseholdDb } from "@/db/server/client";
 import {
 	householdFixture,
-	householdJoinCodeAttemptFixture,
 	householdJoinCodeFixture,
 	householdJoinCodeUseFixture,
 	invitationFixture,
@@ -952,18 +950,6 @@ export async function seedHouseholdJoinCodeAuditScenario(input: {
 		membershipId: facts.members.cameron.id,
 		usedAt: now + 41,
 	});
-	const blakeAttempt = householdJoinCodeAttemptFixture({
-		userId: blake.id,
-		failedCount: 2,
-		windowStartedAt: now + 50,
-		lastFailedAt: now + 51,
-	});
-	const cameronAttempt = householdJoinCodeAttemptFixture({
-		userId: cameron.id,
-		failedCount: 1,
-		windowStartedAt: now + 52,
-		lastFailedAt: now + 52,
-	});
 
 	await input.directory.transaction(async (tx) => {
 		await tx.insert(users).values(facts.rows.users);
@@ -971,9 +957,6 @@ export async function seedHouseholdJoinCodeAuditScenario(input: {
 		await tx.insert(memberships).values(facts.rows.memberships);
 		await tx.insert(householdJoinCodes).values([active, replaced, disabled]);
 		await tx.insert(householdJoinCodeUses).values([blakeUse, cameronUse]);
-		await tx
-			.insert(householdJoinCodeAttempts)
-			.values([blakeAttempt, cameronAttempt]);
 		await setActiveHouseholdForUsers(
 			tx,
 			facts.rows.users.map((user) => user.id),
@@ -1006,10 +989,6 @@ export async function seedHouseholdJoinCodeAuditScenario(input: {
 		joinCodeUses: {
 			blake: blakeUse,
 			cameron: cameronUse,
-		},
-		joinCodeAttempts: {
-			blake: blakeAttempt,
-			cameron: cameronAttempt,
 		},
 		ids: {
 			householdId: household.id,

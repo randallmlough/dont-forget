@@ -5,16 +5,18 @@ import {
 	memberships,
 	type User,
 	users,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
+import type { DirectoryDb } from "@/db/server/client";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import {
-	type LifecycleLockExecutor,
-	runHouseholdLifecycleCommand,
-} from "@/lib/services/shared/server/lifecycle-lock";
+	type DirectoryTransaction,
+	lockHouseholdRow,
+	runDirectoryTransaction,
+} from "@/lib/services/shared/server/directory-transaction";
 
-export type MemberServiceDirectory = LifecycleLockExecutor;
+export type MemberServiceDirectory = DirectoryDb | DirectoryTransaction;
 
 export type ActiveMembership = {
 	membershipId: string;
@@ -143,11 +145,9 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 			return listHouseholdMembers(householdId, deps.directory);
 		},
 		async removeMember(input) {
-			await runHouseholdLifecycleCommand({
-				householdId: input.householdId,
-				directory: deps.directory,
-				command: (tx) => removeMemberInTransaction(input, tx),
-			});
+			await runDirectoryTransaction(deps.directory, (tx) =>
+				removeMemberInTransaction(input, tx),
+			);
 			analytics.track("member_removed", {
 				household_id: input.householdId,
 				membership_id: input.membershipId,
@@ -155,11 +155,9 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 			});
 		},
 		async changeMemberRole(input) {
-			const changed = await runHouseholdLifecycleCommand({
-				householdId: input.householdId,
-				directory: deps.directory,
-				command: (tx) => changeMemberRoleInTransaction(input, tx),
-			});
+			const changed = await runDirectoryTransaction(deps.directory, (tx) =>
+				changeMemberRoleInTransaction(input, tx),
+			);
 			if (changed) {
 				analytics.track("member_role_changed", {
 					household_id: input.householdId,
@@ -170,11 +168,9 @@ export function createMemberService(deps: MemberServiceDeps): MemberService {
 			}
 		},
 		async leaveHousehold(input) {
-			const result = await runHouseholdLifecycleCommand({
-				householdId: input.householdId,
-				directory: deps.directory,
-				command: (tx) => leaveHouseholdInTransaction(input, tx),
-			});
+			const result = await runDirectoryTransaction(deps.directory, (tx) =>
+				leaveHouseholdInTransaction(input, tx),
+			);
 			analytics.track("household_left", {
 				household_id: input.householdId,
 				user_id: input.userId,
@@ -315,19 +311,23 @@ async function ensurePlainMemberMembership(
 		removedAt: null,
 	};
 
-	try {
-		await directory.insert(memberships).values(membership);
-		return { membership, created: true };
-	} catch (error) {
-		const createdByConcurrentRequest = await findActiveMembershipRow(
-			input,
-			directory,
-		);
-		if (createdByConcurrentRequest) {
-			return { membership: createdByConcurrentRequest, created: false };
-		}
-		throw error;
+	const [inserted] = await directory
+		.insert(memberships)
+		.values(membership)
+		.onConflictDoNothing()
+		.returning();
+	if (inserted) return { membership: inserted, created: true };
+
+	const createdByConcurrentRequest = await findActiveMembershipRow(
+		input,
+		directory,
+	);
+	if (createdByConcurrentRequest) {
+		return { membership: createdByConcurrentRequest, created: false };
 	}
+	throw new Error(
+		"Suppressed membership insert conflict left no active Membership row.",
+	);
 }
 
 async function findActiveMembershipRow(
@@ -386,6 +386,8 @@ async function removeMemberInTransaction(
 	},
 	directory: MemberServiceDirectory,
 ): Promise<void> {
+	await lockHouseholdRow(directory, input.householdId);
+
 	const requester = await findActiveMembershipRow(
 		{
 			householdId: input.householdId,
@@ -440,6 +442,8 @@ async function changeMemberRoleInTransaction(
 	},
 	directory: MemberServiceDirectory,
 ): Promise<boolean> {
+	await lockHouseholdRow(directory, input.householdId);
+
 	const requester = await findActiveMembershipRow(
 		{
 			householdId: input.householdId,
@@ -486,6 +490,8 @@ async function leaveHouseholdInTransaction(
 	input: { householdId: string; userId: string },
 	directory: MemberServiceDirectory,
 ): Promise<{ promotedMembershipId: string | null }> {
+	await lockHouseholdRow(directory, input.householdId);
+
 	const membership = await findActiveMembershipRow(input, directory);
 	if (!membership) throw new MemberNotFoundError();
 

@@ -6,8 +6,14 @@ module.exports = {
 		"<rootDir>/lib/unistyles/unistyles.ts",
 	],
 	setupFilesAfterEnv: ["<rootDir>/lib/test/setup.ts"],
+	// Directory-DB tests boot PGlite (WASM Postgres) in a child process and run
+	// migrations; the first such test per run also generates the PGlite template.
+	// That cold start exceeds Jest's 5s default on CI hardware, so widen the budget.
+	testTimeout: 20000,
 	testMatch: ["**/*.test.ts", "**/*.test.tsx"],
 	testPathIgnorePatterns: ["<rootDir>/\\.claude/"],
+	modulePathIgnorePatterns: ["<rootDir>/\\.claude/"],
+	watchPathIgnorePatterns: ["<rootDir>/\\.claude/"],
 	moduleNameMapper: {
 		// Keep Jest aligned with Metro: Drizzle may resolve the libsql package root.
 		"^@libsql/client$": "@libsql/client/http",

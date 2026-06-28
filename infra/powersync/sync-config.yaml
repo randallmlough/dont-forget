@@ -44,7 +44,7 @@ streams:
     auto_subscribe: true
     queries:
       - >-
-        SELECT * FROM households
+        SELECT id, name, created_by_user_id, created_at, deleted_at FROM households
         WHERE id IN (
           SELECT household_id FROM memberships
           WHERE user_id IN (

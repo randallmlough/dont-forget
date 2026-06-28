@@ -4,7 +4,7 @@ import {
 	invitations,
 	memberships,
 	users,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import {
 	householdFixture,

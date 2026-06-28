@@ -2,13 +2,11 @@ import { randomInt } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import {
 	type HouseholdJoinCode,
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
-import { runWithSqliteBusyRetry } from "@/db/utils";
 import {
 	type HouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
@@ -17,17 +15,13 @@ import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createMemberService } from "@/lib/services/member/server";
-import {
-	lockHouseholdLifecycle,
-	lockUserLifecycle,
-} from "@/lib/services/shared/server/lifecycle-lock";
+import { lockHouseholdRow } from "@/lib/services/shared/server/directory-transaction";
 import { createActiveHouseholdService } from "./active-household-service";
 
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const JOIN_CODE_LENGTH = 8;
 const MAX_CODE_GENERATION_ATTEMPTS = 5;
-const FAILED_ATTEMPT_LIMIT = 5;
-const FAILED_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const UNIQUE_VIOLATION_SQLSTATE = "23505";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -39,13 +33,6 @@ export class HouseholdJoinCodeUnavailableError extends Error {
 	constructor() {
 		super("Household Join Code is not available");
 		this.name = "HouseholdJoinCodeUnavailableError";
-	}
-}
-
-export class HouseholdJoinCodeThrottledError extends Error {
-	constructor() {
-		super("Too many Household Join Code attempts");
-		this.name = "HouseholdJoinCodeThrottledError";
 	}
 }
 
@@ -191,59 +178,44 @@ async function joinByCode(
 	analytics: ServiceAnalytics,
 ): Promise<JoinHouseholdByCodeResult> {
 	const now = Date.now();
-	await assertNotThrottled(input.userId, now, directory);
 	const normalizedCode = normalizeJoinCode(input.code);
-	const availableCode = await findAvailableJoinCode(normalizedCode, directory);
-	if (!availableCode) {
-		await recordFailedAttemptAndAssert(
-			{ userId: input.userId, now },
-			directory,
-		);
-		throw new HouseholdJoinCodeUnavailableError();
-	}
+	const result = await directory.transaction(async (tx) => {
+		const availableCode = await findAvailableJoinCode(normalizedCode, tx);
+		if (!availableCode) {
+			throw new HouseholdJoinCodeUnavailableError();
+		}
 
-	const result = await runWithSqliteBusyRetry(() =>
-		directory.transaction(async (tx) => {
-			const availableCode = await findAvailableJoinCode(normalizedCode, tx);
-			if (!availableCode) {
-				throw new HouseholdJoinCodeUnavailableError();
-			}
+		const { membership, created } = await createMemberService({
+			directory: tx,
+		}).ensurePlainMemberMembership({
+			householdId: availableCode.householdId,
+			userId: input.userId,
+			joinedAt: now,
+		});
+		const useId = createAppId("hjcu");
+		await tx.insert(householdJoinCodeUses).values({
+			id: useId,
+			householdJoinCodeId: availableCode.id,
+			householdId: availableCode.householdId,
+			userId: input.userId,
+			membershipId: membership.id,
+			usedAt: now,
+		});
+		await createActiveHouseholdService({ directory: tx }).setActiveHousehold({
+			userId: input.userId,
+			householdId: availableCode.householdId,
+		});
 
-			const { membership, created } = await createMemberService({
-				directory: tx,
-			}).ensurePlainMemberMembership({
-				householdId: availableCode.householdId,
-				userId: input.userId,
-				joinedAt: now,
-			});
-			const useId = createAppId("hjcu");
-			await tx.insert(householdJoinCodeUses).values({
-				id: useId,
-				householdJoinCodeId: availableCode.id,
-				householdId: availableCode.householdId,
-				userId: input.userId,
-				membershipId: membership.id,
-				usedAt: now,
-			});
-			await createActiveHouseholdService({ directory: tx }).setActiveHousehold({
-				userId: input.userId,
-				householdId: availableCode.householdId,
-			});
-			await tx
-				.delete(householdJoinCodeAttempts)
-				.where(eq(householdJoinCodeAttempts.userId, input.userId));
-
-			return {
-				householdJoinCodeId: availableCode.id,
-				householdId: availableCode.householdId,
-				membershipId: membership.id,
-				membershipRole: membership.role,
-				membershipCreated: created,
-				useId,
-				activeHouseholdId: availableCode.householdId,
-			};
-		}),
-	);
+		return {
+			householdJoinCodeId: availableCode.id,
+			householdId: availableCode.householdId,
+			membershipId: membership.id,
+			membershipRole: membership.role,
+			membershipCreated: created,
+			useId,
+			activeHouseholdId: availableCode.householdId,
+		};
+	});
 
 	analytics.track("household_join_code_used", {
 		household_id: result.householdId,
@@ -268,6 +240,8 @@ async function regenerateJoinCode(
 	await requireActiveHouseholdMember(input, directory);
 
 	const result = await directory.transaction(async (tx) => {
+		await lockHouseholdRow(tx, input.householdId);
+
 		await tx
 			.update(householdJoinCodes)
 			.set({ replacedAt: now, replacedByUserId: input.requestedByUserId })
@@ -308,23 +282,22 @@ async function disableJoinCode(
 	const now = Date.now();
 	await requireActiveHouseholdMember(input, directory);
 
-	const disabledCode = await runWithSqliteBusyRetry(() =>
-		directory.transaction(async (tx) => {
-			await lockHouseholdLifecycle(input.householdId, tx);
-			const [updated] = await tx
-				.update(householdJoinCodes)
-				.set({ disabledAt: now, disabledByUserId: input.requestedByUserId })
-				.where(
-					and(
-						eq(householdJoinCodes.householdId, input.householdId),
-						isNull(householdJoinCodes.disabledAt),
-						isNull(householdJoinCodes.replacedAt),
-					),
-				)
-				.returning();
-			return Boolean(updated);
-		}),
-	);
+	const disabledCode = await directory.transaction(async (tx) => {
+		await lockHouseholdRow(tx, input.householdId);
+
+		const [updated] = await tx
+			.update(householdJoinCodes)
+			.set({ disabledAt: now, disabledByUserId: input.requestedByUserId })
+			.where(
+				and(
+					eq(householdJoinCodes.householdId, input.householdId),
+					isNull(householdJoinCodes.disabledAt),
+					isNull(householdJoinCodes.replacedAt),
+				),
+			)
+			.returning();
+		return Boolean(updated);
+	});
 
 	if (disabledCode) {
 		analytics.track("household_join_code_disabled", {
@@ -490,74 +463,6 @@ export async function createInitialHouseholdJoinCode(
 	throw new Error("Unable to generate a unique Household Join Code");
 }
 
-async function assertNotThrottled(
-	userId: string,
-	now: number,
-	directory: HouseholdJoinCodeServiceExecutor,
-) {
-	const [attempt] = await directory
-		.select()
-		.from(householdJoinCodeAttempts)
-		.where(eq(householdJoinCodeAttempts.userId, userId))
-		.limit(1);
-
-	if (!attempt) return;
-	if (attempt.windowStartedAt <= now - FAILED_ATTEMPT_WINDOW_MS) return;
-	if (attempt.failedCount >= FAILED_ATTEMPT_LIMIT) {
-		throw new HouseholdJoinCodeThrottledError();
-	}
-}
-
-async function recordFailedAttemptAndAssert(
-	input: { userId: string; now: number },
-	directory: DirectoryDb,
-) {
-	await directory.transaction(async (tx) => {
-		await lockUserLifecycle(input.userId, tx);
-
-		const [attempt] = await tx
-			.select()
-			.from(householdJoinCodeAttempts)
-			.where(eq(householdJoinCodeAttempts.userId, input.userId))
-			.limit(1);
-
-		if (
-			!attempt ||
-			attempt.windowStartedAt <= input.now - FAILED_ATTEMPT_WINDOW_MS
-		) {
-			await tx
-				.insert(householdJoinCodeAttempts)
-				.values({
-					userId: input.userId,
-					failedCount: 1,
-					windowStartedAt: input.now,
-					lastFailedAt: input.now,
-				})
-				.onConflictDoUpdate({
-					target: householdJoinCodeAttempts.userId,
-					set: {
-						failedCount: 1,
-						windowStartedAt: input.now,
-						lastFailedAt: input.now,
-					},
-				});
-			return;
-		}
-
-		if (attempt.failedCount >= FAILED_ATTEMPT_LIMIT) {
-			throw new HouseholdJoinCodeThrottledError();
-		}
-
-		await tx
-			.update(householdJoinCodeAttempts)
-			.set({
-				failedCount: attempt.failedCount + 1,
-				lastFailedAt: input.now,
-			})
-			.where(eq(householdJoinCodeAttempts.userId, input.userId));
-	});
-}
-
 function toJoinCodeState(
 	code: HouseholdJoinCode,
 	buildJoinUrl: HouseholdJoinUrlBuilder,
@@ -585,18 +490,14 @@ function normalizeJoinCode(code: string): string {
 }
 
 function isActiveJoinCodeConflict(error: unknown): boolean {
-	if (!(error instanceof Error)) return false;
-	if (
-		error.message.includes("SQLITE_CONSTRAINT") ||
-		error.message.includes(
-			"UNIQUE constraint failed: household_join_codes.household_id",
-		)
-	) {
-		return true;
-	}
+	return hasSqlStateCode(error, UNIQUE_VIOLATION_SQLSTATE);
+}
 
-	const cause = (error as { cause?: unknown }).cause;
-	return cause ? isActiveJoinCodeConflict(cause) : false;
+function hasSqlStateCode(error: unknown, code: string): boolean {
+	if (typeof error !== "object" || error === null) return false;
+	const record = error as Record<string, unknown>;
+	if (record.code === code) return true;
+	return hasSqlStateCode(record.cause, code);
 }
 
 function generateSecureHouseholdJoinCode(): string {

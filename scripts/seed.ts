@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { inArray, or } from "drizzle-orm";
 import { z } from "zod";
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	householdJoinCodes,
 	households,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import {
 	directoryClient,
 	directoryDb,
@@ -24,7 +24,9 @@ import {
 import { migrateHouseholdDb } from "@/db/server/household-migrations";
 import {
 	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
 	readClerkServerConfig,
+	readPostgresConfig,
 	readTursoMigrationConfig,
 	readTursoOperatorConfig,
 	type TursoMigrationConfig,
@@ -433,6 +435,7 @@ async function seedDeterministicLocalDatabases(
 ): Promise<void> {
 	const config = readTursoMigrationConfig();
 	assertLocalSeedTursoTarget(config);
+	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
 	const seedDbName =
 		seedHouseholdDbNameForDirectory(config.directoryUrl, config.org) ??
 		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName;
@@ -459,7 +462,7 @@ async function seedDeterministicLocalDatabases(
 		logSeedSummary({ scenario, seedMode });
 	} finally {
 		await householdClientInstance.close();
-		await directoryClientInstance.close();
+		await directoryClientInstance.end();
 	}
 }
 
@@ -468,6 +471,7 @@ async function seedEmailBackedLocalDatabases(
 ): Promise<void> {
 	const config = readTursoOperatorConfig();
 	assertLocalSeedPrerequisites({ seedMode, turso: config });
+	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
 	const seedTarget = emailBackedSeedTargetForMode(seedMode, config);
 	const clerkClient = await createProductionSeedClerkClient();
 
@@ -529,7 +533,7 @@ async function seedEmailBackedLocalDatabases(
 		}
 	} finally {
 		await householdClientInstance?.close();
-		await directoryClientInstance.close();
+		await directoryClientInstance.end();
 	}
 }
 

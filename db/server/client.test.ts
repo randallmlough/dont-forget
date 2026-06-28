@@ -1,29 +1,33 @@
 import { createClient } from "@libsql/client/http";
-
 import { directoryClient, householdClient, householdDbUrl } from "./client";
+import { postgresPool } from "./pg-client";
 
 jest.mock("@libsql/client/http", () => ({
 	createClient: jest.fn((config: unknown) => ({ config, close: jest.fn() })),
 }));
 
+jest.mock("./pg-client", () => ({
+	postgresPool: jest.fn(() => ({ end: jest.fn() })),
+}));
+
 describe("remote DB clients", () => {
 	beforeEach(() => {
 		process.env.APP_ENV = "local";
+		process.env.DATABASE_URL = "postgres://directory";
 		process.env.TURSO_DIRECTORY_AUTH_TOKEN = "directory-token";
 		process.env.TURSO_DIRECTORY_URL = "libsql://directory-randy.turso.io";
 		process.env.TURSO_GROUP = "dont-forget-local-randy";
 		process.env.TURSO_ORG = "randy";
+		jest.clearAllMocks();
 	});
 
-	it("uses the HTTP libsql entrypoint for API-route-compatible remote clients", () => {
+	it("uses Postgres for the directory client and libsql for Household clients", () => {
 		directoryClient();
 		householdClient("libsql://household-randy.turso.io", "household-token");
 
-		expect(createClient).toHaveBeenNthCalledWith(1, {
-			url: "libsql://directory-randy.turso.io",
-			authToken: "directory-token",
-		});
-		expect(createClient).toHaveBeenNthCalledWith(2, {
+		expect(postgresPool).toHaveBeenCalledTimes(1);
+		expect(createClient).toHaveBeenCalledTimes(1);
+		expect(createClient).toHaveBeenCalledWith({
 			url: "libsql://household-randy.turso.io",
 			authToken: "household-token",
 		});

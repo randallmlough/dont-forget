@@ -5,14 +5,14 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1781894642763,
-      "tag": "0000_outgoing_molten_man",
+      "when": 1782538748406,
+      "tag": "0000_stormy_norman_osborn",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1781894642764,
+      "when": 1782538748407,
       "tag": "0001_powersync_publication",
       "breakpoints": true
     }

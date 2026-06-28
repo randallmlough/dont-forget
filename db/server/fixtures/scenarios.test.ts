@@ -1,20 +1,17 @@
 import { eq } from "drizzle-orm";
-
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
 	invitations,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
 import {
 	householdFixture,
-	householdJoinCodeAttemptFixture,
 	householdJoinCodeFixture,
 	householdJoinCodeUseFixture,
 	membershipFixture,
@@ -45,7 +42,6 @@ describe("database fixture scenarios", () => {
 			});
 			const joinCode = householdJoinCodeFixture();
 			const use = householdJoinCodeUseFixture();
-			const attempt = householdJoinCodeAttemptFixture();
 
 			await directory.db.insert(users).values([avery, blake]);
 			await directory.db.insert(households).values(household);
@@ -54,7 +50,6 @@ describe("database fixture scenarios", () => {
 				.values([averyMembership, blakeMembership]);
 			await directory.db.insert(householdJoinCodes).values(joinCode);
 			await directory.db.insert(householdJoinCodeUses).values(use);
-			await directory.db.insert(householdJoinCodeAttempts).values(attempt);
 
 			expect(await directory.db.select().from(householdJoinCodes)).toEqual([
 				expect.objectContaining({
@@ -69,14 +64,6 @@ describe("database fixture scenarios", () => {
 					id: use.id,
 					householdJoinCodeId: joinCode.id,
 					userId: blake.id,
-				}),
-			]);
-			expect(
-				await directory.db.select().from(householdJoinCodeAttempts),
-			).toEqual([
-				expect.objectContaining({
-					userId: blake.id,
-					failedCount: 1,
 				}),
 			]);
 		} finally {
@@ -470,7 +457,7 @@ describe("database fixture scenarios", () => {
 		}
 	});
 
-	it("seeds Household Join Code lifecycle audit rows with safe use and attempt columns", async () => {
+	it("seeds Household Join Code lifecycle audit rows with safe use columns", async () => {
 		const directory = await createTestDirectoryDb();
 
 		try {
@@ -480,9 +467,6 @@ describe("database fixture scenarios", () => {
 
 			const codes = await directory.db.select().from(householdJoinCodes);
 			const uses = await directory.db.select().from(householdJoinCodeUses);
-			const attempts = await directory.db
-				.select()
-				.from(householdJoinCodeAttempts);
 
 			expect(codes).toEqual(
 				expect.arrayContaining([
@@ -513,18 +497,6 @@ describe("database fixture scenarios", () => {
 					}),
 				]),
 			);
-			expect(attempts).toEqual(
-				expect.arrayContaining([
-					expect.objectContaining({
-						userId: scenario.users.blake.id,
-						failedCount: 2,
-					}),
-					expect.objectContaining({
-						userId: scenario.users.cameron.id,
-						failedCount: 1,
-					}),
-				]),
-			);
 			expect(Object.keys(uses[0]).sort()).toEqual([
 				"householdId",
 				"householdJoinCodeId",
@@ -532,12 +504,6 @@ describe("database fixture scenarios", () => {
 				"membershipId",
 				"usedAt",
 				"userId",
-			]);
-			expect(Object.keys(attempts[0]).sort()).toEqual([
-				"failedCount",
-				"lastFailedAt",
-				"userId",
-				"windowStartedAt",
 			]);
 			expect(scenario.members.blake).toBe(scenario.memberships.blake);
 		} finally {

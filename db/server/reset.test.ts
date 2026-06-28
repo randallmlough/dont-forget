@@ -1,13 +1,15 @@
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
 	invitations,
 	memberships,
+	itemChecks as pgItemChecks,
+	items as pgItems,
+	lists as pgLists,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
 import {
 	assertDatabaseResetConfirmation,
@@ -68,11 +70,23 @@ describe("database reset", () => {
 				userId: "usr_1",
 				membershipId: "mbr_1",
 			});
-			await directory.db.insert(householdJoinCodeAttempts).values({
-				userId: "usr_1",
-				failedCount: 1,
-				windowStartedAt: 1_700_000_000_000,
-				lastFailedAt: 1_700_000_000_000,
+			await directory.db.insert(pgLists).values({
+				id: "lst_1",
+				householdId: "hh_1",
+				name: "Groceries",
+				createdByUserId: "usr_1",
+			});
+			await directory.db.insert(pgItems).values({
+				id: "itm_1",
+				listId: "lst_1",
+				name: "Milk",
+				position: 0,
+				createdByUserId: "usr_1",
+			});
+			await directory.db.insert(pgItemChecks).values({
+				id: "ick_1",
+				itemId: "itm_1",
+				checkedByUserId: "usr_1",
 			});
 
 			expect(await householdDatabasesForReset(directory.db)).toEqual([
@@ -84,14 +98,14 @@ describe("database reset", () => {
 			expect(
 				await directory.db.select().from(householdJoinCodeUses),
 			).toHaveLength(0);
-			expect(
-				await directory.db.select().from(householdJoinCodeAttempts),
-			).toHaveLength(0);
 			expect(await directory.db.select().from(householdJoinCodes)).toHaveLength(
 				0,
 			);
 			expect(await directory.db.select().from(invitations)).toHaveLength(0);
 			expect(await directory.db.select().from(memberships)).toHaveLength(0);
+			expect(await directory.db.select().from(pgItemChecks)).toHaveLength(0);
+			expect(await directory.db.select().from(pgItems)).toHaveLength(0);
+			expect(await directory.db.select().from(pgLists)).toHaveLength(0);
 			expect(await directory.db.select().from(households)).toHaveLength(0);
 			expect(await directory.db.select().from(users)).toHaveLength(0);
 		} finally {

@@ -1,14 +1,12 @@
-import { createClient } from "@libsql/client/node";
 import { eq } from "drizzle-orm";
 import {
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { type DirectoryDb, directoryDb } from "@/db/server/client";
+} from "@/db/schema/postgres";
+import type { DirectoryDb } from "@/db/server/client";
 import {
 	householdFixture,
 	householdJoinCodeFixture,
@@ -22,7 +20,6 @@ import { deferred } from "@/lib/test/async";
 import {
 	createHouseholdJoinCodeService,
 	HouseholdJoinCodeMembershipRequiredError,
-	HouseholdJoinCodeThrottledError,
 	HouseholdJoinCodeUnavailableError,
 } from "./household-join-code-service";
 
@@ -195,7 +192,7 @@ describe("createHouseholdJoinCodeService", () => {
 		}
 	});
 
-	it("tracks failed attempt windows and clears them after a successful join", async () => {
+	it("returns unavailable for invalid codes without blocking a later successful join", async () => {
 		const directory = await createTestDirectoryDb();
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_300_000);
 
@@ -207,47 +204,34 @@ describe("createHouseholdJoinCodeService", () => {
 				analytics: { track: jest.fn() },
 			});
 
-			for (let index = 0; index < 5; index += 1) {
-				await expect(
-					service.joinByCode({
-						code: "NOPE1234",
-						userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
-					}),
-				).rejects.toBeInstanceOf(HouseholdJoinCodeUnavailableError);
-			}
 			await expect(
 				service.joinByCode({
-					code: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.code,
+					code: "NOPE1234",
 					userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
 				}),
-			).rejects.toBeInstanceOf(HouseholdJoinCodeThrottledError);
+			).rejects.toBeInstanceOf(HouseholdJoinCodeUnavailableError);
 
-			dateNow.mockReturnValue(1_700_000_300_000 + 16 * 60 * 1000);
 			await expect(
 				service.joinByCode({
 					code: PRIMARY_HOUSEHOLD_SEED.joinCodes.active.code,
 					userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
 				}),
 			).resolves.toMatchObject({ membershipCreated: true });
-			await expect(
-				directory.db.select().from(householdJoinCodeAttempts),
-			).resolves.toHaveLength(0);
 		} finally {
 			dateNow.mockRestore();
 			await directory.close();
 		}
 	});
 
+	// NOTE: the "concurrent"/"race" tests below run against a single PGlite
+	// connection whose worker serializes transactions, so they exercise 23505
+	// unique-conflict handling against the partial unique index — not true
+	// DB-level concurrent interleaving of two in-flight transactions.
 	it("lets two different Users use the same active reusable code concurrently", async () => {
 		const directory = await createTestDirectoryDb();
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_400_000);
-		const secondClient = createClient({ url: `file:${directory.path}` });
 
 		try {
-			await secondClient.execute("PRAGMA foreign_keys = ON");
-			await secondClient.execute("PRAGMA busy_timeout = 5000");
-			await secondClient.execute("PRAGMA journal_mode = WAL");
-			const secondDirectory = directoryDb(secondClient);
 			await seedJoinCodeHousehold(directory.db, {
 				includeBlakeMembership: false,
 				includeExtraUser: true,
@@ -258,7 +242,7 @@ describe("createHouseholdJoinCodeService", () => {
 				analytics: { track: jest.fn() },
 			});
 			const secondService = createHouseholdJoinCodeService({
-				directory: secondDirectory,
+				directory: directory.db,
 				buildJoinUrl: testJoinUrl,
 				analytics: { track: jest.fn() },
 			});
@@ -285,7 +269,6 @@ describe("createHouseholdJoinCodeService", () => {
 			expect(householdMemberships).toHaveLength(3);
 			expect(uses).toHaveLength(2);
 		} finally {
-			secondClient.close();
 			dateNow.mockRestore();
 			await directory.close();
 		}
@@ -294,16 +277,11 @@ describe("createHouseholdJoinCodeService", () => {
 	it("returns the current code when concurrent enable requests race", async () => {
 		const directory = await createTestDirectoryDb();
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_500_000);
-		const secondClient = createClient({ url: `file:${directory.path}` });
 		const releaseGenerators = deferred<void>();
 		const firstGeneratorReady = deferred<void>();
 		const secondGeneratorReady = deferred<void>();
 
 		try {
-			await secondClient.execute("PRAGMA foreign_keys = ON");
-			await secondClient.execute("PRAGMA busy_timeout = 5000");
-			await secondClient.execute("PRAGMA journal_mode = WAL");
-			const secondDirectory = directoryDb(secondClient);
 			await seedJoinCodeHousehold(directory.db);
 			await directory.db
 				.update(householdJoinCodes)
@@ -325,7 +303,7 @@ describe("createHouseholdJoinCodeService", () => {
 				analytics: { track: jest.fn() },
 			});
 			const secondService = createHouseholdJoinCodeService({
-				directory: secondDirectory,
+				directory: directory.db,
 				buildJoinUrl: testJoinUrl,
 				generateCode: jest.fn(async () => {
 					secondGeneratorReady.resolve();
@@ -373,7 +351,6 @@ describe("createHouseholdJoinCodeService", () => {
 				currentCodes.filter((code) => !code.disabledAt && !code.replacedAt),
 			).toHaveLength(1);
 		} finally {
-			secondClient.close();
 			dateNow.mockRestore();
 			await directory.close();
 		}
@@ -382,15 +359,10 @@ describe("createHouseholdJoinCodeService", () => {
 	it("leaves no active code when disable races with regeneration", async () => {
 		const directory = await createTestDirectoryDb();
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(1_700_000_600_000);
-		const secondClient = createClient({ url: `file:${directory.path}` });
 		const generatorStarted = deferred<void>();
 		const releaseGenerator = deferred<void>();
 
 		try {
-			await secondClient.execute("PRAGMA foreign_keys = ON");
-			await secondClient.execute("PRAGMA busy_timeout = 5000");
-			await secondClient.execute("PRAGMA journal_mode = WAL");
-			const secondDirectory = directoryDb(secondClient);
 			await seedJoinCodeHousehold(directory.db);
 			const regeneratingService = createHouseholdJoinCodeService({
 				directory: directory.db,
@@ -403,7 +375,7 @@ describe("createHouseholdJoinCodeService", () => {
 				analytics: { track: jest.fn() },
 			});
 			const disablingService = createHouseholdJoinCodeService({
-				directory: secondDirectory,
+				directory: directory.db,
 				buildJoinUrl: testJoinUrl,
 				analytics: { track: jest.fn() },
 			});
@@ -445,7 +417,6 @@ describe("createHouseholdJoinCodeService", () => {
 				available: false,
 			});
 		} finally {
-			secondClient.close();
 			dateNow.mockRestore();
 			await directory.close();
 		}

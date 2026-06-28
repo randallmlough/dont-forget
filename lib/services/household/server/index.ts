@@ -14,7 +14,6 @@ export {
 	type HouseholdJoinCodeService,
 	type HouseholdJoinCodeServiceDeps,
 	type HouseholdJoinCodeState,
-	HouseholdJoinCodeThrottledError,
 	HouseholdJoinCodeUnavailableError,
 	type HouseholdJoinUrlBuilder,
 	type JoinHouseholdByCodeInput,

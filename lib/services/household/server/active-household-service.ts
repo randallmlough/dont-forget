@@ -1,5 +1,5 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { households, memberships, users } from "@/db/schema/directory";
+import { households, memberships, users } from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";

@@ -163,6 +163,34 @@ export function readPostgresConfig(
 	};
 }
 
+const LOCAL_DATABASE_HOSTS = new Set([
+	"localhost",
+	"127.0.0.1",
+	"::1",
+	"host.docker.internal",
+]);
+
+export function assertLocalDirectoryDatabaseUrl(config: PostgresConfig): void {
+	if (config.appEnv !== "local") {
+		return;
+	}
+
+	let parsed: URL;
+	try {
+		parsed = new URL(config.databaseUrl);
+	} catch {
+		throw new Error("DATABASE_URL must be a valid URL when APP_ENV=local.");
+	}
+
+	const host = parsed.hostname.replace(/^\[|\]$/g, "");
+	if (!LOCAL_DATABASE_HOSTS.has(host)) {
+		throw new Error(
+			`Refusing to use non-local Postgres directory database ${host}. ` +
+				"Local data scripts require a local DATABASE_URL (e.g. localhost).",
+		);
+	}
+}
+
 export function readClerkServerConfig(
 	source: EnvSource = process.env,
 ): ClerkServerConfig {

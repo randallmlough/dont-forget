@@ -1,14 +1,12 @@
 import { asc, eq } from "drizzle-orm";
-
+import { itemChecks, items, lists } from "@/db/schema/household";
 import {
-	householdJoinCodeAttempts,
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
 	memberships,
 	users,
-} from "@/db/schema/directory";
-import { itemChecks, items, lists } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import {
 	createTestDirectoryDb,
 	createTestHouseholdDb,
@@ -244,20 +242,6 @@ describe("test database migrations", () => {
 					membershipId: "mbr_member_2",
 				},
 			]);
-			await directory.db.insert(householdJoinCodeAttempts).values({
-				userId: "usr_member_1",
-				failedCount: 1,
-				windowStartedAt: 1_700_000_000_000,
-				lastFailedAt: 1_700_000_000_000,
-			});
-			await expect(
-				directory.db.insert(householdJoinCodeAttempts).values({
-					userId: "usr_member_1",
-					failedCount: 2,
-					windowStartedAt: 1_700_000_000_000,
-					lastFailedAt: 1_700_000_000_100,
-				}),
-			).rejects.toThrow();
 
 			const [owner] = await directory.db
 				.select({ activeHouseholdId: users.activeHouseholdId })

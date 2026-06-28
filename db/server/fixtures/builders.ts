@@ -1,13 +1,12 @@
+import type { NewItem, NewItemCheck, NewList } from "@/db/schema/household";
 import type {
 	NewHousehold,
 	NewHouseholdJoinCode,
-	NewHouseholdJoinCodeAttempt,
 	NewHouseholdJoinCodeUse,
 	NewInvitation,
 	NewMembership,
 	NewUser,
-} from "@/db/schema/directory";
-import type { NewItem, NewItemCheck, NewList } from "@/db/schema/household";
+} from "@/db/schema/postgres";
 import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
 
 export const PRIMARY_HOUSEHOLD_SEED = {
@@ -212,19 +211,6 @@ export function householdJoinCodeUseFixture(
 		userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
 		membershipId: PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
 		usedAt: now + 200,
-		...overrides,
-	};
-}
-
-export function householdJoinCodeAttemptFixture(
-	overrides: Partial<NewHouseholdJoinCodeAttempt> = {},
-): NewHouseholdJoinCodeAttempt {
-	const now = PRIMARY_HOUSEHOLD_SEED.now;
-	return {
-		userId: PRIMARY_HOUSEHOLD_SEED.users.blake.id,
-		failedCount: 1,
-		windowStartedAt: now,
-		lastFailedAt: now,
 		...overrides,
 	};
 }

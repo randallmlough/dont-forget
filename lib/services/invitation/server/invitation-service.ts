@@ -5,7 +5,7 @@ import {
 	type Invitation,
 	invitations,
 	users,
-} from "@/db/schema/directory";
+} from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
@@ -14,7 +14,7 @@ import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createActiveHouseholdService } from "@/lib/services/household/server/active-household-service";
 import { createMemberService } from "@/lib/services/member/server";
-import { lockHouseholdLifecycle } from "@/lib/services/shared/server/lifecycle-lock";
+import { lockHouseholdRow } from "@/lib/services/shared/server/directory-transaction";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOKEN_GENERATION_ATTEMPTS = 5;
@@ -453,7 +453,7 @@ async function findOrCreateInvitation(
 	const email = input.email;
 
 	return directory.transaction(async (tx) => {
-		await lockHouseholdLifecycle(input.householdId, tx);
+		await lockHouseholdRow(tx, input.householdId);
 
 		const reusable = await findReusablePendingInvitation(
 			{ householdId: input.householdId, email, now: input.now },

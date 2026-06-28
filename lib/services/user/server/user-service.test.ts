@@ -1,4 +1,4 @@
-import { users } from "@/db/schema/directory";
+import { users } from "@/db/schema/postgres";
 import { createTestDirectoryDb } from "@/db/server/test";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import { createUserService } from "./user-service";
