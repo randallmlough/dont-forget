@@ -9,7 +9,11 @@ import {
 	resetHouseholdDatabaseByName,
 } from "@/db/server/reset";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
-import { readTursoOperatorConfig } from "@/lib/env";
+import {
+	assertLocalDirectoryDatabaseUrl,
+	readPostgresConfig,
+	readTursoOperatorConfig,
+} from "@/lib/env";
 import {
 	assertLocalSeedPrerequisites,
 	ensureSeedHouseholdDatabase,
@@ -24,6 +28,7 @@ export async function reseedLocalDatabases(): Promise<void> {
 	const seedMode = readLocalSeedMode();
 	const config = readTursoOperatorConfig();
 	assertLocalSeedPrerequisites({ seedMode, turso: config });
+	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
 	const directoryClientInstance = directoryClient();
 
 	try {

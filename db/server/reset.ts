@@ -13,7 +13,9 @@ import {
 } from "@/db/schema/postgres";
 import {
 	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
+	readPostgresConfig,
 	readTursoMigrationConfig,
 } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
@@ -84,6 +86,15 @@ export function assertDatabaseResetConfirmation(
 	);
 }
 
+function postgresTarget(databaseUrl: string): string {
+	try {
+		const parsed = new URL(databaseUrl);
+		return `${parsed.host}${parsed.pathname}`;
+	} catch {
+		return "<invalid DATABASE_URL>";
+	}
+}
+
 async function main(): Promise<void> {
 	const productionConfirmation = process.env.CONFIRM_APP_ENV;
 	const resetConfirmation = process.env.CONFIRM_DB_RESET;
@@ -95,9 +106,11 @@ async function main(): Promise<void> {
 		CONFIRM_DB_RESET: resetConfirmation,
 	});
 	const config = readTursoMigrationConfig();
+	const postgresConfig = readPostgresConfig();
+	assertLocalDirectoryDatabaseUrl(postgresConfig);
 
 	console.log(`[env] ${config.appEnv}`);
-	console.log(`[directory] ${config.directoryUrl}`);
+	console.log(`[directory] ${postgresTarget(postgresConfig.databaseUrl)}`);
 
 	const directoryClientInstance = directoryClient();
 	try {

@@ -24,7 +24,9 @@ import {
 import { migrateHouseholdDb } from "@/db/server/household-migrations";
 import {
 	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
 	readClerkServerConfig,
+	readPostgresConfig,
 	readTursoMigrationConfig,
 	readTursoOperatorConfig,
 	type TursoMigrationConfig,
@@ -433,6 +435,7 @@ async function seedDeterministicLocalDatabases(
 ): Promise<void> {
 	const config = readTursoMigrationConfig();
 	assertLocalSeedTursoTarget(config);
+	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
 	const seedDbName =
 		seedHouseholdDbNameForDirectory(config.directoryUrl, config.org) ??
 		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName;
@@ -468,6 +471,7 @@ async function seedEmailBackedLocalDatabases(
 ): Promise<void> {
 	const config = readTursoOperatorConfig();
 	assertLocalSeedPrerequisites({ seedMode, turso: config });
+	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
 	const seedTarget = emailBackedSeedTargetForMode(seedMode, config);
 	const clerkClient = await createProductionSeedClerkClient();
 
