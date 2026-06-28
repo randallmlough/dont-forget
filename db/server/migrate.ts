@@ -3,6 +3,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { households } from "@/db/schema/postgres";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 import {
+	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
 	readPostgresConfig,
 	readTursoMigrationConfig,
@@ -20,6 +21,7 @@ async function main(): Promise<void> {
 		CONFIRM_APP_ENV: productionConfirmation,
 	});
 	const postgresConfig = readPostgresConfig();
+	assertLocalDirectoryDatabaseUrl(postgresConfig);
 	const tursoConfig = readTursoMigrationConfig();
 
 	console.log(`[env] ${postgresConfig.appEnv}`);
