@@ -1,12 +1,16 @@
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
-import type { HouseholdStoreExecutor } from "@/db/household-store";
 import { sqlNumberSchema } from "@/db/utils";
 import { track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
+import type { ProductDataStore } from "@/lib/services/shared/product-data-store";
+import {
+	sqlTimestampMillisSchema,
+	timestampMillisToSqlText,
+} from "@/lib/services/shared/sql-timestamp";
 
 export type Item = {
 	id: string;
@@ -50,7 +54,7 @@ export type ItemService = {
 
 export type ItemServiceDeps = {
 	householdId: string;
-	store: HouseholdStoreExecutor;
+	store: ProductDataStore;
 	logger?: Logger;
 	analytics?: ServiceAnalytics;
 };
@@ -62,18 +66,11 @@ const itemRowSchema = z.object({
 	quantity: z.string().nullable(),
 	notes: z.string().nullable(),
 	checked_by_user_id: z.string().nullable().optional(),
-	checked_at: sqlNumberSchema.nullable().optional(),
+	checked_at: sqlTimestampMillisSchema.nullable().optional(),
 	position: sqlNumberSchema,
 	created_by_user_id: z.string(),
-	created_at: sqlNumberSchema,
-	updated_at: sqlNumberSchema,
-});
-
-// The real Household store always reports rowsAffected on writes; parse it
-// loudly so a write rejected by the List lifecycle guard (deleted or missing
-// List) surfaces as an error instead of a silent no-op.
-const writeResultSchema = z.object({
-	rowsAffected: sqlNumberSchema,
+	created_at: sqlTimestampMillisSchema,
+	updated_at: sqlTimestampMillisSchema,
 });
 
 let lastItemServiceTimestamp: number | null = null;
@@ -88,37 +85,38 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 	return {
 		async listItems(input) {
 			try {
-				const schema = await readItemsSchema(deps.store);
-				const result = await deps.store.execute({
-					kind: "read",
-					sql: `
-            SELECT
-              i.id,
-              i.list_id,
-              i.name,
-              ${schema.hasQuantity ? "i.quantity" : "NULL"} AS quantity,
-              i.notes,
-              c.user_id AS checked_by_user_id,
-              c.checked_at AS checked_at,
-              i.position,
-              i.created_by_user_id,
-              i.created_at,
-              i.updated_at
-            FROM items i
-            LEFT JOIN item_checks c ON c.rowid = (
-              SELECT c2.rowid
-              FROM item_checks c2
-              WHERE c2.item_id = i.id
-              ORDER BY c2.updated_at DESC, c2.user_id DESC
-              LIMIT 1
-            )
-            WHERE i.list_id = ? AND i.deleted_at IS NULL
-            ORDER BY i.position ASC, i.created_at ASC, i.id ASC
-          `,
-					args: [input.listId],
-				});
+				const rows = await deps.store.getAll(
+					`
+						SELECT
+							i.id,
+							i.list_id,
+							i.name,
+							i.quantity,
+							i.notes,
+							c.checked_by_user_id AS checked_by_user_id,
+							c.checked_at AS checked_at,
+							i.position,
+							i.created_by_user_id,
+							i.created_at,
+							i.updated_at
+						FROM items i
+						JOIN lists l ON l.id = i.list_id
+						LEFT JOIN item_checks c ON c.id = (
+							SELECT c2.id
+							FROM item_checks c2
+							WHERE c2.item_id = i.id
+							ORDER BY c2.updated_at DESC, c2.id DESC
+							LIMIT 1
+						)
+						WHERE l.household_id = ?
+							AND i.list_id = ?
+							AND i.deleted_at IS NULL
+						ORDER BY i.position ASC, i.created_at ASC, i.id ASC
+					`,
+					[deps.householdId, input.listId],
+				);
 
-				return result.rows.map((row) => itemFromRow(row, deps.householdId));
+				return rows.map((row) => itemFromRow(row, deps.householdId));
 			} catch (error) {
 				log.error("item list load failed", {
 					error: asError(error),
@@ -136,39 +134,71 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 			const notes = nullableTrimmed(input.notes);
 
 			try {
-				const schema = await readItemsSchema(deps.store);
-				if (!schema.hasQuantity && quantity !== null) {
-					throw new Error(
-						"Item quantity cannot be saved until the Household schema is updated",
-					);
-				}
 				const now = nextItemServiceTimestamp();
+				const nowSql = timestampMillisToSqlText(now);
 				const id = createAppId("itm", randomUuid);
-				const writeResult = await deps.store.execute({
-					kind: "write",
-					sql: addItemSql(schema),
-					args: addItemArgs({
-						id,
-						listId: input.listId,
-						name,
-						quantity,
-						notes,
-						userId: input.userId,
-						now,
-						schema,
-					}),
-				});
-				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
+				const writeResult = await deps.store.writeTransaction((tx) =>
+					tx.execute(
+						`
+							INSERT INTO items (
+								id,
+								list_id,
+								name,
+								quantity,
+								notes,
+								position,
+								created_by_user_id,
+								created_at,
+								updated_at,
+								deleted_at
+							)
+							SELECT
+								?,
+								l.id,
+								?,
+								?,
+								?,
+								(
+									SELECT COALESCE(MAX(position), -1) + 1
+									FROM items
+									WHERE list_id = l.id AND deleted_at IS NULL
+								),
+								?,
+								?,
+								?,
+								NULL
+							FROM lists l
+							WHERE l.id = ?
+								AND l.household_id = ?
+								AND l.deleted_at IS NULL
+								AND l.archived_at IS NULL
+							RETURNING position
+						`,
+						[
+							id,
+							name,
+							quantity,
+							notes,
+							input.userId,
+							nowSql,
+							nowSql,
+							input.listId,
+							deps.householdId,
+						],
+					),
+				);
+				const row = writeResult.rows[0];
+				if (!row) {
 					throw new Error("List is not active");
 				}
-				const position = await insertedItemPosition(deps.store, id);
+				const position = sqlNumberSchema.parse(row.position);
 
 				const item = {
 					id,
 					householdId: deps.householdId,
 					listId: input.listId,
 					name,
-					quantity: schema.hasQuantity ? quantity : null,
+					quantity,
 					notes,
 					checked: false,
 					checkedByUserId: null,
@@ -195,34 +225,59 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		},
 		async setItemChecked(input) {
 			try {
-				const schema = await readItemsSchema(deps.store);
 				const now = nextItemServiceTimestamp();
-				// Sourcing the upsert from the guarded Item-and-List join makes the
-				// lifecycle check and the write one statement: a deleted Item, an Item
-				// outside the List, or a deleted/archived List (Home's active flow
-				// excludes both) all reject with rowsAffected = 0.
-				const writeResult = await deps.store.execute({
-					kind: "write",
-					sql: `
-            INSERT INTO item_checks (item_id, user_id, checked_at, updated_at)
-            SELECT i.id, ?, ?, ?
-            FROM items i
-            JOIN lists l ON l.id = i.list_id
-            WHERE i.id = ? AND i.list_id = ?
-              AND i.deleted_at IS NULL AND ${listActiveSql(schema)}
-            ON CONFLICT(item_id, user_id) DO UPDATE SET
-              checked_at = excluded.checked_at,
-              updated_at = excluded.updated_at
-					`,
-					args: [
-						input.userId,
-						input.checked ? now : null,
-						now,
-						input.itemId,
-						input.listId,
-					],
-				});
-				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
+				const nowSql = timestampMillisToSqlText(now);
+				const checkedAt = input.checked ? nowSql : null;
+				const writeResult = await deps.store.writeTransaction((tx) =>
+					tx.execute(
+						`
+							INSERT INTO item_checks (
+								id,
+								item_id,
+								checked_at,
+								checked_by_user_id,
+								updated_at
+							)
+							SELECT
+								COALESCE(
+									(
+										SELECT c.id
+										FROM item_checks c
+										WHERE c.item_id = i.id
+										ORDER BY c.updated_at DESC, c.id DESC
+										LIMIT 1
+									),
+									i.id
+								),
+								i.id,
+								?,
+								?,
+								?
+							FROM items i
+							JOIN lists l ON l.id = i.list_id
+							WHERE i.id = ?
+								AND i.list_id = ?
+								AND i.deleted_at IS NULL
+								AND l.household_id = ?
+								AND l.deleted_at IS NULL
+								AND l.archived_at IS NULL
+							ON CONFLICT(id) DO UPDATE SET
+								checked_at = excluded.checked_at,
+								checked_by_user_id = excluded.checked_by_user_id,
+								updated_at = excluded.updated_at
+							RETURNING id
+						`,
+						[
+							checkedAt,
+							input.userId,
+							nowSql,
+							input.itemId,
+							input.listId,
+							deps.householdId,
+						],
+					),
+				);
+				if (!writeResult.rows[0]) {
 					throw new Error("Item not found in List");
 				}
 				analytics.track("item_checked_state_changed", {
@@ -244,19 +299,6 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 	};
 }
 
-async function insertedItemPosition(
-	store: HouseholdStoreExecutor,
-	itemId: string,
-): Promise<number> {
-	const result = await store.execute({
-		kind: "read",
-		sql: "SELECT position FROM items WHERE id = ? LIMIT 1",
-		args: [itemId],
-	});
-	const value = result.rows[0]?.position;
-	return sqlNumberSchema.parse(value);
-}
-
 function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 	const parsed = itemRowSchema.parse(row);
 	const checked = parsed.checked_at !== null && parsed.checked_at !== undefined;
@@ -276,138 +318,6 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 		createdAt: parsed.created_at,
 		updatedAt: parsed.updated_at,
 	};
-}
-
-type ItemsSchema = {
-	hasQuantity: boolean;
-	hasListArchivedAt: boolean;
-};
-
-async function readItemsSchema(
-	store: HouseholdStoreExecutor,
-): Promise<ItemsSchema> {
-	const itemsResult = await store.execute({
-		kind: "read",
-		sql: "PRAGMA table_info(items)",
-	});
-	const listsResult = await store.execute({
-		kind: "read",
-		sql: "PRAGMA table_info(lists)",
-	});
-	const itemColumns = new Set(itemsResult.rows.map((row) => String(row.name)));
-	const listColumns = new Set(listsResult.rows.map((row) => String(row.name)));
-	return {
-		hasQuantity: itemColumns.has("quantity"),
-		hasListArchivedAt: listColumns.has("archived_at"),
-	};
-}
-
-// A previous local Household schema (before lists.archived_at existed) cannot
-// hold archived Lists, so the lifecycle guard narrows to the deleted check.
-function listActiveSql(schema: ItemsSchema): string {
-	return schema.hasListArchivedAt
-		? "l.deleted_at IS NULL AND l.archived_at IS NULL"
-		: "l.deleted_at IS NULL";
-}
-
-type AddItemSqlInput = {
-	id: string;
-	listId: string;
-	name: string;
-	quantity: string | null;
-	notes: string | null;
-	userId: string;
-	now: number;
-	schema: ItemsSchema;
-};
-
-// Selecting FROM the guarded lists row makes the insert and the List
-// lifecycle check one statement: a delete tombstone or archive flag synced in
-// after any pre-read cannot land an Item under a List that Home's active flow
-// excludes (rowsAffected = 0 rejects above).
-function addItemSql(schema: ItemsSchema): string {
-	return schema.hasQuantity
-		? `
-        INSERT INTO items (
-          id,
-          list_id,
-          name,
-          quantity,
-          notes,
-          position,
-          created_by_user_id,
-          created_at,
-          updated_at
-        )
-        SELECT
-          ?,
-          l.id,
-          ?,
-          ?,
-          ?,
-          (
-            SELECT COALESCE(MAX(position), -1) + 1
-            FROM items
-            WHERE list_id = l.id AND deleted_at IS NULL
-          ),
-          ?,
-          ?,
-          ?
-        FROM lists l
-        WHERE l.id = ? AND ${listActiveSql(schema)}
-      `
-		: `
-        INSERT INTO items (
-          id,
-          list_id,
-          name,
-          notes,
-          position,
-          created_by_user_id,
-          created_at,
-          updated_at
-        )
-        SELECT
-          ?,
-          l.id,
-          ?,
-          ?,
-          (
-            SELECT COALESCE(MAX(position), -1) + 1
-            FROM items
-            WHERE list_id = l.id AND deleted_at IS NULL
-          ),
-          ?,
-          ?,
-          ?
-        FROM lists l
-        WHERE l.id = ? AND ${listActiveSql(schema)}
-      `;
-}
-
-function addItemArgs(input: AddItemSqlInput) {
-	if (input.schema.hasQuantity) {
-		return [
-			input.id,
-			input.name,
-			input.quantity,
-			input.notes,
-			input.userId,
-			input.now,
-			input.now,
-			input.listId,
-		];
-	}
-
-	return [
-		input.id,
-		input.name,
-		input.notes,
-		input.userId,
-		input.now,
-		input.now,
-		input.listId,
-	];
 }
 
 function nullableTrimmed(value: string | null | undefined): string | null {

@@ -23,8 +23,6 @@ export type ActiveMembership = {
 	membershipRole: "owner" | "member";
 	householdId: string;
 	householdName: string;
-	householdTursoDbName: string;
-	householdProvisioningCompletedAt: number | null;
 };
 
 export type HouseholdMember = {
@@ -191,8 +189,6 @@ async function findOldestActiveMembership(
 			membershipRole: memberships.role,
 			householdId: households.id,
 			householdName: households.name,
-			householdTursoDbName: households.tursoDbName,
-			householdProvisioningCompletedAt: households.provisioningCompletedAt,
 		})
 		.from(memberships)
 		.innerJoin(households, eq(households.id, memberships.householdId))
@@ -219,8 +215,6 @@ async function findActiveMembership(
 			membershipRole: memberships.role,
 			householdId: households.id,
 			householdName: households.name,
-			householdTursoDbName: households.tursoDbName,
-			householdProvisioningCompletedAt: households.provisioningCompletedAt,
 		})
 		.from(memberships)
 		.innerJoin(households, eq(households.id, memberships.householdId))

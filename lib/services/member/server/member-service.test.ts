@@ -32,25 +32,19 @@ describe("createMemberService", () => {
 				{
 					id: "hh_newer",
 					name: "Newer",
-					tursoDbName: "db-newer",
 					createdByUserId: "usr_avery",
-					provisioningCompletedAt: 1,
 					createdAt: 1,
 				},
 				{
 					id: "hh_older",
 					name: "Older",
-					tursoDbName: "db-older",
 					createdByUserId: "usr_avery",
-					provisioningCompletedAt: 1,
 					createdAt: 1,
 				},
 				{
 					id: "hh_deleted",
 					name: "Deleted",
-					tursoDbName: "db-deleted",
 					createdByUserId: "usr_avery",
-					provisioningCompletedAt: 1,
 					createdAt: 1,
 					deletedAt: 99,
 				},
@@ -153,17 +147,13 @@ describe("createMemberService", () => {
 				{
 					id: "hh_active",
 					name: "Active",
-					tursoDbName: "db-active",
 					createdByUserId: "usr_avery",
-					provisioningCompletedAt: 1,
 					createdAt: 1,
 				},
 				{
 					id: "hh_removed",
 					name: "Removed",
-					tursoDbName: "db-removed",
 					createdByUserId: "usr_avery",
-					provisioningCompletedAt: 1,
 					createdAt: 1,
 				},
 			]);
@@ -224,9 +214,7 @@ describe("createMemberService", () => {
 			await directory.db.insert(households).values({
 				id: "hh_pending",
 				name: "Avery",
-				tursoDbName: "db-pending",
 				createdByUserId: "usr_avery",
-				provisioningCompletedAt: null,
 			});
 			const [user] = await directory.db.select().from(users);
 			if (!user) throw new Error("Expected test User");
@@ -274,9 +262,7 @@ describe("createMemberService", () => {
 			await directory.db.insert(households).values({
 				id: "hh_avery",
 				name: "Avery",
-				tursoDbName: "db-avery",
 				createdByUserId: "usr_avery",
-				provisioningCompletedAt: 1,
 				createdAt: 1,
 			});
 			await directory.db.insert(memberships).values({
@@ -688,9 +674,7 @@ async function seedMembers(
 	await directory.insert(households).values({
 		id: "hh_1",
 		name: "River House",
-		tursoDbName: "db-river",
 		createdByUserId: membershipRows[0]?.userId ?? "usr_owner",
-		provisioningCompletedAt: 1,
 		createdAt: 1,
 	});
 	await directory.insert(memberships).values(

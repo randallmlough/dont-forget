@@ -22,6 +22,7 @@ function HomeCurrentListResource({
 }: {
 	session: AuthenticatedAppSession;
 }) {
+	const syncStatus = session.services.sync;
 	const currentMemberName = homeSessionMemberName(session);
 	const list = useHomeCurrentList(session);
 	const loadState = list.state;
@@ -87,7 +88,7 @@ function HomeCurrentListResource({
 				currentMemberName={currentMemberName}
 				onAddItem={loadState.actions.addItem}
 				onSetItemChecked={loadState.actions.setItemChecked}
-				syncCoordinator={session.services.sync}
+				syncStatus={syncStatus}
 			>
 				<ActiveList.Screen>
 					<ActiveList.Header onPressListName={() => setSwitcherOpen(true)} />

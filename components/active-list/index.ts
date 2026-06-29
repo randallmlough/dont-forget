@@ -10,10 +10,8 @@ export type {
 	ActiveListItem,
 	ActiveListMeta,
 	ActiveListState,
-	ActiveListSyncCoordinator,
-	ActiveListSyncOptions,
-	ActiveListSyncResult,
 	ActiveListSyncState,
+	ActiveListSyncStatusSource,
 	AddActiveListItemDraft,
 	AddActiveListItemInput,
 } from "./types";

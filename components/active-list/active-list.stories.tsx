@@ -6,11 +6,10 @@ import { StyleSheet } from "react-native-unistyles";
 import { ActiveList, type ActiveListState } from "@/components/active-list";
 import {
 	createActiveListMemoryActions,
-	createPassiveActiveListSyncCoordinator,
+	createPassiveActiveListSyncStatus,
 	emptyActiveListState,
 	populatedActiveListState,
 } from "@/components/active-list/test-support";
-import type { Logger } from "@/lib/logger";
 
 const meta = {
 	title: "Active List",
@@ -37,7 +36,7 @@ function ActiveListStory({ initialState }: { initialState: ActiveListState }) {
 			checkedByMemberName: "Avery Chen",
 		}),
 	);
-	const [syncCoordinator] = useState(createPassiveActiveListSyncCoordinator);
+	const [syncStatus] = useState(createPassiveActiveListSyncStatus);
 
 	return (
 		<View style={styles.canvas}>
@@ -52,8 +51,7 @@ function ActiveListStory({ initialState }: { initialState: ActiveListState }) {
 					await actions.setItemChecked(itemId, checked);
 					setState(await actions.load());
 				}}
-				syncCoordinator={syncCoordinator}
-				logger={storybookLogger}
+				syncStatus={syncStatus}
 			>
 				<ActiveList.Screen>
 					<ActiveList.Header />
@@ -71,13 +69,3 @@ const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.background,
 	},
 }));
-
-const storybookLogger: Logger = {
-	debug() {},
-	info() {},
-	warn() {},
-	error() {},
-	with() {
-		return storybookLogger;
-	},
-};

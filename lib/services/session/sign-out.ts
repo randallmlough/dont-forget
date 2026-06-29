@@ -4,13 +4,12 @@ import { clearUserCurrentListSelections } from "@/lib/local-storage/current-list
 import type { Logger } from "@/lib/logger";
 import { logger as defaultLogger } from "@/lib/logger";
 import type { ServiceResetAnalytics } from "@/lib/services/analytics";
-import { clearSignedOutSessionData as defaultClearSignedOutSessionData } from "./cache";
 import type {
 	AuthenticatedAppSessionActivation,
 	AuthenticatedAppSessionController,
-	AuthenticatedAppSessionDisposal,
 	AuthenticatedAppSessionStateSnapshot,
 } from "./controller";
+import { clearAuthenticatedAppSessionAvailability } from "./session-hint";
 
 export type AuthenticatedAppSessionSignOutAuth =
 	AuthenticatedAppSessionActivation & {
@@ -32,7 +31,7 @@ export type AuthenticatedAppSessionSignOutDeps = {
 	controller: AuthenticatedAppSessionController;
 	getAuth: () => AuthenticatedAppSessionSignOutAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
-	clearSignedOutSessionData?: typeof defaultClearSignedOutSessionData;
+	clearAuthenticatedAppSessionAvailability?: typeof clearAuthenticatedAppSessionAvailability;
 	clearCurrentListSelectionsForUser?: (userId: string) => Promise<void>;
 	logger?: Logger;
 	runningState?: AuthenticatedAppSessionSignOutRunningState;
@@ -47,7 +46,8 @@ export function createAuthenticatedAppSessionSignOut({
 	controller,
 	getAuth,
 	analytics = defaultAnalytics,
-	clearSignedOutSessionData = defaultClearSignedOutSessionData,
+	clearAuthenticatedAppSessionAvailability:
+		clearAuthenticatedAppSessionAvailabilityProp = clearAuthenticatedAppSessionAvailability,
 	clearCurrentListSelectionsForUser = clearUserCurrentListSelections,
 	logger = defaultLogger,
 	runningState,
@@ -65,26 +65,16 @@ export function createAuthenticatedAppSessionSignOut({
 		analytics.track("user_signed_out", {});
 		analytics.reset();
 
-		let disposal: AuthenticatedAppSessionDisposal = {
-			householdIdsForLocalDataDeletion: [],
-		};
-		await controller
-			.dispose()
-			.then((nextDisposal) => {
-				disposal = nextDisposal;
-			})
-			.catch((error) => {
-				logger.error("authenticated app session sign-out dispose failed", {
-					error: asError(error),
-				});
+		await controller.dispose({ clearLocalData: true }).catch((error) => {
+			logger.error("authenticated app session sign-out dispose failed", {
+				error: asError(error),
 			});
+		});
 
 		try {
-			await clearSignedOutSessionData(
-				disposal.householdIdsForLocalDataDeletion,
-			);
+			await clearAuthenticatedAppSessionAvailabilityProp();
 		} catch (error) {
-			logger.error("authenticated app session sign-out local cleanup failed", {
+			logger.error("authenticated app session sign-out hint cleanup failed", {
 				error: asError(error),
 			});
 		}
@@ -108,6 +98,7 @@ export function createAuthenticatedAppSessionSignOut({
 				await controller
 					.activate({
 						getToken: auth.getToken,
+						getPowerSyncToken: auth.getPowerSyncToken,
 						authReady: auth.authReady,
 						signedIn: auth.signedIn,
 					})

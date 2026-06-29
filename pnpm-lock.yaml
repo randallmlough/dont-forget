@@ -33,9 +33,6 @@ importers:
       '@expo/ui':
         specifier: ~56.0.18
         version: 56.0.18(dcda28de73b2a54cb917854e2ff13bb9)
-      '@libsql/client':
-        specifier: ^0.17.3
-        version: 0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@op-engineering/op-sqlite':
         specifier: ^16.2.0
         version: 16.2.2(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)
@@ -72,9 +69,6 @@ importers:
       '@storybook/react-native':
         specifier: ^10.4.1
         version: 10.4.1(6c0adffacee5db0248dba92cb308708b)
-      '@tursodatabase/sync-react-native':
-        specifier: ^0.6.1
-        version: 0.6.1(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)
       babel-loader:
         specifier: ^8.4.1
         version: 8.4.1(@babel/core@7.29.0)(webpack@5.106.2(esbuild@0.28.1))
@@ -2371,13 +2365,6 @@ packages:
   '@tootallnate/once@2.0.1':
     resolution: {integrity: sha512-HqmEUIGRJ5fSXchkVgR5F7qn48bDBzv0kWj/Kfu5e6uci4UlEeng4331LnBkWffb++Ei3FOVLxo8JJWMFBDMeQ==}
     engines: {node: '>= 10'}
-
-  '@tursodatabase/sync-react-native@0.6.1':
-    resolution: {integrity: sha512-PaychaN3Y9Zacb/ogr5HbnmMfbiaACanjbOcRXeBaw1ot1fOGsiwNZ+TZj6HHb+xW/086wsKfZAZKAvyS1lzpQ==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      react: '>=18.0.0'
-      react-native: '>=0.76.0'
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -8724,10 +8711,12 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+    optional: true
 
   '@libsql/core@0.17.3':
     dependencies:
       js-base64: 3.7.8
+    optional: true
 
   '@libsql/darwin-arm64@0.5.29':
     optional: true
@@ -8742,6 +8731,7 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+    optional: true
 
   '@libsql/isomorphic-ws@0.1.5(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
     dependencies:
@@ -8750,6 +8740,7 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+    optional: true
 
   '@libsql/linux-arm-gnueabihf@0.5.29':
     optional: true
@@ -8779,7 +8770,8 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@neon-rs/load@0.0.4': {}
+  '@neon-rs/load@0.0.4':
+    optional: true
 
   '@noble/ciphers@1.3.0': {}
 
@@ -9702,12 +9694,6 @@ snapshots:
       tmcp: 1.19.3(typescript@6.0.3)
 
   '@tootallnate/once@2.0.1': {}
-
-  '@tursodatabase/sync-react-native@0.6.1(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)':
-    dependencies:
-      '@babel/runtime': 7.29.2
-      react: 19.2.3
-      react-native: 0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
@@ -10972,7 +10958,8 @@ snapshots:
 
   destroy@1.2.0: {}
 
-  detect-libc@2.0.2: {}
+  detect-libc@2.0.2:
+    optional: true
 
   detect-libc@2.1.2: {}
 
@@ -12869,6 +12856,7 @@ snapshots:
       '@libsql/linux-x64-gnu': 0.5.29
       '@libsql/linux-x64-musl': 0.5.29
       '@libsql/win32-x64-msvc': 0.5.29
+    optional: true
 
   lighthouse-logger@1.4.2:
     dependencies:
@@ -13595,7 +13583,8 @@ snapshots:
 
   progress@2.0.3: {}
 
-  promise-limit@2.7.0: {}
+  promise-limit@2.7.0:
+    optional: true
 
   promise@7.3.1:
     dependencies:

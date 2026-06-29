@@ -4,10 +4,6 @@ import { logger as defaultLogger } from "@/lib/logger";
 import type { ItemService } from "@/lib/services/item";
 import type { ListService } from "@/lib/services/list";
 import {
-	createDefaultSyncCoordinator,
-	type SyncCoordinator,
-} from "@/lib/services/sync";
-import {
 	type ActiveMember,
 	createSessionBootstrapService,
 	type GetSessionToken,
@@ -17,18 +13,11 @@ import {
 	type SessionUser,
 } from "./bootstrap";
 import {
-	type CachedSessionBootstrap,
-	createSessionCache,
-	type SessionCache,
-} from "./cache";
-import {
-	type CreateSessionDataServices,
-	type CreateSyncCoordinator,
-	createSessionResourceManager,
-	type OpenedSessionResource,
-	type SessionResourceBootstrap,
-} from "./resource-manager";
-import { createSessionDataServices } from "./services";
+	createSessionDataServices,
+	type SessionDataServices,
+	type SessionDataServicesConfig,
+} from "./services";
+import { markAuthenticatedAppSessionAvailable } from "./session-hint";
 
 export type AuthenticatedAppSessionStateSnapshot =
 	| { status: "idle" }
@@ -40,10 +29,7 @@ export type AuthenticatedAppSessionStateSnapshot =
 	| { status: "error"; message: string; previous?: AuthenticatedAppSession }
 	| { status: "ready"; session: AuthenticatedAppSession };
 
-export type AuthenticatedAppSessionSync = Pick<
-	SyncCoordinator,
-	"getStatus" | "subscribe" | "requestSync"
->;
+export type AuthenticatedAppSessionSync = SessionDataServices["sync"];
 
 export type AuthenticatedAppSessionServices = {
 	lists: ListService;
@@ -69,6 +55,7 @@ export type AuthenticatedAppSession = {
 
 export type AuthenticatedAppSessionActivation = {
 	getToken: GetSessionToken;
+	getPowerSyncToken?: GetSessionToken;
 	authReady: boolean;
 	signedIn: boolean;
 	cachePolicy?: AuthenticatedAppSessionCachePolicy;
@@ -86,16 +73,9 @@ type ActivationRunGuard = {
 	isCurrent: () => boolean;
 };
 
-type CachedActivationAttempt = {
-	promise: Promise<boolean>;
-	invalidateHousehold: (cached: CachedSessionBootstrap) => void;
-	markFreshPublished: () => void;
-	throwDiscardCloseError: () => void;
-};
-
 export type AuthenticatedAppSessionController = {
 	activate: (activation: AuthenticatedAppSessionActivation) => Promise<void>;
-	dispose: () => Promise<AuthenticatedAppSessionDisposal>;
+	dispose: (options?: { clearLocalData?: boolean }) => Promise<void>;
 	getSnapshot: () => AuthenticatedAppSessionStateSnapshot;
 	invalidateCurrentSession: () => Promise<void>;
 	subscribe: (subscriber: AuthenticatedAppSessionSubscriber) => {
@@ -103,15 +83,13 @@ export type AuthenticatedAppSessionController = {
 	};
 };
 
-export type AuthenticatedAppSessionDisposal = {
-	householdIdsForLocalDataDeletion: string[];
-};
+export type CreateSessionDataServices = (
+	config: SessionDataServicesConfig,
+) => Promise<SessionDataServices>;
 
 export type AuthenticatedAppSessionControllerDeps = {
 	bootstrap?: SessionBootstrapService;
-	cache?: SessionCache;
 	createDataServices?: CreateSessionDataServices;
-	createSyncCoordinator?: CreateSyncCoordinator;
 	logger?: Logger;
 };
 
@@ -122,67 +100,20 @@ export function createAuthenticatedAppSessionController(
 	deps: AuthenticatedAppSessionControllerDeps = {},
 ): AuthenticatedAppSessionController {
 	const bootstrap = deps.bootstrap ?? createSessionBootstrapService();
-	const cache = deps.cache ?? createSessionCache();
 	const createDataServices =
 		deps.createDataServices ?? createSessionDataServices;
-	const createSyncCoordinator =
-		deps.createSyncCoordinator ?? createDefaultSyncCoordinator;
 	const logger = deps.logger ?? defaultLogger;
 	const subscribers = new Set<AuthenticatedAppSessionSubscriber>();
 	let snapshot: AuthenticatedAppSessionStateSnapshot = { status: "idle" };
 	let activationRun = 0;
-	let cacheWriteQueue: Promise<void> = Promise.resolve();
-	const resources = createSessionResourceManager({
-		createDataServices,
-		createSyncCoordinator,
-		logger,
-	});
+	let activeServices: SessionDataServices | null = null;
+	let nextResourceVersion = 1;
 
 	function publish(nextSnapshot: AuthenticatedAppSessionStateSnapshot) {
 		snapshot = nextSnapshot;
 		for (const subscriber of subscribers) {
 			subscriber(nextSnapshot);
 		}
-	}
-
-	function saveFreshSession(session: SessionBootstrap) {
-		const write = cacheWriteQueue
-			.catch(() => undefined)
-			.then(async () => {
-				await cache.save(session).catch(() => undefined);
-			});
-		cacheWriteQueue = write;
-	}
-
-	async function drainCacheWrites() {
-		await cacheWriteQueue.catch(() => undefined);
-	}
-
-	async function publishOpened(
-		opened: OpenedSessionResource,
-		session: SessionResourceBootstrap,
-		run: number,
-		options: {
-			startSync: boolean;
-			shouldPublish?: () => boolean;
-			onPublished?: () => void;
-			onDiscardCloseError?: (error: unknown) => void;
-		},
-	): Promise<boolean> {
-		return resources.publishOpenedResource(opened, session, {
-			startSync: options.startSync,
-			shouldPublish: () =>
-				run === activationRun && options.shouldPublish?.() !== false,
-			publish: (published) => {
-				const appSession = authenticatedAppSessionFromOpened(
-					published,
-					session,
-				);
-				publish({ status: "ready", session: appSession });
-			},
-			onPublished: options.onPublished,
-			onDiscardCloseError: options.onDiscardCloseError,
-		});
 	}
 
 	function startActivationRun(): ActivationRunGuard {
@@ -205,220 +136,95 @@ export function createAuthenticatedAppSessionController(
 		);
 	}
 
-	function publishLoadingFromCurrentSession() {
-		const previousSession = previousSessionFromSnapshot(snapshot);
-		if (previousSession) {
-			publishLoading(previousSession);
+	async function closeActiveServices(options?: { clearLocalData?: boolean }) {
+		const services = activeServices;
+		activeServices = null;
+		if (services) {
+			await services.close(options);
 		}
 	}
 
-	function startCachedActivationAttempt(
-		run: ActivationRunGuard,
-	): CachedActivationAttempt {
-		const invalidatedHouseholdIds = new Set<string>();
-		let freshPublished = false;
-		let discardCloseError: unknown = null;
-
-		return {
-			promise: (async (): Promise<boolean> => {
-				const cached = await cache.read().catch(() => null);
-				if (
-					!cached ||
-					!run.isCurrent() ||
-					invalidatedHouseholdIds.has(cached.activeHousehold.id)
-				) {
-					return false;
-				}
-
-				try {
-					const opened = await resources.openSessionResource(cached);
-					return await publishOpened(opened, cached, run.id, {
-						startSync: false,
-						shouldPublish: () =>
-							!freshPublished &&
-							!invalidatedHouseholdIds.has(cached.activeHousehold.id),
-						onDiscardCloseError: (error) => {
-							discardCloseError = error;
-						},
-					});
-				} catch {
-					return false;
-				}
-			})(),
-			invalidateHousehold(cached) {
-				invalidatedHouseholdIds.add(cached.activeHousehold.id);
-			},
-			markFreshPublished() {
-				freshPublished = true;
-			},
-			throwDiscardCloseError() {
-				if (discardCloseError) throw discardCloseError;
-			},
-		};
-	}
-
-	function noCachedActivationAttempt(): CachedActivationAttempt {
-		return {
-			promise: Promise.resolve(false),
-			invalidateHousehold() {},
-			markFreshPublished() {},
-			throwDiscardCloseError() {},
-		};
-	}
-
-	function cachedActivationAttemptForPolicy(
-		cachePolicy: AuthenticatedAppSessionCachePolicy,
-		run: ActivationRunGuard,
-	): CachedActivationAttempt {
-		if (cachePolicy === "freshOnly") return noCachedActivationAttempt();
-		return startCachedActivationAttempt(run);
-	}
-
 	async function handleSignedOutActivation(run: ActivationRunGuard) {
-		await Promise.allSettled([
-			drainCacheWrites(),
-			resources.closeOpeningResources(),
-			resources.closeActiveResource(),
-		]).then((results) => {
-			for (const result of results) {
-				if (result.status === "rejected") {
-					logger.error("authenticated app session resource close failed", {
-						error: asError(result.reason),
-					});
-				}
-			}
+		await closeActiveServices().catch((error) => {
+			logger.error("authenticated app session resource close failed", {
+				error: asError(error),
+			});
 		});
 		if (run.isCurrent()) publish({ status: "idle" });
 	}
 
-	async function loadFreshSessionForRun(
-		run: ActivationRunGuard,
-		getToken: GetSessionToken,
-	): Promise<SessionBootstrap | null> {
-		const session = await bootstrap.getSession(getToken);
-		return run.isCurrent() ? session : null;
-	}
-
-	async function invalidateUnauthorizedCachedSessionForFreshRun(
-		freshSession: SessionBootstrap,
-		run: ActivationRunGuard,
-		cachedAttempt: CachedActivationAttempt,
-	): Promise<boolean> {
-		const cached = await cache.readUnauthorized(freshSession);
-		if (!cached || !run.isCurrent()) return false;
-
-		cachedAttempt.invalidateHousehold(cached);
-		publish({ status: "loading" });
-		await resources.closeUnauthorizedCachedResource(cached);
-		await cachedAttempt.promise;
-		cachedAttempt.throwDiscardCloseError();
-		if (!run.isCurrent()) return true;
-
-		await cache.deleteLocalData(cached, freshSession);
-		if (!run.isCurrent()) return true;
-
-		await cache.clearUnauthorizedMetadata(cached, freshSession);
-		return true;
-	}
-
 	async function publishFreshSessionForRun(
 		session: SessionBootstrap,
+		activation: AuthenticatedAppSessionActivation,
 		run: ActivationRunGuard,
-		cachedAttempt: CachedActivationAttempt,
-	) {
-		publishLoadingFromCurrentSession();
-		const opened = await resources.openSessionResource(session);
+	): Promise<void> {
+		const householdLogger = logger.with({
+			household_id: session.activeHousehold.id,
+		});
+		let openedServices: SessionDataServices | null = await createDataServices({
+			householdId: session.activeHousehold.id,
+			userId: session.user.id,
+			getSessionToken: activation.getToken,
+			getPowerSyncToken: activation.getPowerSyncToken ?? activation.getToken,
+			logger: householdLogger,
+		});
+
 		if (!run.isCurrent()) {
-			await publishOpened(opened, session, run.id, {
-				startSync: false,
-				shouldPublish: () => false,
-			});
+			await openedServices.close().catch(() => undefined);
 			return;
 		}
 
-		await publishOpened(opened, session, run.id, {
-			startSync: true,
-			onPublished: () => {
-				saveFreshSession(session);
-				cachedAttempt.markFreshPublished();
-			},
-		});
+		const previousServices = activeServices;
+		const publishedServices = openedServices;
+		activeServices = publishedServices;
+		openedServices = null;
+
+		const appSession = authenticatedAppSessionFromBootstrap(
+			session,
+			publishedServices,
+			`authenticated-app-session:${nextResourceVersion}`,
+		);
+		nextResourceVersion += 1;
+		publish({ status: "ready", session: appSession });
+		void markAuthenticatedAppSessionAvailable().catch(() => undefined);
+
+		if (previousServices && previousServices !== activeServices) {
+			await previousServices.close();
+		}
 	}
 
 	async function handleSignedInActivation(
 		activation: AuthenticatedAppSessionActivation,
 		run: ActivationRunGuard,
-		cachedAttempt: CachedActivationAttempt,
 		cachePolicy: AuthenticatedAppSessionCachePolicy,
 	) {
-		let invalidatedUnauthorizedCached = false;
-		let attemptedFreshSession: SessionBootstrap | null = null;
 		try {
-			const session = await loadFreshSessionForRun(run, activation.getToken);
-			if (!session) return;
-			attemptedFreshSession = session;
-			invalidatedUnauthorizedCached =
-				await invalidateUnauthorizedCachedSessionForFreshRun(
-					session,
-					run,
-					cachedAttempt,
-				);
+			const session = await bootstrap.getSession(activation.getToken);
 			if (!run.isCurrent()) return;
-			await publishFreshSessionForRun(session, run, cachedAttempt);
+			await publishFreshSessionForRun(session, activation, run);
 		} catch (error) {
-			await recoverActivationFailure(error, run, cachedAttempt, {
-				invalidatedUnauthorizedCached,
-				attemptedFreshSession,
-				cachePolicy,
-			});
+			await recoverActivationFailure(error, run, cachePolicy);
 		}
 	}
 
 	async function recoverActivationFailure(
 		error: unknown,
 		run: ActivationRunGuard,
-		cachedAttempt: CachedActivationAttempt,
-		options: {
-			invalidatedUnauthorizedCached: boolean;
-			attemptedFreshSession: SessionBootstrap | null;
-			cachePolicy: AuthenticatedAppSessionCachePolicy;
-		},
+		cachePolicy: AuthenticatedAppSessionCachePolicy,
 	) {
 		logger.error("authenticated app session activation failed", {
 			error: asError(error),
 		});
+		if (!run.isCurrent()) return;
 
-		const publishedCached = await cachedAttempt.promise;
-		if (publishedCached && run.isCurrent()) {
-			const previousSession = previousSessionFromSnapshot(snapshot);
-			if (
-				previousSession &&
-				!options.invalidatedUnauthorizedCached &&
-				sessionMatchesAttemptedActiveHousehold(
-					previousSession,
-					options.attemptedFreshSession,
-				)
-			) {
-				publish({ status: "ready", session: previousSession });
-			} else {
-				publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
-			}
-		} else if (!publishedCached && run.isCurrent()) {
-			const previousSession = previousSessionFromSnapshot(snapshot);
-			if (
-				canRecoverFromPreviousSession(options.cachePolicy) &&
-				previousSession &&
-				sessionMatchesAttemptedActiveHousehold(
-					previousSession,
-					options.attemptedFreshSession,
-				)
-			) {
-				publish({ status: "ready", session: previousSession });
-				return;
-			}
-			await resources.closeActiveResource().catch(() => undefined);
-			publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
+		const previousSession = previousSessionFromSnapshot(snapshot);
+		if (cachePolicy === "allowCached" && previousSession) {
+			publish({ status: "ready", session: previousSession });
+			return;
 		}
+
+		await closeActiveServices().catch(() => undefined);
+		publish({ status: "error", message: GENERIC_ERROR_MESSAGE });
 	}
 
 	return {
@@ -434,55 +240,27 @@ export function createAuthenticatedAppSessionController(
 
 			publishLoading(previousSessionForActivation(cachePolicy, snapshot));
 
-			const cachedAttempt = cachedActivationAttemptForPolicy(cachePolicy, run);
 			if (authState === "unknown") {
-				await cachedAttempt.promise;
 				return;
 			}
 
-			await handleSignedInActivation(
-				activation,
-				run,
-				cachedAttempt,
-				cachePolicy,
-			);
+			await handleSignedInActivation(activation, run, cachePolicy);
 		},
 
 		async invalidateCurrentSession() {
 			activationRun += 1;
 			publish({ status: "loading" });
-			const results = await Promise.allSettled([
-				resources.closeOpeningResources(),
-				resources.closeActiveResource(),
-			]);
-			for (const result of results) {
-				if (result.status === "rejected") {
-					logger.error("authenticated app session resource close failed", {
-						error: asError(result.reason),
-					});
-				}
-			}
+			await closeActiveServices().catch((error) => {
+				logger.error("authenticated app session resource close failed", {
+					error: asError(error),
+				});
+			});
 		},
 
-		async dispose() {
-			const disposal = {
-				householdIdsForLocalDataDeletion: resources.getHouseholdIds(),
-			};
+		async dispose(options) {
 			activationRun += 1;
 			publish({ status: "idle" });
-			const results = await Promise.allSettled([
-				drainCacheWrites(),
-				resources.closeOpeningResources(),
-				resources.closeActiveResource(),
-			]);
-			const rejected = results.find(
-				(result): result is PromiseRejectedResult =>
-					result.status === "rejected",
-			);
-			if (rejected) {
-				throw rejected.reason;
-			}
-			return disposal;
+			await closeActiveServices(options);
 		},
 
 		getSnapshot() {
@@ -518,12 +296,6 @@ function previousSessionForActivation(
 	return previousSessionFromSnapshot(snapshot);
 }
 
-function canRecoverFromPreviousSession(
-	cachePolicy: AuthenticatedAppSessionCachePolicy,
-): boolean {
-	return cachePolicy === "allowCached";
-}
-
 function authenticatedAppSessionAuthStateFromActivation(
 	activation: AuthenticatedAppSessionActivation,
 ): AuthenticatedAppSessionAuthState {
@@ -531,30 +303,10 @@ function authenticatedAppSessionAuthStateFromActivation(
 	return activation.signedIn ? "signedIn" : "signedOut";
 }
 
-function sessionMatchesAttemptedActiveHousehold(
-	previousSession: AuthenticatedAppSession,
-	attemptedFreshSession: SessionBootstrap | null,
-): boolean {
-	return (
-		!attemptedFreshSession ||
-		previousSession.activeHousehold.id ===
-			attemptedFreshSession.activeHousehold.id
-	);
-}
-
-function syncHandleFromCoordinator(
-	syncCoordinator: SyncCoordinator,
-): AuthenticatedAppSessionSync {
-	return {
-		getStatus: syncCoordinator.getStatus,
-		subscribe: syncCoordinator.subscribe,
-		requestSync: syncCoordinator.requestSync,
-	};
-}
-
-function authenticatedAppSessionFromOpened(
-	opened: OpenedSessionResource,
-	session: SessionResourceBootstrap,
+function authenticatedAppSessionFromBootstrap(
+	session: SessionBootstrap,
+	services: SessionDataServices,
+	resourceKey: string,
 ): AuthenticatedAppSession {
 	return {
 		user: session.user,
@@ -562,12 +314,12 @@ function authenticatedAppSessionFromOpened(
 		households: session.households,
 		activeMember: session.activeMember,
 		members: session.members,
-		resourceKey: opened.resourceKey,
+		resourceKey,
 		services: {
-			lists: opened.resource.lists,
-			items: opened.resource.items,
-			changes: opened.resource.changes,
-			sync: syncHandleFromCoordinator(opened.resource.syncCoordinator),
+			lists: services.lists,
+			items: services.items,
+			changes: services.changes,
+			sync: services.sync,
 		},
 	};
 }

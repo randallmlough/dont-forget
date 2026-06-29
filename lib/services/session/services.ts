@@ -1,35 +1,34 @@
-import { ensureHouseholdSchemaReady } from "@/db/household-schema";
-import {
-	type HouseholdDatabaseConfig,
-	type HouseholdStore,
-	type HouseholdStoreExecutor,
-	type OpenHouseholdStoreConfig,
-	openHouseholdStore,
-} from "@/db/household-store";
+import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 import { asError } from "@/lib/errors";
 import type { Logger } from "@/lib/logger";
+import {
+	type PowerSyncAppDatabase,
+	PowerSyncConnector,
+	type ProductSyncStatus,
+	powerSyncAppDatabase,
+	readPowerSyncUrl,
+} from "@/lib/powersync";
 import { createItemService, type ItemService } from "@/lib/services/item";
 import { createListService, type ListService } from "@/lib/services/list";
-import type { SyncOptions, SyncResult } from "@/lib/services/sync";
 
-type SessionStore = HouseholdStoreExecutor & {
-	syncAuthorized?: boolean;
-	subscribeToChanges: HouseholdStore["subscribeToChanges"];
-	push?: () => Promise<void>;
-	sync?: () => Promise<SyncResult>;
-	close: () => void | Promise<void>;
+export type SessionSyncStatusSource = {
+	getStatus: () => ProductSyncStatus;
+	subscribe: (listener: () => void) => { remove: () => void };
 };
 
 export type SessionDataServicesConfig = {
 	householdId: string;
 	userId: string;
-	database: HouseholdDatabaseConfig;
+	getSessionToken: () => Promise<string | null>;
+	getPowerSyncToken: () => Promise<string | null>;
 	logger: Logger;
 };
 
 export type SessionDataServicesOptions = {
-	store?: SessionStore;
-	openStore?: (config: OpenHouseholdStoreConfig) => Promise<SessionStore>;
+	database?: PowerSyncAppDatabase;
+	createConnector?: typeof createPowerSyncConnector;
+	apiBaseUrl?: () => string;
+	powerSyncUrl?: () => string;
 };
 
 export type SessionDataServices = {
@@ -38,75 +37,57 @@ export type SessionDataServices = {
 	changes: {
 		subscribe: (listener: () => void) => { remove: () => void };
 	};
-	syncAuthorized: boolean;
-	sync: (options?: SyncOptions) => Promise<SyncResult>;
-	close: () => Promise<void>;
+	sync: SessionSyncStatusSource;
+	close: (options?: { clearLocalData?: boolean }) => Promise<void>;
 };
 
 export async function createSessionDataServices(
 	config: SessionDataServicesConfig,
 	options: SessionDataServicesOptions = {},
 ): Promise<SessionDataServices> {
-	const store =
-		options.store ??
-		(await (options.openStore ?? openHouseholdStore)({
-			householdId: config.householdId,
-			database: config.database,
-		}));
-	const ownsStore = !options.store;
+	const database = options.database ?? powerSyncAppDatabase;
 	const log = config.logger.with({
 		feature: "authenticated_app_session_services",
 	});
-	const syncAuthorized = Boolean(
-		store.syncAuthorized && store.push && store.sync,
-	);
-	// The gate intentionally runs before the session resource is published and
-	// before the Sync Coordinator exists (resource-manager starts it after
-	// publish), so it syncs through the store directly; the store's operation
-	// queue serializes it against everything that follows.
-	if (syncAuthorized && store.sync) {
-		const storeSync = store.sync;
-		await ensureHouseholdSchemaReady({
-			store,
-			sync: () => storeSync(),
-			logger: log,
-		});
-	}
+	const connector = (options.createConnector ?? createPowerSyncConnector)({
+		getPowerSyncToken: config.getPowerSyncToken,
+		getSessionToken: config.getSessionToken,
+		apiBaseUrl: options.apiBaseUrl ?? readApiBaseUrl,
+		powerSyncUrl: options.powerSyncUrl ?? readPowerSyncUrl,
+	});
+
+	await database.connect(connector);
+
 	let closed = false;
 	const lists = createListService({
 		householdId: config.householdId,
 		userId: config.userId,
-		store,
+		store: database,
 		logger: log,
 	});
 	const items = createItemService({
 		householdId: config.householdId,
-		store,
+		store: database,
 		logger: log,
 	});
 
 	return {
 		lists,
 		items,
-		changes: {
-			subscribe: (listener) => store.subscribeToChanges(listener),
+		changes: database.changes,
+		sync: {
+			getStatus: () => database.getStatus(),
+			subscribe: (listener) => database.subscribeStatus(listener),
 		},
-		syncAuthorized,
-		async sync(syncOptions?: SyncOptions) {
-			if (!syncAuthorized) return { changed: false };
-
-			if (syncOptions?.mode === "pushLocalOnly") {
-				await store.push?.();
-				return { changed: false };
-			}
-
-			return store.sync ? store.sync() : { changed: false };
-		},
-		async close() {
-			if (!ownsStore || closed) return;
+		async close(options) {
+			if (closed) return;
 			closed = true;
 			try {
-				await store.close();
+				if (options?.clearLocalData) {
+					await database.disconnectAndClear();
+					return;
+				}
+				await database.disconnect();
 			} catch (error) {
 				log.error("authenticated app session data store close failed", {
 					error: asError(error),
@@ -115,4 +96,18 @@ export async function createSessionDataServices(
 			}
 		},
 	};
+}
+
+function createPowerSyncConnector(input: {
+	getPowerSyncToken: () => Promise<string | null>;
+	getSessionToken: () => Promise<string | null>;
+	apiBaseUrl: () => string;
+	powerSyncUrl: () => string;
+}): PowerSyncConnector {
+	return new PowerSyncConnector({
+		powersyncGetToken: input.getPowerSyncToken,
+		sessionGetToken: input.getSessionToken,
+		apiBaseUrl: input.apiBaseUrl,
+		powersyncUrl: input.powerSyncUrl(),
+	});
 }

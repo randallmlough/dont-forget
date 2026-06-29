@@ -24,11 +24,11 @@ ruleTester.run("no-db-server-imports", rule, {
 		},
 		{
 			filename: "/repo/scripts/seed.ts",
-			code: `import { householdClient } from "@/db/server/client";`,
+			code: `import { directoryClient } from "@/db/server/client";`,
 		},
 		{
 			filename: "/repo/lib/services/session/services.test.ts",
-			code: `import { createTestHouseholdDb } from "@/db/server/test";`,
+			code: `import { createTestDirectoryDb } from "@/db/server/test";`,
 		},
 		{
 			filename: "/repo/app/api/bootstrap+api.ts",
@@ -36,7 +36,7 @@ ruleTester.run("no-db-server-imports", rule, {
 		},
 		{
 			filename: "/repo/lib/services/item/item-service.ts",
-			code: `import { openHouseholdStore } from "@/db/household-store";`,
+			code: `import { sqlNumberSchema } from "@/db/utils";`,
 		},
 		{
 			filename: "/repo/lib/services/list/list-service.ts",
@@ -46,7 +46,7 @@ ruleTester.run("no-db-server-imports", rule, {
 	invalid: [
 		{
 			filename: "/repo/lib/services/item/item-service.ts",
-			code: `import { householdDb } from "@/db/server/client";`,
+			code: `import { directoryDb } from "@/db/server/client";`,
 			errors: [{ messageId: "serverOnly" }],
 		},
 		{
@@ -55,8 +55,8 @@ ruleTester.run("no-db-server-imports", rule, {
 			errors: [{ messageId: "serverOnly" }],
 		},
 		{
-			filename: "/repo/db/household-store.ts",
-			code: `import { householdDb } from "./server/client";`,
+			filename: "/repo/lib/powersync/database.ts",
+			code: `import { directoryDb } from "@/db/server/client";`,
 			errors: [{ messageId: "serverOnly" }],
 		},
 		{

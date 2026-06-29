@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import { type Dispatch, useMemo, useReducer } from "react";
+import { useMemo, useReducer } from "react";
 import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
 import { track } from "@/lib/analytics";
 import {
@@ -64,14 +64,6 @@ export function useHouseholdSwitch(
 			type: "operationStarted",
 			operation: { status: "switchingHousehold", householdId },
 		});
-		const synced = await syncCurrentHousehold(
-			session,
-			"Unable to sync this Household before switching. Try again.",
-			dispatch,
-		);
-		if (!synced) {
-			return;
-		}
 
 		try {
 			await client.switchHousehold(householdId);
@@ -87,14 +79,6 @@ export function useHouseholdSwitch(
 			type: "operationStarted",
 			operation: { status: "creatingHousehold" },
 		});
-		const synced = await syncCurrentHousehold(
-			session,
-			"Unable to sync this Household before creating a new Household. Try again.",
-			dispatch,
-		);
-		if (!synced) {
-			return;
-		}
 
 		try {
 			const household = await client.createHousehold({
@@ -122,14 +106,6 @@ export function useHouseholdSwitch(
 			type: "operationStarted",
 			operation: { status: "joiningByCode" },
 		});
-		const synced = await syncCurrentHousehold(
-			session,
-			"Unable to sync this Household before joining. Try again.",
-			dispatch,
-		);
-		if (!synced) {
-			return;
-		}
 
 		try {
 			await client.joinByCode(code);
@@ -166,23 +142,6 @@ function reducer(
 
 function operationInProgress(operation: HouseholdSwitchOperation): boolean {
 	return operation.status !== "idle";
-}
-
-async function syncCurrentHousehold(
-	session: AuthenticatedAppSession,
-	failureNotice: string,
-	dispatch: Dispatch<Action>,
-): Promise<boolean> {
-	try {
-		const syncResult = await session.services.sync.requestSync({
-			reason: "manualRefresh",
-		});
-		if (syncResult) return true;
-	} catch {
-		// User-facing notice below covers sync start and sync failure cases.
-	}
-	dispatch({ type: "notice", notice: failureNotice });
-	return false;
 }
 
 function messageFromError(error: unknown): string {

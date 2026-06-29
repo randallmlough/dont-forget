@@ -1,15 +1,16 @@
 import { eq } from "drizzle-orm";
-import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
 	invitations,
+	itemChecks,
+	items,
+	lists,
 	memberships,
 	users,
 } from "@/db/schema/postgres";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
-import { DEFAULT_LIST_ID } from "@/lib/bootstrap";
+import { createTestDirectoryDb } from "@/db/server/test";
 import {
 	householdFixture,
 	householdJoinCodeFixture,
@@ -23,6 +24,8 @@ import {
 	seedPrimaryHouseholdScenario,
 	userFixture,
 } from "./index";
+
+const SEED_DEFAULT_LIST_ID = "lst_default_groceries";
 
 describe("database fixture scenarios", () => {
 	it("inserts Household Join Code builder rows into a migrated directory DB", async () => {
@@ -73,12 +76,10 @@ describe("database fixture scenarios", () => {
 
 	it("seeds a primary Household with active User selection and a Household Join Code", async () => {
 		const directory = await createTestDirectoryDb();
-		const household = await createTestHouseholdDb();
 
 		try {
 			const scenario = await seedPrimaryHouseholdScenario({
 				directory: directory.db,
-				household: household.db,
 			});
 
 			expect(scenario.users.avery.activeHouseholdId).toBe(
@@ -94,22 +95,19 @@ describe("database fixture scenarios", () => {
 				}),
 			]);
 		} finally {
-			await household.close();
 			await directory.close();
 		}
 	});
 
 	it("seeds multiple active Lists plus one archived and one deleted List", async () => {
 		const directory = await createTestDirectoryDb();
-		const household = await createTestHouseholdDb();
 
 		try {
 			const scenario = await seedPrimaryHouseholdScenario({
 				directory: directory.db,
-				household: household.db,
 			});
 
-			const rows = await household.db.select().from(lists);
+			const rows = await directory.db.select().from(lists);
 			const active = rows.filter(
 				(row) => row.archivedAt === null && row.deletedAt === null,
 			);
@@ -118,7 +116,7 @@ describe("database fixture scenarios", () => {
 			);
 			const deleted = rows.filter((row) => row.deletedAt !== null);
 
-			expect(scenario.lists.groceries.id).toBe(DEFAULT_LIST_ID);
+			expect(scenario.lists.groceries.id).toBe(SEED_DEFAULT_LIST_ID);
 			expect(rows).toHaveLength(5);
 			expect(active).toHaveLength(3);
 			expect(active.map((row) => row.id).sort()).toEqual(
@@ -132,7 +130,7 @@ describe("database fixture scenarios", () => {
 				expect.objectContaining({
 					id: scenario.lists.archived.id,
 					name: scenario.lists.archived.name,
-					archivedAt: expect.any(Number),
+					archivedAt: expect.any(Date),
 					deletedAt: null,
 				}),
 			]);
@@ -140,23 +138,20 @@ describe("database fixture scenarios", () => {
 				expect.objectContaining({
 					id: scenario.lists.deleted.id,
 					archivedAt: null,
-					deletedAt: expect.any(Number),
+					deletedAt: expect.any(Date),
 				}),
 			]);
 		} finally {
-			await household.close();
 			await directory.close();
 		}
 	});
 
 	it("seeds an email-backed primary Household with three Members and rich Items", async () => {
 		const directory = await createTestDirectoryDb();
-		const household = await createTestHouseholdDb();
 
 		try {
 			const scenario = await seedEmailBackedPrimaryHouseholdScenario({
 				directory: directory.db,
-				household: household.db,
 				ownerClerkUserId: "user_clerk_owner",
 				ownerEmail: "owner@example.com",
 				memberClerkUserId: "user_clerk_member",
@@ -167,9 +162,9 @@ describe("database fixture scenarios", () => {
 			const directoryMemberships = await directory.db
 				.select()
 				.from(memberships);
-			const listRows = await household.db.select().from(lists);
-			const itemRows = await household.db.select().from(items);
-			const itemCheckRows = await household.db.select().from(itemChecks);
+			const listRows = await directory.db.select().from(lists);
+			const itemRows = await directory.db.select().from(items);
+			const itemCheckRows = await directory.db.select().from(itemChecks);
 
 			const membershipFor = (userId: string) => {
 				const membership = directoryMemberships.find(
@@ -243,31 +238,29 @@ describe("database fixture scenarios", () => {
 				itemRows.filter((item) => item.listId === deletedLists[0]?.id),
 			).toHaveLength(0);
 			expect(
-				itemCheckRows.some((row) => row.userId === scenario.users.avery.id),
+				itemCheckRows.some(
+					(row) => row.checkedByUserId === scenario.users.avery.id,
+				),
 			).toBe(true);
 			expect(
-				itemCheckRows.some((row) => row.userId === scenario.users.blake.id),
+				itemCheckRows.some(
+					(row) => row.checkedByUserId === scenario.users.blake.id,
+				),
 			).toBe(true);
 		} finally {
-			await household.close();
 			await directory.close();
 		}
 	});
 
 	it("seeds an email-backed primary Household alongside existing deterministic seed rows", async () => {
 		const directory = await createTestDirectoryDb();
-		const deterministicHousehold = await createTestHouseholdDb();
-		const emailHousehold = await createTestHouseholdDb();
 
 		try {
 			await seedPrimaryHouseholdScenario({
 				directory: directory.db,
-				household: deterministicHousehold.db,
 			});
 			const scenario = await seedEmailBackedPrimaryHouseholdScenario({
 				directory: directory.db,
-				household: emailHousehold.db,
-				householdTursoDbName: "df-local-hh-seed-email-test",
 				ownerClerkUserId: "user_email_owner",
 				ownerEmail: "owner@example.com",
 				memberClerkUserId: "user_email_member",
@@ -296,32 +289,30 @@ describe("database fixture scenarios", () => {
 					}),
 					expect.objectContaining({
 						id: scenario.household.id,
-						tursoDbName: "df-local-hh-seed-email-test",
 					}),
 				]),
 			);
 			expect(await directory.db.select().from(memberships)).toHaveLength(5);
-			expect(await deterministicHousehold.db.select().from(lists)).toHaveLength(
-				5,
-			);
-			expect(await emailHousehold.db.select().from(lists)).toHaveLength(5);
+			const listRows = await directory.db.select().from(lists);
+			expect(
+				listRows.filter(
+					(row) => row.householdId === PRIMARY_HOUSEHOLD_SEED.household.id,
+				),
+			).toHaveLength(5);
+			expect(
+				listRows.filter((row) => row.householdId === scenario.household.id),
+			).toHaveLength(5);
 		} finally {
-			await emailHousehold.close();
-			await deterministicHousehold.close();
 			await directory.close();
 		}
 	});
 
 	it("seeds multiple email-backed primary Households with unique app-only Member identities", async () => {
 		const directory = await createTestDirectoryDb();
-		const firstHousehold = await createTestHouseholdDb();
-		const secondHousehold = await createTestHouseholdDb();
 
 		try {
 			await seedEmailBackedPrimaryHouseholdScenario({
 				directory: directory.db,
-				household: firstHousehold.db,
-				householdTursoDbName: "df-local-hh-seed-email-first",
 				ownerClerkUserId: "user_email_first_owner",
 				ownerEmail: "first@example.com",
 				memberClerkUserId: "user_email_first_member",
@@ -344,8 +335,6 @@ describe("database fixture scenarios", () => {
 
 			await seedEmailBackedPrimaryHouseholdScenario({
 				directory: directory.db,
-				household: secondHousehold.db,
-				householdTursoDbName: "df-local-hh-seed-email-second",
 				ownerClerkUserId: "user_email_second_owner",
 				ownerEmail: "second@example.com",
 				memberClerkUserId: "user_email_second_member",
@@ -371,9 +360,8 @@ describe("database fixture scenarios", () => {
 
 			expect(directoryUsers).toHaveLength(6);
 			expect(new Set(clerkUserIds).size).toBe(clerkUserIds.length);
+			expect(await directory.db.select().from(lists)).toHaveLength(10);
 		} finally {
-			await secondHousehold.close();
-			await firstHousehold.close();
 			await directory.close();
 		}
 	});

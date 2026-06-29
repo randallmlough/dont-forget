@@ -1,15 +1,16 @@
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
-import type {
-	HouseholdSqlValue,
-	HouseholdStoreExecutor,
-} from "@/db/household-store";
 import { sqlNumberSchema } from "@/db/utils";
 import { track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
+import type { ProductDataStore } from "@/lib/services/shared/product-data-store";
+import {
+	sqlTimestampMillisSchema,
+	timestampMillisToSqlText,
+} from "@/lib/services/shared/sql-timestamp";
 
 export type List = {
 	id: string;
@@ -104,53 +105,47 @@ export type ListService = {
 export type ListServiceDeps = {
 	householdId: string;
 	userId: string;
-	store: HouseholdStoreExecutor;
+	store: ProductDataStore;
 	logger?: Logger;
 	analytics?: ServiceAnalytics;
 };
 
 const LIST_NAME_MAX_LENGTH = 80;
+const ZERO_ACTIVITY_AT = "1970-01-01T00:00:00.000Z";
 
 const listRowSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	created_by_user_id: z.string(),
-	created_at: sqlNumberSchema,
-	updated_at: sqlNumberSchema,
-	archived_at: sqlNumberSchema.nullable(),
-	deleted_at: sqlNumberSchema.nullable(),
+	created_at: sqlTimestampMillisSchema,
+	updated_at: sqlTimestampMillisSchema,
+	archived_at: sqlTimestampMillisSchema.nullable(),
+	deleted_at: sqlTimestampMillisSchema.nullable(),
 });
 
 type ListRow = z.infer<typeof listRowSchema>;
-
-// The real Household store always reports rowsAffected on writes; parse it
-// loudly so a lifecycle race (row deleted between the pre-read and the
-// guarded UPDATE) can be reclassified instead of silently miscounted.
-const writeResultSchema = z.object({
-	rowsAffected: sqlNumberSchema,
-});
 
 const listSummaryRowSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	created_by_user_id: z.string(),
-	created_at: sqlNumberSchema,
-	updated_at: sqlNumberSchema,
-	archived_at: sqlNumberSchema.nullable(),
-	last_activity_at: sqlNumberSchema,
+	created_at: sqlTimestampMillisSchema,
+	updated_at: sqlTimestampMillisSchema,
+	archived_at: sqlTimestampMillisSchema.nullable(),
+	last_activity_at: sqlTimestampMillisSchema,
 	unchecked_item_count: sqlNumberSchema,
 	checked_item_count: sqlNumberSchema,
 });
 
 const ARCHIVE_FILTER_SQL = {
-	active: "AND l.archived_at IS NULL",
-	archived: "AND l.archived_at IS NOT NULL",
+	active: "l.archived_at IS NULL",
+	archived: "l.archived_at IS NOT NULL",
 	all: "",
 } as const;
 
 const SORT_SQL = {
 	recentActivity: "last_activity_at DESC, l.created_at ASC, l.id ASC",
-	name: "l.name COLLATE NOCASE ASC, l.created_at ASC, l.id ASC",
+	name: "LOWER(l.name) ASC, l.created_at ASC, l.id ASC",
 	createdAt: "l.created_at DESC, l.id ASC",
 } as const;
 
@@ -176,15 +171,30 @@ export function createListService(deps: ListServiceDeps): ListService {
 
 			try {
 				const now = nextListServiceTimestamp();
+				const nowSql = timestampMillisToSqlText(now);
 				const id = createAppId("lst", randomUuid);
-				await deps.store.execute({
-					kind: "write",
-					sql: `
-            INSERT INTO lists (id, name, created_by_user_id, created_at, updated_at, archived_at)
-            VALUES (?, ?, ?, ?, ?, NULL)
-          `,
-					args: [id, validated.name, deps.userId, now, now],
-				});
+				const writeResult = await deps.store.writeTransaction((tx) =>
+					tx.execute(
+						`
+							INSERT INTO lists (
+								id,
+								household_id,
+								name,
+								created_by_user_id,
+								created_at,
+								updated_at,
+								archived_at,
+								deleted_at
+							)
+							VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
+							RETURNING id
+						`,
+						[id, deps.householdId, validated.name, deps.userId, nowSql, nowSql],
+					),
+				);
+				if (!writeResult.rows[0]) {
+					throw new Error("List was not created");
+				}
 				analytics.track("list_created", analyticsProperties(deps, id));
 
 				return {
@@ -208,7 +218,11 @@ export function createListService(deps: ListServiceDeps): ListService {
 		},
 		async getList(input) {
 			try {
-				const row = await readListRow(deps.store, input.listId);
+				const row = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
 				if (!row) {
 					return { status: "missing", listId: input.listId };
 				}
@@ -244,7 +258,11 @@ export function createListService(deps: ListServiceDeps): ListService {
 			}
 
 			try {
-				const row = await readListRow(deps.store, input.listId);
+				const row = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
 				if (!row) {
 					return { status: "missing", listId: input.listId, didWrite: false };
 				}
@@ -266,16 +284,26 @@ export function createListService(deps: ListServiceDeps): ListService {
 				}
 
 				const now = nextListServiceTimestamp();
-				// `AND deleted_at IS NULL` guards the read-then-write race: a delete
-				// interleaved after the pre-read must not resurrect or rename the
-				// tombstoned row (rowsAffected reclassifies the lost race below).
-				const writeResult = await deps.store.execute({
-					kind: "write",
-					sql: "UPDATE lists SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
-					args: [validated.name, now, input.listId],
-				});
-				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
-					return reclassifyLostWrite(deps.store, input.listId);
+				const nowSql = timestampMillisToSqlText(now);
+				const writeResult = await deps.store.writeTransaction((tx) =>
+					tx.execute(
+						`
+							UPDATE lists
+							SET name = ?, updated_at = ?
+							WHERE id = ?
+								AND household_id = ?
+								AND deleted_at IS NULL
+							RETURNING id
+						`,
+						[validated.name, nowSql, input.listId, deps.householdId],
+					),
+				);
+				if (!writeResult.rows[0]) {
+					return reclassifyLostWrite(
+						deps.store,
+						deps.householdId,
+						input.listId,
+					);
 				}
 				analytics.track(
 					"list_renamed",
@@ -301,7 +329,11 @@ export function createListService(deps: ListServiceDeps): ListService {
 		},
 		async deleteList(input) {
 			try {
-				const row = await readListRow(deps.store, input.listId);
+				const row = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
 				if (!row) {
 					return { status: "missing", listId: input.listId, didWrite: false };
 				}
@@ -316,15 +348,26 @@ export function createListService(deps: ListServiceDeps): ListService {
 				}
 
 				const now = nextListServiceTimestamp();
-				// `AND deleted_at IS NULL` keeps a concurrent delete from churning the
-				// tombstone timestamps; a lost race reclassifies below.
-				const writeResult = await deps.store.execute({
-					kind: "write",
-					sql: "UPDATE lists SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
-					args: [now, now, input.listId],
-				});
-				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
-					return reclassifyLostWrite(deps.store, input.listId);
+				const nowSql = timestampMillisToSqlText(now);
+				const writeResult = await deps.store.writeTransaction((tx) =>
+					tx.execute(
+						`
+							UPDATE lists
+							SET deleted_at = ?, updated_at = ?
+							WHERE id = ?
+								AND household_id = ?
+								AND deleted_at IS NULL
+							RETURNING id
+						`,
+						[nowSql, nowSql, input.listId, deps.householdId],
+					),
+				);
+				if (!writeResult.rows[0]) {
+					return reclassifyLostWrite(
+						deps.store,
+						deps.householdId,
+						input.listId,
+					);
 				}
 				analytics.track(
 					"list_deleted",
@@ -349,60 +392,61 @@ export function createListService(deps: ListServiceDeps): ListService {
 		async listLists(input) {
 			const archive = input?.archive ?? "active";
 			const sort = input?.sort ?? "recentActivity";
-			const conditions = ["l.deleted_at IS NULL", ARCHIVE_FILTER_SQL[archive]];
-			const args: HouseholdSqlValue[] = [];
+			const conditions = ["l.household_id = ?", "l.deleted_at IS NULL"];
+			const args: unknown[] = [deps.householdId];
+			const archiveCondition = ARCHIVE_FILTER_SQL[archive];
+			if (archiveCondition) conditions.push(archiveCondition);
 
 			const searchText = input?.searchText?.trim() ?? "";
 			if (searchText) {
-				conditions.push("AND l.name LIKE ? ESCAPE '\\'");
+				conditions.push("l.name LIKE ? ESCAPE '\\'");
 				args.push(`%${escapeLikePattern(searchText)}%`);
 			}
 			if (input?.createdByUserId !== undefined) {
-				conditions.push("AND l.created_by_user_id = ?");
+				conditions.push("l.created_by_user_id = ?");
 				args.push(input.createdByUserId);
 			}
 
 			try {
-				const result = await deps.store.execute({
-					kind: "read",
-					sql: `
-            SELECT
-              l.id,
-              l.name,
-              l.created_by_user_id,
-              l.created_at,
-              l.updated_at,
-              l.archived_at,
-              MAX(
-                l.updated_at,
-                COALESCE(MAX(i.updated_at), 0),
-                COALESCE(MAX(c.updated_at), 0)
-              ) AS last_activity_at,
-              COALESCE(
-                SUM(CASE WHEN i.id IS NOT NULL AND c.checked_at IS NULL THEN 1 ELSE 0 END),
-                0
-              ) AS unchecked_item_count,
-              COALESCE(
-                SUM(CASE WHEN c.checked_at IS NOT NULL THEN 1 ELSE 0 END),
-                0
-              ) AS checked_item_count
-            FROM lists l
-            LEFT JOIN items i ON i.list_id = l.id AND i.deleted_at IS NULL
-            LEFT JOIN item_checks c ON c.rowid = (
-              SELECT c2.rowid
-              FROM item_checks c2
-              WHERE c2.item_id = i.id
-              ORDER BY c2.updated_at DESC, c2.user_id DESC
-              LIMIT 1
-            )
-            WHERE ${conditions.filter(Boolean).join(" ")}
-            GROUP BY l.id
-            ORDER BY ${SORT_SQL[sort]}
-          `,
-					args,
-				});
+				const rows = await deps.store.getAll(
+					`
+						SELECT
+							l.id,
+							l.name,
+							l.created_by_user_id,
+							l.created_at,
+							l.updated_at,
+							l.archived_at,
+							MAX(
+								l.updated_at,
+								COALESCE(MAX(i.updated_at), ?),
+								COALESCE(MAX(c.updated_at), ?)
+							) AS last_activity_at,
+							COALESCE(
+								SUM(CASE WHEN i.id IS NOT NULL AND c.checked_at IS NULL THEN 1 ELSE 0 END),
+								0
+							) AS unchecked_item_count,
+							COALESCE(
+								SUM(CASE WHEN c.checked_at IS NOT NULL THEN 1 ELSE 0 END),
+								0
+							) AS checked_item_count
+						FROM lists l
+						LEFT JOIN items i ON i.list_id = l.id AND i.deleted_at IS NULL
+						LEFT JOIN item_checks c ON c.id = (
+							SELECT c2.id
+							FROM item_checks c2
+							WHERE c2.item_id = i.id
+							ORDER BY c2.updated_at DESC, c2.id DESC
+							LIMIT 1
+						)
+						WHERE ${conditions.join(" AND ")}
+						GROUP BY l.id
+						ORDER BY ${SORT_SQL[sort]}
+					`,
+					[ZERO_ACTIVITY_AT, ZERO_ACTIVITY_AT, ...args],
+				);
 
-				return result.rows.map((row) =>
+				return rows.map((row) =>
 					listSummaryFromRow(listSummaryRowSchema.parse(row), deps.householdId),
 				);
 			} catch (error) {
@@ -413,14 +457,9 @@ export function createListService(deps: ListServiceDeps): ListService {
 	};
 }
 
-/**
- * A guarded lifecycle UPDATE (`AND deleted_at IS NULL`) matched no row: the
- * List was deleted (or vanished) between the pre-read and the write. Re-read
- * and return the typed lifecycle result; no write happened, so callers emit
- * no analytics for it.
- */
 async function reclassifyLostWrite(
-	store: HouseholdStoreExecutor,
+	store: ProductDataStore,
+	householdId: string,
 	listId: string,
 ): Promise<
 	| {
@@ -432,7 +471,7 @@ async function reclassifyLostWrite(
 	  }
 	| { status: "missing"; listId: string; didWrite: false }
 > {
-	const row = await readListRow(store, listId);
+	const row = await readListRow(store, householdId, listId);
 	if (row?.deleted_at != null) {
 		return {
 			status: "deleted",
@@ -447,20 +486,19 @@ async function reclassifyLostWrite(
 }
 
 async function readListRow(
-	store: HouseholdStoreExecutor,
+	store: ProductDataStore,
+	householdId: string,
 	listId: string,
 ): Promise<ListRow | null> {
-	const result = await store.execute({
-		kind: "read",
-		sql: `
-      SELECT id, name, created_by_user_id, created_at, updated_at, archived_at, deleted_at
-      FROM lists
-      WHERE id = ?
-      LIMIT 1
-    `,
-		args: [listId],
-	});
-	const row = result.rows[0];
+	const row = await store.getOptional(
+		`
+			SELECT id, name, created_by_user_id, created_at, updated_at, archived_at, deleted_at
+			FROM lists
+			WHERE id = ? AND household_id = ?
+			LIMIT 1
+		`,
+		[listId, householdId],
+	);
 	return row ? listRowSchema.parse(row) : null;
 }
 

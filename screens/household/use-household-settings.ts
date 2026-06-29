@@ -272,14 +272,6 @@ export function useHouseholdSettings(
 	async function leaveHousehold() {
 		if (!startOperation({ status: "leavingHousehold" })) return;
 		try {
-			if (!(await syncCurrentHousehold(session))) {
-				dispatch({
-					type: "notice",
-					loadKey,
-					notice: "Unable to sync this Household before leaving. Try again.",
-				});
-				return;
-			}
 			await resolveClient().leaveHousehold(householdId);
 			reloadSession({ mode: "retireCurrent" });
 		} catch (error) {
@@ -374,19 +366,6 @@ export function useHouseholdSettings(
 			clearNotice: () => dispatch({ type: "notice", loadKey, notice: null }),
 		},
 	};
-}
-
-async function syncCurrentHousehold(
-	session: AuthenticatedAppSession,
-): Promise<boolean> {
-	try {
-		const syncResult = await session.services.sync.requestSync({
-			reason: "manualRefresh",
-		});
-		return Boolean(syncResult);
-	} catch {
-		return false;
-	}
 }
 
 function initialResource(loadKey: string): Resource {

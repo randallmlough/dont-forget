@@ -38,9 +38,8 @@ export const items = pgTable(
 			.notNull()
 			.references(() => lists.id),
 		name: text("name").notNull(),
-		// quantity is text and position is a real/double — mirroring the
-		// authoritative libsql data model (db/schema/household.ts), not the
-		// spike's integer choice.
+		// Quantity is user-entered text and position is fractional so clients can
+		// insert between existing Items without renumbering the whole List.
 		quantity: text("quantity"),
 		notes: text("notes"),
 		position: doublePrecision("position").notNull(),

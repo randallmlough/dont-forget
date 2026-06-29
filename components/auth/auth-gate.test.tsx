@@ -1,7 +1,7 @@
 import { render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { AuthGate } from "@/components/auth/auth-gate";
-import { hasCachedAuthenticatedAppSession } from "@/lib/services/session";
+import { hasPersistedAuthenticatedAppSession } from "@/lib/services/session/session-hint";
 import { setMockAuthState } from "@/lib/test/mocks/clerk";
 
 const mockReplace = jest.fn();
@@ -10,8 +10,8 @@ jest.mock("@/lib/analytics", () =>
 	jest.requireActual("@/lib/test/mocks/analytics"),
 );
 
-jest.mock("@/lib/services/session", () => ({
-	hasCachedAuthenticatedAppSession: jest.fn(),
+jest.mock("@/lib/services/session/session-hint", () => ({
+	hasPersistedAuthenticatedAppSession: jest.fn(),
 }));
 
 jest.mock("expo-router", () => {
@@ -37,30 +37,30 @@ jest.mock("expo-router", () => {
 
 beforeEach(() => {
 	mockReplace.mockReset();
-	jest.mocked(hasCachedAuthenticatedAppSession).mockResolvedValue(false);
+	jest.mocked(hasPersistedAuthenticatedAppSession).mockResolvedValue(false);
 });
 
 describe("AuthGate", () => {
-	it("keeps Home mounted while auth is unknown and a cached Household session exists", async () => {
-		jest.mocked(hasCachedAuthenticatedAppSession).mockResolvedValue(true);
+	it("keeps Home mounted while auth is unknown and a persisted signed-in hint exists", async () => {
+		jest.mocked(hasPersistedAuthenticatedAppSession).mockResolvedValue(true);
 		setMockAuthState({ isLoaded: false, isSignedIn: false });
 
 		await render(<AuthGate pathname="/" />);
 
 		await waitFor(() =>
-			expect(hasCachedAuthenticatedAppSession).toHaveBeenCalledTimes(1),
+			expect(hasPersistedAuthenticatedAppSession).toHaveBeenCalledTimes(1),
 		);
 		expect(mockReplace).not.toHaveBeenCalledWith("/sign-in");
 	});
 
-	it("redirects to sign-in when Clerk reports signed out even if a cached Household session exists", async () => {
-		jest.mocked(hasCachedAuthenticatedAppSession).mockResolvedValue(true);
+	it("redirects to sign-in when Clerk reports signed out even if a persisted signed-in hint exists", async () => {
+		jest.mocked(hasPersistedAuthenticatedAppSession).mockResolvedValue(true);
 		setMockAuthState({ isLoaded: true, isSignedIn: false });
 
 		await render(<AuthGate pathname="/" />);
 
 		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/sign-in"));
-		expect(hasCachedAuthenticatedAppSession).not.toHaveBeenCalled();
+		expect(hasPersistedAuthenticatedAppSession).not.toHaveBeenCalled();
 	});
 
 	it("redirects to sign-in when there is no Clerk session or cached Household session", async () => {

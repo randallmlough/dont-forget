@@ -1,10 +1,3 @@
-import type {
-	SyncCoordinator,
-	SyncOptions,
-	SyncResult,
-	SyncStatus,
-} from "@/lib/services/sync";
-
 export type ActiveListItem = {
 	id: string;
 	name: string;
@@ -32,26 +25,20 @@ export type ActiveListState = {
 	items: ActiveListItem[];
 };
 
-export type ActiveListSyncState = SyncStatus;
+export type ActiveListSyncState = "synced" | "pending" | "offline" | "failed";
 
-export type ActiveListSyncResult = SyncResult;
-
-export type ActiveListSyncOptions = SyncOptions;
-
-export type ActiveListSyncCoordinator = Pick<
-	SyncCoordinator,
-	"getStatus" | "subscribe" | "requestSync"
->;
+export type ActiveListSyncStatusSource = {
+	getStatus: () => ActiveListSyncState;
+	subscribe: (listener: () => void) => { remove: () => void };
+};
 
 export type ActiveListActions = {
 	addItem: (input: AddActiveListItemDraft) => Promise<void>;
 	toggleItem: (itemId: string) => Promise<void>;
-	refresh: () => Promise<void>;
 };
 
 export type ActiveListMeta = {
 	currentMemberName: string;
 	errorMessage: string | null;
-	isRefreshing: boolean;
 	syncState: ActiveListSyncState;
 };

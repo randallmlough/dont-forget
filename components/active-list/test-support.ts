@@ -1,6 +1,6 @@
 import type {
 	ActiveListState,
-	ActiveListSyncCoordinator,
+	ActiveListSyncStatusSource,
 	AddActiveListItemInput,
 } from "./types";
 
@@ -94,14 +94,11 @@ export function createActiveListMemoryActions(
 	};
 }
 
-export function createPassiveActiveListSyncCoordinator(
-	status: ReturnType<ActiveListSyncCoordinator["getStatus"]> = "synced",
-): ActiveListSyncCoordinator {
+export function createPassiveActiveListSyncStatus(
+	status: ReturnType<ActiveListSyncStatusSource["getStatus"]> = "synced",
+): ActiveListSyncStatusSource {
 	return {
 		getStatus: () => status,
 		subscribe: () => ({ remove() {} }),
-		async requestSync() {
-			return { changed: false };
-		},
 	};
 }

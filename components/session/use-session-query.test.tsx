@@ -331,7 +331,6 @@ function sessionFixture(): AuthenticatedAppSession & {
 			sync: {
 				getStatus: () => "synced",
 				subscribe: () => ({ remove() {} }),
-				requestSync: async () => null,
 			},
 		},
 		fireChange() {

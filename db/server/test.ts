@@ -7,23 +7,15 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { type Client, createClient } from "@libsql/client/node";
 import { drizzle as pgliteDrizzle } from "drizzle-orm/pglite";
 import * as directorySchema from "@/db/schema/postgres";
-import { type directoryDb, householdDb } from "@/db/server/client";
+import type { directoryDb } from "@/db/server/client";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 
 const DIRECTORY_MIGRATIONS = "db/migrations/postgres";
-const HOUSEHOLD_MIGRATIONS = "db/migrations/household";
 const execFileAsync = promisify(execFile);
 let pgliteTemplateFilePromise: Promise<string> | undefined;
 let pgliteTemplateDirectory: string | undefined;
-
-type TestLibsqlClient = {
-	client: Client;
-	path: string;
-	close: () => Promise<void>;
-};
 
 type TestPgliteClient = {
 	client: RemotePgliteClient;
@@ -31,16 +23,8 @@ type TestPgliteClient = {
 	close: () => Promise<void>;
 };
 
-type TestDbMigrationOptions = {
-	throughMigration?: string;
-};
-
 export type TestDirectoryDb = TestPgliteClient & {
 	db: ReturnType<typeof directoryDb>;
-};
-
-export type TestHouseholdDb = TestLibsqlClient & {
-	db: ReturnType<typeof householdDb>;
 };
 
 export async function createTestDirectoryDb(): Promise<TestDirectoryDb> {
@@ -52,20 +36,6 @@ export async function createTestDirectoryDb(): Promise<TestDirectoryDb> {
 		db: pgliteDrizzle(testClient.client as never, {
 			schema: directorySchema,
 		}) as unknown as ReturnType<typeof directoryDb>,
-	};
-}
-
-export async function createTestHouseholdDb(
-	options: TestDbMigrationOptions = {},
-): Promise<TestHouseholdDb> {
-	const testClient = await createMigratedTestLibsqlClient(
-		"household.db",
-		HOUSEHOLD_MIGRATIONS,
-		options,
-	);
-	return {
-		...testClient,
-		db: householdDb(testClient.client),
 	};
 }
 
@@ -480,34 +450,6 @@ input.on("line", (line) => {
 });
 `;
 
-async function createMigratedTestLibsqlClient(
-	filename: string,
-	migrationsFolder: string,
-	options: TestDbMigrationOptions = {},
-): Promise<TestLibsqlClient> {
-	const directory = await mkdtemp(path.join(tmpdir(), "dont-forget-test-"));
-	const dbPath = path.join(directory, filename);
-	const client = createClient({ url: `file:${dbPath}` });
-
-	await client.execute("PRAGMA foreign_keys = ON");
-	await client.execute("PRAGMA busy_timeout = 5000");
-	await client.execute("PRAGMA journal_mode = WAL");
-	await applyLibsqlMigrations(
-		client,
-		path.join(process.cwd(), migrationsFolder),
-		options,
-	);
-
-	return {
-		client,
-		path: dbPath,
-		close: async () => {
-			client.close();
-			await rm(directory, { recursive: true, force: true });
-		},
-	};
-}
-
 async function applyPgMigrations(
 	client: RemotePgliteClient,
 	migrationsFolder: string,
@@ -544,51 +486,6 @@ async function applyPgMigrations(
 	}
 }
 
-async function applyLibsqlMigrations(
-	client: Client,
-	migrationsFolder: string,
-	options: TestDbMigrationOptions,
-) {
-	const files = (await readdir(migrationsFolder))
-		.filter((file) => file.endsWith(".sql"))
-		.filter(
-			(file) =>
-				!options.throughMigration ||
-				migrationAtOrBefore(file, options.throughMigration),
-		)
-		.sort();
-	const journal = await readMigrationJournal(migrationsFolder);
-
-	// Mirror the real migrator's tracking table so test DBs report the same
-	// schema version a server-migrated DB would (the schema staleness gate
-	// reads max(created_at); drizzle writes the journal `when` there).
-	await client.execute(
-		`CREATE TABLE IF NOT EXISTS ${DRIZZLE_MIGRATIONS_TABLE} (id INTEGER PRIMARY KEY AUTOINCREMENT, hash text NOT NULL, created_at numeric)`,
-	);
-
-	for (const file of files) {
-		const sql = await readFile(path.join(migrationsFolder, file), "utf8");
-		const statements = sql
-			.split("--> statement-breakpoint")
-			.map((statement) => statement.trim())
-			.filter(Boolean);
-
-		for (const statement of statements) {
-			await client.execute(statement);
-		}
-
-		const tag = file.replace(/\.sql$/, "");
-		const entry = journal.get(tag);
-		if (!entry) {
-			throw new Error(`Migration ${file} has no journal entry`);
-		}
-		await client.execute({
-			sql: `INSERT INTO ${DRIZZLE_MIGRATIONS_TABLE} (hash, created_at) VALUES (?, ?)`,
-			args: [tag, entry.when],
-		});
-	}
-}
-
 async function readMigrationJournal(
 	migrationsFolder: string,
 ): Promise<Map<string, { when: number }>> {
@@ -596,8 +493,4 @@ async function readMigrationJournal(
 		await readFile(path.join(migrationsFolder, "meta/_journal.json"), "utf8"),
 	) as { entries: { tag: string; when: number }[] };
 	return new Map(journal.entries.map((entry) => [entry.tag, entry]));
-}
-
-export function migrationAtOrBefore(file: string, target: string): boolean {
-	return file <= target;
 }

@@ -1,20 +1,9 @@
 import { eq } from "drizzle-orm";
 import { type User, users } from "@/db/schema/postgres";
 import type { DirectoryDb } from "@/db/server/client";
-import {
-	type BootstrapResponse,
-	HOUSEHOLD_TOKEN_TTL_MS,
-} from "@/lib/bootstrap";
-import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
+import type { BootstrapResponse } from "@/lib/bootstrap";
 import type { ServerUserProfile } from "@/lib/server/auth";
-import {
-	createProductionHouseholdProvisioningService,
-	type HouseholdProvisioningService,
-} from "@/lib/services/household/server/household-provisioning-service";
-import {
-	createHouseholdService,
-	householdDatabaseName,
-} from "@/lib/services/household/server/household-service";
+import { createHouseholdService } from "@/lib/services/household/server/household-service";
 import { generateInitialHouseholdName } from "@/lib/services/household/server/initial-household-name";
 import {
 	type ActiveMembership,
@@ -23,9 +12,7 @@ import {
 import { createUserService } from "@/lib/services/user/server";
 
 export type AuthenticatedAppSessionBootstrapDeps = {
-	appEnv: AppEnv;
 	directory: DirectoryDb;
-	provisioning: HouseholdProvisioningService;
 };
 
 export type ProductionAuthenticatedAppSessionBootstrapDeps =
@@ -34,12 +21,8 @@ export type ProductionAuthenticatedAppSessionBootstrapDeps =
 export function createProductionAuthenticatedAppSessionBootstrapDeps(
 	directory: DirectoryDb,
 ): ProductionAuthenticatedAppSessionBootstrapDeps {
-	const config = readTursoOperatorConfig();
-
 	return {
-		appEnv: config.appEnv,
 		directory,
-		provisioning: createProductionHouseholdProvisioningService(),
 	};
 }
 
@@ -49,9 +32,6 @@ export async function bootstrapAuthenticatedAppSession(
 ): Promise<BootstrapResponse> {
 	const userService = createUserService({ directory: deps.directory });
 	const memberService = createMemberService({ directory: deps.directory });
-	const householdService = createHouseholdService({
-		directory: deps.directory,
-	});
 
 	const user = await userService.upsertUser(profile);
 	const active = await deps.directory.transaction(async (tx) => {
@@ -65,24 +45,7 @@ export async function bootstrapAuthenticatedAppSession(
 			return selected;
 		}
 
-		const pending = await txHouseholdService.findPendingCreatedHousehold(
-			user.id,
-		);
-		if (pending) {
-			const membership = await txMemberService.ensureOwnerMembership({
-				householdId: pending.id,
-				user,
-			});
-			const activeMembership = txHouseholdService.activeMembershipFrom(
-				pending,
-				membership,
-			);
-			await setActiveHousehold(tx, user.id, activeMembership.householdId);
-			return activeMembership;
-		}
-
 		const household = await txHouseholdService.createOwnedHousehold({
-			appEnv: deps.appEnv,
 			user,
 			name: generateInitialHouseholdName(),
 		});
@@ -98,18 +61,7 @@ export async function bootstrapAuthenticatedAppSession(
 		return activeMembership;
 	});
 
-	const database = await deps.provisioning.ensureHouseholdDatabase({
-		tursoDbName: active.householdTursoDbName,
-		createdByUserId: user.id,
-		provisioningCompletedAt: active.householdProvisioningCompletedAt,
-	});
-	if (database.provisioned) {
-		await householdService.markProvisioningCompleted(active.householdId);
-	}
-
-	const expiresAt = Date.now() + HOUSEHOLD_TOKEN_TTL_MS;
-	const [authToken, members, associatedHouseholds] = await Promise.all([
-		deps.provisioning.createHouseholdDatabaseToken(active.householdTursoDbName),
+	const [members, associatedHouseholds] = await Promise.all([
 		memberService.listHouseholdMembers(active.householdId),
 		memberService.listAssociatedHouseholds({
 			userId: user.id,
@@ -137,11 +89,6 @@ export async function bootstrapAuthenticatedAppSession(
 			displayName: user.displayName,
 		},
 		members,
-		householdDatabase: {
-			url: database.url,
-			authToken,
-			expiresAt,
-		},
 	};
 }
 
@@ -175,5 +122,3 @@ async function setActiveHousehold(
 		.set({ activeHouseholdId: householdId, updatedAt: Date.now() })
 		.where(eq(users.id, userId));
 }
-
-export { householdDatabaseName };

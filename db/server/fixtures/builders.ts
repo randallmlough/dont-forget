@@ -1,20 +1,23 @@
-import type { NewItem, NewItemCheck, NewList } from "@/db/schema/household";
 import type {
 	NewHousehold,
 	NewHouseholdJoinCode,
 	NewHouseholdJoinCodeUse,
 	NewInvitation,
+	NewItem,
+	NewItemCheck,
+	NewList,
 	NewMembership,
 	NewUser,
 } from "@/db/schema/postgres";
-import { DEFAULT_LIST_ID, DEFAULT_LIST_NAME } from "@/lib/bootstrap";
+
+const SEED_DEFAULT_LIST_ID = "lst_default_groceries";
+const SEED_DEFAULT_LIST_NAME = "Groceries";
 
 export const PRIMARY_HOUSEHOLD_SEED = {
 	now: 1_700_000_000_000,
 	household: {
 		id: "hh_avery",
 		name: "Avery",
-		tursoDbName: "df-local-hh-seed-avery",
 	},
 	users: {
 		avery: {
@@ -83,7 +86,7 @@ export const PRIMARY_HOUSEHOLD_SEED = {
 		cameron: { id: "hjcu_cameron" },
 	},
 	lists: {
-		groceries: { id: DEFAULT_LIST_ID, name: DEFAULT_LIST_NAME },
+		groceries: { id: SEED_DEFAULT_LIST_ID, name: SEED_DEFAULT_LIST_NAME },
 		hardware: { id: "lst_seed_hardware", name: "Hardware" },
 		pharmacy: { id: "lst_seed_pharmacy", name: "Pharmacy" },
 		archived: { id: "lst_seed_holiday", name: "Holiday Dinner" },
@@ -137,9 +140,7 @@ export function householdFixture(
 	return {
 		id: PRIMARY_HOUSEHOLD_SEED.household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.household.name,
-		tursoDbName: PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
 		createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
-		provisioningCompletedAt: now,
 		createdAt: now,
 		deletedAt: null,
 		...overrides,
@@ -219,10 +220,11 @@ export function listFixture(overrides: Partial<NewList> = {}): NewList {
 	const now = PRIMARY_HOUSEHOLD_SEED.now;
 	return {
 		id: PRIMARY_HOUSEHOLD_SEED.lists.groceries.id,
+		householdId: PRIMARY_HOUSEHOLD_SEED.household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.groceries.name,
 		createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
-		createdAt: now,
-		updatedAt: now,
+		createdAt: new Date(now),
+		updatedAt: new Date(now),
 		archivedAt: null,
 		deletedAt: null,
 		...overrides,
@@ -238,8 +240,8 @@ export function itemFixture(overrides: Partial<NewItem> = {}): NewItem {
 		notes: null,
 		position: 0,
 		createdByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
-		createdAt: now,
-		updatedAt: now,
+		createdAt: new Date(now),
+		updatedAt: new Date(now),
 		deletedAt: null,
 		...overrides,
 	};
@@ -250,10 +252,11 @@ export function itemCheckFixture(
 ): NewItemCheck {
 	const now = PRIMARY_HOUSEHOLD_SEED.now;
 	return {
+		id: "chk_seed_eggs",
 		itemId: PRIMARY_HOUSEHOLD_SEED.items.checkedByAvery.id,
-		userId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
-		checkedAt: now + 100,
-		updatedAt: now + 100,
+		checkedByUserId: PRIMARY_HOUSEHOLD_SEED.users.avery.id,
+		checkedAt: new Date(now + 100),
+		updatedAt: new Date(now + 100),
 		...overrides,
 	};
 }
