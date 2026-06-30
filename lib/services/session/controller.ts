@@ -262,7 +262,10 @@ export function createAuthenticatedAppSessionController(
 			return;
 		}
 
-		const previousServices = activeServices;
+		// All sessions share the one PowerSync handle, so we must NOT close the
+		// previous services here — close() would disconnect the handle the new
+		// session just connected. Only sign-out (disconnectAndClear) and unmount
+		// tear the connection down.
 		activeServices = openedServices;
 		openedServices = null;
 
@@ -276,10 +279,6 @@ export function createAuthenticatedAppSessionController(
 		nextResourceVersion += 1;
 		publish({ status: "ready", session: appSession });
 		void markAuthenticatedAppSessionPresent().catch(() => undefined);
-
-		if (previousServices && previousServices !== activeServices) {
-			await previousServices.close();
-		}
 	}
 
 	async function handleSignedInActivation(
