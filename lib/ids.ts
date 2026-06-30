@@ -6,8 +6,7 @@ export type AppIdPrefix =
 	| "hjc"
 	| "hjcu"
 	| "lst"
-	| "itm"
-	| "chk";
+	| "itm";
 
 export type RandomUuid = () => string;
 

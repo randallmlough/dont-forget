@@ -285,7 +285,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
                 VALUES (?, ?, ?, ?, ?)
               `,
 							[
-								createAppId("chk", randomUuid),
+								`chk_${input.itemId}`,
 								input.itemId,
 								checkedAt,
 								input.userId,
