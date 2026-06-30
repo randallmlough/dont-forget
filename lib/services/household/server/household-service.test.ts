@@ -18,11 +18,10 @@ import {
 	HouseholdForbiddenError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,
-	householdDatabaseName,
 } from "./household-service";
 
 describe("createHouseholdService", () => {
-	it("creates a Household with a Turso-safe database name and marks provisioning complete", async () => {
+	it("creates a Household with an initial join code", async () => {
 		const directory = await createTestDirectoryDb();
 		const service = createHouseholdService({
 			directory: directory.db,
@@ -41,13 +40,9 @@ describe("createHouseholdService", () => {
 
 			dateNow.mockReturnValueOnce(1_700_000_000_000);
 			const household = await service.createOwnedHousehold({
-				appEnv: "test",
 				user,
 				name: "Avery",
 			});
-
-			dateNow.mockReturnValueOnce(1_700_000_001_000);
-			await service.markProvisioningCompleted(household.id);
 
 			const [stored] = await directory.db
 				.select()
@@ -60,10 +55,8 @@ describe("createHouseholdService", () => {
 			expect(stored).toMatchObject({
 				id: expect.stringMatching(/^hh_/),
 				name: "Avery",
-				tursoDbName: householdDatabaseName("test", household.id),
 				createdByUserId: "usr_avery",
 				createdAt: 1_700_000_000_000,
-				provisioningCompletedAt: 1_700_000_001_000,
 			});
 			expect(joinCode).toMatchObject({
 				id: expect.stringMatching(/^hjc_/),

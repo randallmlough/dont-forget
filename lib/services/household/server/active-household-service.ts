@@ -24,8 +24,6 @@ export type ActiveHouseholdSelection = {
 	membershipRole: "owner" | "member";
 	householdId: string;
 	householdName: string;
-	householdTursoDbName: string;
-	householdProvisioningCompletedAt: number | null;
 };
 
 export type AssociatedHousehold = {
@@ -216,6 +214,4 @@ const activeHouseholdSelectionColumns = {
 	membershipRole: memberships.role,
 	householdId: households.id,
 	householdName: households.name,
-	householdTursoDbName: households.tursoDbName,
-	householdProvisioningCompletedAt: households.provisioningCompletedAt,
 };

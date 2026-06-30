@@ -118,7 +118,7 @@ test-coverage: ## Run all tests once and report coverage
 ##@ Database
 
 .PHONY: db-generate
-db-generate: ## Generate both directory and Household migrations
+db-generate: ## Generate directory migrations
 	@$(PNPM) db:generate
 
 .PHONY: db-migrate

@@ -56,10 +56,16 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		expect(controller.activate).toHaveBeenCalledWith({
 			getToken: expect.any(Function),
+			getPowerSyncToken: expect.any(Function),
 			authReady: true,
 			signedIn: true,
 			cachePolicy: "allowCached",
 		});
+		const activation = controller.activate.mock.calls[0]?.[0];
+		await expect(activation?.getToken()).resolves.toBe("token");
+		await expect(activation?.getPowerSyncToken?.()).resolves.toBe(
+			"powersync-token",
+		);
 
 		await act(() => {
 			controller.publish({ status: "ready", session: appSessionFixture() });
@@ -266,7 +272,6 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const controller = authenticatedAppSessionControllerFixture();
 		controller.dispose.mockImplementation(async () => {
 			order.push("dispose");
-			return { householdIdsForLocalDataDeletion: [] };
 		});
 		const auth = authFixture({
 			signOut: jest.fn(async () => {
@@ -276,7 +281,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const analytics = createMockAnalytics();
 		analytics.track.mockImplementation(() => order.push("track"));
 		analytics.reset.mockImplementation(() => order.push("reset"));
-		const clearSignedOutData = jest.fn(async () => {
+		const clearSessionHint = jest.fn(async () => {
 			order.push("clear");
 		});
 
@@ -285,7 +290,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				controller={controller}
 				auth={auth}
 				analytics={analytics}
-				clearSignedOutSessionData={clearSignedOutData}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -296,7 +301,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		expect(order).toEqual(["track", "reset", "dispose", "clear", "clerk"]);
 		expect(analytics.track).toHaveBeenCalledWith("user_signed_out", {});
-		expect(clearSignedOutData).toHaveBeenCalledWith([]);
+		expect(clearSessionHint).toHaveBeenCalledWith();
 	});
 
 	it("uses the latest sign-out dependencies after provider rerender", async () => {
@@ -304,14 +309,14 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const auth = authFixture();
 		const firstAnalytics = { track: jest.fn(), reset: jest.fn() };
 		const nextAnalytics = { track: jest.fn(), reset: jest.fn() };
-		const firstClearSignedOutData = jest.fn(async () => undefined);
-		const nextClearSignedOutData = jest.fn(async () => undefined);
+		const firstClearSessionHint = jest.fn(async () => undefined);
+		const nextClearSessionHint = jest.fn(async () => undefined);
 		const { rerender } = await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={firstAnalytics}
-				clearSignedOutSessionData={firstClearSignedOutData}
+				clearAuthenticatedAppSessionPresent={firstClearSessionHint}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -322,7 +327,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				controller={controller}
 				auth={auth}
 				analytics={nextAnalytics}
-				clearSignedOutSessionData={nextClearSignedOutData}
+				clearAuthenticatedAppSessionPresent={nextClearSessionHint}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -333,34 +338,10 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 		expect(firstAnalytics.track).not.toHaveBeenCalled();
 		expect(firstAnalytics.reset).not.toHaveBeenCalled();
-		expect(firstClearSignedOutData).not.toHaveBeenCalled();
+		expect(firstClearSessionHint).not.toHaveBeenCalled();
 		expect(nextAnalytics.track).toHaveBeenCalledWith("user_signed_out", {});
 		expect(nextAnalytics.reset).toHaveBeenCalledTimes(1);
-		expect(nextClearSignedOutData).toHaveBeenCalledWith([]);
-	});
-
-	it("passes disposed Household IDs to signed-out cleanup", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
-		controller.dispose.mockResolvedValue({
-			householdIdsForLocalDataDeletion: ["hh_active"],
-		});
-		const clearSignedOutData = jest.fn(async () => undefined);
-
-		await render(
-			<AuthenticatedAppSessionProvider
-				controller={controller}
-				auth={authFixture()}
-				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={clearSignedOutData}
-			>
-				<SignOutButton />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
-		await waitFor(() =>
-			expect(clearSignedOutData).toHaveBeenCalledWith(["hh_active"]),
-		);
+		expect(nextClearSessionHint).toHaveBeenCalledWith();
 	});
 
 	it("continues Clerk sign out when controller disposal fails", async () => {
@@ -373,7 +354,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				controller={controller}
 				auth={auth}
 				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={jest.fn(async () => undefined)}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -392,15 +373,15 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const auth = authFixture();
 		const controller = authenticatedAppSessionControllerFixture();
 		const analytics = createMockAnalytics();
-		const localDataDeleted = deferred<void>();
-		const clearSignedOutData = jest.fn(() => localDataDeleted.promise);
+		const sessionHintCleared = deferred<void>();
+		const clearSessionHint = jest.fn(() => sessionHintCleared.promise);
 
 		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={analytics}
-				clearSignedOutSessionData={clearSignedOutData}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -410,13 +391,13 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await fireEvent.press(signOutButton);
 		await fireEvent.press(signOutButton);
 
-		await waitFor(() => expect(clearSignedOutData).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
 		expect(analytics.track).toHaveBeenCalledTimes(1);
 		expect(analytics.reset).toHaveBeenCalledTimes(1);
 		expect(controller.dispose).toHaveBeenCalledTimes(1);
 		expect(auth.signOut).not.toHaveBeenCalled();
 
-		localDataDeleted.resolve(undefined);
+		sessionHintCleared.resolve(undefined);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 	});
 
@@ -431,7 +412,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				controller={controller}
 				auth={auth}
 				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={jest.fn(async () => undefined)}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -446,7 +427,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				controller={controller}
 				auth={{ ...auth, signedIn: false }}
 				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={jest.fn(async () => undefined)}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -471,7 +452,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				controller={controller}
 				auth={auth}
 				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={jest.fn(async () => undefined)}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
 				<CatchingSignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -494,7 +475,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
 				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={jest.fn(async () => {
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => {
 					throw new Error("cleanup failed");
 				})}
 			>
@@ -510,21 +491,19 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
 	});
 
-	it("does not clean local Household data before controller disposal finishes", async () => {
+	it("does not run local cleanup before controller disposal finishes", async () => {
 		const auth = authFixture();
 		const controller = authenticatedAppSessionControllerFixture();
-		const disposed = deferred<{
-			householdIdsForLocalDataDeletion: string[];
-		}>();
+		const disposed = deferred<void>();
 		controller.dispose.mockImplementation(() => disposed.promise);
-		const clearSignedOutData = jest.fn(async () => undefined);
+		const clearSessionHint = jest.fn(async () => undefined);
 
 		await render(
 			<AuthenticatedAppSessionProvider
 				controller={controller}
 				auth={auth}
 				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={clearSignedOutData}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -533,24 +512,24 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
 		await waitFor(() => expect(controller.dispose).toHaveBeenCalledTimes(1));
-		expect(clearSignedOutData).not.toHaveBeenCalled();
+		expect(clearSessionHint).not.toHaveBeenCalled();
 		expect(auth.signOut).not.toHaveBeenCalled();
-		disposed.resolve({ householdIdsForLocalDataDeletion: [] });
-		await waitFor(() => expect(clearSignedOutData).toHaveBeenCalledTimes(1));
+		disposed.resolve();
+		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 	});
 
-	it("does not call Clerk sign out before local Household data deletion finishes", async () => {
+	it("does not call Clerk sign out before local cleanup finishes", async () => {
 		const auth = authFixture();
-		const localDataDeleted = deferred<void>();
-		const clearSignedOutData = jest.fn(() => localDataDeleted.promise);
+		const sessionHintCleared = deferred<void>();
+		const clearSessionHint = jest.fn(() => sessionHintCleared.promise);
 
 		await render(
 			<AuthenticatedAppSessionProvider
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
 				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={clearSignedOutData}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
@@ -558,13 +537,13 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
-		await waitFor(() => expect(clearSignedOutData).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
 		expect(auth.signOut).not.toHaveBeenCalled();
-		localDataDeleted.resolve(undefined);
+		sessionHintCleared.resolve(undefined);
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 	});
 
-	it("continues Clerk sign out when local Household cleanup fails", async () => {
+	it("continues Clerk sign out when local cleanup fails", async () => {
 		const auth = authFixture();
 
 		await render(
@@ -572,7 +551,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				controller={authenticatedAppSessionControllerFixture()}
 				auth={auth}
 				analytics={createMockAnalytics()}
-				clearSignedOutSessionData={jest.fn(async () => {
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => {
 					throw new Error("cleanup failed");
 				})}
 			>
@@ -707,6 +686,7 @@ function authFixture(
 ): AuthenticatedAppSessionActivation & { signOut: () => Promise<void> } {
 	return {
 		getToken: jest.fn(async () => "token"),
+		getPowerSyncToken: jest.fn(async () => "powersync-token"),
 		authReady: true,
 		signedIn: true,
 		signOut: jest.fn(async () => undefined),
@@ -761,7 +741,6 @@ function appSessionFixture(): AuthenticatedAppSession {
 			sync: {
 				getStatus: () => "synced",
 				subscribe: () => ({ remove() {} }),
-				requestSync: async () => null,
 			},
 		},
 	};
@@ -790,7 +769,7 @@ function authenticatedAppSessionControllerFixture({
 		dispose: jest.fn<
 			ReturnType<AuthenticatedAppSessionController["dispose"]>,
 			Parameters<AuthenticatedAppSessionController["dispose"]>
-		>(async () => ({ householdIdsForLocalDataDeletion: [] })),
+		>(async () => undefined),
 		invalidateCurrentSession: jest.fn<
 			ReturnType<AuthenticatedAppSessionController["invalidateCurrentSession"]>,
 			Parameters<AuthenticatedAppSessionController["invalidateCurrentSession"]>

@@ -1,6 +1,5 @@
 import {
 	assertLocalSeedPrerequisites,
-	assertLocalSeedTursoTarget,
 	createSeedClerkUsers,
 	deriveSeedMemberEmail,
 	emailBackedSeedTargetForMode,
@@ -56,13 +55,6 @@ function mockUpdateEmailAddress() {
 		Parameters<SeedClerkClient["updateEmailAddress"]>
 	>();
 }
-
-const localTursoTarget = {
-	appEnv: "local" as const,
-	directoryUrl: "libsql://dont-forget-local-directory-dont-forget.turso.io",
-	group: "dont-forget-local",
-	org: "dont-forget",
-};
 
 describe("seed EMAIL helpers", () => {
 	it("returns deterministic mode when EMAIL is missing", () => {
@@ -130,22 +122,12 @@ describe("seed EMAIL helpers", () => {
 	});
 
 	it("derives an email-scoped seed target outside the deterministic seed IDs", () => {
-		const target = emailBackedSeedTargetForMode(
-			{
-				kind: "clerk",
-				ownerEmail: "jun15_3@email.com",
-				memberEmail: "jun15_3+member@email.com",
-			},
-			{
-				directoryUrl: "libsql://df-local-randall.turso.io",
-				org: "randall",
-			},
-		);
+		const target = emailBackedSeedTargetForMode({
+			kind: "clerk",
+			ownerEmail: "jun15_3@email.com",
+			memberEmail: "jun15_3+member@email.com",
+		});
 
-		expect(target.householdDbName).toMatch(
-			/^df-local-hh-seed-avery-[a-f0-9]{8}-[a-f0-9]+$/,
-		);
-		expect(target.householdDbName.length).toBeLessThanOrEqual(51);
 		expect(target.seed.users.avery.id).not.toBe("usr_avery");
 		expect(target.seed.users.cameron).toEqual(
 			expect.objectContaining({
@@ -176,26 +158,16 @@ describe("seed EMAIL helpers", () => {
 	});
 
 	it("derives disjoint seed IDs for different EMAIL values", () => {
-		const config = {
-			directoryUrl: "libsql://df-local-randall.turso.io",
-			org: "randall",
-		};
-		const first = emailBackedSeedTargetForMode(
-			{
-				kind: "clerk",
-				ownerEmail: "jun15_1@email.com",
-				memberEmail: "jun15_1+member@email.com",
-			},
-			config,
-		);
-		const second = emailBackedSeedTargetForMode(
-			{
-				kind: "clerk",
-				ownerEmail: "jun15_2@email.com",
-				memberEmail: "jun15_2+member@email.com",
-			},
-			config,
-		);
+		const first = emailBackedSeedTargetForMode({
+			kind: "clerk",
+			ownerEmail: "jun15_1@email.com",
+			memberEmail: "jun15_1+member@email.com",
+		});
+		const second = emailBackedSeedTargetForMode({
+			kind: "clerk",
+			ownerEmail: "jun15_2@email.com",
+			memberEmail: "jun15_2+member@email.com",
+		});
 
 		const firstIds = new Set(seedTargetIds(first));
 		const secondIds = seedTargetIds(second);
@@ -210,40 +182,13 @@ describe("seed EMAIL helpers", () => {
 		expect(secondIds.every((id) => !firstIds.has(id))).toBe(true);
 	});
 
-	it("preserves worktree-scoped email seed DB names after truncation", () => {
-		const mode = {
-			kind: "clerk" as const,
-			ownerEmail: "seedtest@example.com",
-			memberEmail: "seedtest+member@example.com",
-		};
-		const first = emailBackedSeedTargetForMode(mode, {
-			directoryUrl:
-				"libsql://df-local-wt-shared-email-seed-prefix-alpha-dir-randall.turso.io",
-			org: "randall",
-		});
-		const second = emailBackedSeedTargetForMode(mode, {
-			directoryUrl:
-				"libsql://df-local-wt-shared-email-seed-prefix-bravo-dir-randall.turso.io",
-			org: "randall",
-		});
-
-		expect(first.householdDbName).not.toBe(second.householdDbName);
-		expect(first.householdDbName.length).toBeLessThanOrEqual(51);
-		expect(second.householdDbName.length).toBeLessThanOrEqual(51);
-		expect(first.householdDbName).toMatch(/-[a-f0-9]{8}-[a-f0-9]{16}$/);
-		expect(second.householdDbName).toMatch(/-[a-f0-9]{8}-[a-f0-9]{16}$/);
-	});
-
 	it("preflights actual Clerk IDs for EMAIL seed users", () => {
 		const mode = {
 			kind: "clerk" as const,
 			ownerEmail: "owner@example.com",
 			memberEmail: "owner+member@example.com",
 		};
-		const target = emailBackedSeedTargetForMode(mode, {
-			directoryUrl: "libsql://df-local-randall.turso.io",
-			org: "randall",
-		});
+		const target = emailBackedSeedTargetForMode(mode);
 
 		expect(
 			emailSeedDataTarget(target, mode, [
@@ -257,35 +202,6 @@ describe("seed EMAIL helpers", () => {
 		]);
 	});
 
-	it("accepts documented local Turso seed targets", () => {
-		expect(() => assertLocalSeedTursoTarget(localTursoTarget)).not.toThrow();
-		expect(() =>
-			assertLocalSeedTursoTarget({
-				...localTursoTarget,
-				directoryUrl: "libsql://df-local-wt-branch-dir-dont-forget.turso.io",
-			}),
-		).not.toThrow();
-	});
-
-	it("rejects inherited non-local Turso directory targets", () => {
-		expect(() =>
-			assertLocalSeedTursoTarget({
-				...localTursoTarget,
-				directoryUrl:
-					"libsql://dont-forget-production-directory-dont-forget.turso.io",
-			}),
-		).toThrow(/non-local Turso directory database/);
-	});
-
-	it("rejects inherited non-local Turso groups", () => {
-		expect(() =>
-			assertLocalSeedTursoTarget({
-				...localTursoTarget,
-				group: "dont-forget-production",
-			}),
-		).toThrow(/non-local Turso group/);
-	});
-
 	it("preflights Clerk server config for EMAIL seed mode", () => {
 		const seedMode = {
 			kind: "clerk" as const,
@@ -296,21 +212,18 @@ describe("seed EMAIL helpers", () => {
 		expect(() =>
 			assertLocalSeedPrerequisites({
 				seedMode,
-				turso: localTursoTarget,
 				env: { APP_ENV: "local", CLERK_SECRET_KEY: "sk_live_wrong" },
 			}),
 		).toThrow(/CLERK_SECRET_KEY/);
 		expect(() =>
 			assertLocalSeedPrerequisites({
 				seedMode,
-				turso: localTursoTarget,
 				env: { APP_ENV: "local" },
 			}),
 		).toThrow(/CLERK_SECRET_KEY/);
 		expect(() =>
 			assertLocalSeedPrerequisites({
 				seedMode,
-				turso: localTursoTarget,
 				env: { APP_ENV: "local", CLERK_SECRET_KEY: "sk_test_valid" },
 			}),
 		).not.toThrow();
@@ -321,7 +234,6 @@ function seedTargetIds(
 	target: ReturnType<typeof emailBackedSeedTargetForMode>,
 ) {
 	return [
-		target.householdDbName,
 		...Object.values(target.seed.users).flatMap((user) => [
 			user.id,
 			"clerkUserId" in user ? user.clerkUserId : undefined,

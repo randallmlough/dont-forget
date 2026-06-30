@@ -87,7 +87,7 @@ function HomeCurrentListResource({
 				currentMemberName={currentMemberName}
 				onAddItem={loadState.actions.addItem}
 				onSetItemChecked={loadState.actions.setItemChecked}
-				syncCoordinator={session.services.sync}
+				syncStatus={session.services.sync}
 			>
 				<ActiveList.Screen>
 					<ActiveList.Header onPressListName={() => setSwitcherOpen(true)} />

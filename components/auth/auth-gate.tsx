@@ -3,7 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useReducer } from "react";
 import { useAnalyticsIdentity } from "@/lib/analytics";
-import { hasCachedAuthenticatedAppSession } from "@/lib/services/session";
+import { hasAuthenticatedAppSessionHint } from "@/lib/services/session/session-hint";
 import { type AuthRedirectParams, authRedirectTarget } from "./redirect-policy";
 
 type CachedSessionStatus = "checking" | "available" | "unavailable";
@@ -33,12 +33,10 @@ export function AuthGate({
 		if (isLoaded) return;
 		let cancelled = false;
 
-		void hasCachedAuthenticatedAppSession()
-			.then((hasCachedSession) => {
+		void hasAuthenticatedAppSessionHint()
+			.then((hasSession) => {
 				if (!cancelled) {
-					dispatchCachedSessionStatus(
-						hasCachedSession ? "available" : "unavailable",
-					);
+					dispatchCachedSessionStatus(hasSession ? "available" : "unavailable");
 				}
 			})
 			.catch(() => {

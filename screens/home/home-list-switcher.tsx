@@ -35,12 +35,11 @@ import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
  * reads the stored selection and remounts the Active List boundary), and
  * closes the sheet. A current-row tap is a complete no-op.
  *
- * Lifecycle writes (create/rename/delete) go through the task 2 ListService
- * and request a `localWrite` sync from here — never from the service — and
- * only when the service reports `didWrite === true`. `list_created`,
- * `list_renamed`, and `list_deleted` are service-owned; this component emits
- * no analytics for them and never emits `list_switched` for create or
- * delete-fallback selection repair.
+ * Lifecycle writes (create/rename/delete) go through the task 2 ListService;
+ * PowerSync uploads the change continuously, so this component never requests a
+ * sync. `list_created`, `list_renamed`, and `list_deleted` are service-owned;
+ * this component emits no analytics for them and never emits `list_switched`
+ * for create or delete-fallback selection repair.
  *
  * `onSwitched` (= resolver reload) flips Home into its loading state, which
  * unmounts this sheet's subtree; every `onSwitched()` call is therefore
@@ -65,12 +64,6 @@ export function HomeListSwitcher({
 	const switchingRef = useRef(false);
 	const userId = session.activeMember.userId;
 	const householdId = session.activeHousehold.id;
-
-	function requestLocalWriteSync() {
-		void session.services.sync
-			.requestSync({ reason: "localWrite" })
-			.catch(() => undefined);
-	}
 
 	const selectList = useCallback(
 		async (listId: string) => {
@@ -121,7 +114,6 @@ export function HomeListSwitcher({
 			setMode({ kind: "switcher" });
 			void reload();
 		}
-		requestLocalWriteSync();
 		return null;
 	}
 
@@ -156,7 +148,6 @@ export function HomeListSwitcher({
 			setMode({ kind: "switcher" });
 			void reload();
 		}
-		requestLocalWriteSync();
 		return null;
 	}
 
@@ -208,7 +199,6 @@ export function HomeListSwitcher({
 			setMode({ kind: "switcher" });
 			void reload();
 		}
-		requestLocalWriteSync();
 		return null;
 	}
 

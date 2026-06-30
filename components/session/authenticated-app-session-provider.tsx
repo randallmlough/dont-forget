@@ -19,7 +19,7 @@ import {
 	createAuthenticatedAppSessionController,
 	createAuthenticatedAppSessionSignOut,
 } from "@/lib/services/session";
-import { clearSignedOutSessionData } from "@/lib/services/session/cache";
+import { clearAuthenticatedAppSessionPresent } from "@/lib/services/session/session-hint";
 
 export type AuthenticatedAppSessionState =
 	| { status: "loading" }
@@ -46,7 +46,7 @@ type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	controller?: AuthenticatedAppSessionController;
 	auth?: AuthenticatedAppSessionProviderAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
-	clearSignedOutSessionData?: typeof clearSignedOutSessionData;
+	clearAuthenticatedAppSessionPresent?: typeof clearAuthenticatedAppSessionPresent;
 	activationEnabled?: boolean;
 }>;
 
@@ -63,18 +63,23 @@ export function AuthenticatedAppSessionProvider({
 	controller: controllerProp,
 	auth: authProp,
 	analytics = defaultAnalytics,
-	clearSignedOutSessionData:
-		clearSignedOutSessionDataProp = clearSignedOutSessionData,
+	clearAuthenticatedAppSessionPresent:
+		clearAuthenticatedAppSessionPresentProp = clearAuthenticatedAppSessionPresent,
 	activationEnabled = true,
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
 	const logger = useLogger();
 	const clerkGetToken = clerkAuth.getToken;
+	// PowerSync authenticates with a dedicated Clerk JWT template so the sync
+	// service can verify it independently of the session token used for /api/*.
+	const clerkGetPowerSyncToken = () =>
+		clerkAuth.getToken({ template: "powersync" });
 	const clerkAuthReady = clerkAuth.isLoaded;
 	const clerkSignedIn = Boolean(clerkAuth.isSignedIn);
 	const clerkSignOut = clerkAuth.signOut;
 	const auth = providerAuthFromClerk(authProp, {
 		getToken: clerkGetToken,
+		getPowerSyncToken: clerkGetPowerSyncToken,
 		authReady: clerkAuthReady,
 		signedIn: clerkSignedIn,
 		signOut: clerkSignOut,
@@ -100,11 +105,15 @@ export function AuthenticatedAppSessionProvider({
 	);
 	const [signOutRunningState] = useState(() => ({ running: false }));
 	const getToken = useEffectEvent(() => auth.getToken());
+	const getPowerSyncToken = useEffectEvent(() =>
+		(auth.getPowerSyncToken ?? auth.getToken)(),
+	);
 	const signOutFlow = createAuthenticatedAppSessionSignOut({
 		controller,
 		getAuth: () => auth,
 		analytics,
-		clearSignedOutSessionData: clearSignedOutSessionDataProp,
+		clearAuthenticatedAppSessionPresent:
+			clearAuthenticatedAppSessionPresentProp,
 		logger,
 		runningState: signOutRunningState,
 	});
@@ -119,6 +128,7 @@ export function AuthenticatedAppSessionProvider({
 		if (!activationEnabled && activationRequest.attempt === 0) return;
 		void controller.activate({
 			getToken,
+			getPowerSyncToken,
 			authReady,
 			signedIn,
 			cachePolicy:

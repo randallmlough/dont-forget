@@ -5,7 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import type {
 	ActiveListItem,
 	ActiveListState,
-	ActiveListSyncCoordinator,
+	ActiveListSyncStatusSource,
 } from "@/components/active-list";
 import {
 	createActiveListMemoryActions,
@@ -110,7 +110,7 @@ function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 		services: {
 			...storyServices(initialList),
 			changes: passiveChanges(),
-			sync: storySyncCoordinator(),
+			sync: storySyncStatus(),
 		},
 	};
 }
@@ -219,13 +219,10 @@ function activeListStoryItemToItem(
 	};
 }
 
-function storySyncCoordinator(): ActiveListSyncCoordinator {
+function storySyncStatus(): ActiveListSyncStatusSource {
 	return {
 		getStatus: () => "synced",
 		subscribe: () => ({ remove() {} }),
-		async requestSync() {
-			return { changed: false };
-		},
 	};
 }
 

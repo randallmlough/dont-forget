@@ -60,16 +60,12 @@ function isDatabaseImport(source) {
 	return (
 		source === "drizzle-orm" ||
 		source.startsWith("drizzle-orm/") ||
-		source === "@libsql/client" ||
-		source.startsWith("@libsql/client/") ||
 		source === "@electric-sql/pglite" ||
 		source.startsWith("@electric-sql/pglite/") ||
 		source === "pg" ||
-		source === "@tursodatabase/sync-react-native" ||
-		source === "@tursodatabase/sync" ||
-		source === "@tursodatabase/database" ||
-		source === "@tursodatabase/serverless" ||
-		source.startsWith("@tursodatabase/serverless/") ||
+		source === "@op-engineering/op-sqlite" ||
+		source.startsWith("@op-engineering/op-sqlite/") ||
+		source.startsWith("@powersync/") ||
 		source === "@/db/client" ||
 		source.startsWith("@/db/")
 	);

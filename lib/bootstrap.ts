@@ -1,9 +1,6 @@
 import { z } from "zod";
 
 export const BOOTSTRAP_API_PATH = "/api/bootstrap";
-export const DEFAULT_LIST_ID = "lst_default_groceries";
-export const DEFAULT_LIST_NAME = "Groceries";
-export const HOUSEHOLD_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 const memberRoleSchema = z.enum(["owner", "member"]);
 
@@ -41,11 +38,6 @@ export const bootstrapResponseSchema = z.object({
 			displayName: z.string().nullable(),
 		}),
 	),
-	householdDatabase: z.object({
-		url: z.string(),
-		authToken: z.string(),
-		expiresAt: z.number(),
-	}),
 });
 
 export type BootstrapResponse = z.infer<typeof bootstrapResponseSchema>;

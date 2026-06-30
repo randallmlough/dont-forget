@@ -8,17 +8,11 @@ import {
 	seedPrimaryHouseholdScenario,
 	userFixture,
 } from "@/db/server/fixtures";
-import {
-	createTestDirectoryDb,
-	createTestHouseholdDb,
-	type TestDirectoryDb,
-	type TestHouseholdDb,
-} from "@/db/server/test";
+import { createTestDirectoryDb, type TestDirectoryDb } from "@/db/server/test";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import {
 	createHouseholdJoinCodeService,
 	type HouseholdJoinCodeService,
-	type HouseholdProvisioningService,
 } from "@/lib/services/household/server";
 import { INITIAL_HOUSEHOLD_NAMES } from "@/lib/services/household/server/initial-household-name";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
@@ -55,7 +49,6 @@ describe("Household API handlers", () => {
 					authenticate: async () => {
 						throw new ApiUnauthorizedError("Invalid Clerk session token");
 					},
-					appEnv: "local",
 				},
 			);
 
@@ -128,8 +121,6 @@ describe("Household API handlers", () => {
 			expect(storedHousehold).toMatchObject({
 				id: householdId,
 				name: "Lake House",
-				tursoDbName: expect.stringContaining("df-local-hh-"),
-				provisioningCompletedAt: expect.any(Number),
 				createdByUserId: storedUser?.id,
 			});
 			expect(storedMembership).toMatchObject({
@@ -142,112 +133,6 @@ describe("Household API handlers", () => {
 		} finally {
 			dateNow.mockRestore();
 			await directory.close();
-		}
-	});
-
-	it("leaves the previous Household active and creates no Owner Membership when provisioning fails", async () => {
-		const harness = await primaryHarness();
-		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
-		try {
-			const response = await handleCreateHousehold(
-				createApiRequest({
-					method: "POST",
-					body: { name: "Lake House" },
-				}),
-				{
-					...householdDeps(
-						harness.directory,
-						harness.scenario.users.avery.clerkUserId,
-					),
-					createHouseholdProvisioningService: () =>
-						testHouseholdProvisioningService({
-							ensureHouseholdDatabase: async () => {
-								throw new Error("provisioning unavailable");
-							},
-						}),
-				},
-			);
-
-			await expect(readJsonResponse(response)).resolves.toMatchObject({
-				status: 500,
-				body: { error: "Server error" },
-			});
-			const [storedUser] = await harness.directory.db
-				.select()
-				.from(users)
-				.where(eq(users.id, harness.scenario.users.avery.id));
-			const [createdHousehold] = await harness.directory.db
-				.select()
-				.from(households)
-				.where(eq(households.name, "Lake House"));
-			const createdMemberships = createdHousehold
-				? await harness.directory.db
-						.select()
-						.from(memberships)
-						.where(eq(memberships.householdId, createdHousehold.id))
-				: [];
-
-			expect(storedUser?.activeHouseholdId).toBe(harness.scenario.household.id);
-			expect(createdHousehold).toMatchObject({
-				provisioningCompletedAt: null,
-			});
-			expect(createdMemberships).toEqual([]);
-		} finally {
-			errorSpy.mockRestore();
-			await harness.close();
-		}
-	});
-
-	it("leaves the previous Household active and creates no Owner Membership when token creation fails", async () => {
-		const harness = await primaryHarness();
-		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
-		try {
-			const response = await handleCreateHousehold(
-				createApiRequest({
-					method: "POST",
-					body: { name: "Lake House" },
-				}),
-				{
-					...householdDeps(
-						harness.directory,
-						harness.scenario.users.avery.clerkUserId,
-					),
-					createHouseholdProvisioningService: () =>
-						testHouseholdProvisioningService({
-							createHouseholdDatabaseToken: async () => {
-								throw new Error("token unavailable");
-							},
-						}),
-				},
-			);
-
-			await expect(readJsonResponse(response)).resolves.toMatchObject({
-				status: 500,
-				body: { error: "Server error" },
-			});
-			const [storedUser] = await harness.directory.db
-				.select()
-				.from(users)
-				.where(eq(users.id, harness.scenario.users.avery.id));
-			const [createdHousehold] = await harness.directory.db
-				.select()
-				.from(households)
-				.where(eq(households.name, "Lake House"));
-			const createdMemberships = createdHousehold
-				? await harness.directory.db
-						.select()
-						.from(memberships)
-						.where(eq(memberships.householdId, createdHousehold.id))
-				: [];
-
-			expect(storedUser?.activeHouseholdId).toBe(harness.scenario.household.id);
-			expect(createdHousehold).toMatchObject({
-				provisioningCompletedAt: null,
-			});
-			expect(createdMemberships).toEqual([]);
-		} finally {
-			errorSpy.mockRestore();
-			await harness.close();
 		}
 	});
 
@@ -1025,7 +910,6 @@ function householdDeps(
 ): HouseholdApiDeps {
 	return {
 		directory: directory.db,
-		appEnv: "local",
 		authenticate: async (_request, db) =>
 			upsertAuthenticatedUser(
 				{
@@ -1044,42 +928,22 @@ function householdDeps(
 				generateCode: async () => "STAGE500",
 				analytics: { track: jest.fn() },
 			}),
-		createHouseholdProvisioningService: () =>
-			testHouseholdProvisioningService(),
-	};
-}
-
-function testHouseholdProvisioningService(
-	overrides: Partial<HouseholdProvisioningService> = {},
-): HouseholdProvisioningService {
-	return {
-		ensureHouseholdDatabase: async () => ({
-			url: "file:test-household.db",
-			provisioned: true,
-		}),
-		createHouseholdDatabaseToken: async () => "test-token",
-		...overrides,
 	};
 }
 
 async function primaryHarness(): Promise<{
 	directory: TestDirectoryDb;
-	household: TestHouseholdDb;
 	scenario: Awaited<ReturnType<typeof seedPrimaryHouseholdScenario>>;
 	close: () => Promise<void>;
 }> {
 	const directory = await createTestDirectoryDb();
-	const household = await createTestHouseholdDb();
 	const scenario = await seedPrimaryHouseholdScenario({
 		directory: directory.db,
-		household: household.db,
 	});
 	return {
 		directory,
-		household,
 		scenario,
 		close: async () => {
-			await household.close();
 			await directory.close();
 		},
 	};

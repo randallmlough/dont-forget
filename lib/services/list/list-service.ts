@@ -1,15 +1,16 @@
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
-import type {
-	HouseholdSqlValue,
-	HouseholdStoreExecutor,
-} from "@/db/household-store";
 import { sqlNumberSchema } from "@/db/utils";
 import { track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
+import type { ProductDatabase } from "@/lib/services/shared/product-database";
+import {
+	sqlTimestampMillisSchema,
+	timestampMillisToSqlText,
+} from "@/lib/services/shared/sql-timestamp";
 
 export type List = {
 	id: string;
@@ -104,7 +105,7 @@ export type ListService = {
 export type ListServiceDeps = {
 	householdId: string;
 	userId: string;
-	store: HouseholdStoreExecutor;
+	store: ProductDatabase;
 	logger?: Logger;
 	analytics?: ServiceAnalytics;
 };
@@ -115,29 +116,22 @@ const listRowSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	created_by_user_id: z.string(),
-	created_at: sqlNumberSchema,
-	updated_at: sqlNumberSchema,
-	archived_at: sqlNumberSchema.nullable(),
-	deleted_at: sqlNumberSchema.nullable(),
+	created_at: sqlTimestampMillisSchema,
+	updated_at: sqlTimestampMillisSchema,
+	archived_at: sqlTimestampMillisSchema.nullable(),
+	deleted_at: sqlTimestampMillisSchema.nullable(),
 });
 
 type ListRow = z.infer<typeof listRowSchema>;
-
-// The real Household store always reports rowsAffected on writes; parse it
-// loudly so a lifecycle race (row deleted between the pre-read and the
-// guarded UPDATE) can be reclassified instead of silently miscounted.
-const writeResultSchema = z.object({
-	rowsAffected: sqlNumberSchema,
-});
 
 const listSummaryRowSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	created_by_user_id: z.string(),
-	created_at: sqlNumberSchema,
-	updated_at: sqlNumberSchema,
-	archived_at: sqlNumberSchema.nullable(),
-	last_activity_at: sqlNumberSchema,
+	created_at: sqlTimestampMillisSchema,
+	updated_at: sqlTimestampMillisSchema,
+	archived_at: sqlTimestampMillisSchema.nullable(),
+	last_activity_at: sqlTimestampMillisSchema,
 	unchecked_item_count: sqlNumberSchema,
 	checked_item_count: sqlNumberSchema,
 });
@@ -176,15 +170,26 @@ export function createListService(deps: ListServiceDeps): ListService {
 
 			try {
 				const now = nextListServiceTimestamp();
+				const nowText = timestampMillisToSqlText(now);
 				const id = createAppId("lst", randomUuid);
-				await deps.store.execute({
-					kind: "write",
-					sql: `
-            INSERT INTO lists (id, name, created_by_user_id, created_at, updated_at, archived_at)
-            VALUES (?, ?, ?, ?, ?, NULL)
-          `,
-					args: [id, validated.name, deps.userId, now, now],
-				});
+				// The shared `lists` table carries household_id (each Household is no
+				// longer its own DB), so the write scopes the row to the Household.
+				await deps.store.writeTransaction((tx) =>
+					tx.execute(
+						`
+              INSERT INTO lists (id, household_id, name, created_by_user_id, created_at, updated_at, archived_at, deleted_at)
+              VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
+            `,
+						[
+							id,
+							deps.householdId,
+							validated.name,
+							deps.userId,
+							nowText,
+							nowText,
+						],
+					),
+				);
 				analytics.track("list_created", analyticsProperties(deps, id));
 
 				return {
@@ -208,7 +213,11 @@ export function createListService(deps: ListServiceDeps): ListService {
 		},
 		async getList(input) {
 			try {
-				const row = await readListRow(deps.store, input.listId);
+				const row = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
 				if (!row) {
 					return { status: "missing", listId: input.listId };
 				}
@@ -244,7 +253,11 @@ export function createListService(deps: ListServiceDeps): ListService {
 			}
 
 			try {
-				const row = await readListRow(deps.store, input.listId);
+				const row = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
 				if (!row) {
 					return { status: "missing", listId: input.listId, didWrite: false };
 				}
@@ -268,14 +281,34 @@ export function createListService(deps: ListServiceDeps): ListService {
 				const now = nextListServiceTimestamp();
 				// `AND deleted_at IS NULL` guards the read-then-write race: a delete
 				// interleaved after the pre-read must not resurrect or rename the
-				// tombstoned row (rowsAffected reclassifies the lost race below).
-				const writeResult = await deps.store.execute({
-					kind: "write",
-					sql: "UPDATE lists SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
-					args: [validated.name, now, input.listId],
-				});
-				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
-					return reclassifyLostWrite(deps.store, input.listId);
+				// tombstoned row. PowerSync's local tables are views, so rowsAffected
+				// is always 0; we re-read and classify by the row's lifecycle. A live
+				// row after this guarded UPDATE on the serialized connection carries
+				// the new name (didWrite), while a tombstoned or vanished row
+				// reclassifies the lost race. The Household scope blocks renaming
+				// another Household's List.
+				await deps.store.writeTransaction((tx) =>
+					tx.execute(
+						"UPDATE lists SET name = ?, updated_at = ? WHERE id = ? AND household_id = ? AND deleted_at IS NULL",
+						[
+							validated.name,
+							timestampMillisToSqlText(now),
+							input.listId,
+							deps.householdId,
+						],
+					),
+				);
+				const writtenRow = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
+				if (!writtenRow || writtenRow.deleted_at !== null) {
+					return reclassifyLostWrite(
+						deps.store,
+						deps.householdId,
+						input.listId,
+					);
 				}
 				analytics.track(
 					"list_renamed",
@@ -285,7 +318,7 @@ export function createListService(deps: ListServiceDeps): ListService {
 				return {
 					status: "available",
 					list: {
-						...listFromRow(row, deps.householdId),
+						...listFromRow(writtenRow, deps.householdId),
 						name: validated.name,
 						updatedAt: now,
 					},
@@ -301,7 +334,11 @@ export function createListService(deps: ListServiceDeps): ListService {
 		},
 		async deleteList(input) {
 			try {
-				const row = await readListRow(deps.store, input.listId);
+				const row = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
 				if (!row) {
 					return { status: "missing", listId: input.listId, didWrite: false };
 				}
@@ -316,28 +353,42 @@ export function createListService(deps: ListServiceDeps): ListService {
 				}
 
 				const now = nextListServiceTimestamp();
+				const nowText = timestampMillisToSqlText(now);
 				// `AND deleted_at IS NULL` keeps a concurrent delete from churning the
-				// tombstone timestamps; a lost race reclassifies below.
-				const writeResult = await deps.store.execute({
-					kind: "write",
-					sql: "UPDATE lists SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
-					args: [now, now, input.listId],
-				});
-				if (writeResultSchema.parse(writeResult).rowsAffected === 0) {
-					return reclassifyLostWrite(deps.store, input.listId);
-				}
-				analytics.track(
-					"list_deleted",
-					analyticsProperties(deps, input.listId),
+				// tombstone timestamps. PowerSync's local tables are views, so
+				// rowsAffected is always 0; we re-read instead. deleted_at is
+				// write-once under the guard, so a tombstone equal to our `now` means
+				// our write won the race (didWrite); any other tombstone is a lost
+				// race, and a vanished row is missing.
+				await deps.store.writeTransaction((tx) =>
+					tx.execute(
+						"UPDATE lists SET deleted_at = ?, updated_at = ? WHERE id = ? AND household_id = ? AND deleted_at IS NULL",
+						[nowText, nowText, input.listId, deps.householdId],
+					),
 				);
+				const deletedRow = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
+				if (deletedRow?.deleted_at != null) {
+					const didWrite = deletedRow.deleted_at === now;
+					if (didWrite) {
+						analytics.track(
+							"list_deleted",
+							analyticsProperties(deps, input.listId),
+						);
+					}
+					return {
+						status: "deleted",
+						listId: input.listId,
+						deletedAt: deletedRow.deleted_at,
+						updatedAt: deletedRow.updated_at,
+						didWrite,
+					};
+				}
 
-				return {
-					status: "deleted",
-					listId: input.listId,
-					deletedAt: now,
-					updatedAt: now,
-					didWrite: true,
-				};
+				return { status: "missing", listId: input.listId, didWrite: false };
 			} catch (error) {
 				log.error("list delete failed", {
 					error: asError(error),
@@ -349,8 +400,12 @@ export function createListService(deps: ListServiceDeps): ListService {
 		async listLists(input) {
 			const archive = input?.archive ?? "active";
 			const sort = input?.sort ?? "recentActivity";
-			const conditions = ["l.deleted_at IS NULL", ARCHIVE_FILTER_SQL[archive]];
-			const args: HouseholdSqlValue[] = [];
+			const conditions = [
+				"l.household_id = ?",
+				"AND l.deleted_at IS NULL",
+				ARCHIVE_FILTER_SQL[archive],
+			];
+			const args: unknown[] = [deps.householdId];
 
 			const searchText = input?.searchText?.trim() ?? "";
 			if (searchText) {
@@ -363,9 +418,12 @@ export function createListService(deps: ListServiceDeps): ListService {
 			}
 
 			try {
-				const result = await deps.store.execute({
-					kind: "read",
-					sql: `
+				// item_checks is one shared row per Item (Decision 9), so the plain
+				// join replaces the old latest-row subquery. Timestamps are ISO text,
+				// so last_activity_at uses the scalar MAX over text with '' as the
+				// "no activity" floor (ISO-8601 sorts lexicographically = chronologically).
+				const rows = await deps.store.getAll(
+					`
             SELECT
               l.id,
               l.name,
@@ -375,8 +433,8 @@ export function createListService(deps: ListServiceDeps): ListService {
               l.archived_at,
               MAX(
                 l.updated_at,
-                COALESCE(MAX(i.updated_at), 0),
-                COALESCE(MAX(c.updated_at), 0)
+                COALESCE(MAX(i.updated_at), ''),
+                COALESCE(MAX(c.updated_at), '')
               ) AS last_activity_at,
               COALESCE(
                 SUM(CASE WHEN i.id IS NOT NULL AND c.checked_at IS NULL THEN 1 ELSE 0 END),
@@ -388,21 +446,15 @@ export function createListService(deps: ListServiceDeps): ListService {
               ) AS checked_item_count
             FROM lists l
             LEFT JOIN items i ON i.list_id = l.id AND i.deleted_at IS NULL
-            LEFT JOIN item_checks c ON c.rowid = (
-              SELECT c2.rowid
-              FROM item_checks c2
-              WHERE c2.item_id = i.id
-              ORDER BY c2.updated_at DESC, c2.user_id DESC
-              LIMIT 1
-            )
+            LEFT JOIN item_checks c ON c.item_id = i.id
             WHERE ${conditions.filter(Boolean).join(" ")}
             GROUP BY l.id
             ORDER BY ${SORT_SQL[sort]}
           `,
 					args,
-				});
+				);
 
-				return result.rows.map((row) =>
+				return rows.map((row) =>
 					listSummaryFromRow(listSummaryRowSchema.parse(row), deps.householdId),
 				);
 			} catch (error) {
@@ -420,7 +472,8 @@ export function createListService(deps: ListServiceDeps): ListService {
  * no analytics for it.
  */
 async function reclassifyLostWrite(
-	store: HouseholdStoreExecutor,
+	store: ProductDatabase,
+	householdId: string,
 	listId: string,
 ): Promise<
 	| {
@@ -432,7 +485,7 @@ async function reclassifyLostWrite(
 	  }
 	| { status: "missing"; listId: string; didWrite: false }
 > {
-	const row = await readListRow(store, listId);
+	const row = await readListRow(store, householdId, listId);
 	if (row?.deleted_at != null) {
 		return {
 			status: "deleted",
@@ -447,20 +500,19 @@ async function reclassifyLostWrite(
 }
 
 async function readListRow(
-	store: HouseholdStoreExecutor,
+	store: ProductDatabase,
+	householdId: string,
 	listId: string,
 ): Promise<ListRow | null> {
-	const result = await store.execute({
-		kind: "read",
-		sql: `
+	const row = await store.getOptional(
+		`
       SELECT id, name, created_by_user_id, created_at, updated_at, archived_at, deleted_at
       FROM lists
-      WHERE id = ?
+      WHERE id = ? AND household_id = ?
       LIMIT 1
     `,
-		args: [listId],
-	});
-	const row = result.rows[0];
+		[listId, householdId],
+	);
 	return row ? listRowSchema.parse(row) : null;
 }
 

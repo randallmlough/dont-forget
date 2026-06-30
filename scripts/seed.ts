@@ -1,47 +1,33 @@
 import { createHash } from "node:crypto";
 import { inArray, or } from "drizzle-orm";
 import { z } from "zod";
-import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	householdJoinCodes,
 	households,
+	itemChecks,
+	items,
+	lists,
 	memberships,
 	users,
 } from "@/db/schema/postgres";
-import {
-	directoryClient,
-	directoryDb,
-	householdClient,
-	householdDb,
-	householdDbUrl,
-} from "@/db/server/client";
+import { directoryClient, directoryDb } from "@/db/server/client";
 import {
 	type EmailBackedPrimaryHouseholdScenarioSeed,
 	PRIMARY_HOUSEHOLD_SEED,
 	seedEmailBackedPrimaryHouseholdScenario,
 	seedPrimaryHouseholdScenario,
 } from "@/db/server/fixtures";
-import { migrateHouseholdDb } from "@/db/server/household-migrations";
 import {
 	type AppEnv,
 	assertLocalDirectoryDatabaseUrl,
 	readClerkServerConfig,
 	readPostgresConfig,
-	readTursoMigrationConfig,
-	readTursoOperatorConfig,
-	type TursoMigrationConfig,
 } from "@/lib/env";
 import { loadEnvFile } from "@/lib/load-env";
-import {
-	directoryDbNameFromUrl,
-	seedHouseholdDbNameForDirectory,
-} from "./worktree-db";
 
 export const SEED_TEST_PASSWORD = "testing1234";
 
-const TURSO_DATABASE_NAME_LIMIT = 51;
 const EMAIL_SEED_HASH_LENGTH = 16;
-const EMAIL_SEED_DB_BASE_HASH_LENGTH = 8;
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
 const seedEmailSchema = z.email();
@@ -137,7 +123,6 @@ function seedClerkUserCreate(input: SeedClerkUserInput): SeedClerkUserCreate {
 }
 
 export type EmailBackedSeedTarget = {
-	householdDbName: string;
 	seed: EmailBackedPrimaryHouseholdScenarioSeed;
 };
 
@@ -186,16 +171,10 @@ function deriveSeedCameronEmail(ownerEmail: string): string {
 
 export function emailBackedSeedTargetForMode(
 	mode: Extract<SeedMode, { kind: "clerk" }>,
-	config: Pick<TursoMigrationConfig, "directoryUrl" | "org">,
 ): EmailBackedSeedTarget {
 	const slug = seedSlugForEmail(mode.ownerEmail);
-	const baseDbName =
-		seedHouseholdDbNameForDirectory(config.directoryUrl, config.org) ??
-		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName;
-	const householdDbName = emailSeedHouseholdDbName(baseDbName, slug);
 
 	return {
-		householdDbName,
 		seed: {
 			users: {
 				avery: { id: `usr_seed_${slug}_owner` },
@@ -220,19 +199,6 @@ export function emailBackedSeedTargetForMode(
 			items: scopedSeedIds(PRIMARY_HOUSEHOLD_SEED.items, slug),
 		},
 	};
-}
-
-function emailSeedHouseholdDbName(baseDbName: string, slug: string): string {
-	const baseHash = createHash("sha256")
-		.update(baseDbName)
-		.digest("hex")
-		.slice(0, EMAIL_SEED_DB_BASE_HASH_LENGTH);
-	const dbSuffix = `-${baseHash}-${slug}`;
-
-	return `${baseDbName.slice(
-		0,
-		TURSO_DATABASE_NAME_LIMIT - dbSuffix.length,
-	)}${dbSuffix}`;
 }
 
 function scopedSeedIds<T extends Record<string, { id: string }>>(
@@ -433,35 +399,21 @@ export async function seedLocalDatabasesForMode(
 async function seedDeterministicLocalDatabases(
 	seedMode: Extract<SeedMode, { kind: "deterministic" }>,
 ): Promise<void> {
-	const config = readTursoMigrationConfig();
-	assertLocalSeedTursoTarget(config);
 	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
-	const seedDbName =
-		seedHouseholdDbNameForDirectory(config.directoryUrl, config.org) ??
-		PRIMARY_HOUSEHOLD_SEED.household.tursoDbName;
 	const directoryClientInstance = directoryClient();
-	const householdClientInstance = householdClient(
-		householdDbUrl(seedDbName, config.org),
-		config.platformGroupToken,
-	);
 
 	try {
 		const directory = directoryDb(directoryClientInstance);
-		const household = householdDb(householdClientInstance);
 		await assertSeedDataDoesNotExist({
 			directory,
-			household,
-			seedTarget: deterministicSeedTarget(seedDbName),
+			seedTarget: deterministicSeedTarget(),
 		});
 		const scenario = await seedPrimaryHouseholdScenario({
 			directory,
-			household,
-			householdTursoDbName: seedDbName,
 		});
 
 		logSeedSummary({ scenario, seedMode });
 	} finally {
-		await householdClientInstance.close();
 		await directoryClientInstance.end();
 	}
 }
@@ -469,36 +421,20 @@ async function seedDeterministicLocalDatabases(
 async function seedEmailBackedLocalDatabases(
 	seedMode: Extract<SeedMode, { kind: "clerk" }>,
 ): Promise<void> {
-	const config = readTursoOperatorConfig();
-	assertLocalSeedPrerequisites({ seedMode, turso: config });
+	assertLocalSeedPrerequisites({ seedMode });
 	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
-	const seedTarget = emailBackedSeedTargetForMode(seedMode, config);
+	const seedTarget = emailBackedSeedTargetForMode(seedMode);
 	const clerkClient = await createProductionSeedClerkClient();
 
 	const directoryClientInstance = directoryClient();
-	let householdClientInstance: ReturnType<typeof householdClient> | undefined;
 
 	try {
 		const directory = directoryDb(directoryClientInstance);
-		const databaseCreated = await ensureSeedHouseholdDatabase(
-			seedTarget.householdDbName,
-			config,
-		);
-		if (databaseCreated) {
-			await migrateHouseholdDb(seedTarget.householdDbName, config);
-		}
-
-		householdClientInstance = householdClient(
-			householdDbUrl(seedTarget.householdDbName, config.org),
-			config.platformGroupToken,
-		);
-		const household = householdDb(householdClientInstance);
 		const clerkUsers = await ensureSeedClerkUsers(clerkClient, seedMode);
 
 		try {
 			await assertSeedDataDoesNotExist({
 				directory,
-				household,
 				seedTarget: emailSeedDataTarget(seedTarget, seedMode, [
 					clerkUsers.owner.user.id,
 					clerkUsers.member.user.id,
@@ -506,8 +442,6 @@ async function seedEmailBackedLocalDatabases(
 			});
 			const scenario = await seedEmailBackedPrimaryHouseholdScenario({
 				directory,
-				household,
-				householdTursoDbName: seedTarget.householdDbName,
 				ownerClerkUserId: clerkUsers.owner.user.id,
 				ownerEmail: seedMode.ownerEmail,
 				memberClerkUserId: clerkUsers.member.user.id,
@@ -532,7 +466,6 @@ async function seedEmailBackedLocalDatabases(
 			throw error;
 		}
 	} finally {
-		await householdClientInstance?.close();
 		await directoryClientInstance.end();
 	}
 }
@@ -551,81 +484,16 @@ export function loadLocalSeedEnv(): AppEnv {
 	return appEnv;
 }
 
-type LocalSeedTursoTarget = Pick<
-	TursoMigrationConfig,
-	"appEnv" | "directoryUrl" | "group" | "org"
->;
-
-export function assertLocalSeedTursoTarget(config: LocalSeedTursoTarget): void {
-	assertLocalSeedEnvironment(config.appEnv);
-	if (!config.group.startsWith("dont-forget-local")) {
-		throw new Error(
-			`Refusing to seed non-local Turso group ${config.group}. Local seed data requires a dont-forget-local* Turso group.`,
-		);
-	}
-
-	const directoryDbName = directoryDbNameFromUrl(
-		config.directoryUrl,
-		config.org,
-	);
-	if (!isLocalDirectoryDbName(directoryDbName)) {
-		throw new Error(
-			`Refusing to seed non-local Turso directory database ${directoryDbName}. Local seed data requires a local directory database.`,
-		);
-	}
-}
-
-function isLocalDirectoryDbName(directoryDbName: string): boolean {
-	return (
-		directoryDbName.startsWith("dont-forget-local") ||
-		directoryDbName.startsWith("df-local-")
-	);
-}
-
 export function assertLocalSeedPrerequisites(input: {
 	seedMode: SeedMode;
-	turso: LocalSeedTursoTarget;
 	env?: SeedEnvSource;
 }): void {
-	assertLocalSeedTursoTarget(input.turso);
+	assertLocalSeedEnvironment(
+		(input.env?.APP_ENV as AppEnv | undefined) ?? "local",
+	);
 	if (input.seedMode.kind === "clerk") {
 		readClerkServerConfig(input.env);
 	}
-}
-
-type SeedTursoOperatorConfig = ReturnType<typeof readTursoOperatorConfig>;
-
-export async function ensureSeedHouseholdDatabase(
-	tursoDbName: string,
-	config: SeedTursoOperatorConfig,
-): Promise<boolean> {
-	const response = await fetch(
-		`https://api.turso.tech/v1/organizations/${config.org}/databases`,
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${config.platformApiToken}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				name: tursoDbName,
-				group: config.group,
-			}),
-		},
-	);
-
-	if (response.status === 409) return false;
-	if (response.ok) return true;
-
-	const details = await response.text().catch(() => "");
-	throw new Error(
-		[
-			`Unable to ensure seed Household database (${response.status})`,
-			details ? details.slice(0, 500) : null,
-		]
-			.filter(Boolean)
-			.join(": "),
-	);
 }
 
 function logSeedSummary(input: {
@@ -657,18 +525,15 @@ function logSeedSummary(input: {
 
 type SeedConflictDbs = {
 	directory: ReturnType<typeof directoryDb>;
-	household: ReturnType<typeof householdDb>;
 	seedTarget: SeedDataTarget;
 };
 
 async function assertSeedDataDoesNotExist({
 	directory,
-	household,
 	seedTarget,
 }: SeedConflictDbs): Promise<void> {
 	const {
 		clerkUserIds,
-		householdDbNames,
 		householdIds,
 		itemIds,
 		joinCodeCodes,
@@ -692,12 +557,7 @@ async function assertSeedDataDoesNotExist({
 		directory
 			.select({ id: households.id })
 			.from(households)
-			.where(
-				or(
-					inArray(households.id, householdIds),
-					inArray(households.tursoDbName, householdDbNames),
-				),
-			),
+			.where(inArray(households.id, householdIds)),
 		directory
 			.select({ id: memberships.id })
 			.from(memberships)
@@ -713,15 +573,15 @@ async function assertSeedDataDoesNotExist({
 			),
 	]);
 	const [existingLists, existingItems, existingItemChecks] = await Promise.all([
-		household
+		directory
 			.select({ id: lists.id })
 			.from(lists)
 			.where(inArray(lists.id, listIds)),
-		household
+		directory
 			.select({ id: items.id })
 			.from(items)
 			.where(inArray(items.id, itemIds)),
-		household
+		directory
 			.select({ itemId: itemChecks.itemId })
 			.from(itemChecks)
 			.where(inArray(itemChecks.itemId, itemIds)),
@@ -755,7 +615,6 @@ type SeedDataTarget = {
 	userIds: string[];
 	clerkUserIds: string[];
 	householdIds: string[];
-	householdDbNames: string[];
 	membershipIds: string[];
 	joinCodeIds: string[];
 	joinCodeCodes: string[];
@@ -763,7 +622,7 @@ type SeedDataTarget = {
 	itemIds: string[];
 };
 
-function deterministicSeedTarget(seedDbName: string): SeedDataTarget {
+function deterministicSeedTarget(): SeedDataTarget {
 	return {
 		seedMode: { kind: "deterministic" },
 		userIds: [
@@ -775,7 +634,6 @@ function deterministicSeedTarget(seedDbName: string): SeedDataTarget {
 			PRIMARY_HOUSEHOLD_SEED.users.blake.clerkUserId,
 		],
 		householdIds: [PRIMARY_HOUSEHOLD_SEED.household.id],
-		householdDbNames: [seedDbName],
 		membershipIds: [
 			PRIMARY_HOUSEHOLD_SEED.memberships.avery.id,
 			PRIMARY_HOUSEHOLD_SEED.memberships.blake.id,
@@ -806,7 +664,6 @@ export function emailSeedDataTarget(
 		],
 		clerkUserIds: [...clerkUserIds, cameronClerkUserId],
 		householdIds: [target.seed.household.id],
-		householdDbNames: [target.householdDbName],
 		membershipIds: [
 			target.seed.memberships.avery.id,
 			target.seed.memberships.blake.id,

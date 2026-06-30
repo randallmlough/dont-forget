@@ -1,4 +1,3 @@
-import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	householdJoinCodes,
 	householdJoinCodeUses,
@@ -10,12 +9,10 @@ import {
 	lists as pgLists,
 	users,
 } from "@/db/schema/postgres";
-import { createTestDirectoryDb, createTestHouseholdDb } from "@/db/server/test";
+import { createTestDirectoryDb } from "@/db/server/test";
 import {
 	assertDatabaseResetConfirmation,
-	householdDatabasesForReset,
 	resetDirectoryDatabase,
-	resetHouseholdDatabase,
 } from "./reset";
 
 describe("database reset", () => {
@@ -40,7 +37,6 @@ describe("database reset", () => {
 			await directory.db.insert(households).values({
 				id: "hh_1",
 				name: "Avery",
-				tursoDbName: "df-test-hh-1",
 				createdByUserId: "usr_1",
 			});
 			await directory.db.update(users).set({ activeHouseholdId: "hh_1" });
@@ -89,10 +85,6 @@ describe("database reset", () => {
 				checkedByUserId: "usr_1",
 			});
 
-			expect(await householdDatabasesForReset(directory.db)).toEqual([
-				{ id: "hh_1", tursoDbName: "df-test-hh-1" },
-			]);
-
 			await resetDirectoryDatabase(directory.db);
 
 			expect(
@@ -110,38 +102,6 @@ describe("database reset", () => {
 			expect(await directory.db.select().from(users)).toHaveLength(0);
 		} finally {
 			await directory.close();
-		}
-	});
-
-	it("deletes all Household app data", async () => {
-		const household = await createTestHouseholdDb();
-
-		try {
-			await household.db.insert(lists).values({
-				id: "lst_1",
-				name: "Groceries",
-				createdByUserId: "usr_1",
-			});
-			await household.db.insert(items).values({
-				id: "itm_1",
-				listId: "lst_1",
-				name: "Milk",
-				position: 0,
-				createdByUserId: "usr_1",
-			});
-			await household.db.insert(itemChecks).values({
-				itemId: "itm_1",
-				userId: "usr_1",
-				checkedAt: 1_700_000_000_000,
-			});
-
-			await resetHouseholdDatabase(household.db);
-
-			expect(await household.db.select().from(itemChecks)).toHaveLength(0);
-			expect(await household.db.select().from(items)).toHaveLength(0);
-			expect(await household.db.select().from(lists)).toHaveLength(0);
-		} finally {
-			await household.close();
 		}
 	});
 });

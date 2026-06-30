@@ -88,6 +88,19 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
 	removeItem: jest.fn(),
 }));
 
+// The `@/lib/powersync` barrel transitively loads the native op-sqlite driver
+// (`lib/powersync/powersync.ts`), which cannot run under Jest. Production code
+// reaches PowerSync only through this barrel; tests inject fakes for the session
+// data services, so a barrel stub is all that is needed to keep the module graph
+// loadable. The real connector is exercised directly via its relative path in
+// `lib/powersync/connector.test.ts`, which does not import this barrel.
+jest.mock("@/lib/powersync", () => ({
+	db: {},
+	PowerSyncConnector: class PowerSyncConnector {},
+	PowerSyncProvider: ({ children }: { children: unknown }) => children,
+	AppSchema: {},
+}));
+
 jest.mock("expo-web-browser", () => ({
 	WebBrowserResultType: {
 		CANCEL: "cancel",

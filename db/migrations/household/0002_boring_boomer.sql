@@ -1,1 +1,0 @@
-ALTER TABLE `lists` ADD `archived_at` integer;

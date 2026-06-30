@@ -21,22 +21,6 @@ export type PublicExpoConfig = {
 	termsUrl?: string;
 };
 
-export type TursoConfig = {
-	appEnv: AppEnv;
-	directoryAuthToken: string;
-	directoryUrl: string;
-	group: string;
-	org: string;
-};
-
-export type TursoMigrationConfig = TursoConfig & {
-	platformGroupToken: string;
-};
-
-export type TursoOperatorConfig = TursoMigrationConfig & {
-	platformApiToken: string;
-};
-
 export type ClerkServerConfig = {
 	appEnv: AppEnv;
 	secretKey: string;
@@ -121,35 +105,6 @@ export function readPublicExpoConfig(
 			source,
 		),
 		termsUrl: optionalPublicHttpsUrl("EXPO_PUBLIC_TERMS_URL", source),
-	};
-}
-
-export function readTursoConfig(source: EnvSource = process.env): TursoConfig {
-	const appEnv = readAppEnv(source);
-	return {
-		appEnv,
-		directoryAuthToken: requireEnv("TURSO_DIRECTORY_AUTH_TOKEN", source),
-		directoryUrl: requireEnv("TURSO_DIRECTORY_URL", source),
-		group: requireEnv("TURSO_GROUP", source),
-		org: requireEnv("TURSO_ORG", source),
-	};
-}
-
-export function readTursoMigrationConfig(
-	source: EnvSource = process.env,
-): TursoMigrationConfig {
-	return {
-		...readTursoConfig(source),
-		platformGroupToken: requireEnv("TURSO_PLATFORM_GROUP_TOKEN", source),
-	};
-}
-
-export function readTursoOperatorConfig(
-	source: EnvSource = process.env,
-): TursoOperatorConfig {
-	return {
-		...readTursoMigrationConfig(source),
-		platformApiToken: requireEnv("TURSO_PLATFORM_API_TOKEN", source),
 	};
 }
 
