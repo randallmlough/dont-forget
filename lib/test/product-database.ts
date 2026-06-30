@@ -196,8 +196,14 @@ function querierFrom(sqlite: Database.Database): ProductQuerier {
 			sql: string,
 			params?: readonly unknown[],
 		): Promise<ProductWriteResult> {
-			const info = sqlite.prepare(sql).run(...bind(params));
-			return { rowsAffected: info.changes, rows: [] };
+			// PowerSync's local tables are SQLite VIEWS over `ps_data__*` with
+			// INSTEAD OF triggers, so sqlite3_changes() (QueryResult.rowsAffected)
+			// is always 0 for INSERT/UPDATE/DELETE on them. Mirror that here: run
+			// the statement so the write still persists to these real tables, but
+			// report rowsAffected: 0 — so a service that leans on rowsAffected is
+			// caught by tests instead of passing on better-sqlite3's real count.
+			sqlite.prepare(sql).run(...bind(params));
+			return { rowsAffected: 0, rows: [] };
 		},
 	};
 }

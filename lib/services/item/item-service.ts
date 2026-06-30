@@ -140,10 +140,13 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 				// Selecting FROM the guarded lists row makes the insert and the List
 				// lifecycle check one statement: a delete tombstone or archive flag
 				// synced in after any pre-read cannot land an Item under a List that
-				// Home's active flow excludes (rowsAffected = 0 rejects below). The
-				// Household scope blocks writing into another Household's List.
+				// Home's active flow excludes. PowerSync's local tables are views, so
+				// rowsAffected is always 0; the read-back below (the app-generated id
+				// is unique) confirms the insert landed — a missing row means no
+				// active List matched. The Household scope blocks writing into
+				// another Household's List.
 				const position = await deps.store.writeTransaction(async (tx) => {
-					const writeResult = await tx.execute(
+					await tx.execute(
 						`
               INSERT INTO items (
                 id,
@@ -190,14 +193,14 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 							deps.householdId,
 						],
 					);
-					if (writeResult.rowsAffected === 0) {
-						throw new Error("List is not active");
-					}
 					const row = await tx.getOptional(
 						"SELECT position FROM items WHERE id = ? LIMIT 1",
 						[id],
 					);
-					return sqlNumberSchema.parse(row?.position);
+					if (!row) {
+						throw new Error("List is not active");
+					}
+					return sqlNumberSchema.parse(row.position);
 				});
 
 				const item: Item = {

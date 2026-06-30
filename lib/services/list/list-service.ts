@@ -281,9 +281,13 @@ export function createListService(deps: ListServiceDeps): ListService {
 				const now = nextListServiceTimestamp();
 				// `AND deleted_at IS NULL` guards the read-then-write race: a delete
 				// interleaved after the pre-read must not resurrect or rename the
-				// tombstoned row (rowsAffected reclassifies the lost race below). The
-				// Household scope blocks renaming another Household's List.
-				const writeResult = await deps.store.writeTransaction((tx) =>
+				// tombstoned row. PowerSync's local tables are views, so rowsAffected
+				// is always 0; we re-read and classify by the row's lifecycle. A live
+				// row after this guarded UPDATE on the serialized connection carries
+				// the new name (didWrite), while a tombstoned or vanished row
+				// reclassifies the lost race. The Household scope blocks renaming
+				// another Household's List.
+				await deps.store.writeTransaction((tx) =>
 					tx.execute(
 						"UPDATE lists SET name = ?, updated_at = ? WHERE id = ? AND household_id = ? AND deleted_at IS NULL",
 						[
@@ -294,7 +298,12 @@ export function createListService(deps: ListServiceDeps): ListService {
 						],
 					),
 				);
-				if (writeResult.rowsAffected === 0) {
+				const writtenRow = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
+				);
+				if (!writtenRow || writtenRow.deleted_at !== null) {
 					return reclassifyLostWrite(
 						deps.store,
 						deps.householdId,
@@ -309,7 +318,7 @@ export function createListService(deps: ListServiceDeps): ListService {
 				return {
 					status: "available",
 					list: {
-						...listFromRow(row, deps.householdId),
+						...listFromRow(writtenRow, deps.householdId),
 						name: validated.name,
 						updatedAt: now,
 					},
@@ -346,32 +355,40 @@ export function createListService(deps: ListServiceDeps): ListService {
 				const now = nextListServiceTimestamp();
 				const nowText = timestampMillisToSqlText(now);
 				// `AND deleted_at IS NULL` keeps a concurrent delete from churning the
-				// tombstone timestamps; a lost race reclassifies below.
-				const writeResult = await deps.store.writeTransaction((tx) =>
+				// tombstone timestamps. PowerSync's local tables are views, so
+				// rowsAffected is always 0; we re-read instead. deleted_at is
+				// write-once under the guard, so a tombstone equal to our `now` means
+				// our write won the race (didWrite); any other tombstone is a lost
+				// race, and a vanished row is missing.
+				await deps.store.writeTransaction((tx) =>
 					tx.execute(
 						"UPDATE lists SET deleted_at = ?, updated_at = ? WHERE id = ? AND household_id = ? AND deleted_at IS NULL",
 						[nowText, nowText, input.listId, deps.householdId],
 					),
 				);
-				if (writeResult.rowsAffected === 0) {
-					return reclassifyLostWrite(
-						deps.store,
-						deps.householdId,
-						input.listId,
-					);
-				}
-				analytics.track(
-					"list_deleted",
-					analyticsProperties(deps, input.listId),
+				const deletedRow = await readListRow(
+					deps.store,
+					deps.householdId,
+					input.listId,
 				);
+				if (deletedRow?.deleted_at != null) {
+					const didWrite = deletedRow.deleted_at === now;
+					if (didWrite) {
+						analytics.track(
+							"list_deleted",
+							analyticsProperties(deps, input.listId),
+						);
+					}
+					return {
+						status: "deleted",
+						listId: input.listId,
+						deletedAt: deletedRow.deleted_at,
+						updatedAt: deletedRow.updated_at,
+						didWrite,
+					};
+				}
 
-				return {
-					status: "deleted",
-					listId: input.listId,
-					deletedAt: now,
-					updatedAt: now,
-					didWrite: true,
-				};
+				return { status: "missing", listId: input.listId, didWrite: false };
 			} catch (error) {
 				log.error("list delete failed", {
 					error: asError(error),
