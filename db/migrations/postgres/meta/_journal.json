@@ -15,6 +15,13 @@
       "when": 1782538748407,
       "tag": "0001_powersync_publication",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782781602348,
+      "tag": "0002_dusty_maximus",
+      "breakpoints": true
     }
   ]
 }

@@ -35,13 +35,9 @@ export const users = pgTable(
 export const households = pgTable("households", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
-	tursoDbName: text("turso_db_name").notNull().unique(),
 	createdByUserId: text("created_by_user_id")
 		.notNull()
 		.references((): AnyPgColumn => users.id),
-	provisioningCompletedAt: bigint("provisioning_completed_at", {
-		mode: "number",
-	}),
 	createdAt: bigint("created_at", { mode: "number" })
 		.notNull()
 		.default(nowEpochMillis),

@@ -36,7 +36,7 @@ ruleTester.run("no-db-server-imports", rule, {
 		},
 		{
 			filename: "/repo/lib/services/item/item-service.ts",
-			code: `import { openHouseholdStore } from "@/db/household-store";`,
+			code: `import { sqlNumberSchema } from "@/db/utils";`,
 		},
 		{
 			filename: "/repo/lib/services/list/list-service.ts",
@@ -55,8 +55,8 @@ ruleTester.run("no-db-server-imports", rule, {
 			errors: [{ messageId: "serverOnly" }],
 		},
 		{
-			filename: "/repo/db/household-store.ts",
-			code: `import { householdDb } from "./server/client";`,
+			filename: "/repo/lib/powersync/database.ts",
+			code: `import { directoryDb } from "@/db/server/client";`,
 			errors: [{ messageId: "serverOnly" }],
 		},
 		{

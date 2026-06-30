@@ -20,18 +20,10 @@ export {
 	type JoinHouseholdByCodeResult,
 } from "./household-join-code-service";
 export {
-	createHouseholdProvisioningService,
-	createProductionHouseholdProvisioningService,
-	type HouseholdDatabaseProvisioningResult,
-	type HouseholdProvisioningService,
-	type HouseholdProvisioningServiceDeps,
-} from "./household-provisioning-service";
-export {
 	createHouseholdService,
 	HouseholdForbiddenError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,
 	type HouseholdService,
 	type HouseholdServiceDeps,
-	householdDatabaseName,
 } from "./household-service";

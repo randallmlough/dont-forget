@@ -1,1006 +1,300 @@
-import type { HouseholdSqlStatement } from "@/db/household-store";
-import { itemChecks, items, lists } from "@/db/schema/household";
 import {
-	itemCheckFixture,
-	itemFixture,
-	listFixture,
-} from "@/db/server/fixtures";
-import { createTestHouseholdDb } from "@/db/server/test";
-import { createMockAnalytics } from "@/lib/test/mocks/analytics";
-import { createMockLogger } from "@/lib/test/mocks/logger";
+	createTestProductDatabase,
+	type TestProductDatabase,
+} from "@/lib/test/product-database";
+import { createItemService, type ItemService } from "./item-service";
 
-import { createItemService } from "./item-service";
-
-jest.mock("@/lib/analytics", () =>
-	jest.requireActual("@/lib/test/mocks/analytics"),
-);
-
-jest.mock("@/lib/logger", () =>
-	jest
-		.requireActual<typeof import("@/lib/test/mocks/logger")>(
-			"@/lib/test/mocks/logger",
-		)
-		.createMockLoggerModule(),
-);
-
-const testLogger = createMockLogger();
-testLogger.with.mockReturnValue(testLogger);
-
-beforeEach(() => {
-	jest.restoreAllMocks();
-	testLogger.debug.mockReset();
-	testLogger.info.mockReset();
-	testLogger.warn.mockReset();
-	testLogger.error.mockReset();
-	testLogger.with.mockClear();
-	testLogger.with.mockReturnValue(testLogger);
-});
+const HOUSEHOLD = "hh_1";
+const OTHER_HOUSEHOLD = "hh_2";
 
 describe("createItemService", () => {
-	it("lists Items in stable order with latest per-User checked state", async () => {
-		const household = await createTestHouseholdDb();
+	let store: TestProductDatabase;
+	let service: ItemService;
 
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-				}),
-			);
-			await household.db.insert(items).values([
-				itemFixture({
-					id: "itm_b",
-					listId: "lst_weekend",
-					name: "Bananas",
-					position: 1,
-					createdByUserId: "usr_avery",
-					createdAt: 20,
-					updatedAt: 20,
-				}),
-				itemFixture({
-					id: "itm_a",
-					listId: "lst_weekend",
-					name: "Apples",
-					position: 1,
-					createdByUserId: "usr_avery",
-					createdAt: 10,
-					updatedAt: 10,
-				}),
-				itemFixture({
-					id: "itm_c",
-					listId: "lst_weekend",
-					name: "Coffee",
-					position: 2,
-					createdByUserId: "usr_avery",
-					createdAt: 30,
-					updatedAt: 30,
-				}),
-				itemFixture({
-					id: "itm_deleted",
-					listId: "lst_weekend",
-					name: "Deleted",
-					position: 0,
-					createdByUserId: "usr_avery",
-					createdAt: 1,
-					updatedAt: 1,
-					deletedAt: 2,
-				}),
-			]);
-			await household.db.insert(itemChecks).values([
-				itemCheckFixture({
-					itemId: "itm_a",
-					userId: "usr_blake",
-					checkedAt: 40,
-					updatedAt: 40,
-				}),
-				itemCheckFixture({
-					itemId: "itm_a",
-					userId: "usr_avery",
-					checkedAt: null,
-					updatedAt: 50,
-				}),
-				itemCheckFixture({
-					itemId: "itm_b",
-					userId: "usr_blake",
-					checkedAt: 60,
-					updatedAt: 60,
-				}),
-			]);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-			});
-
-			await expect(
-				service.listItems({ listId: "lst_weekend" }),
-			).resolves.toEqual([
-				expect.objectContaining({
-					id: "itm_a",
-					householdId: "hh_avery",
-					listId: "lst_weekend",
-					name: "Apples",
-					checked: false,
-					checkedByUserId: null,
-					position: 1,
-				}),
-				expect.objectContaining({
-					id: "itm_b",
-					name: "Bananas",
-					checked: true,
-					checkedByUserId: "usr_blake",
-					position: 1,
-				}),
-				expect.objectContaining({
-					id: "itm_c",
-					name: "Coffee",
-					checked: false,
-					checkedByUserId: null,
-					position: 2,
-				}),
-			]);
-		} finally {
-			await household.close();
-		}
+	beforeEach(() => {
+		store = createTestProductDatabase();
+		service = createItemService({ householdId: HOUSEHOLD, store });
+		store.seedList({ id: "lst_groceries", householdId: HOUSEHOLD });
 	});
 
-	it("lists Items from a previous local Household schema without quantity", async () => {
-		const household = await createTestHouseholdDb({
-			throughMigration: "0000_dear_exodus.sql",
-		});
-
-		try {
-			await household.client.execute({
-				sql: `
-					INSERT INTO lists (id, name, created_by_user_id)
-					VALUES (?, ?, ?)
-				`,
-				args: ["lst_weekend", "Weekend Groceries", "usr_avery"],
-			});
-			await household.client.execute({
-				sql: `
-					INSERT INTO items (
-						id,
-						list_id,
-						name,
-						notes,
-						position,
-						created_by_user_id,
-						created_at,
-						updated_at
-					)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-				`,
-				args: [
-					"itm_milk",
-					"lst_weekend",
-					"Milk",
-					"Organic if easy",
-					0,
-					"usr_avery",
-					10,
-					10,
-				],
-			});
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-			});
-
-			await expect(
-				service.listItems({ listId: "lst_weekend" }),
-			).resolves.toEqual([
-				expect.objectContaining({
-					id: "itm_milk",
-					name: "Milk",
-					quantity: null,
-					notes: "Organic if easy",
-				}),
-			]);
-		} finally {
-			await household.close();
-		}
+	afterEach(() => {
+		store.close();
+		jest.restoreAllMocks();
 	});
 
-	it("adds Items without quantity to a previous local Household schema", async () => {
-		const household = await createTestHouseholdDb({
-			throughMigration: "0000_dear_exodus.sql",
-		});
-
-		try {
-			await household.client.execute({
-				sql: `
-					INSERT INTO lists (id, name, created_by_user_id)
-					VALUES (?, ?, ?)
-				`,
-				args: ["lst_weekend", "Weekend Groceries", "usr_avery"],
-			});
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics: createMockAnalytics(),
-			});
-
-			const item = await service.addItem({
-				listId: "lst_weekend",
-				userId: "usr_avery",
+	describe("listItems", () => {
+		it("returns Items with shared checked-state attribution", async () => {
+			store.seedItem({
+				id: "itm_milk",
+				listId: "lst_groceries",
 				name: "Milk",
-				quantity: null,
-				notes: "Organic if easy",
-			});
-			const rows = await household.client.execute({
-				sql: "SELECT name, notes, position FROM items WHERE id = ?",
-				args: [item.id],
-			});
-
-			expect(item).toMatchObject({
-				name: "Milk",
-				quantity: null,
-				notes: "Organic if easy",
+				quantity: "1 gal",
 				position: 0,
+				createdByUserId: "usr_river",
 			});
-			expect(rows.rows).toEqual([
-				{ name: "Milk", notes: "Organic if easy", position: 0 },
-			]);
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("rejects quantity-bearing Items on a previous local Household schema", async () => {
-		const household = await createTestHouseholdDb({
-			throughMigration: "0000_dear_exodus.sql",
-		});
-
-		try {
-			await household.client.execute({
-				sql: `
-					INSERT INTO lists (id, name, created_by_user_id)
-					VALUES (?, ?, ?)
-				`,
-				args: ["lst_weekend", "Weekend Groceries", "usr_avery"],
-			});
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics: createMockAnalytics(),
+			store.seedItemCheck({
+				id: "chk_milk",
+				itemId: "itm_milk",
+				checkedAtMillis: 1_780_000_000_000,
+				checkedByUserId: "usr_avery",
 			});
 
 			await expect(
-				service.addItem({
-					listId: "lst_weekend",
-					userId: "usr_avery",
+				service.listItems({ listId: "lst_groceries" }),
+			).resolves.toEqual([
+				{
+					id: "itm_milk",
+					householdId: HOUSEHOLD,
+					listId: "lst_groceries",
 					name: "Milk",
-					quantity: "1 gallon",
-					notes: "Organic if easy",
-				}),
-			).rejects.toThrow(
-				"Item quantity cannot be saved until the Household schema is updated",
-			);
+					quantity: "1 gal",
+					notes: null,
+					checked: true,
+					checkedByUserId: "usr_avery",
+					position: 0,
+					createdByUserId: "usr_river",
+					createdAt: expect.any(Number),
+					updatedAt: expect.any(Number),
+				},
+			]);
+		});
 
-			const rows = await household.client.execute({
-				sql: "SELECT id FROM items",
+		it("treats an Item with no check row, and an uncheck (checked_at NULL), as unchecked", async () => {
+			store.seedItem({ id: "itm_a", listId: "lst_groceries", position: 0 });
+			store.seedItem({ id: "itm_b", listId: "lst_groceries", position: 1 });
+			// itm_b has a persistent check row that was unchecked.
+			store.seedItemCheck({
+				id: "chk_b",
+				itemId: "itm_b",
+				checkedAtMillis: null,
+				checkedByUserId: "usr_avery",
 			});
-			expect(rows.rows).toEqual([]);
-		} finally {
-			await household.close();
-		}
+
+			const items = await service.listItems({ listId: "lst_groceries" });
+
+			expect(
+				items.map((item) => ({
+					id: item.id,
+					checked: item.checked,
+					by: item.checkedByUserId,
+				})),
+			).toEqual([
+				{ id: "itm_a", checked: false, by: null },
+				{ id: "itm_b", checked: false, by: null },
+			]);
+		});
+
+		it("excludes soft-deleted Items and orders by position", async () => {
+			store.seedItem({ id: "itm_2", listId: "lst_groceries", position: 2 });
+			store.seedItem({ id: "itm_0", listId: "lst_groceries", position: 0 });
+			store.seedItem({
+				id: "itm_gone",
+				listId: "lst_groceries",
+				position: 1,
+				deletedAtMillis: 1_780_000_000_000,
+			});
+
+			const items = await service.listItems({ listId: "lst_groceries" });
+
+			expect(items.map((item) => item.id)).toEqual(["itm_0", "itm_2"]);
+		});
+
+		it("scopes to the Household — an Item under another Household's List is not returned", async () => {
+			store.seedList({ id: "lst_other", householdId: OTHER_HOUSEHOLD });
+			store.seedItem({ id: "itm_other", listId: "lst_other", position: 0 });
+			const items = await service.listItems({ listId: "lst_other" });
+			expect(items).toEqual([]);
+		});
 	});
 
-	it("adds a trimmed Item with generated ID and controlled timestamps", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-		jest.spyOn(Date, "now").mockReturnValue(8_000_000_000_000);
-
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
-			const item = await service.addItem({
-				listId: "lst_weekend",
+	describe("addItem", () => {
+		it("appends Items with incrementing positions and trims input", async () => {
+			const first = await service.addItem({
+				listId: "lst_groceries",
 				userId: "usr_avery",
 				name: "  Milk  ",
-				quantity: "  1 gallon  ",
-				notes: "  Organic if easy  ",
+				quantity: "  1 gallon ",
+				notes: " ",
 			});
-			const row = await household.db.query.items.findFirst({
-				where: (table, { eq }) => eq(table.id, item.id),
+			const second = await service.addItem({
+				listId: "lst_groceries",
+				userId: "usr_avery",
+				name: "Bread",
+				quantity: null,
+				notes: null,
 			});
 
-			expect(item.id).toMatch(/^itm_[0-9a-f-]+$/);
-			expect(item).toEqual({
-				id: item.id,
-				householdId: "hh_avery",
-				listId: "lst_weekend",
+			expect(first).toMatchObject({
+				householdId: HOUSEHOLD,
 				name: "Milk",
 				quantity: "1 gallon",
-				notes: "Organic if easy",
+				notes: null,
+				position: 0,
 				checked: false,
 				checkedByUserId: null,
-				position: 0,
 				createdByUserId: "usr_avery",
-				createdAt: 8_000_000_000_000,
-				updatedAt: 8_000_000_000_000,
 			});
-			expect(row).toMatchObject({
-				id: item.id,
-				listId: "lst_weekend",
-				name: "Milk",
-				quantity: "1 gallon",
-				notes: "Organic if easy",
-				position: 0,
-				createdByUserId: "usr_avery",
-				createdAt: 8_000_000_000_000,
-				updatedAt: 8_000_000_000_000,
-			});
-			expect(analytics.track).toHaveBeenCalledWith("item_added", {
-				household_id: "hh_avery",
-				list_id: "lst_weekend",
-				item_id: item.id,
-				user_id: "usr_avery",
-			});
-		} finally {
-			await household.close();
-		}
-	});
+			expect(second.position).toBe(1);
+			const persisted = await service.listItems({ listId: "lst_groceries" });
+			expect(persisted.map((item) => item.name)).toEqual(["Milk", "Bread"]);
+		});
 
-	it("stores blank Item quantity and notes as null", async () => {
-		const household = await createTestHouseholdDb();
-
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics: createMockAnalytics(),
-			});
-
-			const item = await service.addItem({
-				listId: "lst_weekend",
-				userId: "usr_avery",
-				name: "Milk",
-				quantity: "   ",
-				notes: "",
-			});
-
-			expect(item).toMatchObject({ quantity: null, notes: null });
-			await expect(
-				service.listItems({ listId: "lst_weekend" }),
-			).resolves.toEqual([
-				expect.objectContaining({ quantity: null, notes: null }),
-			]);
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("assigns the next position after existing non-deleted Items", async () => {
-		const household = await createTestHouseholdDb();
-
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-				}),
-			);
-			await household.db.insert(items).values([
-				itemFixture({
-					id: "itm_existing",
-					listId: "lst_weekend",
-					name: "Apples",
-					position: 2,
-					createdByUserId: "usr_avery",
-				}),
-				itemFixture({
-					id: "itm_deleted",
-					listId: "lst_weekend",
-					name: "Deleted",
-					position: 20,
-					createdByUserId: "usr_avery",
-					deletedAt: 1,
-				}),
-			]);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-			});
-
+		it("rejects a blank name without writing", async () => {
 			await expect(
 				service.addItem({
-					listId: "lst_weekend",
+					listId: "lst_groceries",
 					userId: "usr_avery",
-					name: "Milk",
+					name: "   ",
 					quantity: null,
 					notes: null,
 				}),
-			).resolves.toMatchObject({ position: 3 });
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("allocates Item position inside the insert statement", async () => {
-		const execute = jest.fn(async (statement: HouseholdSqlStatement) => {
-			if (statement.sql.includes("SELECT position FROM items")) {
-				return { rows: [{ position: 4 }] };
-			}
-			return { rows: [], rowsAffected: 1 };
-		});
-		const service = createItemService({
-			householdId: "hh_avery",
-			store: { execute },
-			logger: testLogger,
-			analytics: createMockAnalytics(),
+			).rejects.toThrow("Item name is required");
+			expect(
+				store.raw.prepare("SELECT COUNT(*) AS n FROM items").get(),
+			).toEqual({ n: 0 });
 		});
 
-		await expect(
-			service.addItem({
-				listId: "lst_weekend",
-				userId: "usr_avery",
-				name: "Milk",
-				quantity: null,
-				notes: null,
-			}),
-		).resolves.toMatchObject({ position: 4 });
-
-		const insertStatement = execute.mock.calls
-			.map((call) => call[0])
-			.find((statement) => statement.sql.includes("INSERT INTO items"));
-		const firstSql = insertStatement?.sql;
-		expect(firstSql).toContain("INSERT INTO items");
-		expect(firstSql).toContain("COALESCE(MAX(position), -1) + 1");
-		expect(firstSql).not.toMatch(/^\s*SELECT COALESCE\(MAX\(position\)/);
-	});
-
-	it("rejects adding Items to a deleted List", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-					deletedAt: 100,
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
+		it.each([
+			["deleted", { deletedAtMillis: 1_780_000_000_000 }],
+			["archived", { archivedAtMillis: 1_780_000_000_000 }],
+		])("refuses to add to a %s List", async (_label, lifecycle) => {
+			store.seedList({ id: "lst_dead", householdId: HOUSEHOLD, ...lifecycle });
 			await expect(
 				service.addItem({
-					listId: "lst_weekend",
+					listId: "lst_dead",
 					userId: "usr_avery",
 					name: "Milk",
 					quantity: null,
 					notes: null,
 				}),
 			).rejects.toThrow("List is not active");
-
-			const rows = await household.client.execute({
-				sql: "SELECT id FROM items",
-			});
-			expect(rows.rows).toEqual([]);
-			expect(analytics.track).not.toHaveBeenCalled();
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("rejects adding Items to an archived List", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-					archivedAt: 100,
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
-			await expect(
-				service.addItem({
-					listId: "lst_weekend",
-					userId: "usr_avery",
-					name: "Milk",
-					quantity: null,
-					notes: null,
-				}),
-			).rejects.toThrow("List is not active");
-
-			const rows = await household.client.execute({
-				sql: "SELECT id FROM items",
-			});
-			expect(rows.rows).toEqual([]);
-			expect(analytics.track).not.toHaveBeenCalled();
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("rejects adding Items to a missing List", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-
-		try {
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
-			await expect(
-				service.addItem({
-					listId: "lst_missing",
-					userId: "usr_avery",
-					name: "Milk",
-					quantity: null,
-					notes: null,
-				}),
-			).rejects.toThrow("List is not active");
-
-			const rows = await household.client.execute({
-				sql: "SELECT id FROM items",
-			});
-			expect(rows.rows).toEqual([]);
-			expect(analytics.track).not.toHaveBeenCalled();
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("rejects empty Item names before writing", async () => {
-		const analytics = createMockAnalytics();
-		const execute = jest.fn(async () => ({ rows: [] }));
-		const service = createItemService({
-			householdId: "hh_avery",
-			store: { execute },
-			logger: testLogger,
-			analytics,
 		});
 
-		await expect(
-			service.addItem({
-				listId: "lst_weekend",
-				userId: "usr_avery",
-				name: "   ",
-				quantity: null,
-				notes: null,
-			}),
-		).rejects.toThrow("Item name is required");
-		expect(execute).not.toHaveBeenCalled();
-		expect(analytics.track).not.toHaveBeenCalled();
+		it("refuses to add to another Household's List", async () => {
+			store.seedList({ id: "lst_other", householdId: OTHER_HOUSEHOLD });
+			await expect(
+				service.addItem({
+					listId: "lst_other",
+					userId: "usr_avery",
+					name: "Milk",
+					quantity: null,
+					notes: null,
+				}),
+			).rejects.toThrow("List is not active");
+		});
 	});
 
-	it("updates checked state with monotonic service timestamps", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-		const rawTimestamps = [
-			9_000_000_000_000, 8_999_999_999_999, 8_999_999_999_999,
-		];
-		jest
-			.spyOn(Date, "now")
-			.mockImplementation(() => rawTimestamps.shift() ?? 8_999_999_999_999);
+	describe("setItemChecked", () => {
+		beforeEach(() => {
+			store.seedItem({ id: "itm_milk", listId: "lst_groceries", position: 0 });
+		});
 
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
-			const milk = await service.addItem({
-				listId: "lst_weekend",
-				userId: "usr_avery",
-				name: "Milk",
-				quantity: null,
-				notes: null,
-			});
-			const eggs = await service.addItem({
-				listId: "lst_weekend",
-				userId: "usr_avery",
-				name: "Eggs",
-				quantity: null,
-				notes: null,
-			});
+		it("keeps one shared check row across check -> uncheck -> recheck with attribution and LWW", async () => {
 			await service.setItemChecked({
-				listId: "lst_weekend",
-				itemId: milk.id,
-				userId: "usr_avery",
-				checked: true,
-			});
-
-			const [milkRow, eggsRow] = await household.db
-				.select()
-				.from(items)
-				.orderBy(items.position);
-			const checkRow = await household.db.query.itemChecks.findFirst({
-				where: (table, { eq }) => eq(table.itemId, milk.id),
-			});
-
-			expect(milkRow).toMatchObject({
-				id: milk.id,
-				createdAt: 9_000_000_000_000,
-				updatedAt: 9_000_000_000_000,
-			});
-			expect(eggsRow).toMatchObject({
-				id: eggs.id,
-				createdAt: 9_000_000_000_001,
-				updatedAt: 9_000_000_000_001,
-			});
-			expect(checkRow).toMatchObject({
-				itemId: milk.id,
-				userId: "usr_avery",
-				checkedAt: 9_000_000_000_002,
-				updatedAt: 9_000_000_000_002,
-			});
-			expect(analytics.track).toHaveBeenCalledWith(
-				"item_checked_state_changed",
-				{
-					household_id: "hh_avery",
-					list_id: "lst_weekend",
-					item_id: milk.id,
-					user_id: "usr_avery",
-					checked: true,
-				},
-			);
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("rejects checked state changes when the Item is outside the explicit List", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-
-		try {
-			await household.db.insert(lists).values([
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-				}),
-				listFixture({
-					id: "lst_hardware",
-					name: "Hardware",
-					createdByUserId: "usr_avery",
-				}),
-			]);
-			await household.db.insert(items).values(
-				itemFixture({
-					id: "itm_milk",
-					listId: "lst_weekend",
-					name: "Milk",
-					position: 0,
-					createdByUserId: "usr_avery",
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
-			await expect(
-				service.setItemChecked({
-					listId: "lst_hardware",
-					itemId: "itm_milk",
-					userId: "usr_avery",
-					checked: true,
-				}),
-			).rejects.toThrow("Item not found in List");
-
-			await expect(
-				household.db.query.itemChecks.findFirst({
-					where: (table, { eq }) => eq(table.itemId, "itm_milk"),
-				}),
-			).resolves.toBeUndefined();
-			expect(analytics.track).not.toHaveBeenCalled();
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("rejects checked state changes when the List is deleted", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-					deletedAt: 100,
-				}),
-			);
-			await household.db.insert(items).values(
-				itemFixture({
-					id: "itm_milk",
-					listId: "lst_weekend",
-					name: "Milk",
-					position: 0,
-					createdByUserId: "usr_avery",
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
-			await expect(
-				service.setItemChecked({
-					listId: "lst_weekend",
-					itemId: "itm_milk",
-					userId: "usr_avery",
-					checked: true,
-				}),
-			).rejects.toThrow("Item not found in List");
-
-			await expect(
-				household.db.query.itemChecks.findFirst({
-					where: (table, { eq }) => eq(table.itemId, "itm_milk"),
-				}),
-			).resolves.toBeUndefined();
-			expect(analytics.track).not.toHaveBeenCalled();
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("updates checked state on a previous local Household schema without lists.archived_at", async () => {
-		const household = await createTestHouseholdDb({
-			throughMigration: "0000_dear_exodus.sql",
-		});
-		const analytics = createMockAnalytics();
-
-		try {
-			await household.client.execute({
-				sql: `
-					INSERT INTO lists (id, name, created_by_user_id)
-					VALUES (?, ?, ?)
-				`,
-				args: ["lst_weekend", "Weekend Groceries", "usr_avery"],
-			});
-			await household.client.execute({
-				sql: `
-					INSERT INTO items (
-						id,
-						list_id,
-						name,
-						position,
-						created_by_user_id,
-						created_at,
-						updated_at
-					)
-					VALUES (?, ?, ?, ?, ?, ?, ?)
-				`,
-				args: ["itm_milk", "lst_weekend", "Milk", 0, "usr_avery", 10, 10],
-			});
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
-			await service.setItemChecked({
-				listId: "lst_weekend",
+				listId: "lst_groceries",
 				itemId: "itm_milk",
 				userId: "usr_avery",
 				checked: true,
 			});
-
-			const rows = await household.client.execute({
-				sql: "SELECT item_id, user_id FROM item_checks WHERE checked_at IS NOT NULL",
-			});
-			expect(rows.rows).toEqual([
-				{ item_id: "itm_milk", user_id: "usr_avery" },
-			]);
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("rejects checked state changes when the List is archived", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-					archivedAt: 100,
-				}),
-			);
-			await household.db.insert(items).values(
-				itemFixture({
-					id: "itm_milk",
-					listId: "lst_weekend",
-					name: "Milk",
-					position: 0,
-					createdByUserId: "usr_avery",
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-
-			await expect(
-				service.setItemChecked({
-					listId: "lst_weekend",
-					itemId: "itm_milk",
-					userId: "usr_avery",
-					checked: true,
-				}),
-			).rejects.toThrow("Item not found in List");
-
-			await expect(
-				household.db.query.itemChecks.findFirst({
-					where: (table, { eq }) => eq(table.itemId, "itm_milk"),
-				}),
-			).resolves.toBeUndefined();
-			expect(analytics.track).not.toHaveBeenCalled();
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("unchecks an Item for the active User and derives the unchecked state", async () => {
-		const household = await createTestHouseholdDb();
-		const analytics = createMockAnalytics();
-		const rawTimestamps = [
-			10_000_000_000_000, 10_000_000_000_001, 10_000_000_000_002,
-		];
-		jest
-			.spyOn(Date, "now")
-			.mockImplementation(() => rawTimestamps.shift() ?? 10_000_000_000_002);
-
-		try {
-			await household.db.insert(lists).values(
-				listFixture({
-					id: "lst_weekend",
-					name: "Weekend Groceries",
-					createdByUserId: "usr_avery",
-				}),
-			);
-			const service = createItemService({
-				householdId: "hh_avery",
-				store: { execute: household.client.execute.bind(household.client) },
-				logger: testLogger,
-				analytics,
-			});
-			const milk = await service.addItem({
-				listId: "lst_weekend",
-				userId: "usr_avery",
-				name: "Milk",
-				quantity: null,
-				notes: null,
-			});
+			expect(await checkedView()).toEqual({ checked: true, by: "usr_avery" });
+			const afterCheck = checkRow();
+			expect(afterCheck.count).toBe(1);
+			expect(afterCheck.checked_at).not.toBeNull();
 
 			await service.setItemChecked({
-				listId: "lst_weekend",
-				itemId: milk.id,
-				userId: "usr_avery",
-				checked: true,
-			});
-			await service.setItemChecked({
-				listId: "lst_weekend",
-				itemId: milk.id,
-				userId: "usr_avery",
+				listId: "lst_groceries",
+				itemId: "itm_milk",
+				userId: "usr_blake",
 				checked: false,
 			});
+			// Uncheck persists the row (tombstone, never delete) with checked_at NULL.
+			const afterUncheck = checkRow();
+			expect(afterUncheck.count).toBe(1);
+			expect(afterUncheck.checked_at).toBeNull();
+			expect(afterUncheck.checked_by_user_id).toBe("usr_blake");
+			expect(await checkedView()).toEqual({ checked: false, by: null });
+			// LWW: updated_at advances monotonically.
+			expect(afterUncheck.updated_at > afterCheck.updated_at).toBe(true);
 
-			const checkRow = await household.db.query.itemChecks.findFirst({
-				where: (table, { eq }) => eq(table.itemId, milk.id),
+			await service.setItemChecked({
+				listId: "lst_groceries",
+				itemId: "itm_milk",
+				userId: "usr_casey",
+				checked: true,
 			});
-			await expect(
-				service.listItems({ listId: "lst_weekend" }),
-			).resolves.toEqual([
-				expect.objectContaining({
-					id: milk.id,
-					checked: false,
-					checkedByUserId: null,
-				}),
-			]);
-			expect(checkRow).toMatchObject({
-				itemId: milk.id,
-				userId: "usr_avery",
-				checkedAt: null,
-				updatedAt: 10_000_000_000_002,
-			});
-			expect(analytics.track).toHaveBeenCalledWith(
-				"item_checked_state_changed",
-				{
-					household_id: "hh_avery",
-					list_id: "lst_weekend",
-					item_id: milk.id,
-					user_id: "usr_avery",
-					checked: false,
-				},
-			);
-		} finally {
-			await household.close();
-		}
-	});
-
-	it("does not track checked state changes when the local write fails", async () => {
-		const analytics = createMockAnalytics();
-		const service = createItemService({
-			householdId: "hh_avery",
-			store: {
-				async execute() {
-					throw new Error("local write failed");
-				},
-			},
-			logger: testLogger,
-			analytics,
+			const afterRecheck = checkRow();
+			expect(afterRecheck.count).toBe(1);
+			expect(await checkedView()).toEqual({ checked: true, by: "usr_casey" });
+			expect(afterRecheck.updated_at > afterUncheck.updated_at).toBe(true);
 		});
 
-		await expect(
-			service.setItemChecked({
-				listId: "lst_weekend",
-				itemId: "itm_milk",
-				userId: "usr_avery",
-				checked: true,
-			}),
-		).rejects.toThrow("local write failed");
-		expect(analytics.track).not.toHaveBeenCalled();
+		it("throws for a missing Item", async () => {
+			await expect(
+				service.setItemChecked({
+					listId: "lst_groceries",
+					itemId: "itm_ghost",
+					userId: "usr_avery",
+					checked: true,
+				}),
+			).rejects.toThrow("Item not found in List");
+		});
+
+		it.each([
+			["a deleted List", { deletedAtMillis: 1 }],
+			["an archived List", { archivedAtMillis: 1 }],
+		])("throws for an Item in %s", async (_label, lifecycle) => {
+			store.seedList({ id: "lst_dead", householdId: HOUSEHOLD, ...lifecycle });
+			store.seedItem({ id: "itm_dead", listId: "lst_dead", position: 0 });
+			await expect(
+				service.setItemChecked({
+					listId: "lst_dead",
+					itemId: "itm_dead",
+					userId: "usr_avery",
+					checked: true,
+				}),
+			).rejects.toThrow("Item not found in List");
+		});
+
+		it("refuses to check an Item under another Household's List", async () => {
+			store.seedList({ id: "lst_other", householdId: OTHER_HOUSEHOLD });
+			store.seedItem({ id: "itm_other", listId: "lst_other", position: 0 });
+			await expect(
+				service.setItemChecked({
+					listId: "lst_other",
+					itemId: "itm_other",
+					userId: "usr_avery",
+					checked: true,
+				}),
+			).rejects.toThrow("Item not found in List");
+		});
 	});
+
+	async function checkedView(): Promise<{
+		checked: boolean;
+		by: string | null;
+	}> {
+		const [item] = await service.listItems({ listId: "lst_groceries" });
+		return { checked: item.checked, by: item.checkedByUserId };
+	}
+
+	function checkRow(): {
+		count: number;
+		checked_at: string | null;
+		checked_by_user_id: string | null;
+		updated_at: string;
+	} {
+		const count = store.raw
+			.prepare("SELECT COUNT(*) AS n FROM item_checks WHERE item_id = ?")
+			.get("itm_milk") as { n: number };
+		const row = store.raw
+			.prepare(
+				"SELECT checked_at, checked_by_user_id, updated_at FROM item_checks WHERE item_id = ?",
+			)
+			.get("itm_milk") as {
+			checked_at: string | null;
+			checked_by_user_id: string | null;
+			updated_at: string;
+		};
+		return { count: count.n, ...row };
+	}
 });

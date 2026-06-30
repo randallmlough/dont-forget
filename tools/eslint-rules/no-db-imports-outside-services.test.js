@@ -12,11 +12,11 @@ ruleTester.run("no-db-imports-outside-services", rule, {
 	valid: [
 		{
 			filename: "/repo/lib/services/item/item-service.ts",
-			code: `import { openHouseholdStore } from "@/db/household-store";`,
+			code: `import { sqlNumberSchema } from "@/db/utils";`,
 		},
 		{
-			filename: "/repo/db/household-store.ts",
-			code: `const runtime = await import("@tursodatabase/sync-react-native");`,
+			filename: "/repo/lib/powersync/database.ts",
+			code: `const runtime = await import("@powersync/react-native");`,
 		},
 		{
 			filename: "/repo/lib/services/user/server/user-service.ts",
@@ -28,7 +28,7 @@ ruleTester.run("no-db-imports-outside-services", rule, {
 		},
 		{
 			filename: "/repo/screens/home/home-screen.test.tsx",
-			code: `import { createClient } from "@libsql/client";`,
+			code: `import { PowerSyncDatabase } from "@powersync/react-native";`,
 		},
 	],
 	invalid: [
@@ -39,7 +39,7 @@ ruleTester.run("no-db-imports-outside-services", rule, {
 		},
 		{
 			filename: "/repo/components/active-list/index.tsx",
-			code: `import { createClient } from "@libsql/client/web";`,
+			code: `import { PowerSyncDatabase } from "@powersync/react-native";`,
 			errors: [{ messageId: "useServices" }],
 		},
 		{
@@ -59,12 +59,12 @@ ruleTester.run("no-db-imports-outside-services", rule, {
 		},
 		{
 			filename: "/repo/components/auth/auth-gate.tsx",
-			code: `const db = import("@/db/schema/household");`,
+			code: `const db = import("@/db/schema/postgres");`,
 			errors: [{ messageId: "useServices" }],
 		},
 		{
 			filename: "/repo/screens/home/use-home-content.ts",
-			code: `import { Database } from "@tursodatabase/sync-react-native";`,
+			code: `import { open } from "@op-engineering/op-sqlite";`,
 			errors: [{ messageId: "useServices" }],
 		},
 	],

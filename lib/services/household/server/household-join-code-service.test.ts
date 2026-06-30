@@ -117,7 +117,6 @@ describe("createHouseholdJoinCodeService", () => {
 				householdFixture({
 					id: "hh_unused",
 					name: "Unused",
-					tursoDbName: "df-local-unused",
 				}),
 			);
 			await directory.db.insert(householdJoinCodes).values(

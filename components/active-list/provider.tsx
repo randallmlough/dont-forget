@@ -7,11 +7,10 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { type Logger, useLogger } from "@/lib/logger";
 import { ActiveListContext } from "./context";
 import type {
 	ActiveListState,
-	ActiveListSyncCoordinator,
+	ActiveListSyncStatusSource,
 	AddActiveListItemDraft,
 	AddActiveListItemInput,
 } from "./types";
@@ -21,54 +20,26 @@ export type ActiveListProviderProps = PropsWithChildren<{
 	currentMemberName: string;
 	onAddItem: (input: AddActiveListItemInput) => Promise<void>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-	syncCoordinator: ActiveListSyncCoordinator;
-	logger?: Logger;
+	syncStatus: ActiveListSyncStatusSource;
 }>;
 
 export function ActiveListProvider({
-	logger,
-	...props
-}: ActiveListProviderProps) {
-	if (logger) {
-		return <ActiveListProviderContent {...props} logger={logger} />;
-	}
-
-	return <ActiveListProviderWithLogger {...props} />;
-}
-
-type ActiveListProviderContentProps = Omit<
-	ActiveListProviderProps,
-	"logger"
-> & {
-	logger: Logger;
-};
-
-function ActiveListProviderWithLogger(
-	props: Omit<ActiveListProviderProps, "logger">,
-) {
-	const logger = useLogger();
-	return <ActiveListProviderContent {...props} logger={logger} />;
-}
-
-function ActiveListProviderContent({
 	state,
 	currentMemberName,
 	onAddItem,
 	onSetItemChecked,
-	syncCoordinator,
-	logger,
+	syncStatus,
 	children,
-}: ActiveListProviderContentProps) {
+}: ActiveListProviderProps) {
 	const syncState = useSyncExternalStore(
 		(onStoreChange: () => void) => {
-			const subscription = syncCoordinator.subscribe(onStoreChange);
+			const subscription = syncStatus.subscribe(onStoreChange);
 			return () => subscription.remove();
 		},
-		() => syncCoordinator.getStatus(),
-		() => syncCoordinator.getStatus(),
+		() => syncStatus.getStatus(),
+		() => syncStatus.getStatus(),
 	);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
-	const [isRefreshing, setIsRefreshing] = useState(false);
 	const mounted = useRef(true);
 
 	useEffect(() => {
@@ -84,33 +55,6 @@ function ActiveListProviderContent({
 		}
 	}, []);
 
-	const setRefreshingIfMounted = useCallback((refreshing: boolean) => {
-		if (mounted.current) {
-			setIsRefreshing(refreshing);
-		}
-	}, []);
-
-	const requestLocalWriteSync = useCallback(() => {
-		void syncCoordinator
-			.requestSync({ reason: "localWrite" })
-			.catch(() => undefined);
-	}, [syncCoordinator]);
-
-	const refresh = useCallback(async () => {
-		setErrorIfMounted(null);
-		setRefreshingIfMounted(true);
-		try {
-			await syncCoordinator.requestSync({ reason: "manualRefresh" });
-		} catch (error) {
-			if (syncCoordinator.getStatus() !== "failed") {
-				logger.error("active list refresh failed", { error });
-			}
-			setErrorIfMounted("Unable to refresh this List. Please try again.");
-		} finally {
-			setRefreshingIfMounted(false);
-		}
-	}, [logger, setErrorIfMounted, setRefreshingIfMounted, syncCoordinator]);
-
 	const addItem = useCallback(
 		async (input: AddActiveListItemDraft) => {
 			const name = input.name.trim();
@@ -121,13 +65,12 @@ function ActiveListProviderContent({
 			try {
 				await onAddItem({ name, quantity, notes });
 				setErrorIfMounted(null);
-				requestLocalWriteSync();
 			} catch (error) {
 				setErrorIfMounted("Unable to save that Item. Please try again.");
 				throw error;
 			}
 		},
-		[onAddItem, requestLocalWriteSync, setErrorIfMounted],
+		[onAddItem, setErrorIfMounted],
 	);
 
 	const toggleItem = useCallback(
@@ -138,27 +81,25 @@ function ActiveListProviderContent({
 			try {
 				await onSetItemChecked(itemId, !target.checked);
 				setErrorIfMounted(null);
-				requestLocalWriteSync();
 			} catch {
 				setErrorIfMounted("Unable to save that change. Please try again.");
 			}
 		},
-		[onSetItemChecked, requestLocalWriteSync, setErrorIfMounted, state.items],
+		[onSetItemChecked, setErrorIfMounted, state.items],
 	);
 
 	const actions = useMemo(
-		() => ({ addItem, refresh, toggleItem }),
-		[addItem, refresh, toggleItem],
+		() => ({ addItem, toggleItem }),
+		[addItem, toggleItem],
 	);
 
 	const meta = useMemo(
 		() => ({
 			currentMemberName,
 			errorMessage,
-			isRefreshing,
 			syncState,
 		}),
-		[currentMemberName, errorMessage, isRefreshing, syncState],
+		[currentMemberName, errorMessage, syncState],
 	);
 
 	const value = useMemo(

@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { itemChecks, items, lists } from "@/db/schema/household";
 import type {
 	NewHousehold,
 	NewMembership,
@@ -10,10 +9,13 @@ import {
 	householdJoinCodeUses,
 	households,
 	invitations,
+	itemChecks,
+	items,
+	lists,
 	memberships,
 	users,
 } from "@/db/schema/postgres";
-import type { DirectoryDb, HouseholdDb } from "@/db/server/client";
+import type { DirectoryDb } from "@/db/server/client";
 import {
 	householdFixture,
 	householdJoinCodeFixture,
@@ -29,7 +31,6 @@ import {
 
 type PrimaryHouseholdScenarioOptions = {
 	now?: number;
-	householdTursoDbName?: string;
 };
 
 export type EmailBackedPrimaryHouseholdScenarioSeed = {
@@ -62,7 +63,6 @@ function buildPrimaryDirectoryHouseholdFacts(input: {
 	includeCameron?: boolean;
 	blakeJoinedAt?: number;
 	cameronJoinedAt?: number;
-	householdTursoDbName?: string;
 	householdOverrides?: Partial<NewHousehold>;
 	membershipOverrides?: {
 		avery?: Partial<NewMembership>;
@@ -96,12 +96,8 @@ function buildPrimaryDirectoryHouseholdFacts(input: {
 	});
 	const household = householdFixture({
 		...PRIMARY_HOUSEHOLD_SEED.household,
-		tursoDbName:
-			input.householdTursoDbName ??
-			PRIMARY_HOUSEHOLD_SEED.household.tursoDbName,
 		...input.householdOverrides,
 		createdByUserId: avery.id,
-		provisioningCompletedAt: now,
 		createdAt: now,
 	});
 	const averyMembership = membershipFixture({
@@ -180,13 +176,11 @@ export type PrimaryHouseholdScenario = Awaited<
 export async function seedPrimaryHouseholdScenario(
 	input: {
 		directory: DirectoryDb;
-		household: HouseholdDb;
 	} & PrimaryHouseholdScenarioOptions,
 ) {
 	const now = input.now ?? PRIMARY_HOUSEHOLD_SEED.now;
 	const facts = buildPrimaryDirectoryHouseholdFacts({
 		now,
-		householdTursoDbName: input.householdTursoDbName,
 	});
 	const { avery, blake } = facts.users;
 	const { household } = facts;
@@ -198,40 +192,45 @@ export async function seedPrimaryHouseholdScenario(
 	});
 	const groceries = listFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.lists.groceries.id,
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.groceries.name,
 		createdByUserId: avery.id,
-		createdAt: now,
-		updatedAt: now,
+		createdAt: new Date(now),
+		updatedAt: new Date(now),
 	});
 	const hardware = listFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.lists.hardware.id,
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.hardware.name,
 		createdByUserId: avery.id,
-		createdAt: now + 1,
-		updatedAt: now + 1,
+		createdAt: new Date(now + 1),
+		updatedAt: new Date(now + 1),
 	});
 	const pharmacy = listFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.lists.pharmacy.id,
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.pharmacy.name,
 		createdByUserId: blake.id,
-		createdAt: now + 2,
-		updatedAt: now + 2,
+		createdAt: new Date(now + 2),
+		updatedAt: new Date(now + 2),
 	});
 	const archivedList = listFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.lists.archived.id,
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.archived.name,
 		createdByUserId: avery.id,
-		createdAt: now + 3,
-		updatedAt: now + 60,
-		archivedAt: now + 60,
+		createdAt: new Date(now + 3),
+		updatedAt: new Date(now + 60),
+		archivedAt: new Date(now + 60),
 	});
 	const deletedList = listFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.lists.deleted.id,
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.deleted.name,
 		createdByUserId: avery.id,
-		createdAt: now + 4,
-		updatedAt: now + 70,
-		deletedAt: now + 70,
+		createdAt: new Date(now + 4),
+		updatedAt: new Date(now + 70),
+		deletedAt: new Date(now + 70),
 	});
 	const uncheckedItem = itemFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.items.unchecked.id,
@@ -239,8 +238,8 @@ export async function seedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.unchecked.name,
 		position: 0,
 		createdByUserId: avery.id,
-		createdAt: now + 10,
-		updatedAt: now + 10,
+		createdAt: new Date(now + 10),
+		updatedAt: new Date(now + 10),
 	});
 	const checkedByAveryItem = itemFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.items.checkedByAvery.id,
@@ -248,8 +247,8 @@ export async function seedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.checkedByAvery.name,
 		position: 1,
 		createdByUserId: avery.id,
-		createdAt: now + 20,
-		updatedAt: now + 20,
+		createdAt: new Date(now + 20),
+		updatedAt: new Date(now + 20),
 	});
 	const checkedByBlakeItem = itemFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.items.checkedByBlake.id,
@@ -257,8 +256,8 @@ export async function seedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.checkedByBlake.name,
 		position: 2,
 		createdByUserId: blake.id,
-		createdAt: now + 30,
-		updatedAt: now + 30,
+		createdAt: new Date(now + 30),
+		updatedAt: new Date(now + 30),
 	});
 	const tombstonedItem = itemFixture({
 		id: PRIMARY_HOUSEHOLD_SEED.items.tombstoned.id,
@@ -266,21 +265,23 @@ export async function seedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.tombstoned.name,
 		position: 3,
 		createdByUserId: avery.id,
-		createdAt: now + 40,
-		updatedAt: now + 50,
-		deletedAt: now + 50,
+		createdAt: new Date(now + 40),
+		updatedAt: new Date(now + 50),
+		deletedAt: new Date(now + 50),
 	});
 	const checkedByAvery = itemCheckFixture({
+		id: "chk_seed_eggs",
 		itemId: checkedByAveryItem.id,
-		userId: avery.id,
-		checkedAt: now + 100,
-		updatedAt: now + 100,
+		checkedByUserId: avery.id,
+		checkedAt: new Date(now + 100),
+		updatedAt: new Date(now + 100),
 	});
 	const checkedByBlake = itemCheckFixture({
+		id: "chk_seed_bread",
 		itemId: checkedByBlakeItem.id,
-		userId: blake.id,
-		checkedAt: now + 110,
-		updatedAt: now + 110,
+		checkedByUserId: blake.id,
+		checkedAt: new Date(now + 110),
+		updatedAt: new Date(now + 110),
 	});
 
 	await input.directory.transaction(async (tx) => {
@@ -294,7 +295,7 @@ export async function seedPrimaryHouseholdScenario(
 			household.id,
 		);
 	});
-	await input.household.transaction(async (tx) => {
+	await input.directory.transaction(async (tx) => {
 		await tx
 			.insert(lists)
 			.values([groceries, hardware, pharmacy, archivedList, deletedList]);
@@ -351,7 +352,6 @@ export type EmailBackedPrimaryHouseholdScenario = Awaited<
 export async function seedEmailBackedPrimaryHouseholdScenario(
 	input: {
 		directory: DirectoryDb;
-		household: HouseholdDb;
 		ownerClerkUserId: string;
 		ownerEmail: string;
 		memberClerkUserId: string;
@@ -364,7 +364,6 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 	const facts = buildPrimaryDirectoryHouseholdFacts({
 		now,
 		includeCameron: true,
-		householdTursoDbName: input.householdTursoDbName,
 		householdOverrides: seed
 			? {
 					id: seed.household.id,
@@ -410,40 +409,45 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 	});
 	const groceries = listFixture({
 		id: seedListId(seed, "groceries"),
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.groceries.name,
 		createdByUserId: avery.id,
-		createdAt: now,
-		updatedAt: now,
+		createdAt: new Date(now),
+		updatedAt: new Date(now),
 	});
 	const hardware = listFixture({
 		id: seedListId(seed, "hardware"),
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.hardware.name,
 		createdByUserId: avery.id,
-		createdAt: now + 1,
-		updatedAt: now + 1,
+		createdAt: new Date(now + 1),
+		updatedAt: new Date(now + 1),
 	});
 	const pharmacy = listFixture({
 		id: seedListId(seed, "pharmacy"),
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.pharmacy.name,
 		createdByUserId: blake.id,
-		createdAt: now + 2,
-		updatedAt: now + 2,
+		createdAt: new Date(now + 2),
+		updatedAt: new Date(now + 2),
 	});
 	const archivedList = listFixture({
 		id: seedListId(seed, "archived"),
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.archived.name,
 		createdByUserId: avery.id,
-		createdAt: now + 3,
-		updatedAt: now + 60,
-		archivedAt: now + 60,
+		createdAt: new Date(now + 3),
+		updatedAt: new Date(now + 60),
+		archivedAt: new Date(now + 60),
 	});
 	const deletedList = listFixture({
 		id: seedListId(seed, "deleted"),
+		householdId: household.id,
 		name: PRIMARY_HOUSEHOLD_SEED.lists.deleted.name,
 		createdByUserId: avery.id,
-		createdAt: now + 4,
-		updatedAt: now + 70,
-		deletedAt: now + 70,
+		createdAt: new Date(now + 4),
+		updatedAt: new Date(now + 70),
+		deletedAt: new Date(now + 70),
 	});
 	const uncheckedItem = itemFixture({
 		id: seedItemId(seed, "unchecked"),
@@ -451,8 +455,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.unchecked.name,
 		position: 0,
 		createdByUserId: avery.id,
-		createdAt: now + 10,
-		updatedAt: now + 10,
+		createdAt: new Date(now + 10),
+		updatedAt: new Date(now + 10),
 	});
 	const checkedByAveryItem = itemFixture({
 		id: seedItemId(seed, "checkedByAvery"),
@@ -460,8 +464,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.checkedByAvery.name,
 		position: 1,
 		createdByUserId: avery.id,
-		createdAt: now + 20,
-		updatedAt: now + 20,
+		createdAt: new Date(now + 20),
+		updatedAt: new Date(now + 20),
 	});
 	const checkedByBlakeItem = itemFixture({
 		id: seedItemId(seed, "checkedByBlake"),
@@ -469,8 +473,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.checkedByBlake.name,
 		position: 2,
 		createdByUserId: blake.id,
-		createdAt: now + 30,
-		updatedAt: now + 30,
+		createdAt: new Date(now + 30),
+		updatedAt: new Date(now + 30),
 	});
 	const tombstonedItem = itemFixture({
 		id: seedItemId(seed, "tombstoned"),
@@ -478,9 +482,9 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.tombstoned.name,
 		position: 3,
 		createdByUserId: avery.id,
-		createdAt: now + 40,
-		updatedAt: now + 50,
-		deletedAt: now + 50,
+		createdAt: new Date(now + 40),
+		updatedAt: new Date(now + 50),
+		deletedAt: new Date(now + 50),
 	});
 	const hardwareBatteries = itemFixture({
 		id: seedItemId(seed, "hardwareBatteries"),
@@ -488,8 +492,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.hardwareBatteries.name,
 		position: 0,
 		createdByUserId: avery.id,
-		createdAt: now + 11,
-		updatedAt: now + 11,
+		createdAt: new Date(now + 11),
+		updatedAt: new Date(now + 11),
 	});
 	const hardwarePaintersTape = itemFixture({
 		id: seedItemId(seed, "hardwarePaintersTape"),
@@ -497,8 +501,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.hardwarePaintersTape.name,
 		position: 1,
 		createdByUserId: blake.id,
-		createdAt: now + 21,
-		updatedAt: now + 21,
+		createdAt: new Date(now + 21),
+		updatedAt: new Date(now + 21),
 	});
 	const hardwareLightBulbs = itemFixture({
 		id: seedItemId(seed, "hardwareLightBulbs"),
@@ -506,8 +510,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.hardwareLightBulbs.name,
 		position: 2,
 		createdByUserId: avery.id,
-		createdAt: now + 31,
-		updatedAt: now + 31,
+		createdAt: new Date(now + 31),
+		updatedAt: new Date(now + 31),
 	});
 	const pharmacyIbuprofen = itemFixture({
 		id: seedItemId(seed, "pharmacyIbuprofen"),
@@ -515,8 +519,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.pharmacyIbuprofen.name,
 		position: 0,
 		createdByUserId: blake.id,
-		createdAt: now + 12,
-		updatedAt: now + 12,
+		createdAt: new Date(now + 12),
+		updatedAt: new Date(now + 12),
 	});
 	const pharmacyBandages = itemFixture({
 		id: seedItemId(seed, "pharmacyBandages"),
@@ -524,8 +528,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.pharmacyBandages.name,
 		position: 1,
 		createdByUserId: avery.id,
-		createdAt: now + 22,
-		updatedAt: now + 22,
+		createdAt: new Date(now + 22),
+		updatedAt: new Date(now + 22),
 	});
 	const pharmacyAllergyTablets = itemFixture({
 		id: seedItemId(seed, "pharmacyAllergyTablets"),
@@ -533,8 +537,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.pharmacyAllergyTablets.name,
 		position: 2,
 		createdByUserId: blake.id,
-		createdAt: now + 32,
-		updatedAt: now + 32,
+		createdAt: new Date(now + 32),
+		updatedAt: new Date(now + 32),
 	});
 	const archivedCranberrySauce = itemFixture({
 		id: seedItemId(seed, "archivedCranberrySauce"),
@@ -542,8 +546,8 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.archivedCranberrySauce.name,
 		position: 0,
 		createdByUserId: avery.id,
-		createdAt: now + 13,
-		updatedAt: now + 13,
+		createdAt: new Date(now + 13),
+		updatedAt: new Date(now + 13),
 	});
 	const archivedPieCrust = itemFixture({
 		id: seedItemId(seed, "archivedPieCrust"),
@@ -551,26 +555,29 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 		name: PRIMARY_HOUSEHOLD_SEED.items.archivedPieCrust.name,
 		position: 1,
 		createdByUserId: blake.id,
-		createdAt: now + 23,
-		updatedAt: now + 23,
+		createdAt: new Date(now + 23),
+		updatedAt: new Date(now + 23),
 	});
 	const checkedByAvery = itemCheckFixture({
+		id: seedItemCheckId(seed, "checkedByAvery"),
 		itemId: checkedByAveryItem.id,
-		userId: avery.id,
-		checkedAt: now + 100,
-		updatedAt: now + 100,
+		checkedByUserId: avery.id,
+		checkedAt: new Date(now + 100),
+		updatedAt: new Date(now + 100),
 	});
 	const checkedByBlake = itemCheckFixture({
+		id: seedItemCheckId(seed, "checkedByBlake"),
 		itemId: checkedByBlakeItem.id,
-		userId: blake.id,
-		checkedAt: now + 110,
-		updatedAt: now + 110,
+		checkedByUserId: blake.id,
+		checkedAt: new Date(now + 110),
+		updatedAt: new Date(now + 110),
 	});
 	const hardwareCheckedByBlake = itemCheckFixture({
+		id: seedItemCheckId(seed, "hardwareLightBulbs"),
 		itemId: hardwareLightBulbs.id,
-		userId: blake.id,
-		checkedAt: now + 120,
-		updatedAt: now + 120,
+		checkedByUserId: blake.id,
+		checkedAt: new Date(now + 120),
+		updatedAt: new Date(now + 120),
 	});
 
 	await input.directory.transaction(async (tx) => {
@@ -584,7 +591,7 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 			household.id,
 		);
 	});
-	await input.household.transaction(async (tx) => {
+	await input.directory.transaction(async (tx) => {
 		await tx
 			.insert(lists)
 			.values([groceries, hardware, pharmacy, archivedList, deletedList]);
@@ -661,14 +668,33 @@ function seedListId(
 	seed: EmailBackedPrimaryHouseholdScenarioSeed | undefined,
 	key: keyof typeof PRIMARY_HOUSEHOLD_SEED.lists,
 ): string {
-	return seed?.lists?.[key]?.id ?? PRIMARY_HOUSEHOLD_SEED.lists[key].id;
+	const defaultId = PRIMARY_HOUSEHOLD_SEED.lists[key].id;
+	return seed?.lists?.[key]?.id ?? scopedSeedId(seed, defaultId);
 }
 
 function seedItemId(
 	seed: EmailBackedPrimaryHouseholdScenarioSeed | undefined,
 	key: keyof typeof PRIMARY_HOUSEHOLD_SEED.items,
 ): string {
-	return seed?.items?.[key]?.id ?? PRIMARY_HOUSEHOLD_SEED.items[key].id;
+	const defaultId = PRIMARY_HOUSEHOLD_SEED.items[key].id;
+	return seed?.items?.[key]?.id ?? scopedSeedId(seed, defaultId);
+}
+
+function seedItemCheckId(
+	seed: EmailBackedPrimaryHouseholdScenarioSeed | undefined,
+	key: "checkedByAvery" | "checkedByBlake" | "hardwareLightBulbs",
+): string {
+	return scopedSeedId(seed, `chk_${PRIMARY_HOUSEHOLD_SEED.items[key].id}`);
+}
+
+function scopedSeedId(
+	seed: EmailBackedPrimaryHouseholdScenarioSeed | undefined,
+	defaultId: string,
+): string {
+	if (!seed) {
+		return defaultId;
+	}
+	return `${defaultId}_${seed.household.id}`;
 }
 
 function syntheticClerkUserId(userId: string): string {
@@ -700,15 +726,12 @@ export async function seedMultiHouseholdUserScenario(input: {
 	const primaryHousehold = householdFixture({
 		...PRIMARY_HOUSEHOLD_SEED.household,
 		createdByUserId: avery.id,
-		provisioningCompletedAt: now,
 		createdAt: now,
 	});
 	const secondHousehold = householdFixture({
 		id: "hh_cedar",
 		name: "Cedar",
-		tursoDbName: "df-local-hh-seed-cedar",
 		createdByUserId: avery.id,
-		provisioningCompletedAt: now + 10,
 		createdAt: now + 10,
 	});
 	const primaryOwnerMembership = membershipFixture({

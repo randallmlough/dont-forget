@@ -1,5 +1,4 @@
 import type { DirectoryDb } from "@/db/server/client";
-import { type AppEnv, readTursoOperatorConfig } from "@/lib/env";
 import { asError } from "@/lib/errors";
 import {
 	type HouseholdJoinCodeSource,
@@ -13,7 +12,6 @@ import {
 	createActiveHouseholdService,
 	createHouseholdJoinCodeService,
 	createHouseholdService,
-	createProductionHouseholdProvisioningService,
 	HouseholdForbiddenError,
 	HouseholdJoinCodeMembershipRequiredError,
 	type HouseholdJoinCodeService,
@@ -21,7 +19,6 @@ import {
 	HouseholdJoinCodeUnavailableError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,
-	type HouseholdProvisioningService,
 	type HouseholdService,
 } from "@/lib/services/household/server";
 import type { ActiveHouseholdServiceDirectory } from "@/lib/services/household/server/active-household-service";
@@ -58,7 +55,6 @@ import {
 } from "../shared";
 
 export type HouseholdApiDeps = ApiHandlerDeps & {
-	appEnv?: AppEnv;
 	createActiveHouseholdService?: (
 		directory: ActiveHouseholdServiceDirectory,
 	) => ActiveHouseholdService;
@@ -68,7 +64,6 @@ export type HouseholdApiDeps = ApiHandlerDeps & {
 	createHouseholdService?: (
 		directory: HouseholdServiceDirectory,
 	) => HouseholdService;
-	createHouseholdProvisioningService?: () => HouseholdProvisioningService;
 	createMemberService?: (directory: MemberServiceDirectory) => MemberService;
 };
 
@@ -81,40 +76,26 @@ export async function handleCreateHousehold(
 			const user = await authenticateApiUser(request, directory, deps);
 			const body = await readJsonObject(request);
 			const name = createHouseholdNameFromBody(body);
-			const appEnv = deps?.appEnv ?? readTursoOperatorConfig().appEnv;
 			const household = await directory.transaction(async (tx) => {
-				return householdService(tx, deps).createOwnedHousehold({
-					appEnv,
+				const created = await householdService(tx, deps).createOwnedHousehold({
 					user,
 					name,
 				});
-			});
-
-			const provisioning = householdProvisioningService(deps);
-			await provisioning.ensureHouseholdDatabase({
-				tursoDbName: household.tursoDbName,
-				createdByUserId: user.id,
-				provisioningCompletedAt: household.provisioningCompletedAt,
-			});
-			await provisioning.createHouseholdDatabaseToken(household.tursoDbName);
-
-			return directory.transaction(async (tx) => {
-				await householdService(tx, deps).markProvisioningCompleted(
-					household.id,
-				);
 				await memberService(tx, deps).ensureOwnerMembership({
-					householdId: household.id,
+					householdId: created.id,
 					user,
 				});
 				await activeHouseholdService(tx, deps).setActiveHousehold({
 					userId: user.id,
-					householdId: household.id,
+					householdId: created.id,
 				});
-				return jsonResponse(
-					{ household: { id: household.id, name: household.name } },
-					201,
-				);
+				return created;
 			});
+
+			return jsonResponse(
+				{ household: { id: household.id, name: household.name } },
+				201,
+			);
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Create Household API failed");
@@ -428,15 +409,6 @@ function householdJoinCodeService(
 	return createHouseholdJoinCodeService(
 		productionJoinCodeServiceDeps(directory),
 	);
-}
-
-function householdProvisioningService(
-	deps?: HouseholdApiDeps,
-): HouseholdProvisioningService {
-	if (deps?.createHouseholdProvisioningService) {
-		return deps.createHouseholdProvisioningService();
-	}
-	return createProductionHouseholdProvisioningService();
 }
 
 function memberService(

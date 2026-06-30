@@ -8,7 +8,7 @@ export function ActiveListHeader({
 }: {
 	onPressListName?: () => void;
 }) {
-	const { actions, meta, state } = useActiveList();
+	const { meta, state } = useActiveList();
 	const itemCount = state.items.length;
 	const checkedCount = state.items.filter((item) => item.checked).length;
 	const progressLabel =
@@ -20,19 +20,6 @@ export function ActiveListHeader({
 		<View style={styles.header}>
 			<View style={styles.headerTopRow}>
 				<Text style={styles.householdName}>{state.householdName}</Text>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ busy: meta.isRefreshing }}
-					onPress={() => void actions.refresh()}
-					style={({ pressed }) => [
-						styles.refreshButton,
-						pressed ? styles.refreshButtonPressed : undefined,
-					]}
-				>
-					<Text style={styles.refreshButtonLabel}>
-						{meta.isRefreshing ? "Refreshing" : "Refresh"}
-					</Text>
-				</Pressable>
 			</View>
 			{onPressListName ? (
 				<Pressable
@@ -107,25 +94,6 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.textMuted,
 		fontSize: theme.fontSizes.footnote,
 		fontWeight: theme.fontWeights.semibold,
-	},
-	refreshButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(2.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.background,
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.border,
-	},
-	refreshButtonPressed: {
-		opacity: theme.opacities.pressed,
-	},
-	refreshButtonLabel: {
-		...theme.typography.caption,
-		color: theme.colors.text,
-		fontWeight: theme.fontWeights.bold,
 	},
 	listName: {
 		...theme.typography.largeTitle,

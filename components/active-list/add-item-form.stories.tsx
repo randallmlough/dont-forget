@@ -7,7 +7,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { ActiveList } from "@/components/active-list";
 import {
 	createActiveListMemoryActions,
-	createPassiveActiveListSyncCoordinator,
+	createPassiveActiveListSyncStatus,
 	emptyActiveListState,
 } from "@/components/active-list/test-support";
 
@@ -32,7 +32,7 @@ function AddItemComposerStory() {
 			checkedByMemberName: "Avery Chen",
 		}),
 	);
-	const [syncCoordinator] = useState(createPassiveActiveListSyncCoordinator);
+	const [syncStatus] = useState(createPassiveActiveListSyncStatus);
 
 	return (
 		<SafeAreaProvider
@@ -53,7 +53,7 @@ function AddItemComposerStory() {
 						await actions.setItemChecked(itemId, checked);
 						setState(await actions.load());
 					}}
-					syncCoordinator={syncCoordinator}
+					syncStatus={syncStatus}
 				>
 					<ActiveList.Screen>
 						<ActiveList.Header />

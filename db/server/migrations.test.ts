@@ -1,31 +1,19 @@
 import { asc, eq } from "drizzle-orm";
-import { itemChecks, items, lists } from "@/db/schema/household";
 import {
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
+	itemChecks,
+	items,
+	lists,
 	memberships,
 	users,
 } from "@/db/schema/postgres";
-import {
-	createTestDirectoryDb,
-	createTestHouseholdDb,
-	migrationAtOrBefore,
-} from "@/db/server/test";
+import { createTestDirectoryDb } from "@/db/server/test";
 
 describe("test database migrations", () => {
-	it("orders migration filenames by zero-padded migration prefix", () => {
-		expect(
-			migrationAtOrBefore("0000_dear_exodus.sql", "0001_add_quantity.sql"),
-		).toBe(true);
-		expect(
-			migrationAtOrBefore("0002_future_change.sql", "0001_add_quantity.sql"),
-		).toBe(false);
-	});
-
-	it("applies directory and Household migrations to isolated local databases", async () => {
+	it("applies directory and product migrations to an isolated local database", async () => {
 		const directory = await createTestDirectoryDb();
-		const household = await createTestHouseholdDb();
 
 		try {
 			await directory.db.insert(users).values({
@@ -39,7 +27,6 @@ describe("test database migrations", () => {
 			await directory.db.insert(households).values({
 				id: "household_1",
 				name: "Test Household",
-				tursoDbName: "test-household",
 				createdByUserId: "usr_1",
 			});
 			await directory.db.insert(memberships).values({
@@ -49,12 +36,13 @@ describe("test database migrations", () => {
 				role: "owner",
 			});
 
-			await household.db.insert(lists).values({
+			await directory.db.insert(lists).values({
 				id: "list_1",
+				householdId: "household_1",
 				name: "Groceries",
 				createdByUserId: "usr_1",
 			});
-			await household.db.insert(items).values({
+			await directory.db.insert(items).values({
 				id: "item_1",
 				listId: "list_1",
 				name: "Milk",
@@ -63,10 +51,11 @@ describe("test database migrations", () => {
 				position: 0,
 				createdByUserId: "usr_1",
 			});
-			await household.db.insert(itemChecks).values({
+			await directory.db.insert(itemChecks).values({
+				id: "check_1",
 				itemId: "item_1",
-				userId: "usr_1",
-				checkedAt: 1_700_000_000_000,
+				checkedByUserId: "usr_1",
+				checkedAt: new Date(1_700_000_000_000),
 			});
 
 			const directoryRows = await directory.db
@@ -76,9 +65,9 @@ describe("test database migrations", () => {
 				})
 				.from(households)
 				.innerJoin(memberships, eq(memberships.householdId, households.id));
-			const listRows = await household.db.select().from(lists);
-			const itemRows = await household.db.select().from(items);
-			const checkRows = await household.db.select().from(itemChecks);
+			const listRows = await directory.db.select().from(lists);
+			const itemRows = await directory.db.select().from(items);
+			const checkRows = await directory.db.select().from(itemChecks);
 
 			expect(directoryRows).toEqual([
 				{ householdId: "household_1", role: "owner" },
@@ -97,15 +86,15 @@ describe("test database migrations", () => {
 			]);
 			expect(checkRows).toEqual([
 				{
+					id: "check_1",
 					itemId: "item_1",
-					userId: "usr_1",
-					checkedAt: 1_700_000_000_000,
-					updatedAt: expect.any(Number),
+					checkedByUserId: "usr_1",
+					checkedAt: new Date(1_700_000_000_000),
+					updatedAt: expect.any(Date),
 				},
 			]);
 		} finally {
 			await directory.close();
-			await household.close();
 		}
 	});
 
@@ -134,13 +123,11 @@ describe("test database migrations", () => {
 				{
 					id: "hh_1",
 					name: "Avery",
-					tursoDbName: "df-test-hh-1",
 					createdByUserId: "usr_owner",
 				},
 				{
 					id: "hh_2",
 					name: "Cedar",
-					tursoDbName: "df-test-hh-2",
 					createdByUserId: "usr_owner",
 				},
 			]);
