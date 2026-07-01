@@ -96,8 +96,8 @@ Use the container for screen-owned side effects and app dependencies. Use the vi
 
 5. **Keep resource ownership at the right boundary.**
    - Signed-in routes consume `useActiveHousehold()` or other provider-owned resources.
-   - Screens must not open, replace, sync, close, or delete Household DB resources directly.
-   - Sync coordinator lifecycle belongs to active Household infrastructure, not a screen.
+   - Screens must not manage the PowerSync connection or session resources directly.
+   - PowerSync connection lifecycle belongs to the Authenticated App Session controller, not a screen.
 
 6. **Add focused tests.**
    - Test route/screen behavior outside `app/`.
@@ -137,7 +137,7 @@ Use RocketSim/iOS Simulator validation when the change affects navigation, keybo
 - Screen-owned code lives under `screens/<surface>/`.
 - Reusable UI lives under `components/`.
 - Container/view split is justified by tests, stories, or dependency boundaries.
-- Screen does not own HouseholdStore or sync coordinator lifecycle.
+- Screen does not own the PowerSync connection or sync lifecycle.
 - Tests live outside `app/`.
 - Stories use deterministic fixtures and no live app resources.
 - Accessibility roles, labels, states, safe areas, and keyboard behavior are considered.

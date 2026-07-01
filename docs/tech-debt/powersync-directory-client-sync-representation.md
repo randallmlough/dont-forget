@@ -28,22 +28,24 @@ local PowerSync directory tables yet) but become live the moment C2 wires the cl
    client devices. (PR-C1 already narrowed `my_households` to the client-modeled columns; `me`/users
    still streams `created_at`/`updated_at` that the client schema does not model.)
 
-## Debt (resolve in PR-C2, "Client onto PowerSync")
+## Debt (open — not resolved by PR-C2)
 
-When the client is wired onto PowerSync, reconcile the directory tables' synced representation with the
-client schema. Two viable approaches:
+**Status (2026-06-30):** PR-C2 ("Cut over product data to PowerSync", #134) wired the client onto
+PowerSync but did **not** touch the directory sync representation, so the timestamp/projection mismatch
+below is still open. ADR-0017 Decision 1's wording was corrected by PR-D. This is a code concern
+(`infra/powersync/sync-config.yaml` + `lib/powersync/schema.ts`), not a docs one.
+
+Reconcile the directory tables' synced representation with the client schema. Two viable approaches:
 
 - Cast the directory timestamp columns to the client's representation in the sync queries (bigint
   epoch-millis → ISO text), **or**
 - Change the client schema column types to match what PowerSync emits for `bigint` (integer
   epoch-millis), keeping `z.number()` consistency end-to-end.
 
-Also fold in: audit every directory stream projection against the C2 client schema (drop server-only
-columns, e.g. confirm `me`/users excludes non-modeled fields), and **correct ADR-0017 Decision 1's
-wording** — it currently reads "the directory ... is not in the PowerSync publication," but
-`users`/`households`/`memberships` are in the `powersync` publication; the accurate statement for the
-end state is that the directory is not synced to clients *during C1* (bootstrap path), and becomes
-client-synced in C2.
+Also audit every directory stream projection in `sync-config.yaml` against the client schema and drop
+server-only columns (e.g. `me`/users still streams `created_at`/`updated_at` that the client schema does
+not model; `turso_db_name`/`provisioning_completed_at` were dropped by PR-C2). _(The related ADR-0017
+Decision 1 wording fix was completed by PR-D.)_
 
 ## Source
 

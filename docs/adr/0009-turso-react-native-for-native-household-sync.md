@@ -1,5 +1,7 @@
 # Turso React Native sync for native Household DB access
 
+> Superseded by [ADR-0018](0018-single-postgres-self-hosted-powersync.md) (PowerSync migration, 2026-06-30).
+
 The iOS app needs true local Household DB access: Home should reopen offline after a prior bootstrap, accept local Item/List writes, and sync when connectivity returns. We will use `@tursodatabase/sync-react-native` behind an app-owned Household DB wrapper for the native app Household DB path. ADR-0011 later names that wrapper `HouseholdStore` under `lib/services/household/household-store.ts`; this ADR originally referred to `lib/app/household-db.ts`. Server/API route, migration, reset, and Node test code will keep explicit `@libsql/client` server-safe entrypoints unless a separate server-driver proof replaces them later.
 
 This revises the earlier op-sqlite candidate after the Issue #6 spike found Turso's official React Native sync package can be installed, wrapped behind an app-owned interface, exercised in Jest through mocks, and bundled for iOS.

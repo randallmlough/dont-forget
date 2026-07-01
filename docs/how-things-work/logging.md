@@ -107,14 +107,16 @@ Services and stores should accept a `Logger` dependency when they log diagnostic
 ```ts
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 
-export type OpenHouseholdStoreConfig = {
+export type ItemServiceDeps = {
   householdId: string;
+  store: ProductDatabase;
   logger?: Logger;
 };
 
-export function openHouseholdStore(config: OpenHouseholdStoreConfig) {
-  const log = (config.logger ?? defaultLogger).with({
-    household_id: config.householdId,
+export function createItemService(deps: ItemServiceDeps) {
+  const log = (deps.logger ?? defaultLogger).with({
+    household_id: deps.householdId,
+    service: "item",
   });
 }
 ```

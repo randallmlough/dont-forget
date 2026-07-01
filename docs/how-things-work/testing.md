@@ -2,7 +2,7 @@
 
 Tests are React Native-first. The default stack is Jest through `jest-expo` plus React Native Testing Library. Use Expo Router testing utilities for router and auth-gate flows when a test needs real route behavior.
 
-Integration-first testing is the hard default for product behavior. If Household, Member, Owner, Invitation, List, Item, Authenticated App Session, or sync behavior can run locally through Jest, React Native Testing Library, Expo Router testing utilities, and/or isolated temp libSQL databases, the test should exercise that real collaboration instead of replacing it with app-owned fakes.
+Integration-first testing is the hard default for product behavior. If Household, Member, Owner, Invitation, List, Item, Authenticated App Session, or sync behavior can run locally through Jest, React Native Testing Library, Expo Router testing utilities, and/or isolated ephemeral local databases, the test should exercise that real collaboration instead of replacing it with app-owned fakes.
 
 There is no separate React DOM/jsdom track. Add one later only if the app grows web-specific behavior that cannot be exercised through the React Native surface.
 
@@ -38,7 +38,7 @@ Mock true external SDK and native boundaries:
 - Expo browser and secure storage APIs
 - NetInfo, app foreground/background state, timers, time, random ID sources, or deliberately controlled race collaborators when the behavior under test depends on deterministic ordering
 
-Do not mock product behavior that can run locally. Database behavior should use an isolated local libSQL database loaded from checked-in migration SQL. Hand-written SQL result maps are not product coverage when the behavior can be seeded into temp libSQL.
+Do not mock product behavior that can run locally. Database behavior should use an isolated local database loaded from checked-in migration SQL. Hand-written SQL result maps are not product coverage when the behavior can be seeded into a temp database.
 
 Allowed mocks are defined by boundary, not convenience:
 
@@ -48,13 +48,13 @@ Allowed mocks are defined by boundary, not convenience:
 - App-owned service/store/session/List/Item/sync policy: run it for product behavior.
 - Race-control collaborator: fake only the timing edge being asserted and keep the rest of the path real when practical.
 
-Use Maestro, not Jest, to prove native database module behavior such as Turso React Native open/sync, offline cold start, app relaunch, and airplane-mode transitions.
+Use Maestro, not Jest, to prove native database module behavior such as PowerSync open/sync, offline cold start, app relaunch, and airplane-mode transitions.
 
 Maestro flows that are specifically about native database/offline behavior may use a test-only auth path gated to `APP_ENV=local` or `APP_ENV=test` plus explicit E2E flags/secrets on both client and server. The client may return a fake signed-in session, and the bootstrap API may accept a matching server-only bearer token that maps to a fixed test User profile. The bypass must fail closed in staging and production. Keep real Clerk email/password or OAuth automation in separate auth-focused smoke flows so database/offline tests are deterministic.
 
-Database/offline Maestro flows should use a fixed E2E User profile and run an explicit local/test reset before the flow. Do not create a new Household DB per run unless the cleanup path is part of the test harness.
+Database/offline Maestro flows should use a fixed E2E User profile and run an explicit local/test reset before the flow. Do not create new test Households per run unless the cleanup path is part of the test harness.
 
-When a Maestro flow verifies offline writes that should sync later, pair the UI flow with a local/test-only post-flow assertion that queries the Household DB and confirms the offline Item reached the remote database.
+When a Maestro flow verifies offline writes that should sync later, pair the UI flow with a local/test-only post-flow assertion that queries Postgres and confirms the offline Item synced to the server.
 
 MSW is intentionally not part of the first testing setup. Add MSW only when app-owned HTTP/API routes exist and tests need to exercise those network boundaries. Clerk is mocked at the SDK-hook boundary because feature code does not call Clerk HTTP endpoints directly.
 
@@ -62,15 +62,11 @@ MSW is intentionally not part of the first testing setup. Add MSW only when app-
 
 Database integration tests mirror production topology:
 
-- one directory DB for Households, Members, and Invitations
-- one Household DB per test Household for Lists, Items, and `item_checks`
+- one Postgres database holding the directory (Users, Households, Members, Invitations) and product data (Lists, Items, `item_checks`), partitioned by `household_id`
 
 The `test` environment means automated tests only. It is not a persistent cloud environment; staging is the persistent pre-production environment.
 
-Use helpers from `db/server/test.ts`. They create temp local libSQL files and apply SQL from:
-
-- `db/migrations/directory/*.sql`
-- `db/migrations/household/*.sql`
+Directory tests use helpers from `db/server/test.ts`, which run an ephemeral PGlite (embedded Postgres) database and apply the SQL in `db/migrations/postgres/*.sql`. Product-service tests (List/Item) run against an in-memory SQLite database that mirrors the PowerSync client schema (`lib/test/product-database.ts`), so the real service SQL executes without the native PowerSync layer.
 
 Do not use `pnpm db:migrate` in tests. That command is for intentionally applying migrations to configured databases.
 
@@ -78,10 +74,10 @@ Do not use `pnpm db:migrate` in tests. That command is for intentionally applyin
 
 `db/server/fixtures/` is the shared persistence fixture layer. It contains:
 
-- low-level Drizzle insert-shaped builders for User, Household, Membership/Member, Invitation, Household Join Code, Household Join Code use/attempt, List, Item, and `item_checks` rows;
-- scenario helpers that seed caller-provided directory and Household DB handles and return the inserted records/IDs.
+- low-level Drizzle insert-shaped builders for User, Household, Membership/Member, Invitation, Household Join Code, Household Join Code use, List, Item, and `item_checks` rows;
+- scenario helpers that seed caller-provided directory and product database handles and return the inserted records/IDs.
 
-`db/server/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, sync coordinators, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
+`db/server/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
 
 The first canonical scenario is `seedPrimaryHouseholdScenario`:
 
@@ -104,12 +100,12 @@ make db-seed EMAIL=email@email.com
 make db-reseed EMAIL=email@email.com
 ```
 
-- `db-seed` runs `scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist in the no-`EMAIL` path. It assumes the deterministic seed Household DB already exists and has Household migrations applied.
+- `db-seed` runs `scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist in the no-`EMAIL` path. It assumes the local Postgres database already exists and has migrations applied.
 - Without `EMAIL`, seed/reseed keep the deterministic DB-only seed behavior.
 - With `EMAIL`, `db-seed` is additive: it creates an email-scoped seed Household without resetting unrelated local Users or Households. It creates or reuses two Clerk development Users: the supplied email as the Owner and the derived `+member` email as a plain Member. Both use password `testing1234`.
 - Existing matching Clerk development Users are reused and repaired before the local duplicate seed-data check runs.
 - `EMAIL` mode seeds 3 Members total: the Owner, the sign-inable plain Member, and Cameron as an app-only plain Member for Member-list UI coverage.
-- `db-reseed` is the explicit local destructive rebuild path: reset local app data, migrate the directory DB, ensure the deterministic seed Household DB, then seed. It defaults to local and no longer requires `CONFIRM_DB_RESET`.
+- `db-reseed` is the explicit local destructive rebuild path: reset local app data, migrate the Postgres database, then seed. It defaults to local and no longer requires `CONFIRM_DB_RESET`.
 - `db-reset` still means reset to empty and remains confirmation-gated.
 - Seed/reseed commands fail closed outside `APP_ENV=local`; staging and production are not seed sandboxes.
 
@@ -158,5 +154,5 @@ Coverage is visible through `pnpm test:coverage`, but there is no global thresho
 ## Examples To Copy
 
 - `lib/redact.test.ts` shows a focused pure-helper unit test.
-- `db/migrations.test.ts` shows a local directory + Household DB integration test.
+- `db/migrations.test.ts` shows a local Postgres migration integration test.
 - `screens/auth/sign-in-screen.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.

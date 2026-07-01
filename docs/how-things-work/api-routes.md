@@ -16,7 +16,7 @@ Responsibilities:
 - `lib/api/**` parses requests, verifies auth, shapes HTTP responses, maps expected domain errors to status codes, and orchestrates service calls.
 - `lib/services/**` owns domain behavior, database access, Membership checks, Invitation behavior, Household Join Code behavior, and active Household selection.
 
-`lib/api` is not a data-access layer. If an API handler needs directory DB or Household DB access, call the appropriate service instead of adding SQL to the handler.
+`lib/api` is not a data-access layer. If an API handler needs directory or product data access, call the appropriate service instead of adding SQL to the handler.
 
 The PowerSync write endpoint `/api/data` follows this rule with no exception. Its handler (`lib/api/data/handler.ts`) is a thin HTTP shim — authenticate, parse the batch, run the applicator in one transaction, map errors to status codes. The write logic, the batch contract, and the SQL live in `db/server/sync` as data-store infrastructure ([ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md)), which the shim imports downward (`lib/api -> db`). The applicator is a generic, schema-agnostic write engine for the sync transport, not domain data access, so it is not a domain service.
 
@@ -24,7 +24,7 @@ Request and response schemas can live in `lib/api/**` when they are only HTTP-bo
 
 ## Legacy Exception
 
-`app/api/bootstrap+api.ts` predates the `lib/api` boundary and still lazy-loads auth, directory DB, and `lib/services/session/server` directly. Do not copy that shape into new routes.
+`app/api/bootstrap+api.ts` predates the `lib/api` boundary and still lazy-loads auth, directory DB, and `lib/services/session/server` directly, and returns directory identity only — no per-Household sync tokens, since the PowerSync connection token is fetched directly from Clerk. Do not copy that shape into new routes.
 
 When the Authenticated App Session bootstrap route is next changed for API-boundary work, move its HTTP parsing, auth/error handling, response shaping, and service orchestration into `lib/api` first. Until then, treat bootstrap as the only documented exception to the `app/api` -> `lib/api` -> `lib/services` flow.
 
@@ -40,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-Avoid static imports from `lib/api`, server services, directory DB clients, Clerk server SDKs, Turso platform clients, or Resend in route files. Tests may import `lib/api` handlers directly.
+Avoid static imports from `lib/api`, server services, directory DB clients, Clerk server SDKs, or Resend in route files. Tests may import `lib/api` handlers directly.
 
 ## Auth And Errors
 
@@ -53,7 +53,7 @@ Authenticated mutations must verify the signed-in User before calling services. 
 
 Unavailable Invitation tokens and Household Join Codes must use generic user-facing messages. Do not reveal whether an Invitation token never existed, expired, was revoked, was accepted, or belonged to another Household. Do not reveal whether a Household Join Code never existed, was disabled, was regenerated, or belongs to another Household.
 
-Expected validation, unavailable, throttled, and authorization outcomes should be returned as shaped HTTP responses. Unexpected operational failures should be logged once at the API boundary or service boundary with useful non-sensitive context, then returned as a generic server failure.
+Expected validation, unavailable, and authorization outcomes should be returned as shaped HTTP responses. Unexpected operational failures should be logged once at the API boundary or service boundary with useful non-sensitive context, then returned as a generic server failure.
 
 ## Status Codes
 
@@ -78,6 +78,28 @@ This Household code is not available.
 ```
 
 ## Current Route Contracts
+
+PowerSync write upload:
+
+```http
+POST /api/data
+```
+
+The PowerSync connector's `uploadData` posts a batch of the client's queued local writes:
+
+```json
+{ "ops": [{ "op": "PUT", "table": "items", "id": "...", "data": {} }] }
+```
+
+Each op is `PUT` (upsert), `PATCH` (partial update), or `DELETE` (tombstone) keyed
+on a synthetic row `id`. Auth is the Clerk session bearer token, verified sub-only
+(`verifyToken` → `clerk_user_id → users.id`). The applicator enforces per-row
+Household-membership authorization, a per-table/column allow-list, tombstone
+monotonicity, and an `updated_at` clamp, then applies the whole batch in one
+transaction (see [ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md),
+[ADR-0018](../adr/0018-single-postgres-self-hosted-powersync.md)). The connector
+treats `4xx` as terminal (discard the op) and `5xx`/network as transient (retry),
+so a permanently-rejected write cannot jam the upload queue.
 
 Household switching:
 
