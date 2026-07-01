@@ -43,7 +43,7 @@ Do not add duplicate Clerk or PostHog providers inside route groups.
 
 `app/(app)/_layout.tsx` owns signed-in product providers. It mounts the Authenticated App Session provider around signed-in routes, and that provider eagerly activates the app-owned Authenticated App Session controller and exposes session state/actions to screens.
 
-Screens consume `useAuthenticatedAppSession()`. They should not open, replace, sync, close, or delete Household DB resources directly, and they should not own sync coordinator lifecycle.
+Screens consume `useAuthenticatedAppSession()`. They should not manage the PowerSync connection or session resources directly, and they should not own sync lifecycle.
 
 See [Authenticated App Session](./authenticated-app-session.md) for the controller/provider boundary, snapshot model, replacement policy, and sign-out cleanup contract.
 
@@ -61,7 +61,7 @@ await clearSignedOutSessionData(disposal.householdIdsForLocalDataDeletion);
 await signOut();
 ```
 
-Cached Authenticated App Session metadata clearing and local Household DB file deletion
+Cached Authenticated App Session metadata clearing and local synced-data clearing (PowerSync `disconnectAndClear`)
 remain separate operations so authenticated app session resources can be stopped and
 closed before destructive local cleanup. Controller disposal and local cleanup
 failures are logged and do not block Clerk sign-out.

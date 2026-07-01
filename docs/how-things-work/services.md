@@ -13,7 +13,6 @@ lib/services/
   household/
     server/
       index.ts
-      household-provisioning-service.ts
       household-service.ts
   invitation/
   item/
@@ -29,14 +28,14 @@ lib/services/
   session/
     index.ts
     bootstrap.ts
-    cache.ts
     controller.ts
-    resource-manager.ts
-    resource-lease.ts
-    services.ts
+    powersync-app-database.ts
+    sign-out.ts
     server/
       index.ts
       bootstrap.ts
+  shared/
+    product-database.ts
   user/
     server/
       index.ts
@@ -49,7 +48,7 @@ Rules:
 - `lib/services/<domain>/server/index.ts` and `lib/services/session/server/index.ts` may export server-only APIs for API routes and server tests.
 - There is no root `lib/services/index.ts` barrel.
 - Top-level `lib/app/` and `lib/server/` are legacy locations. Do not add new data-access modules there.
-- Data-store infrastructure is not a service and lives in the db layer (see ADR-0014): the `db/` root is app-safe (`db/schema/`, `db/utils.ts`, `db/household-store.ts`); everything touching `@libsql/client`, Turso Platform APIs, operator config, migrations, reset, or test seeding lives under `db/server/`.
+- Data-store infrastructure is not a service and lives in the db layer (see ADR-0014): the `db/` root is app-safe (`db/schema/`, `db/utils.ts`); everything touching the server Postgres client, operator config, migrations, reset, the `/api/data` write applicator (`db/server/sync/`), or test seeding lives under `db/server/`. The app-side PowerSync store lives in `lib/powersync/`.
 
 ## Runtime Boundary
 
@@ -58,14 +57,13 @@ Domain-first does not mean app and server code can freely import each other.
 App-safe services must not import:
 
 - `@clerk/backend`
-- Turso Platform clients or operator config
-- server-only environment readers such as `readTursoOperatorConfig` or `readClerkServerConfig`
-- `@libsql/client` server/HTTP entrypoints
+- the server Postgres client or operator config
+- server-only environment readers such as `readPostgresConfig` or `readClerkServerConfig`
 - Drizzle directory DB clients
 - anything under `lib/services/**/server/**`
 - anything under `db/server/`
 
-Server services live under `server/` because they may use secrets, Clerk server APIs, Turso platform APIs, Drizzle, and directory DB clients.
+Server services live under `server/` because they may use secrets, Clerk server APIs, Drizzle, and the server Postgres client.
 
 Expo API Routes must keep server imports lazy inside request handlers:
 
@@ -99,7 +97,7 @@ export type ItemService = {
 
 export type ItemServiceDeps = {
   householdId: string;
-  store: HouseholdStore;
+  store: ProductDatabase;
   logger?: Logger;
   analytics?: { track: typeof track };
 };
@@ -125,29 +123,24 @@ Use optional dependencies sparingly. Services own ID generation and timestamp ge
 
 Service methods should emit informative product tracking after successful operations when the method owns a user-visible or domain outcome, such as loading an online Authenticated App Session, saving an offline-capable cache, creating an Item, or sending an Invitation. Do not track exploratory diagnostics, expected validation failures, or reads that do not represent a meaningful product outcome.
 
-## HouseholdStore
+## PowerSync store and the ProductDatabase seam
 
-`HouseholdStore` is the app-owned infrastructure seam around the local synced Household data file. It is not a service and should not be named `*-db-service`. It lives in the db layer at `db/household-store.ts` (see ADR-0014), not under `lib/services/`, and also owns the store's sync contract: `SyncResult`, `SyncInterruptedError`, and the native sync-error classification. `SyncResult` is re-exported through `lib/services/sync` because app-facing code may only consume types through the service layer, never from `@/db`. Lint enforces that ban for `app/`, `screens/`, and `components/` (`no-db-imports-outside-services`); for other non-service `lib/` modules it is policy, not lint — follow it anyway.
+The app's local product data lives in one PowerSync database (`@powersync/op-sqlite`) under `lib/powersync/`:
 
-Initial shape should stay minimal:
+- `schema.ts` — the declarative `AppSchema` (client views over synced rows; there are no client migrations).
+- `powersync.ts` — the `PowerSyncDatabase` singleton, opened over an `OPSqliteOpenFactory`.
+- `connector.ts` — the backend connector: it fetches the connection token from Clerk and uploads local writes to `/api/data`.
+- `provider.tsx` — the React provider that makes the database available to the app.
+
+Services never import PowerSync directly. They depend on the narrow `ProductDatabase` seam (`lib/services/shared/product-database.ts`), which exposes `getAll` / `getOptional` / `execute` and a `writeTransaction(run)` that runs against a `ProductQuerier`. `lib/services/session/powersync-app-database.ts` adapts the PowerSync handle to this seam. Reactivity comes from PowerSync's `watch()` / onChange, surfaced to the app as `session.services.changes` (see UI Data Loading).
 
 ```ts
-export type HouseholdStore = {
-  path: string;
-  syncAuthorized: boolean;
-  execute(statement: HouseholdSqlStatement): Promise<HouseholdSqlResult>;
-  subscribeToChanges(listener: () => void): { remove(): void };
-  push(): Promise<void>;
-  pull(): Promise<SyncResult>;
-  sync(): Promise<SyncResult>;
-  close(): Promise<void>;
-  deleteLocalData(): Promise<void>;
+export type ProductDatabase = ProductQuerier & {
+  writeTransaction<T>(run: (tx: ProductQuerier) => Promise<T>): Promise<T>;
 };
 ```
 
-Open one shared `HouseholdStore` for a Household workflow and inject it into the services that need it. For signed-in app UI, the Authenticated App Session controller composes one store with List and Item services and closes it through controller-owned session resources.
-
-Any app-owned store or DB wrapper that shares one native/local database handle must serialize operations through `createDatabaseOperationQueue()` from `db/utils.ts`. This includes reads, writes, sync operations, and close/delete paths. The queue is per store instance, not global.
+The session controller opens the PowerSync database once and injects the `ProductDatabase` seam into the List and Item services. Because PowerSync's local tables are views (a write reports `rowsAffected: 0`), services confirm inserts with an app-generated `id` read-back rather than relying on `RETURNING` / `ON CONFLICT`.
 
 ## SQL Ownership
 
@@ -155,9 +148,9 @@ Services own SQL directly for now.
 
 Allowed:
 
-- app-safe List/Item services executing SQL through `HouseholdStore`
+- app-safe List/Item services executing SQL through the `ProductDatabase` seam
 - server User/Member/Household services using Drizzle/directory DB infrastructure
-- server Household provisioning services using Turso Platform and Household DB migration infrastructure
+- the `/api/data` write applicator issuing SQL in the db layer (see ADR-0016)
 - session runtime code composing app-safe services for the Authenticated App Session
 - service tests injecting fake or local SQL stores
 
@@ -166,8 +159,8 @@ Not allowed:
 - screens executing SQL
 - components executing SQL
 - hooks importing DB clients directly
-- reusable UI importing `HouseholdStore`
-- feature code importing Turso/Clerk server SDKs directly
+- reusable UI importing the `ProductDatabase` seam or PowerSync
+- feature code importing the server Postgres client or Clerk server SDKs directly
 
 Services should return domain-shaped records, not raw SQL rows and not component types.
 
@@ -194,39 +187,28 @@ return {
 };
 ```
 
-`HouseholdStore` emits a store-level change signal after successful local writes and sync/pull operations that changed the local Household DB. The Authenticated App Session exposes that signal as `session.services.changes`; UI consumes it through `useSessionQuery` so List and Item reads re-run when the local database changes. Sync status is still coordinator-owned UI state, not a data-reload trigger.
+PowerSync emits an onChange signal after any local write and after synced rows arrive. The Authenticated App Session exposes that signal as `session.services.changes`; UI consumes it through `useSessionQuery` so List and Item reads re-run when the local database changes. Sync status (`session.services.sync`) is read-only connection state, not a data-reload trigger.
 
 Current List is selection state only. Home resolves the selected `listId` from local selection state and session-scoped List services; List switching changes the selected `listId`, not a Household-owned Current List service or data source. `ActiveList` receives loaded state and explicit callbacks such as `onAddItem` and `onSetItemChecked`.
 
-During safe cached-to-fresh replacement, the provider may expose `state: { status: "ready", refreshing: true }` with the previous `session`. The previous List UI remains writable until a replacement session is published. After replacement, the old borrowed session resource rejects new List/Item/sync calls with a typed stale-resource error and closes only after accepted operations drain.
-
-If fresh authorization proves the cached Household is unauthorized, the controller retires cached resources before deleting local data and does not keep stale Household data visible.
+There is one local PowerSync database rather than a per-Household resource set, so there is no cached-to-fresh resource swap or stale-resource lease to manage: switching the active Household re-points the watched queries' `household_id` filter. Membership revocation is server-authoritative — PowerSync stops streaming and purges the rows for a Household the User is no longer an active Member of.
 
 See [Authenticated App Session](./authenticated-app-session.md) for the public boundary and replacement policy.
 
 ## Offline-First Sync Semantics
 
-Turso Sync is local-first: List/Item reads and writes happen against the local Household DB. Explicit `push()` and `pull()` calls propagate changes when connectivity and authorization are available.
+PowerSync is local-first: List/Item reads and writes happen against the local PowerSync database. There is no explicit push/pull and no sync coordinator — PowerSync streams continuously while connected and queues local writes while offline.
 
-Domain services should resolve mutations on local commit:
-
-```ts
-const item = await itemService.addItem({ listId, userId, name });
-```
-
-They should not treat remote sync as part of mutation success. Sync timing is an application/controller policy owned by the Authenticated App Session controller and its sync coordinator:
+Domain services resolve mutations on local commit:
 
 ```ts
 const item = await session.services.items.addItem(input);
-void session.services.sync.requestSync({ reason: "localWrite" });
 return item;
 ```
 
-Local UI freshness does not wait for that sync request. The local write updates the Household DB first, `HouseholdStore` emits `session.services.changes`, and `useSessionQuery` consumers reload from local services. Later sync work may pull remote Household changes; when the local store changes, the same signal drives UI reloads.
+A local write lands in the PowerSync database first; PowerSync emits `session.services.changes`, and `useSessionQuery` consumers reload from local services. Separately, PowerSync's connector uploads the write to `/api/data` in the background and streams any remote changes back — when the local database changes, the same signal drives UI reloads. Services do not treat that upload as part of mutation success.
 
-The coordinator chooses full sync or push-local-only behavior, serializes in-flight sync work, owns retry cadence while the app is active, and receives app lifecycle and connectivity events through app-owned adapter seams. The Authenticated App Session controller owns when a Household coordinator exists, starts, stops, and is replaced. See [Sync Coordinator](./sync-coordinator.md).
-
-`session.services.sync` is a narrowed consumer handle: route-owned UI may call `getStatus`, `subscribe`, and `requestSync`, but only the Authenticated App Session controller starts or stops the underlying coordinator.
+`session.services.sync` is a read-only connection-state handle: route-owned UI may call `getStatus` and `subscribe` to render the sync indicator. There is no `requestSync` and nothing to start or stop.
 
 ## Authenticated App Session
 
@@ -235,13 +217,11 @@ Use **Authenticated App Session** for the top-level signed-in app runtime. It id
 Preferred app-side names:
 
 - `getSessionBootstrap`, not `bootstrapWithClerk`
-- `CachedSessionBootstrap`, not `CachedBootstrapMetadata`
 - `lib/services/session/bootstrap.ts` for fresh online session loading
-- `lib/services/session/cache.ts` for offline-capable non-secret cache behavior
 - `lib/services/session/controller.ts` for signed-in runtime orchestration
 
-Cached Authenticated App Sessions must not store Household DB auth tokens. Offline startup may use cached non-secret metadata and the local Household DB file; push/pull authorization resumes only after a fresh online Authenticated App Session is obtained.
+The session bootstrap returns directory identity only — it carries no per-Household sync tokens (the PowerSync connection token is fetched directly from Clerk). Offline startup reads the local PowerSync database; streaming resumes when the connector reconnects and re-authenticates.
 
 ## Historical Migration Note
 
-The initial Home/List/Item migration introduced domain services and `HouseholdStore`. The current boundary supersedes the old Home-owned resource lifecycle: Authenticated App Session infrastructure exposes Household-scoped List and Item services, and route-owned code loads the selected List by explicit List ID.
+The initial Home/List/Item migration introduced domain services over a local synced store. The current boundary supersedes the old Home-owned resource lifecycle: Authenticated App Session infrastructure exposes Household-scoped List and Item services over the PowerSync `ProductDatabase` seam, and route-owned code loads the selected List by explicit List ID.

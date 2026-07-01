@@ -6,26 +6,26 @@ Don't Forget has four operational environments selected by `APP_ENV`: `local`, `
 
 | Environment | Meaning |
 | --- | --- |
-| `local` | Per-developer app development. Uses real Turso through a private local group so sync and token behavior can be exercised. |
-| `test` | Automated tests only. Uses temp file-backed libSQL databases from checked-in migrations and mocked external SDK boundaries. |
+| `local` | Per-developer app development. Runs against a local Postgres + self-hosted PowerSync stack so sync behavior can be exercised. |
+| `test` | Automated tests only. Uses ephemeral local databases (PGlite for the Postgres directory, in-memory SQLite for the PowerSync-backed product schema) and mocked external SDK boundaries. |
 | `staging` | Persistent pre-production environment for real device and TestFlight-style validation. Treated as production-like and durable. |
 | `production` | Live App Store environment and live user data. |
 
 Do not use `NODE_ENV`, `__DEV__`, or EAS profile names as the source of truth for backend selection. Those values describe tooling or build mode; `APP_ENV` describes the backend and data boundary.
 
-## Turso
+## Data Store
 
-Persistent Turso resources are isolated by environment group and redundant database naming:
+Each environment has one Postgres database (holding both the directory and product data) fronted by a self-hosted PowerSync service; there are no per-Household databases.
 
-- Turso group: `dont-forget-<env>` for persistent shared environments, with per-developer local groups such as `dont-forget-local-<name>`.
-- Directory DB: `dont-forget-<env>-directory`.
-- Household DBs: `df-<env>-hh-<compact-household-id>` so names stay within Turso's 51-character database-name limit.
+- Postgres: addressed by `DATABASE_URL`, reachable only on the environment's private Docker network.
+- PowerSync service: addressed by `EXPO_PUBLIC_POWERSYNC_URL`; it streams rows to devices scoped by Membership.
+- Writes: the client uploads local changes to the `/api/data` endpoint on the environment's API host (`EXPO_PUBLIC_API_BASE_URL`).
 
-The Turso group represents the app environment, not the data type. There is no nested `household` group; each environment group contains that environment's directory DB and all of its Household DBs. Household DB names are based on generated Household IDs, not Household names, so they remain stable and avoid personal information.
+The Postgres database holds every Household's Lists, Items, and `item_checks` in shared tables partitioned by `household_id`, alongside the directory tables (Users, Households, Memberships, Invitations, Household Join Codes).
 
 ## Secrets
 
-Each selected environment uses the same secret names, for example `TURSO_DIRECTORY_URL`, `TURSO_ORG`, `CLERK_SECRET_KEY`, and `RESEND_API_KEY`. Do not load all environments into one process with suffixed names such as `TURSO_DIRECTORY_URL_PRODUCTION`.
+Each selected environment uses the same secret names, for example `DATABASE_URL`, `CLERK_SECRET_KEY`, and `RESEND_API_KEY`. Do not load all environments into one process with suffixed names such as `DATABASE_URL_PRODUCTION`.
 
 Production secrets must only be present in production operator contexts. Staging and local commands should fail rather than silently falling back to production values.
 
@@ -55,55 +55,29 @@ production) still configure `EXPO_PUBLIC_API_BASE_URL`. `PUBLIC_APP_BASE_URL`
 
 ### Per-worktree database isolation
 
-All worktrees share the local environment's databases by default. That is safe
-for migration-free branches, but parallel efforts that each carry a Household
-or directory migration must not share databases: Drizzle applies migrations by
-latest `created_at`, so divergent migration sets from two branches either
-union onto the shared DBs or get silently skipped (see
-`docs/adr/0013-household-schema-staleness-gate.md`).
+All worktrees share the local environment's single Postgres database by
+default. That is safe for migration-free branches, but two branches that each
+carry a divergent migration set should not share one database.
 
-Give a migration-bearing worktree its own directory DB:
+Real per-worktree Postgres isolation is **not yet supported**: the
+`make worktree-db` / `make worktree-db-destroy` targets predate the PowerSync
+cut-over and currently error. Isolated-DB worktrees are a forthcoming DX task
+tied to the self-host deploy work (PR-E). Until then, run migration-bearing
+branches one at a time against the shared local Postgres, or point a worktree at
+a separate `DATABASE_URL` by hand.
 
-```bash
-make worktree-db
-```
-
-This creates `df-local-wt-<worktree>-dir` in the existing local group, migrates
-it, converts a symlinked `.env.local` into a private copy, and rewrites
-`TURSO_DIRECTORY_URL`/`TURSO_DIRECTORY_AUTH_TOKEN` (originals kept as
-comments). Create fresh accounts in that worktree; their Households provision
-into isolated Household DBs and local replicas. The minted directory token
-expires after 30 days; for a worktree that lives longer, destroy and recreate
-the worktree DB.
-
-The deterministic seed flow is worktree-scoped too: when `.env.local` points at
-a worktree directory DB, `make db-reseed`/`make db-seed` target
-`df-local-wt-<worktree>-hh-seed` instead of the shared seed Household DB, so a
-worktree carrying Household migrations can reseed without touching (or being
-poisoned by) shared local state. The seed Household row records that scoped
-name, so `make worktree-db-destroy` deletes it with the rest. Passing
-`EMAIL=<address>` to seed/reseed creates email-scoped local Clerk development
-Users and a seed Household database for Owner and plain Member sign-in, while
-leaving the seeded Household database worktree-scoped. If those Clerk
+The email-backed local seed flow still works against the shared local Postgres.
+Passing `EMAIL=<address>` to `make db-seed`/`make db-reseed` creates email-scoped
+local Clerk development Users for Owner and plain Member sign-in; if those Clerk
 development Users already exist, the seed flow reuses them, resets them to the
 local seed password, marks their primary email addresses verified through the
 Clerk backend API, and disables their MFA methods so fake local emails never
 require an inbox-backed sign-in code. Email-backed List and Item fixture IDs are
-also scoped from the EMAIL value, while deterministic seed fixtures keep stable
-IDs so duplicate deterministic seed data is caught intentionally.
-When `db-seed EMAIL=<address>` is rerun for an EMAIL whose local seed rows
-already exist, the Clerk development Users are repaired before the duplicate
-seed-data check refuses to insert another copy.
-
-Tear it down when the branch is done:
-
-```bash
-make worktree-db-destroy
-```
-
-This deletes the worktree directory DB plus every Household DB it recorded and
-restores the original `.env.local` values. It refuses to run against databases
-not named `df-local-wt-*`.
+scoped from the EMAIL value, while deterministic seed fixtures keep stable IDs so
+duplicate deterministic seed data is caught intentionally. When
+`db-seed EMAIL=<address>` is rerun for an EMAIL whose local seed rows already
+exist, the Clerk development Users are repaired before the duplicate seed-data
+check refuses to insert another copy.
 
 ## Clerk
 
@@ -150,7 +124,7 @@ Production migrations also require the extra non-interactive confirmation shown 
 
 ## Database Reset
 
-Database reset deletes app data from the selected environment's directory DB and every Household DB known from directory rows. It preserves migration metadata tables.
+Database reset deletes app data from the selected environment's Postgres database (directory and product tables). It preserves migration metadata tables.
 
 ```bash
 make db-reset APP_ENV=local CONFIRM_DB_RESET=local

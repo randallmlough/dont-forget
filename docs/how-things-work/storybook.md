@@ -10,13 +10,13 @@ The generated `.rnstorybook/index.ts` must load `../lib/unistyles/unistyles` bef
 
 ## Boundaries
 
-Stories should render presentational components with typed fixture data and callback props. Do not require live Clerk, PostHog, Turso, or Expo Router state for ordinary stories.
+Stories should render presentational components with typed fixture data and callback props. Do not require live Clerk, PostHog, PowerSync, or Expo Router state for ordinary stories.
 
 For route screens, extract composed view components for Storybook and keep hooks, analytics, auth, database reads, and navigation side effects in the route container. Prefer the [React composition pattern](../code-standards/react-composition.md) for surfaces with shared state and actions, instead of passing a long list of callbacks through the top-level screen.
 
 If a Story renders an app route shell that already owns safe-area handling, set `parameters.noSafeArea = true` on that Story or meta. React Native Storybook's mobile UI adds safe-area padding by default, and route shells such as `HomeScreen` already apply their own safe area.
 
-For current-List UI, use a provider whose context is shaped around `state`, `actions`, and `meta`. Stories can use local state; production signed-in routes consume Authenticated App Session provider dependencies and route-owned List loading backed by authenticated app session resources. Do not inject raw Turso clients, Drizzle row types, or generic storage repositories into presentational components.
+For current-List UI, use a provider whose context is shaped around `state`, `actions`, and `meta`. Stories can use local state; production signed-in routes consume Authenticated App Session provider dependencies and route-owned List loading backed by authenticated app session resources. Do not inject raw PowerSync or database clients, Drizzle row types, or generic storage repositories into presentational components.
 
 Use dot-notation compound exports for the active List surface only, such as `ActiveList.Provider`, `ActiveList.Header`, `ActiveList.Items`, and `ActiveList.AddItemForm`. Do not force simple standalone components like `AuthScreen` into a compound namespace unless they grow shared state.
 

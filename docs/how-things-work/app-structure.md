@@ -91,7 +91,7 @@ After adding, moving, or deleting stories, run `make storybook-generate`.
 
 ## Server Code
 
-When Expo API Routes are added, put them under `app/api` to avoid collisions with app screens. Keep route modules thin and lazy-load server-only helpers inside request handlers, because native Expo Router route registration can evaluate `app/api` modules in the iOS bundle. Put shared server-only helpers in a clearly server-owned folder and keep secrets out of client code. Expo's Metro config maps the default `@libsql/client` import to `@libsql/client/http` so Drizzle's libSQL driver does not pull the native Node `libsql` package into API-route bundles; app-owned remote clients should import the HTTP or Web subpath explicitly. The existing `db/` folder stays at the root because it is shared by schema generation, Drizzle config, migrations, tests, and API routes.
+When Expo API Routes are added, put them under `app/api` to avoid collisions with app screens. Keep route modules thin and lazy-load server-only helpers inside request handlers, because native Expo Router route registration can evaluate `app/api` modules in the iOS bundle. Put shared server-only helpers in a clearly server-owned folder and keep secrets out of client code. The server data client is `pg` (Postgres), used only under `db/server/` and lazy-loaded inside API-route handlers so it never enters the app bundle. On the client, PowerSync's native module (`@powersync/op-sqlite`) is configured for Metro — a Metro inline-requires block-list, `node-linker=hoisted` in `.npmrc`, and the op-sqlite native config (landed in PR-B). The existing `db/` folder stays at the root because it is shared by schema generation, Drizzle config, migrations, tests, and API routes.
 
 ## Platform Code
 
