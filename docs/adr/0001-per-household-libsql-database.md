@@ -1,5 +1,7 @@
 # Per-Household libSQL database, plus a server-only directory database
 
+> Superseded by [ADR-0018](0018-single-postgres-self-hosted-powersync.md) (PowerSync migration, 2026-06-30).
+
 Households share Lists and Items across multiple Members' devices, with offline-first edits and seconds-scale eventual consistency. We use **one Turso (libSQL) database per Household**, replicated to each Member's device via the Turso React Native bindings, plus a single server-only **directory database** that holds `users`, `households`, `memberships`, and `invitations`. Clerk owns authentication identity; Don't Forget stores app-owned User records in the directory DB linked to Clerk by `clerk_user_id`, and product tables reference app `user_id`.
 
 ## Considered alternatives
