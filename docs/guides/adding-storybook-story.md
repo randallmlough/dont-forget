@@ -4,7 +4,7 @@
 
 Use this guide to add or update a React Native Storybook story for a reusable component or screen view.
 
-Storybook stories should make UI states reviewable without live Clerk, Turso, HouseholdStore, or network dependencies.
+Storybook stories should make UI states reviewable without live Clerk, PowerSync, or network dependencies.
 
 ## Before you start
 
@@ -66,8 +66,8 @@ Use `args` for simple presentational states. Use `render` when the story needs l
 
 3. **Provide local fakes for data contracts.**
    - If a component expects an Active List data source, provide a local in-memory fake.
-   - If a component expects a sync coordinator, provide a deterministic fake with `getStatus`, `subscribe`, `start`, `stop`, and `requestSync`.
-   - Do not open real Household DB resources from stories.
+   - If a component consumes sync status, provide a deterministic `SyncStatus` fixture; there is no sync coordinator to fake.
+   - Do not open a real PowerSync database from stories.
 
 4. **Add decorators only for missing app context.**
    - Wrap stories in a themed canvas when needed.
@@ -122,7 +122,7 @@ make storybook
 - Story title follows the existing naming style.
 - Fixtures use Don't Forget domain language.
 - Stories cover meaningful UI states, not only the ideal state.
-- No live Clerk, Turso, HouseholdStore, network, or analytics dependency is used.
-- Data-source and sync-coordinator fakes are deterministic.
+- No live Clerk, PowerSync, network, or analytics dependency is used.
+- Data-source and sync-status fakes are deterministic.
 - Safe-area behavior matches the rendered surface.
 - `make storybook-generate`, `make format`, and relevant tests ran.

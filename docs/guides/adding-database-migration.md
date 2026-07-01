@@ -2,77 +2,74 @@
 
 ## Purpose
 
-Use this guide to change the directory or Household database schema and generate the matching Drizzle migration files.
+Use this guide to change the Postgres database schema and generate the matching Drizzle migration files.
 
-Don't Forget has two database partitions:
+Don't Forget has one Postgres database with two table groups:
 
-- the **directory DB** for Users, Households, Memberships, and Invitations;
-- one **Household DB per Household** for Lists, Items, and `item_checks`.
+- **directory tables** (server-side only) for Users, Households, Memberships, and Invitations;
+- **product tables** (published to PowerSync) for Lists, Items, and `item_checks`, partitioned by `household_id`.
 
-Every schema change must respect that split.
+Adding or changing a **synced product table** has three coordinated edit points: the Postgres schema, the PowerSync publication + `infra/powersync/sync-config.yaml`, and the declarative client schema (`lib/powersync/schema.ts`). The client runs no migrations.
 
 ## Before you start
 
 Read:
 
 - `CONTEXT.md` for the data model and domain language.
-- `docs/adr/0003-schema-migration-fanout.md` for directory + Household migration fanout.
+- `docs/adr/0018-single-postgres-self-hosted-powersync.md` for the Postgres + PowerSync architecture, and `docs/adr/0017-directory-database-on-postgres-single-schema-and-concurrency.md` for the directory schema.
 - `docs/how-things-work/environments.md` for `APP_ENV`, production confirmation, and environment isolation.
 - `docs/how-things-work/commands.md` for Make targets.
 - `docs/code-standards/architecture.md` for data-boundary rules.
 
 Inspect the current schema and migration setup:
 
-- `db/schema/directory.ts`
-- `db/schema/household.ts`
-- `db/drizzle/directory.config.ts`
-- `db/drizzle/household.config.ts`
+- `db/schema/postgres/directory.ts`
+- `db/schema/postgres/product.ts`
+- `db/drizzle/postgres.config.ts`
 - `db/server/generate.ts`
 - `db/server/migrate.ts`
-- `db/server/household-migrations.ts`
 - `db/server/migrations.test.ts`
+- `infra/powersync/sync-config.yaml` and `lib/powersync/schema.ts` (for synced product tables)
 
 ## Files and naming
 
-Directory DB schema lives in:
+Directory table schema lives in:
 
 ```text
-db/schema/directory.ts
+db/schema/postgres/directory.ts
 ```
 
-Household DB schema lives in:
+Product table schema lives in:
 
 ```text
-db/schema/household.ts
+db/schema/postgres/product.ts
 ```
 
 Generated migrations live in:
 
 ```text
-db/migrations/directory/
-db/migrations/household/
+db/migrations/postgres/
 ```
 
-Drizzle configs live in:
+The Drizzle config lives in:
 
 ```text
-db/drizzle/directory.config.ts
-db/drizzle/household.config.ts
+db/drizzle/postgres.config.ts
 ```
 
 ## Recipe
 
 1. **Choose the correct schema file.**
-   - Users, Households, Memberships, and Invitations belong in `db/schema/directory.ts`.
-   - Lists, Items, `item_checks`, and other replicated Household data belong in `db/schema/household.ts`.
-   - Do not create cross-Household joins or schema dependencies.
+   - Users, Households, Memberships, and Invitations belong in `db/schema/postgres/directory.ts`.
+   - Lists, Items, `item_checks`, and other product data belong in `db/schema/postgres/product.ts`.
+   - Keep product rows addressable by `household_id` so PowerSync can scope them by Membership.
 
 2. **Make the smallest backward-compatible schema change.**
    - Prefer additive changes.
    - New columns should usually have safe defaults or tolerate older rows.
    - Avoid renames and drops in one step. Use a two-phase rollout when old app versions may still be running.
    - Preserve tombstone columns for replicated data.
-   - Keep checked state in `item_checks`; do not move it onto `items`.
+   - Keep checked state in `item_checks` (one shared row per Item, keyed `UNIQUE(item_id)` with `checked_by_user_id`); do not move it onto `items`. See ADR-0015.
 
 3. **Update inferred types only through Drizzle schema.**
    - Keep `$inferSelect` and `$inferInsert` exports aligned with table definitions.
@@ -84,16 +81,16 @@ db/drizzle/household.config.ts
    make db-generate
    ```
 
-   This runs `db/server/generate.ts`, which discovers each `db/drizzle/*.config.ts` file and runs drizzle-kit for both partitions.
+   This runs `db/server/generate.ts`, which runs drizzle-kit against `db/drizzle/postgres.config.ts`. The PowerSync publication migration (`db/migrations/postgres/0001_powersync_publication.sql`) is hand-maintained, since drizzle-kit does not emit `CREATE PUBLICATION`.
 
 5. **Inspect generated SQL and metadata.**
    - Confirm the migration appears under the expected partition directory.
    - Confirm Drizzle did not generate destructive SQL unexpectedly.
    - Confirm `_journal.json` and snapshot metadata changed consistently.
-   - For Household schema changes, remember the server-migrated Turso Household DB remains the schema authority; the app does not run bundled local Household migrations.
+   - The Postgres schema is migrated server-side and is the schema authority; the client uses declarative PowerSync views (`lib/powersync/schema.ts`) and runs no client migrations.
 
 6. **Update migration tests when the schema contract changes.**
-   - `db/server/migrations.test.ts` should continue proving both directory and Household migrations apply to isolated local DBs.
+   - `db/server/migrations.test.ts` should continue proving the Postgres migrations apply to an isolated local database (PGlite).
    - Add focused expectations for new required columns, relationships, indexes, or defaults when useful.
 
 7. **Update services/tests that depend on the schema.**
@@ -103,8 +100,8 @@ db/drizzle/household.config.ts
 8. **Apply migrations only when intentionally operating on a configured environment.**
    - Local/staging/production application is a separate operational step from generation.
    - Production requires explicit confirmation.
-   - Migrate the remote databases before running app code built against the new schema. Existing devices heal at session open: the schema staleness gate awaits one sync when the local replica is behind the app's bundled journal (`docs/adr/0013-household-schema-staleness-gate.md`).
-   - When parallel branches each carry a migration, isolate this worktree's databases first with `make worktree-db` (see `docs/how-things-work/environments.md`).
+   - Migrate the Postgres database before running app code built against the new schema. Clients hold no schema of their own — PowerSync client tables are declarative views over synced rows — so there is no staleness gate and no per-device migration to heal.
+   - When parallel branches each carry a migration, run them one at a time: per-worktree Postgres isolation is not yet supported (see `docs/how-things-work/environments.md`).
 
    ```bash
    make db-migrate APP_ENV=staging
@@ -134,11 +131,11 @@ make verify
 
 ## Review checklist
 
-- Schema change is in the correct directory or Household schema file.
+- Schema change is in the correct directory or product schema file.
 - Change is backward-compatible with the previous shipped app version.
-- Household schema change does not assume app-bundled local migrations.
+- A synced product-table change updates the PowerSync publication and `sync-config.yaml`.
 - Generated SQL and Drizzle metadata were inspected.
-- Directory and Household migrations are not mixed accidentally.
+- The declarative client schema (`lib/powersync/schema.ts`) matches any synced product-table change.
 - Production migration commands are not run unless explicitly intended.
 - Tests cover the changed schema behavior.
 - `make format` and `make verify` pass.

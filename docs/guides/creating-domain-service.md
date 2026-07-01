@@ -44,7 +44,7 @@ Examples:
 
 ### Server-only services
 
-Use `server/` for services that import server-only dependencies, directory DB infrastructure, Clerk backend helpers, Turso platform clients, Resend, or operator secrets:
+Use `server/` for services that import server-only dependencies, directory DB infrastructure, Clerk backend helpers, the server Postgres client, Resend, or operator secrets:
 
 ```text
 lib/services/<domain>/server/
@@ -82,7 +82,7 @@ export type ExampleService = {
 };
 
 export type ExampleServiceDeps = {
-	// App-safe Household data uses HouseholdStoreExecutor.
+	// App-safe product data uses the ProductDatabase seam.
 	// Server-only directory data uses DirectoryDb or a transaction type.
 };
 
@@ -110,7 +110,7 @@ Keep the public types named for the domain:
    - Current expected domains include `auth`, `household`, `invitation`, `item`, `list`, `member`, and `user`.
 
 2. **Choose app-safe or server-only placement.**
-   - App-safe services may depend on app-safe interfaces such as `HouseholdStoreExecutor`.
+   - App-safe services may depend on app-safe interfaces such as the `ProductDatabase` seam.
    - Server-only services go under `lib/services/<domain>/server/`.
 
 3. **Define domain-shaped return types.**
@@ -118,7 +118,7 @@ Keep the public types named for the domain:
    - Do not return raw SQL rows, Drizzle internals, or UI component props.
 
 4. **Define an explicit dependency type.**
-   - App-safe Household reads/writes should use a narrow `HouseholdStoreExecutor` when only SQL execution is needed.
+   - App-safe product reads/writes should use the narrow `ProductDatabase` seam (`watch()` / `writeTransaction()`).
    - Server services should receive `DirectoryDb` or a transaction-compatible type.
    - Add `logger?: Logger` only when the service logs.
    - Add a scoped analytics dependency only when the service owns a product outcome.

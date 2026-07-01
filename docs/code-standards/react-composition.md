@@ -66,7 +66,7 @@ Keep app side effects at the route or container boundary:
 - navigation side effects
 - network calls
 
-Providers may adapt those dependencies behind domain-shaped actions, but presentational children should not import Clerk, PostHog, Turso, Drizzle, or Expo Router just to render a feature surface.
+Providers may adapt those dependencies behind domain-shaped actions, but presentational children should not import Clerk, PostHog, PowerSync, Drizzle, or Expo Router just to render a feature surface.
 
 ## Storybook
 

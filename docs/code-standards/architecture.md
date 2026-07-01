@@ -32,7 +32,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** not import or export `./server` from an app-safe `lib/services/<domain>/index.ts`.
 - **Must** keep `app/api/**` server-service imports dynamic inside request handlers until a better Expo API Route bundling solution is proven.
 - **Must** enforce server-service import boundaries with the repo ESLint rule.
-- **Must** keep server-only db infrastructure (libsql clients, Drizzle directory/Household client factories, migrations, reset, test seeding) under `db/server/` and enforce the `@/db/server` import boundary with the repo ESLint rule. The `db/` root is app-safe.
+- **Must** keep server-only db infrastructure (the server Postgres client, Drizzle directory/product schema, migrations, reset, the `/api/data` write applicator, test seeding) under `db/server/` and enforce the `@/db/server` import boundary with the repo ESLint rule. The `db/` root is app-safe.
 - **Must** keep SQL and DB-client access inside service implementations. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
 - **Must** inject logger and analytics dependencies into services and stores that need observability instead of forcing those modules to mock global singletons in tests or non-app processes.
 - **Must** keep reusable component contracts UI-facing. Compose services into component data sources at the owning controller or feature boundary; screens should consume those boundaries instead of opening Household data resources directly.
@@ -40,9 +40,9 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** generate IDs inside services for newly-created domain records. Service callers and normal tests must not inject or prescribe IDs.
 - **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
-- **Should** use `HouseholdStore` as the app-owned infrastructure seam for local synced Household data. It is owned by the db layer at `db/household-store.ts` (ADR-0014). Do not name this `*-db-service`.
+- **Should** use the `ProductDatabase` seam (`lib/services/shared/product-database.ts`) as the app-owned infrastructure boundary for the local PowerSync data store, exposing `watch()` / `writeTransaction()`. Do not name this `*-db-service`.
 - **Should** keep List and Item services separate; route-owned List loading should call them by explicit List ID after authenticated app session context exists.
-- **Avoid** letting domain services automatically sync remote state after every mutation. Local Household writes should resolve on local commit; sync timing belongs to the Authenticated App Session controller and sync coordinator.
+- **Avoid** coupling mutation success to remote propagation. Local writes resolve on local commit; PowerSync uploads them to `/api/data` continuously in the background, so there is no sync-timing policy for services to own.
 
 ## Single-Responsibility Functions
 
@@ -60,7 +60,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** keep root layout effects limited to app-wide provider, navigation, analytics, auth, theme, and native SDK lifecycle synchronization.
 - **Must** keep feature-specific data loading and mutation lifecycle out of `app/_layout.tsx`.
 - **Must** initialize signed-in authenticated app session infrastructure from the authenticated route group (`app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
-- **Must** make screens and reusable components borrow controller-owned authenticated app session resources and actions; they must not open or close HouseholdStore resources directly.
+- **Must** make screens and reusable components borrow controller-owned authenticated app session resources and actions; they must not manage the PowerSync connection directly.
 - **Must** create provider-owned controllers, resource managers, and long-lived service adapters with lazy initialization, not render-time ref assignment.
 - **Must** make provider activation, subscription, and disposal effects depend on the owned controller or resource identity.
 - **Must** keep sign-out, disposal, cleanup, and recovery order centralized in the owning runtime module instead of duplicating it in components.
@@ -75,19 +75,19 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 
 ## Data Boundaries
 
-- **Must** keep directory data and Household data separate: directory DB owns Users, Households, Memberships, and Invitations; each Household DB owns Lists, Items, and `item_checks`.
+- **Must** keep directory data and product data distinct in the one Postgres database: the directory tables (Users, Households, Memberships, Invitations) are server-side only; the product tables (Lists, Items, `item_checks`, partitioned by `household_id`) are the ones published to PowerSync.
 - **Must** not perform cross-Household SQL joins.
 - **Must** write tombstones (`deleted_at`) on app delete paths for replicated data instead of hard deletes.
 - **Must** preserve `item_checks` as separate checked-state data to avoid high-collision Item conflicts.
 - **Must** keep database access behind domain services rather than importing database clients directly into presentational UI.
-- **Must** serialize operations inside any app-owned store or DB wrapper that shares one native/local database handle across reads, writes, sync, and close. Use `createDatabaseOperationQueue()` from `db/utils.ts` so failed operations do not break the queue and later operations still run. See the [offline Item sync post-mortem](../post-mortem/2026-05-20-offline-item-sync.md) for the failure mode that led to this rule.
+- **Must** perform multi-statement product writes inside a single `ProductDatabase.writeTransaction(...)` so they commit atomically. PowerSync serializes access to the local database, so no app-owned operation queue is needed. (The historical [offline Item sync post-mortem](../post-mortem/2026-05-20-offline-item-sync.md) records the Turso-era serialization queue this replaced.)
 
 ## Server And Environment Safety
 
 - **Must** keep Expo API route modules thin and lazy-load server-only helpers inside request handlers when those imports would otherwise affect native route registration.
 - **Must** follow the `app/api` -> `lib/api` -> `lib/services` boundary from [`docs/how-things-work/api-routes.md`](../how-things-work/api-routes.md) for new or changed HTTP behavior, except for explicitly documented legacy routes awaiting migration.
 - **Must** expose only public config through Expo `extra`.
-- **Must** not expose Turso platform tokens, Clerk secrets, Resend secrets, or other server/operator secrets to client code.
+- **Must** not expose the server database URL, Clerk secrets, Resend secrets, or other server/operator secrets to client code.
 - **Must** use `APP_ENV` as the app-owned backend selector.
 
 See also: [`docs/how-things-work/environments.md`](../how-things-work/environments.md).

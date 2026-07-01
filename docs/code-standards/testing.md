@@ -3,11 +3,11 @@
 ## Test Boundaries
 
 - **Must** test app-owned behavior, not external SDK behavior.
-- **Must** use integration-style tests as the default for product behavior that can run locally through Jest, React Native Testing Library, Expo Router testing utilities, or isolated temp libSQL databases.
+- **Must** use integration-style tests as the default for product behavior that can run locally through Jest, React Native Testing Library, Expo Router testing utilities, or isolated ephemeral local databases.
 - **Must** mock true external SDK and native boundaries such as Clerk hooks, native auth/browser/storage modules, PostHog sinks, and platform APIs.
 - **Must** not mock local product behavior that can run deterministically in tests.
 - **Must** justify any mock of local product behavior in the test or implementation notes; convenience is not a justification.
-- **Must** use local isolated libSQL database helpers for database behavior instead of running migrations against configured environments.
+- **Must** use local isolated database helpers for database behavior instead of running migrations against configured environments.
 - **Must** test loading, ready, empty, error, and retry states for route-owned data hooks or containers.
 - **Must** test stale async responses, cancellation, or unmount cleanup when a hook or container owns async lifecycle.
 - **Must** test authenticated app session controller cached load, fresh load, safe cached-to-fresh replacement, unauthorized cached invalidation, stale run IDs, disposal, and write races through borrowed authenticated app session resources.
@@ -36,7 +36,7 @@ See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 - **Must** mock true external or nondeterministic boundaries by category: external SDKs, native/platform APIs, network-only providers, observability sinks, system time/randomness when needed, and intentionally controlled race collaborators.
 - **Must** use real app-owned services, stores, database queries, session resources, List/Item behavior, and sync policy when they can run deterministically in the local harness.
 - **Must** keep race-control fakes narrow: fake only the collaborator whose timing is the assertion, and keep the rest of the product path real when practical.
-- **Avoid** replacing database rows or service results with hand-written maps when a temp libSQL database plus fixtures can prove the same behavior.
+- **Avoid** replacing database rows or service results with hand-written maps when a temp local database plus fixtures can prove the same behavior.
 
 ## Test Location
 
@@ -47,8 +47,8 @@ See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 ## Test Organization And Shared Fixtures
 
 - **Must** move reusable cross-feature test fixtures into a domain-owned shared fixture folder, such as `db/server/fixtures/`, instead of duplicating fixture builders across test files.
-- **Must** keep `db/server/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and Household DBs.
-- **Must** not return services, providers, sync coordinators, app sessions, or UI model objects from `db/server/fixtures/`.
+- **Must** keep `db/server/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and product databases.
+- **Must** not return services, providers, app sessions, or UI model objects from `db/server/fixtures/`.
 - **Should** keep shared fixtures domain-shaped and product-language-first: Household, Member, User, List, Item, and Invitation.
 - **Should** allow narrow overrides for test-specific facts while preserving realistic defaults.
 - **Should** split large test files by behavior theme when a single file starts covering several independent concerns.
