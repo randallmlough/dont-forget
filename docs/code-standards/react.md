@@ -113,7 +113,7 @@ See also: [`docs/code-standards/react-composition.md`](./react-composition.md).
 - **Must** show user-facing recovery copy for failed user actions or screen loads unless the failure is intentionally silent and documented.
 - **Should** prefer `Promise.all` for independent operations.
 - **Should** start dependent follow-up work as early as its dependency is available instead of waiting for unrelated work to finish.
-- **Should** parallelize narrow independent reads after required mutations and provisioning steps complete.
+- **Should** parallelize narrow independent reads after required mutations and setup steps complete.
 - **Should** preserve the previous usable UI state when a mutation fails and refresh only when needed to restore correctness.
 - **Should** keep best-effort cleanup failures silent only when they cannot affect user-visible correctness.
 - **Avoid** parallelizing migrations, reset flows, pull/push/pull sync, cleanup loops, or retry/order-sensitive workflows unless the ordering contract is explicitly redesigned.

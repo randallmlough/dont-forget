@@ -1,5 +1,7 @@
 # Offline Item sync failure
 
+> Historical: the `createDatabaseOperationQueue` serialization rule this incident motivated was removed in the PowerSync migration ([ADR-0018](../adr/0018-single-postgres-self-hosted-powersync.md)); the native Turso operation-queue failure mode no longer exists.
+
 Date: 2026-05-20
 
 Status: Resolved
