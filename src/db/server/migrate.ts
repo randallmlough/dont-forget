@@ -8,7 +8,7 @@ import {
 import { loadEnvFile } from "@/lib/load-env";
 import { directoryClient, directoryDb } from "./client";
 
-const DIRECTORY_MIGRATIONS = "./db/migrations/postgres";
+const DIRECTORY_MIGRATIONS = "./src/db/migrations/postgres";
 
 async function main(): Promise<void> {
 	const productionConfirmation = process.env.CONFIRM_APP_ENV;
