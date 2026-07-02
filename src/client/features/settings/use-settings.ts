@@ -2,21 +2,20 @@ import { useAuth } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useRef, useState } from "react";
-
-import { useAuthenticatedAppSession } from "@/client/session";
-import { track } from "@/client/lib/analytics";
 import {
 	createUsersApiClient,
 	type UsersApiClient,
 } from "@/client/features/settings/api";
-import { type AppEnv, readAppEnvFromExpoExtra } from "@/shared/env";
+import { track } from "@/client/lib/analytics";
 import { useLogger } from "@/client/lib/logger";
+import { useAuthenticatedAppSession } from "@/client/session";
 import {
 	type AppearancePreference,
 	applyAppearancePreference,
 	readAppearancePreference,
 	writeAppearancePreference,
 } from "@/client/theme/appearance-preference";
+import { type AppEnv, readAppEnvFromExpoExtra } from "@/shared/env";
 
 export type SettingsState = {
 	appearancePreference: AppearancePreference;

@@ -1,6 +1,4 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { createAppId } from "@/shared/ids";
-import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { DirectoryDb } from "@/server/db/client";
 import {
@@ -15,6 +13,8 @@ import {
 	lockHouseholdRow,
 	runDirectoryTransaction,
 } from "@/server/directory-transaction";
+import { createAppId } from "@/shared/ids";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 
 export type MemberServiceDirectory = DirectoryDb | DirectoryTransaction;
 

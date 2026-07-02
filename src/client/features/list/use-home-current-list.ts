@@ -3,13 +3,13 @@ import type {
 	ActiveListState,
 	AddActiveListItemInput,
 } from "@/client/features/list/active-list";
-import { useSessionQuery } from "@/client/session";
 import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 } from "@/client/features/list/current-selection";
 import type { Item } from "@/client/features/list/item-service";
 import type { AuthenticatedAppSession } from "@/client/session";
+import { useSessionQuery } from "@/client/session";
 
 export type HomeCurrentListActions = {
 	addItem: (input: AddActiveListItemInput) => Promise<void>;

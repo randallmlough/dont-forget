@@ -14,12 +14,11 @@ import type { PropsWithChildren, ReactElement } from "react";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { UnistylesRuntime } from "react-native-unistyles";
-
-import { useAuthenticatedAppSession } from "@/client/session";
-import { track } from "@/client/lib/analytics";
 import { createUsersApiClient } from "@/client/features/settings/api";
+import { track } from "@/client/lib/analytics";
 import { useLogger } from "@/client/lib/logger";
 import type { AuthenticatedAppSession } from "@/client/session";
+import { useAuthenticatedAppSession } from "@/client/session";
 import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import SettingsScreen from "./settings-screen";
 
@@ -80,9 +79,7 @@ jest.mock("@/client/lib/analytics", () =>
 
 jest.mock("@/client/lib/logger", () =>
 	jest
-		.requireActual<typeof import("@/test/mocks/logger")>(
-			"@/test/mocks/logger",
-		)
+		.requireActual<typeof import("@/test/mocks/logger")>("@/test/mocks/logger")
 		.createMockLoggerModule(),
 );
 

@@ -8,9 +8,6 @@ import {
 	View,
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-
-import { BottomSheet } from "@/client/ui/bottom-sheet";
-import { track } from "@/client/lib/analytics";
 import {
 	clearCurrentListSelection,
 	setCurrentListSelection,
@@ -22,7 +19,9 @@ import type {
 	ListSummary,
 	RenameListResult,
 } from "@/client/features/list/list-service";
+import { track } from "@/client/lib/analytics";
 import type { AuthenticatedAppSession } from "@/client/session";
+import { BottomSheet } from "@/client/ui/bottom-sheet";
 import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
 
 /**

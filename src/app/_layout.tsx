@@ -17,12 +17,12 @@ import {
 	AUTH_PATHS,
 	PUBLIC_AUTH_PRESERVING_PATHS,
 } from "@/client/features/auth/redirect-policy";
-import { AuthenticatedAppSessionProvider } from "@/client/session";
 import { screen } from "@/client/lib/analytics";
-import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/shared/env";
 import { logger } from "@/client/lib/logger";
 import { posthog } from "@/client/lib/posthog";
 import { tokenCache } from "@/client/lib/token-cache";
+import { AuthenticatedAppSessionProvider } from "@/client/session";
+import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/shared/env";
 import "@/client/theme/unistyles";
 import { loadAndApplyAppearancePreference } from "@/client/theme/appearance-preference";
 import { navigationThemeFor } from "@/client/theme/navigation-theme";

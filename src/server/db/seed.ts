@@ -1,13 +1,6 @@
 import { createHash } from "node:crypto";
 import { inArray, or } from "drizzle-orm";
 import { z } from "zod";
-import {
-	type AppEnv,
-	assertLocalDirectoryDatabaseUrl,
-	readClerkServerConfig,
-	readPostgresConfig,
-} from "@/shared/env";
-import { loadEnvFile } from "@/shared/load-env";
 import { directoryClient, directoryDb } from "@/server/db/client";
 import {
 	type EmailBackedPrimaryHouseholdScenarioSeed,
@@ -24,6 +17,13 @@ import {
 	memberships,
 	users,
 } from "@/server/db/schema/postgres";
+import {
+	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
+	readClerkServerConfig,
+	readPostgresConfig,
+} from "@/shared/env";
+import { loadEnvFile } from "@/shared/load-env";
 
 export const SEED_TEST_PASSWORD = "testing1234";
 

@@ -1,6 +1,4 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { createAppId } from "@/shared/ids";
-import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { DirectoryDb } from "@/server/db/client";
 import {
@@ -15,6 +13,8 @@ import {
 	runDirectoryTransaction,
 } from "@/server/directory-transaction";
 import type { ActiveMembership } from "@/server/households/member-service";
+import { createAppId } from "@/shared/ids";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 import {
 	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,

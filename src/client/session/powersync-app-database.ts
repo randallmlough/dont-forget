@@ -5,13 +5,13 @@ import type {
 	SyncStatus,
 	Transaction,
 } from "@powersync/react-native";
-import { db } from "@/client/session/powersync";
 import type {
 	ProductDatabase,
 	ProductQuerier,
 	ProductRow,
 	ProductWriteResult,
 } from "@/client/lib/product-database";
+import { db } from "@/client/session/powersync";
 
 // The product tables synced onto the local PowerSync DB. A change to any of them
 // drives the session's `changes` refetch seam.

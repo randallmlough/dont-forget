@@ -1,9 +1,5 @@
 import { readApiBaseUrl } from "@/client/lib/api-base-url";
 import {
-	type HouseholdJoinCodeSource,
-	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
-} from "@/shared/household-join-code-source";
-import {
 	createHouseholdResponseSchema,
 	type HouseholdJoinCode,
 	type HouseholdJoinCodePreview,
@@ -25,6 +21,10 @@ import {
 	revokeInvitationResponseSchema,
 } from "@/shared/contracts/invitations";
 import type { HouseholdMember } from "@/shared/contracts/members";
+import {
+	type HouseholdJoinCodeSource,
+	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
+} from "@/shared/household-join-code-source";
 
 export type {
 	CreateInvitationResponse,

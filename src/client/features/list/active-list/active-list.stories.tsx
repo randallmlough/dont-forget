@@ -3,7 +3,10 @@ import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
-import { ActiveList, type ActiveListState } from "@/client/features/list/active-list";
+import {
+	ActiveList,
+	type ActiveListState,
+} from "@/client/features/list/active-list";
 import {
 	createActiveListMemoryActions,
 	createPassiveActiveListSyncStatus,

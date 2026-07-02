@@ -4,7 +4,10 @@ import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 } from "@/client/features/list/current-selection";
-import type { GetListResult, ListSummary } from "@/client/features/list/list-service";
+import type {
+	GetListResult,
+	ListSummary,
+} from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useHomeCurrentList } from "./use-home-current-list";
 
@@ -15,9 +18,7 @@ import { useHomeCurrentList } from "./use-home-current-list";
 
 jest.mock("@/client/lib/logger", () =>
 	jest
-		.requireActual<typeof import("@/test/mocks/logger")>(
-			"@/test/mocks/logger",
-		)
+		.requireActual<typeof import("@/test/mocks/logger")>("@/test/mocks/logger")
 		.createMockLoggerModule(),
 );
 

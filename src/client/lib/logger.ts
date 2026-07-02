@@ -1,6 +1,6 @@
 import { useUser } from "@clerk/clerk-expo";
-import { redactAttributes, redactString } from "@/shared/redact";
 import { useMemo } from "react";
+import { redactAttributes, redactString } from "@/shared/redact";
 
 import { posthog } from "./posthog";
 

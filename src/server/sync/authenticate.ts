@@ -9,9 +9,9 @@
 // so importing them statically defers nothing.
 
 import { eq } from "drizzle-orm";
-import { readClerkServerConfig } from "@/shared/env";
 import { postgresDb, postgresPool } from "@/server/db/pg-client";
 import { users } from "@/server/db/schema/postgres";
+import { readClerkServerConfig } from "@/shared/env";
 
 // Auth failure (401).
 export class DataAuthError extends Error {

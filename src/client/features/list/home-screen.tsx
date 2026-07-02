@@ -2,13 +2,12 @@ import { useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
-
+import { track } from "@/client/lib/analytics";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { track } from "@/client/lib/analytics";
 import { HomeCurrentList, homeSessionMemberName } from "./home-current-list";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 

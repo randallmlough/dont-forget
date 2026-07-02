@@ -12,10 +12,10 @@ import {
 	emptyActiveListState,
 	populatedActiveListState,
 } from "@/client/features/list/active-list/test-support";
+import { HomeScreenView } from "@/client/features/list/home-screen";
 import type { Item, ItemService } from "@/client/features/list/item-service";
 import type { ListService } from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
-import { HomeScreenView } from "@/client/features/list/home-screen";
 
 const meta = {
 	title: "Home/HomeScreen",

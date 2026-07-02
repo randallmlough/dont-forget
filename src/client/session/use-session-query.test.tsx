@@ -16,9 +16,7 @@ let mockLogger: MockLogger;
 
 jest.mock("@/client/lib/logger", () =>
 	jest
-		.requireActual<typeof import("@/test/mocks/logger")>(
-			"@/test/mocks/logger",
-		)
+		.requireActual<typeof import("@/test/mocks/logger")>("@/test/mocks/logger")
 		.createMockLoggerModule(),
 );
 

@@ -1,9 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
-import { asError } from "@/shared/errors";
-import { createAppId } from "@/shared/ids";
-import { redactAttributes } from "@/shared/redact";
-import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { DirectoryDb } from "@/server/db/client";
 import {
@@ -15,6 +11,10 @@ import {
 import { lockHouseholdRow } from "@/server/directory-transaction";
 import { createActiveHouseholdService } from "@/server/households/active-household-service";
 import { createMemberService } from "@/server/households/member-service";
+import { asError } from "@/shared/errors";
+import { createAppId } from "@/shared/ids";
+import { redactAttributes } from "@/shared/redact";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOKEN_GENERATION_ATTEMPTS = 5;

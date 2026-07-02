@@ -5,9 +5,9 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Alert } from "react-native";
+import SignUpScreen from "@/client/features/auth/sign-up-screen";
 import { analyticsMocks } from "@/test/mocks/analytics";
 import { clerkMocks } from "@/test/mocks/clerk";
-import SignUpScreen from "@/client/features/auth/sign-up-screen";
 
 jest.mock("@/client/lib/analytics", () =>
 	jest.requireActual("@/test/mocks/analytics"),

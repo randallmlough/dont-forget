@@ -1,8 +1,8 @@
-import { createMockAnalytics } from "@/test/mocks/analytics";
 import {
 	BOOTSTRAP_API_PATH,
 	type BootstrapResponse,
 } from "@/shared/contracts/bootstrap";
+import { createMockAnalytics } from "@/test/mocks/analytics";
 import { createSessionBootstrapService } from "./bootstrap";
 
 jest.mock("@/client/lib/analytics", () =>

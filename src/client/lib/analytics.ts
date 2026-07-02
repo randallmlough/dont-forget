@@ -1,7 +1,7 @@
 import { useUser } from "@clerk/clerk-expo";
+import { useEffect } from "react";
 import type { EventMap } from "@/shared/analytics-events";
 import { redactAttributes } from "@/shared/redact";
-import { useEffect } from "react";
 import { posthog } from "./posthog";
 
 type PostHogProperties = NonNullable<Parameters<typeof posthog.capture>[1]>;

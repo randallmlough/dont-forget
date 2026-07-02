@@ -1,11 +1,5 @@
 import { randomInt } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
-import {
-	type HouseholdJoinCodeSource,
-	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
-} from "@/shared/household-join-code-source";
-import { createAppId } from "@/shared/ids";
-import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { DirectoryDb } from "@/server/db/client";
 import {
@@ -16,6 +10,12 @@ import {
 } from "@/server/db/schema/postgres";
 import { lockHouseholdRow } from "@/server/directory-transaction";
 import { createMemberService } from "@/server/households/member-service";
+import {
+	type HouseholdJoinCodeSource,
+	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
+} from "@/shared/household-join-code-source";
+import { createAppId } from "@/shared/ids";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { createActiveHouseholdService } from "./active-household-service";
 
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
