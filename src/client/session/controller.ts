@@ -1,8 +1,8 @@
-import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
-import { readPowerSyncUrl } from "@/lib/client-api/powersync-url";
+import { readApiBaseUrl } from "@/client/lib/api-base-url";
+import { readPowerSyncUrl } from "@/client/session/powersync/powersync-url";
 import { asError } from "@/shared/errors";
-import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import { PowerSyncConnector } from "@/lib/powersync";
+import { logger as defaultLogger, type Logger } from "@/client/lib/logger";
+import { PowerSyncConnector } from "@/client/session/powersync";
 import { createItemService, type ItemService } from "@/lib/services/item";
 import { createListService, type ListService } from "@/lib/services/list";
 import {

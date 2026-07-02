@@ -6,15 +6,15 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
-import { useLogger } from "@/lib/logger";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { useLogger } from "@/client/lib/logger";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { type Deferred, deferred } from "@/test/async";
 import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import { useSessionQuery } from "./use-session-query";
 
 let mockLogger: MockLogger;
 
-jest.mock("@/lib/logger", () =>
+jest.mock("@/client/lib/logger", () =>
 	jest
 		.requireActual<typeof import("@/test/mocks/logger")>(
 			"@/test/mocks/logger",

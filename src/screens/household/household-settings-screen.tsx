@@ -15,13 +15,13 @@ import {
 	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
-} from "@/components/session";
+} from "@/client/session";
 import type {
 	HouseholdJoinCode,
 	HouseholdMember,
 	PendingInvitation,
 } from "@/lib/client-api/households";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { HouseholdButton } from "./household-button";
 import {
 	type HouseholdSettingsActions,

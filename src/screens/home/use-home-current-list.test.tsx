@@ -5,7 +5,7 @@ import {
 	getCurrentListSelection,
 } from "@/lib/local-storage/current-list-selection";
 import type { GetListResult, ListSummary } from "@/lib/services/list";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { useHomeCurrentList } from "./use-home-current-list";
 
 // Restores the resolveCurrentList behavior coverage at the hook level (the old
@@ -13,7 +13,7 @@ import { useHomeCurrentList } from "./use-home-current-list";
 // cutover deleted). The resolver source is unchanged, so the candidate that
 // wins must not change — these tests guard exactly that, against fake services.
 
-jest.mock("@/lib/logger", () =>
+jest.mock("@/client/lib/logger", () =>
 	jest
 		.requireActual<typeof import("@/test/mocks/logger")>(
 			"@/test/mocks/logger",

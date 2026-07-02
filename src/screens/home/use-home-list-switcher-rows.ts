@@ -1,6 +1,6 @@
-import { useSessionQuery } from "@/components/session";
+import { useSessionQuery } from "@/client/session";
 import type { ListSummary } from "@/lib/services/list";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 
 export type HomeListSwitcherRows =
 	| { status: "loading" }

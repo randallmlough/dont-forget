@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import * as Clipboard from "expo-clipboard";
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
+import type { AuthenticatedAppSessionReloadOptions } from "@/client/session";
 import {
 	type CreateInvitationResponse,
 	createHouseholdApiClient,
@@ -10,7 +10,7 @@ import {
 	type HouseholdMember,
 	type PendingInvitation,
 } from "@/lib/client-api/households";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 
 export type HouseholdSettingsState =
 	| { status: "loading" }

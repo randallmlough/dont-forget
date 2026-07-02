@@ -14,7 +14,7 @@ import {
 } from "@/components/active-list/test-support";
 import type { Item, ItemService } from "@/lib/services/item";
 import type { ListService } from "@/lib/services/list";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { HomeScreenView } from "@/screens/home/home-screen";
 
 const meta = {

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { UnistylesRuntime } from "react-native-unistyles";
 
-import type { Logger } from "@/lib/logger";
+import type { Logger } from "@/client/lib/logger";
 
 export type AppearancePreference = "system" | "light" | "dark";
 

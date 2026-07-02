@@ -1,4 +1,4 @@
-import type { LogAttributes, Logger } from "@/lib/logger";
+import type { LogAttributes, Logger } from "@/client/lib/logger";
 
 export type MockLogger = jest.Mocked<Logger>;
 

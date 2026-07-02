@@ -4,8 +4,8 @@ import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { Alert, Pressable, Text } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { track } from "@/lib/analytics";
-import { userMessage } from "@/lib/clerk-errors";
+import { track } from "@/client/lib/analytics";
+import { userMessage } from "@/client/lib/clerk-errors";
 
 const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
 

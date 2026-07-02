@@ -1,4 +1,12 @@
 export {
+	type AuthenticatedAppSessionContextValue,
+	AuthenticatedAppSessionProvider,
+	type AuthenticatedAppSessionReloadOptions,
+	type AuthenticatedAppSessionState,
+	useAuthenticatedAppSession,
+} from "./provider";
+export { type SessionQueryState, useSessionQuery } from "./use-session-query";
+export {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionActivation,
 	type AuthenticatedAppSessionCachePolicy,

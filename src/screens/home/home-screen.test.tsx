@@ -5,7 +5,7 @@ jest.mock("expo-router", () => ({
 	useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
 }));
 
-jest.mock("@/lib/powersync", () => ({
+jest.mock("@/client/session/powersync", () => ({
 	PowerSyncConnector: jest.fn(),
 	powerSyncAppDatabase: {},
 	readPowerSyncUrl: jest.fn(() => "https://sync.test"),

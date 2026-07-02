@@ -1,8 +1,8 @@
-import { reset, track } from "@/lib/analytics";
+import { reset, track } from "@/client/lib/analytics";
 import { asError } from "@/shared/errors";
 import { clearUserCurrentListSelections } from "@/lib/local-storage/current-list-selection";
-import type { Logger } from "@/lib/logger";
-import { logger as defaultLogger } from "@/lib/logger";
+import type { Logger } from "@/client/lib/logger";
+import { logger as defaultLogger } from "@/client/lib/logger";
 import type { ServiceResetAnalytics } from "@/shared/service-analytics";
 import type {
 	AuthenticatedAppSessionActivation,

@@ -15,11 +15,11 @@ import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { UnistylesRuntime } from "react-native-unistyles";
 
-import { useAuthenticatedAppSession } from "@/components/session";
-import { track } from "@/lib/analytics";
+import { useAuthenticatedAppSession } from "@/client/session";
+import { track } from "@/client/lib/analytics";
 import { createUsersApiClient } from "@/lib/client-api/users";
-import { useLogger } from "@/lib/logger";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { useLogger } from "@/client/lib/logger";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import SettingsScreen from "./settings-screen";
 
@@ -66,7 +66,7 @@ jest.mock("@clerk/clerk-expo", () => ({
 	useAuth: jest.fn(),
 }));
 
-jest.mock("@/components/session", () => ({
+jest.mock("@/client/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
 }));
 
@@ -74,11 +74,11 @@ jest.mock("@/lib/client-api/users", () => ({
 	createUsersApiClient: jest.fn(),
 }));
 
-jest.mock("@/lib/analytics", () =>
+jest.mock("@/client/lib/analytics", () =>
 	jest.requireActual("@/test/mocks/analytics"),
 );
 
-jest.mock("@/lib/logger", () =>
+jest.mock("@/client/lib/logger", () =>
 	jest
 		.requireActual<typeof import("@/test/mocks/logger")>(
 			"@/test/mocks/logger",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { asError } from "@/shared/errors";
-import { useLogger } from "@/lib/logger";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import { useLogger } from "@/client/lib/logger";
+import type { AuthenticatedAppSession } from "@/client/session";
 
 export type SessionQueryState<T> =
 	| { status: "loading" }

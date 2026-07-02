@@ -1,13 +1,13 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useMemo, useReducer } from "react";
-import type { AuthenticatedAppSessionReloadOptions } from "@/components/session";
-import { track } from "@/lib/analytics";
+import type { AuthenticatedAppSessionReloadOptions } from "@/client/session";
+import { track } from "@/client/lib/analytics";
 import {
 	createHouseholdApiClient,
 	type HouseholdApiClient,
 } from "@/lib/client-api/households";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 
 export type HouseholdSwitchState = {
 	code: string;

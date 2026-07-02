@@ -16,7 +16,7 @@ ruleTester.run("no-services-imports-in-db", rule, {
 		},
 		{
 			filename: "/repo/db/household-store.ts",
-			code: `import { logger } from "@/lib/logger";`,
+			code: `import { logger } from "@/client/lib/logger";`,
 		},
 		{
 			filename: "/repo/db/server/migrate.ts",

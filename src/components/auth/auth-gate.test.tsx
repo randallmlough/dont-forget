@@ -1,16 +1,16 @@
 import { render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { AuthGate } from "@/components/auth/auth-gate";
-import { hasAuthenticatedAppSessionHint } from "@/lib/services/session/session-hint";
+import { hasAuthenticatedAppSessionHint } from "@/client/session/session-hint";
 import { setMockAuthState } from "@/test/mocks/clerk";
 
 const mockReplace = jest.fn();
 
-jest.mock("@/lib/analytics", () =>
+jest.mock("@/client/lib/analytics", () =>
 	jest.requireActual("@/test/mocks/analytics"),
 );
 
-jest.mock("@/lib/services/session/session-hint", () => ({
+jest.mock("@/client/session/session-hint", () => ({
 	hasAuthenticatedAppSessionHint: jest.fn(),
 }));
 

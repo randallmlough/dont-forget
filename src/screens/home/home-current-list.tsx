@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ActiveList } from "@/components/active-list";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { HomeListSwitcher } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";

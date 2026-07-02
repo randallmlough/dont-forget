@@ -2,7 +2,7 @@ import { useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
-import { useAuthenticatedAppSession } from "@/components/session";
+import { useAuthenticatedAppSession } from "@/client/session";
 import { HouseholdButton } from "./household-button";
 import {
 	type PublicHouseholdEntryState,

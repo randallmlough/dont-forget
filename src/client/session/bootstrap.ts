@@ -1,5 +1,5 @@
-import { track } from "@/lib/analytics";
-import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
+import { track } from "@/client/lib/analytics";
+import { readApiBaseUrl } from "@/client/lib/api-base-url";
 import type { ServiceAnalytics } from "@/shared/service-analytics";
 import {
 	BOOTSTRAP_API_PATH,

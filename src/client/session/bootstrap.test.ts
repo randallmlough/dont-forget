@@ -5,7 +5,7 @@ import {
 } from "@/shared/contracts/bootstrap";
 import { createSessionBootstrapService } from "./bootstrap";
 
-jest.mock("@/lib/analytics", () =>
+jest.mock("@/client/lib/analytics", () =>
 	jest.requireActual("@/test/mocks/analytics"),
 );
 

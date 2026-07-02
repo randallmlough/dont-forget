@@ -6,24 +6,24 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
-import { useLogger } from "@/lib/logger";
+import { useLogger } from "@/client/lib/logger";
 import type {
 	AuthenticatedAppSession,
 	AuthenticatedAppSessionActivation,
 	AuthenticatedAppSessionController,
 	AuthenticatedAppSessionStateSnapshot,
-} from "@/lib/services/session";
+} from "@/client/session";
 import { deferred } from "@/test/async";
 import { createMockAnalytics } from "@/test/mocks/analytics";
 import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import {
 	AuthenticatedAppSessionProvider,
 	useAuthenticatedAppSession,
-} from "./authenticated-app-session-provider";
+} from "./provider";
 
 let mockLogger: MockLogger;
 
-jest.mock("@/lib/logger", () =>
+jest.mock("@/client/lib/logger", () =>
 	jest
 		.requireActual<typeof import("@/test/mocks/logger")>(
 			"@/test/mocks/logger",
@@ -31,7 +31,7 @@ jest.mock("@/lib/logger", () =>
 		.createMockLoggerModule(),
 );
 
-jest.mock("@/lib/analytics", () =>
+jest.mock("@/client/lib/analytics", () =>
 	jest.requireActual("@/test/mocks/analytics"),
 );
 

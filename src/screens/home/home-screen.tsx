@@ -6,9 +6,9 @@ import { StyleSheet } from "react-native-unistyles";
 import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
-} from "@/components/session";
-import { track } from "@/lib/analytics";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+} from "@/client/session";
+import { track } from "@/client/lib/analytics";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { HomeCurrentList, homeSessionMemberName } from "./home-current-list";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 

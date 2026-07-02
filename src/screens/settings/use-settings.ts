@@ -3,20 +3,20 @@ import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useRef, useState } from "react";
 
-import { useAuthenticatedAppSession } from "@/components/session";
-import { track } from "@/lib/analytics";
+import { useAuthenticatedAppSession } from "@/client/session";
+import { track } from "@/client/lib/analytics";
 import {
 	createUsersApiClient,
 	type UsersApiClient,
 } from "@/lib/client-api/users";
 import { type AppEnv, readAppEnvFromExpoExtra } from "@/shared/env";
-import { useLogger } from "@/lib/logger";
+import { useLogger } from "@/client/lib/logger";
 import {
 	type AppearancePreference,
 	applyAppearancePreference,
 	readAppearancePreference,
 	writeAppearancePreference,
-} from "@/lib/unistyles/appearance-preference";
+} from "@/client/theme/appearance-preference";
 
 export type SettingsState = {
 	appearancePreference: AppearancePreference;

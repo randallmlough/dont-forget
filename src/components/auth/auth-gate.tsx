@@ -2,8 +2,8 @@ import { useAuth } from "@clerk/clerk-expo";
 import { Stack, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useReducer } from "react";
-import { useAnalyticsIdentity } from "@/lib/analytics";
-import { hasAuthenticatedAppSessionHint } from "@/lib/services/session/session-hint";
+import { useAnalyticsIdentity } from "@/client/lib/analytics";
+import { hasAuthenticatedAppSessionHint } from "@/client/session/session-hint";
 import { type AuthRedirectParams, authRedirectTarget } from "./redirect-policy";
 
 type CachedSessionStatus = "checking" | "available" | "unavailable";

@@ -4,7 +4,7 @@ import type {
 	ProductQuerier,
 	ProductRow,
 	ProductWriteResult,
-} from "@/lib/services/shared/product-database";
+} from "@/client/lib/product-database";
 import { timestampMillisToSqlText } from "@/lib/services/shared/sql-timestamp";
 
 // A real in-memory SQLite (better-sqlite3) standing in for the on-device

@@ -30,7 +30,7 @@ ruleTester.run("no-server-service-imports", rule, {
 			filename: "/repo/app/api/bootstrap+api.ts",
 			code: `
 				export async function POST() {
-					const server = await import("@/lib/services/session/server");
+					const server = await import("@/client/session/server");
 					return Response.json(server);
 				}
 			`,
@@ -62,7 +62,7 @@ ruleTester.run("no-server-service-imports", rule, {
 		},
 		{
 			filename: "/repo/app/api/bootstrap+api.ts",
-			code: `const server = import("@/lib/services/session/server");`,
+			code: `const server = import("@/client/session/server");`,
 			errors: [{ messageId: "apiStatic" }],
 		},
 		{

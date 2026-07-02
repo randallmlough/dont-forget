@@ -9,8 +9,8 @@ import { OrDivider } from "@/components/auth/or-divider";
 import { PrimaryButton } from "@/components/auth/primary-button";
 import { authHrefWithIntent } from "@/components/auth/redirect-policy";
 import { SocialSignIn } from "@/components/auth/social-sign-in";
-import { track } from "@/lib/analytics";
-import { userMessage } from "@/lib/clerk-errors";
+import { track } from "@/client/lib/analytics";
+import { userMessage } from "@/client/lib/clerk-errors";
 
 export default function SignInScreen() {
 	const { signIn, setActive, isLoaded } = useSignIn();

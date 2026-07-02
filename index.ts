@@ -1,3 +1,3 @@
 import "@azure/core-asynciterator-polyfill";
-import "./src/lib/unistyles/unistyles";
+import "./src/client/theme/unistyles";
 import "expo-router/entry";

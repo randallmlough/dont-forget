@@ -3,7 +3,7 @@ module.exports = {
 	preset: "jest-expo",
 	setupFiles: [
 		"react-native-unistyles/mocks",
-		"<rootDir>/src/lib/unistyles/unistyles.ts",
+		"<rootDir>/src/client/theme/unistyles.ts",
 	],
 	setupFilesAfterEnv: ["<rootDir>/src/test/setup.ts"],
 	// Directory-DB tests boot PGlite (WASM Postgres) in a child process and run

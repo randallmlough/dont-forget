@@ -12,8 +12,8 @@ import {
 	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
-} from "@/components/session";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+} from "@/client/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { HouseholdButton } from "./household-button";
 import {
 	type HouseholdSwitchOperation,

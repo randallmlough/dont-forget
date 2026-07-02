@@ -1,14 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { ItemService } from "@/lib/services/item";
 import type { ListService } from "@/lib/services/list";
-import type { AuthenticatedAppSession } from "@/lib/services/session";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { HouseholdSwitchView } from "./household-switch-screen";
 
 jest.mock("expo-router", () => ({
 	useRouter: () => ({ replace: jest.fn() }),
 }));
 
-jest.mock("@/lib/powersync", () => ({
+jest.mock("@/client/session/powersync", () => ({
 	PowerSyncConnector: jest.fn(),
 	powerSyncAppDatabase: {},
 	readPowerSyncUrl: jest.fn(() => "https://sync.test"),

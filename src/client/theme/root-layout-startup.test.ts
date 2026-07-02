@@ -3,7 +3,7 @@ describe("root layout Unistyles startup", () => {
 		jest.resetModules();
 		let didLoadUnistylesConfiguration = false;
 
-		jest.doMock("@/lib/unistyles/unistyles", () => {
+		jest.doMock("@/client/theme/unistyles", () => {
 			didLoadUnistylesConfiguration = true;
 			return {};
 		});
@@ -54,30 +54,30 @@ function mockRootLayoutDependencies() {
 		AUTH_PATHS: new Set<string>(),
 		PUBLIC_AUTH_PRESERVING_PATHS: new Set<string>(),
 	}));
-	jest.doMock("@/components/session", () => ({
+	jest.doMock("@/client/session", () => ({
 		AuthenticatedAppSessionProvider: ({ children }: { children: unknown }) =>
 			children,
 	}));
-	jest.doMock("@/lib/analytics", () => ({
+	jest.doMock("@/client/lib/analytics", () => ({
 		screen: jest.fn(),
 	}));
 	jest.doMock("@/shared/env", () => ({
 		readAppEnvFromExpoExtra: jest.fn(() => "test"),
 		validateClerkKeyForEnv: jest.fn(),
 	}));
-	jest.doMock("@/lib/posthog", () => ({
+	jest.doMock("@/client/lib/posthog", () => ({
 		posthog: {},
 	}));
-	jest.doMock("@/lib/token-cache", () => ({
+	jest.doMock("@/client/lib/token-cache", () => ({
 		tokenCache: {},
 	}));
-	jest.doMock("@/lib/unistyles/navigation-theme", () => ({
+	jest.doMock("@/client/theme/navigation-theme", () => ({
 		navigationThemeFor: jest.fn(() => ({ colors: {} })),
 	}));
-	jest.doMock("@/lib/logger", () => ({
+	jest.doMock("@/client/lib/logger", () => ({
 		logger: { error: jest.fn() },
 	}));
-	jest.doMock("@/lib/unistyles/appearance-preference", () => ({
+	jest.doMock("@/client/theme/appearance-preference", () => ({
 		loadAndApplyAppearancePreference: jest.fn(async () => undefined),
 	}));
 }

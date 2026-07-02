@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 import { AuthTextInput } from "@/components/auth/auth-text-input";
-import type { AppearancePreference } from "@/lib/unistyles/appearance-preference";
+import type { AppearancePreference } from "@/client/theme/appearance-preference";
 import {
 	type SettingsActions,
 	type SettingsState,

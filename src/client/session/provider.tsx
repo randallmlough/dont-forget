@@ -8,8 +8,8 @@ import {
 	useReducer,
 	useState,
 } from "react";
-import { reset, track } from "@/lib/analytics";
-import { useLogger } from "@/lib/logger";
+import { reset, track } from "@/client/lib/analytics";
+import { useLogger } from "@/client/lib/logger";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionActivation,
@@ -18,8 +18,8 @@ import {
 	type AuthenticatedAppSessionStateSnapshot,
 	createAuthenticatedAppSessionController,
 	createAuthenticatedAppSessionSignOut,
-} from "@/lib/services/session";
-import { clearAuthenticatedAppSessionPresent } from "@/lib/services/session/session-hint";
+} from "@/client/session";
+import { clearAuthenticatedAppSessionPresent } from "@/client/session/session-hint";
 
 export type AuthenticatedAppSessionState =
 	| { status: "loading" }

@@ -4,7 +4,7 @@ import type {
 	screen as screenAnalytics,
 	track as trackAnalytics,
 	useAnalyticsIdentity as useAnalyticsIdentityHook,
-} from "@/lib/analytics";
+} from "@/client/lib/analytics";
 
 export type MockAnalytics = {
 	track: jest.MockedFunction<typeof trackAnalytics>;

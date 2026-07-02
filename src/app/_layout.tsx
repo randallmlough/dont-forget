@@ -17,15 +17,15 @@ import {
 	AUTH_PATHS,
 	PUBLIC_AUTH_PRESERVING_PATHS,
 } from "@/components/auth/redirect-policy";
-import { AuthenticatedAppSessionProvider } from "@/components/session";
-import { screen } from "@/lib/analytics";
+import { AuthenticatedAppSessionProvider } from "@/client/session";
+import { screen } from "@/client/lib/analytics";
 import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/shared/env";
-import { logger } from "@/lib/logger";
-import { posthog } from "@/lib/posthog";
-import { tokenCache } from "@/lib/token-cache";
-import "@/lib/unistyles/unistyles";
-import { loadAndApplyAppearancePreference } from "@/lib/unistyles/appearance-preference";
-import { navigationThemeFor } from "@/lib/unistyles/navigation-theme";
+import { logger } from "@/client/lib/logger";
+import { posthog } from "@/client/lib/posthog";
+import { tokenCache } from "@/client/lib/token-cache";
+import "@/client/theme/unistyles";
+import { loadAndApplyAppearancePreference } from "@/client/theme/appearance-preference";
+import { navigationThemeFor } from "@/client/theme/navigation-theme";
 
 export const unstable_settings = {
 	anchor: "(app)",

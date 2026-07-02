@@ -9,7 +9,7 @@ import { analyticsMocks } from "@/test/mocks/analytics";
 import { clerkMocks } from "@/test/mocks/clerk";
 import SignUpScreen from "@/screens/auth/sign-up-screen";
 
-jest.mock("@/lib/analytics", () =>
+jest.mock("@/client/lib/analytics", () =>
 	jest.requireActual("@/test/mocks/analytics"),
 );
 

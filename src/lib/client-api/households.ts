@@ -1,4 +1,4 @@
-import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
+import { readApiBaseUrl } from "@/client/lib/api-base-url";
 import {
 	type HouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
