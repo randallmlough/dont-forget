@@ -22,6 +22,7 @@ import { logger } from "@/client/lib/logger";
 import { posthog } from "@/client/lib/posthog";
 import { tokenCache } from "@/client/lib/token-cache";
 import { AuthenticatedAppSessionProvider } from "@/client/session";
+import { PowerSyncProvider } from "@/client/session/powersync";
 import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/shared/env";
 import "@/client/theme/unistyles";
 import { loadAndApplyAppearancePreference } from "@/client/theme/appearance-preference";
@@ -92,13 +93,15 @@ export default function RootLayout() {
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
 					<ThemeProvider value={navigationTheme}>
-						<AuthenticatedAppSessionProvider
-							activationEnabled={shouldActivateAuthenticatedAppSession(
-								pathname,
-							)}
-						>
-							<AuthGate pathname={pathname} params={params} />
-						</AuthenticatedAppSessionProvider>
+						<PowerSyncProvider>
+							<AuthenticatedAppSessionProvider
+								activationEnabled={shouldActivateAuthenticatedAppSession(
+									pathname,
+								)}
+							>
+								<AuthGate pathname={pathname} params={params} />
+							</AuthenticatedAppSessionProvider>
+						</PowerSyncProvider>
 						<StatusBar style={isDarkTheme ? "light" : "dark"} />
 					</ThemeProvider>
 				</ClerkProvider>

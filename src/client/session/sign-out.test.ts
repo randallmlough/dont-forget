@@ -1,12 +1,6 @@
 import { createCurrentListSelectionStore } from "@/client/features/list/current-selection";
 import { createMockAnalytics } from "@/test/mocks/analytics";
 import { createMockLogger } from "@/test/mocks/logger";
-import type {
-	AuthenticatedAppSession,
-	AuthenticatedAppSessionController,
-	AuthenticatedAppSessionServices,
-	AuthenticatedAppSessionStateSnapshot,
-} from "./controller";
 import {
 	type AuthenticatedAppSessionSignOutAuth,
 	createAuthenticatedAppSessionSignOut,
@@ -29,13 +23,14 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		);
 		const auth = authFixture();
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
-			controller: controllerFixture(readySnapshot("usr_avery")),
 			getAuth: () => auth,
 			analytics: createMockAnalytics(),
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
 			clearCurrentListSelectionsForUser:
 				selectionStore.clearUserCurrentListSelections,
 			logger: createMockLogger(),
+			disconnectAndClear: jest.fn(async () => undefined),
+			getSessionUserId: () => "usr_avery",
 		});
 
 		await signOutFlow.run();
@@ -49,42 +44,44 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(auth.signOut).toHaveBeenCalledTimes(1);
 	});
 
-	it("wipes the local PowerSync data via controller dispose and clears the cold-start hint", async () => {
-		const controller = controllerFixture(readySnapshot("usr_avery"));
+	it("wipes the local PowerSync data and clears the cold-start hint", async () => {
+		const disconnectAndClear = jest.fn(async () => undefined);
 		const clearHint = jest.fn(async () => undefined);
 		const auth = authFixture();
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
-			controller,
 			getAuth: () => auth,
 			analytics: createMockAnalytics(),
 			clearAuthenticatedAppSessionPresent: clearHint,
 			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
 			logger: createMockLogger(),
+			disconnectAndClear,
+			getSessionUserId: () => "usr_avery",
 		});
 
 		await signOutFlow.run();
 
-		expect(controller.dispose).toHaveBeenCalledWith({ clearLocalData: true });
+		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
 		expect(clearHint).toHaveBeenCalledTimes(1);
 	});
 
-	it("captures the userId from the pre-disposal snapshot", async () => {
-		const controller = controllerFixture(readySnapshot("usr_avery"));
+	it("captures the userId before local data is wiped", async () => {
+		let currentUserId: string | null = "usr_avery";
 		const clearCurrentListSelectionsForUser = jest.fn(
 			async (_userId: string) => {
-				// dispose already published idle, so the userId came from the
-				// pre-disposal snapshot.
-				expect(controller.getSnapshot()).toEqual({ status: "idle" });
+				expect(currentUserId).toBeNull();
 			},
 		);
 		const auth = authFixture();
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
-			controller,
 			getAuth: () => auth,
 			analytics: createMockAnalytics(),
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
 			clearCurrentListSelectionsForUser,
 			logger: createMockLogger(),
+			disconnectAndClear: jest.fn(async () => {
+				currentUserId = null;
+			}),
+			getSessionUserId: () => currentUserId,
 		});
 
 		await signOutFlow.run();
@@ -92,37 +89,17 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledWith("usr_avery");
 	});
 
-	it("derives the userId from the previous session mid-refresh", async () => {
-		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
-		const auth = authFixture();
-		const signOutFlow = createAuthenticatedAppSessionSignOut({
-			controller: controllerFixture({
-				status: "loading",
-				previous: appSessionFixture("usr_blake"),
-				refreshingSession: true,
-			}),
-			getAuth: () => auth,
-			analytics: createMockAnalytics(),
-			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
-			clearCurrentListSelectionsForUser,
-			logger: createMockLogger(),
-		});
-
-		await signOutFlow.run();
-
-		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledWith("usr_blake");
-	});
-
 	it("skips selection cleanup when no session was ever published", async () => {
 		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
 		const auth = authFixture();
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
-			controller: controllerFixture({ status: "loading" }),
 			getAuth: () => auth,
 			analytics: createMockAnalytics(),
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
 			clearCurrentListSelectionsForUser,
 			logger: createMockLogger(),
+			disconnectAndClear: jest.fn(async () => undefined),
+			getSessionUserId: () => null,
 		});
 
 		await signOutFlow.run();
@@ -131,29 +108,27 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(auth.signOut).toHaveBeenCalledTimes(1);
 	});
 
-	it("re-activates and rethrows when Clerk sign-out fails while still signed in", async () => {
-		const controller = controllerFixture(readySnapshot("usr_avery"));
+	it("rethrows when Clerk sign-out fails", async () => {
 		const signOutError = new Error("network down");
 		const auth = authFixture({
-			signedIn: true,
 			signOut: jest.fn(async () => {
 				throw signOutError;
 			}),
 		});
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
-			controller,
 			getAuth: () => auth,
 			analytics: createMockAnalytics(),
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
 			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
 			logger: createMockLogger(),
+			disconnectAndClear: jest.fn(async () => undefined),
+			getSessionUserId: () => "usr_avery",
 		});
 
 		await expect(signOutFlow.run()).rejects.toThrow("network down");
-		expect(controller.activate).toHaveBeenCalledTimes(1);
 	});
 
-	it("runs cleanup in order: track, reset, dispose, hint, selections, Clerk sign-out", async () => {
+	it("runs cleanup in order: track, reset, disconnect, hint, selections, Clerk sign-out", async () => {
 		const order: string[] = [];
 		const analytics = createMockAnalytics();
 		analytics.track.mockImplementation(() => {
@@ -162,17 +137,12 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		analytics.reset.mockImplementation(() => {
 			order.push("reset");
 		});
-		const controller = controllerFixture(readySnapshot("usr_avery"));
-		jest.mocked(controller.dispose).mockImplementation(async () => {
-			order.push("dispose");
-		});
 		const auth = authFixture({
 			signOut: jest.fn(async () => {
 				order.push("clerkSignOut");
 			}),
 		});
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
-			controller,
 			getAuth: () => auth,
 			analytics,
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => {
@@ -182,6 +152,10 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 				order.push("selections");
 			}),
 			logger: createMockLogger(),
+			disconnectAndClear: jest.fn(async () => {
+				order.push("disconnect");
+			}),
+			getSessionUserId: () => "usr_avery",
 		});
 
 		await signOutFlow.run();
@@ -189,80 +163,61 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(order).toEqual([
 			"track",
 			"reset",
-			"dispose",
+			"disconnect",
 			"hint",
 			"selections",
 			"clerkSignOut",
 		]);
 	});
-});
 
-function servicesFixture(): AuthenticatedAppSessionServices {
-	const unused = jest.fn(async () => {
-		throw new Error("session service not expected during sign-out");
+	it("continues Clerk sign-out when local cleanup fails", async () => {
+		const logger = createMockLogger();
+		const auth = authFixture();
+		const signOutFlow = createAuthenticatedAppSessionSignOut({
+			getAuth: () => auth,
+			analytics: createMockAnalytics(),
+			clearAuthenticatedAppSessionPresent: jest.fn(async () => {
+				throw new Error("cleanup failed");
+			}),
+			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
+			logger,
+			disconnectAndClear: jest.fn(async () => undefined),
+			getSessionUserId: () => "usr_avery",
+		});
+
+		await signOutFlow.run();
+
+		expect(auth.signOut).toHaveBeenCalledTimes(1);
+		expect(logger.error).toHaveBeenCalledWith(
+			"authenticated app session sign-out local cleanup failed",
+			{ error: expect.any(Error) },
+		);
 	});
-	return {
-		lists: {
-			createList: unused,
-			getList: unused,
-			renameList: unused,
-			deleteList: unused,
-			listLists: unused,
-		},
-		items: {
-			listItems: unused,
-			addItem: unused,
-			setItemChecked: unused,
-		},
-		changes: { subscribe: () => ({ remove() {} }) },
-		sync: {
-			getStatus: () => "synced",
-			subscribe: () => ({ remove() {} }),
-		},
-	};
-}
 
-function appSessionFixture(userId: string): AuthenticatedAppSession {
-	return {
-		user: {
-			id: userId,
-			email: "avery@example.com",
-			displayName: "Avery",
-			firstName: "Avery",
-			lastName: "Chen",
-		},
-		activeHousehold: { id: "hh_avery", name: "Avery's Home" },
-		households: [],
-		activeMember: {
-			id: "mbr_avery",
-			userId,
-			role: "owner",
-			displayName: "Avery",
-		},
-		members: [],
-		resourceKey: "authenticated-app-session:1",
-		services: servicesFixture(),
-	};
-}
+	it("continues Clerk sign-out when disconnect fails", async () => {
+		const logger = createMockLogger();
+		const auth = authFixture();
+		const signOutFlow = createAuthenticatedAppSessionSignOut({
+			getAuth: () => auth,
+			analytics: createMockAnalytics(),
+			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
+			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
+			logger,
+			disconnectAndClear: jest.fn(async () => {
+				throw new Error("disconnect failed");
+			}),
+			getSessionUserId: () => "usr_avery",
+		});
 
-function readySnapshot(userId: string): AuthenticatedAppSessionStateSnapshot {
-	return { status: "ready", session: appSessionFixture(userId) };
-}
+		await signOutFlow.run();
 
-function controllerFixture(
-	initialSnapshot: AuthenticatedAppSessionStateSnapshot,
-): AuthenticatedAppSessionController {
-	let snapshot = initialSnapshot;
-	return {
-		activate: jest.fn(async () => undefined),
-		dispose: jest.fn(async () => {
-			snapshot = { status: "idle" };
-		}),
-		invalidateCurrentSession: jest.fn(async () => undefined),
-		getSnapshot: () => snapshot,
-		subscribe: jest.fn(() => ({ remove() {} })),
-	};
-}
+		expect(auth.signOut).toHaveBeenCalledTimes(1);
+		expect(logger.error).toHaveBeenCalledWith(
+			"authenticated app session sign-out disconnect failed",
+			{ error: expect.any(Error) },
+		);
+	});
+});
 
 function authFixture(
 	overrides: Partial<AuthenticatedAppSessionSignOutAuth> = {},

@@ -10,6 +10,7 @@ import type {
 } from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useHomeCurrentList } from "./use-home-current-list";
+import type { ProductServices } from "./use-product-services";
 
 // Restores the resolveCurrentList behavior coverage at the hook level (the old
 // home-screen.test drove these through a real Household DB that the PowerSync
@@ -25,6 +26,18 @@ jest.mock("@/client/lib/logger", () =>
 jest.mock("@/client/features/list/current-selection", () => ({
 	getCurrentListSelection: jest.fn(),
 	clearCurrentListSelectionIfMatches: jest.fn(async () => false),
+}));
+
+jest.mock("@/client/session/powersync-app-database", () => ({
+	appProductDatabase: {
+		subscribeChanges: jest.fn(() => ({ remove() {} })),
+	},
+}));
+
+let mockProductServices: ProductServices;
+
+jest.mock("./use-product-services", () => ({
+	useProductServices: () => mockProductServices,
 }));
 
 const mockGetSelection = jest.mocked(getCurrentListSelection);
@@ -206,6 +219,23 @@ function sessionFixture(input: {
 	const unused = jest.fn(async () => {
 		throw new Error("unexpected service call");
 	});
+	mockProductServices = {
+		lists: {
+			listLists: jest.fn(async () => input.summaries),
+			getList: jest.fn(
+				async ({ listId }): Promise<GetListResult> =>
+					input.lists[listId] ?? { status: "missing", listId },
+			),
+			createList: unused,
+			renameList: unused,
+			deleteList: unused,
+		},
+		items: {
+			listItems: jest.fn(async () => []),
+			addItem: unused,
+			setItemChecked: unused,
+		},
+	};
 	return {
 		user: {
 			id: "usr_avery",
@@ -223,29 +253,6 @@ function sessionFixture(input: {
 			displayName: "Avery",
 		},
 		members: [],
-		resourceKey: "authenticated-app-session:1",
-		services: {
-			lists: {
-				listLists: jest.fn(async () => input.summaries),
-				getList: jest.fn(
-					async ({ listId }): Promise<GetListResult> =>
-						input.lists[listId] ?? { status: "missing", listId },
-				),
-				createList: unused,
-				renameList: unused,
-				deleteList: unused,
-			},
-			items: {
-				listItems: jest.fn(async () => []),
-				addItem: unused,
-				setItemChecked: unused,
-			},
-			changes: { subscribe: () => ({ remove() {} }) },
-			sync: {
-				getStatus: () => "synced",
-				subscribe: () => ({ remove() {} }),
-			},
-		},
 	};
 }
 

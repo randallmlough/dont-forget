@@ -1,6 +1,4 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import type { ItemService } from "@/client/features/list/item-service";
-import type { ListService } from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { HouseholdSwitchView } from "./household-switch-screen";
 
@@ -62,50 +60,5 @@ function sessionFixture(): AuthenticatedAppSession {
 			displayName: "Avery",
 		},
 		members: [],
-		resourceKey: "session:1",
-		services: {
-			lists: listServiceFixture(),
-			items: itemServiceFixture(),
-			changes: { subscribe: () => ({ remove() {} }) },
-			sync: {
-				getStatus: () => "synced",
-				subscribe: () => ({ remove() {} }),
-			},
-		},
-	};
-}
-
-function listServiceFixture(): ListService {
-	return {
-		createList: jest.fn(async () => ({
-			status: "invalidName" as const,
-			reason: "required" as const,
-			didWrite: false as const,
-		})),
-		getList: jest.fn(async () => ({
-			status: "missing" as const,
-			listId: "lst_1",
-		})),
-		renameList: jest.fn(async () => ({
-			status: "missing" as const,
-			listId: "lst_1",
-			didWrite: false as const,
-		})),
-		deleteList: jest.fn(async () => ({
-			status: "missing" as const,
-			listId: "lst_1",
-			didWrite: false as const,
-		})),
-		listLists: jest.fn(async () => []),
-	};
-}
-
-function itemServiceFixture(): ItemService {
-	return {
-		listItems: jest.fn(async () => []),
-		addItem: jest.fn(async () => {
-			throw new Error("not implemented");
-		}),
-		setItemChecked: jest.fn(async () => undefined),
 	};
 }

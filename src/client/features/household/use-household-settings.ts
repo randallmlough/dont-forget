@@ -139,7 +139,7 @@ export function useHouseholdSettings(
 		});
 		return defaultClientRef.current;
 	}, [clientProp]);
-	const loadKey = `${session.resourceKey}:${session.activeHousehold.id}`;
+	const loadKey = session.activeHousehold.id;
 	const [resource, dispatch] = useReducer(reducer, loadKey, initialResource);
 	const operationInFlightRef = useRef(false);
 	const loadAttempt = resource.loadKey === loadKey ? resource.attempt : 0;

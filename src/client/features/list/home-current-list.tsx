@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ActiveList } from "@/client/features/list/active-list";
 import type { AuthenticatedAppSession } from "@/client/session";
+import { useSyncStatusSource } from "@/client/session/use-sync-status-source";
 import { HomeListSwitcher } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";
@@ -13,7 +14,10 @@ export function HomeCurrentList({
 	session: AuthenticatedAppSession;
 }) {
 	return (
-		<HomeCurrentListResource key={session.resourceKey} session={session} />
+		<HomeCurrentListResource
+			key={session.activeHousehold.id}
+			session={session}
+		/>
 	);
 }
 
@@ -24,6 +28,7 @@ function HomeCurrentListResource({
 }) {
 	const currentMemberName = homeSessionMemberName(session);
 	const list = useHomeCurrentList(session);
+	const syncStatus = useSyncStatusSource();
 	const loadState = list.state;
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 
@@ -82,12 +87,12 @@ function HomeCurrentListResource({
 	return (
 		<>
 			<ActiveList.Provider
-				key={`${session.resourceKey}:${loadState.listId}`}
+				key={`${session.activeHousehold.id}:${loadState.listId}`}
 				state={loadState.list}
 				currentMemberName={currentMemberName}
 				onAddItem={loadState.actions.addItem}
 				onSetItemChecked={loadState.actions.setItemChecked}
-				syncStatus={session.services.sync}
+				syncStatus={syncStatus}
 			>
 				<ActiveList.Screen>
 					<ActiveList.Header onPressListName={() => setSwitcherOpen(true)} />

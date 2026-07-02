@@ -397,10 +397,6 @@ function setExpoConfig(config: {
 }
 
 function authenticatedAppSessionFixture(): AuthenticatedAppSession {
-	const unusedServiceCall = async () => {
-		throw new Error("Unexpected Settings session service call");
-	};
-
 	return {
 		user: {
 			id: "usr_avery",
@@ -427,27 +423,5 @@ function authenticatedAppSessionFixture(): AuthenticatedAppSession {
 				displayName: "Avery Chen",
 			},
 		],
-		resourceKey: "settings-test-session",
-		services: {
-			lists: {
-				createList: unusedServiceCall,
-				deleteList: unusedServiceCall,
-				getList: unusedServiceCall,
-				listLists: unusedServiceCall,
-				renameList: unusedServiceCall,
-			},
-			items: {
-				addItem: unusedServiceCall,
-				listItems: unusedServiceCall,
-				setItemChecked: unusedServiceCall,
-			},
-			changes: {
-				subscribe: () => ({ remove() {} }),
-			},
-			sync: {
-				getStatus: () => "synced",
-				subscribe: () => ({ remove() {} }),
-			},
-		},
 	};
 }

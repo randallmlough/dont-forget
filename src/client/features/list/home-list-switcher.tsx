@@ -23,6 +23,7 @@ import { track } from "@/client/lib/analytics";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { BottomSheet } from "@/client/ui/bottom-sheet";
 import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
+import { useProductServices } from "./use-product-services";
 
 /**
  * Home-owned List sheet: one shell with internal modes
@@ -59,6 +60,10 @@ export function HomeListSwitcher({
 	onSwitched: () => void;
 }) {
 	const { rows, reload } = useHomeListSwitcherRows(session);
+	const services = useProductServices({
+		householdId: session.activeHousehold.id,
+		userId: session.activeMember.userId,
+	});
 	const [mode, setMode] = useState<SheetMode>({ kind: initialMode });
 	const switchingRef = useRef(false);
 	const userId = session.activeMember.userId;
@@ -93,7 +98,7 @@ export function HomeListSwitcher({
 	async function submitCreate(name: string): Promise<string | null> {
 		let result: CreateListResult;
 		try {
-			result = await session.services.lists.createList({ name });
+			result = await services.lists.createList({ name });
 		} catch {
 			return GENERIC_ERROR_MESSAGE;
 		}
@@ -122,7 +127,7 @@ export function HomeListSwitcher({
 	): Promise<string | null> {
 		let result: RenameListResult;
 		try {
-			result = await session.services.lists.renameList({ listId, name });
+			result = await services.lists.renameList({ listId, name });
 		} catch {
 			return GENERIC_ERROR_MESSAGE;
 		}
@@ -153,7 +158,7 @@ export function HomeListSwitcher({
 	async function submitDelete(listId: string): Promise<string | null> {
 		let result: DeleteListResult;
 		try {
-			result = await session.services.lists.deleteList({ listId });
+			result = await services.lists.deleteList({ listId });
 		} catch {
 			return GENERIC_ERROR_MESSAGE;
 		}
@@ -178,7 +183,7 @@ export function HomeListSwitcher({
 			// Explicit User repair: deleting the Current List persists the most
 			// recently active remaining List, or clears to zero-active.
 			try {
-				const remaining = await session.services.lists.listLists({
+				const remaining = await services.lists.listLists({
 					archive: "active",
 					sort: "recentActivity",
 				});

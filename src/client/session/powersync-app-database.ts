@@ -1,8 +1,6 @@
 import type {
-	PowerSyncBackendConnector,
 	PowerSyncDatabase,
 	QueryResult,
-	SyncStatus,
 	Transaction,
 } from "@powersync/react-native";
 import type {
@@ -15,22 +13,13 @@ import { db } from "@/client/session/powersync";
 
 // The product tables synced onto the local PowerSync DB. A change to any of them
 // drives the session's `changes` refetch seam.
-const PRODUCT_TABLES = ["lists", "items", "item_checks"] as const;
+export const PRODUCT_TABLES = ["lists", "items", "item_checks"] as const;
 
-export type ProductSyncStatus = "synced" | "pending" | "offline" | "failed";
-
-// The full app-facing handle: the narrow `ProductDatabase` the services consume,
-// plus the lifecycle, change-notification, and sync-status seams the session
-// controller and the active-list UI wire up. Wrapping the raw PowerSync handle
-// here keeps the rest of the app off the PowerSync SDK surface (and off the
-// native driver), and gives the services a SQLite executor a test can stand in.
+// The app-facing product-data handle: the narrow `ProductDatabase` the services
+// consume, plus the product-table change seam watched resources subscribe to.
+// PowerSync lifecycle and sync status are owned by the raw `db` singleton.
 export type AppProductDatabase = ProductDatabase & {
-	connect(connector: PowerSyncBackendConnector): Promise<void>;
-	disconnect(): Promise<void>;
-	disconnectAndClear(): Promise<void>;
 	subscribeChanges(listener: () => void): { remove: () => void };
-	getSyncStatus(): ProductSyncStatus;
-	subscribeSyncStatus(listener: () => void): { remove: () => void };
 };
 
 export function createPowerSyncAppDatabase(
@@ -41,9 +30,6 @@ export function createPowerSyncAppDatabase(
 		writeTransaction(run) {
 			return database.writeTransaction((tx) => run(querierFromTransaction(tx)));
 		},
-		connect: (connector) => database.connect(connector),
-		disconnect: () => database.disconnect(),
-		disconnectAndClear: () => database.disconnectAndClear(),
 		subscribeChanges(listener) {
 			const dispose = database.onChange(
 				{
@@ -53,15 +39,6 @@ export function createPowerSyncAppDatabase(
 				},
 				{ tables: [...PRODUCT_TABLES] },
 			);
-			return { remove: dispose };
-		},
-		getSyncStatus: () => syncStatusFrom(database.currentStatus),
-		subscribeSyncStatus(listener) {
-			const dispose = database.registerListener({
-				statusChanged() {
-					listener();
-				},
-			});
 			return { remove: dispose };
 		},
 	};
@@ -121,12 +98,4 @@ function rowFrom(row: unknown): ProductRow {
 	return row && typeof row === "object" && !Array.isArray(row)
 		? { ...(row as Record<string, unknown>) }
 		: {};
-}
-
-function syncStatusFrom(status: SyncStatus): ProductSyncStatus {
-	const flow = status.dataFlowStatus;
-	if (flow.downloadError || flow.uploadError) return "failed";
-	if (status.connecting || flow.downloading || flow.uploading) return "pending";
-	if (status.connected) return status.hasSynced ? "synced" : "pending";
-	return "offline";
 }

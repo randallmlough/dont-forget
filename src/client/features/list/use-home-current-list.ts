@@ -9,7 +9,11 @@ import {
 } from "@/client/features/list/current-selection";
 import type { Item } from "@/client/features/list/item-service";
 import type { AuthenticatedAppSession } from "@/client/session";
-import { useSessionQuery } from "@/client/session";
+import { useWatchedResource } from "@/client/session";
+import {
+	type ProductServices,
+	useProductServices,
+} from "./use-product-services";
 
 export type HomeCurrentListActions = {
 	addItem: (input: AddActiveListItemInput) => Promise<void>;
@@ -32,10 +36,13 @@ export function useHomeCurrentList(session: AuthenticatedAppSession): {
 	retry: () => void;
 	reload: () => void;
 } {
-	const query = useSessionQuery({
-		session,
-		loadKey: session.resourceKey,
-		load: () => resolveCurrentList(session),
+	const services = useProductServices({
+		householdId: session.activeHousehold.id,
+		userId: session.activeMember.userId,
+	});
+	const query = useWatchedResource({
+		key: session.activeHousehold.id,
+		load: () => resolveCurrentList(session, services),
 		errorMessage: "Unable to load this List. Please try again.",
 	});
 
@@ -101,11 +108,12 @@ function homeCurrentListStateFromQuery(
  */
 async function resolveCurrentList(
 	session: AuthenticatedAppSession,
+	services: ProductServices,
 ): Promise<HomeCurrentListResolution> {
 	const userId = session.activeMember.userId;
 	const householdId = session.activeHousehold.id;
 	const storedListId = await getCurrentListSelection(userId, householdId);
-	const summaries = await session.services.lists.listLists({
+	const summaries = await services.lists.listLists({
 		archive: "active",
 		sort: "recentActivity",
 	});
@@ -125,7 +133,7 @@ async function resolveCurrentList(
 			: activeListIds;
 
 	for (const listId of candidateListIds) {
-		const initialList = await loadActiveListState(session, listId);
+		const initialList = await loadActiveListState(session, services, listId);
 		if (initialList) {
 			if (clearStoredSelection && storedListId !== null) {
 				await clearCurrentListSelectionIfMatches(
@@ -138,7 +146,7 @@ async function resolveCurrentList(
 				status: "active",
 				listId,
 				list: initialList,
-				actions: homeCurrentListActions(session, listId),
+				actions: homeCurrentListActions(session, services, listId),
 			};
 		}
 		// Typed missing/deleted lifecycle result: stale candidate, never an error.
@@ -155,11 +163,12 @@ async function resolveCurrentList(
 
 function homeCurrentListActions(
 	session: AuthenticatedAppSession,
+	services: ProductServices,
 	listId: string,
 ): HomeCurrentListActions {
 	return {
 		async addItem(input: AddActiveListItemInput) {
-			await session.services.items.addItem({
+			await services.items.addItem({
 				listId,
 				userId: session.activeMember.userId,
 				name: input.name,
@@ -168,7 +177,7 @@ function homeCurrentListActions(
 			});
 		},
 		async setItemChecked(itemId: string, checked: boolean) {
-			await session.services.items.setItemChecked({
+			await services.items.setItemChecked({
 				listId,
 				itemId,
 				userId: session.activeMember.userId,
@@ -180,11 +189,12 @@ function homeCurrentListActions(
 
 async function loadActiveListState(
 	session: AuthenticatedAppSession,
+	services: ProductServices,
 	listId: string,
 ): Promise<ActiveListState | null> {
 	const [listResult, items] = await Promise.all([
-		session.services.lists.getList({ listId }),
-		session.services.items.listItems({ listId }),
+		services.lists.getList({ listId }),
+		services.items.listItems({ listId }),
 	]);
 	// `listLists({ archive: "active" })` already excludes archived Lists; the
 	// `archived` check covers a List archived between the two reads, since

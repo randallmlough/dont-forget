@@ -2,19 +2,19 @@ import { clearUserCurrentListSelections } from "@/client/features/list/current-s
 import { reset, track } from "@/client/lib/analytics";
 import type { Logger } from "@/client/lib/logger";
 import { logger as defaultLogger } from "@/client/lib/logger";
+import type { GetSessionToken } from "@/client/session/bootstrap";
+import { db } from "@/client/session/powersync";
 import { asError } from "@/shared/errors";
 import type { ServiceResetAnalytics } from "@/shared/service-analytics";
-import type {
-	AuthenticatedAppSessionActivation,
-	AuthenticatedAppSessionController,
-	AuthenticatedAppSessionStateSnapshot,
-} from "./controller";
 import { clearAuthenticatedAppSessionPresent } from "./session-hint";
 
-export type AuthenticatedAppSessionSignOutAuth =
-	AuthenticatedAppSessionActivation & {
-		signOut: () => Promise<void>;
-	};
+export type AuthenticatedAppSessionSignOutAuth = {
+	getToken: GetSessionToken;
+	getPowerSyncToken?: GetSessionToken;
+	authReady: boolean;
+	signedIn: boolean;
+	signOut: () => Promise<void>;
+};
 
 export type AuthenticatedAppSessionSignOutAnalytics = ServiceResetAnalytics;
 
@@ -28,13 +28,14 @@ export type AuthenticatedAppSessionSignOutRunningState = {
 };
 
 export type AuthenticatedAppSessionSignOutDeps = {
-	controller: AuthenticatedAppSessionController;
 	getAuth: () => AuthenticatedAppSessionSignOutAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearAuthenticatedAppSessionPresent?: typeof clearAuthenticatedAppSessionPresent;
 	clearCurrentListSelectionsForUser?: (userId: string) => Promise<void>;
 	logger?: Logger;
 	runningState?: AuthenticatedAppSessionSignOutRunningState;
+	disconnectAndClear?: () => Promise<void>;
+	getSessionUserId: () => string | null;
 };
 
 const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
@@ -43,7 +44,6 @@ const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 };
 
 export function createAuthenticatedAppSessionSignOut({
-	controller,
 	getAuth,
 	analytics = defaultAnalytics,
 	clearAuthenticatedAppSessionPresent:
@@ -51,6 +51,8 @@ export function createAuthenticatedAppSessionSignOut({
 	clearCurrentListSelectionsForUser = clearUserCurrentListSelections,
 	logger = defaultLogger,
 	runningState,
+	disconnectAndClear = () => db.disconnectAndClear(),
+	getSessionUserId,
 }: AuthenticatedAppSessionSignOutDeps): AuthenticatedAppSessionSignOut {
 	const state = runningState ?? { running: false };
 
@@ -58,17 +60,13 @@ export function createAuthenticatedAppSessionSignOut({
 		if (state.running) return;
 		state.running = true;
 		const signOut = getAuth().signOut;
-		// Captured before dispose(): dispose publishes the idle snapshot and
-		// discards the signed-out User's Authenticated App Session.
-		const signedOutUserId = sessionUserIdFromSnapshot(controller.getSnapshot());
+		const signedOutUserId = getSessionUserId();
 
 		analytics.track("user_signed_out", {});
 		analytics.reset();
 
-		// dispose({ clearLocalData: true }) runs PowerSync `disconnectAndClear`,
-		// wiping the signed-out User's local product data.
-		await controller.dispose({ clearLocalData: true }).catch((error) => {
-			logger.error("authenticated app session sign-out dispose failed", {
+		await disconnectAndClear().catch((error) => {
+			logger.error("authenticated app session sign-out disconnect failed", {
 				error: asError(error),
 			});
 		});
@@ -94,23 +92,6 @@ export function createAuthenticatedAppSessionSignOut({
 
 		try {
 			await signOut();
-		} catch (error) {
-			const auth = getAuth();
-			if (auth.authReady && auth.signedIn) {
-				await controller
-					.activate({
-						getToken: auth.getToken,
-						getPowerSyncToken: auth.getPowerSyncToken,
-						authReady: auth.authReady,
-						signedIn: auth.signedIn,
-					})
-					.catch((activationError) => {
-						logger.error("authenticated app session sign-out recovery failed", {
-							error: asError(activationError),
-						});
-					});
-			}
-			throw error;
 		} finally {
 			state.running = false;
 		}
@@ -120,14 +101,4 @@ export function createAuthenticatedAppSessionSignOut({
 		isRunning: () => state.running,
 		run,
 	};
-}
-
-function sessionUserIdFromSnapshot(
-	snapshot: AuthenticatedAppSessionStateSnapshot,
-): string | null {
-	if (snapshot.status === "ready") return snapshot.session.user.id;
-	if (snapshot.status === "loading" || snapshot.status === "error") {
-		return snapshot.previous?.user.id ?? null;
-	}
-	return null;
 }

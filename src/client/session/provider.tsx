@@ -6,20 +6,31 @@ import {
 	useEffect,
 	useEffectEvent,
 	useReducer,
+	useRef,
 	useState,
 } from "react";
 import { reset, track } from "@/client/lib/analytics";
+import { readApiBaseUrl } from "@/client/lib/api-base-url";
 import { useLogger } from "@/client/lib/logger";
 import {
-	type AuthenticatedAppSession,
-	type AuthenticatedAppSessionActivation,
-	type AuthenticatedAppSessionController,
+	createSessionBootstrapService,
+	type GetSessionToken,
+	type SessionBootstrap,
+	type SessionBootstrapService,
+} from "@/client/session/bootstrap";
+import { db, PowerSyncConnector } from "@/client/session/powersync";
+import { readPowerSyncUrl } from "@/client/session/powersync/powersync-url";
+import {
 	type AuthenticatedAppSessionSignOutAnalytics,
-	type AuthenticatedAppSessionStateSnapshot,
-	createAuthenticatedAppSessionController,
 	createAuthenticatedAppSessionSignOut,
-} from "@/client/session";
-import { clearAuthenticatedAppSessionPresent } from "@/client/session/session-hint";
+} from "@/client/session/sign-out";
+import { asError } from "@/shared/errors";
+import {
+	clearAuthenticatedAppSessionPresent,
+	markAuthenticatedAppSessionPresent,
+} from "./session-hint";
+
+export type AuthenticatedAppSession = SessionBootstrap;
 
 export type AuthenticatedAppSessionState =
 	| { status: "loading" }
@@ -38,17 +49,46 @@ export type AuthenticatedAppSessionReloadOptions =
 	| { mode: "freshOnly" }
 	| { mode: "retireCurrent" };
 
-type AuthenticatedAppSessionProviderAuth = AuthenticatedAppSessionActivation & {
+export type AuthenticatedAppSessionProviderAuth = {
+	getToken: GetSessionToken;
+	getPowerSyncToken?: GetSessionToken;
+	authReady: boolean;
+	signedIn: boolean;
 	signOut: () => Promise<void>;
 };
 
+export type AuthenticatedAppSessionConnectDatabase = (input: {
+	getToken: GetSessionToken;
+	getPowerSyncToken: GetSessionToken;
+}) => Promise<void>;
+
 type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
-	controller?: AuthenticatedAppSessionController;
 	auth?: AuthenticatedAppSessionProviderAuth;
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearAuthenticatedAppSessionPresent?: typeof clearAuthenticatedAppSessionPresent;
 	activationEnabled?: boolean;
+	bootstrapService?: SessionBootstrapService;
+	connectDatabase?: AuthenticatedAppSessionConnectDatabase;
+	disconnectAndClear?: () => Promise<void>;
 }>;
+
+type SessionView = {
+	state: AuthenticatedAppSessionState;
+	session: AuthenticatedAppSession | null;
+};
+
+type ActivationRequest = {
+	attempt: number;
+	mode: "normal" | "freshOnly";
+};
+
+type ActivationRun = ActivationRequest & {
+	authReady: boolean;
+	signedIn: boolean;
+};
+
+const GENERIC_ERROR_MESSAGE =
+	"Unable to prepare your Household. Please try again.";
 
 const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 	track,
@@ -60,111 +100,151 @@ const AuthenticatedAppSessionContext =
 
 export function AuthenticatedAppSessionProvider({
 	children,
-	controller: controllerProp,
 	auth: authProp,
 	analytics = defaultAnalytics,
 	clearAuthenticatedAppSessionPresent:
 		clearAuthenticatedAppSessionPresentProp = clearAuthenticatedAppSessionPresent,
 	activationEnabled = true,
+	bootstrapService = createSessionBootstrapService(),
+	connectDatabase = defaultConnectDatabase,
+	disconnectAndClear = () => db.disconnectAndClear(),
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
 	const logger = useLogger();
 	const clerkGetToken = clerkAuth.getToken;
-	// PowerSync authenticates with a dedicated Clerk JWT template so the sync
-	// service can verify it independently of the session token used for /api/*.
 	const clerkGetPowerSyncToken = () =>
 		clerkAuth.getToken({ template: "powersync" });
-	const clerkAuthReady = clerkAuth.isLoaded;
-	const clerkSignedIn = Boolean(clerkAuth.isSignedIn);
-	const clerkSignOut = clerkAuth.signOut;
-	const auth = providerAuthFromClerk(authProp, {
+	const auth = authProp ?? {
 		getToken: clerkGetToken,
 		getPowerSyncToken: clerkGetPowerSyncToken,
-		authReady: clerkAuthReady,
-		signedIn: clerkSignedIn,
-		signOut: clerkSignOut,
-	});
+		authReady: clerkAuth.isLoaded,
+		signedIn: Boolean(clerkAuth.isSignedIn),
+		signOut: clerkAuth.signOut,
+	};
 	const authReady = auth.authReady;
 	const signedIn = auth.signedIn;
-	const [controller] = useState<AuthenticatedAppSessionController>(
-		() => controllerProp ?? createAuthenticatedAppSessionController(),
-	);
-	const [snapshot, setSnapshot] =
-		useState<AuthenticatedAppSessionStateSnapshot>(() =>
-			controller.getSnapshot(),
-		);
+	const [view, setView] = useState<SessionView>({
+		state: { status: "loading" },
+		session: null,
+	});
+	const sessionRef = useRef<AuthenticatedAppSession | null>(null);
+	const attemptRef = useRef(0);
 	const [activationRequest, requestActivation] = useReducer(
 		(
-			_request: { attempt: number; mode: "normal" | "freshOnly" },
-			mode: "normal" | "freshOnly" = "normal",
+			_request: ActivationRequest,
+			mode: ActivationRequest["mode"] = "normal",
 		) => ({
 			attempt: _request.attempt + 1,
 			mode,
 		}),
-		{ attempt: 0, mode: "normal" as const },
+		{ attempt: 0, mode: "normal" },
 	);
 	const [signOutRunningState] = useState(() => ({ running: false }));
 	const getToken = useEffectEvent(() => auth.getToken());
 	const getPowerSyncToken = useEffectEvent(() =>
 		(auth.getPowerSyncToken ?? auth.getToken)(),
 	);
+	const activate = useEffectEvent(async (request: ActivationRun) => {
+		const attempt = attemptRef.current + 1;
+		attemptRef.current = attempt;
+		const cachedSession = sessionRef.current;
+		const allowCached = request.mode !== "freshOnly";
+
+		if (!request.authReady) {
+			publishLoading();
+			return;
+		}
+
+		if (!request.signedIn) {
+			publishLoading();
+			return;
+		}
+
+		if (allowCached && cachedSession) {
+			publishReady(cachedSession, true);
+		} else {
+			publishLoading();
+		}
+
+		try {
+			const session = await bootstrapService.getSession(getToken);
+			if (attempt !== attemptRef.current) return;
+			await connectDatabase({ getToken, getPowerSyncToken });
+			if (attempt !== attemptRef.current) return;
+			publishReady(session, false);
+			void markAuthenticatedAppSessionPresent().catch(() => undefined);
+		} catch (error) {
+			logger.error("authenticated app session activation failed", {
+				error: asError(error),
+			});
+			if (attempt !== attemptRef.current) return;
+			if (allowCached && cachedSession) {
+				publishReady(cachedSession, false);
+				return;
+			}
+			publishError(GENERIC_ERROR_MESSAGE);
+		}
+	});
 	const signOutFlow = createAuthenticatedAppSessionSignOut({
-		controller,
 		getAuth: () => auth,
 		analytics,
 		clearAuthenticatedAppSessionPresent:
 			clearAuthenticatedAppSessionPresentProp,
 		logger,
 		runningState: signOutRunningState,
+		disconnectAndClear,
+		getSessionUserId: () => sessionRef.current?.user.id ?? null,
 	});
 
-	useEffect(() => {
-		const subscription = controller.subscribe(setSnapshot);
-		return () => subscription.remove();
-	}, [controller]);
+	function publishLoading() {
+		sessionRef.current = null;
+		setView({ state: { status: "loading" }, session: null });
+	}
+
+	function publishReady(session: AuthenticatedAppSession, refreshing: boolean) {
+		sessionRef.current = session;
+		setView({ state: { status: "ready", refreshing }, session });
+	}
+
+	function publishError(message: string) {
+		sessionRef.current = null;
+		setView({ state: { status: "error", message }, session: null });
+	}
 
 	useEffect(() => {
 		if (signOutRunningState.running) return;
 		if (!activationEnabled && activationRequest.attempt === 0) return;
-		void controller.activate({
-			getToken,
-			getPowerSyncToken,
-			authReady,
-			signedIn,
-			cachePolicy:
-				activationRequest.mode === "freshOnly" ? "freshOnly" : "allowCached",
-		});
+		void activate({ ...activationRequest, authReady, signedIn });
 	}, [
 		activationEnabled,
 		authReady,
 		signedIn,
-		controller,
 		activationRequest,
 		signOutRunningState,
 	]);
 
-	useEffect(() => {
-		return () => {
-			void controller.dispose().catch(() => undefined);
-		};
-	}, [controller]);
+	function requestSessionReload(mode: ActivationRequest["mode"]) {
+		attemptRef.current += 1;
+		requestActivation(mode);
+	}
 
 	function retry() {
-		requestActivation();
+		requestSessionReload("normal");
 	}
 
 	function reloadSession(options?: AuthenticatedAppSessionReloadOptions) {
 		if (options?.mode === "retireCurrent") {
-			void controller
-				.invalidateCurrentSession()
-				.finally(() => requestActivation("normal"));
+			publishLoading();
+			requestSessionReload("normal");
 			return;
 		}
-		requestActivation(options?.mode === "freshOnly" ? "freshOnly" : "normal");
+		requestSessionReload(
+			options?.mode === "freshOnly" ? "freshOnly" : "normal",
+		);
 	}
 
 	const value: AuthenticatedAppSessionContextValue = {
-		...publicStateFromSnapshot(snapshot),
+		...view,
 		retry,
 		reloadSession,
 		signOut: signOutFlow.run,
@@ -177,13 +257,6 @@ export function AuthenticatedAppSessionProvider({
 	);
 }
 
-function providerAuthFromClerk(
-	authProp: AuthenticatedAppSessionProviderAuth | undefined,
-	clerkAuth: AuthenticatedAppSessionProviderAuth,
-): AuthenticatedAppSessionProviderAuth {
-	return authProp ?? clerkAuth;
-}
-
 export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValue {
 	const value = use(AuthenticatedAppSessionContext);
 	if (!value) {
@@ -194,32 +267,19 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 	return value;
 }
 
-function publicStateFromSnapshot(
-	snapshot: AuthenticatedAppSessionStateSnapshot,
-): {
-	state: AuthenticatedAppSessionState;
-	session: AuthenticatedAppSession | null;
-} {
-	if (snapshot.status === "ready") {
-		return {
-			state: { status: "ready", refreshing: false },
-			session: snapshot.session,
-		};
-	}
-
-	if (snapshot.status === "loading" && snapshot.previous) {
-		return {
-			state: { status: "ready", refreshing: true },
-			session: snapshot.previous,
-		};
-	}
-
-	if (snapshot.status === "error") {
-		return {
-			state: { status: "error", message: snapshot.message },
-			session: null,
-		};
-	}
-
-	return { state: { status: "loading" }, session: null };
+async function defaultConnectDatabase({
+	getToken,
+	getPowerSyncToken,
+}: {
+	getToken: GetSessionToken;
+	getPowerSyncToken: GetSessionToken;
+}) {
+	await db.connect(
+		new PowerSyncConnector({
+			powersyncGetToken: getPowerSyncToken,
+			sessionGetToken: getToken,
+			apiBaseUrl: readApiBaseUrl,
+			powersyncUrl: readPowerSyncUrl(),
+		}),
+	);
 }
