@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const dynamicRouteWrappers = [
-	"app/api/households/[householdId]+api.ts",
-	"app/api/households/[householdId]/members+api.ts",
-	"app/api/households/[householdId]/invitations+api.ts",
-	"app/api/households/[householdId]/join-code+api.ts",
-	"app/api/households/[householdId]/join-code/regenerate+api.ts",
-	"app/api/invitations/[invitationId]+api.ts",
+	"src/app/api/households/[householdId]+api.ts",
+	"src/app/api/households/[householdId]/members+api.ts",
+	"src/app/api/households/[householdId]/invitations+api.ts",
+	"src/app/api/households/[householdId]/join-code+api.ts",
+	"src/app/api/households/[householdId]/join-code/regenerate+api.ts",
+	"src/app/api/invitations/[invitationId]+api.ts",
 ] as const;
 
 describe("dynamic API route wrappers", () => {

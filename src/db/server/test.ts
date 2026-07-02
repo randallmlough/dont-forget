@@ -12,7 +12,7 @@ import * as directorySchema from "@/db/schema/postgres";
 import type { directoryDb } from "@/db/server/client";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
 
-const DIRECTORY_MIGRATIONS = "db/migrations/postgres";
+const DIRECTORY_MIGRATIONS = "src/db/migrations/postgres";
 const execFileAsync = promisify(execFile);
 let pgliteTemplateFilePromise: Promise<string> | undefined;
 let pgliteTemplateDirectory: string | undefined;

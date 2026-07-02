@@ -10,7 +10,7 @@ import {
 	seedLocalDatabasesForMode,
 } from "./seed";
 
-const DIRECTORY_MIGRATIONS = "./db/migrations/postgres";
+const DIRECTORY_MIGRATIONS = "./src/db/migrations/postgres";
 
 export async function reseedLocalDatabases(): Promise<void> {
 	const seedMode = readLocalSeedMode();
@@ -32,11 +32,4 @@ export async function reseedLocalDatabases(): Promise<void> {
 	}
 
 	await seedLocalDatabasesForMode(seedMode);
-}
-
-if (require.main === module) {
-	reseedLocalDatabases().catch((error) => {
-		console.error(error);
-		process.exit(1);
-	});
 }

@@ -3,7 +3,7 @@ const { defineConfig } = require("eslint/config");
 const expoConfig = require("eslint-config-expo/flat");
 const typescriptEslint = require("@typescript-eslint/eslint-plugin");
 const reactNativeA11y = require("eslint-plugin-react-native-a11y");
-const dontForget = require("./tools/eslint-rules");
+const dontForget = require("./tooling/eslint-plugin");
 
 module.exports = defineConfig([
 	expoConfig,

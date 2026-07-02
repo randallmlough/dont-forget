@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
-import { type AppEnv, readPublicExpoConfig } from "./lib/env.ts";
-import { loadEnvFile } from "./lib/load-env.ts";
+import { type AppEnv, readPublicExpoConfig } from "./src/lib/env.ts";
+import { loadEnvFile } from "./src/lib/load-env.ts";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
 	loadEnvFile();
@@ -52,7 +52,7 @@ function withLocalConfigPlugins(
 		return resolvedPlugins;
 	}
 
-	const rocketSimPlugin = "./plugins/withRocketSimConnect.js";
+	const rocketSimPlugin = "./tooling/expo-plugins/withRocketSimConnect.js";
 	if (!existsSync(resolve(process.cwd(), rocketSimPlugin))) {
 		console.warn(
 			`Skipping RocketSim config plugin because ${rocketSimPlugin} does not exist.`,

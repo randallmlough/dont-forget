@@ -4,7 +4,7 @@ module.exports = (api) => {
 	return {
 		presets: ["babel-preset-expo"],
 		plugins: [
-			["react-native-unistyles/plugin", { root: "components" }],
+			["react-native-unistyles/plugin", { root: "src" }],
 			"@babel/plugin-transform-async-generator-functions",
 		],
 	};
