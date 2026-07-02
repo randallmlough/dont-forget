@@ -12,20 +12,20 @@ import {
 } from "react-native-safe-area-context";
 import { useUnistyles } from "react-native-unistyles";
 
-import { AuthGate } from "@/components/auth/auth-gate";
+import { AuthGate } from "@/client/features/auth/auth-gate";
 import {
 	AUTH_PATHS,
 	PUBLIC_AUTH_PRESERVING_PATHS,
-} from "@/components/auth/redirect-policy";
-import { AuthenticatedAppSessionProvider } from "@/components/session";
-import { screen } from "@/lib/analytics";
-import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
-import { logger } from "@/lib/logger";
-import { posthog } from "@/lib/posthog";
-import { tokenCache } from "@/lib/token-cache";
-import "@/lib/unistyles/unistyles";
-import { loadAndApplyAppearancePreference } from "@/lib/unistyles/appearance-preference";
-import { navigationThemeFor } from "@/lib/unistyles/navigation-theme";
+} from "@/client/features/auth/redirect-policy";
+import { screen } from "@/client/lib/analytics";
+import { logger } from "@/client/lib/logger";
+import { posthog } from "@/client/lib/posthog";
+import { tokenCache } from "@/client/lib/token-cache";
+import { AuthenticatedAppSessionProvider } from "@/client/session";
+import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/shared/env";
+import "@/client/theme/unistyles";
+import { loadAndApplyAppearancePreference } from "@/client/theme/appearance-preference";
+import { navigationThemeFor } from "@/client/theme/navigation-theme";
 
 export const unstable_settings = {
 	anchor: "(app)",

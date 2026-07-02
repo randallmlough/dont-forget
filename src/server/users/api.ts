@@ -1,5 +1,3 @@
-import { asError } from "@/lib/errors";
-import { redactAttributes } from "@/lib/redact";
 import type { DirectoryDb } from "@/server/db/client";
 import type { User } from "@/server/db/schema/postgres";
 import {
@@ -21,6 +19,8 @@ import type {
 	CurrentUser,
 	UpdateUserNameResponse,
 } from "@/shared/contracts/users";
+import { asError } from "@/shared/errors";
+import { redactAttributes } from "@/shared/redact";
 
 const MAX_NAME_LENGTH = 50;
 

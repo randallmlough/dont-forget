@@ -1,10 +1,10 @@
 import { PostHog } from "posthog-node";
 
-import type { EventMap, EventName } from "@/lib/analytics-events";
-import { optionalEnv } from "@/lib/env";
-import { asError } from "@/lib/errors";
-import { redactAttributes } from "@/lib/redact";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
+import type { EventMap, EventName } from "@/shared/analytics-events";
+import { optionalEnv } from "@/shared/env";
+import { asError } from "@/shared/errors";
+import { redactAttributes } from "@/shared/redact";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 
 type ServerPostHogClient = Pick<PostHog, "capture" | "flush">;
 

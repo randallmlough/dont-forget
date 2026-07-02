@@ -1,11 +1,11 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/server/db/utils";
 import {
 	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
 	readPostgresConfig,
-} from "@/lib/env";
-import { loadEnvFile } from "@/lib/load-env";
-import { DRIZZLE_MIGRATIONS_TABLE } from "@/server/db/utils";
+} from "@/shared/env";
+import { loadEnvFile } from "@/shared/load-env";
 import { directoryClient, directoryDb } from "./client";
 
 const DIRECTORY_MIGRATIONS = "./src/server/db/migrations/postgres";

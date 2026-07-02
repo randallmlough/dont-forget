@@ -1,5 +1,5 @@
-import { createApiRequest, readJsonResponse } from "@/lib/test/api/requests";
 import { DataAuthError, type DataTransaction } from "@/server/sync";
+import { createApiRequest, readJsonResponse } from "@/test/api/requests";
 import { type DataDeps, handleDataUpload } from "./api";
 
 type FakeRowState = {

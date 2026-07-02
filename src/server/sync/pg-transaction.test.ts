@@ -1,10 +1,10 @@
-import { createApiRequest, readJsonResponse } from "@/lib/test/api/requests";
 import { handleDataUpload } from "@/server/data/api";
 import type { DataOp } from "@/server/sync/applicator";
 import {
 	type PgQueryClient,
 	pgDataTransaction,
 } from "@/server/sync/pg-transaction";
+import { createApiRequest, readJsonResponse } from "@/test/api/requests";
 
 function request(batch: unknown): Request {
 	return createApiRequest({ method: "POST", body: { batch } });

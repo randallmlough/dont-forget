@@ -5,13 +5,13 @@
 // imported dynamically so the heavy, server-only Clerk SDK loads only when a
 // request is actually authenticated — a caller that injects its own auth (e.g.
 // the handler tests) never pulls it in. The other deps (drizzle, the pg schema,
-// @/lib/env) are already in this module's static graph via @/server/db/pg-client,
+// @/shared/env) are already in this module's static graph via @/server/db/pg-client,
 // so importing them statically defers nothing.
 
 import { eq } from "drizzle-orm";
-import { readClerkServerConfig } from "@/lib/env";
 import { postgresDb, postgresPool } from "@/server/db/pg-client";
 import { users } from "@/server/db/schema/postgres";
+import { readClerkServerConfig } from "@/shared/env";
 
 // Auth failure (401).
 export class DataAuthError extends Error {

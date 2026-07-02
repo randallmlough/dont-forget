@@ -1,5 +1,3 @@
-import { asError } from "@/lib/errors";
-import { redactAttributes } from "@/lib/redact";
 import {
 	bootstrapAuthenticatedAppSession,
 	createProductionAuthenticatedAppSessionBootstrapDeps,
@@ -7,6 +5,8 @@ import {
 import { directoryClient, directoryDb } from "@/server/db/client";
 import { UnauthorizedError, verifyClerkRequest } from "@/server/http";
 import type { BootstrapResponse } from "@/shared/contracts/bootstrap";
+import { asError } from "@/shared/errors";
+import { redactAttributes } from "@/shared/redact";
 
 export async function handleBootstrap(request: Request): Promise<Response> {
 	try {

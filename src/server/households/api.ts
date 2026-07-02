@@ -1,10 +1,3 @@
-import { asError } from "@/lib/errors";
-import {
-	type HouseholdJoinCodeSource,
-	isHouseholdJoinCodeSource,
-	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
-} from "@/lib/household-join-code-source";
-import { redactAttributes } from "@/lib/redact";
 import type { DirectoryDb } from "@/server/db/client";
 import {
 	ActiveHouseholdMembershipRequiredError,
@@ -66,6 +59,13 @@ import type {
 	ListMembersResponse,
 	RenameHouseholdResponse,
 } from "@/shared/contracts/households";
+import { asError } from "@/shared/errors";
+import {
+	type HouseholdJoinCodeSource,
+	isHouseholdJoinCodeSource,
+	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
+} from "@/shared/household-join-code-source";
+import { redactAttributes } from "@/shared/redact";
 
 export type HouseholdApiDeps = ApiHandlerDeps & {
 	createActiveHouseholdService?: (

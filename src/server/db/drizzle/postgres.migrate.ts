@@ -1,6 +1,6 @@
 import { defineConfig } from "drizzle-kit";
-import { requireEnv } from "@/lib/env";
-import { loadEnvFile } from "@/lib/load-env";
+import { requireEnv } from "@/shared/env";
+import { loadEnvFile } from "@/shared/load-env";
 import base from "./postgres.config";
 
 // Connection-bearing variant of postgres.config.ts, used ONLY by

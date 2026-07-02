@@ -3,9 +3,9 @@ module.exports = {
 	preset: "jest-expo",
 	setupFiles: [
 		"react-native-unistyles/mocks",
-		"<rootDir>/src/lib/unistyles/unistyles.ts",
+		"<rootDir>/src/client/theme/unistyles.ts",
 	],
-	setupFilesAfterEnv: ["<rootDir>/src/lib/test/setup.ts"],
+	setupFilesAfterEnv: ["<rootDir>/src/test/setup.ts"],
 	// Directory-DB tests boot PGlite (WASM Postgres) in a child process and run
 	// migrations; the first such test per run also generates the PGlite template.
 	// That cold start exceeds Jest's 5s default on CI hardware, so widen the budget.
@@ -24,17 +24,13 @@ module.exports = {
 	],
 	collectCoverageFrom: [
 		"src/app/**/*.{ts,tsx}",
-		"src/components/**/*.{ts,tsx}",
-		"src/constants/**/*.{ts,tsx}",
+		"src/client/**/*.{ts,tsx}",
 		"src/server/**/*.{ts,tsx}",
 		"src/shared/**/*.{ts,tsx}",
-		"src/hooks/**/*.{ts,tsx}",
-		"src/lib/**/*.{ts,tsx}",
-		"src/screens/**/*.{ts,tsx}",
 		"!**/*.d.ts",
 		"!**/*.test.{ts,tsx}",
 		"!**/db/migrations/**",
 		"!src/server/db/test.ts",
-		"!src/lib/test/**/*",
+		"!src/test/**/*",
 	],
 };

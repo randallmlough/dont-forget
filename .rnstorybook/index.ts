@@ -1,4 +1,4 @@
-import "../src/lib/unistyles/unistyles";
+import "../src/client/theme/unistyles";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { registerRootComponent } from "expo";

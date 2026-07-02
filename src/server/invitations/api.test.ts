@@ -1,4 +1,3 @@
-import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import {
 	PRIMARY_HOUSEHOLD_SEED,
 	seedInvitationVariantsScenario,
@@ -9,6 +8,7 @@ import {
 	createInvitationService,
 	type InvitationService,
 } from "@/server/invitations/invitation-service";
+import { createApiRequest, readJsonResponse } from "@/test/api";
 import {
 	handleAcceptInvitation,
 	handleCreateInvitation,

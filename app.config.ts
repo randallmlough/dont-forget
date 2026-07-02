@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
-import { type AppEnv, readPublicExpoConfig } from "./src/lib/env.ts";
-import { loadEnvFile } from "./src/lib/load-env.ts";
+import { type AppEnv, readPublicExpoConfig } from "./src/shared/env.ts";
+import { loadEnvFile } from "./src/shared/load-env.ts";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
 	loadEnvFile();
