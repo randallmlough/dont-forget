@@ -2,7 +2,7 @@
 	"name": "dont-forget",
 	"main": "index.ts",
 	"version": "1.0.0",
-	"packageManager": "pnpm@10.11.0",
+	"packageManager": "pnpm@11.9.0+sha512.bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
 	"scripts": {
 		"start": "NODE_OPTIONS=--dns-result-order=ipv4first expo start --localhost",
 		"ios": "expo run:ios",
@@ -107,20 +107,5 @@
 		"tsx": "^4.21.0",
 		"typescript": "~6.0.3"
 	},
-	"private": true,
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"better-sqlite3"
-		],
-		"overrides": {
-			"js-cookie": "3.0.7",
-			"shell-quote": ">=1.8.4",
-			"esbuild@<0.28.1": ">=0.28.1",
-			"form-data@>=4.0.0 <4.0.6": ">=4.0.6",
-			"ws@>=7.0.0 <7.5.11": ">=7.5.11",
-			"ws@>=8.0.0 <8.20.1": ">=8.20.1",
-			"brace-expansion@>=5.0.0 <5.0.6": ">=5.0.6",
-			"uuid@<11.1.1": ">=11.1.1"
-		}
-	}
+	"private": true
 }

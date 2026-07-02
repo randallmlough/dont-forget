@@ -1,2 +1,41 @@
 packages:
   - tooling
+
+# Moved from .npmrc — pnpm 11 reads only auth/registry from .npmrc, so hoisting
+# settings live here now. "hoisted" = flat node_modules, so directly-imported
+# transitive deps (e.g. @powersync/common) resolve at the root.
+nodeLinker: hoisted
+
+# Supply-chain cooldown: don't install versions published < 7 days ago (minutes),
+# incl. transitive deps. pnpm 11 also defaults to 1 day; this extends it.
+minimumReleaseAge: 10080
+
+# Dependency build (install/postinstall) scripts. pnpm 11 replaced
+# pnpm.onlyBuiltDependencies with this { name: true|false } map.
+# Only better-sqlite3 needs its native build (Jest's real-SQLite substrate);
+# the rest are cosmetic postinstalls, napi/binary checks covered by optional
+# deps, or optional native speedups with pure-JS fallbacks.
+allowBuilds:
+  better-sqlite3: true
+  '@clerk/shared': false
+  browser-tabs-lock: false
+  bufferutil: false
+  core-js: false
+  esbuild: false
+  unrs-resolver: false
+  utf-8-validate: false
+
+# Security pins moved out of package.json#pnpm (pnpm 11 no longer reads it).
+overrides:
+  # Cooldown-compliance pin: prebuild-install wants tar-fs@^2.0.0 and would take
+  # 2.1.5 (published < 7 days ago, blocked by minimumReleaseAge). 2.1.4 is the
+  # newest proven 2.x past the cutoff. Revisit when 2.1.5 ages out.
+  tar-fs: '2.1.4'
+  js-cookie: '3.0.7'
+  shell-quote: '>=1.8.4'
+  'esbuild@<0.28.1': '>=0.28.1'
+  'form-data@>=4.0.0 <4.0.6': '>=4.0.6'
+  'ws@>=7.0.0 <7.5.11': '>=7.5.11'
+  'ws@>=8.0.0 <8.21.0': '>=8.21.0'
+  'brace-expansion@>=5.0.0 <5.0.6': '>=5.0.6'
+  'uuid@<11.1.1': '>=11.1.1'
