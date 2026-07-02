@@ -1,42 +1,4 @@
-import { asError } from "@/lib/errors";
-import { redactAttributes } from "@/lib/redact";
-
 export async function POST(request: Request): Promise<Response> {
-	let UnauthorizedError:
-		| typeof import("@/server/http")["UnauthorizedError"]
-		| null = null;
-
-	try {
-		const [db, bootstrap, auth] = await Promise.all([
-			import("@/server/db/client"),
-			import("@/server/bootstrap/bootstrap-service"),
-			import("@/server/http"),
-		]);
-		UnauthorizedError = auth.UnauthorizedError;
-
-		const profile = await auth.verifyClerkRequest(request);
-		const client = db.directoryClient();
-
-		try {
-			const response = await bootstrap.bootstrapAuthenticatedAppSession(
-				profile,
-				bootstrap.createProductionAuthenticatedAppSessionBootstrapDeps(
-					db.directoryDb(client),
-				),
-			);
-			return Response.json(response);
-		} finally {
-			await client.end();
-		}
-	} catch (error) {
-		if (UnauthorizedError && error instanceof UnauthorizedError) {
-			return Response.json({ error: error.message }, { status: 401 });
-		}
-
-		console.error(
-			"Bootstrap API failed",
-			redactAttributes({ error: asError(error) }),
-		);
-		return Response.json({ error: "Bootstrap failed" }, { status: 500 });
-	}
+	const { handleBootstrap } = await import("@/server/bootstrap/api");
+	return handleBootstrap(request);
 }
