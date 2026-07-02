@@ -1,4 +1,4 @@
-import { createDatabaseOperationQueue } from "@/db/utils";
+import { createDatabaseOperationQueue } from "@/server/db/utils";
 import { deferred } from "@/lib/test/async";
 
 describe("createDatabaseOperationQueue", () => {

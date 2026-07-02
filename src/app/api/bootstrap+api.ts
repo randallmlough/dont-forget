@@ -8,7 +8,7 @@ export async function POST(request: Request): Promise<Response> {
 
 	try {
 		const [db, bootstrap, auth] = await Promise.all([
-			import("@/db/server/client"),
+			import("@/server/db/client"),
 			import("@/lib/services/session/server"),
 			import("@/lib/server/auth"),
 		]);

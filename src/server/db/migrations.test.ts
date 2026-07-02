@@ -8,8 +8,8 @@ import {
 	lists,
 	memberships,
 	users,
-} from "@/db/schema/postgres";
-import { createTestDirectoryDb } from "@/db/server/test";
+} from "@/server/db/schema/postgres";
+import { createTestDirectoryDb } from "@/server/db/test";
 
 describe("test database migrations", () => {
 	it("applies directory and product migrations to an isolated local database", async () => {

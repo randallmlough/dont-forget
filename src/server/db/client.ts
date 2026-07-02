@@ -1,6 +1,6 @@
 import { drizzle as nodePgDrizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
-import * as directorySchema from "@/db/schema/postgres";
+import * as directorySchema from "@/server/db/schema/postgres";
 import { postgresPool } from "./pg-client";
 
 export type DirectoryDb = ReturnType<typeof directoryDb>;

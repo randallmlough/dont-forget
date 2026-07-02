@@ -1,5 +1,5 @@
-import type { User } from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+import type { User } from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
 import {

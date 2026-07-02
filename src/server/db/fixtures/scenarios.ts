@@ -3,7 +3,7 @@ import type {
 	NewHousehold,
 	NewMembership,
 	NewUser,
-} from "@/db/schema/postgres";
+} from "@/server/db/schema/postgres";
 import {
 	householdJoinCodes,
 	householdJoinCodeUses,
@@ -14,8 +14,8 @@ import {
 	lists,
 	memberships,
 	users,
-} from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+} from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	householdFixture,
 	householdJoinCodeFixture,

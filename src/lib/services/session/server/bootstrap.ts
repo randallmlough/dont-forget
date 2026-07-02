@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { type User, users } from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+import { type User, users } from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import type { BootstrapResponse } from "@/shared/contracts/bootstrap";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import { createHouseholdService } from "@/lib/services/household/server/household-service";

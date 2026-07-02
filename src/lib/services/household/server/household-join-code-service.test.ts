@@ -5,16 +5,16 @@ import {
 	households,
 	memberships,
 	users,
-} from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+} from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	householdFixture,
 	householdJoinCodeFixture,
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
 	userFixture,
-} from "@/db/server/fixtures";
-import { createTestDirectoryDb } from "@/db/server/test";
+} from "@/server/db/fixtures";
+import { createTestDirectoryDb } from "@/server/db/test";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import { deferred } from "@/lib/test/async";
 import {

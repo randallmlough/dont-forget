@@ -1,8 +1,8 @@
-import type { DataOp } from "@/db/server/sync/applicator";
+import type { DataOp } from "@/server/sync/applicator";
 import {
 	type PgQueryClient,
 	pgDataTransaction,
-} from "@/db/server/sync/pg-transaction";
+} from "@/server/sync/pg-transaction";
 import { handleDataUpload } from "@/lib/api/data/handler";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api/requests";
 

@@ -8,11 +8,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { drizzle as pgliteDrizzle } from "drizzle-orm/pglite";
-import * as directorySchema from "@/db/schema/postgres";
-import type { directoryDb } from "@/db/server/client";
-import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
+import * as directorySchema from "@/server/db/schema/postgres";
+import type { directoryDb } from "@/server/db/client";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/server/db/utils";
 
-const DIRECTORY_MIGRATIONS = "src/db/migrations/postgres";
+const DIRECTORY_MIGRATIONS = "src/server/db/migrations/postgres";
 const execFileAsync = promisify(execFile);
 let pgliteTemplateFilePromise: Promise<string> | undefined;
 let pgliteTemplateDirectory: string | undefined;

@@ -5,8 +5,8 @@ import {
 	type Invitation,
 	invitations,
 	users,
-} from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+} from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { redactAttributes } from "@/lib/redact";

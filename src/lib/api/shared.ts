@@ -1,9 +1,9 @@
-import type { User } from "@/db/schema/postgres";
+import type { User } from "@/server/db/schema/postgres";
 import {
 	type DirectoryDb,
 	directoryClient,
 	directoryDb,
-} from "@/db/server/client";
+} from "@/server/db/client";
 import { requireEnv } from "@/lib/env";
 import type { ServerUserProfile } from "@/lib/server/auth";
 import { createUserService } from "@/lib/services/user/server";

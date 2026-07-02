@@ -8,7 +8,7 @@ import {
 	items as pgItems,
 	lists as pgLists,
 	users,
-} from "@/db/schema/postgres";
+} from "@/server/db/schema/postgres";
 import {
 	type AppEnv,
 	assertLocalDirectoryDatabaseUrl,

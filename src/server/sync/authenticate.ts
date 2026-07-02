@@ -5,13 +5,13 @@
 // imported dynamically so the heavy, server-only Clerk SDK loads only when a
 // request is actually authenticated — a caller that injects its own auth (e.g.
 // the handler tests) never pulls it in. The other deps (drizzle, the pg schema,
-// @/lib/env) are already in this module's static graph via @/db/server/pg-client,
+// @/lib/env) are already in this module's static graph via @/server/db/pg-client,
 // so importing them statically defers nothing. db/ importing @/lib/* is
 // lint-clean: no-services-imports-in-db bars only @/lib/services and @/lib/api.
 
 import { eq } from "drizzle-orm";
-import { users } from "@/db/schema/postgres";
-import { postgresDb, postgresPool } from "@/db/server/pg-client";
+import { users } from "@/server/db/schema/postgres";
+import { postgresDb, postgresPool } from "@/server/db/pg-client";
 import { readClerkServerConfig } from "@/lib/env";
 
 // Auth failure (401).

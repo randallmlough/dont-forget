@@ -1,8 +1,8 @@
 import {
 	PRIMARY_HOUSEHOLD_SEED,
 	seedInvitationVariantsScenario,
-} from "@/db/server/fixtures";
-import { createTestDirectoryDb } from "@/db/server/test";
+} from "@/server/db/fixtures";
+import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	createInvitationService,
 	type InvitationService,

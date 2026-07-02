@@ -1,4 +1,4 @@
-import type { DirectoryDb } from "@/db/server/client";
+import type { DirectoryDb } from "@/server/db/client";
 import { asError } from "@/lib/errors";
 import {
 	type HouseholdJoinCodeSource,

@@ -1,4 +1,4 @@
-import { createTestDirectoryDb } from "@/db/server/test";
+import { createTestDirectoryDb } from "@/server/db/test";
 import { ApiUnauthorizedError } from "../shared";
 import { handleUpdateUserName } from "./handlers";
 

@@ -4,16 +4,16 @@ import {
 	invitations,
 	memberships,
 	users,
-} from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+} from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	householdFixture,
 	invitationFixture,
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
 	userFixture,
-} from "@/db/server/fixtures";
-import { createTestDirectoryDb } from "@/db/server/test";
+} from "@/server/db/fixtures";
+import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	createInvitationService,
 	InvitationInvalidEmailError,

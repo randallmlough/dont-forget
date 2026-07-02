@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { type User, users } from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+import { type User, users } from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import { createAppId } from "@/lib/ids";
 import type { ServerUserProfile } from "@/lib/server/auth";
 

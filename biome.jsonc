@@ -12,7 +12,7 @@
 			"!!.agents",
 			"!!.claude",
 			"!!.omx",
-			"!!src/db/migrations/**/meta/*.json",
+			"!!src/server/db/migrations/**/meta/*.json",
 			"!!.rnstorybook/storybook.requires.ts",
 			"!!skills-lock.json"
 		]

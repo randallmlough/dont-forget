@@ -5,8 +5,8 @@
 // (./applicator) decides intent and calls these methods through the
 // DataTransaction interface. Lives in the db layer (ADR-0014).
 
-import { HOUSEHOLD_RESOLUTION } from "@/db/schema/postgres/sync-columns";
-import { postgresPool } from "@/db/server/pg-client";
+import { HOUSEHOLD_RESOLUTION } from "@/server/db/schema/postgres/sync-columns";
+import { postgresPool } from "@/server/db/pg-client";
 import type { DataTransaction } from "./applicator";
 
 export type PgQueryClient = {

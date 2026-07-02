@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-const CONFIG_DIR = "src/db/drizzle";
+const CONFIG_DIR = "src/server/db/drizzle";
 
 async function main(): Promise<void> {
 	const configs = await drizzleConfigs();

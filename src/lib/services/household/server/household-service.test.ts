@@ -5,14 +5,14 @@ import {
 	households,
 	memberships,
 	users,
-} from "@/db/schema/postgres";
+} from "@/server/db/schema/postgres";
 import {
 	householdFixture,
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
 	userFixture,
-} from "@/db/server/fixtures";
-import { createTestDirectoryDb } from "@/db/server/test";
+} from "@/server/db/fixtures";
+import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	createHouseholdService,
 	HouseholdForbiddenError,

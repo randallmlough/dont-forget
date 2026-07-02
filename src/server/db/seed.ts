@@ -9,14 +9,14 @@ import {
 	lists,
 	memberships,
 	users,
-} from "@/db/schema/postgres";
-import { directoryClient, directoryDb } from "@/db/server/client";
+} from "@/server/db/schema/postgres";
+import { directoryClient, directoryDb } from "@/server/db/client";
 import {
 	type EmailBackedPrimaryHouseholdScenarioSeed,
 	PRIMARY_HOUSEHOLD_SEED,
 	seedEmailBackedPrimaryHouseholdScenario,
 	seedPrimaryHouseholdScenario,
-} from "@/db/server/fixtures";
+} from "@/server/db/fixtures";
 import {
 	type AppEnv,
 	assertLocalDirectoryDatabaseUrl,

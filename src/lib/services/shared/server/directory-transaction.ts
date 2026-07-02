@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { households } from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+import { households } from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 
 export type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]

@@ -4,7 +4,7 @@ import { defineConfig } from "drizzle-kit";
 // evaluates this at module load with no DATABASE_URL guaranteed, and
 // `drizzle-kit generate` for postgresql never connects — so no dbCredentials.
 export default defineConfig({
-	schema: "./src/db/schema/postgres/index.ts",
-	out: "./src/db/migrations/postgres",
+	schema: "./src/server/db/schema/postgres/index.ts",
+	out: "./src/server/db/migrations/postgres",
 	dialect: "postgresql",
 });

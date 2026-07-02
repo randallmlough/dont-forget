@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
-import { households, memberships, users } from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
-import { createTestDirectoryDb } from "@/db/server/test";
+import { households, memberships, users } from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
+import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	createMemberService,
 	LastOwnerError,

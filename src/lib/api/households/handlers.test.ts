@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { households, memberships, users } from "@/db/schema/postgres";
+import { households, memberships, users } from "@/server/db/schema/postgres";
 import {
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
@@ -7,8 +7,8 @@ import {
 	seedMultiHouseholdUserScenario,
 	seedPrimaryHouseholdScenario,
 	userFixture,
-} from "@/db/server/fixtures";
-import { createTestDirectoryDb, type TestDirectoryDb } from "@/db/server/test";
+} from "@/server/db/fixtures";
+import { createTestDirectoryDb, type TestDirectoryDb } from "@/server/db/test";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
 import {
 	createHouseholdJoinCodeService,

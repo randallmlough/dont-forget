@@ -5,8 +5,8 @@ import {
 	type Membership,
 	memberships,
 	type User,
-} from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+} from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/lib/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";

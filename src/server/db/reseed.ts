@@ -1,8 +1,8 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 
-import { directoryClient, directoryDb } from "@/db/server/client";
-import { resetDirectoryDatabase } from "@/db/server/reset";
-import { DRIZZLE_MIGRATIONS_TABLE } from "@/db/utils";
+import { directoryClient, directoryDb } from "@/server/db/client";
+import { resetDirectoryDatabase } from "@/server/db/reset";
+import { DRIZZLE_MIGRATIONS_TABLE } from "@/server/db/utils";
 import { assertLocalDirectoryDatabaseUrl, readPostgresConfig } from "@/lib/env";
 import {
 	assertLocalSeedPrerequisites,
@@ -10,7 +10,7 @@ import {
 	seedLocalDatabasesForMode,
 } from "./seed";
 
-const DIRECTORY_MIGRATIONS = "./src/db/migrations/postgres";
+const DIRECTORY_MIGRATIONS = "./src/server/db/migrations/postgres";
 
 export async function reseedLocalDatabases(): Promise<void> {
 	const seedMode = readLocalSeedMode();

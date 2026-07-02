@@ -23,7 +23,7 @@ import {
 	type DataTable,
 	isDataTable,
 	WRITABLE_COLUMNS,
-} from "@/db/schema/postgres/sync-columns";
+} from "@/server/db/schema/postgres/sync-columns";
 
 const opSchema = z.object({
 	op: z.enum(["PUT", "PATCH", "DELETE"]),

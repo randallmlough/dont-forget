@@ -9,8 +9,8 @@ import {
 	lists,
 	memberships,
 	users,
-} from "@/db/schema/postgres";
-import { createTestDirectoryDb } from "@/db/server/test";
+} from "@/server/db/schema/postgres";
+import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	householdFixture,
 	householdJoinCodeFixture,

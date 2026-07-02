@@ -5,8 +5,8 @@ import {
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
-} from "@/db/schema/postgres";
-import type { DirectoryDb } from "@/db/server/client";
+} from "@/server/db/schema/postgres";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	type HouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,

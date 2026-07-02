@@ -1,8 +1,8 @@
 // /api/data — the PowerSync write endpoint. HTTP transport shim only: it reads
 // the Request, dispatches authentication and the transaction through a deps seam
-// (production defaults wired from @/db/server/sync), runs the db-owned applicator
+// (production defaults wired from @/server/sync), runs the db-owned applicator
 // inside one transaction, and maps errors to status codes. All write logic, the
-// batch contract, and the SQL live in the db layer (@/db/server/sync; ADR-0014).
+// batch contract, and the SQL live in the db layer (@/server/sync; ADR-0014).
 
 import {
 	applyOp,
@@ -13,7 +13,7 @@ import {
 	type DataTransaction,
 	defaultAuthenticate,
 	defaultWithTransaction,
-} from "@/db/server/sync";
+} from "@/server/sync";
 
 export type DataDeps = {
 	// Returns the internal users.id, or throws DataAuthError on bad/missing token.

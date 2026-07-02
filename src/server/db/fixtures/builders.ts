@@ -8,7 +8,7 @@ import type {
 	NewList,
 	NewMembership,
 	NewUser,
-} from "@/db/schema/postgres";
+} from "@/server/db/schema/postgres";
 
 const SEED_DEFAULT_LIST_ID = "lst_default_groceries";
 const SEED_DEFAULT_LIST_NAME = "Groceries";
