@@ -9,6 +9,12 @@ import {
 	type InvitationServiceDeps,
 	InvitationUnavailableError,
 } from "@/server/invitations/invitation-service";
+import type {
+	CreateInvitationResponse,
+	InvitationPreview,
+	ListInvitationsResponse,
+	RevokeInvitationResponse,
+} from "@/shared/contracts/invitations";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
@@ -45,14 +51,12 @@ export async function handleCreateInvitation(
 				email: optionalStringField(body, "email"),
 			});
 
-			return jsonResponse(
-				{
-					invitation: result.invitation,
-					emailDelivery: result.emailDelivery,
-					reusedExisting: result.reusedExisting,
-				},
-				result.reusedExisting ? 200 : 201,
-			);
+			const payload: CreateInvitationResponse = {
+				invitation: result.invitation,
+				emailDelivery: result.emailDelivery,
+				reusedExisting: result.reusedExisting,
+			};
+			return jsonResponse(payload, result.reusedExisting ? 200 : 201);
 		});
 	} catch (error) {
 		return invitationErrorResponse(error, "Create Invitation API failed");
@@ -66,7 +70,7 @@ export async function handlePreviewInvitation(
 	try {
 		return await withDirectory(deps, async (directory) => {
 			const token = queryStringField(request, "token");
-			const preview = await invitationService(
+			const preview: InvitationPreview = await invitationService(
 				directory,
 				deps,
 			).previewInvitation(token);
@@ -113,7 +117,8 @@ export async function handleListInvitations(
 				householdId,
 				requestedByUserId: user.id,
 			});
-			return jsonResponse({ invitations });
+			const payload: ListInvitationsResponse = { invitations };
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return invitationErrorResponse(error, "List Invitations API failed");
@@ -140,7 +145,8 @@ export async function handleRevokeInvitation(
 				invitationId,
 				revokedByUserId: user.id,
 			});
-			return jsonResponse({ invitation });
+			const payload: RevokeInvitationResponse = { invitation };
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return invitationErrorResponse(error, "Revoke Invitation API failed");

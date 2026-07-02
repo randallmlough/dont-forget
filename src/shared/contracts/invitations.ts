@@ -60,3 +60,9 @@ export type CreateInvitationResponse = z.infer<
 	typeof createInvitationResponseSchema
 >;
 export type InvitationPreview = z.infer<typeof invitationPreviewSchema>;
+export type ListInvitationsResponse = z.infer<
+	typeof listInvitationsResponseSchema
+>;
+export type RevokeInvitationResponse = z.infer<
+	typeof revokeInvitationResponseSchema
+>;

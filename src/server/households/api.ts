@@ -28,6 +28,14 @@ import {
 	type HouseholdServiceDirectory,
 } from "@/server/households/household-service";
 import { generateInitialHouseholdName } from "@/server/households/initial-household-name";
+import type {
+	CreateHouseholdResponse,
+	HouseholdJoinCodePreview,
+	JoinCodeResponse,
+	LeaveHouseholdResponse,
+	ListMembersResponse,
+	RenameHouseholdResponse,
+} from "@/shared/contracts/households";
 import {
 	createMemberService,
 	LastOwnerError,
@@ -96,10 +104,10 @@ export async function handleCreateHousehold(
 				return created;
 			});
 
-			return jsonResponse(
-				{ household: { id: household.id, name: household.name } },
-				201,
-			);
+			const payload: CreateHouseholdResponse = {
+				household: { id: household.id, name: household.name },
+			};
+			return jsonResponse(payload, 201);
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Create Household API failed");
@@ -144,7 +152,8 @@ export async function handleListMembers(
 			if (!membership) throw new ApiForbiddenError();
 
 			const members = await service.listHouseholdMembers(householdId);
-			return jsonResponse({ members });
+			const payload: ListMembersResponse = { members };
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "List Members API failed");
@@ -167,9 +176,10 @@ export async function handleRenameHousehold(
 					requestedByUserId: user.id,
 				},
 			);
-			return jsonResponse({
+			const payload: RenameHouseholdResponse = {
 				household: { id: household.id, name: household.name },
-			});
+			};
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Rename Household API failed");
@@ -234,7 +244,11 @@ export async function handleLeaveHousehold(
 				householdId,
 				userId: user.id,
 			});
-			return jsonResponse({ left: true, promotedMembershipId });
+			const payload: LeaveHouseholdResponse = {
+				left: true,
+				promotedMembershipId,
+			};
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Leave Household API failed");
@@ -256,7 +270,8 @@ export async function handleGetJoinCode(
 				householdId,
 				requestedByUserId: user.id,
 			});
-			return jsonResponse({ joinCode });
+			const payload: JoinCodeResponse = { joinCode };
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return householdErrorResponse(error, "Get Household Join Code API failed");
@@ -278,7 +293,8 @@ export async function handleRegenerateJoinCode(
 				householdId,
 				requestedByUserId: user.id,
 			});
-			return jsonResponse({ joinCode });
+			const payload: JoinCodeResponse = { joinCode };
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return householdErrorResponse(
@@ -308,7 +324,8 @@ export async function handleSetJoinCodeEnabled(
 						householdId,
 						requestedByUserId: user.id,
 					});
-			return jsonResponse({ joinCode });
+			const payload: JoinCodeResponse = { joinCode };
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return householdErrorResponse(
@@ -326,7 +343,7 @@ export async function handlePreviewJoinCode(
 		return await withDirectory(deps, async (directory) => {
 			await authenticateApiUser(request, directory, deps);
 			const code = queryStringField(request, "code");
-			const preview = await householdJoinCodeService(
+			const preview: HouseholdJoinCodePreview = await householdJoinCodeService(
 				directory,
 				deps,
 			).previewJoinCode(code);

@@ -53,3 +53,11 @@ export type HouseholdJoinCodePreview = z.infer<typeof joinCodePreviewSchema>;
 export type LeaveHouseholdResponse = z.infer<
 	typeof leaveHouseholdResponseSchema
 >;
+export type CreateHouseholdResponse = z.infer<
+	typeof createHouseholdResponseSchema
+>;
+export type RenameHouseholdResponse = z.infer<
+	typeof renameHouseholdResponseSchema
+>;
+export type ListMembersResponse = z.infer<typeof listMembersResponseSchema>;
+export type JoinCodeResponse = z.infer<typeof joinCodeResponseSchema>;

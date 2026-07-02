@@ -7,6 +7,10 @@ import {
 	type UpdateClerkUserName,
 	type UserService,
 } from "@/server/users/user-service";
+import type {
+	CurrentUser,
+	UpdateUserNameResponse,
+} from "@/shared/contracts/users";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
@@ -19,14 +23,6 @@ import {
 } from "@/server/http";
 
 const MAX_NAME_LENGTH = 50;
-
-export type CurrentUser = {
-	id: string;
-	email: string | null;
-	displayName: string | null;
-	firstName: string | null;
-	lastName: string | null;
-};
 
 export type UsersApiDeps = ApiHandlerDeps & {
 	createUserService?: (
@@ -51,7 +47,10 @@ export async function handleUpdateUserName(
 				...input,
 			});
 
-			return jsonResponse({ user: currentUserResponse(updatedUser) });
+			const payload: UpdateUserNameResponse = {
+				user: currentUserResponse(updatedUser),
+			};
+			return jsonResponse(payload);
 		});
 	} catch (error) {
 		return usersErrorResponse(error, "Update User name API failed");

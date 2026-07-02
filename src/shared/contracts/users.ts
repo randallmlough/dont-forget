@@ -13,3 +13,6 @@ export const updateUserNameResponseSchema = z.object({
 });
 
 export type CurrentUser = z.infer<typeof currentUserSchema>;
+export type UpdateUserNameResponse = z.infer<
+	typeof updateUserNameResponseSchema
+>;
