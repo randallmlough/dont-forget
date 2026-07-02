@@ -33,10 +33,3 @@ export async function reseedLocalDatabases(): Promise<void> {
 
 	await seedLocalDatabasesForMode(seedMode);
 }
-
-if (require.main === module) {
-	reseedLocalDatabases().catch((error) => {
-		console.error(error);
-		process.exit(1);
-	});
-}

@@ -708,10 +708,3 @@ export function formatSeedConflictMessage(
 		"Run make db-reseed only if you intend to reset all local app data."
 	);
 }
-
-if (require.main === module) {
-	seedLocalDatabases().catch((error) => {
-		console.error(error);
-		process.exit(1);
-	});
-}
