@@ -26,6 +26,7 @@ import {
 	HouseholdNotFoundError,
 	type HouseholdService,
 	type HouseholdServiceDirectory,
+	normalizeHouseholdName,
 } from "@/server/households/household-service";
 import { generateInitialHouseholdName } from "@/server/households/initial-household-name";
 import type {
@@ -402,12 +403,7 @@ function memberRoleField(body: Record<string, unknown>): "owner" | "member" {
 function createHouseholdNameFromBody(body: Record<string, unknown>): string {
 	const rawName = optionalStringField(body, "name")?.trim();
 	if (!rawName) return generateInitialHouseholdName();
-	if (rawName.length > 80) {
-		throw new HouseholdNameInvalidError(
-			"Household name must be 80 characters or fewer.",
-		);
-	}
-	return rawName;
+	return normalizeHouseholdName(rawName);
 }
 
 function activeHouseholdService(

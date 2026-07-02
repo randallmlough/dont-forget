@@ -142,7 +142,7 @@ async function renameHousehold(
 	return household;
 }
 
-function normalizeHouseholdName(name: string): string {
+export function normalizeHouseholdName(name: string): string {
 	const trimmed = name.trim();
 	if (!trimmed) {
 		throw new HouseholdNameInvalidError("Household name is required.");
