@@ -1,22 +1,14 @@
-import { z } from "zod";
-
 import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
+import {
+	type CurrentUser,
+	currentUserSchema,
+	updateUserNameResponseSchema,
+} from "@/shared/contracts/users";
+
+export type { CurrentUser };
+export { currentUserSchema };
 
 export type ApiGetToken = () => Promise<string | null>;
-
-export const currentUserSchema = z.object({
-	id: z.string(),
-	email: z.string().nullable(),
-	displayName: z.string().nullable(),
-	firstName: z.string().nullable(),
-	lastName: z.string().nullable(),
-});
-
-const updateUserNameResponseSchema = z.object({
-	user: currentUserSchema,
-});
-
-export type CurrentUser = z.infer<typeof currentUserSchema>;
 
 export type UsersApiClient = {
 	updateUserName(input: {
@@ -81,6 +73,13 @@ async function requestJson(
 }
 
 function errorMessageFromPayload(payload: unknown): string {
-	const parsed = z.object({ error: z.string() }).safeParse(payload);
-	return parsed.success ? parsed.data.error : "Something went wrong.";
+	if (
+		typeof payload === "object" &&
+		payload !== null &&
+		"error" in payload &&
+		typeof (payload as { error: unknown }).error === "string"
+	) {
+		return (payload as { error: string }).error;
+	}
+	return "Something went wrong.";
 }

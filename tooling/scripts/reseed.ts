@@ -1,4 +1,4 @@
-import { reseedLocalDatabases } from "@/db/server/reseed";
+import { reseedLocalDatabases } from "@/server/db/reseed";
 
 reseedLocalDatabases().catch((error) => {
 	console.error(error);

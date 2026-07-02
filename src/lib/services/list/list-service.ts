@@ -1,6 +1,5 @@
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
-import { sqlNumberSchema } from "@/db/utils";
 import { track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
@@ -11,6 +10,7 @@ import {
 	sqlTimestampMillisSchema,
 	timestampMillisToSqlText,
 } from "@/lib/services/shared/sql-timestamp";
+import { sqlNumberSchema } from "@/shared/sql";
 
 export type List = {
 	id: string;

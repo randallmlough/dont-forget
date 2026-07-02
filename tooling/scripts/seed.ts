@@ -1,4 +1,4 @@
-import { seedLocalDatabases } from "@/db/server/seed";
+import { seedLocalDatabases } from "@/server/db/seed";
 
 seedLocalDatabases().catch((error) => {
 	console.error(error);
