@@ -12,8 +12,8 @@ import { createAppId } from "@/lib/ids";
 import { redactAttributes } from "@/lib/redact";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
-import { createActiveHouseholdService } from "@/lib/services/household/server/active-household-service";
-import { createMemberService } from "@/lib/services/member/server";
+import { createActiveHouseholdService } from "@/server/households/active-household-service";
+import { createMemberService } from "@/server/households/member-service";
 import { lockHouseholdRow } from "@/server/directory-transaction";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;

@@ -21,7 +21,7 @@ import {
 	createHouseholdJoinCodeService,
 	HouseholdJoinCodeMembershipRequiredError,
 	HouseholdJoinCodeUnavailableError,
-} from "./household-join-code-service";
+} from "./join-code-service";
 
 function createCodeGenerator(codes: string[]) {
 	return jest.fn(async () => {

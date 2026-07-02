@@ -4,7 +4,7 @@ import {
 	verifyToken,
 } from "@clerk/backend";
 import { readClerkServerConfig, requireEnv } from "@/lib/env";
-import { createUserService } from "@/lib/services/user/server";
+import { createUserService } from "@/server/users/user-service";
 import {
 	type DirectoryDb,
 	directoryClient,

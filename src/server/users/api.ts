@@ -6,7 +6,7 @@ import {
 	createUserService,
 	type UpdateClerkUserName,
 	type UserService,
-} from "@/lib/services/user/server";
+} from "@/server/users/user-service";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,

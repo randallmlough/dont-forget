@@ -22,19 +22,19 @@ import { POST as createInvitation } from "@/app/api/invitations+api";
 import { PATCH as switchActiveHousehold } from "@/app/api/users/me/active-household+api";
 import { PATCH as updateUserName } from "@/app/api/users/me+api";
 
-jest.mock("@/lib/api/invitations/handlers", () => {
+jest.mock("@/server/invitations/api", () => {
 	throw new Error("Invitation API handler imported during route registration");
 });
 
-jest.mock("@/lib/api/households/handlers", () => {
+jest.mock("@/server/households/api", () => {
 	throw new Error("Household API handler imported during route registration");
 });
 
-jest.mock("@/lib/api/users/handlers", () => {
+jest.mock("@/server/users/api", () => {
 	throw new Error("Users API handler imported during route registration");
 });
 
-jest.mock("@/lib/api/data/handler", () => {
+jest.mock("@/server/data/api", () => {
 	throw new Error("Data API handler imported during route registration");
 });
 

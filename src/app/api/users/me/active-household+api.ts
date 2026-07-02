@@ -1,6 +1,6 @@
 export async function PATCH(request: Request): Promise<Response> {
 	const { handleSwitchActiveHousehold } = await import(
-		"@/lib/api/households/handlers"
+		"@/server/households/api"
 	);
 	return handleSwitchActiveHousehold(request);
 }

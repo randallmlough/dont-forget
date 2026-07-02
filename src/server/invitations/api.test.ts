@@ -6,7 +6,7 @@ import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	createInvitationService,
 	type InvitationService,
-} from "@/lib/services/invitation/server";
+} from "@/server/invitations/invitation-service";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "@/server/http";
 import {
@@ -16,7 +16,12 @@ import {
 	handlePreviewInvitation,
 	handleRevokeInvitation,
 	type InvitationApiDeps,
-} from "./handlers";
+} from "./api";
+
+jest.mock("@clerk/backend", () => ({
+	createClerkClient: jest.fn(),
+	verifyToken: jest.fn(),
+}));
 
 const now = PRIMARY_HOUSEHOLD_SEED.now + 100_000;
 

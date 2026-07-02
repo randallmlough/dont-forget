@@ -10,7 +10,7 @@ import type { DirectoryDb } from "@/server/db/client";
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
-import type { ActiveMembership } from "@/lib/services/member/server";
+import type { ActiveMembership } from "@/server/households/member-service";
 import {
 	type DirectoryTransaction,
 	runDirectoryTransaction,
@@ -18,7 +18,7 @@ import {
 import {
 	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,
-} from "./household-join-code-service";
+} from "./join-code-service";
 
 export type HouseholdServiceDirectory = DirectoryDb | DirectoryTransaction;
 

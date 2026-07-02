@@ -13,8 +13,8 @@ import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-
 import {
 	createHouseholdJoinCodeService,
 	type HouseholdJoinCodeService,
-} from "@/lib/services/household/server";
-import { INITIAL_HOUSEHOLD_NAMES } from "@/lib/services/household/server/initial-household-name";
+} from "@/server/households/join-code-service";
+import { INITIAL_HOUSEHOLD_NAMES } from "@/server/households/initial-household-name";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "@/server/http";
 import {
@@ -31,7 +31,12 @@ import {
 	handleRenameHousehold,
 	handleSetJoinCodeEnabled,
 	handleSwitchActiveHousehold,
-} from "./handlers";
+} from "./api";
+
+jest.mock("@clerk/backend", () => ({
+	createClerkClient: jest.fn(),
+	verifyToken: jest.fn(),
+}));
 
 const now = PRIMARY_HOUSEHOLD_SEED.now + 100_000;
 

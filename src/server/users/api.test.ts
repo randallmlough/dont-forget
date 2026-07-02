@@ -1,6 +1,11 @@
 import { createTestDirectoryDb } from "@/server/db/test";
 import { ApiUnauthorizedError } from "@/server/http";
-import { handleUpdateUserName } from "./handlers";
+import { handleUpdateUserName } from "./api";
+
+jest.mock("@clerk/backend", () => ({
+	createClerkClient: jest.fn(),
+	verifyToken: jest.fn(),
+}));
 
 const testUser = {
 	id: "usr_avery",

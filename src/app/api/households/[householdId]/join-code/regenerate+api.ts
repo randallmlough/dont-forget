@@ -3,7 +3,7 @@ export async function POST(
 	{ householdId }: { householdId: string },
 ): Promise<Response> {
 	const { handleRegenerateJoinCode } = await import(
-		"@/lib/api/households/handlers"
+		"@/server/households/api"
 	);
 	return handleRegenerateJoinCode(request, { householdId });
 }

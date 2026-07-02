@@ -3,7 +3,7 @@ import {
 	type PgQueryClient,
 	pgDataTransaction,
 } from "@/server/sync/pg-transaction";
-import { handleDataUpload } from "@/lib/api/data/handler";
+import { handleDataUpload } from "@/server/data/api";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api/requests";
 
 function request(batch: unknown): Request {

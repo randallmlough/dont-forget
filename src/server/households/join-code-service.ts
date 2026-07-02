@@ -14,7 +14,7 @@ import {
 import { createAppId } from "@/lib/ids";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
-import { createMemberService } from "@/lib/services/member/server";
+import { createMemberService } from "@/server/households/member-service";
 import { lockHouseholdRow } from "@/server/directory-transaction";
 import { createActiveHouseholdService } from "./active-household-service";
 

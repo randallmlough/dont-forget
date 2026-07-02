@@ -3,13 +3,13 @@ import { type User, users } from "@/server/db/schema/postgres";
 import type { DirectoryDb } from "@/server/db/client";
 import type { BootstrapResponse } from "@/shared/contracts/bootstrap";
 import type { ServerUserProfile } from "@/server/http";
-import { createHouseholdService } from "@/lib/services/household/server/household-service";
-import { generateInitialHouseholdName } from "@/lib/services/household/server/initial-household-name";
+import { createHouseholdService } from "@/server/households/household-service";
+import { generateInitialHouseholdName } from "@/server/households/initial-household-name";
 import {
 	type ActiveMembership,
 	createMemberService,
-} from "@/lib/services/member/server";
-import { createUserService } from "@/lib/services/user/server";
+} from "@/server/households/member-service";
+import { createUserService } from "@/server/users/user-service";
 
 export type AuthenticatedAppSessionBootstrapDeps = {
 	directory: DirectoryDb;

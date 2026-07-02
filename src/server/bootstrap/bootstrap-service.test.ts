@@ -5,7 +5,7 @@ import type { ServerUserProfile } from "@/server/http";
 import {
 	type AuthenticatedAppSessionBootstrapDeps,
 	bootstrapAuthenticatedAppSession,
-} from "./bootstrap";
+} from "./bootstrap-service";
 
 describe("bootstrapAuthenticatedAppSession", () => {
 	it("creates a first-run User, Household, Owner Membership, and active selection", async () => {

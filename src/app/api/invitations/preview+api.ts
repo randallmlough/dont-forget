@@ -1,6 +1,6 @@
 export async function GET(request: Request): Promise<Response> {
 	const { handlePreviewInvitation } = await import(
-		"@/lib/api/invitations/handlers"
+		"@/server/invitations/api"
 	);
 	return handlePreviewInvitation(request);
 }

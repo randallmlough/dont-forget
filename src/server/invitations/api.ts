@@ -8,7 +8,7 @@ import {
 	type InvitationService,
 	type InvitationServiceDeps,
 	InvitationUnavailableError,
-} from "@/lib/services/invitation/server";
+} from "@/server/invitations/invitation-service";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,

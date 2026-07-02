@@ -1,6 +1,6 @@
 export async function POST(request: Request): Promise<Response> {
 	const { handleAcceptInvitation } = await import(
-		"@/lib/api/invitations/handlers"
+		"@/server/invitations/api"
 	);
 	return handleAcceptInvitation(request);
 }

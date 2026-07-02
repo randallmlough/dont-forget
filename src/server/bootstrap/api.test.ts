@@ -8,7 +8,7 @@ jest.mock("@/server/http", () => {
 	throw new Error("server auth imported during route registration");
 });
 
-jest.mock("@/lib/services/household/server", () => {
+jest.mock("@/server/households/household-service", () => {
 	throw new Error(
 		"household server service imported during route registration",
 	);

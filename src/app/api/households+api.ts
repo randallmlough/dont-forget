@@ -1,6 +1,6 @@
 export async function POST(request: Request): Promise<Response> {
 	const { handleCreateHousehold } = await import(
-		"@/lib/api/households/handlers"
+		"@/server/households/api"
 	);
 	return handleCreateHousehold(request);
 }

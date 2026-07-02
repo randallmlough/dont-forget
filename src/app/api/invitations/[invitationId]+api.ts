@@ -3,7 +3,7 @@ export async function PATCH(
 	{ invitationId }: { invitationId: string },
 ): Promise<Response> {
 	const { handleRevokeInvitation } = await import(
-		"@/lib/api/invitations/handlers"
+		"@/server/invitations/api"
 	);
 	return handleRevokeInvitation(request, { invitationId });
 }

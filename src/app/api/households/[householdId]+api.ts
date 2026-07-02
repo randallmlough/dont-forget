@@ -3,7 +3,7 @@ export async function PATCH(
 	{ householdId }: { householdId: string },
 ): Promise<Response> {
 	const { handleRenameHousehold } = await import(
-		"@/lib/api/households/handlers"
+		"@/server/households/api"
 	);
 	return handleRenameHousehold(request, { householdId });
 }

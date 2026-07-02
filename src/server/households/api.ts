@@ -9,21 +9,25 @@ import { redactAttributes } from "@/lib/redact";
 import {
 	ActiveHouseholdMembershipRequiredError,
 	type ActiveHouseholdService,
+	type ActiveHouseholdServiceDirectory,
 	createActiveHouseholdService,
+} from "@/server/households/active-household-service";
+import {
 	createHouseholdJoinCodeService,
-	createHouseholdService,
-	HouseholdForbiddenError,
 	HouseholdJoinCodeMembershipRequiredError,
 	type HouseholdJoinCodeService,
 	type HouseholdJoinCodeServiceDeps,
 	HouseholdJoinCodeUnavailableError,
+} from "@/server/households/join-code-service";
+import {
+	createHouseholdService,
+	HouseholdForbiddenError,
 	HouseholdNameInvalidError,
 	HouseholdNotFoundError,
 	type HouseholdService,
-} from "@/lib/services/household/server";
-import type { ActiveHouseholdServiceDirectory } from "@/lib/services/household/server/active-household-service";
-import type { HouseholdServiceDirectory } from "@/lib/services/household/server/household-service";
-import { generateInitialHouseholdName } from "@/lib/services/household/server/initial-household-name";
+	type HouseholdServiceDirectory,
+} from "@/server/households/household-service";
+import { generateInitialHouseholdName } from "@/server/households/initial-household-name";
 import {
 	createMemberService,
 	LastOwnerError,
@@ -33,7 +37,7 @@ import {
 	type MemberService,
 	type MemberServiceDirectory,
 	SoleMemberError,
-} from "@/lib/services/member/server";
+} from "@/server/households/member-service";
 import {
 	ApiForbiddenError,
 	type ApiHandlerDeps,

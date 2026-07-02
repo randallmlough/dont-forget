@@ -3,7 +3,7 @@ export async function GET(
 	{ householdId }: { householdId: string },
 ): Promise<Response> {
 	const { handleListInvitations } = await import(
-		"@/lib/api/invitations/handlers"
+		"@/server/invitations/api"
 	);
 	return handleListInvitations(request, { householdId });
 }
