@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import {
+	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
@@ -21,7 +22,6 @@ import type {
 	HouseholdMember,
 	PendingInvitation,
 } from "@/client/features/household/api";
-import type { AuthenticatedAppSession } from "@/client/session";
 import { HouseholdButton } from "./household-button";
 import {
 	type HouseholdSettingsActions,

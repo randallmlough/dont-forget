@@ -14,41 +14,45 @@ const ruleTester = new RuleTester({
 ruleTester.run("no-raw-color-literals", rule, {
 	valid: [
 		{
-			filename: "/repo/lib/unistyles/palette.ts",
+			filename: "/repo/src/client/theme/palette.ts",
 			code: `export const brandPalette = { green700: "#2F855A" };`,
 		},
 		{
-			filename: "/repo/lib/unistyles/unistyles.test.ts",
+			filename: "/repo/src/client/theme/unistyles.test.ts",
 			code: `expect(theme.colors.primary).toBe("#2F855A");`,
 		},
 		{
-			filename: "/repo/components/button.tsx",
+			filename: "/repo/src/client/features/list/button.tsx",
 			code: `const styles = { color: theme.colors.primary };`,
+		},
+		{
+			filename: "/repo/src/server/households/api.ts",
+			code: `const color = "#2F855A";`,
 		},
 	],
 	invalid: [
 		{
-			filename: "/repo/components/button.tsx",
+			filename: "/repo/src/client/features/list/button.tsx",
 			code: `const styles = { color: "#2F855A" };`,
 			errors: [{ messageId: "rawColor" }],
 		},
 		{
-			filename: "/repo/screens/home/home-screen.tsx",
+			filename: "/repo/src/client/features/list/home-screen.tsx",
 			code: `const styles = { backgroundColor: "rgba(255, 255, 255, 0.8)" };`,
 			errors: [{ messageId: "rawColor" }],
 		},
 		{
-			filename: "/repo/components/card.tsx",
+			filename: "/repo/src/client/features/list/card.tsx",
 			code: `const styles = { boxShadow: "0 2px 8px #000000" };`,
 			errors: [{ messageId: "rawColor" }],
 		},
 		{
-			filename: "/repo/app/_layout.tsx",
+			filename: "/repo/src/app/_layout.tsx",
 			code: "const color = `hsl(120, 50%, 50%)`;",
 			errors: [{ messageId: "rawColor" }],
 		},
 		{
-			filename: "/repo/components/card.tsx",
+			filename: "/repo/src/client/features/list/card.tsx",
 			code: "const shadow = `0 2px 8px #000000`;",
 			errors: [{ messageId: "rawColor" }],
 		},

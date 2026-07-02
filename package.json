@@ -14,7 +14,7 @@
 		"lint": "eslint .",
 		"test": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
 		"test:ci": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
-		"test:eslint-rules": "node tooling/eslint-plugin/no-screen-use-effect.test.js && node tooling/eslint-plugin/no-server-service-imports.test.js && node tooling/eslint-plugin/no-db-imports-outside-services.test.js && node tooling/eslint-plugin/no-db-server-imports.test.js && node tooling/eslint-plugin/no-services-imports-in-db.test.js && node tooling/eslint-plugin/no-lib-api-imports.test.js && node tooling/eslint-plugin/no-raw-color-literals.test.js",
+		"test:eslint-rules": "node tooling/eslint-plugin/no-client-server-imports.test.js && node tooling/eslint-plugin/no-raw-color-literals.test.js",
 		"test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --runInBand",
 		"typecheck": "tsc --noEmit",
 		"db:generate": "tsx src/server/db/generate.ts",

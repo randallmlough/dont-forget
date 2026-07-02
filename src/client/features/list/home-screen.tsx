@@ -4,11 +4,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
 import {
+	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
 import { track } from "@/client/lib/analytics";
-import type { AuthenticatedAppSession } from "@/client/session";
 import { HomeCurrentList, homeSessionMemberName } from "./home-current-list";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 
