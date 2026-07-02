@@ -52,7 +52,7 @@ function withLocalConfigPlugins(
 		return resolvedPlugins;
 	}
 
-	const rocketSimPlugin = "./plugins/withRocketSimConnect.js";
+	const rocketSimPlugin = "./tooling/expo-plugins/withRocketSimConnect.js";
 	if (!existsSync(resolve(process.cwd(), rocketSimPlugin))) {
 		console.warn(
 			`Skipping RocketSim config plugin because ${rocketSimPlugin} does not exist.`,

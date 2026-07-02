@@ -17,7 +17,7 @@ install: ## Install dependencies *common*
 
 .PHONY: worktree-env
 worktree-env: ## Link or copy local .env.local into this worktree
-	@./script/setup_worktree_env.sh
+	@./tooling/scripts/setup_worktree_env.sh
 
 .PHONY: worktree-db
 worktree-db: ## Create an isolated per-worktree directory DB and point .env.local at it
@@ -177,12 +177,12 @@ pg-shell: ## Open psql on the source Postgres
 
 .PHONY: ps-token-test
 ps-token-test: ## Probe PowerSync /sync/stream with a real Clerk token (powersync JWT template)
-	@set -a; . ./.env.local; set +a; node tools/clerk-token-test.mjs "http://localhost:$${PS_PORT:-8089}" powersync
+	@set -a; . ./.env.local; set +a; node tooling/powersync/clerk-token-test.mjs "http://localhost:$${PS_PORT:-8089}" powersync
 
 .PHONY: ps-synced-rows
 ps-synced-rows: ## Show rows a user receives from PowerSync. Usage: make ps-synced-rows USER=<clerk-user-id>
 	@test -n "$(USER)" || (echo "Usage: make ps-synced-rows USER=<clerk-user-id>" && exit 1)
-	@set -a; . ./.env.local; set +a; node tools/synced-rows.mjs "$(USER)" "http://localhost:$${PS_PORT:-8089}"
+	@set -a; . ./.env.local; set +a; node tooling/powersync/synced-rows.mjs "$(USER)" "http://localhost:$${PS_PORT:-8089}"
 
 # ==================================================================================== #
 # UTILITIES

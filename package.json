@@ -14,7 +14,7 @@
 		"lint": "eslint .",
 		"test": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
 		"test:ci": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
-		"test:eslint-rules": "node tools/eslint-rules/no-screen-use-effect.test.js && node tools/eslint-rules/no-server-service-imports.test.js && node tools/eslint-rules/no-db-imports-outside-services.test.js && node tools/eslint-rules/no-db-server-imports.test.js && node tools/eslint-rules/no-services-imports-in-db.test.js && node tools/eslint-rules/no-lib-api-imports.test.js && node tools/eslint-rules/no-raw-color-literals.test.js",
+		"test:eslint-rules": "node tooling/eslint-plugin/no-screen-use-effect.test.js && node tooling/eslint-plugin/no-server-service-imports.test.js && node tooling/eslint-plugin/no-db-imports-outside-services.test.js && node tooling/eslint-plugin/no-db-server-imports.test.js && node tooling/eslint-plugin/no-services-imports-in-db.test.js && node tooling/eslint-plugin/no-lib-api-imports.test.js && node tooling/eslint-plugin/no-raw-color-literals.test.js",
 		"test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --runInBand",
 		"typecheck": "tsc --noEmit",
 		"db:generate": "tsx db/server/generate.ts",
@@ -22,8 +22,8 @@
 		"db:reset": "tsx db/server/reset.ts",
 		"db:seed": "tsx scripts/seed.ts",
 		"db:reseed": "tsx scripts/reseed.ts",
-		"worktree:db": "tsx scripts/worktree-db.ts",
-		"worktree:db:destroy": "tsx scripts/worktree-db-destroy.ts",
+		"worktree:db": "tsx tooling/scripts/worktree-db.ts",
+		"worktree:db:destroy": "tsx tooling/scripts/worktree-db-destroy.ts",
 		"doctor": "npx react-doctor@latest"
 	},
 	"dependencies": {
