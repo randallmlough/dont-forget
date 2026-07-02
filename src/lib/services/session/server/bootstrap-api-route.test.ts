@@ -4,7 +4,7 @@ jest.mock("@/server/db/client", () => {
 	throw new Error("server DB client imported during route registration");
 });
 
-jest.mock("@/lib/server/auth", () => {
+jest.mock("@/server/http", () => {
 	throw new Error("server auth imported during route registration");
 });
 

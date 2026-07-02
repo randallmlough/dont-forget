@@ -1,7 +1,7 @@
 // Production authentication for /api/data: sub-only Clerk verification, then
 // resolve the internal users.id by clerk_user_id from the pg directory.
 //
-// Lives in the db layer (ADR-0014). @/lib/server/auth and @clerk/backend are
+// Lives in the db layer (ADR-0014). @/server/http and @clerk/backend are
 // imported dynamically so the heavy, server-only Clerk SDK loads only when a
 // request is actually authenticated — a caller that injects its own auth (e.g.
 // the handler tests) never pulls it in. The other deps (drizzle, the pg schema,
@@ -26,7 +26,7 @@ export class DataAuthError extends Error {
 // then resolve the internal users.id by clerk_user_id from the pg directory.
 export async function defaultAuthenticate(request: Request): Promise<string> {
 	const [{ bearerToken }, { verifyToken }] = await Promise.all([
-		import("@/lib/server/auth"),
+		import("@/server/http"),
 		import("@clerk/backend"),
 	]);
 

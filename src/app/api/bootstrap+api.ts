@@ -3,14 +3,14 @@ import { redactAttributes } from "@/lib/redact";
 
 export async function POST(request: Request): Promise<Response> {
 	let UnauthorizedError:
-		| typeof import("@/lib/server/auth")["UnauthorizedError"]
+		| typeof import("@/server/http")["UnauthorizedError"]
 		| null = null;
 
 	try {
 		const [db, bootstrap, auth] = await Promise.all([
 			import("@/server/db/client"),
 			import("@/lib/services/session/server"),
-			import("@/lib/server/auth"),
+			import("@/server/http"),
 		]);
 		UnauthorizedError = auth.UnauthorizedError;
 

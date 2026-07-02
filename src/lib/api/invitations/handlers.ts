@@ -24,7 +24,7 @@ import {
 	unavailableErrorResponse,
 	unavailablePreviewResponse,
 	withDirectory,
-} from "../shared";
+} from "@/server/http";
 
 export type InvitationApiDeps = ApiHandlerDeps & {
 	createInvitationService?: (directory: DirectoryDb) => InvitationService;

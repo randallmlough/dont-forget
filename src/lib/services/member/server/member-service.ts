@@ -8,13 +8,13 @@ import {
 } from "@/server/db/schema/postgres";
 import type { DirectoryDb } from "@/server/db/client";
 import { createAppId } from "@/lib/ids";
-import { serverServiceAnalytics } from "@/lib/server/analytics";
+import { serverServiceAnalytics } from "@/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import {
 	type DirectoryTransaction,
 	lockHouseholdRow,
 	runDirectoryTransaction,
-} from "@/lib/services/shared/server/directory-transaction";
+} from "@/server/directory-transaction";
 
 export type MemberServiceDirectory = DirectoryDb | DirectoryTransaction;
 

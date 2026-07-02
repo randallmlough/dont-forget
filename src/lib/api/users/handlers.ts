@@ -16,7 +16,7 @@ import {
 	jsonResponse,
 	readJsonObject,
 	withDirectory,
-} from "../shared";
+} from "@/server/http";
 
 const MAX_NAME_LENGTH = 50;
 

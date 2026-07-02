@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { households, memberships, users } from "@/server/db/schema/postgres";
 import { createTestDirectoryDb } from "@/server/db/test";
-import type { ServerUserProfile } from "@/lib/server/auth";
+import type { ServerUserProfile } from "@/server/http";
 import {
 	type AuthenticatedAppSessionBootstrapDeps,
 	bootstrapAuthenticatedAppSession,

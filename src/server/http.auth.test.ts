@@ -3,7 +3,7 @@ import {
 	bearerToken,
 	UnauthorizedError,
 	updateClerkUserName,
-} from "@/lib/server/auth";
+} from "@/server/http";
 
 jest.mock("@clerk/backend", () => ({
 	createClerkClient: jest.fn(),

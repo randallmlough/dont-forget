@@ -52,7 +52,7 @@ import {
 	unavailableErrorResponse,
 	unavailablePreviewResponse,
 	withDirectory,
-} from "../shared";
+} from "@/server/http";
 
 export type HouseholdApiDeps = ApiHandlerDeps & {
 	createActiveHouseholdService?: (

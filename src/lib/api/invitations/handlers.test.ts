@@ -8,7 +8,7 @@ import {
 	type InvitationService,
 } from "@/lib/services/invitation/server";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
-import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
+import { ApiUnauthorizedError, upsertAuthenticatedUser } from "@/server/http";
 import {
 	handleAcceptInvitation,
 	handleCreateInvitation,

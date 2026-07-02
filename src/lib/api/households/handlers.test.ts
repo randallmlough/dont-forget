@@ -16,7 +16,7 @@ import {
 } from "@/lib/services/household/server";
 import { INITIAL_HOUSEHOLD_NAMES } from "@/lib/services/household/server/initial-household-name";
 import { createApiRequest, readJsonResponse } from "@/lib/test/api";
-import { ApiUnauthorizedError, upsertAuthenticatedUser } from "../shared";
+import { ApiUnauthorizedError, upsertAuthenticatedUser } from "@/server/http";
 import {
 	type HouseholdApiDeps,
 	handleChangeMemberRole,

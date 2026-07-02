@@ -10,11 +10,11 @@ import type { DirectoryDb } from "@/server/db/client";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";
 import { redactAttributes } from "@/lib/redact";
-import { serverServiceAnalytics } from "@/lib/server/analytics";
+import { serverServiceAnalytics } from "@/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createActiveHouseholdService } from "@/lib/services/household/server/active-household-service";
 import { createMemberService } from "@/lib/services/member/server";
-import { lockHouseholdRow } from "@/lib/services/shared/server/directory-transaction";
+import { lockHouseholdRow } from "@/server/directory-transaction";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOKEN_GENERATION_ATTEMPTS = 5;

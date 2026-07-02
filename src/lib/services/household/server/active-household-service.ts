@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { households, memberships, users } from "@/server/db/schema/postgres";
 import type { DirectoryDb } from "@/server/db/client";
-import { serverServiceAnalytics } from "@/lib/server/analytics";
+import { serverServiceAnalytics } from "@/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 
 type DirectoryTransaction = Parameters<

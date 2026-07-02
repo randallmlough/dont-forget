@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { type User, users } from "@/server/db/schema/postgres";
 import type { DirectoryDb } from "@/server/db/client";
 import type { BootstrapResponse } from "@/shared/contracts/bootstrap";
-import type { ServerUserProfile } from "@/lib/server/auth";
+import type { ServerUserProfile } from "@/server/http";
 import { createHouseholdService } from "@/lib/services/household/server/household-service";
 import { generateInitialHouseholdName } from "@/lib/services/household/server/initial-household-name";
 import {

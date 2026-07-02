@@ -1,5 +1,5 @@
 import { createTestDirectoryDb } from "@/server/db/test";
-import { ApiUnauthorizedError } from "../shared";
+import { ApiUnauthorizedError } from "@/server/http";
 import { handleUpdateUserName } from "./handlers";
 
 const testUser = {

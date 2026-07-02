@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { type User, users } from "@/server/db/schema/postgres";
 import type { DirectoryDb } from "@/server/db/client";
 import { createAppId } from "@/lib/ids";
-import type { ServerUserProfile } from "@/lib/server/auth";
+import type { ServerUserProfile } from "@/server/http";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]
@@ -45,7 +45,7 @@ export function createUserService(deps: UserServiceDeps): UserService {
 }
 
 async function defaultUpdateClerkUserName(): Promise<UpdateClerkUserName> {
-	const { updateClerkUserName } = await import("@/lib/server/auth");
+	const { updateClerkUserName } = await import("@/server/http");
 	return updateClerkUserName;
 }
 

@@ -12,10 +12,10 @@ import {
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
 } from "@/lib/household-join-code-source";
 import { createAppId } from "@/lib/ids";
-import { serverServiceAnalytics } from "@/lib/server/analytics";
+import { serverServiceAnalytics } from "@/server/analytics";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 import { createMemberService } from "@/lib/services/member/server";
-import { lockHouseholdRow } from "@/lib/services/shared/server/directory-transaction";
+import { lockHouseholdRow } from "@/server/directory-transaction";
 import { createActiveHouseholdService } from "./active-household-service";
 
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";

@@ -1,6 +1,6 @@
 import { users } from "@/server/db/schema/postgres";
 import { createTestDirectoryDb } from "@/server/db/test";
-import type { ServerUserProfile } from "@/lib/server/auth";
+import type { ServerUserProfile } from "@/server/http";
 import { createUserService } from "./user-service";
 
 describe("createUserService", () => {
