@@ -12,7 +12,7 @@ ruleTester.run("no-services-imports-in-db", rule, {
 	valid: [
 		{
 			filename: "/repo/db/household-store.ts",
-			code: `import { asError } from "@/lib/errors";`,
+			code: `import { asError } from "@/shared/errors";`,
 		},
 		{
 			filename: "/repo/db/household-store.ts",
@@ -20,7 +20,7 @@ ruleTester.run("no-services-imports-in-db", rule, {
 		},
 		{
 			filename: "/repo/db/server/migrate.ts",
-			code: `import { loadEnvFile } from "@/lib/load-env";`,
+			code: `import { loadEnvFile } from "@/shared/load-env";`,
 		},
 		{
 			filename: "/repo/db/server/fixtures/builders.ts",

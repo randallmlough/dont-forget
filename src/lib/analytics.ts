@@ -1,8 +1,8 @@
 import { useUser } from "@clerk/clerk-expo";
+import type { EventMap } from "@/shared/analytics-events";
+import { redactAttributes } from "@/shared/redact";
 import { useEffect } from "react";
-import type { EventMap } from "./analytics-events";
 import { posthog } from "./posthog";
-import { redactAttributes } from "./redact";
 
 type PostHogProperties = NonNullable<Parameters<typeof posthog.capture>[1]>;
 
@@ -33,7 +33,7 @@ class PostHogAnalyticsAdapter implements AnalyticsAdapter {
 
 const adapter: AnalyticsAdapter = new PostHogAnalyticsAdapter();
 
-export function track<K extends keyof EventMap>(
+export function track<K extends keyof EventMap & string>(
 	event: K,
 	properties: EventMap[K],
 ): void {

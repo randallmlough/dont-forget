@@ -1,10 +1,10 @@
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
 import { track } from "@/lib/analytics";
-import { asError } from "@/lib/errors";
-import { createAppId } from "@/lib/ids";
+import { asError } from "@/shared/errors";
+import { createAppId } from "@/shared/ids";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 import type { ProductDatabase } from "@/lib/services/shared/product-database";
 import {
 	sqlTimestampMillisSchema,

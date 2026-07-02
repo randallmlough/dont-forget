@@ -1,4 +1,4 @@
-import type { EventMap } from "@/lib/analytics-events";
+import type { EventMap } from "@/shared/analytics-events";
 
 export type ServiceAnalytics = {
 	track<K extends keyof EventMap>(event: K, properties: EventMap[K]): void;

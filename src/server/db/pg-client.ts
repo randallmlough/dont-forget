@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { readPostgresConfig } from "@/lib/env";
+import { readPostgresConfig } from "@/shared/env";
 import * as schema from "@/server/db/schema/postgres";
 
 export type PostgresDb = ReturnType<typeof postgresDb>;

@@ -9,7 +9,7 @@ import {
 	createUsersApiClient,
 	type UsersApiClient,
 } from "@/lib/client-api/users";
-import { type AppEnv, readAppEnvFromExpoExtra } from "@/lib/env";
+import { type AppEnv, readAppEnvFromExpoExtra } from "@/shared/env";
 import { useLogger } from "@/lib/logger";
 import {
 	type AppearancePreference,

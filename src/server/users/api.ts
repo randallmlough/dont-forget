@@ -1,5 +1,5 @@
-import { asError } from "@/lib/errors";
-import { redactAttributes } from "@/lib/redact";
+import { asError } from "@/shared/errors";
+import { redactAttributes } from "@/shared/redact";
 import type { DirectoryDb } from "@/server/db/client";
 import type { User } from "@/server/db/schema/postgres";
 import {

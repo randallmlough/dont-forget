@@ -2,7 +2,7 @@ import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 import {
 	type HouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
-} from "@/lib/household-join-code-source";
+} from "@/shared/household-join-code-source";
 import {
 	createHouseholdResponseSchema,
 	type HouseholdJoinCode,

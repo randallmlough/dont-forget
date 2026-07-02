@@ -19,7 +19,7 @@ import {
 } from "@/components/auth/redirect-policy";
 import { AuthenticatedAppSessionProvider } from "@/components/session";
 import { screen } from "@/lib/analytics";
-import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/lib/env";
+import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/shared/env";
 import { logger } from "@/lib/logger";
 import { posthog } from "@/lib/posthog";
 import { tokenCache } from "@/lib/token-cache";

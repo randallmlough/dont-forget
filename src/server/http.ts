@@ -3,7 +3,7 @@ import {
 	createClerkClient,
 	verifyToken,
 } from "@clerk/backend";
-import { readClerkServerConfig, requireEnv } from "@/lib/env";
+import { readClerkServerConfig, requireEnv } from "@/shared/env";
 import {
 	type DirectoryDb,
 	directoryClient,

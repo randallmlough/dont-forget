@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { createAppId } from "@/lib/ids";
+import { createAppId } from "@/shared/ids";
 import type { DirectoryDb } from "@/server/db/client";
 import { type User, users } from "@/server/db/schema/postgres";
 import type { ServerUserProfile } from "@/server/http";

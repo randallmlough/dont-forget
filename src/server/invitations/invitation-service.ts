@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
-import { asError } from "@/lib/errors";
-import { createAppId } from "@/lib/ids";
-import { redactAttributes } from "@/lib/redact";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
+import { asError } from "@/shared/errors";
+import { createAppId } from "@/shared/ids";
+import { redactAttributes } from "@/shared/redact";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { DirectoryDb } from "@/server/db/client";
 import {

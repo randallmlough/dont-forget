@@ -1,6 +1,6 @@
 import { track } from "@/lib/analytics";
 import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 import {
 	BOOTSTRAP_API_PATH,
 	type BootstrapResponse,

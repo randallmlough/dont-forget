@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { createAppId } from "@/lib/ids";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
+import { createAppId } from "@/shared/ids";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { DirectoryDb } from "@/server/db/client";
 import {

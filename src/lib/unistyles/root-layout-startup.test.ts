@@ -61,7 +61,7 @@ function mockRootLayoutDependencies() {
 	jest.doMock("@/lib/analytics", () => ({
 		screen: jest.fn(),
 	}));
-	jest.doMock("@/lib/env", () => ({
+	jest.doMock("@/shared/env", () => ({
 		readAppEnvFromExpoExtra: jest.fn(() => "test"),
 		validateClerkKeyForEnv: jest.fn(),
 	}));

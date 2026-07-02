@@ -1,4 +1,4 @@
-import type { HouseholdJoinCodeSource } from "@/lib/household-join-code-source";
+import type { HouseholdJoinCodeSource } from "@/shared/household-join-code-source";
 
 /**
  * Catalog of every product-analytics event the app emits.

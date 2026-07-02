@@ -1,6 +1,6 @@
 import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 import { readPowerSyncUrl } from "@/lib/client-api/powersync-url";
-import { asError } from "@/lib/errors";
+import { asError } from "@/shared/errors";
 import { logger as defaultLogger, type Logger } from "@/lib/logger";
 import { PowerSyncConnector } from "@/lib/powersync";
 import { createItemService, type ItemService } from "@/lib/services/item";

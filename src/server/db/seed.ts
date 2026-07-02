@@ -6,8 +6,8 @@ import {
 	assertLocalDirectoryDatabaseUrl,
 	readClerkServerConfig,
 	readPostgresConfig,
-} from "@/lib/env";
-import { loadEnvFile } from "@/lib/load-env";
+} from "@/shared/env";
+import { loadEnvFile } from "@/shared/load-env";
 import { directoryClient, directoryDb } from "@/server/db/client";
 import {
 	type EmailBackedPrimaryHouseholdScenarioSeed,

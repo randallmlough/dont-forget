@@ -4,7 +4,7 @@
  *
  * Run with: make worktree-db
  */
-import { loadEnvFile } from "@/lib/load-env";
+import { loadEnvFile } from "@/shared/load-env";
 
 async function main(): Promise<void> {
 	const appEnv = loadEnvFile();

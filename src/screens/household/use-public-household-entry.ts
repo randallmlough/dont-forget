@@ -11,7 +11,7 @@ import {
 	type HouseholdJoinCodePreview,
 	type InvitationPreview,
 } from "@/lib/client-api/households";
-import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
+import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/shared/household-join-code-source";
 
 type PublicEntryKind = "invitation" | "joinCode";
 

@@ -3,9 +3,9 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
 	type HouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
-} from "@/lib/household-join-code-source";
-import { createAppId } from "@/lib/ids";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
+} from "@/shared/household-join-code-source";
+import { createAppId } from "@/shared/ids";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { DirectoryDb } from "@/server/db/client";
 import {

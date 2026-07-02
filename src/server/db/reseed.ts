@@ -1,5 +1,5 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { assertLocalDirectoryDatabaseUrl, readPostgresConfig } from "@/lib/env";
+import { assertLocalDirectoryDatabaseUrl, readPostgresConfig } from "@/shared/env";
 import { directoryClient, directoryDb } from "@/server/db/client";
 import { resetDirectoryDatabase } from "@/server/db/reset";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/server/db/utils";

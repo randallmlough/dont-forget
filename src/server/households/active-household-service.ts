@@ -1,5 +1,5 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
+import type { ServiceAnalytics } from "@/shared/service-analytics";
 import { serverServiceAnalytics } from "@/server/analytics";
 import type { DirectoryDb } from "@/server/db/client";
 import { households, memberships, users } from "@/server/db/schema/postgres";

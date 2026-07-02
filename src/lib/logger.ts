@@ -1,8 +1,8 @@
 import { useUser } from "@clerk/clerk-expo";
+import { redactAttributes, redactString } from "@/shared/redact";
 import { useMemo } from "react";
 
 import { posthog } from "./posthog";
-import { redactAttributes, redactString } from "./redact";
 
 type PostHogLogAttributes = Parameters<typeof posthog.logger.info>[1];
 
