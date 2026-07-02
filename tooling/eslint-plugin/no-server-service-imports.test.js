@@ -12,7 +12,7 @@ ruleTester.run("no-server-service-imports", rule, {
 	valid: [
 		{
 			filename: "/repo/screens/home/use-home-content.ts",
-			code: `import { createItemService } from "@/lib/services/item";`,
+			code: `import { createItemService } from "@/client/features/list/item-service";`,
 		},
 		{
 			filename: "/repo/lib/services/item/index.ts",

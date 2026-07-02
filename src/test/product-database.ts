@@ -5,7 +5,7 @@ import type {
 	ProductRow,
 	ProductWriteResult,
 } from "@/client/lib/product-database";
-import { timestampMillisToSqlText } from "@/lib/services/shared/sql-timestamp";
+import { timestampMillisToSqlText } from "@/client/features/list/sql-timestamp";
 
 // A real in-memory SQLite (better-sqlite3) standing in for the on-device
 // PowerSync database in service tests. The dialect and `?`-positional

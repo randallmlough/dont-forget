@@ -1,4 +1,4 @@
-import { createCurrentListSelectionStore } from "@/lib/local-storage/current-list-selection";
+import { createCurrentListSelectionStore } from "@/client/features/list/current-selection";
 import { createMockAnalytics } from "@/test/mocks/analytics";
 import { createMockLogger } from "@/test/mocks/logger";
 import type {

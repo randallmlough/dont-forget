@@ -12,11 +12,11 @@ import {
 } from "react-native-safe-area-context";
 import { useUnistyles } from "react-native-unistyles";
 
-import { AuthGate } from "@/components/auth/auth-gate";
+import { AuthGate } from "@/client/features/auth/auth-gate";
 import {
 	AUTH_PATHS,
 	PUBLIC_AUTH_PRESERVING_PATHS,
-} from "@/components/auth/redirect-policy";
+} from "@/client/features/auth/redirect-policy";
 import { AuthenticatedAppSessionProvider } from "@/client/session";
 import { screen } from "@/client/lib/analytics";
 import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/shared/env";

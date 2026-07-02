@@ -3,8 +3,8 @@ import { readPowerSyncUrl } from "@/client/session/powersync/powersync-url";
 import { asError } from "@/shared/errors";
 import { logger as defaultLogger, type Logger } from "@/client/lib/logger";
 import { PowerSyncConnector } from "@/client/session/powersync";
-import { createItemService, type ItemService } from "@/lib/services/item";
-import { createListService, type ListService } from "@/lib/services/list";
+import { createItemService, type ItemService } from "@/client/features/list/item-service";
+import { createListService, type ListService } from "@/client/features/list/list-service";
 import {
 	type ActiveMember,
 	createSessionBootstrapService,

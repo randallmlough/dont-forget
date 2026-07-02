@@ -47,10 +47,10 @@ function mockRootLayoutDependencies() {
 	jest.doMock("react-native-unistyles", () => ({
 		useUnistyles: jest.fn(),
 	}));
-	jest.doMock("@/components/auth/auth-gate", () => ({
+	jest.doMock("@/client/features/auth/auth-gate", () => ({
 		AuthGate: () => null,
 	}));
-	jest.doMock("@/components/auth/redirect-policy", () => ({
+	jest.doMock("@/client/features/auth/redirect-policy", () => ({
 		AUTH_PATHS: new Set<string>(),
 		PUBLIC_AUTH_PRESERVING_PATHS: new Set<string>(),
 	}));
