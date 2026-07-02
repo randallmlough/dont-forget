@@ -1,10 +1,4 @@
 import { eq } from "drizzle-orm";
-import {
-	households,
-	invitations,
-	memberships,
-	users,
-} from "@/server/db/schema/postgres";
 import type { DirectoryDb } from "@/server/db/client";
 import {
 	householdFixture,
@@ -13,6 +7,12 @@ import {
 	PRIMARY_HOUSEHOLD_SEED,
 	userFixture,
 } from "@/server/db/fixtures";
+import {
+	households,
+	invitations,
+	memberships,
+	users,
+} from "@/server/db/schema/postgres";
 import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	createInvitationService,

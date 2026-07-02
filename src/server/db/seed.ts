@@ -2,14 +2,12 @@ import { createHash } from "node:crypto";
 import { inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import {
-	householdJoinCodes,
-	households,
-	itemChecks,
-	items,
-	lists,
-	memberships,
-	users,
-} from "@/server/db/schema/postgres";
+	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
+	readClerkServerConfig,
+	readPostgresConfig,
+} from "@/lib/env";
+import { loadEnvFile } from "@/lib/load-env";
 import { directoryClient, directoryDb } from "@/server/db/client";
 import {
 	type EmailBackedPrimaryHouseholdScenarioSeed,
@@ -18,12 +16,14 @@ import {
 	seedPrimaryHouseholdScenario,
 } from "@/server/db/fixtures";
 import {
-	type AppEnv,
-	assertLocalDirectoryDatabaseUrl,
-	readClerkServerConfig,
-	readPostgresConfig,
-} from "@/lib/env";
-import { loadEnvFile } from "@/lib/load-env";
+	householdJoinCodes,
+	households,
+	itemChecks,
+	items,
+	lists,
+	memberships,
+	users,
+} from "@/server/db/schema/postgres";
 
 export const SEED_TEST_PASSWORD = "testing1234";
 

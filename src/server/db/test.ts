@@ -8,8 +8,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { drizzle as pgliteDrizzle } from "drizzle-orm/pglite";
-import * as directorySchema from "@/server/db/schema/postgres";
 import type { directoryDb } from "@/server/db/client";
+import * as directorySchema from "@/server/db/schema/postgres";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/server/db/utils";
 
 const DIRECTORY_MIGRATIONS = "src/server/db/migrations/postgres";

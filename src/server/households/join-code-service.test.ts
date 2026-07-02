@@ -1,11 +1,6 @@
 import { eq } from "drizzle-orm";
-import {
-	householdJoinCodes,
-	householdJoinCodeUses,
-	households,
-	memberships,
-	users,
-} from "@/server/db/schema/postgres";
+import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
+import { deferred } from "@/lib/test/async";
 import type { DirectoryDb } from "@/server/db/client";
 import {
 	householdFixture,
@@ -14,9 +9,14 @@ import {
 	PRIMARY_HOUSEHOLD_SEED,
 	userFixture,
 } from "@/server/db/fixtures";
+import {
+	householdJoinCodes,
+	householdJoinCodeUses,
+	households,
+	memberships,
+	users,
+} from "@/server/db/schema/postgres";
 import { createTestDirectoryDb } from "@/server/db/test";
-import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
-import { deferred } from "@/lib/test/async";
 import {
 	createHouseholdJoinCodeService,
 	HouseholdJoinCodeMembershipRequiredError,

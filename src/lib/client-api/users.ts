@@ -5,8 +5,8 @@ import {
 	updateUserNameResponseSchema,
 } from "@/shared/contracts/users";
 
-export { currentUserSchema };
 export type { CurrentUser };
+export { currentUserSchema };
 
 export type ApiGetToken = () => Promise<string | null>;
 

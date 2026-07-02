@@ -1,15 +1,15 @@
 import { eq } from "drizzle-orm";
-import { type User, users } from "@/server/db/schema/postgres";
 import type { DirectoryDb } from "@/server/db/client";
-import type { BootstrapResponse } from "@/shared/contracts/bootstrap";
-import type { ServerUserProfile } from "@/server/http";
+import { type User, users } from "@/server/db/schema/postgres";
 import { createHouseholdService } from "@/server/households/household-service";
 import { generateInitialHouseholdName } from "@/server/households/initial-household-name";
 import {
 	type ActiveMembership,
 	createMemberService,
 } from "@/server/households/member-service";
+import type { ServerUserProfile } from "@/server/http";
 import { createUserService } from "@/server/users/user-service";
+import type { BootstrapResponse } from "@/shared/contracts/bootstrap";
 
 export type AuthenticatedAppSessionBootstrapDeps = {
 	directory: DirectoryDb;

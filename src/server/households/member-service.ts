@@ -1,4 +1,8 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { createAppId } from "@/lib/ids";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
+import { serverServiceAnalytics } from "@/server/analytics";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	households,
 	type Membership,
@@ -6,10 +10,6 @@ import {
 	type User,
 	users,
 } from "@/server/db/schema/postgres";
-import type { DirectoryDb } from "@/server/db/client";
-import { createAppId } from "@/lib/ids";
-import { serverServiceAnalytics } from "@/server/analytics";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
 import {
 	type DirectoryTransaction,
 	lockHouseholdRow,

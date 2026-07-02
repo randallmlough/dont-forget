@@ -1,4 +1,3 @@
-import type { DirectoryDb } from "@/server/db/client";
 import { asError } from "@/lib/errors";
 import {
 	type HouseholdJoinCodeSource,
@@ -6,19 +5,13 @@ import {
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
 } from "@/lib/household-join-code-source";
 import { redactAttributes } from "@/lib/redact";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	ActiveHouseholdMembershipRequiredError,
 	type ActiveHouseholdService,
 	type ActiveHouseholdServiceDirectory,
 	createActiveHouseholdService,
 } from "@/server/households/active-household-service";
-import {
-	createHouseholdJoinCodeService,
-	HouseholdJoinCodeMembershipRequiredError,
-	type HouseholdJoinCodeService,
-	type HouseholdJoinCodeServiceDeps,
-	HouseholdJoinCodeUnavailableError,
-} from "@/server/households/join-code-service";
 import {
 	createHouseholdService,
 	HouseholdForbiddenError,
@@ -29,14 +22,13 @@ import {
 	normalizeHouseholdName,
 } from "@/server/households/household-service";
 import { generateInitialHouseholdName } from "@/server/households/initial-household-name";
-import type {
-	CreateHouseholdResponse,
-	HouseholdJoinCodePreview,
-	JoinCodeResponse,
-	LeaveHouseholdResponse,
-	ListMembersResponse,
-	RenameHouseholdResponse,
-} from "@/shared/contracts/households";
+import {
+	createHouseholdJoinCodeService,
+	HouseholdJoinCodeMembershipRequiredError,
+	type HouseholdJoinCodeService,
+	type HouseholdJoinCodeServiceDeps,
+	HouseholdJoinCodeUnavailableError,
+} from "@/server/households/join-code-service";
 import {
 	createMemberService,
 	LastOwnerError,
@@ -66,6 +58,14 @@ import {
 	unavailablePreviewResponse,
 	withDirectory,
 } from "@/server/http";
+import type {
+	CreateHouseholdResponse,
+	HouseholdJoinCodePreview,
+	JoinCodeResponse,
+	LeaveHouseholdResponse,
+	ListMembersResponse,
+	RenameHouseholdResponse,
+} from "@/shared/contracts/households";
 
 export type HouseholdApiDeps = ApiHandlerDeps & {
 	createActiveHouseholdService?: (

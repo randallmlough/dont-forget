@@ -1,4 +1,11 @@
 import {
+	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
+	assertProductionConfirmation,
+	readPostgresConfig,
+} from "@/lib/env";
+import { loadEnvFile } from "@/lib/load-env";
+import {
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
@@ -9,13 +16,6 @@ import {
 	lists as pgLists,
 	users,
 } from "@/server/db/schema/postgres";
-import {
-	type AppEnv,
-	assertLocalDirectoryDatabaseUrl,
-	assertProductionConfirmation,
-	readPostgresConfig,
-} from "@/lib/env";
-import { loadEnvFile } from "@/lib/load-env";
 import { type DirectoryDb, directoryClient, directoryDb } from "./client";
 
 type ResetConfirmationSource = Record<string, string | undefined>;

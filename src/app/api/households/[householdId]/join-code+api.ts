@@ -10,8 +10,6 @@ export async function PATCH(
 	request: Request,
 	{ householdId }: { householdId: string },
 ): Promise<Response> {
-	const { handleSetJoinCodeEnabled } = await import(
-		"@/server/households/api"
-	);
+	const { handleSetJoinCodeEnabled } = await import("@/server/households/api");
 	return handleSetJoinCodeEnabled(request, { householdId });
 }

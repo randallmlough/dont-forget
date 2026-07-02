@@ -4,13 +4,13 @@ import {
 	verifyToken,
 } from "@clerk/backend";
 import { readClerkServerConfig, requireEnv } from "@/lib/env";
-import { createUserService } from "@/server/users/user-service";
 import {
 	type DirectoryDb,
 	directoryClient,
 	directoryDb,
 } from "@/server/db/client";
 import type { User } from "@/server/db/schema/postgres";
+import { createUserService } from "@/server/users/user-service";
 
 export const INVITATION_UNAVAILABLE_MESSAGE =
 	"This Invitation is no longer available.";

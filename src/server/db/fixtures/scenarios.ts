@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import type { DirectoryDb } from "@/server/db/client";
 import type {
 	NewHousehold,
 	NewMembership,
@@ -15,7 +16,6 @@ import {
 	memberships,
 	users,
 } from "@/server/db/schema/postgres";
-import type { DirectoryDb } from "@/server/db/client";
 import {
 	householdFixture,
 	householdJoinCodeFixture,

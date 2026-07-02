@@ -1,20 +1,20 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { asError } from "@/lib/errors";
+import { createAppId } from "@/lib/ids";
+import { redactAttributes } from "@/lib/redact";
+import type { ServiceAnalytics } from "@/lib/services/analytics";
+import { serverServiceAnalytics } from "@/server/analytics";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	households,
 	type Invitation,
 	invitations,
 	users,
 } from "@/server/db/schema/postgres";
-import type { DirectoryDb } from "@/server/db/client";
-import { asError } from "@/lib/errors";
-import { createAppId } from "@/lib/ids";
-import { redactAttributes } from "@/lib/redact";
-import { serverServiceAnalytics } from "@/server/analytics";
-import type { ServiceAnalytics } from "@/lib/services/analytics";
+import { lockHouseholdRow } from "@/server/directory-transaction";
 import { createActiveHouseholdService } from "@/server/households/active-household-service";
 import { createMemberService } from "@/server/households/member-service";
-import { lockHouseholdRow } from "@/server/directory-transaction";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TOKEN_GENERATION_ATTEMPTS = 5;

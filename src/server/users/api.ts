@@ -1,16 +1,7 @@
-import type { User } from "@/server/db/schema/postgres";
-import type { DirectoryDb } from "@/server/db/client";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
-import {
-	createUserService,
-	type UpdateClerkUserName,
-	type UserService,
-} from "@/server/users/user-service";
-import type {
-	CurrentUser,
-	UpdateUserNameResponse,
-} from "@/shared/contracts/users";
+import type { DirectoryDb } from "@/server/db/client";
+import type { User } from "@/server/db/schema/postgres";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
@@ -21,6 +12,15 @@ import {
 	readJsonObject,
 	withDirectory,
 } from "@/server/http";
+import {
+	createUserService,
+	type UpdateClerkUserName,
+	type UserService,
+} from "@/server/users/user-service";
+import type {
+	CurrentUser,
+	UpdateUserNameResponse,
+} from "@/shared/contracts/users";
 
 const MAX_NAME_LENGTH = 50;
 

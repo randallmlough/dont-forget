@@ -1,20 +1,6 @@
-import type { DirectoryDb } from "@/server/db/client";
 import { asError } from "@/lib/errors";
 import { redactAttributes } from "@/lib/redact";
-import {
-	createInvitationService,
-	InvitationInvalidEmailError,
-	InvitationMembershipRequiredError,
-	type InvitationService,
-	type InvitationServiceDeps,
-	InvitationUnavailableError,
-} from "@/server/invitations/invitation-service";
-import type {
-	CreateInvitationResponse,
-	InvitationPreview,
-	ListInvitationsResponse,
-	RevokeInvitationResponse,
-} from "@/shared/contracts/invitations";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
@@ -31,6 +17,20 @@ import {
 	unavailablePreviewResponse,
 	withDirectory,
 } from "@/server/http";
+import {
+	createInvitationService,
+	InvitationInvalidEmailError,
+	InvitationMembershipRequiredError,
+	type InvitationService,
+	type InvitationServiceDeps,
+	InvitationUnavailableError,
+} from "@/server/invitations/invitation-service";
+import type {
+	CreateInvitationResponse,
+	InvitationPreview,
+	ListInvitationsResponse,
+	RevokeInvitationResponse,
+} from "@/shared/contracts/invitations";
 
 export type InvitationApiDeps = ApiHandlerDeps & {
 	createInvitationService?: (directory: DirectoryDb) => InvitationService;

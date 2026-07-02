@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import { households, memberships, users } from "@/server/db/schema/postgres";
+import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
+import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import {
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
@@ -8,14 +9,13 @@ import {
 	seedPrimaryHouseholdScenario,
 	userFixture,
 } from "@/server/db/fixtures";
+import { households, memberships, users } from "@/server/db/schema/postgres";
 import { createTestDirectoryDb, type TestDirectoryDb } from "@/server/db/test";
-import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/lib/household-join-code-source";
+import { INITIAL_HOUSEHOLD_NAMES } from "@/server/households/initial-household-name";
 import {
 	createHouseholdJoinCodeService,
 	type HouseholdJoinCodeService,
 } from "@/server/households/join-code-service";
-import { INITIAL_HOUSEHOLD_NAMES } from "@/server/households/initial-household-name";
-import { createApiRequest, readJsonResponse } from "@/lib/test/api";
 import { ApiUnauthorizedError, upsertAuthenticatedUser } from "@/server/http";
 import {
 	type HouseholdApiDeps,

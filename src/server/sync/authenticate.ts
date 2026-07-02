@@ -6,13 +6,12 @@
 // request is actually authenticated — a caller that injects its own auth (e.g.
 // the handler tests) never pulls it in. The other deps (drizzle, the pg schema,
 // @/lib/env) are already in this module's static graph via @/server/db/pg-client,
-// so importing them statically defers nothing. db/ importing @/lib/* is
-// lint-clean: no-services-imports-in-db bars only @/lib/services and @/lib/api.
+// so importing them statically defers nothing.
 
 import { eq } from "drizzle-orm";
-import { users } from "@/server/db/schema/postgres";
-import { postgresDb, postgresPool } from "@/server/db/pg-client";
 import { readClerkServerConfig } from "@/lib/env";
+import { postgresDb, postgresPool } from "@/server/db/pg-client";
+import { users } from "@/server/db/schema/postgres";
 
 // Auth failure (401).
 export class DataAuthError extends Error {

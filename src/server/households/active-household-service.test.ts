@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { memberships, users } from "@/server/db/schema/postgres";
 import { seedMultiHouseholdUserScenario } from "@/server/db/fixtures";
+import { memberships, users } from "@/server/db/schema/postgres";
 import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	ActiveHouseholdMembershipRequiredError,

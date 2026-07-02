@@ -1,17 +1,16 @@
 import { eq } from "drizzle-orm";
-
-import {
-	householdJoinCodes,
-	households,
-	memberships,
-	users,
-} from "@/server/db/schema/postgres";
 import {
 	householdFixture,
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
 	userFixture,
 } from "@/server/db/fixtures";
+import {
+	householdJoinCodes,
+	households,
+	memberships,
+	users,
+} from "@/server/db/schema/postgres";
 import { createTestDirectoryDb } from "@/server/db/test";
 import {
 	createHouseholdService,
