@@ -20,7 +20,7 @@ import { track } from "@/lib/analytics";
 import { createUsersApiClient } from "@/lib/client-api/users";
 import { useLogger } from "@/lib/logger";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
-import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
+import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
@@ -75,13 +75,13 @@ jest.mock("@/lib/client-api/users", () => ({
 }));
 
 jest.mock("@/lib/analytics", () =>
-	jest.requireActual("@/lib/test/mocks/analytics"),
+	jest.requireActual("@/test/mocks/analytics"),
 );
 
 jest.mock("@/lib/logger", () =>
 	jest
-		.requireActual<typeof import("@/lib/test/mocks/logger")>(
-			"@/lib/test/mocks/logger",
+		.requireActual<typeof import("@/test/mocks/logger")>(
+			"@/test/mocks/logger",
 		)
 		.createMockLoggerModule(),
 );

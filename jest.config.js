@@ -5,7 +5,7 @@ module.exports = {
 		"react-native-unistyles/mocks",
 		"<rootDir>/src/lib/unistyles/unistyles.ts",
 	],
-	setupFilesAfterEnv: ["<rootDir>/src/lib/test/setup.ts"],
+	setupFilesAfterEnv: ["<rootDir>/src/test/setup.ts"],
 	// Directory-DB tests boot PGlite (WASM Postgres) in a child process and run
 	// migrations; the first such test per run also generates the PGlite template.
 	// That cold start exceeds Jest's 5s default on CI hardware, so widen the budget.
@@ -35,6 +35,6 @@ module.exports = {
 		"!**/*.test.{ts,tsx}",
 		"!**/db/migrations/**",
 		"!src/server/db/test.ts",
-		"!src/lib/test/**/*",
+		"!src/test/**/*",
 	],
 };

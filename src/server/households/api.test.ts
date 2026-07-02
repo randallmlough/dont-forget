@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/shared/household-join-code-source";
-import { createApiRequest, readJsonResponse } from "@/lib/test/api";
+import { createApiRequest, readJsonResponse } from "@/test/api";
 import {
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,

@@ -1,4 +1,4 @@
-import { createApiRequest, readJsonResponse } from "@/lib/test/api/requests";
+import { createApiRequest, readJsonResponse } from "@/test/api/requests";
 import { handleDataUpload } from "@/server/data/api";
 import type { DataOp } from "@/server/sync/applicator";
 import {

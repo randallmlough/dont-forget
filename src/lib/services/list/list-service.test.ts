@@ -1,7 +1,7 @@
 import {
 	createTestProductDatabase,
 	type TestProductDatabase,
-} from "@/lib/test/product-database";
+} from "@/test/product-database";
 import { createListService, type ListService } from "./list-service";
 
 const HOUSEHOLD = "hh_1";

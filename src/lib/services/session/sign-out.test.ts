@@ -1,6 +1,6 @@
 import { createCurrentListSelectionStore } from "@/lib/local-storage/current-list-selection";
-import { createMockAnalytics } from "@/lib/test/mocks/analytics";
-import { createMockLogger } from "@/lib/test/mocks/logger";
+import { createMockAnalytics } from "@/test/mocks/analytics";
+import { createMockLogger } from "@/test/mocks/logger";
 import type {
 	AuthenticatedAppSession,
 	AuthenticatedAppSessionController,

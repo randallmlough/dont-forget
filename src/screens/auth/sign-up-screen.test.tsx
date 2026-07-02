@@ -5,12 +5,12 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Alert } from "react-native";
-import { analyticsMocks } from "@/lib/test/mocks/analytics";
-import { clerkMocks } from "@/lib/test/mocks/clerk";
+import { analyticsMocks } from "@/test/mocks/analytics";
+import { clerkMocks } from "@/test/mocks/clerk";
 import SignUpScreen from "@/screens/auth/sign-up-screen";
 
 jest.mock("@/lib/analytics", () =>
-	jest.requireActual("@/lib/test/mocks/analytics"),
+	jest.requireActual("@/test/mocks/analytics"),
 );
 
 jest.mock("expo-router", () => {

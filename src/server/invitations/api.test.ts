@@ -1,4 +1,4 @@
-import { createApiRequest, readJsonResponse } from "@/lib/test/api";
+import { createApiRequest, readJsonResponse } from "@/test/api";
 import {
 	PRIMARY_HOUSEHOLD_SEED,
 	seedInvitationVariantsScenario,

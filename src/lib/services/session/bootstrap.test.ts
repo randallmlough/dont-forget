@@ -1,4 +1,4 @@
-import { createMockAnalytics } from "@/lib/test/mocks/analytics";
+import { createMockAnalytics } from "@/test/mocks/analytics";
 import {
 	BOOTSTRAP_API_PATH,
 	type BootstrapResponse,
@@ -6,7 +6,7 @@ import {
 import { createSessionBootstrapService } from "./bootstrap";
 
 jest.mock("@/lib/analytics", () =>
-	jest.requireActual("@/lib/test/mocks/analytics"),
+	jest.requireActual("@/test/mocks/analytics"),
 );
 
 describe("createSessionBootstrapService", () => {

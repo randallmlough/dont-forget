@@ -13,9 +13,9 @@ import type {
 	AuthenticatedAppSessionController,
 	AuthenticatedAppSessionStateSnapshot,
 } from "@/lib/services/session";
-import { deferred } from "@/lib/test/async";
-import { createMockAnalytics } from "@/lib/test/mocks/analytics";
-import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
+import { deferred } from "@/test/async";
+import { createMockAnalytics } from "@/test/mocks/analytics";
+import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import {
 	AuthenticatedAppSessionProvider,
 	useAuthenticatedAppSession,
@@ -25,14 +25,14 @@ let mockLogger: MockLogger;
 
 jest.mock("@/lib/logger", () =>
 	jest
-		.requireActual<typeof import("@/lib/test/mocks/logger")>(
-			"@/lib/test/mocks/logger",
+		.requireActual<typeof import("@/test/mocks/logger")>(
+			"@/test/mocks/logger",
 		)
 		.createMockLoggerModule(),
 );
 
 jest.mock("@/lib/analytics", () =>
-	jest.requireActual("@/lib/test/mocks/analytics"),
+	jest.requireActual("@/test/mocks/analytics"),
 );
 
 describe("AuthenticatedAppSessionProvider", () => {

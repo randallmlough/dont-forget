@@ -1,5 +1,5 @@
 import { renderHook, waitFor } from "@testing-library/react-native";
-import { setMockUserState } from "@/lib/test/mocks/clerk";
+import { setMockUserState } from "@/test/mocks/clerk";
 import { identify, screen, useAnalyticsIdentity } from "./analytics";
 import { posthog } from "./posthog";
 

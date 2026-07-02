@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/shared/household-join-code-source";
-import { deferred } from "@/lib/test/async";
+import { deferred } from "@/test/async";
 import type { DirectoryDb } from "@/server/db/client";
 import {
 	householdFixture,

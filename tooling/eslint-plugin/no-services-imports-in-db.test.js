@@ -28,7 +28,7 @@ ruleTester.run("no-services-imports-in-db", rule, {
 		},
 		{
 			filename: "/repo/db/household-store.test.ts",
-			code: `import { deferred } from "@/lib/test/async";`,
+			code: `import { deferred } from "@/test/async";`,
 		},
 		{
 			filename: "/repo/lib/services/sync/sync-coordinator.ts",

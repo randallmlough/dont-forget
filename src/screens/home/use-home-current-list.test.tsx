@@ -15,8 +15,8 @@ import { useHomeCurrentList } from "./use-home-current-list";
 
 jest.mock("@/lib/logger", () =>
 	jest
-		.requireActual<typeof import("@/lib/test/mocks/logger")>(
-			"@/lib/test/mocks/logger",
+		.requireActual<typeof import("@/test/mocks/logger")>(
+			"@/test/mocks/logger",
 		)
 		.createMockLoggerModule(),
 );

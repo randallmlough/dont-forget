@@ -8,16 +8,16 @@ import {
 import { Pressable, Text } from "react-native";
 import { useLogger } from "@/lib/logger";
 import type { AuthenticatedAppSession } from "@/lib/services/session";
-import { type Deferred, deferred } from "@/lib/test/async";
-import { createMockLogger, type MockLogger } from "@/lib/test/mocks/logger";
+import { type Deferred, deferred } from "@/test/async";
+import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import { useSessionQuery } from "./use-session-query";
 
 let mockLogger: MockLogger;
 
 jest.mock("@/lib/logger", () =>
 	jest
-		.requireActual<typeof import("@/lib/test/mocks/logger")>(
-			"@/lib/test/mocks/logger",
+		.requireActual<typeof import("@/test/mocks/logger")>(
+			"@/test/mocks/logger",
 		)
 		.createMockLoggerModule(),
 );
