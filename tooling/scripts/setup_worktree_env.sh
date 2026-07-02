@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TARGET_ENV="${ROOT_DIR}/.env.local"
 MODE="${WORKTREE_ENV_MODE:-symlink}"
 SOURCE_ENV="${WORKTREE_ENV_FILE:-${CODEX_WORKTREE_ENV_FILE:-}}"
