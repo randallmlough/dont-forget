@@ -3,7 +3,7 @@ import {
 	BOOTSTRAP_API_PATH,
 	type BootstrapResponse,
 	bootstrapResponseSchema,
-} from "@/lib/bootstrap";
+} from "@/shared/contracts/bootstrap";
 import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 import type { ServiceAnalytics } from "@/lib/services/analytics";
 

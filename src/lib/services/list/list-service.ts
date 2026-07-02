@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
-import { sqlNumberSchema } from "@/db/utils";
+import { sqlNumberSchema } from "@/shared/sql";
 import { track } from "@/lib/analytics";
 import { asError } from "@/lib/errors";
 import { createAppId } from "@/lib/ids";

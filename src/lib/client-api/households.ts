@@ -1,118 +1,43 @@
-import { z } from "zod";
 import { readApiBaseUrl } from "@/lib/client-api/api-base-url";
 import {
 	type HouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
 } from "@/lib/household-join-code-source";
+import {
+	createHouseholdResponseSchema,
+	type HouseholdJoinCode,
+	type HouseholdJoinCodePreview,
+	joinCodePreviewSchema,
+	joinCodeResponseSchema,
+	type LeaveHouseholdResponse,
+	leaveHouseholdResponseSchema,
+	listMembersResponseSchema,
+	renameHouseholdResponseSchema,
+} from "@/shared/contracts/households";
+import {
+	createInvitationResponseSchema,
+	type CreateInvitationResponse,
+	type InvitationPreview,
+	invitationPreviewSchema,
+	type InvitationRecord,
+	listInvitationsResponseSchema,
+	type PendingInvitation,
+	revokeInvitationResponseSchema,
+} from "@/shared/contracts/invitations";
+import type { HouseholdMember } from "@/shared/contracts/members";
+
+export type {
+	CreateInvitationResponse,
+	HouseholdJoinCode,
+	HouseholdJoinCodePreview,
+	HouseholdMember,
+	InvitationPreview,
+	InvitationRecord,
+	LeaveHouseholdResponse,
+	PendingInvitation,
+};
 
 export type ApiGetToken = () => Promise<string | null>;
-
-const memberRoleSchema = z.enum(["owner", "member"]);
-
-export const householdMemberSchema = z.object({
-	membershipId: z.string(),
-	userId: z.string(),
-	role: memberRoleSchema,
-	displayName: z.string().nullable(),
-});
-
-export const pendingInvitationSchema = z.object({
-	id: z.string(),
-	householdId: z.string(),
-	email: z.string().nullable(),
-	createdByUserId: z.string(),
-	creatorDisplayName: z.string().nullable(),
-	createdAt: z.number(),
-	expiresAt: z.number(),
-	acceptUrl: z.string(),
-});
-
-export const invitationRecordSchema = z.object({
-	id: z.string(),
-	householdId: z.string(),
-	email: z.string().nullable(),
-	createdByUserId: z.string(),
-	createdAt: z.number(),
-	expiresAt: z.number(),
-	acceptedAt: z.number().nullable(),
-	acceptedByUserId: z.string().nullable(),
-	revokedAt: z.number().nullable(),
-	acceptUrl: z.string(),
-});
-
-const emailDeliverySchema = z.discriminatedUnion("status", [
-	z.object({ status: z.literal("not_requested") }),
-	z.object({ status: z.literal("sent") }),
-	z.object({ status: z.literal("skipped"), reason: z.literal("environment") }),
-	z.object({ status: z.literal("failed"), message: z.string() }),
-]);
-
-const joinCodeSchema = z.discriminatedUnion("enabled", [
-	z.object({
-		enabled: z.literal(true),
-		id: z.string(),
-		householdId: z.string(),
-		code: z.string(),
-		joinUrl: z.string(),
-		createdAt: z.number(),
-	}),
-	z.object({
-		enabled: z.literal(false),
-		householdId: z.string(),
-	}),
-]);
-
-const invitationPreviewSchema = z.discriminatedUnion("available", [
-	z.object({
-		available: z.literal(true),
-		householdName: z.string(),
-		inviterDisplayName: z.string(),
-	}),
-	z.object({ available: z.literal(false) }),
-]);
-
-const joinCodePreviewSchema = z.discriminatedUnion("available", [
-	z.object({ available: z.literal(true), householdName: z.string() }),
-	z.object({ available: z.literal(false) }),
-]);
-
-const createInvitationResponseSchema = z.object({
-	invitation: invitationRecordSchema,
-	emailDelivery: emailDeliverySchema,
-	reusedExisting: z.boolean(),
-});
-
-const renameHouseholdResponseSchema = z.object({
-	household: z.object({
-		id: z.string(),
-		name: z.string(),
-	}),
-});
-
-const createHouseholdResponseSchema = z.object({
-	household: z.object({
-		id: z.string(),
-		name: z.string(),
-	}),
-});
-
-const leaveHouseholdResponseSchema = z.object({
-	left: z.literal(true),
-	promotedMembershipId: z.string().nullable(),
-});
-
-export type HouseholdMember = z.infer<typeof householdMemberSchema>;
-export type PendingInvitation = z.infer<typeof pendingInvitationSchema>;
-export type InvitationRecord = z.infer<typeof invitationRecordSchema>;
-export type CreateInvitationResponse = z.infer<
-	typeof createInvitationResponseSchema
->;
-export type HouseholdJoinCode = z.infer<typeof joinCodeSchema>;
-export type InvitationPreview = z.infer<typeof invitationPreviewSchema>;
-export type HouseholdJoinCodePreview = z.infer<typeof joinCodePreviewSchema>;
-export type LeaveHouseholdResponse = z.infer<
-	typeof leaveHouseholdResponseSchema
->;
 
 export type HouseholdApiClient = {
 	createHousehold(input: {
@@ -184,9 +109,7 @@ export function createHouseholdApiClient({
 		},
 		async listMembers(householdId) {
 			const payload = await authed(`/api/households/${householdId}/members`);
-			return z
-				.object({ members: z.array(householdMemberSchema) })
-				.parse(payload).members;
+			return listMembersResponseSchema.parse(payload).members;
 		},
 		async removeMember(input) {
 			await authed(
@@ -216,9 +139,7 @@ export function createHouseholdApiClient({
 			const payload = await authed(
 				`/api/households/${householdId}/invitations`,
 			);
-			return z
-				.object({ invitations: z.array(pendingInvitationSchema) })
-				.parse(payload).invitations;
+			return listInvitationsResponseSchema.parse(payload).invitations;
 		},
 		async createInvitation(input) {
 			const payload = await authed("/api/invitations", {
@@ -235,19 +156,18 @@ export function createHouseholdApiClient({
 				method: "PATCH",
 				body: JSON.stringify({ revoked: true }),
 			});
-			return z.object({ invitation: invitationRecordSchema }).parse(payload)
-				.invitation;
+			return revokeInvitationResponseSchema.parse(payload).invitation;
 		},
 		async getJoinCode(householdId) {
 			const payload = await authed(`/api/households/${householdId}/join-code`);
-			return z.object({ joinCode: joinCodeSchema }).parse(payload).joinCode;
+			return joinCodeResponseSchema.parse(payload).joinCode;
 		},
 		async regenerateJoinCode(householdId) {
 			const payload = await authed(
 				`/api/households/${householdId}/join-code/regenerate`,
 				{ method: "POST" },
 			);
-			return z.object({ joinCode: joinCodeSchema }).parse(payload).joinCode;
+			return joinCodeResponseSchema.parse(payload).joinCode;
 		},
 		async setJoinCodeEnabled(input) {
 			const payload = await authed(
@@ -257,7 +177,7 @@ export function createHouseholdApiClient({
 					body: JSON.stringify({ enabled: input.enabled }),
 				},
 			);
-			return z.object({ joinCode: joinCodeSchema }).parse(payload).joinCode;
+			return joinCodeResponseSchema.parse(payload).joinCode;
 		},
 		async switchHousehold(householdId) {
 			await authed("/api/users/me/active-household", {
@@ -327,6 +247,13 @@ async function requestJson(
 }
 
 function errorMessageFromPayload(payload: unknown): string {
-	const parsed = z.object({ error: z.string() }).safeParse(payload);
-	return parsed.success ? parsed.data.error : "Something went wrong.";
+	if (
+		typeof payload === "object" &&
+		payload !== null &&
+		"error" in payload &&
+		typeof (payload as { error: unknown }).error === "string"
+	) {
+		return (payload as { error: string }).error;
+	}
+	return "Something went wrong.";
 }

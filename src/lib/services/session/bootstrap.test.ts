@@ -1,4 +1,7 @@
-import { BOOTSTRAP_API_PATH, type BootstrapResponse } from "@/lib/bootstrap";
+import {
+	BOOTSTRAP_API_PATH,
+	type BootstrapResponse,
+} from "@/shared/contracts/bootstrap";
 import { createMockAnalytics } from "@/lib/test/mocks/analytics";
 import { createSessionBootstrapService } from "./bootstrap";
 

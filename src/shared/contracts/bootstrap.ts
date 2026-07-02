@@ -1,8 +1,7 @@
 import { z } from "zod";
+import { memberRoleSchema } from "./members";
 
 export const BOOTSTRAP_API_PATH = "/api/bootstrap";
-
-const memberRoleSchema = z.enum(["owner", "member"]);
 
 const associatedHouseholdSchema = z.object({
 	id: z.string(),
