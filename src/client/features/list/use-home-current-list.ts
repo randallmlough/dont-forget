@@ -1,8 +1,3 @@
-import type {
-	ActiveListItem,
-	ActiveListState,
-	AddActiveListItemInput,
-} from "@/client/features/list/active-list";
 import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
@@ -10,6 +5,11 @@ import {
 import type { Item } from "@/client/features/list/item-service";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useWatchedResource } from "@/client/session";
+import type {
+	ActiveListItem,
+	ActiveListState,
+	AddActiveListItemInput,
+} from "./list-view-types";
 import {
 	type ProductServices,
 	useProductServices,

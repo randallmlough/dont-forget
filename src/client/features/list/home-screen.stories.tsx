@@ -2,18 +2,16 @@ import type { Meta, StoryObj } from "@storybook/react-native";
 import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-
+import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
+import { HomeScreenView } from "@/client/features/list/home-screen";
+import {
+	emptyActiveListState,
+	populatedActiveListState,
+} from "@/client/features/list/list-test-support";
 import type {
 	ActiveListState,
 	AddActiveListItemInput,
-} from "@/client/features/list/active-list";
-import {
-	createPassiveActiveListSyncStatus,
-	emptyActiveListState,
-	populatedActiveListState,
-} from "@/client/features/list/active-list/test-support";
-import type { HomeCurrentListDeps } from "@/client/features/list/home-current-list";
-import { HomeScreenView } from "@/client/features/list/home-screen";
+} from "@/client/features/list/list-view-types";
 import type { AuthenticatedAppSession } from "@/client/session";
 
 const meta = {
@@ -75,8 +73,6 @@ export const AuthenticatedAppSessionError: Story = {
 
 function noop() {}
 
-const storySyncStatus = createPassiveActiveListSyncStatus();
-
 function HomeStory({ initialList }: { initialList: ActiveListState }) {
 	const [list, setList] = useState(initialList);
 	const currentListDeps: HomeCurrentListDeps = {
@@ -99,7 +95,7 @@ function HomeStory({ initialList }: { initialList: ActiveListState }) {
 			retry: noop,
 			reload: noop,
 		},
-		syncStatus: storySyncStatus,
+		syncState: "synced",
 	};
 
 	return (

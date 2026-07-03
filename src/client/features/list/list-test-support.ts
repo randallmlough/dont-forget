@@ -1,8 +1,7 @@
 import type {
 	ActiveListState,
-	ActiveListSyncStatusSource,
 	AddActiveListItemInput,
-} from "./types";
+} from "./list-view-types";
 
 export const emptyActiveListState: ActiveListState = {
 	householdName: "Avery",
@@ -39,6 +38,22 @@ export const populatedActiveListState: ActiveListState = {
 			checkedByMemberName: null,
 		},
 	],
+};
+
+export const largeActiveListState: ActiveListState = {
+	householdName: "Avery",
+	listName: "Groceries",
+	items: Array.from({ length: 24 }, (_, index) => ({
+		id: `large-item-${index + 1}`,
+		name:
+			index === 0
+				? "Extra long Item name that should stay readable in the List row"
+				: `Pantry staple ${index + 1}`,
+		quantity: index % 3 === 0 ? `${index + 1} ct` : null,
+		notes: index % 4 === 0 ? "Check the bottom shelf before buying" : null,
+		checked: index % 2 === 0,
+		checkedByMemberName: index % 2 === 0 ? "Avery Chen" : null,
+	})),
 };
 
 export type ActiveListMemoryActions = {
@@ -91,14 +106,5 @@ export function createActiveListMemoryActions(
 				),
 			};
 		},
-	};
-}
-
-export function createPassiveActiveListSyncStatus(
-	status: ReturnType<ActiveListSyncStatusSource["getStatus"]> = "synced",
-): ActiveListSyncStatusSource {
-	return {
-		getStatus: () => status,
-		subscribe: () => ({ remove() {} }),
 	};
 }
