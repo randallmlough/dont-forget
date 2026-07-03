@@ -8,7 +8,11 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { HomeCurrentList, homeSessionMemberName } from "./home-current-list";
+import {
+	HomeCurrentList,
+	type HomeCurrentListDeps,
+	homeSessionMemberName,
+} from "./home-current-list";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 
 export type HomeScreenViewProps = {
@@ -17,6 +21,7 @@ export type HomeScreenViewProps = {
 	onRetry?: () => void;
 	onOpenSettings?: () => void;
 	onOpenHouseholdSettings?: () => void;
+	currentListDeps?: HomeCurrentListDeps;
 };
 
 export default function HomeScreen() {
@@ -43,6 +48,7 @@ export function HomeScreenView({
 	onRetry,
 	onOpenSettings,
 	onOpenHouseholdSettings,
+	currentListDeps,
 }: HomeScreenViewProps) {
 	const displayMemberName = homeSessionMemberName(session);
 
@@ -84,7 +90,7 @@ export function HomeScreenView({
 			</View>
 
 			{session ? (
-				<HomeCurrentList session={session} />
+				<HomeCurrentList session={session} deps={currentListDeps} />
 			) : state.status === "error" ? (
 				<HomeStatus title="Household unavailable" body={state.message}>
 					{onRetry ? <HomeRetryButton onPress={onRetry} /> : null}

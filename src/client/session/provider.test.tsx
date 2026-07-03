@@ -7,19 +7,18 @@ import {
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
 import { useLogger } from "@/client/lib/logger";
-import type {
-	AuthenticatedAppSession,
-	AuthenticatedAppSessionActivation,
-	AuthenticatedAppSessionController,
-	AuthenticatedAppSessionStateSnapshot,
-} from "@/client/session";
+import type { SessionBootstrapService } from "@/client/session/bootstrap";
 import { deferred } from "@/test/async";
 import { createMockAnalytics } from "@/test/mocks/analytics";
 import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import {
+	type AuthenticatedAppSession,
+	type AuthenticatedAppSessionConnectDatabase,
 	AuthenticatedAppSessionProvider,
+	type AuthenticatedAppSessionProviderAuth,
 	useAuthenticatedAppSession,
 } from "./provider";
+import { markAuthenticatedAppSessionPresent } from "./session-hint";
 
 let mockLogger: MockLogger;
 
@@ -33,6 +32,11 @@ jest.mock("@/client/lib/analytics", () =>
 	jest.requireActual("@/test/mocks/analytics"),
 );
 
+jest.mock("./session-hint", () => ({
+	clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
+	markAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
+}));
+
 describe("AuthenticatedAppSessionProvider", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -41,47 +45,49 @@ describe("AuthenticatedAppSessionProvider", () => {
 		jest.mocked(useLogger).mockReturnValue(mockLogger);
 	});
 
-	it("eagerly activates the controller and renders fresh ready state", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
+	it("bootstraps, connects PowerSync, and renders ready state", async () => {
+		const session = appSessionFixture();
+		const bootstrapService = bootstrapServiceFixture(session);
+		const connectDatabase = connectDatabaseFixture();
 		await render(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		expect(controller.activate).toHaveBeenCalledWith({
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
+		expect(screen.getByText("hh_avery")).toBeTruthy();
+		expect(screen.getByText("ready")).toBeTruthy();
+		expect(bootstrapService.getSession).toHaveBeenCalledWith(
+			expect.any(Function),
+		);
+		expect(connectDatabase).toHaveBeenCalledWith({
 			getToken: expect.any(Function),
 			getPowerSyncToken: expect.any(Function),
-			authReady: true,
-			signedIn: true,
-			cachePolicy: "allowCached",
 		});
-		const activation = controller.activate.mock.calls[0]?.[0];
-		await expect(activation?.getToken()).resolves.toBe("token");
-		await expect(activation?.getPowerSyncToken?.()).resolves.toBe(
+		const getSessionToken = bootstrapService.getSession.mock.calls[0]?.[0];
+		const connectInput = connectDatabase.mock.calls[0]?.[0];
+		await expect(getSessionToken?.()).resolves.toBe("token");
+		await expect(connectInput?.getToken()).resolves.toBe("token");
+		await expect(connectInput?.getPowerSyncToken()).resolves.toBe(
 			"powersync-token",
 		);
-
-		await act(() => {
-			controller.publish({ status: "ready", session: appSessionFixture() });
-		});
-
-		await waitFor(() =>
-			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
-		);
-		expect(screen.getByText("Avery Chen")).toBeTruthy();
-		expect(screen.getByText("ready")).toBeTruthy();
+		expect(markAuthenticatedAppSessionPresent).toHaveBeenCalledTimes(1);
 	});
 
 	it("can defer initial activation until reload is requested", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
 		await render(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
 				activationEnabled={false}
 			>
 				<ReloadState />
@@ -89,341 +95,589 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 
 		await Promise.resolve();
-		expect(controller.activate).not.toHaveBeenCalled();
+		expect(bootstrapService.getSession).not.toHaveBeenCalled();
 
 		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
 
-		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(bootstrapService.getSession).toHaveBeenCalledTimes(1),
+		);
 	});
 
 	it("does not reactivate when only the token callback identity changes", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
 		const firstAuth = authFixture();
 		const { rerender } = await render(
-			<AuthenticatedAppSessionProvider controller={controller} auth={firstAuth}>
+			<AuthenticatedAppSessionProvider
+				auth={firstAuth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
 		);
-
-		expect(controller.activate).toHaveBeenCalledTimes(1);
+		await waitFor(() =>
+			expect(bootstrapService.getSession).toHaveBeenCalledTimes(1),
+		);
 
 		await rerender(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={authFixture({
 					getToken: jest.fn(async () => "next-token"),
 				})}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
 		);
 
 		await Promise.resolve();
-		expect(controller.activate).toHaveBeenCalledTimes(1);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps the previous session while a replacement is loading", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
+		const replacement = deferred<AuthenticatedAppSession>();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockReturnValueOnce(
+			Promise.resolve(appSessionFixture()),
+		);
+		bootstrapService.getSession.mockReturnValueOnce(replacement.promise);
 		await render(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
 			>
 				<CurrentState />
+				<ReloadState />
 			</AuthenticatedAppSessionProvider>,
 		);
+		await waitFor(() => expect(screen.getByText("ready")).toBeTruthy());
 
-		await act(() => {
-			controller.publish({
-				status: "loading",
-				previous: appSessionFixture(),
-				refreshingSession: true,
-			});
-		});
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
 
-		await waitFor(() =>
-			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
-		);
+		await waitFor(() => expect(screen.getByText("refreshing")).toBeTruthy());
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
-		expect(screen.getByText("refreshing")).toBeTruthy();
 	});
 
-	it("can retire the current session before requesting replacement activation", async () => {
-		const controller = authenticatedAppSessionControllerFixture({
-			snapshot: { status: "ready", session: appSessionFixture() },
-		});
-		await render(
-			<AuthenticatedAppSessionProvider
-				controller={controller}
-				auth={authFixture()}
-			>
-				<RetireSessionState />
-			</AuthenticatedAppSessionProvider>,
+	it("keeps the cached session when a normal refresh fails", async () => {
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockReturnValueOnce(
+			Promise.resolve(appSessionFixture()),
 		);
-		expect(screen.getByText("authenticated-app-session:1")).toBeTruthy();
-
-		await fireEvent.press(screen.getByRole("button", { name: "Retire" }));
-
-		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
-		expect(screen.queryByText("authenticated-app-session:1")).toBeNull();
-		expect(controller.activate).toHaveBeenCalledTimes(2);
-		expect(controller.invalidateCurrentSession).toHaveBeenCalledTimes(1);
-	});
-
-	it("stops exposing ready session data while loading has no previous session", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
 		await render(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
 			>
 				<CurrentState />
+				<ReloadState />
 			</AuthenticatedAppSessionProvider>,
 		);
-		await act(() => {
-			controller.publish({ status: "ready", session: appSessionFixture() });
-		});
-		await waitFor(() =>
-			expect(screen.getByText("authenticated-app-session:1")).toBeTruthy(),
+		await waitFor(() => expect(screen.getByText("ready")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+
+		await waitFor(() => expect(screen.getByText("ready")).toBeTruthy());
+		expect(screen.getByText("Avery Chen")).toBeTruthy();
+		expect(
+			screen.queryByText("Unable to prepare your Household. Please try again."),
+		).toBeNull();
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session activation failed",
+			{ error: expect.any(Error) },
 		);
-
-		await act(() => {
-			controller.publish({ status: "loading" });
-		});
-
-		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
-		expect(screen.queryByText("authenticated-app-session:1")).toBeNull();
 	});
 
-	it("exposes error state and retries with the latest auth inputs", async () => {
-		const auth = authFixture();
-		const controller = authenticatedAppSessionControllerFixture({
-			snapshot: {
-				status: "error",
-				message: "Unable to prepare your Household.",
-			},
-		});
+	it("surfaces an error when connecting PowerSync fails without a cached session", async () => {
+		const connectError = new Error("connect failed");
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockRejectedValueOnce(connectError);
 		await render(
-			<AuthenticatedAppSessionProvider controller={controller} auth={auth}>
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+			>
 				<RetryState />
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		expect(screen.getByText("Unable to prepare your Household.")).toBeTruthy();
-		await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
-
-		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
-		const [activation] = controller.activate.mock.calls.at(-1) ?? [];
-		expect(activation).toMatchObject({
-			authReady: true,
-			signedIn: true,
-		});
-		await expect(activation?.getToken()).resolves.toBe("token");
-
-		await act(() => {
-			controller.publish({ status: "ready", session: appSessionFixture() });
-		});
-		expect(screen.getByText("authenticated-app-session:1")).toBeTruthy();
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session activation failed",
+			{ error: connectError },
+		);
 	});
 
-	it("reloads the Authenticated App Session with the latest auth inputs", async () => {
-		const auth = authFixture();
-		const controller = authenticatedAppSessionControllerFixture();
+	it("keeps the cached session when connecting PowerSync fails during a refresh", async () => {
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockResolvedValueOnce(undefined);
+		connectDatabase.mockRejectedValueOnce(new Error("connect failed"));
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockResolvedValue(appSessionFixture());
 		await render(
-			<AuthenticatedAppSessionProvider controller={controller} auth={auth}>
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<CurrentState />
+				<ReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+
+		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(2));
+		expect(screen.getByText("Avery Chen")).toBeTruthy();
+		expect(
+			screen.queryByText("Unable to prepare your Household. Please try again."),
+		).toBeNull();
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session activation failed",
+			{ error: expect.any(Error) },
+		);
+	});
+
+	it("surfaces an error when no cached session exists", async () => {
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+			>
+				<RetryState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+	});
+
+	it("retries from an error state", async () => {
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
+		bootstrapService.getSession.mockResolvedValueOnce(appSessionFixture());
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+			>
+				<RetryState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+	});
+
+	it("fresh-only reload drops cached UI and errors on failure", async () => {
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockResolvedValueOnce(appSessionFixture());
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+			>
+				<CurrentState />
+				<FreshOnlyReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Fresh reload" }));
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+	});
+
+	it("can retire the current session before requesting a replacement", async () => {
+		const replacement = deferred<AuthenticatedAppSession>();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockResolvedValueOnce(appSessionFixture());
+		bootstrapService.getSession.mockReturnValueOnce(replacement.promise);
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+			>
+				<RetireSessionState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Retire" }));
+
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		await resolveActivation(
+			replacement,
+			appSessionFixture({ displayName: "Blake" }),
+		);
+		await waitFor(() => expect(screen.getByText("Blake")).toBeTruthy());
+	});
+
+	it("discards stale bootstrap results from superseded activations", async () => {
+		const stale = deferred<AuthenticatedAppSession>();
+		const fresh = deferred<AuthenticatedAppSession>();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockReturnValueOnce(stale.promise);
+		bootstrapService.getSession.mockReturnValueOnce(fresh.promise);
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+			>
+				<CurrentState />
 				<ReloadState />
 			</AuthenticatedAppSessionProvider>,
 		);
 
 		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+		await resolveActivation(stale, appSessionFixture({ displayName: "Stale" }));
+		await resolveActivation(fresh, appSessionFixture({ displayName: "Fresh" }));
 
-		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
-		const [activation] = controller.activate.mock.calls.at(-1) ?? [];
-		expect(activation).toMatchObject({
-			authReady: true,
-			signedIn: true,
-		});
-		await expect(activation?.getToken()).resolves.toBe("token");
+		await waitFor(() => expect(screen.getByText("Fresh")).toBeTruthy());
+		expect(screen.queryByText("Stale")).toBeNull();
 	});
 
-	it("can request a fresh-only Authenticated App Session reload", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
-		await render(
-			<AuthenticatedAppSessionProvider
-				controller={controller}
-				auth={authFixture()}
-			>
-				<FreshOnlyReloadState />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await fireEvent.press(screen.getByRole("button", { name: "Fresh reload" }));
-
-		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
-		expect(controller.activate.mock.calls.at(-1)?.[0]).toMatchObject({
-			cachePolicy: "freshOnly",
-		});
-	});
-
-	it("signs out in analytics, controller, local cleanup, Clerk order", async () => {
+	it("signs out through analytics, local wipe, hint cleanup, and Clerk", async () => {
 		const order: string[] = [];
-		const controller = authenticatedAppSessionControllerFixture();
-		controller.dispose.mockImplementation(async () => {
-			order.push("dispose");
-		});
-		const auth = authFixture({
-			signOut: jest.fn(async () => {
-				order.push("clerk");
-			}),
-		});
 		const analytics = createMockAnalytics();
 		analytics.track.mockImplementation(() => order.push("track"));
 		analytics.reset.mockImplementation(() => order.push("reset"));
 		const clearSessionHint = jest.fn(async () => {
 			order.push("clear");
 		});
-
+		const disconnectAndClear = jest.fn(async () => {
+			order.push("disconnect");
+		});
+		const auth = authFixture({
+			signOut: jest.fn(async () => {
+				order.push("clerk");
+			}),
+		});
 		await render(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={auth}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={disconnectAndClear}
 				analytics={analytics}
 				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
-				<SignOutButton />
+				<CurrentState />
+				<SignOutButton awaitSignOut />
 			</AuthenticatedAppSessionProvider>,
 		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
 
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
-		expect(order).toEqual(["track", "reset", "dispose", "clear", "clerk"]);
+		expect(order).toEqual(["track", "reset", "disconnect", "clear", "clerk"]);
 		expect(analytics.track).toHaveBeenCalledWith("user_signed_out", {});
 		expect(clearSessionHint).toHaveBeenCalledWith();
 	});
 
-	it("uses the latest sign-out dependencies after provider rerender", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
-		const auth = authFixture();
-		const firstAnalytics = { track: jest.fn(), reset: jest.fn() };
-		const nextAnalytics = { track: jest.fn(), reset: jest.fn() };
-		const firstClearSessionHint = jest.fn(async () => undefined);
-		const nextClearSessionHint = jest.fn(async () => undefined);
-		const { rerender } = await render(
-			<AuthenticatedAppSessionProvider
-				controller={controller}
-				auth={auth}
-				analytics={firstAnalytics}
-				clearAuthenticatedAppSessionPresent={firstClearSessionHint}
-			>
-				<SignOutButton />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await rerender(
-			<AuthenticatedAppSessionProvider
-				controller={controller}
-				auth={auth}
-				analytics={nextAnalytics}
-				clearAuthenticatedAppSessionPresent={nextClearSessionHint}
-			>
-				<SignOutButton />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
-
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-		expect(firstAnalytics.track).not.toHaveBeenCalled();
-		expect(firstAnalytics.reset).not.toHaveBeenCalled();
-		expect(firstClearSessionHint).not.toHaveBeenCalled();
-		expect(nextAnalytics.track).toHaveBeenCalledWith("user_signed_out", {});
-		expect(nextAnalytics.reset).toHaveBeenCalledTimes(1);
-		expect(nextClearSessionHint).toHaveBeenCalledWith();
-	});
-
-	it("continues Clerk sign out when controller disposal fails", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
-		controller.dispose.mockRejectedValue(new Error("dispose failed"));
-		const auth = authFixture();
-
+	it("recovers the Authenticated App Session before rethrowing when Clerk sign-out fails", async () => {
+		const signOutError = new Error("clerk offline");
+		const signOutErrors: unknown[] = [];
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(appSessionFixture({ displayName: "Recovered" }));
+		const connectDatabase = connectDatabaseFixture();
+		const auth = authFixture({
+			signOut: jest.fn(async () => {
+				throw signOutError;
+			}),
+		});
 		await render(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
-				<SignOutButton />
+				<CurrentState />
+				<SignOutButton
+					awaitSignOut
+					onError={(error) => signOutErrors.push(error)}
+				/>
 			</AuthenticatedAppSessionProvider>,
 		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
 
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-		expect(mockLogger.error).toHaveBeenCalledWith(
-			"authenticated app session sign-out dispose failed",
-			{ error: expect.any(Error) },
-		);
+		await waitFor(() => expect(screen.getByText("Recovered")).toBeTruthy());
+		expect(signOutErrors).toEqual([signOutError]);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+		expect(connectDatabase).toHaveBeenCalledTimes(2);
 	});
 
-	it("ignores duplicate sign-out presses while the first sign-out is pending", async () => {
-		const auth = authFixture();
-		const controller = authenticatedAppSessionControllerFixture();
-		const analytics = createMockAnalytics();
-		const sessionHintCleared = deferred<void>();
-		const clearSessionHint = jest.fn(() => sessionHintCleared.promise);
-
+	it("can retry sign-out after recovering from a Clerk sign-out failure", async () => {
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(appSessionFixture({ displayName: "Recovered" }));
+		const auth = authFixture({
+			signOut: jest
+				.fn<Promise<void>, []>()
+				.mockRejectedValueOnce(new Error("clerk offline"))
+				.mockResolvedValueOnce(undefined),
+		});
 		await render(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={auth}
-				analytics={analytics}
-				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
+				<CurrentState />
+				<SignOutButton awaitSignOut onError={() => undefined} />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(screen.getByText("Recovered")).toBeTruthy());
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
+		expect(screen.queryByText("Recovered")).toBeNull();
+		expect(screen.getByText("loading")).toBeTruthy();
+	});
+
+	it("clears the published session after successful sign-out and does not flash the previous User on the next sign-in", async () => {
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(appSessionFixture({ displayName: "Blake" }));
+		const auth = authFixture();
+		const { rerender } = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton awaitSignOut />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(screen.getByText("loading")).toBeTruthy();
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: false }}
+				activationEnabled={false}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: true }}
+				activationEnabled={false}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await Promise.resolve();
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(screen.queryByText("Blake")).toBeNull();
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: true }}
+				activationEnabled
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		const signOutButton = screen.getByRole("button", { name: "Sign out" });
-		await fireEvent.press(signOutButton);
-		await fireEvent.press(signOutButton);
+		await waitFor(() => expect(screen.getByText("Blake")).toBeTruthy());
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+	});
 
-		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
-		expect(analytics.track).toHaveBeenCalledTimes(1);
-		expect(analytics.reset).toHaveBeenCalledTimes(1);
-		expect(controller.dispose).toHaveBeenCalledTimes(1);
-		expect(auth.signOut).not.toHaveBeenCalled();
+	it("replays the latest reload requested while sign-out is pending when Clerk sign-out fails", async () => {
+		const signOutFinished = deferred<void>();
+		const signOutErrors: unknown[] = [];
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(appSessionFixture({ displayName: "Queued" }));
+		const auth = authFixture({
+			signOut: jest.fn(() => signOutFinished.promise),
+		});
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<ReloadState />
+				<SignOutButton onError={(error) => signOutErrors.push(error)} />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
 
-		sessionHintCleared.resolve(undefined);
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+		await act(async () => {
+			signOutFinished.reject(new Error("clerk offline"));
+			await signOutFinished.promise.catch(() => undefined);
+		});
+
+		await waitFor(() => expect(screen.getByText("Queued")).toBeTruthy());
+		expect(signOutErrors).toHaveLength(1);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+	});
+
+	it("clears the last-known User's Current List selections when sign-out starts after the session was retired", async () => {
+		const replacement = deferred<AuthenticatedAppSession>();
+		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockReturnValueOnce(replacement.promise);
+		const auth = authFixture();
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+			>
+				<CurrentState />
+				<RetireSessionState />
+				<SignOutButton awaitSignOut />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Retire" }));
+		await waitFor(() =>
+			expect(screen.getAllByText("loading").length).toBeGreaterThan(0),
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() =>
+			expect(clearCurrentListSelectionsForUser).toHaveBeenCalledWith(
+				"usr_avery",
+			),
+		);
 	});
 
 	it("skips activation runs while sign-out is in progress", async () => {
 		const signOutFinished = deferred<void>();
-		const controller = authenticatedAppSessionControllerFixture();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
 		const auth = authFixture({
 			signOut: jest.fn(() => signOutFinished.promise),
 		});
 		const { rerender } = await render(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
 				<SignOutButton />
 			</AuthenticatedAppSessionProvider>,
 		);
-
-		expect(controller.activate).toHaveBeenCalledTimes(1);
+		await waitFor(() =>
+			expect(bootstrapService.getSession).toHaveBeenCalledTimes(1),
+		);
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
 		await rerender(
 			<AuthenticatedAppSessionProvider
-				controller={controller}
 				auth={{ ...auth, signedIn: false }}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -432,165 +686,26 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 
 		await Promise.resolve();
-		expect(controller.activate).toHaveBeenCalledTimes(1);
-		signOutFinished.resolve(undefined);
-	});
-
-	it("allows sign-out retry after Clerk sign-out fails", async () => {
-		const auth = authFixture({
-			signOut: jest
-				.fn()
-				.mockRejectedValueOnce(new Error("sign out failed"))
-				.mockResolvedValueOnce(undefined),
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			signOutFinished.resolve(undefined);
+			await signOutFinished.promise;
 		});
-		const controller = authenticatedAppSessionControllerFixture();
-
-		await render(
-			<AuthenticatedAppSessionProvider
-				controller={controller}
-				auth={auth}
-				analytics={createMockAnalytics()}
-				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
-			>
-				<CatchingSignOutButton />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		const button = screen.getByRole("button", { name: "Sign out" });
-		await fireEvent.press(button);
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-		await waitFor(() => expect(controller.activate).toHaveBeenCalledTimes(2));
-
-		await fireEvent.press(button);
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
-	});
-
-	it("allows sign-out retry after cleanup fails and Clerk sign-out succeeds", async () => {
-		const auth = authFixture();
-
-		await render(
-			<AuthenticatedAppSessionProvider
-				controller={authenticatedAppSessionControllerFixture()}
-				auth={auth}
-				analytics={createMockAnalytics()}
-				clearAuthenticatedAppSessionPresent={jest.fn(async () => {
-					throw new Error("cleanup failed");
-				})}
-			>
-				<SignOutButton />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		const button = screen.getByRole("button", { name: "Sign out" });
-		await fireEvent.press(button);
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-
-		await fireEvent.press(button);
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
-	});
-
-	it("does not run local cleanup before controller disposal finishes", async () => {
-		const auth = authFixture();
-		const controller = authenticatedAppSessionControllerFixture();
-		const disposed = deferred<void>();
-		controller.dispose.mockImplementation(() => disposed.promise);
-		const clearSessionHint = jest.fn(async () => undefined);
-
-		await render(
-			<AuthenticatedAppSessionProvider
-				controller={controller}
-				auth={auth}
-				analytics={createMockAnalytics()}
-				clearAuthenticatedAppSessionPresent={clearSessionHint}
-			>
-				<SignOutButton />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
-
-		await waitFor(() => expect(controller.dispose).toHaveBeenCalledTimes(1));
-		expect(clearSessionHint).not.toHaveBeenCalled();
-		expect(auth.signOut).not.toHaveBeenCalled();
-		disposed.resolve();
-		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-	});
-
-	it("does not call Clerk sign out before local cleanup finishes", async () => {
-		const auth = authFixture();
-		const sessionHintCleared = deferred<void>();
-		const clearSessionHint = jest.fn(() => sessionHintCleared.promise);
-
-		await render(
-			<AuthenticatedAppSessionProvider
-				controller={authenticatedAppSessionControllerFixture()}
-				auth={auth}
-				analytics={createMockAnalytics()}
-				clearAuthenticatedAppSessionPresent={clearSessionHint}
-			>
-				<SignOutButton />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
-
-		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
-		expect(auth.signOut).not.toHaveBeenCalled();
-		sessionHintCleared.resolve(undefined);
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-	});
-
-	it("continues Clerk sign out when local cleanup fails", async () => {
-		const auth = authFixture();
-
-		await render(
-			<AuthenticatedAppSessionProvider
-				controller={authenticatedAppSessionControllerFixture()}
-				auth={auth}
-				analytics={createMockAnalytics()}
-				clearAuthenticatedAppSessionPresent={jest.fn(async () => {
-					throw new Error("cleanup failed");
-				})}
-			>
-				<SignOutButton />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
-
-		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-		expect(mockLogger.error).toHaveBeenCalledWith(
-			"authenticated app session sign-out local cleanup failed",
-			{ error: expect.any(Error) },
-		);
-	});
-
-	it("disposes the controller on provider unmount", async () => {
-		const controller = authenticatedAppSessionControllerFixture();
-		const { unmount } = await render(
-			<AuthenticatedAppSessionProvider
-				controller={controller}
-				auth={authFixture()}
-			>
-				<Text>Child</Text>
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await unmount();
-
-		expect(controller.dispose).toHaveBeenCalledTimes(1);
 	});
 });
 
 function CurrentState() {
 	const { state, session } = useAuthenticatedAppSession();
-	if (!session) return <Text>{state.status}</Text>;
+	if (!session) {
+		return (
+			<Text>{state.status === "error" ? state.message : state.status}</Text>
+		);
+	}
 
 	return (
 		<>
 			<Text>{session.activeMember.displayName}</Text>
-			<Text>{session.resourceKey}</Text>
+			<Text>{session.activeHousehold.id}</Text>
 			<Text>
 				{state.status === "ready" && state.refreshing
 					? "refreshing"
@@ -600,23 +715,22 @@ function CurrentState() {
 	);
 }
 
-function SignOutButton() {
-	const { signOut } = useAuthenticatedAppSession();
-	// RNTL 14's fireEvent chains a promise returned from the handler, which
-	// would deadlock tests that hold sign-out pending — don't return it.
-	return (
-		<Pressable accessibilityRole="button" onPress={() => void signOut()}>
-			<Text>Sign out</Text>
-		</Pressable>
-	);
-}
-
-function CatchingSignOutButton() {
+function SignOutButton({
+	awaitSignOut = false,
+	onError,
+}: {
+	awaitSignOut?: boolean;
+	onError?: (error: unknown) => void;
+}) {
 	const { signOut } = useAuthenticatedAppSession();
 	return (
 		<Pressable
 			accessibilityRole="button"
-			onPress={() => void signOut().catch(() => undefined)}
+			onPress={() => {
+				const result = signOut().catch((error: unknown) => onError?.(error));
+				if (awaitSignOut) return result;
+				void result;
+			}}
 		>
 			<Text>Sign out</Text>
 		</Pressable>
@@ -629,7 +743,7 @@ function RetryState() {
 		<>
 			<Text>
 				{session
-					? session.resourceKey
+					? session.activeMember.displayName
 					: state.status === "error"
 						? state.message
 						: state.status}
@@ -666,7 +780,7 @@ function RetireSessionState() {
 	const { state, session, reloadSession } = useAuthenticatedAppSession();
 	return (
 		<>
-			<Text>{session ? session.resourceKey : state.status}</Text>
+			<Text>{session ? session.activeMember.displayName : state.status}</Text>
 			<Pressable
 				accessibilityRole="button"
 				onPress={() => reloadSession({ mode: "retireCurrent" })}
@@ -678,10 +792,8 @@ function RetireSessionState() {
 }
 
 function authFixture(
-	overrides: Partial<
-		AuthenticatedAppSessionActivation & { signOut: () => Promise<void> }
-	> = {},
-): AuthenticatedAppSessionActivation & { signOut: () => Promise<void> } {
+	overrides: Partial<AuthenticatedAppSessionProviderAuth> = {},
+): AuthenticatedAppSessionProviderAuth {
 	return {
 		getToken: jest.fn(async () => "token"),
 		getPowerSyncToken: jest.fn(async () => "powersync-token"),
@@ -692,12 +804,15 @@ function authFixture(
 	};
 }
 
-function appSessionFixture(): AuthenticatedAppSession {
+function appSessionFixture(
+	overrides: { displayName?: string } = {},
+): AuthenticatedAppSession {
+	const displayName = overrides.displayName ?? "Avery Chen";
 	return {
 		user: {
 			id: "usr_avery",
 			email: "avery@example.com",
-			displayName: "Avery Chen",
+			displayName,
 			firstName: "Avery",
 			lastName: "Chen",
 		},
@@ -709,86 +824,43 @@ function appSessionFixture(): AuthenticatedAppSession {
 			id: "mbr_avery",
 			userId: "usr_avery",
 			role: "owner",
-			displayName: "Avery Chen",
+			displayName,
 		},
 		members: [
 			{
 				membershipId: "mbr_avery",
 				userId: "usr_avery",
 				role: "owner",
-				displayName: "Avery Chen",
+				displayName,
 			},
 		],
-		resourceKey: "authenticated-app-session:1",
-		services: {
-			lists: {
-				createList: unusedSessionService,
-				getList: unusedSessionService,
-				renameList: unusedSessionService,
-				deleteList: unusedSessionService,
-				listLists: unusedSessionService,
-			},
-			items: {
-				listItems: unusedSessionService,
-				addItem: unusedSessionService,
-				setItemChecked: unusedSessionService,
-			},
-			changes: {
-				subscribe: () => ({ remove() {} }),
-			},
-			sync: {
-				getStatus: () => "synced",
-				subscribe: () => ({ remove() {} }),
-			},
-		},
 	};
 }
 
-async function unusedSessionService(): Promise<never> {
-	throw new Error("Provider tests must not call session data services");
-}
-
-function authenticatedAppSessionControllerFixture({
-	snapshot = { status: "loading" },
-}: {
-	snapshot?: AuthenticatedAppSessionStateSnapshot;
-} = {}): jest.Mocked<AuthenticatedAppSessionController> & {
-	publish: (snapshot: AuthenticatedAppSessionStateSnapshot) => void;
-} {
-	let currentSnapshot = snapshot;
-	const subscribers = new Set<
-		(snapshot: AuthenticatedAppSessionStateSnapshot) => void
-	>();
+function bootstrapServiceFixture(
+	session: AuthenticatedAppSession,
+): jest.Mocked<SessionBootstrapService> {
 	return {
-		activate: jest.fn<
-			ReturnType<AuthenticatedAppSessionController["activate"]>,
-			Parameters<AuthenticatedAppSessionController["activate"]>
-		>(async () => undefined),
-		dispose: jest.fn<
-			ReturnType<AuthenticatedAppSessionController["dispose"]>,
-			Parameters<AuthenticatedAppSessionController["dispose"]>
-		>(async () => undefined),
-		invalidateCurrentSession: jest.fn<
-			ReturnType<AuthenticatedAppSessionController["invalidateCurrentSession"]>,
-			Parameters<AuthenticatedAppSessionController["invalidateCurrentSession"]>
-		>(async () => {
-			currentSnapshot = { status: "loading" };
-			for (const subscriber of subscribers) subscriber(currentSnapshot);
-		}),
-		getSnapshot: jest.fn<
-			ReturnType<AuthenticatedAppSessionController["getSnapshot"]>,
-			Parameters<AuthenticatedAppSessionController["getSnapshot"]>
-		>(() => currentSnapshot),
-		subscribe: jest.fn<
-			ReturnType<AuthenticatedAppSessionController["subscribe"]>,
-			Parameters<AuthenticatedAppSessionController["subscribe"]>
-		>((subscriber) => {
-			subscribers.add(subscriber);
-			return { remove: () => subscribers.delete(subscriber) };
-		}),
-		publish(nextSnapshot) {
-			currentSnapshot = nextSnapshot;
-			for (const subscriber of subscribers) subscriber(nextSnapshot);
-		},
+		getSession: jest.fn<
+			ReturnType<SessionBootstrapService["getSession"]>,
+			Parameters<SessionBootstrapService["getSession"]>
+		>(async () => session),
 	};
+}
+
+function connectDatabaseFixture(): jest.MockedFunction<AuthenticatedAppSessionConnectDatabase> {
+	return jest.fn<
+		ReturnType<AuthenticatedAppSessionConnectDatabase>,
+		Parameters<AuthenticatedAppSessionConnectDatabase>
+	>(async () => undefined);
+}
+
+async function resolveActivation(
+	activation: ReturnType<typeof deferred<AuthenticatedAppSession>>,
+	session: AuthenticatedAppSession,
+) {
+	await act(async () => {
+		activation.resolve(session);
+		await activation.promise;
+	});
 }

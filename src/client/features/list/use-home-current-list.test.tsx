@@ -10,6 +10,10 @@ import type {
 } from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useHomeCurrentList } from "./use-home-current-list";
+import {
+	type ProductServices,
+	useProductServices,
+} from "./use-product-services";
 
 // Restores the resolveCurrentList behavior coverage at the hook level (the old
 // home-screen.test drove these through a real Household DB that the PowerSync
@@ -27,12 +31,26 @@ jest.mock("@/client/features/list/current-selection", () => ({
 	clearCurrentListSelectionIfMatches: jest.fn(async () => false),
 }));
 
+jest.mock("@/client/session/powersync-app-database", () => ({
+	appProductDatabase: {
+		subscribeChanges: jest.fn(() => ({ remove() {} })),
+	},
+}));
+
+let mockProductServices: ProductServices;
+
+jest.mock("./use-product-services", () => ({
+	useProductServices: jest.fn(),
+}));
+
 const mockGetSelection = jest.mocked(getCurrentListSelection);
 const mockClearSelection = jest.mocked(clearCurrentListSelectionIfMatches);
+const mockUseProductServices = jest.mocked(useProductServices);
 
 beforeEach(() => {
 	mockGetSelection.mockResolvedValue(null);
 	mockClearSelection.mockResolvedValue(false);
+	mockUseProductServices.mockImplementation(() => mockProductServices);
 });
 
 afterEach(() => {
@@ -40,6 +58,21 @@ afterEach(() => {
 });
 
 describe("useHomeCurrentList / resolveCurrentList", () => {
+	it("creates product services for the active Household and User", async () => {
+		await renderHomeCurrentList(
+			sessionFixture({
+				summaries: [summary("lst_recent")],
+				lists: { lst_recent: available("lst_recent", "Recent") },
+			}),
+		);
+
+		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
+		expect(mockUseProductServices).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			userId: "usr_avery",
+		});
+	});
+
 	it("resolves the stored selection when it is an active List", async () => {
 		mockGetSelection.mockResolvedValue("lst_pantry");
 		await renderHomeCurrentList(
@@ -206,6 +239,23 @@ function sessionFixture(input: {
 	const unused = jest.fn(async () => {
 		throw new Error("unexpected service call");
 	});
+	mockProductServices = {
+		lists: {
+			listLists: jest.fn(async () => input.summaries),
+			getList: jest.fn(
+				async ({ listId }): Promise<GetListResult> =>
+					input.lists[listId] ?? { status: "missing", listId },
+			),
+			createList: unused,
+			renameList: unused,
+			deleteList: unused,
+		},
+		items: {
+			listItems: jest.fn(async () => []),
+			addItem: unused,
+			setItemChecked: unused,
+		},
+	};
 	return {
 		user: {
 			id: "usr_avery",
@@ -223,29 +273,6 @@ function sessionFixture(input: {
 			displayName: "Avery",
 		},
 		members: [],
-		resourceKey: "authenticated-app-session:1",
-		services: {
-			lists: {
-				listLists: jest.fn(async () => input.summaries),
-				getList: jest.fn(
-					async ({ listId }): Promise<GetListResult> =>
-						input.lists[listId] ?? { status: "missing", listId },
-				),
-				createList: unused,
-				renameList: unused,
-				deleteList: unused,
-			},
-			items: {
-				listItems: jest.fn(async () => []),
-				addItem: unused,
-				setItemChecked: unused,
-			},
-			changes: { subscribe: () => ({ remove() {} }) },
-			sync: {
-				getStatus: () => "synced",
-				subscribe: () => ({ remove() {} }),
-			},
-		},
 	};
 }
 

@@ -1,6 +1,7 @@
 import type { ListSummary } from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
-import { useSessionQuery } from "@/client/session";
+import { useWatchedResource } from "@/client/session";
+import { useProductServices } from "./use-product-services";
 
 export type HomeListSwitcherRows =
 	| { status: "loading" }
@@ -17,11 +18,14 @@ export function useHomeListSwitcherRows(session: AuthenticatedAppSession): {
 	rows: HomeListSwitcherRows;
 	reload: () => void;
 } {
-	const query = useSessionQuery({
-		session,
-		loadKey: session.resourceKey,
+	const services = useProductServices({
+		householdId: session.activeHousehold.id,
+		userId: session.activeMember.userId,
+	});
+	const query = useWatchedResource({
+		key: session.activeHousehold.id,
 		load: () =>
-			session.services.lists.listLists({
+			services.lists.listLists({
 				archive: "active",
 				sort: "recentActivity",
 			}),

@@ -1,20 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import type {
-	ActiveListItem,
 	ActiveListState,
-	ActiveListSyncStatusSource,
+	AddActiveListItemInput,
 } from "@/client/features/list/active-list";
 import {
-	createActiveListMemoryActions,
+	createPassiveActiveListSyncStatus,
 	emptyActiveListState,
 	populatedActiveListState,
 } from "@/client/features/list/active-list/test-support";
+import type { HomeCurrentListDeps } from "@/client/features/list/home-current-list";
 import { HomeScreenView } from "@/client/features/list/home-screen";
-import type { Item, ItemService } from "@/client/features/list/item-service";
-import type { ListService } from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
 
 const meta = {
@@ -42,6 +41,7 @@ export const EmptyList: Story = {
 		session: readySession(emptyActiveListState),
 		onOpenSettings: noop,
 	},
+	render: () => <HomeStory initialList={emptyActiveListState} />,
 };
 
 export const WithItems: Story = {
@@ -50,6 +50,7 @@ export const WithItems: Story = {
 		session: readySession(populatedActiveListState),
 		onOpenSettings: noop,
 	},
+	render: () => <HomeStory initialList={populatedActiveListState} />,
 };
 
 export const Loading: Story = {
@@ -73,6 +74,43 @@ export const AuthenticatedAppSessionError: Story = {
 };
 
 function noop() {}
+
+const storySyncStatus = createPassiveActiveListSyncStatus();
+
+function HomeStory({ initialList }: { initialList: ActiveListState }) {
+	const [list, setList] = useState(initialList);
+	const currentListDeps: HomeCurrentListDeps = {
+		currentList: {
+			state: {
+				status: "active",
+				listId: "lst_story",
+				list,
+				actions: {
+					addItem: async (input) => {
+						setList((current) => addFixtureItem(current, input));
+					},
+					setItemChecked: async (itemId, checked) => {
+						setList((current) =>
+							setFixtureItemChecked(current, itemId, checked),
+						);
+					},
+				},
+			},
+			retry: noop,
+			reload: noop,
+		},
+		syncStatus: storySyncStatus,
+	};
+
+	return (
+		<HomeScreenView
+			state={{ status: "ready", refreshing: false }}
+			session={readySession(list)}
+			onOpenSettings={noop}
+			currentListDeps={currentListDeps}
+		/>
+	);
+}
 
 function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 	return {
@@ -106,129 +144,45 @@ function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 				displayName: "Avery Chen",
 			},
 		],
-		resourceKey: `story:${initialList.householdName}:${initialList.listName}`,
-		services: {
-			...storyServices(initialList),
-			changes: passiveChanges(),
-			sync: storySyncStatus(),
-		},
 	};
 }
 
-function storyServices(initialList: ActiveListState): {
-	lists: ListService;
-	items: ItemService;
-} {
-	const actions = createActiveListMemoryActions(initialList, {
-		itemIdPrefix: "story-item",
-		checkedByMemberName: "Avery Chen",
-	});
-
+function addFixtureItem(
+	list: ActiveListState,
+	input: AddActiveListItemInput,
+): ActiveListState {
 	return {
-		lists: {
-			async createList() {
-				throw new Error("Story Lists must not be created");
+		...list,
+		items: [
+			...list.items,
+			{
+				id: `story-item-${list.items.length + 1}`,
+				name: input.name,
+				quantity: input.quantity,
+				notes: input.notes,
+				checked: false,
+				checkedByMemberName: null,
 			},
-			async getList() {
-				const state = await actions.load();
-				return {
-					status: "available",
-					list: {
-						id: "lst_default_groceries",
-						householdId: "hh_story",
-						name: state.listName,
-						createdByUserId: "usr_avery",
-						createdAt: 1,
-						updatedAt: 1,
-						archived: false,
-						archivedAt: null,
-					},
-				};
-			},
-			async renameList() {
-				throw new Error("Story Lists must not be renamed");
-			},
-			async deleteList() {
-				throw new Error("Story Lists must not be deleted");
-			},
-			async listLists() {
-				const state = await actions.load();
-				return [
-					{
-						id: "lst_default_groceries",
-						householdId: "hh_story",
-						name: state.listName,
-						createdByUserId: "usr_avery",
-						createdAt: 1,
-						updatedAt: 1,
-						archived: false,
-						archivedAt: null,
-						lastActivityAt: 1,
-						uncheckedItemCount: state.items.filter((item) => !item.checked)
-							.length,
-						checkedItemCount: state.items.filter((item) => item.checked).length,
-					},
-				];
-			},
-		},
-		items: {
-			async listItems() {
-				const state = await actions.load();
-				return state.items.map(activeListStoryItemToItem);
-			},
-			async addItem(input) {
-				await actions.addItem({
-					name: input.name,
-					quantity: input.quantity,
-					notes: input.notes,
-				});
-				const state = await actions.load();
-				const item = state.items.at(-1);
-				if (!item) {
-					throw new Error("Story Item was not added");
-				}
-				return activeListStoryItemToItem(
-					item,
-					state.items.findIndex((stateItem) => stateItem.id === item.id),
-				);
-			},
-			async setItemChecked({ itemId, checked }) {
-				await actions.setItemChecked(itemId, checked);
-			},
-		},
+		],
 	};
 }
 
-function activeListStoryItemToItem(
-	item: ActiveListItem,
-	position: number,
-): Item {
+function setFixtureItemChecked(
+	list: ActiveListState,
+	itemId: string,
+	checked: boolean,
+): ActiveListState {
 	return {
-		id: item.id,
-		householdId: "hh_story",
-		listId: "lst_default_groceries",
-		name: item.name,
-		quantity: item.quantity,
-		notes: item.notes,
-		checked: item.checked,
-		checkedByUserId: item.checked ? "usr_avery" : null,
-		position,
-		createdByUserId: "usr_avery",
-		createdAt: 1,
-		updatedAt: 1,
-	};
-}
-
-function storySyncStatus(): ActiveListSyncStatusSource {
-	return {
-		getStatus: () => "synced",
-		subscribe: () => ({ remove() {} }),
-	};
-}
-
-function passiveChanges(): AuthenticatedAppSession["services"]["changes"] {
-	return {
-		subscribe: () => ({ remove() {} }),
+		...list,
+		items: list.items.map((item) =>
+			item.id === itemId
+				? {
+						...item,
+						checked,
+						checkedByMemberName: checked ? "Avery Chen" : null,
+					}
+				: item,
+		),
 	};
 }
 

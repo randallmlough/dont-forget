@@ -10,7 +10,7 @@
 - **Must** use local isolated database helpers for database behavior instead of running migrations against configured environments.
 - **Must** test loading, ready, empty, error, and retry states for route-owned data hooks or containers.
 - **Must** test stale async responses, cancellation, or unmount cleanup when a hook or container owns async lifecycle.
-- **Must** test authenticated app session controller cached load, fresh load, safe cached-to-fresh replacement, unauthorized cached invalidation, stale run IDs, disposal, and write races through borrowed authenticated app session resources.
+- **Must** test authenticated app session provider cached load, fresh load, safe cached-to-fresh replacement, sign-out cleanup and recovery, stale run IDs, disposal, and write races through borrowed authenticated app session resources.
 - **Must** test reducers and transition helpers directly when they encode product behavior or async UI recovery.
 - **Must** cover success, failure, and ignored or no-op transitions where relevant.
 - **Must** test user actions through visible behavior and accessibility queries, not implementation state.
@@ -52,7 +52,7 @@ See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 - **Should** keep shared fixtures domain-shaped and product-language-first: Household, Member, User, List, Item, and Invitation.
 - **Should** allow narrow overrides for test-specific facts while preserving realistic defaults.
 - **Should** split large test files by behavior theme when a single file starts covering several independent concerns.
-- **Should** name focused test files after the behavior under test, for example `lib/services/session/controller.activation.test.ts`, `lib/services/session/controller.cache-invalidation.test.ts`, or `lib/services/session/controller.resource-lifecycle.test.ts`.
+- **Should** name focused test files after the behavior under test, for example `src/client/session/provider.activation.test.tsx`, `src/client/session/provider.sign-out.test.tsx`, or `src/client/session/provider.resource-lifecycle.test.tsx`.
 - **Should** keep each focused test file readable as a behavior spec for one concern.
 - **Avoid** extracting one-off setup into shared fixtures. Promote only fixtures used across multiple modules or likely to support future domain tests.
 - **Avoid** hiding behavior in fixtures. Database fixtures should create rows, not encode product logic or runtime composition.

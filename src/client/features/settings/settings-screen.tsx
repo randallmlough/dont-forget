@@ -39,7 +39,12 @@ export function SettingsScreenView({
 
 	async function signOutFromSettings() {
 		router.replace("/");
-		await actions.signOut();
+		try {
+			await actions.signOut();
+		} catch {
+			// The Authenticated App Session provider owns recovery when Clerk sign-out
+			// fails after local cleanup. Settings has already returned the User Home.
+		}
 	}
 
 	return (
