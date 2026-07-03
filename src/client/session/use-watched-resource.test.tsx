@@ -118,6 +118,28 @@ describe("useWatchedResource", () => {
 		expect(screen.queryByText("Stale")).toBeNull();
 	});
 
+	it("ignores an older same-key refetch result when a newer change-signal load wins", async () => {
+		const older = deferred<string>();
+		const latest = deferred<string>();
+		const load = jest
+			.fn<Promise<string>, []>()
+			.mockResolvedValueOnce("Milk")
+			.mockReturnValueOnce(older.promise)
+			.mockReturnValueOnce(latest.promise);
+		await render(<ResourceView loadKey="list" load={load} />);
+		await waitFor(() => expect(screen.getByText("Milk")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+		await fireChange();
+		await waitFor(() => expect(load).toHaveBeenCalledTimes(3));
+		await resolveLoad(latest, "Latest");
+		await waitFor(() => expect(screen.getByText("Latest")).toBeTruthy());
+		await resolveLoad(older, "Older");
+
+		expect(screen.getByText("Latest")).toBeTruthy();
+		expect(screen.queryByText("Older")).toBeNull();
+	});
+
 	it("keeps ready data and logs when a background rerun fails", async () => {
 		const error = new Error("offline");
 		const load = jest

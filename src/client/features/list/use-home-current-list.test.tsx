@@ -10,7 +10,10 @@ import type {
 } from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useHomeCurrentList } from "./use-home-current-list";
-import type { ProductServices } from "./use-product-services";
+import {
+	type ProductServices,
+	useProductServices,
+} from "./use-product-services";
 
 // Restores the resolveCurrentList behavior coverage at the hook level (the old
 // home-screen.test drove these through a real Household DB that the PowerSync
@@ -37,15 +40,17 @@ jest.mock("@/client/session/powersync-app-database", () => ({
 let mockProductServices: ProductServices;
 
 jest.mock("./use-product-services", () => ({
-	useProductServices: () => mockProductServices,
+	useProductServices: jest.fn(),
 }));
 
 const mockGetSelection = jest.mocked(getCurrentListSelection);
 const mockClearSelection = jest.mocked(clearCurrentListSelectionIfMatches);
+const mockUseProductServices = jest.mocked(useProductServices);
 
 beforeEach(() => {
 	mockGetSelection.mockResolvedValue(null);
 	mockClearSelection.mockResolvedValue(false);
+	mockUseProductServices.mockImplementation(() => mockProductServices);
 });
 
 afterEach(() => {
@@ -53,6 +58,21 @@ afterEach(() => {
 });
 
 describe("useHomeCurrentList / resolveCurrentList", () => {
+	it("creates product services for the active Household and User", async () => {
+		await renderHomeCurrentList(
+			sessionFixture({
+				summaries: [summary("lst_recent")],
+				lists: { lst_recent: available("lst_recent", "Recent") },
+			}),
+		);
+
+		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
+		expect(mockUseProductServices).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			userId: "usr_avery",
+		});
+	});
+
 	it("resolves the stored selection when it is an active List", async () => {
 		mockGetSelection.mockResolvedValue("lst_pantry");
 		await renderHomeCurrentList(

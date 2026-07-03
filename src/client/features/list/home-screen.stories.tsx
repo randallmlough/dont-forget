@@ -1,12 +1,18 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
-import type { ActiveListState } from "@/client/features/list/active-list";
+import type {
+	ActiveListState,
+	AddActiveListItemInput,
+} from "@/client/features/list/active-list";
 import {
+	createPassiveActiveListSyncStatus,
 	emptyActiveListState,
 	populatedActiveListState,
 } from "@/client/features/list/active-list/test-support";
+import type { HomeCurrentListDeps } from "@/client/features/list/home-current-list";
 import { HomeScreenView } from "@/client/features/list/home-screen";
 import type { AuthenticatedAppSession } from "@/client/session";
 
@@ -35,6 +41,7 @@ export const EmptyList: Story = {
 		session: readySession(emptyActiveListState),
 		onOpenSettings: noop,
 	},
+	render: () => <HomeStory initialList={emptyActiveListState} />,
 };
 
 export const WithItems: Story = {
@@ -43,6 +50,7 @@ export const WithItems: Story = {
 		session: readySession(populatedActiveListState),
 		onOpenSettings: noop,
 	},
+	render: () => <HomeStory initialList={populatedActiveListState} />,
 };
 
 export const Loading: Story = {
@@ -66,6 +74,43 @@ export const AuthenticatedAppSessionError: Story = {
 };
 
 function noop() {}
+
+const storySyncStatus = createPassiveActiveListSyncStatus();
+
+function HomeStory({ initialList }: { initialList: ActiveListState }) {
+	const [list, setList] = useState(initialList);
+	const currentListDeps: HomeCurrentListDeps = {
+		currentList: {
+			state: {
+				status: "active",
+				listId: "lst_story",
+				list,
+				actions: {
+					addItem: async (input) => {
+						setList((current) => addFixtureItem(current, input));
+					},
+					setItemChecked: async (itemId, checked) => {
+						setList((current) =>
+							setFixtureItemChecked(current, itemId, checked),
+						);
+					},
+				},
+			},
+			retry: noop,
+			reload: noop,
+		},
+		syncStatus: storySyncStatus,
+	};
+
+	return (
+		<HomeScreenView
+			state={{ status: "ready", refreshing: false }}
+			session={readySession(list)}
+			onOpenSettings={noop}
+			currentListDeps={currentListDeps}
+		/>
+	);
+}
 
 function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 	return {
@@ -99,6 +144,45 @@ function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 				displayName: "Avery Chen",
 			},
 		],
+	};
+}
+
+function addFixtureItem(
+	list: ActiveListState,
+	input: AddActiveListItemInput,
+): ActiveListState {
+	return {
+		...list,
+		items: [
+			...list.items,
+			{
+				id: `story-item-${list.items.length + 1}`,
+				name: input.name,
+				quantity: input.quantity,
+				notes: input.notes,
+				checked: false,
+				checkedByMemberName: null,
+			},
+		],
+	};
+}
+
+function setFixtureItemChecked(
+	list: ActiveListState,
+	itemId: string,
+	checked: boolean,
+): ActiveListState {
+	return {
+		...list,
+		items: list.items.map((item) =>
+			item.id === itemId
+				? {
+						...item,
+						checked,
+						checkedByMemberName: checked ? "Avery Chen" : null,
+					}
+				: item,
+		),
 	};
 }
 

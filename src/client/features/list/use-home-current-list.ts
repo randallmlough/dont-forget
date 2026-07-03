@@ -31,11 +31,15 @@ export type HomeCurrentListState =
 			actions: HomeCurrentListActions;
 	  };
 
-export function useHomeCurrentList(session: AuthenticatedAppSession): {
+export type HomeCurrentListData = {
 	state: HomeCurrentListState;
 	retry: () => void;
 	reload: () => void;
-} {
+};
+
+export function useHomeCurrentList(
+	session: AuthenticatedAppSession,
+): HomeCurrentListData {
 	const services = useProductServices({
 		householdId: session.activeHousehold.id,
 		userId: session.activeMember.userId,

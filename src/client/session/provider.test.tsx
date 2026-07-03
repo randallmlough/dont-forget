@@ -59,7 +59,9 @@ describe("AuthenticatedAppSessionProvider", () => {
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
 		expect(screen.getByText("hh_avery")).toBeTruthy();
 		expect(screen.getByText("ready")).toBeTruthy();
 		expect(bootstrapService.getSession).toHaveBeenCalledWith(
@@ -190,6 +192,64 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 	});
 
+	it("surfaces an error when connecting PowerSync fails without a cached session", async () => {
+		const connectError = new Error("connect failed");
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockRejectedValueOnce(connectError);
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+			>
+				<RetryState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session activation failed",
+			{ error: connectError },
+		);
+	});
+
+	it("keeps the cached session when connecting PowerSync fails during a refresh", async () => {
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockResolvedValueOnce(undefined);
+		connectDatabase.mockRejectedValueOnce(new Error("connect failed"));
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockResolvedValue(appSessionFixture());
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<CurrentState />
+				<ReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+
+		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(2));
+		expect(screen.getByText("Avery Chen")).toBeTruthy();
+		expect(
+			screen.queryByText("Unable to prepare your Household. Please try again."),
+		).toBeNull();
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session activation failed",
+			{ error: expect.any(Error) },
+		);
+	});
+
 	it("surfaces an error when no cached session exists", async () => {
 		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
 		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
@@ -231,7 +291,9 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
 
-		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
 		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
 	});
 
@@ -275,7 +337,9 @@ describe("AuthenticatedAppSessionProvider", () => {
 				<RetireSessionState />
 			</AuthenticatedAppSessionProvider>,
 		);
-		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
 
 		await fireEvent.press(screen.getByRole("button", { name: "Retire" }));
 
@@ -339,7 +403,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<CurrentState />
-				<SignOutButton />
+				<SignOutButton awaitSignOut />
 			</AuthenticatedAppSessionProvider>,
 		);
 		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
@@ -350,6 +414,238 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(order).toEqual(["track", "reset", "disconnect", "clear", "clerk"]);
 		expect(analytics.track).toHaveBeenCalledWith("user_signed_out", {});
 		expect(clearSessionHint).toHaveBeenCalledWith();
+	});
+
+	it("recovers the Authenticated App Session before rethrowing when Clerk sign-out fails", async () => {
+		const signOutError = new Error("clerk offline");
+		const signOutErrors: unknown[] = [];
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(appSessionFixture({ displayName: "Recovered" }));
+		const connectDatabase = connectDatabaseFixture();
+		const auth = authFixture({
+			signOut: jest.fn(async () => {
+				throw signOutError;
+			}),
+		});
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton
+					awaitSignOut
+					onError={(error) => signOutErrors.push(error)}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() => expect(screen.getByText("Recovered")).toBeTruthy());
+		expect(signOutErrors).toEqual([signOutError]);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+		expect(connectDatabase).toHaveBeenCalledTimes(2);
+	});
+
+	it("can retry sign-out after recovering from a Clerk sign-out failure", async () => {
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(appSessionFixture({ displayName: "Recovered" }));
+		const auth = authFixture({
+			signOut: jest
+				.fn<Promise<void>, []>()
+				.mockRejectedValueOnce(new Error("clerk offline"))
+				.mockResolvedValueOnce(undefined),
+		});
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton awaitSignOut onError={() => undefined} />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(screen.getByText("Recovered")).toBeTruthy());
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(2));
+		expect(screen.queryByText("Recovered")).toBeNull();
+		expect(screen.getByText("loading")).toBeTruthy();
+	});
+
+	it("clears the published session after successful sign-out and does not flash the previous User on the next sign-in", async () => {
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(appSessionFixture({ displayName: "Blake" }));
+		const auth = authFixture();
+		const { rerender } = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton awaitSignOut />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(screen.getByText("loading")).toBeTruthy();
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: false }}
+				activationEnabled={false}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: true }}
+				activationEnabled={false}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await Promise.resolve();
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(screen.queryByText("Blake")).toBeNull();
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: true }}
+				activationEnabled
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(screen.getByText("Blake")).toBeTruthy());
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+	});
+
+	it("replays the latest reload requested while sign-out is pending when Clerk sign-out fails", async () => {
+		const signOutFinished = deferred<void>();
+		const signOutErrors: unknown[] = [];
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(appSessionFixture({ displayName: "Queued" }));
+		const auth = authFixture({
+			signOut: jest.fn(() => signOutFinished.promise),
+		});
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<ReloadState />
+				<SignOutButton onError={(error) => signOutErrors.push(error)} />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+		await act(async () => {
+			signOutFinished.reject(new Error("clerk offline"));
+			await signOutFinished.promise.catch(() => undefined);
+		});
+
+		await waitFor(() => expect(screen.getByText("Queued")).toBeTruthy());
+		expect(signOutErrors).toHaveLength(1);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+	});
+
+	it("clears the last-known User's Current List selections when sign-out starts after the session was retired", async () => {
+		const replacement = deferred<AuthenticatedAppSession>();
+		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockReturnValueOnce(replacement.promise);
+		const auth = authFixture();
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={jest.fn(async () => undefined)}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+			>
+				<CurrentState />
+				<RetireSessionState />
+				<SignOutButton awaitSignOut />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getAllByText("Avery Chen").length).toBeGreaterThan(0),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Retire" }));
+		await waitFor(() =>
+			expect(screen.getAllByText("loading").length).toBeGreaterThan(0),
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+
+		await waitFor(() =>
+			expect(clearCurrentListSelectionsForUser).toHaveBeenCalledWith(
+				"usr_avery",
+			),
+		);
 	});
 
 	it("skips activation runs while sign-out is in progress", async () => {
@@ -391,7 +687,10 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await Promise.resolve();
 		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
-		signOutFinished.resolve(undefined);
+		await act(async () => {
+			signOutFinished.resolve(undefined);
+			await signOutFinished.promise;
+		});
 	});
 });
 
@@ -416,10 +715,23 @@ function CurrentState() {
 	);
 }
 
-function SignOutButton() {
+function SignOutButton({
+	awaitSignOut = false,
+	onError,
+}: {
+	awaitSignOut?: boolean;
+	onError?: (error: unknown) => void;
+}) {
 	const { signOut } = useAuthenticatedAppSession();
 	return (
-		<Pressable accessibilityRole="button" onPress={() => void signOut()}>
+		<Pressable
+			accessibilityRole="button"
+			onPress={() => {
+				const result = signOut().catch((error: unknown) => onError?.(error));
+				if (awaitSignOut) return result;
+				void result;
+			}}
+		>
 			<Text>Sign out</Text>
 		</Pressable>
 	);

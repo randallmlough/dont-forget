@@ -1,4 +1,5 @@
 import { createCurrentListSelectionStore } from "@/client/features/list/current-selection";
+import { deferred, waitForAsync } from "@/test/async";
 import { createMockAnalytics } from "@/test/mocks/analytics";
 import { createMockLogger } from "@/test/mocks/logger";
 import {
@@ -128,6 +129,61 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		await expect(signOutFlow.run()).rejects.toThrow("network down");
 	});
 
+	it("can retry after Clerk sign-out fails", async () => {
+		const auth = authFixture({
+			signOut: jest
+				.fn<Promise<void>, []>()
+				.mockRejectedValueOnce(new Error("network down"))
+				.mockResolvedValueOnce(undefined),
+		});
+		const disconnectAndClear = jest.fn(async () => undefined);
+		const clearHint = jest.fn(async () => undefined);
+		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
+		const signOutFlow = createAuthenticatedAppSessionSignOut({
+			getAuth: () => auth,
+			analytics: createMockAnalytics(),
+			clearAuthenticatedAppSessionPresent: clearHint,
+			clearCurrentListSelectionsForUser,
+			logger: createMockLogger(),
+			disconnectAndClear,
+			getSessionUserId: () => "usr_avery",
+		});
+
+		await expect(signOutFlow.run()).rejects.toThrow("network down");
+		await expect(signOutFlow.run()).resolves.toBeUndefined();
+
+		expect(disconnectAndClear).toHaveBeenCalledTimes(2);
+		expect(clearHint).toHaveBeenCalledTimes(2);
+		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledTimes(2);
+		expect(auth.signOut).toHaveBeenCalledTimes(2);
+	});
+
+	it("ignores duplicate runs while sign-out is already in progress", async () => {
+		const clerkSignOut = deferred<void>();
+		const auth = authFixture({
+			signOut: jest.fn(() => clerkSignOut.promise),
+		});
+		const disconnectAndClear = jest.fn(async () => undefined);
+		const signOutFlow = createAuthenticatedAppSessionSignOut({
+			getAuth: () => auth,
+			analytics: createMockAnalytics(),
+			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
+			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
+			logger: createMockLogger(),
+			disconnectAndClear,
+			getSessionUserId: () => "usr_avery",
+		});
+
+		const firstRun = signOutFlow.run();
+		const secondRun = signOutFlow.run();
+		await waitForAsync(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+
+		clerkSignOut.resolve(undefined);
+		await expect(firstRun).resolves.toBeUndefined();
+		await expect(secondRun).resolves.toBeUndefined();
+	});
+
 	it("runs cleanup in order: track, reset, disconnect, hint, selections, Clerk sign-out", async () => {
 		const order: string[] = [];
 		const analytics = createMockAnalytics();
@@ -168,6 +224,86 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 			"selections",
 			"clerkSignOut",
 		]);
+	});
+
+	it("awaits each async cleanup step before starting the next one", async () => {
+		const order: string[] = [];
+		const disconnect = deferred<void>();
+		const hint = deferred<void>();
+		const selections = deferred<void>();
+		const clerkSignOut = deferred<void>();
+		const analytics = createMockAnalytics();
+		analytics.track.mockImplementation(() => {
+			order.push("track");
+		});
+		analytics.reset.mockImplementation(() => {
+			order.push("reset");
+		});
+		const auth = authFixture({
+			signOut: jest.fn(() => {
+				order.push("clerkSignOut");
+				return clerkSignOut.promise;
+			}),
+		});
+		const clearHint = jest.fn(() => {
+			order.push("hint");
+			return hint.promise;
+		});
+		const clearCurrentListSelectionsForUser = jest.fn(() => {
+			order.push("selections");
+			return selections.promise;
+		});
+		const signOutFlow = createAuthenticatedAppSessionSignOut({
+			getAuth: () => auth,
+			analytics,
+			clearAuthenticatedAppSessionPresent: clearHint,
+			clearCurrentListSelectionsForUser,
+			logger: createMockLogger(),
+			disconnectAndClear: jest.fn(() => {
+				order.push("disconnect");
+				return disconnect.promise;
+			}),
+			getSessionUserId: () => "usr_avery",
+		});
+
+		const run = signOutFlow.run();
+		await waitForAsync(() =>
+			expect(order).toEqual(["track", "reset", "disconnect"]),
+		);
+		expect(clearHint).not.toHaveBeenCalled();
+
+		disconnect.resolve(undefined);
+		await waitForAsync(() =>
+			expect(order).toEqual(["track", "reset", "disconnect", "hint"]),
+		);
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+
+		hint.resolve(undefined);
+		await waitForAsync(() =>
+			expect(order).toEqual([
+				"track",
+				"reset",
+				"disconnect",
+				"hint",
+				"selections",
+			]),
+		);
+		expect(auth.signOut).not.toHaveBeenCalled();
+
+		selections.resolve(undefined);
+		await waitForAsync(() =>
+			expect(order).toEqual([
+				"track",
+				"reset",
+				"disconnect",
+				"hint",
+				"selections",
+				"clerkSignOut",
+			]),
+		);
+
+		clerkSignOut.resolve(undefined);
+		await expect(run).resolves.toBeUndefined();
 	});
 
 	it("continues Clerk sign-out when local cleanup fails", async () => {
@@ -223,9 +359,6 @@ function authFixture(
 	overrides: Partial<AuthenticatedAppSessionSignOutAuth> = {},
 ): AuthenticatedAppSessionSignOutAuth {
 	return {
-		getToken: jest.fn(async () => "session-token"),
-		authReady: true,
-		signedIn: false,
 		signOut: jest.fn(async () => undefined),
 		...overrides,
 	};

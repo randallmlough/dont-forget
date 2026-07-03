@@ -1,18 +1,44 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { ActiveList } from "@/client/features/list/active-list";
-import type { AuthenticatedAppSession } from "@/client/session";
-import { useSyncStatusSource } from "@/client/session/use-sync-status-source";
+import {
+	ActiveList,
+	type ActiveListSyncStatusSource,
+} from "@/client/features/list/active-list";
+import {
+	type AuthenticatedAppSession,
+	useSyncStatusSource,
+} from "@/client/session";
 import { HomeListSwitcher } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
-import { useHomeCurrentList } from "./use-home-current-list";
+import {
+	type HomeCurrentListData,
+	useHomeCurrentList,
+} from "./use-home-current-list";
+
+export type HomeCurrentListDeps = {
+	currentList: HomeCurrentListData;
+	syncStatus: ActiveListSyncStatusSource;
+};
 
 export function HomeCurrentList({
 	session,
+	deps,
 }: {
 	session: AuthenticatedAppSession;
+	deps?: HomeCurrentListDeps;
 }) {
+	if (deps) {
+		return (
+			<HomeCurrentListContent
+				session={session}
+				list={deps.currentList}
+				syncStatus={deps.syncStatus}
+				allowListSwitcher={false}
+			/>
+		);
+	}
+
 	return (
 		<HomeCurrentListResource
 			key={session.activeHousehold.id}
@@ -26,9 +52,30 @@ function HomeCurrentListResource({
 }: {
 	session: AuthenticatedAppSession;
 }) {
-	const currentMemberName = homeSessionMemberName(session);
 	const list = useHomeCurrentList(session);
 	const syncStatus = useSyncStatusSource();
+	return (
+		<HomeCurrentListContent
+			session={session}
+			list={list}
+			syncStatus={syncStatus}
+			allowListSwitcher
+		/>
+	);
+}
+
+function HomeCurrentListContent({
+	session,
+	list,
+	syncStatus,
+	allowListSwitcher,
+}: {
+	session: AuthenticatedAppSession;
+	list: HomeCurrentListData;
+	syncStatus: ActiveListSyncStatusSource;
+	allowListSwitcher: boolean;
+}) {
+	const currentMemberName = homeSessionMemberName(session);
 	const loadState = list.state;
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 
@@ -60,7 +107,9 @@ function HomeCurrentListResource({
 				>
 					<Pressable
 						accessibilityRole="button"
-						onPress={() => setSwitcherOpen(true)}
+						onPress={
+							allowListSwitcher ? () => setSwitcherOpen(true) : undefined
+						}
 						style={({ pressed }) => [
 							styles.createButton,
 							pressed ? styles.createButtonPressed : undefined,
@@ -95,7 +144,11 @@ function HomeCurrentListResource({
 				syncStatus={syncStatus}
 			>
 				<ActiveList.Screen>
-					<ActiveList.Header onPressListName={() => setSwitcherOpen(true)} />
+					<ActiveList.Header
+						onPressListName={
+							allowListSwitcher ? () => setSwitcherOpen(true) : undefined
+						}
+					/>
 					<ActiveList.Items />
 					<ActiveList.AddItemForm />
 				</ActiveList.Screen>
