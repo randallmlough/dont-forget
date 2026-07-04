@@ -29,6 +29,12 @@ const SYNCED_TABLES: Record<string, DrizzleTable> = {
 	item_checks: itemChecks,
 };
 
+// Published-table columns deliberately excluded from explicit stream
+// projections because the client schema does not model them.
+const SERVER_ONLY_SYNCED_COLUMNS: Record<string, string[]> = {
+	users: ["created_at", "updated_at"],
+};
+
 // Tables that must NEVER sync to devices (Invitation and Household Join Code
 // data stays server-side; see 0001_powersync_publication.sql).
 const UNPUBLISHED_TABLES = [
@@ -54,6 +60,8 @@ const syncConfigSchema = z.object({
 	streams: z.record(z.string(), z.object({ queries: z.array(z.string()) })),
 });
 
+type SyncStreams = z.infer<typeof syncConfigSchema>["streams"];
+
 const syncConfig = syncConfigSchema.parse(
 	parse(
 		readFileSync(
@@ -71,14 +79,22 @@ const publicationSql = readFileSync(
 	"utf8",
 );
 
-function publicationTables(): string[] {
-	const match = /CREATE PUBLICATION powersync FOR TABLE ([^;]+);/.exec(
-		publicationSql,
-	);
+function publicationTablesFromSql(sql: string): string[] {
+	const match = /CREATE PUBLICATION powersync FOR TABLE ([^;]+);/.exec(sql);
 	if (!match) {
 		throw new Error("0001_powersync_publication.sql: publication not found");
 	}
 	return match[1].split(",").map((table) => table.trim());
+}
+
+function syncedTableFor(tableName: string): DrizzleTable {
+	const table = SYNCED_TABLES[tableName];
+	if (!table) {
+		throw new Error(
+			`${tableName}: missing from SYNCED_TABLES — add it so schema consistency can compare Drizzle columns`,
+		);
+	}
+	return table;
 }
 
 function drizzleColumnNames(table: DrizzleTable): string[] {
@@ -92,18 +108,17 @@ type StreamProjection = { stream: string; table: string; columns: string[] };
 // (`SELECT id FROM users WHERE clerk_user_id = auth.user_id()`) are never
 // mistaken for projections. `SELECT *` expands to the Drizzle column list —
 // that is what PowerSync publishes for `*`.
-function streamProjections(): StreamProjection[] {
-	return Object.entries(syncConfig.streams).flatMap(([stream, { queries }]) =>
+function streamProjectionsFromStreams(
+	streams: SyncStreams,
+): StreamProjection[] {
+	return Object.entries(streams).flatMap(([stream, { queries }]) =>
 		queries.map((query) => {
 			const match = /^SELECT\s+(.*?)\s+FROM\s+(\w+)/is.exec(query);
 			if (!match) {
 				throw new Error(`stream ${stream}: unparseable query: ${query}`);
 			}
 			const [, selectList, table] = match;
-			const drizzleTable = SYNCED_TABLES[table];
-			if (!drizzleTable) {
-				throw new Error(`stream ${stream}: unknown table ${table}`);
-			}
+			const drizzleTable = syncedTableFor(table);
 			const columns =
 				selectList.trim() === "*"
 					? drizzleColumnNames(drizzleTable)
@@ -116,13 +131,13 @@ function streamProjections(): StreamProjection[] {
 describe("PowerSync schema consistency", () => {
 	it("client schema models exactly the tables the publication replicates", () => {
 		expect([...clientTables.map((table) => table.name)].sort()).toEqual(
-			[...publicationTables()].sort(),
+			[...publicationTablesFromSql(publicationSql)].sort(),
 		);
 	});
 
 	it("keeps Invitation and Household Join Code tables unpublished", () => {
 		for (const table of UNPUBLISHED_TABLES) {
-			expect(publicationTables()).not.toContain(table);
+			expect(publicationTablesFromSql(publicationSql)).not.toContain(table);
 		}
 	});
 
@@ -130,7 +145,7 @@ describe("PowerSync schema consistency", () => {
 		const problems: string[] = [];
 		for (const table of clientTables) {
 			const pgColumns = new Map(
-				Object.values(getTableColumns(SYNCED_TABLES[table.name])).map(
+				Object.values(getTableColumns(syncedTableFor(table.name))).map(
 					(column) => [column.name, column.getSQLType()],
 				),
 			);
@@ -161,7 +176,9 @@ describe("PowerSync schema consistency", () => {
 
 	it("streams publish exactly the columns the client models, plus id", () => {
 		const problems: string[] = [];
-		for (const { stream, table, columns } of streamProjections()) {
+		for (const { stream, table, columns } of streamProjectionsFromStreams(
+			syncConfig.streams,
+		)) {
 			const published = new Set(columns);
 			if (!published.delete("id")) {
 				problems.push(`${stream}: does not publish ${table}.id`);
@@ -190,14 +207,88 @@ describe("PowerSync schema consistency", () => {
 		expect(problems).toEqual([]);
 	});
 
+	it("keeps synced Drizzle columns either streamed or explicitly server-only", () => {
+		const problems: string[] = [];
+		const projections = streamProjectionsFromStreams(syncConfig.streams);
+
+		for (const [table, drizzleTable] of Object.entries(SYNCED_TABLES)) {
+			const drizzleColumns = new Set(drizzleColumnNames(drizzleTable));
+			const expectedColumns = new Set(["id"]);
+			for (const projection of projections) {
+				if (projection.table !== table) {
+					continue;
+				}
+				for (const column of projection.columns) {
+					expectedColumns.add(column);
+				}
+			}
+			for (const column of SERVER_ONLY_SYNCED_COLUMNS[table] ?? []) {
+				expectedColumns.add(column);
+			}
+			for (const column of drizzleColumns) {
+				if (!expectedColumns.has(column)) {
+					problems.push(
+						`${table}.${column}: in Drizzle schema but not streamed or allowlisted as server-only`,
+					);
+				}
+			}
+			for (const column of expectedColumns) {
+				if (!drizzleColumns.has(column)) {
+					problems.push(
+						`${table}.${column}: streamed or allowlisted but missing from Drizzle schema`,
+					);
+				}
+			}
+		}
+
+		for (const [table, columns] of Object.entries(SERVER_ONLY_SYNCED_COLUMNS)) {
+			const drizzleColumns = new Set(drizzleColumnNames(syncedTableFor(table)));
+			for (const column of columns) {
+				if (!drizzleColumns.has(column)) {
+					problems.push(
+						`${table}.${column}: allowlisted as server-only but missing from Drizzle schema`,
+					);
+				}
+			}
+		}
+
+		expect(problems).toEqual([]);
+	});
+
 	it("publishes every client-modeled table through at least one stream", () => {
 		const streamed = new Set(
-			streamProjections().map((projection) => projection.table),
+			streamProjectionsFromStreams(syncConfig.streams).map(
+				(projection) => projection.table,
+			),
 		);
 		expect(
 			clientTables
 				.map((table) => table.name)
 				.filter((name) => !streamed.has(name)),
 		).toEqual([]);
+	});
+
+	it("rejects a migration SQL file without the powersync publication", () => {
+		expect(() =>
+			publicationTablesFromSql("CREATE TABLE users (id text);"),
+		).toThrow(/publication not found/);
+	});
+
+	it("rejects a stream query that cannot be parsed", () => {
+		expect(() =>
+			streamProjectionsFromStreams({
+				broken: { queries: ["DELETE FROM users"] },
+			}),
+		).toThrow(/stream broken: unparseable query/);
+	});
+
+	it("rejects a stream table missing from the synced-table map", () => {
+		expect(() =>
+			streamProjectionsFromStreams({
+				broken: { queries: ["SELECT * FROM widgets"] },
+			}),
+		).toThrow(
+			/widgets: missing from SYNCED_TABLES — add it so schema consistency can compare Drizzle columns/,
+		);
 	});
 });

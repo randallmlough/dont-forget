@@ -31,5 +31,3 @@ We will replatform onto a single self-hosted Postgres fronted by self-hosted Pow
 - **Schema changes have three coordinated edit points** instead of a migration fan-out: a server Postgres migration (`db/migrations/postgres`), the declarative client `AppSchema`, and the PowerSync sync rules (`infra/powersync/sync-config.yaml`). The client runs no migrations.
 - **Consciously deferred hardening** (server-authoritative timestamping, `/api/data` rate/payload/batch caps, join-code abuse protection, invitation-reuse index, leave-drain, offline cold-start restoration) is recorded in [`docs/tech-debt/powersync-deferred-hardening.md`](../tech-debt/powersync-deferred-hardening.md), not built here.
 - **The directory timestamp representation gap is closed** (2026-07-03): the client schema declares the directory tables' timestamps as integer epoch-millis, matching PowerSync's `bigint` serialization, and `src/client/session/powersync/schema-consistency.test.ts` mechanically enforces agreement between the Drizzle schema, the client `AppSchema`, the sync streams, and the `powersync` publication.
-</content>
-</invoke>
