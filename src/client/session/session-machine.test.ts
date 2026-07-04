@@ -287,6 +287,45 @@ describe("reduceSessionMachine", () => {
 		]);
 	});
 
+	it("does not activate or bump attempts for changed signed-in observations while suppressed", () => {
+		const signingOut = reduceSessionMachine(
+			activatedWith(sessionFixture()).state,
+			{
+				type: "signOutRequested",
+			},
+		);
+		const suppressed = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: true,
+		});
+		const result = reduceSessionMachine(
+			suppressed.state,
+			authStateChanged({ activationEnabled: false }),
+		);
+
+		expect(result.state.attempt).toBe(suppressed.state.attempt);
+		expect(result.state.suppressActivationUntilSignedOut).toBe(true);
+		expect(result.effects).toEqual([]);
+	});
+
+	it("does not activate or bump attempts for reloads while suppressed", () => {
+		const signingOut = reduceSessionMachine(
+			activatedWith(sessionFixture()).state,
+			{
+				type: "signOutRequested",
+			},
+		);
+		const suppressed = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: true,
+		});
+		const result = reduceSessionMachine(suppressed.state, reloadRequested());
+
+		expect(result.state.attempt).toBe(suppressed.state.attempt);
+		expect(result.state.suppressActivationUntilSignedOut).toBe(true);
+		expect(result.effects).toEqual([]);
+	});
+
 	it("clears the last-known User without activation when sign-out fails after auth is signed out", () => {
 		const signingOut = reduceSessionMachine(
 			activatedWith(sessionFixture()).state,

@@ -1,6 +1,14 @@
 import { useAuth } from "@clerk/clerk-expo";
-import type { PropsWithChildren } from "react";
-import * as React from "react";
+import {
+	createContext,
+	type PropsWithChildren,
+	use,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import type { clearUserCurrentListSelections } from "@/client/features/list/current-selection";
 import { reset, track } from "@/client/lib/analytics";
 import { readApiBaseUrl } from "@/client/lib/api-base-url";
@@ -77,7 +85,7 @@ const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 };
 
 const AuthenticatedAppSessionContext =
-	React.createContext<AuthenticatedAppSessionContextValue | null>(null);
+	createContext<AuthenticatedAppSessionContextValue | null>(null);
 
 export function AuthenticatedAppSessionProvider({
 	children,
@@ -93,13 +101,13 @@ export function AuthenticatedAppSessionProvider({
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
 	const logger = useLogger();
-	const [defaultBootstrapService] = React.useState(() =>
+	const [defaultBootstrapService] = useState(() =>
 		createSessionBootstrapService(),
 	);
 	const bootstrapService = bootstrapServiceProp ?? defaultBootstrapService;
 	const clerkGetToken = clerkAuth.getToken;
 	const clerkSignOut = clerkAuth.signOut;
-	const defaultAuth = React.useMemo(
+	const defaultAuth = useMemo(
 		() => ({
 			getToken: clerkGetToken,
 			getPowerSyncToken: () => clerkGetToken({ template: "powersync" }),
@@ -112,18 +120,19 @@ export function AuthenticatedAppSessionProvider({
 	const auth = authProp ?? defaultAuth;
 	const authReady = auth.authReady;
 	const signedIn = auth.signedIn;
-	const authRef = React.useRef(auth);
-	const machineRef = React.useRef(initialSessionMachineState);
-	const [view, setViewState] = React.useState<SessionView>(
+	const authRef = useRef(auth);
+	const machineRef = useRef(initialSessionMachineState);
+	const [view, setViewState] = useState<SessionView>(
 		initialSessionMachineState.view,
 	);
-	const getToken = React.useCallback(() => authRef.current.getToken(), []);
-	const getPowerSyncToken = React.useCallback(
+	const getToken = useCallback(() => authRef.current.getToken(), []);
+	const getPowerSyncToken = useCallback(
 		() => (authRef.current.getPowerSyncToken ?? authRef.current.getToken)(),
 		[],
 	);
 
-	const dispatch = React.useCallback(
+	// The auth observation effect depends on dispatch, so keep it intentionally stable while preserving honest hook deps.
+	const dispatch = useCallback(
 		(event: SessionMachineEvent) => {
 			function applyResult(result: ReturnType<typeof reduceSessionMachine>) {
 				machineRef.current = result.state;
@@ -146,7 +155,6 @@ export function AuthenticatedAppSessionProvider({
 					const session = await bootstrapService.getSession(getToken);
 					if (machineRef.current.attempt !== attempt) return;
 					await connectDatabase({ getToken, getPowerSyncToken });
-					if (machineRef.current.attempt !== attempt) return;
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
 							type: "activationSucceeded",
@@ -173,7 +181,7 @@ export function AuthenticatedAppSessionProvider({
 		[bootstrapService, connectDatabase, getPowerSyncToken, getToken, logger],
 	);
 
-	React.useEffect(() => {
+	useEffect(() => {
 		dispatch({
 			type: "authStateChanged",
 			authReady,
@@ -182,7 +190,7 @@ export function AuthenticatedAppSessionProvider({
 		});
 	}, [authReady, signedIn, activationEnabled, dispatch]);
 
-	React.useEffect(() => {
+	useEffect(() => {
 		authRef.current = auth;
 	}, [auth]);
 
@@ -248,7 +256,7 @@ export function AuthenticatedAppSessionProvider({
 }
 
 export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValue {
-	const value = React.use(AuthenticatedAppSessionContext);
+	const value = use(AuthenticatedAppSessionContext);
 	if (!value) {
 		throw new Error(
 			"useAuthenticatedAppSession must be used inside AuthenticatedAppSessionProvider",

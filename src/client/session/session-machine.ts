@@ -57,6 +57,7 @@ const LOADING_VIEW: SessionView = {
 	state: { status: "loading" },
 	session: null,
 };
+// Tests and no-op transitions rely on LOADING_VIEW referential identity.
 
 export const initialSessionMachineState: SessionMachineState = {
 	view: LOADING_VIEW,
@@ -84,6 +85,7 @@ export function reduceSessionMachine(
 				state: {
 					...state,
 					signingOut: true,
+					// This invalidates every in-flight activation before cleanup starts.
 					attempt: state.attempt + 1,
 					queuedReloadMode: null,
 				},
@@ -97,6 +99,7 @@ export function reduceSessionMachine(
 					view: LOADING_VIEW,
 					lastKnownUserId: null,
 					queuedReloadMode: null,
+					// Clerk may still report signed-in until its auth flip lands.
 					suppressActivationUntilSignedOut: event.signedIn,
 				},
 				effects: [],
@@ -166,6 +169,7 @@ function reduceAuthStateChanged(
 		signedIn: event.signedIn,
 		activationEnabled: event.activationEnabled,
 	};
+	// Identical observations should not restart the session lifecycle.
 	if (sameObservedAuth(state.lastObservedAuth, observed)) {
 		return noChange(state);
 	}
@@ -199,9 +203,11 @@ function reduceReloadRequested(
 ): SessionMachineResult {
 	const next: SessionMachineState = { ...state, hasEverRequestedReload: true };
 	if (next.suppressActivationUntilSignedOut) {
+		// Reload suppression belongs to the pending auth flip after sign-out.
 		return { state: next, effects: [] };
 	}
 	if (event.mode === "retireCurrent") {
+		// Keep lastKnownUserId so sign-out can clean up Current List selections.
 		next.view = LOADING_VIEW;
 	}
 	if (next.signingOut) {
