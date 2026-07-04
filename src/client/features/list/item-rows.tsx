@@ -8,22 +8,25 @@ import {
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useAddItemComposerScrollInset } from "@/client/features/list/add-item-composer";
-import { useActiveList } from "./context";
-import type { ActiveListItem } from "./types";
+import type { ActiveListItem } from "./list-view-types";
 
-export function ActiveListItems() {
-	const { state, actions } = useActiveList();
+export type ItemRowsProps = {
+	items: ActiveListItem[];
+	onToggleItem: (itemId: string) => void;
+};
+
+export function ItemRows({ items, onToggleItem }: ItemRowsProps) {
 	const bottomScrollInset = useAddItemComposerScrollInset();
 	const renderItem = useCallback(
 		({ item }: ListRenderItemInfo<ActiveListItem>) => (
-			<ItemRow item={item} onToggle={actions.toggleItem} />
+			<ItemRow item={item} onToggle={onToggleItem} />
 		),
-		[actions.toggleItem],
+		[onToggleItem],
 	);
 
 	return (
 		<FlatList
-			data={state.items}
+			data={items}
 			keyExtractor={keyExtractor}
 			renderItem={renderItem}
 			ItemSeparatorComponent={ItemSeparator}
@@ -32,7 +35,7 @@ export function ActiveListItems() {
 			contentContainerStyle={[
 				styles.itemsContent,
 				{ paddingBottom: bottomScrollInset },
-				state.items.length === 0 ? styles.emptyItemsContent : undefined,
+				items.length === 0 ? styles.emptyItemsContent : undefined,
 			]}
 		/>
 	);

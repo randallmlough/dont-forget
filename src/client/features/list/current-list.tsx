@@ -1,39 +1,36 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import {
-	ActiveList,
-	type ActiveListSyncStatusSource,
-} from "@/client/features/list/active-list";
-import {
-	type AuthenticatedAppSession,
-	useSyncStatusSource,
-} from "@/client/session";
+import { type AuthenticatedAppSession, useSyncState } from "@/client/session";
+import { AddItemForm } from "./add-item-form";
 import { HomeListSwitcher } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
+import { ItemRows } from "./item-rows";
+import { ListHeader } from "./list-header";
+import type { ActiveListSyncState } from "./list-view-types";
 import {
 	type HomeCurrentListData,
 	useHomeCurrentList,
 } from "./use-home-current-list";
+import { useListActions } from "./use-list-actions";
 
 export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
-	syncStatus: ActiveListSyncStatusSource;
+	syncState: ActiveListSyncState;
 };
 
-export function HomeCurrentList({
-	session,
-	deps,
-}: {
+export type CurrentListProps = {
 	session: AuthenticatedAppSession;
 	deps?: HomeCurrentListDeps;
-}) {
+};
+
+export function CurrentList({ session, deps }: CurrentListProps) {
 	if (deps) {
 		return (
 			<HomeCurrentListContent
 				session={session}
 				list={deps.currentList}
-				syncStatus={deps.syncStatus}
+				syncState={deps.syncState}
 				allowListSwitcher={false}
 			/>
 		);
@@ -47,34 +44,36 @@ export function HomeCurrentList({
 	);
 }
 
-function HomeCurrentListResource({
-	session,
-}: {
+type HomeCurrentListResourceProps = {
 	session: AuthenticatedAppSession;
-}) {
+};
+
+function HomeCurrentListResource({ session }: HomeCurrentListResourceProps) {
 	const list = useHomeCurrentList(session);
-	const syncStatus = useSyncStatusSource();
+	const syncState = useSyncState();
 	return (
 		<HomeCurrentListContent
 			session={session}
 			list={list}
-			syncStatus={syncStatus}
+			syncState={syncState}
 			allowListSwitcher
 		/>
 	);
 }
 
+type HomeCurrentListContentProps = {
+	session: AuthenticatedAppSession;
+	list: HomeCurrentListData;
+	syncState: ActiveListSyncState;
+	allowListSwitcher: boolean;
+};
+
 function HomeCurrentListContent({
 	session,
 	list,
-	syncStatus,
+	syncState,
 	allowListSwitcher,
-}: {
-	session: AuthenticatedAppSession;
-	list: HomeCurrentListData;
-	syncStatus: ActiveListSyncStatusSource;
-	allowListSwitcher: boolean;
-}) {
+}: HomeCurrentListContentProps) {
 	const currentMemberName = homeSessionMemberName(session);
 	const loadState = list.state;
 	const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -135,35 +134,69 @@ function HomeCurrentListContent({
 
 	return (
 		<>
-			<ActiveList.Provider
+			<ActiveCurrentList
 				key={`${session.activeHousehold.id}:${loadState.listId}`}
-				state={loadState.list}
+				loadState={loadState}
 				currentMemberName={currentMemberName}
-				onAddItem={loadState.actions.addItem}
-				onSetItemChecked={loadState.actions.setItemChecked}
-				syncStatus={syncStatus}
-			>
-				<ActiveList.Screen>
-					<ActiveList.Header
-						onPressListName={
-							allowListSwitcher ? () => setSwitcherOpen(true) : undefined
-						}
-					/>
-					<ActiveList.Items />
-					<ActiveList.AddItemForm />
-				</ActiveList.Screen>
-			</ActiveList.Provider>
+				syncState={syncState}
+				onPressListName={
+					allowListSwitcher ? () => setSwitcherOpen(true) : undefined
+				}
+			/>
 			{switcherOpen ? (
 				<HomeListSwitcher
 					session={session}
 					currentListId={loadState.listId}
 					onDismiss={() => setSwitcherOpen(false)}
 					// Task 5 re-resolution: re-reads the freshly stored selection and
-					// remounts the Active List boundary via the listId-keyed Provider.
+					// remounts the Current List body via the listId-keyed boundary.
 					onSwitched={list.reload}
 				/>
 			) : null}
 		</>
+	);
+}
+
+type ActiveCurrentListProps = {
+	loadState: Extract<HomeCurrentListData["state"], { status: "active" }>;
+	currentMemberName: string;
+	syncState: ActiveListSyncState;
+	onPressListName?: () => void;
+};
+
+function ActiveCurrentList({
+	loadState,
+	currentMemberName,
+	syncState,
+	onPressListName,
+}: ActiveCurrentListProps) {
+	const actions = useListActions({
+		items: loadState.list.items,
+		onAddItem: loadState.actions.addItem,
+		onSetItemChecked: loadState.actions.setItemChecked,
+	});
+
+	return (
+		<View style={styles.currentList}>
+			<ListHeader
+				state={loadState.list}
+				meta={{
+					currentMemberName,
+					errorMessage: actions.errorMessage,
+					syncState,
+				}}
+				onPressListName={onPressListName}
+			/>
+			<ItemRows
+				items={loadState.list.items}
+				onToggleItem={actions.toggleItem}
+			/>
+			<AddItemForm
+				listName={loadState.list.listName}
+				errorMessage={actions.errorMessage}
+				onAddItem={actions.addItem}
+			/>
+		</View>
 	);
 }
 
@@ -180,6 +213,9 @@ export function homeSessionMemberName(
 }
 
 const styles = StyleSheet.create((theme) => ({
+	currentList: {
+		flex: 1,
+	},
 	createButton: {
 		minHeight: theme.spacing(11),
 		paddingHorizontal: theme.spacing(4),

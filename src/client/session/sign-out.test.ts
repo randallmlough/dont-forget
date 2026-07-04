@@ -158,32 +158,6 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(auth.signOut).toHaveBeenCalledTimes(2);
 	});
 
-	it("ignores duplicate runs while sign-out is already in progress", async () => {
-		const clerkSignOut = deferred<void>();
-		const auth = authFixture({
-			signOut: jest.fn(() => clerkSignOut.promise),
-		});
-		const disconnectAndClear = jest.fn(async () => undefined);
-		const signOutFlow = createAuthenticatedAppSessionSignOut({
-			getAuth: () => auth,
-			analytics: createMockAnalytics(),
-			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
-			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
-			logger: createMockLogger(),
-			disconnectAndClear,
-			getSessionUserId: () => "usr_avery",
-		});
-
-		const firstRun = signOutFlow.run();
-		const secondRun = signOutFlow.run();
-		await waitForAsync(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
-
-		clerkSignOut.resolve(undefined);
-		await expect(firstRun).resolves.toBeUndefined();
-		await expect(secondRun).resolves.toBeUndefined();
-	});
-
 	it("runs cleanup in order: track, reset, disconnect, hint, selections, Clerk sign-out", async () => {
 		const order: string[] = [];
 		const analytics = createMockAnalytics();

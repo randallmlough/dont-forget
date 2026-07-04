@@ -5,7 +5,7 @@ export {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "./provider";
-export { useSyncStatusSource } from "./use-sync-status-source";
+export { useSyncState } from "./use-sync-state";
 export {
 	useWatchedResource,
 	type WatchedResourceState,

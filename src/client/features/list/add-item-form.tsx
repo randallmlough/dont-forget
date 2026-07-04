@@ -1,6 +1,12 @@
 import { useReducer } from "react";
 import { AddItemComposer } from "@/client/features/list/add-item-composer";
-import { useActiveList } from "./context";
+import type { AddActiveListItemDraft } from "./list-view-types";
+
+export type AddItemFormProps = {
+	listName: string;
+	errorMessage: string | null;
+	onAddItem: (input: AddActiveListItemDraft) => Promise<void>;
+};
 
 type ComposerState = {
 	isOpen: boolean;
@@ -22,8 +28,11 @@ type ComposerAction =
 	| { type: "submitSucceeded" }
 	| { type: "submitFailed" };
 
-export function ActiveListAddItemForm() {
-	const { actions, meta, state } = useActiveList();
+export function AddItemForm({
+	listName,
+	errorMessage,
+	onAddItem,
+}: AddItemFormProps) {
 	const [composer, dispatchComposer] = useReducer(
 		composerReducer,
 		undefined,
@@ -45,7 +54,7 @@ export function ActiveListAddItemForm() {
 
 		dispatchComposer({ type: "submitStarted" });
 		try {
-			await actions.addItem({
+			await onAddItem({
 				name: trimmedName,
 				quantity: composer.quantity,
 				notes: composer.notes,
@@ -68,8 +77,8 @@ export function ActiveListAddItemForm() {
 				isOpen: composer.isOpen,
 				isNoteOpen: composer.isNoteOpen,
 				canSubmit,
-				listName: state.listName,
-				errorMessage: meta.errorMessage,
+				listName,
+				errorMessage,
 			}}
 			actions={{
 				open: openComposer,

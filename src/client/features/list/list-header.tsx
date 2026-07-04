@@ -1,14 +1,18 @@
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { useActiveList } from "./context";
-import type { ActiveListSyncState } from "./types";
+import type {
+	ActiveListMeta,
+	ActiveListState,
+	ActiveListSyncState,
+} from "./list-view-types";
 
-export function ActiveListHeader({
-	onPressListName,
-}: {
+export type ListHeaderProps = {
+	state: ActiveListState;
+	meta: ActiveListMeta;
 	onPressListName?: () => void;
-}) {
-	const { meta, state } = useActiveList();
+};
+
+export function ListHeader({ state, meta, onPressListName }: ListHeaderProps) {
 	const itemCount = state.items.length;
 	const checkedCount = state.items.filter((item) => item.checked).length;
 	const progressLabel =

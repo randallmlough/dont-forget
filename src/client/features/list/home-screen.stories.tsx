@@ -2,18 +2,15 @@ import type { Meta, StoryObj } from "@storybook/react-native";
 import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-
-import type {
-	ActiveListState,
-	AddActiveListItemInput,
-} from "@/client/features/list/active-list";
+import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
+import { HomeScreenView } from "@/client/features/list/home-screen";
 import {
-	createPassiveActiveListSyncStatus,
+	addFixtureItem,
 	emptyActiveListState,
 	populatedActiveListState,
-} from "@/client/features/list/active-list/test-support";
-import type { HomeCurrentListDeps } from "@/client/features/list/home-current-list";
-import { HomeScreenView } from "@/client/features/list/home-screen";
+	setFixtureItemChecked,
+} from "@/client/features/list/list-test-support";
+import type { ActiveListState } from "@/client/features/list/list-view-types";
 import type { AuthenticatedAppSession } from "@/client/session";
 
 const meta = {
@@ -75,8 +72,6 @@ export const AuthenticatedAppSessionError: Story = {
 
 function noop() {}
 
-const storySyncStatus = createPassiveActiveListSyncStatus();
-
 function HomeStory({ initialList }: { initialList: ActiveListState }) {
 	const [list, setList] = useState(initialList);
 	const currentListDeps: HomeCurrentListDeps = {
@@ -99,7 +94,7 @@ function HomeStory({ initialList }: { initialList: ActiveListState }) {
 			retry: noop,
 			reload: noop,
 		},
-		syncStatus: storySyncStatus,
+		syncState: "synced",
 	};
 
 	return (
@@ -144,45 +139,6 @@ function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 				displayName: "Avery Chen",
 			},
 		],
-	};
-}
-
-function addFixtureItem(
-	list: ActiveListState,
-	input: AddActiveListItemInput,
-): ActiveListState {
-	return {
-		...list,
-		items: [
-			...list.items,
-			{
-				id: `story-item-${list.items.length + 1}`,
-				name: input.name,
-				quantity: input.quantity,
-				notes: input.notes,
-				checked: false,
-				checkedByMemberName: null,
-			},
-		],
-	};
-}
-
-function setFixtureItemChecked(
-	list: ActiveListState,
-	itemId: string,
-	checked: boolean,
-): ActiveListState {
-	return {
-		...list,
-		items: list.items.map((item) =>
-			item.id === itemId
-				? {
-						...item,
-						checked,
-						checkedByMemberName: checked ? "Avery Chen" : null,
-					}
-				: item,
-		),
 	};
 }
 

@@ -13,7 +13,7 @@ import { db } from "@/client/session/powersync";
 
 // The product tables synced onto the local PowerSync DB. A change to any of them
 // drives the session's `changes` refetch seam.
-export const PRODUCT_TABLES = ["lists", "items", "item_checks"] as const;
+const PRODUCT_TABLES = ["lists", "items", "item_checks"] as const;
 
 // The app-facing product-data handle: the narrow `ProductDatabase` the services
 // consume, plus the product-table change seam watched resources subscribe to.

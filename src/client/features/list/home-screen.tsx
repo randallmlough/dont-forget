@@ -9,10 +9,10 @@ import {
 	useAuthenticatedAppSession,
 } from "@/client/session";
 import {
-	HomeCurrentList,
+	CurrentList,
 	type HomeCurrentListDeps,
 	homeSessionMemberName,
-} from "./home-current-list";
+} from "./current-list";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 
 export type HomeScreenViewProps = {
@@ -90,7 +90,7 @@ export function HomeScreenView({
 			</View>
 
 			{session ? (
-				<HomeCurrentList session={session} deps={currentListDeps} />
+				<CurrentList session={session} deps={currentListDeps} />
 			) : state.status === "error" ? (
 				<HomeStatus title="Household unavailable" body={state.message}>
 					{onRetry ? <HomeRetryButton onPress={onRetry} /> : null}
