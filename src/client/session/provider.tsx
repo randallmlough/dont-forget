@@ -30,13 +30,18 @@ import {
 	clearAuthenticatedAppSessionPresent,
 	markAuthenticatedAppSessionPresent,
 } from "./session-hint";
+import {
+	type AuthenticatedAppSessionState,
+	initialSessionMachineState,
+	reduceSessionMachine,
+	type SessionMachineEffect,
+	type SessionMachineEvent,
+	type SessionView,
+} from "./session-machine";
 
 export type AuthenticatedAppSession = SessionBootstrap;
 
-export type AuthenticatedAppSessionState =
-	| { status: "loading" }
-	| { status: "ready"; refreshing: boolean }
-	| { status: "error"; message: string };
+export type { AuthenticatedAppSessionState } from "./session-machine";
 
 export type AuthenticatedAppSessionContextValue = {
 	state: AuthenticatedAppSessionState;
@@ -74,25 +79,9 @@ type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	disconnectAndClear?: () => Promise<void>;
 }>;
 
-type SessionView = {
-	state: AuthenticatedAppSessionState;
-	session: AuthenticatedAppSession | null;
+type DispatchOptions = {
+	awaitActivation?: boolean;
 };
-
-type ActivationRequest = {
-	attempt: number;
-	mode: "normal" | "freshOnly";
-};
-
-type ActivationRun = ActivationRequest & {
-	authReady: boolean;
-	signedIn: boolean;
-};
-
-type SignOutStatus = "idle" | "running";
-
-const GENERIC_ERROR_MESSAGE =
-	"Unable to prepare your Household. Please try again.";
 
 const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 	track,
@@ -136,172 +125,108 @@ export function AuthenticatedAppSessionProvider({
 	const authReady = auth.authReady;
 	const signedIn = auth.signedIn;
 	const authRef = useRef(auth);
-	const [view, setView] = useState<SessionView>({
-		state: { status: "loading" },
-		session: null,
-	});
-	const sessionRef = useRef<AuthenticatedAppSession | null>(null);
-	const lastKnownUserIdRef = useRef<string | null>(null);
-	const attemptRef = useRef(0);
-	const [activationRequest, setActivationRequest] = useState<ActivationRequest>(
-		{
-			attempt: 0,
-			mode: "normal",
-		},
+	const machineRef = useRef(initialSessionMachineState);
+	const [view, setViewState] = useState<SessionView>(
+		initialSessionMachineState.view,
 	);
-	const activationRequestRef = useRef<ActivationRequest>(activationRequest);
-	const handledActivationRunRef = useRef<string | null>(null);
-	const [signOutStatus, setSignOutStatus] = useState<SignOutStatus>("idle");
-	const signOutStatusRef = useRef<SignOutStatus>("idle");
-	const suppressActivationUntilSignedOutRef = useRef(false);
 	const getToken = useCallback(() => authRef.current.getToken(), []);
 	const getPowerSyncToken = useCallback(
 		() => (authRef.current.getPowerSyncToken ?? authRef.current.getToken)(),
 		[],
 	);
-	const publishLoading = useCallback(() => {
-		sessionRef.current = null;
-		setView({ state: { status: "loading" }, session: null });
-	}, []);
-	const publishReady = useCallback(
-		(session: AuthenticatedAppSession, refreshing: boolean) => {
-			sessionRef.current = session;
-			lastKnownUserIdRef.current = session.user.id;
-			setView({ state: { status: "ready", refreshing }, session });
-		},
-		[],
-	);
-	const publishError = useCallback((message: string) => {
-		sessionRef.current = null;
-		setView({ state: { status: "error", message }, session: null });
-	}, []);
-	const setProviderSignOutStatus = useCallback((status: SignOutStatus) => {
-		signOutStatusRef.current = status;
-		setSignOutStatus(status);
-	}, []);
-	const runActivation = useCallback(
-		async (request: ActivationRun) => {
-			handledActivationRunRef.current = activationRunKey(request);
-			const attempt = attemptRef.current + 1;
-			attemptRef.current = attempt;
-			const cachedSession = sessionRef.current;
-			const allowCached = request.mode !== "freshOnly";
 
-			if (!request.authReady) {
-				publishLoading();
-				return;
-			}
+	// The auth observation effect depends on dispatch, so keep it intentionally stable while preserving honest hook deps.
+	const dispatch = useCallback(
+		(event: SessionMachineEvent, options: DispatchOptions = {}) => {
+			const activationEffects: Promise<void>[] = [];
 
-			if (!request.signedIn) {
-				publishLoading();
-				return;
-			}
-
-			if (allowCached && cachedSession) {
-				publishReady(cachedSession, true);
-			} else {
-				publishLoading();
-			}
-
-			try {
-				const session = await bootstrapService.getSession(getToken);
-				if (attempt !== attemptRef.current) return;
-				await connectDatabase({ getToken, getPowerSyncToken });
-				if (attempt !== attemptRef.current) return;
-				publishReady(session, false);
-				void markAuthenticatedAppSessionPresent().catch(() => undefined);
-			} catch (error) {
-				logger.error("authenticated app session activation failed", {
-					error: asError(error),
-				});
-				if (attempt !== attemptRef.current) return;
-				if (allowCached && cachedSession) {
-					publishReady(cachedSession, false);
-					return;
+			function applyResult(result: ReturnType<typeof reduceSessionMachine>) {
+				machineRef.current = result.state;
+				setViewState(result.state.view);
+				for (const effect of result.effects) {
+					const effectResult = runEffect(effect);
+					if (options.awaitActivation && effect.type === "activate") {
+						activationEffects.push(effectResult);
+					}
 				}
-				publishError(GENERIC_ERROR_MESSAGE);
 			}
-		},
-		[
-			bootstrapService,
-			connectDatabase,
-			getPowerSyncToken,
-			getToken,
-			logger,
-			publishError,
-			publishLoading,
-			publishReady,
-		],
-	);
-	function clearPublishedSession() {
-		handledActivationRunRef.current = null;
-		publishLoading();
-	}
 
-	function queueActivationRequest(mode: ActivationRequest["mode"]) {
-		const nextRequest: ActivationRequest = {
-			attempt: activationRequestRef.current.attempt + 1,
-			mode,
-		};
-		activationRequestRef.current = nextRequest;
-		setActivationRequest(nextRequest);
-		return nextRequest;
-	}
+			function runEffect(effect: SessionMachineEffect): Promise<void> {
+				if (effect.type === "activate") {
+					return executeActivation(effect.attempt, effect.allowCached);
+				}
+				return markAuthenticatedAppSessionPresent()
+					.catch(() => undefined)
+					.then(() => undefined);
+			}
+
+			async function executeActivation(attempt: number, allowCached: boolean) {
+				try {
+					const session = await bootstrapService.getSession(getToken);
+					if (machineRef.current.attempt !== attempt) return;
+					await connectDatabase({ getToken, getPowerSyncToken });
+					applyResult(
+						reduceSessionMachine(machineRef.current, {
+							type: "activationSucceeded",
+							attempt,
+							session,
+						}),
+					);
+				} catch (error) {
+					logger.error("authenticated app session activation failed", {
+						error: asError(error),
+					});
+					applyResult(
+						reduceSessionMachine(machineRef.current, {
+							type: "activationFailed",
+							attempt,
+							allowCached,
+						}),
+					);
+				}
+			}
+
+			applyResult(reduceSessionMachine(machineRef.current, event));
+			if (!options.awaitActivation) return Promise.resolve();
+			return Promise.all(activationEffects).then(() => undefined);
+		},
+		[bootstrapService, connectDatabase, getPowerSyncToken, getToken, logger],
+	);
 
 	useEffect(() => {
-		if (signOutStatus === "running") {
-			return;
-		}
-		if (suppressActivationUntilSignedOutRef.current) {
-			if (signedIn) return;
-			suppressActivationUntilSignedOutRef.current = false;
-		}
-		if (!activationEnabled && activationRequest.attempt === 0) return;
-		const request = { ...activationRequest, authReady, signedIn };
-		if (handledActivationRunRef.current === activationRunKey(request)) {
-			return;
-		}
-		void runActivation(request);
-	}, [
-		activationEnabled,
-		authReady,
-		signedIn,
-		activationRequest,
-		signOutStatus,
-		runActivation,
-	]);
+		void dispatch({
+			type: "authStateChanged",
+			authReady,
+			signedIn,
+			activationEnabled,
+		});
+	}, [authReady, signedIn, activationEnabled, dispatch]);
 
 	useEffect(() => {
 		authRef.current = auth;
 	}, [auth]);
 
-	function requestSessionReload(
-		mode: ActivationRequest["mode"],
-	): ActivationRequest {
-		attemptRef.current += 1;
-		return queueActivationRequest(mode);
-	}
-
 	function retry() {
-		requestSessionReload("normal");
+		void dispatch({
+			type: "reloadRequested",
+			mode: "normal",
+			authReady: authRef.current.authReady,
+			signedIn: authRef.current.signedIn,
+		});
 	}
 
 	function reloadSession(options?: AuthenticatedAppSessionReloadOptions) {
-		if (options?.mode === "retireCurrent") {
-			publishLoading();
-			requestSessionReload("normal");
-			return;
-		}
-		requestSessionReload(
-			options?.mode === "freshOnly" ? "freshOnly" : "normal",
-		);
+		void dispatch({
+			type: "reloadRequested",
+			mode: options?.mode ?? "normal",
+			authReady: authRef.current.authReady,
+			signedIn: authRef.current.signedIn,
+		});
 	}
 
 	async function runSignOut() {
-		if (signOutStatusRef.current === "running") return;
-		const signOutStartedAfterAttempt = activationRequestRef.current.attempt;
-		attemptRef.current += 1;
-		setProviderSignOutStatus("running");
+		if (machineRef.current.signingOut) return;
+		void dispatch({ type: "signOutRequested" });
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
 			getAuth: () => authRef.current,
 			analytics,
@@ -310,31 +235,23 @@ export function AuthenticatedAppSessionProvider({
 			clearCurrentListSelectionsForUser,
 			logger,
 			disconnectAndClear,
-			getSessionUserId: () => lastKnownUserIdRef.current,
+			getSessionUserId: () => machineRef.current.lastKnownUserId,
 		});
 		try {
 			await signOutFlow.run();
-			clearPublishedSession();
-			lastKnownUserIdRef.current = null;
-			suppressActivationUntilSignedOutRef.current = true;
-			setProviderSignOutStatus("idle");
-		} catch (error) {
-			const latestAuth = {
-				authReady: authRef.current.authReady,
+			void dispatch({
+				type: "signOutSucceeded",
 				signedIn: authRef.current.signedIn,
-			};
-			clearPublishedSession();
-			if (latestAuth.authReady && latestAuth.signedIn) {
-				const queuedRequest = activationRequestRef.current;
-				const recoveryRequest =
-					queuedRequest.attempt > signOutStartedAfterAttempt
-						? queuedRequest
-						: requestSessionReload("freshOnly");
-				await runActivation({ ...recoveryRequest, ...latestAuth });
-			} else {
-				lastKnownUserIdRef.current = null;
-			}
-			setProviderSignOutStatus("idle");
+			});
+		} catch (error) {
+			await dispatch(
+				{
+					type: "signOutFailed",
+					authReady: authRef.current.authReady,
+					signedIn: authRef.current.signedIn,
+				},
+				{ awaitActivation: true },
+			);
 			throw error;
 		}
 	}
@@ -361,10 +278,6 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 		);
 	}
 	return value;
-}
-
-function activationRunKey(request: ActivationRun): string {
-	return `${request.attempt}:${request.mode}:${request.authReady}:${request.signedIn}`;
 }
 
 async function defaultConnectDatabase({
