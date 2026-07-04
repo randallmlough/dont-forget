@@ -1,6 +1,11 @@
-import { column, Schema, Table } from "@powersync/react-native";
+import { column, Schema, Table } from "@powersync/common";
 
-// PowerSync streams timestamps as ISO text; keep these column.text values aligned with PR-A's sync-stream representation.
+// Client column types mirror what PowerSync serializes for each Postgres type
+// (https://docs.powersync.com/usage/sync-rules/types): product timestamps are
+// timestamptz -> ISO-8601-compatible text (column.text); directory timestamps
+// are bigint epoch-millis -> integer client columns. schema-consistency.test.ts
+// mechanically enforces agreement with src/server/db/schema/postgres,
+// infra/powersync/sync-config.yaml, and the powersync publication.
 const users = new Table({
 	clerk_user_id: column.text,
 	email: column.text,
@@ -13,8 +18,8 @@ const users = new Table({
 const households = new Table({
 	name: column.text,
 	created_by_user_id: column.text,
-	created_at: column.text,
-	deleted_at: column.text,
+	created_at: column.integer,
+	deleted_at: column.integer,
 });
 
 const memberships = new Table(
@@ -22,8 +27,8 @@ const memberships = new Table(
 		household_id: column.text,
 		user_id: column.text,
 		role: column.text,
-		joined_at: column.text,
-		removed_at: column.text,
+		joined_at: column.integer,
+		removed_at: column.integer,
 	},
 	{
 		indexes: { by_user: ["user_id"] },

@@ -16,6 +16,9 @@ module.exports = {
 	watchPathIgnorePatterns: ["<rootDir>/\\.claude/"],
 	moduleNameMapper: {
 		"^@/(.*)$": "<rootDir>/src/$1",
+		// jest-expo resolves the `browser` condition, and yaml's browser build is
+		// ESM-only; pin yaml to its Node CJS entry so tests can parse YAML files.
+		"^yaml$": "<rootDir>/node_modules/yaml/dist/index.js",
 	},
 	transformIgnorePatterns: [
 		// pnpm encodes the scope separator as `+` inside `.pnpm` (e.g. `@expo+ui@...`),
