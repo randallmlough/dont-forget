@@ -23,7 +23,6 @@ export type SessionMachineState = {
 	signingOut: boolean;
 	suppressActivationUntilSignedOut: boolean;
 	queuedReloadMode: "normal" | "freshOnly" | null;
-	hasEverRequestedReload: boolean;
 	lastObservedAuth: ObservedAuth | null;
 };
 
@@ -66,7 +65,6 @@ export const initialSessionMachineState: SessionMachineState = {
 	signingOut: false,
 	suppressActivationUntilSignedOut: false,
 	queuedReloadMode: null,
-	hasEverRequestedReload: false,
 	lastObservedAuth: null,
 };
 
@@ -107,21 +105,24 @@ export function reduceSessionMachine(
 		case "signOutFailed": {
 			const base: SessionMachineState = {
 				...state,
-				signingOut: false,
 				view: LOADING_VIEW,
 				queuedReloadMode: null,
 			};
 			if (!event.authReady || !event.signedIn) {
-				return { state: { ...base, lastKnownUserId: null }, effects: [] };
+				return {
+					state: { ...base, signingOut: false, lastKnownUserId: null },
+					effects: [],
+				};
 			}
 			const mode = state.queuedReloadMode ?? "freshOnly";
-			return startActivation(base, mode === "normal");
+			return startActivation({ ...base, signingOut: true }, mode === "normal");
 		}
 		case "activationSucceeded": {
 			if (event.attempt !== state.attempt) return noChange(state);
 			return {
 				state: {
 					...state,
+					signingOut: false,
 					view: {
 						state: { status: "ready", refreshing: false },
 						session: event.session,
@@ -138,6 +139,7 @@ export function reduceSessionMachine(
 				return {
 					state: {
 						...state,
+						signingOut: false,
 						view: {
 							state: { status: "ready", refreshing: false },
 							session: cached,
@@ -149,6 +151,7 @@ export function reduceSessionMachine(
 			return {
 				state: {
 					...state,
+					signingOut: false,
 					view: {
 						state: { status: "error", message: GENERIC_ERROR_MESSAGE },
 						session: null,
@@ -187,7 +190,7 @@ function reduceAuthStateChanged(
 			effects: [],
 		};
 	}
-	if (!event.activationEnabled && !next.hasEverRequestedReload) {
+	if (!event.activationEnabled) {
 		return { state: next, effects: [] };
 	}
 	return startActivation(next, true);
@@ -201,7 +204,7 @@ function reduceReloadRequested(
 		signedIn: boolean;
 	},
 ): SessionMachineResult {
-	const next: SessionMachineState = { ...state, hasEverRequestedReload: true };
+	const next: SessionMachineState = { ...state };
 	if (next.suppressActivationUntilSignedOut) {
 		// Reload suppression belongs to the pending auth flip after sign-out.
 		return { state: next, effects: [] };

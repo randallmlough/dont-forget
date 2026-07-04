@@ -460,15 +460,15 @@ describe("AuthenticatedAppSessionProvider", () => {
 	it("recovers the Authenticated App Session before rethrowing when Clerk sign-out fails", async () => {
 		const signOutError = new Error("clerk offline");
 		const signOutErrors: unknown[] = [];
+		const signOutFinished = deferred<void>();
+		const recovery = deferred<AuthenticatedAppSession>();
 		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
 		bootstrapService.getSession
 			.mockResolvedValueOnce(appSessionFixture())
-			.mockResolvedValueOnce(appSessionFixture({ displayName: "Recovered" }));
+			.mockReturnValueOnce(recovery.promise);
 		const connectDatabase = connectDatabaseFixture();
 		const auth = authFixture({
-			signOut: jest.fn(async () => {
-				throw signOutError;
-			}),
+			signOut: jest.fn(() => signOutFinished.promise),
 		});
 		await render(
 			<AuthenticatedAppSessionProvider
@@ -488,10 +488,26 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
 
-		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await act(async () => {
+			signOutFinished.reject(signOutError);
+			await signOutFinished.promise.catch(() => undefined);
+		});
+
+		await waitFor(() =>
+			expect(bootstrapService.getSession).toHaveBeenCalledTimes(2),
+		);
+		expect(screen.getByText("loading")).toBeTruthy();
+		expect(signOutErrors).toEqual([]);
+
+		await resolveActivation(
+			recovery,
+			appSessionFixture({ displayName: "Recovered" }),
+		);
 
 		await waitFor(() => expect(screen.getByText("Recovered")).toBeTruthy());
-		expect(signOutErrors).toEqual([signOutError]);
+		await waitFor(() => expect(signOutErrors).toEqual([signOutError]));
 		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
 		expect(connectDatabase).toHaveBeenCalledTimes(2);
 	});

@@ -59,6 +59,26 @@ describe("reduceSessionMachine", () => {
 		]);
 	});
 
+	it("does not restart from a disabled passive auth observation after an explicit reload", () => {
+		const session = sessionFixture();
+		const ready = activatedWith(session);
+		const reloading = reduceSessionMachine(ready.state, reloadRequested());
+		const reloaded = reduceSessionMachine(reloading.state, {
+			type: "activationSucceeded",
+			attempt: 2,
+			session,
+		});
+
+		const result = reduceSessionMachine(
+			reloaded.state,
+			authStateChanged({ activationEnabled: false }),
+		);
+
+		expect(result.state.attempt).toBe(reloaded.state.attempt);
+		expect(result.state.view).toBe(reloaded.state.view);
+		expect(result.effects).toEqual([]);
+	});
+
 	it("publishes loading and bumps the attempt on signed-out observations", () => {
 		const session = sessionFixture();
 		const ready = activatedWith(session);
@@ -213,11 +233,19 @@ describe("reduceSessionMachine", () => {
 			signedIn: true,
 		});
 
-		expect(recoveredQueued.state.signingOut).toBe(false);
+		expect(recoveredQueued.state.signingOut).toBe(true);
 		expect(recoveredQueued.state.queuedReloadMode).toBeNull();
 		expect(recoveredQueued.effects).toEqual([
 			{ type: "activate", attempt: 3, allowCached: true },
 		]);
+
+		const recovered = reduceSessionMachine(recoveredQueued.state, {
+			type: "activationSucceeded",
+			attempt: 3,
+			session: sessionFixture({ displayName: "Recovered" }),
+		});
+
+		expect(recovered.state.signingOut).toBe(false);
 
 		const noQueuedReload = reduceSessionMachine(signingOut.state, {
 			type: "signOutFailed",
@@ -225,9 +253,37 @@ describe("reduceSessionMachine", () => {
 			signedIn: true,
 		});
 
+		expect(noQueuedReload.state.signingOut).toBe(true);
 		expect(noQueuedReload.effects).toEqual([
 			{ type: "activate", attempt: 3, allowCached: false },
 		]);
+	});
+
+	it("clears signingOut when sign-out recovery activation fails", () => {
+		const signingOut = reduceSessionMachine(
+			activatedWith(sessionFixture()).state,
+			{
+				type: "signOutRequested",
+			},
+		);
+		const recovering = reduceSessionMachine(signingOut.state, {
+			type: "signOutFailed",
+			authReady: true,
+			signedIn: true,
+		});
+
+		const failed = reduceSessionMachine(recovering.state, {
+			type: "activationFailed",
+			attempt: 3,
+			allowCached: false,
+		});
+
+		expect(failed.state.signingOut).toBe(false);
+		expect(failed.state.view).toEqual({
+			state: { status: "error", message: GENERIC_ERROR_MESSAGE },
+			session: null,
+		});
+		expect(failed.effects).toEqual([]);
 	});
 
 	it("clears the view and last-known User on sign-out success while suppressing only if still signed in", () => {
@@ -341,6 +397,7 @@ describe("reduceSessionMachine", () => {
 
 		expect(result.state.view).toBe(initialSessionMachineState.view);
 		expect(result.state.lastKnownUserId).toBeNull();
+		expect(result.state.signingOut).toBe(false);
 		expect(result.effects).toEqual([]);
 	});
 

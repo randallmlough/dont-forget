@@ -79,6 +79,10 @@ type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	disconnectAndClear?: () => Promise<void>;
 }>;
 
+type DispatchOptions = {
+	awaitActivation?: boolean;
+};
+
 const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 	track,
 	reset,
@@ -133,21 +137,27 @@ export function AuthenticatedAppSessionProvider({
 
 	// The auth observation effect depends on dispatch, so keep it intentionally stable while preserving honest hook deps.
 	const dispatch = useCallback(
-		(event: SessionMachineEvent) => {
+		(event: SessionMachineEvent, options: DispatchOptions = {}) => {
+			const activationEffects: Promise<void>[] = [];
+
 			function applyResult(result: ReturnType<typeof reduceSessionMachine>) {
 				machineRef.current = result.state;
 				setViewState(result.state.view);
 				for (const effect of result.effects) {
-					runEffect(effect);
+					const effectResult = runEffect(effect);
+					if (options.awaitActivation && effect.type === "activate") {
+						activationEffects.push(effectResult);
+					}
 				}
 			}
 
-			function runEffect(effect: SessionMachineEffect) {
+			function runEffect(effect: SessionMachineEffect): Promise<void> {
 				if (effect.type === "activate") {
-					void executeActivation(effect.attempt, effect.allowCached);
-					return;
+					return executeActivation(effect.attempt, effect.allowCached);
 				}
-				void markAuthenticatedAppSessionPresent().catch(() => undefined);
+				return markAuthenticatedAppSessionPresent()
+					.catch(() => undefined)
+					.then(() => undefined);
 			}
 
 			async function executeActivation(attempt: number, allowCached: boolean) {
@@ -177,12 +187,14 @@ export function AuthenticatedAppSessionProvider({
 			}
 
 			applyResult(reduceSessionMachine(machineRef.current, event));
+			if (!options.awaitActivation) return Promise.resolve();
+			return Promise.all(activationEffects).then(() => undefined);
 		},
 		[bootstrapService, connectDatabase, getPowerSyncToken, getToken, logger],
 	);
 
 	useEffect(() => {
-		dispatch({
+		void dispatch({
 			type: "authStateChanged",
 			authReady,
 			signedIn,
@@ -195,7 +207,7 @@ export function AuthenticatedAppSessionProvider({
 	}, [auth]);
 
 	function retry() {
-		dispatch({
+		void dispatch({
 			type: "reloadRequested",
 			mode: "normal",
 			authReady: authRef.current.authReady,
@@ -204,7 +216,7 @@ export function AuthenticatedAppSessionProvider({
 	}
 
 	function reloadSession(options?: AuthenticatedAppSessionReloadOptions) {
-		dispatch({
+		void dispatch({
 			type: "reloadRequested",
 			mode: options?.mode ?? "normal",
 			authReady: authRef.current.authReady,
@@ -214,7 +226,7 @@ export function AuthenticatedAppSessionProvider({
 
 	async function runSignOut() {
 		if (machineRef.current.signingOut) return;
-		dispatch({ type: "signOutRequested" });
+		void dispatch({ type: "signOutRequested" });
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
 			getAuth: () => authRef.current,
 			analytics,
@@ -227,16 +239,19 @@ export function AuthenticatedAppSessionProvider({
 		});
 		try {
 			await signOutFlow.run();
-			dispatch({
+			void dispatch({
 				type: "signOutSucceeded",
 				signedIn: authRef.current.signedIn,
 			});
 		} catch (error) {
-			dispatch({
-				type: "signOutFailed",
-				authReady: authRef.current.authReady,
-				signedIn: authRef.current.signedIn,
-			});
+			await dispatch(
+				{
+					type: "signOutFailed",
+					authReady: authRef.current.authReady,
+					signedIn: authRef.current.signedIn,
+				},
+				{ awaitActivation: true },
+			);
 			throw error;
 		}
 	}
