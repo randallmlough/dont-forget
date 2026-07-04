@@ -59,6 +59,25 @@ describe("reduceSessionMachine", () => {
 		]);
 	});
 
+	it("does not reactivate a ready session after a disabled passive auth observation", () => {
+		const session = sessionFixture();
+		const ready = activatedWith(session);
+		const disabled = reduceSessionMachine(
+			ready.state,
+			authStateChanged({ activationEnabled: false }),
+		);
+		const enabled = reduceSessionMachine(disabled.state, authStateChanged());
+
+		expect(disabled.state).toBe(ready.state);
+		expect(disabled.effects).toEqual([]);
+		expect(enabled.state.attempt).toBe(ready.state.attempt);
+		expect(enabled.state.view).toEqual({
+			state: { status: "ready", refreshing: false },
+			session,
+		});
+		expect(enabled.effects).toEqual([]);
+	});
+
 	it("does not restart from a disabled passive auth observation after an explicit reload", () => {
 		const session = sessionFixture();
 		const ready = activatedWith(session);

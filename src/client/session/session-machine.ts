@@ -176,6 +176,15 @@ function reduceAuthStateChanged(
 	if (sameObservedAuth(state.lastObservedAuth, observed)) {
 		return noChange(state);
 	}
+	if (
+		event.authReady &&
+		event.signedIn &&
+		!event.activationEnabled &&
+		!state.signingOut &&
+		!state.suppressActivationUntilSignedOut
+	) {
+		return noChange(state);
+	}
 	const next: SessionMachineState = { ...state, lastObservedAuth: observed };
 	if (next.signingOut) {
 		return { state: next, effects: [] };
