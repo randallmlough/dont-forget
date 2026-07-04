@@ -7,10 +7,11 @@ import { AddItemForm } from "./add-item-form";
 import { ItemRows } from "./item-rows";
 import { ListHeader } from "./list-header";
 import {
-	createActiveListMemoryActions,
+	addFixtureItem,
 	emptyActiveListState,
 	largeActiveListState,
 	populatedActiveListState,
+	setFixtureItemChecked,
 } from "./list-test-support";
 import type { ActiveListState } from "./list-view-types";
 import { useListActions } from "./use-list-actions";
@@ -37,21 +38,13 @@ export const ManyItems: Story = {
 
 function ListPartsStory({ initialState }: { initialState: ActiveListState }) {
 	const [state, setState] = useState(initialState);
-	const [memoryActions] = useState(() =>
-		createActiveListMemoryActions(initialState, {
-			itemIdPrefix: "story-item",
-			checkedByMemberName: "Avery Chen",
-		}),
-	);
 	const actions = useListActions({
 		items: state.items,
 		onAddItem: async (input) => {
-			await memoryActions.addItem(input);
-			setState(await memoryActions.load());
+			setState((current) => addFixtureItem(current, input));
 		},
 		onSetItemChecked: async (itemId, checked) => {
-			await memoryActions.setItemChecked(itemId, checked);
-			setState(await memoryActions.load());
+			setState((current) => setFixtureItemChecked(current, itemId, checked));
 		},
 	});
 

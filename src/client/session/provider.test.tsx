@@ -416,6 +416,47 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(clearSessionHint).toHaveBeenCalledWith();
 	});
 
+	it("ignores duplicate sign-out requests while Clerk sign-out is pending", async () => {
+		const clerkSignOut = deferred<void>();
+		const analytics = createMockAnalytics();
+		const disconnectAndClear = jest.fn(async () => undefined);
+		const clearSessionHint = jest.fn(async () => undefined);
+		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
+		const auth = authFixture({
+			signOut: jest.fn(() => clerkSignOut.promise),
+		});
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabaseFixture()}
+				disconnectAndClear={disconnectAndClear}
+				analytics={analytics}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+			>
+				<CurrentState />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+
+		expect(analytics.track).toHaveBeenCalledTimes(1);
+		expect(analytics.reset).toHaveBeenCalledTimes(1);
+		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+		expect(clearSessionHint).toHaveBeenCalledTimes(1);
+		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			clerkSignOut.resolve(undefined);
+			await clerkSignOut.promise;
+		});
+	});
+
 	it("recovers the Authenticated App Session before rethrowing when Clerk sign-out fails", async () => {
 		const signOutError = new Error("clerk offline");
 		const signOutErrors: unknown[] = [];

@@ -6,8 +6,9 @@ import { StyleSheet } from "react-native-unistyles";
 
 import { AddItemForm } from "./add-item-form";
 import {
-	createActiveListMemoryActions,
+	addFixtureItem,
 	emptyActiveListState,
+	setFixtureItemChecked,
 } from "./list-test-support";
 import { useListActions } from "./use-list-actions";
 
@@ -25,21 +26,13 @@ export const Default: Story = {
 
 function AddItemFormStory() {
 	const [state, setState] = useState(emptyActiveListState);
-	const [memoryActions] = useState(() =>
-		createActiveListMemoryActions(emptyActiveListState, {
-			itemIdPrefix: "story-item",
-			checkedByMemberName: "Avery Chen",
-		}),
-	);
 	const actions = useListActions({
 		items: state.items,
 		onAddItem: async (input) => {
-			await memoryActions.addItem(input);
-			setState(await memoryActions.load());
+			setState((current) => addFixtureItem(current, input));
 		},
 		onSetItemChecked: async (itemId, checked) => {
-			await memoryActions.setItemChecked(itemId, checked);
-			setState(await memoryActions.load());
+			setState((current) => setFixtureItemChecked(current, itemId, checked));
 		},
 	});
 

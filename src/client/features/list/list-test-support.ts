@@ -56,55 +56,41 @@ export const largeActiveListState: ActiveListState = {
 	})),
 };
 
-export type ActiveListMemoryActions = {
-	load: () => Promise<ActiveListState>;
-	addItem: (input: AddActiveListItemInput) => Promise<void>;
-	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-};
-
-type ActiveListMemoryActionsOptions = {
-	itemIdPrefix?: string;
-	checkedByMemberName?: string;
-};
-
-export function createActiveListMemoryActions(
-	initialState: ActiveListState,
-	options: ActiveListMemoryActionsOptions = {},
-): ActiveListMemoryActions {
-	const itemIdPrefix = options.itemIdPrefix ?? "memory-item";
-	const checkedByMemberName = options.checkedByMemberName ?? "Avery Chen";
-	let state = initialState;
-	let nextItem = initialState.items.length + 1;
-
+export function addFixtureItem(
+	list: ActiveListState,
+	input: AddActiveListItemInput,
+): ActiveListState {
 	return {
-		async load() {
-			return state;
-		},
-		async addItem(input) {
-			const item = {
-				id: `${itemIdPrefix}-${nextItem}`,
+		...list,
+		items: [
+			...list.items,
+			{
+				id: `story-item-${list.items.length + 1}`,
 				name: input.name,
 				quantity: input.quantity,
 				notes: input.notes,
 				checked: false,
 				checkedByMemberName: null,
-			};
-			nextItem += 1;
-			state = { ...state, items: [...state.items, item] };
-		},
-		async setItemChecked(itemId, checked) {
-			state = {
-				...state,
-				items: state.items.map((item) =>
-					item.id === itemId
-						? {
-								...item,
-								checked,
-								checkedByMemberName: checked ? checkedByMemberName : null,
-							}
-						: item,
-				),
-			};
-		},
+			},
+		],
+	};
+}
+
+export function setFixtureItemChecked(
+	list: ActiveListState,
+	itemId: string,
+	checked: boolean,
+): ActiveListState {
+	return {
+		...list,
+		items: list.items.map((item) =>
+			item.id === itemId
+				? {
+						...item,
+						checked,
+						checkedByMemberName: checked ? "Avery Chen" : null,
+					}
+				: item,
+		),
 	};
 }

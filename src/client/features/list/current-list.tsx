@@ -7,7 +7,7 @@ import { HomeListSwitcher } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { ItemRows } from "./item-rows";
 import { ListHeader } from "./list-header";
-import type { ActiveListMeta } from "./list-view-types";
+import type { ActiveListSyncState } from "./list-view-types";
 import {
 	type HomeCurrentListData,
 	useHomeCurrentList,
@@ -16,7 +16,7 @@ import { useListActions } from "./use-list-actions";
 
 export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
-	syncState: ActiveListMeta["syncState"];
+	syncState: ActiveListSyncState;
 };
 
 export type CurrentListProps = {
@@ -64,7 +64,7 @@ function HomeCurrentListResource({ session }: HomeCurrentListResourceProps) {
 type HomeCurrentListContentProps = {
 	session: AuthenticatedAppSession;
 	list: HomeCurrentListData;
-	syncState: ActiveListMeta["syncState"];
+	syncState: ActiveListSyncState;
 	allowListSwitcher: boolean;
 };
 
@@ -160,7 +160,7 @@ function HomeCurrentListContent({
 type ActiveCurrentListProps = {
 	loadState: Extract<HomeCurrentListData["state"], { status: "active" }>;
 	currentMemberName: string;
-	syncState: ActiveListMeta["syncState"];
+	syncState: ActiveListSyncState;
 	onPressListName?: () => void;
 };
 

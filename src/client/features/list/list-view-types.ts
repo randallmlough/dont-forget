@@ -1,3 +1,5 @@
+import type { ProductSyncStatus } from "@/client/session/sync-state";
+
 export type ActiveListItem = {
 	id: string;
 	name: string;
@@ -25,12 +27,7 @@ export type ActiveListState = {
 	items: ActiveListItem[];
 };
 
-export type ActiveListSyncState = "synced" | "pending" | "offline" | "failed";
-
-export type ActiveListActions = {
-	addItem: (input: AddActiveListItemDraft) => Promise<void>;
-	toggleItem: (itemId: string) => Promise<void>;
-};
+export type ActiveListSyncState = ProductSyncStatus;
 
 export type ActiveListMeta = {
 	currentMemberName: string;

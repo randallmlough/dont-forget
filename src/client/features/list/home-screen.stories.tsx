@@ -5,13 +5,12 @@ import { StyleSheet } from "react-native-unistyles";
 import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
 import { HomeScreenView } from "@/client/features/list/home-screen";
 import {
+	addFixtureItem,
 	emptyActiveListState,
 	populatedActiveListState,
+	setFixtureItemChecked,
 } from "@/client/features/list/list-test-support";
-import type {
-	ActiveListState,
-	AddActiveListItemInput,
-} from "@/client/features/list/list-view-types";
+import type { ActiveListState } from "@/client/features/list/list-view-types";
 import type { AuthenticatedAppSession } from "@/client/session";
 
 const meta = {
@@ -140,45 +139,6 @@ function readySession(initialList: ActiveListState): AuthenticatedAppSession {
 				displayName: "Avery Chen",
 			},
 		],
-	};
-}
-
-function addFixtureItem(
-	list: ActiveListState,
-	input: AddActiveListItemInput,
-): ActiveListState {
-	return {
-		...list,
-		items: [
-			...list.items,
-			{
-				id: `story-item-${list.items.length + 1}`,
-				name: input.name,
-				quantity: input.quantity,
-				notes: input.notes,
-				checked: false,
-				checkedByMemberName: null,
-			},
-		],
-	};
-}
-
-function setFixtureItemChecked(
-	list: ActiveListState,
-	itemId: string,
-	checked: boolean,
-): ActiveListState {
-	return {
-		...list,
-		items: list.items.map((item) =>
-			item.id === itemId
-				? {
-						...item,
-						checked,
-						checkedByMemberName: checked ? "Avery Chen" : null,
-					}
-				: item,
-		),
 	};
 }
 

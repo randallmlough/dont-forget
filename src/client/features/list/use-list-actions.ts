@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import type {
 	ActiveListItem,
 	AddActiveListItemDraft,
@@ -22,20 +22,6 @@ export function useListActions(
 ): UseListActionsResult {
 	const { items, onAddItem, onSetItemChecked } = input;
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
-	const mounted = useRef(true);
-
-	useEffect(() => {
-		mounted.current = true;
-		return () => {
-			mounted.current = false;
-		};
-	}, []);
-
-	const setErrorIfMounted = useCallback((message: string | null) => {
-		if (mounted.current) {
-			setErrorMessage(message);
-		}
-	}, []);
 
 	const addItem = useCallback(
 		async (draft: AddActiveListItemDraft) => {
@@ -46,13 +32,13 @@ export function useListActions(
 
 			try {
 				await onAddItem({ name, quantity, notes });
-				setErrorIfMounted(null);
+				setErrorMessage(null);
 			} catch (error) {
-				setErrorIfMounted("Unable to save that Item. Please try again.");
+				setErrorMessage("Unable to save that Item. Please try again.");
 				throw error;
 			}
 		},
-		[onAddItem, setErrorIfMounted],
+		[onAddItem],
 	);
 
 	const toggleItem = useCallback(
@@ -62,12 +48,12 @@ export function useListActions(
 
 			try {
 				await onSetItemChecked(itemId, !target.checked);
-				setErrorIfMounted(null);
+				setErrorMessage(null);
 			} catch {
-				setErrorIfMounted("Unable to save that change. Please try again.");
+				setErrorMessage("Unable to save that change. Please try again.");
 			}
 		},
-		[items, onSetItemChecked, setErrorIfMounted],
+		[items, onSetItemChecked],
 	);
 
 	return { addItem, toggleItem, errorMessage };
