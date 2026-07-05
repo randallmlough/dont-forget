@@ -24,10 +24,14 @@ config:
 
 streams:
   # The signed-in user's own profile row (matched by external auth id).
+  # Explicit projection: created_at/updated_at are server-only — the client
+  # schema does not model them.
   me:
     auto_subscribe: true
     queries:
-      - SELECT * FROM users WHERE clerk_user_id = auth.user_id()
+      - >-
+        SELECT id, clerk_user_id, email, first_name, last_name, display_name,
+        active_household_id FROM users WHERE clerk_user_id = auth.user_id()
 
   # The user's memberships (internal user_id resolved from the Clerk sub).
   my_memberships:
