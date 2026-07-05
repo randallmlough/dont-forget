@@ -1,20 +1,12 @@
-import type { useQuery as usePowerSyncQuery } from "@powersync/react";
 import type { ListSummary } from "@/client/features/list/list-service";
-import type { ProductQuery } from "@/client/lib/product-database";
 import type { AuthenticatedAppSession } from "@/client/session";
+import { usePowerSyncQuery } from "./use-powersync-query";
 import { useProductServices } from "./use-product-services";
 
 export type HomeListSwitcherRows =
 	| { status: "loading" }
 	| { status: "error" }
 	| { status: "ready"; summaries: ListSummary[] };
-
-type PowerSyncWatchedQueryResult<T> = {
-	data: T[];
-	isLoading: boolean;
-	isFetching: boolean;
-	error: Error | undefined;
-};
 
 /**
  * Watches the active List summaries for the Home List switcher: exactly
@@ -31,7 +23,7 @@ export function useHomeListSwitcherRows(session: AuthenticatedAppSession): {
 	});
 	// A fresh query object per render is fine: useQuery re-keys on the
 	// compiled SQL + parameters, not object identity.
-	const query = useQuery<ListSummary>(
+	const query = usePowerSyncQuery<ListSummary>(
 		services.lists.listListsQuery({
 			archive: "active",
 			sort: "recentActivity",
@@ -45,18 +37,4 @@ export function useHomeListSwitcherRows(session: AuthenticatedAppSession): {
 		return { rows: { status: "loading" } };
 	}
 	return { rows: { status: "ready", summaries: query.data } };
-}
-
-function useQuery<RowType>(
-	query: ProductQuery<RowType>,
-): PowerSyncWatchedQueryResult<RowType> {
-	// @powersync/react is ESM-only; loading it inside the hook keeps Jest tests
-	// that do not render this hook from requiring the package at module import.
-	const powersyncReact = require("@powersync/react") as {
-		useQuery: typeof usePowerSyncQuery;
-	};
-	const usePowerSyncWatchedQuery: <T>(
-		query: ProductQuery<T>,
-	) => PowerSyncWatchedQueryResult<T> = powersyncReact.useQuery;
-	return usePowerSyncWatchedQuery(query);
 }

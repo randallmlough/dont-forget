@@ -1,5 +1,4 @@
-import type { useQuery as usePowerSyncQuery } from "@powersync/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
@@ -7,7 +6,6 @@ import {
 import type { Item } from "@/client/features/list/item-service";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { useLogger } from "@/client/lib/logger";
-import type { ProductQuery } from "@/client/lib/product-database";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { asError } from "@/shared/errors";
 import type {
@@ -15,6 +13,7 @@ import type {
 	ActiveListState,
 	AddActiveListItemInput,
 } from "./list-view-types";
+import { usePowerSyncQuery } from "./use-powersync-query";
 import {
 	type ProductServices,
 	useProductServices,
@@ -44,13 +43,6 @@ export type HomeCurrentListData = {
 
 const LIST_ERROR_MESSAGE = "Unable to load this List. Please try again.";
 
-type PowerSyncWatchedQueryResult<T> = {
-	data: T[];
-	isLoading: boolean;
-	isFetching: boolean;
-	error: Error | undefined;
-};
-
 /**
  * Resolves the Current List for Home from live watched SQL snapshots plus the
  * AsyncStorage-backed explicit selection:
@@ -75,9 +67,18 @@ export function useHomeCurrentList(
 		userId,
 		householdId,
 	);
+	const selectionClearGuard = useRef<{
+		selectionKey: string | null;
+		summariesData: readonly ListSummary[] | null;
+		observedSummariesAfterSelection: boolean;
+	}>({
+		selectionKey: null,
+		summariesData: null,
+		observedSummariesAfterSelection: false,
+	});
 	// Fresh query objects per render are fine: useQuery re-keys on compiled
 	// SQL + parameters, not object identity.
-	const summaries = useQuery<ListSummary>(
+	const summaries = usePowerSyncQuery<ListSummary>(
 		services.lists.listListsQuery({
 			archive: "active",
 			sort: "recentActivity",
@@ -92,17 +93,39 @@ export function useHomeCurrentList(
 			: null;
 	// Hooks cannot be conditional; an empty-string List id matches no rows
 	// while resolution is pending.
-	const items = useQuery<Item>(
+	const items = usePowerSyncQuery<Item>(
 		services.items.listItemsQuery({ listId: currentListId ?? "" }),
 	);
+	const readySelectionKey = selection.status === "ready" ? selection.key : null;
+
+	useEffect(() => {
+		const guard = selectionClearGuard.current;
+		if (guard.selectionKey !== readySelectionKey) {
+			guard.selectionKey = readySelectionKey;
+			guard.summariesData = summaries.data;
+			guard.observedSummariesAfterSelection = false;
+			return;
+		}
+		if (guard.summariesData !== summaries.data) {
+			guard.summariesData = summaries.data;
+			guard.observedSummariesAfterSelection = readySelectionKey !== null;
+		}
+	}, [readySelectionKey, summaries.data]);
 
 	// A stored selection that is no longer an active List is stale: clear it
 	// so it cannot shadow a later explicit selection. The in-memory fallback
-	// is never persisted. `clearCurrentListSelectionIfMatches` is idempotent,
-	// so re-runs on later summary emissions are no-ops. Failures log and
-	// degrade: the fallback List still renders (Decision 5).
+	// is never persisted. The clear waits for a List summaries emission after
+	// the current selection read so a just-persisted selection is not cleared
+	// against a stale trailing-throttled watched-query snapshot.
+	// `clearCurrentListSelectionIfMatches` is idempotent, so re-runs on later
+	// summary emissions are no-ops. Failures log and degrade: the fallback List
+	// still renders (Decision 5).
 	useEffect(() => {
+		const canClearAgainstSummaries =
+			selectionClearGuard.current.selectionKey === readySelectionKey &&
+			selectionClearGuard.current.observedSummariesAfterSelection;
 		if (!summariesReady || storedListId === null) return;
+		if (summaries.isFetching || !canClearAgainstSummaries) return;
 		if (summaries.data.some((summary) => summary.id === storedListId)) return;
 		void clearCurrentListSelectionIfMatches(
 			userId,
@@ -115,7 +138,9 @@ export function useHomeCurrentList(
 		});
 	}, [
 		summariesReady,
+		summaries.isFetching,
 		summaries.data,
+		readySelectionKey,
 		storedListId,
 		userId,
 		householdId,
@@ -142,7 +167,7 @@ export function useHomeCurrentList(
 
 type StoredSelectionState =
 	| { status: "loading" }
-	| { status: "ready"; storedListId: string | null };
+	| { status: "ready"; key: string; storedListId: string | null };
 
 type StoredSelectionSnapshot =
 	| { status: "loading"; key: string }
@@ -170,6 +195,7 @@ function useStoredCurrentListSelection(
 		selectionSnapshot.status === "ready"
 			? {
 					status: "ready",
+					key: selectionSnapshot.key,
 					storedListId: selectionSnapshot.storedListId,
 				}
 			: {
@@ -333,18 +359,4 @@ function activeListItemFromItem(
 				? (memberNames.get(item.checkedByUserId) ?? null)
 				: null,
 	};
-}
-
-function useQuery<RowType>(
-	query: ProductQuery<RowType>,
-): PowerSyncWatchedQueryResult<RowType> {
-	// @powersync/react is ESM-only; loading it inside the hook keeps Jest tests
-	// that do not render this hook from requiring the package at module import.
-	const powersyncReact = require("@powersync/react") as {
-		useQuery: typeof usePowerSyncQuery;
-	};
-	const usePowerSyncWatchedQuery: <T>(
-		query: ProductQuery<T>,
-	) => PowerSyncWatchedQueryResult<T> = powersyncReact.useQuery;
-	return usePowerSyncWatchedQuery(query);
 }

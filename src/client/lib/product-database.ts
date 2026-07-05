@@ -25,7 +25,7 @@ export type ProductQuery<T> = {
 	execute(): Promise<T[]>;
 	compile(): {
 		readonly sql: string;
-		readonly parameters: ReadonlyArray<unknown>;
+		readonly parameters: readonly unknown[];
 	};
 };
 

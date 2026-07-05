@@ -101,6 +101,35 @@ describe("useHomeCurrentList", () => {
 		});
 	});
 
+	it("renders loading while the stored Current List selection is pending", async () => {
+		let resolveSelection: (value: string | null) => void = () => {};
+		const pendingSelection = new Promise<string | null>((resolve) => {
+			resolveSelection = resolve;
+		});
+		mockGetSelection.mockReturnValue(pendingSelection);
+		const view = await renderHomeCurrentList({
+			summaries: [summary("lst_recent")],
+			itemsByListId: { lst_recent: [] },
+		});
+
+		expect(screen.getByText("loading")).toBeTruthy();
+
+		await act(async () => {
+			resolveSelection(null);
+		});
+		view.unmount();
+	});
+
+	it("renders loading while active List summaries are loading", async () => {
+		await renderHomeCurrentList({
+			summaries: [],
+			summariesIsLoading: true,
+		});
+
+		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
+		expect(screen.getByText("loading")).toBeTruthy();
+	});
+
 	it("resolves the stored selection when it is an active List", async () => {
 		mockGetSelection.mockResolvedValue("lst_pantry");
 		await renderHomeCurrentList({
@@ -133,12 +162,21 @@ describe("useHomeCurrentList", () => {
 		expect(mockClearSelection).not.toHaveBeenCalled();
 	});
 
-	it("clears an invalid stored selection and falls back without persisting the fallback", async () => {
+	it("clears an invalid stored selection after fresh List summaries emit and falls back without persisting the fallback", async () => {
 		mockGetSelection.mockResolvedValue("lst_gone");
-		await renderHomeCurrentList({
-			summaries: [summary("lst_recent", "Recent")],
+		const view = await renderHomeCurrentList({
+			summaries: [],
+			summariesIsLoading: true,
 			itemsByListId: { lst_recent: [] },
 		});
+
+		expect(await screen.findByText("loading")).toBeTruthy();
+		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
+
+		summariesResult = watchedQuery({
+			data: [summary("lst_recent", "Recent")],
+		});
+		view.rerender(<HomeCurrentListHarness session={sessionFixture()} />);
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
 		await waitFor(() =>
@@ -187,10 +225,18 @@ describe("useHomeCurrentList", () => {
 	it("logs a clear failure and keeps rendering the active fallback", async () => {
 		mockGetSelection.mockResolvedValue("lst_gone");
 		mockClearSelection.mockRejectedValue(new Error("storage offline"));
-		await renderHomeCurrentList({
-			summaries: [summary("lst_recent")],
+		const view = await renderHomeCurrentList({
+			summaries: [],
+			summariesIsLoading: true,
 			itemsByListId: { lst_recent: [] },
 		});
+
+		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
+
+		summariesResult = watchedQuery({
+			data: [summary("lst_recent")],
+		});
+		view.rerender(<HomeCurrentListHarness session={sessionFixture()} />);
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
 		await waitFor(() =>
@@ -252,6 +298,61 @@ describe("useHomeCurrentList", () => {
 		expect(mockGetSelection).toHaveBeenCalledTimes(2);
 	});
 
+	it("does not clear a refreshed stored selection before List summaries emit after the refresh", async () => {
+		mockGetSelection
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce("lst_pantry");
+		const { result } = await renderUseHomeCurrentList({
+			summaries: [summary("lst_recent", "Recent")],
+			itemsByListId: {
+				lst_recent: [],
+				lst_pantry: [],
+			},
+		});
+
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_recent",
+			}),
+		);
+		mockClearSelection.mockClear();
+
+		await act(async () => {
+			result.current.reload();
+		});
+
+		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_recent",
+			}),
+		);
+		expect(mockClearSelection).not.toHaveBeenCalled();
+	});
+
+	it("does not clear an absent stored selection while summaries are fetching", async () => {
+		mockGetSelection.mockResolvedValue("lst_gone");
+		const { rerender } = await renderUseHomeCurrentList({
+			summaries: [],
+			summariesIsLoading: true,
+			itemsByListId: { lst_recent: [] },
+		});
+
+		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
+
+		await act(async () => {
+			summariesResult = watchedQuery({
+				data: [summary("lst_recent", "Recent")],
+				isFetching: true,
+			});
+			rerender(undefined);
+		});
+
+		expect(mockClearSelection).not.toHaveBeenCalled();
+	});
+
 	it("filters Item rows that belong to a different List id", async () => {
 		await renderHomeCurrentList({
 			summaries: [summary("lst_current")],
@@ -304,6 +405,8 @@ async function renderUseHomeCurrentList(input: WatchedQueryFixture) {
 
 type WatchedQueryFixture = {
 	summaries: ListSummary[];
+	summariesIsLoading?: boolean;
+	summariesIsFetching?: boolean;
 	summariesError?: Error;
 	itemsByListId?: Record<string, Item[]>;
 	itemErrorsByListId?: Record<string, Error>;
@@ -312,6 +415,8 @@ type WatchedQueryFixture = {
 function arrangeWatchedQueries(input: WatchedQueryFixture) {
 	summariesResult = watchedQuery({
 		data: input.summaries,
+		isLoading: input.summariesIsLoading,
+		isFetching: input.summariesIsFetching,
 		error: input.summariesError,
 	});
 	itemResults = new Map();
