@@ -199,6 +199,23 @@ function reduceAuthStateChanged(
 		return noChange(state);
 	}
 	const next: SessionMachineState = { ...state, lastObservedAuth: observed };
+	if (
+		next.signingOut &&
+		(!event.authReady || !event.signedIn) &&
+		next.pendingActivationAttempt === next.attempt
+	) {
+		return {
+			state: {
+				...next,
+				attempt: next.attempt + 1,
+				signingOut: false,
+				suppressActivationUntilSignedOut: false,
+				queuedReloadMode: null,
+				view: LOADING_VIEW,
+			},
+			effects: [{ type: "disconnectAndClear" }],
+		};
+	}
 	if (next.signingOut) {
 		return { state: next, effects: [] };
 	}

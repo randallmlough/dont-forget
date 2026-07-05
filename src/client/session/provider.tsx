@@ -88,6 +88,8 @@ const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 	reset,
 };
 
+let databaseOperationChain: Promise<void> = Promise.resolve();
+
 const AuthenticatedAppSessionContext =
 	createContext<AuthenticatedAppSessionContextValue | null>(null);
 
@@ -156,7 +158,7 @@ export function AuthenticatedAppSessionProvider({
 					return executeActivation(effect.attempt, effect.allowCached);
 				}
 				if (effect.type === "disconnectAndClear") {
-					return disconnectAndClear().catch((error) => {
+					return enqueueDatabaseOperation(disconnectAndClear).catch((error) => {
 						logger.error(
 							"authenticated app session stale connect cleanup failed",
 							{
@@ -174,6 +176,14 @@ export function AuthenticatedAppSessionProvider({
 				return machineRef.current.attempt !== attempt;
 			}
 
+			function connectDatabaseForActivation(attempt: number): Promise<boolean> {
+				return databaseOperationChain.then(async () => {
+					if (activationSuperseded(attempt)) return false;
+					await connectDatabase({ getToken, getPowerSyncToken });
+					return true;
+				});
+			}
+
 			async function executeActivation(attempt: number, allowCached: boolean) {
 				try {
 					const session = await bootstrapService.getSession(getToken);
@@ -182,7 +192,8 @@ export function AuthenticatedAppSessionProvider({
 					// and the reducer alone decides what a stale one means (including
 					// undoing a stale connect).
 					if (activationSuperseded(attempt)) return;
-					await connectDatabase({ getToken, getPowerSyncToken });
+					const connected = await connectDatabaseForActivation(attempt);
+					if (!connected) return;
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
 							type: "activationSucceeded",
@@ -307,6 +318,15 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 
 function defaultDisconnectAndClear() {
 	return db.disconnectAndClear();
+}
+
+function enqueueDatabaseOperation<T>(operation: () => Promise<T>): Promise<T> {
+	const result = databaseOperationChain.then(operation, operation);
+	databaseOperationChain = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	return result;
 }
 
 async function defaultConnectDatabase({

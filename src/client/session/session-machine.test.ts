@@ -697,3 +697,94 @@ function sessionFixture(
 		],
 	};
 }
+
+describe("reduceSessionMachine sign-out recovery auth drops", () => {
+	it("disconnects and clears when the User signs out after recovery owns the activation", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const recovering = reduceSessionMachine(signingOut.state, {
+			type: "signOutFailed",
+			authReady: true,
+			signedIn: true,
+		});
+		const staleBeforeDrop = reduceSessionMachine(recovering.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(staleBeforeDrop.state).toBe(recovering.state);
+		expect(staleBeforeDrop.effects).toEqual([]);
+
+		const result = reduceSessionMachine(
+			staleBeforeDrop.state,
+			authStateChanged({ signedIn: false }),
+		);
+
+		expect(result.state.attempt).toBe(4);
+		expect(result.state.pendingActivationAttempt).toBe(3);
+		expect(result.state.signingOut).toBe(false);
+		expect(result.state.view).toBe(initialSessionMachineState.view);
+		expect(result.state.queuedReloadMode).toBeNull();
+		expect(result.state.suppressActivationUntilSignedOut).toBe(false);
+		expect(result.state.lastObservedAuth).toEqual({
+			authReady: true,
+			signedIn: false,
+			activationEnabled: true,
+		});
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("disconnects and clears when an old Household activation lands after a recovery auth drop", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const recovering = reduceSessionMachine(signingOut.state, {
+			type: "signOutFailed",
+			authReady: true,
+			signedIn: true,
+		});
+		const authDropped = reduceSessionMachine(
+			recovering.state,
+			authStateChanged({ signedIn: false }),
+		);
+
+		const result = reduceSessionMachine(authDropped.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(authDropped.state);
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("disconnects and clears when the recovery Household activation lands after the auth drop", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const recovering = reduceSessionMachine(signingOut.state, {
+			type: "signOutFailed",
+			authReady: true,
+			signedIn: true,
+		});
+		const recoveryAttempt = recovering.state.attempt;
+		const authDropped = reduceSessionMachine(
+			recovering.state,
+			authStateChanged({ signedIn: false }),
+		);
+
+		const result = reduceSessionMachine(authDropped.state, {
+			type: "activationSucceeded",
+			attempt: recoveryAttempt,
+			session,
+		});
+
+		expect(result.state).toBe(authDropped.state);
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+});

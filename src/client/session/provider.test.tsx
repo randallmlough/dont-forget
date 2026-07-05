@@ -989,3 +989,99 @@ async function resolveActivation(
 		await activation.promise;
 	});
 }
+
+describe("AuthenticatedAppSessionProvider database operation ordering", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockLogger = createMockLogger();
+		mockLogger.with.mockReturnValue(mockLogger);
+		jest.mocked(useLogger).mockReturnValue(mockLogger);
+	});
+
+	it("orders a stale corrective wipe before the next User database connect", async () => {
+		const staleConnect = deferred<void>();
+		const correctiveWipe = deferred<void>();
+		const initialSession = appSessionFixture();
+		const nextSession = appSessionFixture({ displayName: "Blake" });
+		const bootstrapService = bootstrapServiceFixture(initialSession);
+		bootstrapService.getSession
+			.mockResolvedValueOnce(initialSession)
+			.mockResolvedValueOnce(nextSession);
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockReturnValueOnce(staleConnect.promise);
+		const disconnectAndClear = jest
+			.fn<Promise<void>, []>()
+			.mockResolvedValueOnce(undefined)
+			.mockReturnValueOnce(correctiveWipe.promise);
+		const auth = authFixture();
+		const { rerender } = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton awaitSignOut />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(1));
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			staleConnect.resolve(undefined);
+			await staleConnect.promise;
+		});
+		await waitFor(() => expect(disconnectAndClear).toHaveBeenCalledTimes(2));
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: false }}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: true }}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(bootstrapService.getSession).toHaveBeenCalledTimes(2),
+		);
+		await Promise.resolve();
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("Blake")).toBeNull();
+		expect(screen.getByText("loading")).toBeTruthy();
+
+		await act(async () => {
+			correctiveWipe.resolve(undefined);
+			await correctiveWipe.promise;
+		});
+
+		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(screen.getByText("Blake")).toBeTruthy());
+		expect(screen.getByText("ready")).toBeTruthy();
+	});
+});
