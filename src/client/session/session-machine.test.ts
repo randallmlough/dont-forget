@@ -440,6 +440,250 @@ describe("reduceSessionMachine", () => {
 		});
 		expect(result.effects).toEqual([]);
 	});
+
+	it("disconnects and clears the database when a stale connect lands during sign-out cleanup", () => {
+		const session = sessionFixture();
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const signingOut = reduceSessionMachine(activating.state, {
+			type: "signOutRequested",
+		});
+
+		const result = reduceSessionMachine(signingOut.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(signingOut.state);
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("disconnects and clears the database when a stale connect lands after sign-out succeeded", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const signedOut = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: true,
+		});
+
+		const result = reduceSessionMachine(signedOut.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(signedOut.state);
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("disconnects and clears the database when Clerk flipped signed out before the next auth observation", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const signedOut = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: false,
+		});
+
+		const result = reduceSessionMachine(signedOut.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(signedOut.state);
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("disconnects and clears the database when a stale connect lands after auth was observed signed out", () => {
+		const session = sessionFixture();
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const signedOut = reduceSessionMachine(
+			activating.state,
+			authStateChanged({ signedIn: false }),
+		);
+
+		const result = reduceSessionMachine(signedOut.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(signedOut.state);
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("keeps the database connected when a stale connect resolves after a quick sign-out and re-sign-in", () => {
+		const session = sessionFixture();
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const staleAttempt = activating.state.attempt;
+		const signingOut = reduceSessionMachine(activating.state, {
+			type: "signOutRequested",
+		});
+		const signOutSucceeded = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: true,
+		});
+		const signedOut = reduceSessionMachine(
+			signOutSucceeded.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const reSignedIn = reduceSessionMachine(
+			signedOut.state,
+			authStateChanged(),
+		);
+		const liveAttempt = reSignedIn.state.attempt;
+
+		expect(reSignedIn.state.pendingActivationAttempt).toBe(liveAttempt);
+
+		const result = reduceSessionMachine(reSignedIn.state, {
+			type: "activationSucceeded",
+			attempt: staleAttempt,
+			session,
+		});
+
+		expect(result.state).toBe(reSignedIn.state);
+		expect(result.effects).toEqual([]);
+	});
+
+	it("keeps the database connected when a stale connect resolves after quick re-sign-in activation succeeded", () => {
+		const staleSession = sessionFixture();
+		const liveSession = sessionFixture({ displayName: "Re-signed In" });
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const staleAttempt = activating.state.attempt;
+		const signingOut = reduceSessionMachine(activating.state, {
+			type: "signOutRequested",
+		});
+		const signOutSucceeded = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: true,
+		});
+		const signedOut = reduceSessionMachine(
+			signOutSucceeded.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const reSignedIn = reduceSessionMachine(
+			signedOut.state,
+			authStateChanged(),
+		);
+		const liveAttempt = reSignedIn.state.attempt;
+		const reactivated = reduceSessionMachine(reSignedIn.state, {
+			type: "activationSucceeded",
+			attempt: liveAttempt,
+			session: liveSession,
+		});
+
+		expect(reactivated.state.pendingActivationAttempt).toBeNull();
+
+		const result = reduceSessionMachine(reactivated.state, {
+			type: "activationSucceeded",
+			attempt: staleAttempt,
+			session: staleSession,
+		});
+
+		expect(result.state).toBe(reactivated.state);
+		expect(result.effects).toEqual([]);
+	});
+
+	it("keeps the database connected when a superseded connect resolves while a newer activation is pending", () => {
+		const session = sessionFixture();
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const reloading = reduceSessionMachine(activating.state, reloadRequested());
+
+		const result = reduceSessionMachine(reloading.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(reloading.state);
+		expect(result.effects).toEqual([]);
+	});
+
+	it("keeps the database connected when a superseded connect resolves after the newer activation succeeded", () => {
+		const session = sessionFixture();
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const reloading = reduceSessionMachine(activating.state, reloadRequested());
+		const reloaded = reduceSessionMachine(reloading.state, {
+			type: "activationSucceeded",
+			attempt: 2,
+			session,
+		});
+
+		expect(reloaded.state.pendingActivationAttempt).toBeNull();
+
+		const result = reduceSessionMachine(reloaded.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(reloaded.state);
+		expect(result.effects).toEqual([]);
+	});
+
+	it("keeps the database connected while sign-out recovery owns the activation", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const recovering = reduceSessionMachine(signingOut.state, {
+			type: "signOutFailed",
+			authReady: true,
+			signedIn: true,
+		});
+
+		expect(recovering.state.pendingActivationAttempt).toBe(3);
+
+		const result = reduceSessionMachine(recovering.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(recovering.state);
+		expect(result.effects).toEqual([]);
+	});
+
+	it("does not disconnect for stale activation failures during sign-out", () => {
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const signingOut = reduceSessionMachine(activating.state, {
+			type: "signOutRequested",
+		});
+
+		const result = reduceSessionMachine(signingOut.state, {
+			type: "activationFailed",
+			attempt: 1,
+			allowCached: true,
+		});
+
+		expect(result.state).toBe(signingOut.state);
+		expect(result.effects).toEqual([]);
+	});
 });
 
 function run(...events: SessionMachineEvent[]): {
@@ -531,3 +775,94 @@ function sessionFixture(
 		],
 	};
 }
+
+describe("reduceSessionMachine sign-out recovery auth drops", () => {
+	it("disconnects and clears when the User signs out after recovery owns the activation", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const recovering = reduceSessionMachine(signingOut.state, {
+			type: "signOutFailed",
+			authReady: true,
+			signedIn: true,
+		});
+		const staleBeforeDrop = reduceSessionMachine(recovering.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(staleBeforeDrop.state).toBe(recovering.state);
+		expect(staleBeforeDrop.effects).toEqual([]);
+
+		const result = reduceSessionMachine(
+			staleBeforeDrop.state,
+			authStateChanged({ signedIn: false }),
+		);
+
+		expect(result.state.attempt).toBe(4);
+		expect(result.state.pendingActivationAttempt).toBe(3);
+		expect(result.state.signingOut).toBe(false);
+		expect(result.state.view).toBe(initialSessionMachineState.view);
+		expect(result.state.queuedReloadMode).toBeNull();
+		expect(result.state.suppressActivationUntilSignedOut).toBe(false);
+		expect(result.state.lastObservedAuth).toEqual({
+			authReady: true,
+			signedIn: false,
+			activationEnabled: true,
+		});
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("disconnects and clears when an old Household activation lands after a recovery auth drop", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const recovering = reduceSessionMachine(signingOut.state, {
+			type: "signOutFailed",
+			authReady: true,
+			signedIn: true,
+		});
+		const authDropped = reduceSessionMachine(
+			recovering.state,
+			authStateChanged({ signedIn: false }),
+		);
+
+		const result = reduceSessionMachine(authDropped.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(result.state).toBe(authDropped.state);
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("disconnects and clears when the recovery Household activation lands after the auth drop", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const recovering = reduceSessionMachine(signingOut.state, {
+			type: "signOutFailed",
+			authReady: true,
+			signedIn: true,
+		});
+		const recoveryAttempt = recovering.state.attempt;
+		const authDropped = reduceSessionMachine(
+			recovering.state,
+			authStateChanged({ signedIn: false }),
+		);
+
+		const result = reduceSessionMachine(authDropped.state, {
+			type: "activationSucceeded",
+			attempt: recoveryAttempt,
+			session,
+		});
+
+		expect(result.state).toBe(authDropped.state);
+		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+});

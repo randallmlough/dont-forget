@@ -88,6 +88,8 @@ const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 	reset,
 };
 
+let databaseOperationChain: Promise<void> = Promise.resolve();
+
 const AuthenticatedAppSessionContext =
 	createContext<AuthenticatedAppSessionContextValue | null>(null);
 
@@ -101,7 +103,7 @@ export function AuthenticatedAppSessionProvider({
 	activationEnabled = true,
 	bootstrapService: bootstrapServiceProp,
 	connectDatabase = defaultConnectDatabase,
-	disconnectAndClear = () => db.disconnectAndClear(),
+	disconnectAndClear = defaultDisconnectAndClear,
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
 	const logger = useLogger();
@@ -155,16 +157,48 @@ export function AuthenticatedAppSessionProvider({
 				if (effect.type === "activate") {
 					return executeActivation(effect.attempt, effect.allowCached);
 				}
+				if (effect.type === "disconnectAndClear") {
+					return enqueueDatabaseOperation(disconnectAndClear).catch((error) => {
+						logger.error(
+							"authenticated app session stale connect cleanup failed",
+							{
+								error: asError(error),
+							},
+						);
+					});
+				}
 				return markAuthenticatedAppSessionPresent()
 					.catch(() => undefined)
 					.then(() => undefined);
 			}
 
+			function activationSuperseded(attempt: number): boolean {
+				return machineRef.current.attempt !== attempt;
+			}
+
+			// Waits on the chain but deliberately does not extend it: a hung
+			// connect (PowerSync retries on bad networks) must never block a
+			// later cleanup wipe. Safe because a later disconnect aborts an
+			// in-flight connect for good (@powersync/common ConnectionManager);
+			// re-verify that guarantee when upgrading the SDK.
+			function connectDatabaseForActivation(attempt: number): Promise<boolean> {
+				return databaseOperationChain.then(async () => {
+					if (activationSuperseded(attempt)) return false;
+					await connectDatabase({ getToken, getPowerSyncToken });
+					return true;
+				});
+			}
+
 			async function executeActivation(attempt: number, allowCached: boolean) {
 				try {
 					const session = await bootstrapService.getSession(getToken);
-					if (machineRef.current.attempt !== attempt) return;
-					await connectDatabase({ getToken, getPowerSyncToken });
+					// `attempt` is the machine's only cancellation token: consult it before
+					// starting the next side effect; terminal results are always dispatched
+					// and the reducer alone decides what a stale one means (including
+					// undoing a stale connect).
+					if (activationSuperseded(attempt)) return;
+					const connected = await connectDatabaseForActivation(attempt);
+					if (!connected) return;
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
 							type: "activationSucceeded",
@@ -190,7 +224,14 @@ export function AuthenticatedAppSessionProvider({
 			if (!options.awaitActivation) return Promise.resolve();
 			return Promise.all(activationEffects).then(() => undefined);
 		},
-		[bootstrapService, connectDatabase, getPowerSyncToken, getToken, logger],
+		[
+			bootstrapService,
+			connectDatabase,
+			disconnectAndClear,
+			getPowerSyncToken,
+			getToken,
+			logger,
+		],
 	);
 
 	useEffect(() => {
@@ -278,6 +319,19 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 		);
 	}
 	return value;
+}
+
+function defaultDisconnectAndClear() {
+	return db.disconnectAndClear();
+}
+
+function enqueueDatabaseOperation<T>(operation: () => Promise<T>): Promise<T> {
+	const result = databaseOperationChain.then(operation, operation);
+	databaseOperationChain = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	return result;
 }
 
 async function defaultConnectDatabase({
