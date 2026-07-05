@@ -23,6 +23,39 @@ describe("createItemService", () => {
 	});
 
 	describe("listItems", () => {
+		it("keeps listItemsQuery compile and execute paths in lockstep while scoping to the Household", async () => {
+			store.seedItem({ id: "itm_milk", listId: "lst_groceries", position: 0 });
+			store.seedItem({
+				id: "itm_bread",
+				listId: "lst_groceries",
+				position: 1,
+			});
+			store.seedList({ id: "lst_other", householdId: OTHER_HOUSEHOLD });
+			store.seedItem({ id: "itm_other", listId: "lst_other", position: 0 });
+
+			const query = service.listItemsQuery({ listId: "lst_groceries" });
+			const executed = await query.execute();
+
+			await expect(
+				service.listItems({ listId: "lst_groceries" }),
+			).resolves.toEqual(executed);
+			const compiled = query.compile();
+			expect(compiled.parameters).toEqual([HOUSEHOLD, "lst_groceries"]);
+			const compiledRows = await store.getAll<
+				{ id: string } & Record<string, unknown>
+			>(compiled.sql, [...compiled.parameters]);
+			expect(compiledRows.map((row) => row.id)).toEqual(
+				executed.map((item) => item.id),
+			);
+
+			const scopedOutQuery = service.listItemsQuery({ listId: "lst_other" });
+			await expect(scopedOutQuery.execute()).resolves.toEqual([]);
+			const scopedOutCompiled = scopedOutQuery.compile();
+			await expect(
+				store.getAll(scopedOutCompiled.sql, [...scopedOutCompiled.parameters]),
+			).resolves.toEqual([]);
+		});
+
 		it("returns Items with shared checked-state attribution", async () => {
 			store.seedItem({
 				id: "itm_milk",

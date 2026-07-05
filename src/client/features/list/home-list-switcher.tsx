@@ -59,7 +59,7 @@ export function HomeListSwitcher({
 	onDismiss: () => void;
 	onSwitched: () => void;
 }) {
-	const { rows, reload } = useHomeListSwitcherRows(session);
+	const { rows } = useHomeListSwitcherRows(session);
 	const services = useProductServices({
 		householdId: session.activeHousehold.id,
 		userId: session.activeMember.userId,
@@ -106,17 +106,16 @@ export function HomeListSwitcher({
 			return listNameValidationMessage(result.reason);
 		}
 		// didWrite === true: persist the selection first, then update Home via
-		// re-resolution, close the sheet, and request sync last — never awaited
-		// before the local UI updates.
+		// re-resolution and close the sheet. The watched rows query observes the
+		// List write on its own.
 		try {
 			await setCurrentListSelection(userId, householdId, result.list.id);
 			onSwitched();
 			onDismiss();
 		} catch {
 			// Selection persistence failed but the List exists locally: fall back
-			// to the rows so the User can see and select it.
+			// to the switcher. The watched rows query will surface it.
 			setMode({ kind: "switcher" });
-			void reload();
 		}
 		return null;
 	}
@@ -135,7 +134,6 @@ export function HomeListSwitcher({
 			return listNameValidationMessage(result.reason);
 		}
 		if (result.status === "missing" || result.status === "deleted") {
-			void reload();
 			return LIST_GONE_MESSAGE;
 		}
 		if (!result.didWrite) {
@@ -150,7 +148,6 @@ export function HomeListSwitcher({
 			onDismiss();
 		} else {
 			setMode({ kind: "switcher" });
-			void reload();
 		}
 		return null;
 	}
@@ -163,7 +160,6 @@ export function HomeListSwitcher({
 			return GENERIC_ERROR_MESSAGE;
 		}
 		if (result.status === "missing") {
-			void reload();
 			return LIST_GONE_MESSAGE;
 		}
 		if (!result.didWrite) {
@@ -175,7 +171,6 @@ export function HomeListSwitcher({
 				onDismiss();
 			} else {
 				setMode({ kind: "switcher" });
-				void reload();
 			}
 			return null;
 		}
@@ -201,7 +196,6 @@ export function HomeListSwitcher({
 			onDismiss();
 		} else {
 			setMode({ kind: "switcher" });
-			void reload();
 		}
 		return null;
 	}
@@ -229,18 +223,8 @@ export function HomeListSwitcher({
 						) : rows.status === "error" ? (
 							<View style={styles.statusContainer}>
 								<Text style={styles.errorMessage}>
-									Unable to load your Lists. Please try again.
+									Unable to load your Lists.
 								</Text>
-								<Pressable
-									accessibilityRole="button"
-									onPress={() => void reload()}
-									style={({ pressed }) => [
-										styles.secondaryButton,
-										pressed ? styles.pressed : undefined,
-									]}
-								>
-									<Text style={styles.secondaryButtonLabel}>Try again</Text>
-								</Pressable>
 							</View>
 						) : (
 							<ScrollView

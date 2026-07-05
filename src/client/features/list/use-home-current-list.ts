@@ -1,10 +1,15 @@
+import type { useQuery as usePowerSyncQuery } from "@powersync/react";
+import { useEffect, useState } from "react";
 import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 } from "@/client/features/list/current-selection";
 import type { Item } from "@/client/features/list/item-service";
+import type { ListSummary } from "@/client/features/list/list-service";
+import { useLogger } from "@/client/lib/logger";
+import type { ProductQuery } from "@/client/lib/product-database";
 import type { AuthenticatedAppSession } from "@/client/session";
-import { useWatchedResource } from "@/client/session";
+import { asError } from "@/shared/errors";
 import type {
 	ActiveListItem,
 	ActiveListState,
@@ -37,132 +42,237 @@ export type HomeCurrentListData = {
 	reload: () => void;
 };
 
+const LIST_ERROR_MESSAGE = "Unable to load this List. Please try again.";
+
+type PowerSyncWatchedQueryResult<T> = {
+	data: T[];
+	isLoading: boolean;
+	isFetching: boolean;
+	error: Error | undefined;
+};
+
+/**
+ * Resolves the Current List for Home from live watched SQL snapshots plus the
+ * AsyncStorage-backed explicit selection:
+ *
+ * 1. Read the stored Current List selection for the active User + Household.
+ * 2. Validate it against the live active List summaries snapshot.
+ * 3. If the stored selection is inactive, clear it and fall back IN MEMORY to
+ *    the most recently active List. Fallback is never persisted.
+ * 4. Items are read through a watched query for the derived Current List id.
+ *
+ * SQL errors map to the retryable List error state. Selection-storage failures
+ * log and degrade to the in-memory fallback.
+ */
 export function useHomeCurrentList(
 	session: AuthenticatedAppSession,
 ): HomeCurrentListData {
-	const services = useProductServices({
-		householdId: session.activeHousehold.id,
-		userId: session.activeMember.userId,
-	});
-	const query = useWatchedResource({
-		key: session.activeHousehold.id,
-		load: () => resolveCurrentList(session, services),
-		errorMessage: "Unable to load this List. Please try again.",
-	});
-
-	return {
-		state: homeCurrentListStateFromQuery(query.state),
-		retry: query.reload,
-		// Current List selection lives in AsyncStorage, so switch/create/delete
-		// flows reset and re-resolve after persisting a new selection.
-		reload: query.reload,
-	};
-}
-
-type HomeCurrentListResolution =
-	| {
-			status: "active";
-			listId: string;
-			list: ActiveListState;
-			actions: HomeCurrentListActions;
-	  }
-	| { status: "zeroActive" };
-
-function homeCurrentListStateFromQuery(
-	queryState:
-		| { status: "loading" }
-		| { status: "error"; message: string }
-		| { status: "ready"; data: HomeCurrentListResolution },
-): HomeCurrentListState {
-	if (queryState.status === "loading") {
-		return { status: "loading" };
-	}
-
-	if (queryState.status === "error") {
-		return { status: "error", message: queryState.message };
-	}
-
-	if (queryState.data.status === "zeroActive") {
-		return { status: "zeroActive" };
-	}
-
-	return {
-		status: "active",
-		listId: queryState.data.listId,
-		list: queryState.data.list,
-		actions: queryState.data.actions,
-	};
-}
-
-/**
- * Resolves the Current List for Home:
- *
- * 1. Read the local Current List selection for the active Member + Household.
- * 2. Validate it against the active `listLists()` snapshot; a stored selection
- *    absent from the snapshot (archived, deleted, missing locally, corrupt id)
- *    is invalid and gets cleared.
- * 3. Load the stored selection when valid, otherwise fall back IN MEMORY to
- *    the most recently active List. Fallback is never persisted.
- * 4. Typed `missing`/`deleted` (or archived-in-race) `getList()` results mark
- *    the candidate stale: skip it and continue with the remaining snapshot
- *    candidates. The loop is bounded by the single snapshot — each candidate
- *    is attempted at most once and `listLists()` is not re-queried.
- *
- * Thrown infrastructure failures propagate to the retryable List error state.
- */
-async function resolveCurrentList(
-	session: AuthenticatedAppSession,
-	services: ProductServices,
-): Promise<HomeCurrentListResolution> {
 	const userId = session.activeMember.userId;
 	const householdId = session.activeHousehold.id;
-	const storedListId = await getCurrentListSelection(userId, householdId);
-	const summaries = await services.lists.listLists({
-		archive: "active",
-		sort: "recentActivity",
-	});
-	const activeListIds = summaries.map((summary) => summary.id);
-	const storedCandidateId =
-		storedListId !== null && activeListIds.includes(storedListId)
-			? storedListId
+	const logger = useLogger();
+	const services = useProductServices({ householdId, userId });
+	const { selection, refreshSelection } = useStoredCurrentListSelection(
+		userId,
+		householdId,
+	);
+	// Fresh query objects per render are fine: useQuery re-keys on compiled
+	// SQL + parameters, not object identity.
+	const summaries = useQuery<ListSummary>(
+		services.lists.listListsQuery({
+			archive: "active",
+			sort: "recentActivity",
+		}),
+	);
+	const storedListId =
+		selection.status === "ready" ? selection.storedListId : null;
+	const summariesReady = !summaries.isLoading && !summaries.error;
+	const currentListId =
+		selection.status === "ready" && summariesReady
+			? deriveCurrentListId(storedListId, summaries.data)
 			: null;
-	let clearStoredSelection =
-		storedListId !== null && storedCandidateId === null;
-	const candidateListIds =
-		storedCandidateId !== null
-			? [
-					storedCandidateId,
-					...activeListIds.filter((listId) => listId !== storedCandidateId),
-				]
-			: activeListIds;
+	// Hooks cannot be conditional; an empty-string List id matches no rows
+	// while resolution is pending.
+	const items = useQuery<Item>(
+		services.items.listItemsQuery({ listId: currentListId ?? "" }),
+	);
 
-	for (const listId of candidateListIds) {
-		const initialList = await loadActiveListState(session, services, listId);
-		if (initialList) {
-			if (clearStoredSelection && storedListId !== null) {
-				await clearCurrentListSelectionIfMatches(
-					userId,
-					householdId,
+	// A stored selection that is no longer an active List is stale: clear it
+	// so it cannot shadow a later explicit selection. The in-memory fallback
+	// is never persisted. `clearCurrentListSelectionIfMatches` is idempotent,
+	// so re-runs on later summary emissions are no-ops. Failures log and
+	// degrade: the fallback List still renders (Decision 5).
+	useEffect(() => {
+		if (!summariesReady || storedListId === null) return;
+		if (summaries.data.some((summary) => summary.id === storedListId)) return;
+		void clearCurrentListSelectionIfMatches(
+			userId,
+			householdId,
+			storedListId,
+		).catch((error: unknown) => {
+			logger.error("current List selection clear failed", {
+				error: asError(error),
+			});
+		});
+	}, [
+		summariesReady,
+		summaries.data,
+		storedListId,
+		userId,
+		householdId,
+		logger,
+	]);
+
+	return {
+		state: homeCurrentListState({
+			session,
+			services,
+			selection,
+			summaries,
+			items,
+			currentListId,
+		}),
+		retry: refreshSelection,
+		// Current List selection lives in AsyncStorage (not watched by
+		// PowerSync), so switch/create/delete flows re-read it explicitly
+		// after persisting a new selection; the watched queries re-emit on
+		// their own.
+		reload: refreshSelection,
+	};
+}
+
+type StoredSelectionState =
+	| { status: "loading" }
+	| { status: "ready"; storedListId: string | null };
+
+type StoredSelectionSnapshot =
+	| { status: "loading"; key: string }
+	| { status: "ready"; key: string; storedListId: string | null };
+
+function useStoredCurrentListSelection(
+	userId: string,
+	householdId: string,
+): { selection: StoredSelectionState; refreshSelection: () => void } {
+	const logger = useLogger();
+	// `epoch` is a trigger token: `refreshSelection` bumps it to re-read the
+	// AsyncStorage-backed selection after a switch/create/delete persisted a
+	// new one. `selectionKey` makes loading derivable while the next read is in
+	// flight. The cleanup flag guards against publishing after unmount or a
+	// Household change.
+	const [epoch, setEpoch] = useState(0);
+	const selectionKey = `${userId}:${householdId}:${epoch}`;
+	const [selectionSnapshot, setSelectionSnapshot] =
+		useState<StoredSelectionSnapshot>({
+			status: "loading",
+			key: selectionKey,
+		});
+	const selection: StoredSelectionState =
+		selectionSnapshot.key === selectionKey &&
+		selectionSnapshot.status === "ready"
+			? {
+					status: "ready",
+					storedListId: selectionSnapshot.storedListId,
+				}
+			: {
+					status: "loading",
+				};
+
+	useEffect(() => {
+		let cancelled = false;
+		getCurrentListSelection(userId, householdId)
+			.catch((error: unknown) => {
+				// A failed read behaves like no stored selection: the most
+				// recently active List still renders (Decision 5).
+				logger.error("current List selection read failed", {
+					error: asError(error),
+				});
+				return null;
+			})
+			.then((storedListId) => {
+				if (cancelled) return;
+				setSelectionSnapshot({
+					status: "ready",
+					key: selectionKey,
 					storedListId,
-				);
-			}
-			return {
-				status: "active",
-				listId,
-				list: initialList,
-				actions: homeCurrentListActions(session, services, listId),
-			};
-		}
-		// Typed missing/deleted lifecycle result: stale candidate, never an error.
-		if (listId === storedListId) {
-			clearStoredSelection = true;
-		}
-	}
+				});
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [userId, householdId, selectionKey, logger]);
 
-	if (clearStoredSelection && storedListId !== null) {
-		await clearCurrentListSelectionIfMatches(userId, householdId, storedListId);
+	return {
+		selection,
+		refreshSelection: () => setEpoch((value) => value + 1),
+	};
+}
+
+function deriveCurrentListId(
+	storedListId: string | null,
+	activeSummaries: readonly ListSummary[],
+): string | null {
+	if (
+		storedListId !== null &&
+		activeSummaries.some((summary) => summary.id === storedListId)
+	) {
+		return storedListId;
 	}
-	return { status: "zeroActive" };
+	// In-memory fallback to the most recently active List (the summaries
+	// query's sort order); never persisted.
+	return activeSummaries[0]?.id ?? null;
+}
+
+function homeCurrentListState(input: {
+	session: AuthenticatedAppSession;
+	services: ProductServices;
+	selection: StoredSelectionState;
+	summaries: {
+		data: ListSummary[];
+		isLoading: boolean;
+		error: Error | undefined;
+	};
+	items: { data: Item[]; isLoading: boolean; error: Error | undefined };
+	currentListId: string | null;
+}): HomeCurrentListState {
+	if (input.summaries.error || input.items.error) {
+		return { status: "error", message: LIST_ERROR_MESSAGE };
+	}
+	if (input.selection.status === "loading" || input.summaries.isLoading) {
+		return { status: "loading" };
+	}
+	if (input.currentListId === null) {
+		return { status: "zeroActive" };
+	}
+	if (input.items.isLoading) {
+		return { status: "loading" };
+	}
+	const summary = input.summaries.data.find(
+		(candidate) => candidate.id === input.currentListId,
+	);
+	if (!summary) {
+		// Type narrowing only: currentListId is derived from this same array.
+		return { status: "loading" };
+	}
+	const memberNames = memberNamesFromSession(input.session);
+	// Right after a switch the watched Items query may briefly still hold the
+	// previous List's rows (the SDK keeps data while re-running on a
+	// parameter change); rows are List-scoped, so filter (Decision 7).
+	const itemRows = input.items.data.filter(
+		(item) => item.listId === input.currentListId,
+	);
+	return {
+		status: "active",
+		listId: input.currentListId,
+		list: {
+			householdName: input.session.activeHousehold.name,
+			listName: summary.name,
+			items: itemRows.map((item) => activeListItemFromItem(item, memberNames)),
+		},
+		actions: homeCurrentListActions(
+			input.session,
+			input.services,
+			input.currentListId,
+		),
+	};
 }
 
 function homeCurrentListActions(
@@ -188,30 +298,6 @@ function homeCurrentListActions(
 				checked,
 			});
 		},
-	};
-}
-
-async function loadActiveListState(
-	session: AuthenticatedAppSession,
-	services: ProductServices,
-	listId: string,
-): Promise<ActiveListState | null> {
-	const [listResult, items] = await Promise.all([
-		services.lists.getList({ listId }),
-		services.items.listItems({ listId }),
-	]);
-	// `listLists({ archive: "active" })` already excludes archived Lists; the
-	// `archived` check covers a List archived between the two reads, since
-	// `getList` reports archived Lists as available.
-	if (listResult.status !== "available" || listResult.list.archived) {
-		return null;
-	}
-	const memberNames = memberNamesFromSession(session);
-
-	return {
-		householdName: session.activeHousehold.name,
-		listName: listResult.list.name,
-		items: items.map((item) => activeListItemFromItem(item, memberNames)),
 	};
 }
 
@@ -247,4 +333,18 @@ function activeListItemFromItem(
 				? (memberNames.get(item.checkedByUserId) ?? null)
 				: null,
 	};
+}
+
+function useQuery<RowType>(
+	query: ProductQuery<RowType>,
+): PowerSyncWatchedQueryResult<RowType> {
+	// @powersync/react is ESM-only; loading it inside the hook keeps Jest tests
+	// that do not render this hook from requiring the package at module import.
+	const powersyncReact = require("@powersync/react") as {
+		useQuery: typeof usePowerSyncQuery;
+	};
+	const usePowerSyncWatchedQuery: <T>(
+		query: ProductQuery<T>,
+	) => PowerSyncWatchedQueryResult<T> = powersyncReact.useQuery;
+	return usePowerSyncWatchedQuery(query);
 }

@@ -6,7 +6,10 @@ import {
 } from "@/client/features/list/sql-timestamp";
 import { track } from "@/client/lib/analytics";
 import { logger as defaultLogger, type Logger } from "@/client/lib/logger";
-import type { ProductDatabase } from "@/client/lib/product-database";
+import type {
+	ProductDatabase,
+	ProductQuery,
+} from "@/client/lib/product-database";
 import { asError } from "@/shared/errors";
 import { createAppId } from "@/shared/ids";
 import type { ServiceAnalytics } from "@/shared/service-analytics";
@@ -48,6 +51,7 @@ export type SetItemCheckedInput = {
 
 export type ItemService = {
 	listItems(input: ListItemsInput): Promise<Item[]>;
+	listItemsQuery(input: ListItemsInput): ProductQuery<Item>;
 	addItem(input: AddItemInput): Promise<Item>;
 	setItemChecked(input: SetItemCheckedInput): Promise<void>;
 };
@@ -86,15 +90,16 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 	});
 	const analytics = deps.analytics ?? { track };
 
-	return {
-		async listItems(input) {
-			try {
-				// The PowerSync local DB holds every Household the User syncs, so the
-				// join to `lists` scopes the read to the active Household. item_checks
-				// is one shared row per Item (Decision 9, `item_id` unique), so a plain
-				// LEFT JOIN reads the attributed check directly — no latest-row subquery.
-				const rows = await deps.store.getAll(
-					`
+	function listItemsStatement(input: ListItemsInput): {
+		sql: string;
+		parameters: unknown[];
+	} {
+		// The PowerSync local DB holds every Household the User syncs, so the
+		// join to `lists` scopes the read to the active Household. item_checks
+		// is one shared row per Item (Decision 9, `item_id` unique), so a plain
+		// LEFT JOIN reads the attributed check directly — no latest-row subquery.
+		return {
+			sql: `
             SELECT
               i.id,
               i.list_id,
@@ -113,17 +118,32 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
             WHERE l.household_id = ? AND i.list_id = ? AND i.deleted_at IS NULL
             ORDER BY i.position ASC, i.created_at ASC, i.id ASC
           `,
-					[deps.householdId, input.listId],
-				);
+			parameters: [deps.householdId, input.listId],
+		};
+	}
 
-				return rows.map((row) => itemFromRow(row, deps.householdId));
-			} catch (error) {
-				log.error("item list load failed", {
-					error: asError(error),
-					list_id: input.listId,
-				});
-				throw error;
-			}
+	async function listItems(input: ListItemsInput): Promise<Item[]> {
+		const statement = listItemsStatement(input);
+		try {
+			const rows = await deps.store.getAll(statement.sql, statement.parameters);
+
+			return rows.map((row) => itemFromRow(row, deps.householdId));
+		} catch (error) {
+			log.error("item list load failed", {
+				error: asError(error),
+				list_id: input.listId,
+			});
+			throw error;
+		}
+	}
+
+	return {
+		listItems,
+		listItemsQuery(input) {
+			return {
+				compile: () => listItemsStatement(input),
+				execute: () => listItems(input),
+			};
 		},
 		async addItem(input) {
 			const name = input.name.trim();

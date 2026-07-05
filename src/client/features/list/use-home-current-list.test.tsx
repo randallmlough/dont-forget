@@ -1,13 +1,20 @@
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { useQuery } from "@powersync/react";
+import {
+	act,
+	render,
+	renderHook,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
 import { Text } from "react-native";
 import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 } from "@/client/features/list/current-selection";
-import type {
-	GetListResult,
-	ListSummary,
-} from "@/client/features/list/list-service";
+import type { Item, ListItemsInput } from "@/client/features/list/item-service";
+import type { ListSummary } from "@/client/features/list/list-service";
+import { logger } from "@/client/lib/logger";
+import type { ProductQuery } from "@/client/lib/product-database";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useHomeCurrentList } from "./use-home-current-list";
 import {
@@ -15,10 +22,7 @@ import {
 	useProductServices,
 } from "./use-product-services";
 
-// Restores the resolveCurrentList behavior coverage at the hook level (the old
-// home-screen.test drove these through a real Household DB that the PowerSync
-// cutover deleted). The resolver source is unchanged, so the candidate that
-// wins must not change — these tests guard exactly that, against fake services.
+jest.mock("@powersync/react", () => ({ useQuery: jest.fn() }));
 
 jest.mock("@/client/lib/logger", () =>
 	jest
@@ -31,40 +35,64 @@ jest.mock("@/client/features/list/current-selection", () => ({
 	clearCurrentListSelectionIfMatches: jest.fn(async () => false),
 }));
 
-jest.mock("@/client/session/powersync-app-database", () => ({
-	appProductDatabase: {
-		subscribeChanges: jest.fn(() => ({ remove() {} })),
-	},
-}));
-
-let mockProductServices: ProductServices;
-
 jest.mock("./use-product-services", () => ({
 	useProductServices: jest.fn(),
 }));
 
+type WatchedQueryResult<T> = {
+	data: T[];
+	isLoading: boolean;
+	isFetching: boolean;
+	error: Error | undefined;
+};
+
+type ItemQuery = ProductQuery<Item> & { readonly listId: string };
+
+const mockUseQuery = jest.mocked(useQuery);
 const mockGetSelection = jest.mocked(getCurrentListSelection);
 const mockClearSelection = jest.mocked(clearCurrentListSelectionIfMatches);
 const mockUseProductServices = jest.mocked(useProductServices);
+const mockLogger = jest.mocked(logger);
+
+const listSummariesQuery: ProductQuery<ListSummary> = {
+	compile: () => ({ sql: "SELECT lists", parameters: [] }),
+	execute: async () => [],
+};
+
+let summariesResult: WatchedQueryResult<ListSummary>;
+let itemResults: Map<string, WatchedQueryResult<Item>>;
+let itemQueryListIds: Map<object, string>;
 
 beforeEach(() => {
+	summariesResult = watchedQuery({ data: [] });
+	itemResults = new Map();
+	itemQueryListIds = new Map();
 	mockGetSelection.mockResolvedValue(null);
 	mockClearSelection.mockResolvedValue(false);
-	mockUseProductServices.mockImplementation(() => mockProductServices);
+	mockUseProductServices.mockReturnValue(productServices());
+	mockUseQuery.mockImplementation((query) => {
+		if (query === listSummariesQuery) {
+			return summariesResult;
+		}
+		const key = queryObject(query);
+		const listId = key ? itemQueryListIds.get(key) : undefined;
+		if (listId !== undefined) {
+			return itemResults.get(listId) ?? watchedQuery({ data: [] });
+		}
+		throw new Error("unexpected watched query");
+	});
 });
 
 afterEach(() => {
 	jest.clearAllMocks();
 });
 
-describe("useHomeCurrentList / resolveCurrentList", () => {
+describe("useHomeCurrentList", () => {
 	it("creates product services for the active Household and User", async () => {
-		await renderHomeCurrentList(
-			sessionFixture({
-				summaries: [summary("lst_recent")],
-				lists: { lst_recent: available("lst_recent", "Recent") },
-			}),
-		);
+		await renderHomeCurrentList({
+			summaries: [summary("lst_recent")],
+			itemsByListId: { lst_recent: [] },
+		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
 		expect(mockUseProductServices).toHaveBeenCalledWith({
@@ -75,45 +103,42 @@ describe("useHomeCurrentList / resolveCurrentList", () => {
 
 	it("resolves the stored selection when it is an active List", async () => {
 		mockGetSelection.mockResolvedValue("lst_pantry");
-		await renderHomeCurrentList(
-			sessionFixture({
-				summaries: [summary("lst_groceries"), summary("lst_pantry")],
-				lists: {
-					lst_groceries: available("lst_groceries", "Groceries"),
-					lst_pantry: available("lst_pantry", "Pantry"),
-				},
-			}),
-		);
+		await renderHomeCurrentList({
+			summaries: [
+				summary("lst_groceries", "Groceries"),
+				summary("lst_pantry", "Pantry"),
+			],
+			itemsByListId: { lst_pantry: [item("itm_flour", "lst_pantry")] },
+		});
 
 		expect(await screen.findByText("active:lst_pantry")).toBeTruthy();
+		expect(screen.getByText("listName:Pantry")).toBeTruthy();
+		expect(screen.getByText("item:itm_flour")).toBeTruthy();
 		expect(mockClearSelection).not.toHaveBeenCalled();
 	});
 
 	it("falls back in memory to the most recently active List when nothing is stored", async () => {
 		mockGetSelection.mockResolvedValue(null);
-		await renderHomeCurrentList(
-			sessionFixture({
-				// listLists is queried sort: recentActivity, so index 0 is most recent.
-				summaries: [summary("lst_recent"), summary("lst_older")],
-				lists: {
-					lst_recent: available("lst_recent", "Recent"),
-					lst_older: available("lst_older", "Older"),
-				},
-			}),
-		);
+		await renderHomeCurrentList({
+			// Summaries are queried sort: recentActivity, so index 0 is most recent.
+			summaries: [
+				summary("lst_recent", "Recent"),
+				summary("lst_older", "Older"),
+			],
+			itemsByListId: { lst_recent: [] },
+		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
+		expect(screen.getByText("listName:Recent")).toBeTruthy();
 		expect(mockClearSelection).not.toHaveBeenCalled();
 	});
 
 	it("clears an invalid stored selection and falls back without persisting the fallback", async () => {
 		mockGetSelection.mockResolvedValue("lst_gone");
-		await renderHomeCurrentList(
-			sessionFixture({
-				summaries: [summary("lst_recent")],
-				lists: { lst_recent: available("lst_recent", "Recent") },
-			}),
-		);
+		await renderHomeCurrentList({
+			summaries: [summary("lst_recent", "Recent")],
+			itemsByListId: { lst_recent: [] },
+		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
 		await waitFor(() =>
@@ -125,91 +150,122 @@ describe("useHomeCurrentList / resolveCurrentList", () => {
 		);
 	});
 
-	it("excludes a stored candidate archived between listLists() and getList() and renders the next List", async () => {
-		mockGetSelection.mockResolvedValue("lst_stored");
-		await renderHomeCurrentList(
-			sessionFixture({
-				summaries: [summary("lst_stored"), summary("lst_next")],
-				lists: {
-					// In the active snapshot but archived by the time getList runs.
-					lst_stored: { status: "available", list: list("lst_stored", true) },
-					lst_next: available("lst_next", "Next"),
-				},
-			}),
-		);
-
-		expect(await screen.findByText("active:lst_next")).toBeTruthy();
-		await waitFor(() =>
-			expect(mockClearSelection).toHaveBeenCalledWith(
-				"usr_avery",
-				"hh_1",
-				"lst_stored",
-			),
-		);
-	});
-
-	it("excludes a stored candidate with a typed deleted getList() result and clears it", async () => {
-		mockGetSelection.mockResolvedValue("lst_stored");
-		await renderHomeCurrentList(
-			sessionFixture({
-				summaries: [summary("lst_stored"), summary("lst_next")],
-				lists: {
-					lst_stored: {
-						status: "deleted",
-						listId: "lst_stored",
-						deletedAt: 1,
-						updatedAt: 1,
-					},
-					lst_next: available("lst_next", "Next"),
-				},
-			}),
-		);
-
-		expect(await screen.findByText("active:lst_next")).toBeTruthy();
-		await waitFor(() =>
-			expect(mockClearSelection).toHaveBeenCalledWith(
-				"usr_avery",
-				"hh_1",
-				"lst_stored",
-			),
-		);
-	});
-
 	it("renders zero-active when there are no active Lists", async () => {
-		await renderHomeCurrentList(sessionFixture({ summaries: [], lists: {} }));
+		await renderHomeCurrentList({ summaries: [] });
 
 		expect(await screen.findByText("zeroActive")).toBeTruthy();
 	});
 
-	it("renders zero-active after a bounded pass when every candidate is stale", async () => {
-		await renderHomeCurrentList(
-			sessionFixture({
-				summaries: [summary("lst_a"), summary("lst_b")],
-				lists: {
-					lst_a: { status: "missing", listId: "lst_a" },
-					lst_b: { status: "missing", listId: "lst_b" },
-				},
-			}),
-		);
-
-		expect(await screen.findByText("zeroActive")).toBeTruthy();
-	});
-
-	it("surfaces a retryable error when clearing an invalid stored selection throws", async () => {
-		mockGetSelection.mockResolvedValue("lst_gone");
-		mockClearSelection.mockRejectedValue(new Error("storage offline"));
-		await renderHomeCurrentList(
-			sessionFixture({
-				summaries: [summary("lst_recent")],
-				lists: { lst_recent: available("lst_recent", "Recent") },
-			}),
-		);
+	it("maps a summaries query error to the List error state", async () => {
+		await renderHomeCurrentList({
+			summaries: [],
+			summariesError: new Error("lists failed"),
+		});
 
 		expect(
 			await screen.findByText(
 				"error:Unable to load this List. Please try again.",
 			),
 		).toBeTruthy();
+	});
+
+	it("maps an Items query error to the List error state", async () => {
+		await renderHomeCurrentList({
+			summaries: [summary("lst_recent")],
+			itemErrorsByListId: {
+				lst_recent: new Error("items failed"),
+			},
+		});
+
+		expect(
+			await screen.findByText(
+				"error:Unable to load this List. Please try again.",
+			),
+		).toBeTruthy();
+	});
+
+	it("logs a clear failure and keeps rendering the active fallback", async () => {
+		mockGetSelection.mockResolvedValue("lst_gone");
+		mockClearSelection.mockRejectedValue(new Error("storage offline"));
+		await renderHomeCurrentList({
+			summaries: [summary("lst_recent")],
+			itemsByListId: { lst_recent: [] },
+		});
+
+		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
+		await waitFor(() =>
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				"current List selection clear failed",
+				{ error: expect.any(Error) },
+			),
+		);
+	});
+
+	it("logs a selection read failure and renders the most recently active List", async () => {
+		mockGetSelection.mockRejectedValue(new Error("storage offline"));
+		await renderHomeCurrentList({
+			summaries: [summary("lst_recent")],
+			itemsByListId: { lst_recent: [] },
+		});
+
+		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
+		await waitFor(() =>
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				"current List selection read failed",
+				{ error: expect.any(Error) },
+			),
+		);
+	});
+
+	it("reload re-reads the stored selection and renders the newly selected List", async () => {
+		mockGetSelection
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce("lst_pantry");
+		const { result } = await renderUseHomeCurrentList({
+			summaries: [
+				summary("lst_recent", "Recent"),
+				summary("lst_pantry", "Pantry"),
+			],
+			itemsByListId: {
+				lst_recent: [],
+				lst_pantry: [],
+			},
+		});
+
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_recent",
+			}),
+		);
+
+		await act(async () => {
+			result.current.reload();
+		});
+
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_pantry",
+			}),
+		);
+		expect(mockGetSelection).toHaveBeenCalledTimes(2);
+	});
+
+	it("filters Item rows that belong to a different List id", async () => {
+		await renderHomeCurrentList({
+			summaries: [summary("lst_current")],
+			itemsByListId: {
+				lst_current: [
+					item("itm_current", "lst_current"),
+					item("itm_previous", "lst_previous"),
+				],
+			},
+		});
+
+		expect(await screen.findByText("active:lst_current")).toBeTruthy();
+		expect(screen.getByText("item:itm_current")).toBeTruthy();
+		expect(screen.queryByText("item:itm_previous")).toBeNull();
 	});
 });
 
@@ -220,7 +276,15 @@ function HomeCurrentListHarness({
 }) {
 	const { state } = useHomeCurrentList(session);
 	if (state.status === "active") {
-		return <Text>{`active:${state.listId}`}</Text>;
+		return (
+			<>
+				<Text>{`active:${state.listId}`}</Text>
+				<Text>{`listName:${state.list.listName}`}</Text>
+				{state.list.items.map((row) => (
+					<Text key={row.id}>{`item:${row.id}`}</Text>
+				))}
+			</>
+		);
 	}
 	if (state.status === "error") {
 		return <Text>{`error:${state.message}`}</Text>;
@@ -228,34 +292,91 @@ function HomeCurrentListHarness({
 	return <Text>{state.status}</Text>;
 }
 
-async function renderHomeCurrentList(session: AuthenticatedAppSession) {
-	return render(<HomeCurrentListHarness session={session} />);
+async function renderHomeCurrentList(input: WatchedQueryFixture) {
+	arrangeWatchedQueries(input);
+	return render(<HomeCurrentListHarness session={sessionFixture()} />);
 }
 
-function sessionFixture(input: {
+async function renderUseHomeCurrentList(input: WatchedQueryFixture) {
+	arrangeWatchedQueries(input);
+	return renderHook(() => useHomeCurrentList(sessionFixture()));
+}
+
+type WatchedQueryFixture = {
 	summaries: ListSummary[];
-	lists: Record<string, GetListResult>;
-}): AuthenticatedAppSession {
+	summariesError?: Error;
+	itemsByListId?: Record<string, Item[]>;
+	itemErrorsByListId?: Record<string, Error>;
+};
+
+function arrangeWatchedQueries(input: WatchedQueryFixture) {
+	summariesResult = watchedQuery({
+		data: input.summaries,
+		error: input.summariesError,
+	});
+	itemResults = new Map();
+	for (const [listId, items] of Object.entries(input.itemsByListId ?? {})) {
+		itemResults.set(listId, watchedQuery({ data: items }));
+	}
+	for (const [listId, error] of Object.entries(
+		input.itemErrorsByListId ?? {},
+	)) {
+		itemResults.set(listId, watchedQuery({ data: [], error }));
+	}
+}
+
+function watchedQuery<T>(input: {
+	data: T[];
+	isLoading?: boolean;
+	isFetching?: boolean;
+	error?: Error;
+}): WatchedQueryResult<T> {
+	return {
+		data: input.data,
+		isLoading: input.isLoading ?? false,
+		isFetching: input.isFetching ?? false,
+		error: input.error,
+	};
+}
+
+function productServices(): ProductServices {
 	const unused = jest.fn(async () => {
 		throw new Error("unexpected service call");
 	});
-	mockProductServices = {
+	return {
 		lists: {
-			listLists: jest.fn(async () => input.summaries),
-			getList: jest.fn(
-				async ({ listId }): Promise<GetListResult> =>
-					input.lists[listId] ?? { status: "missing", listId },
-			),
+			listLists: unused,
+			listListsQuery: jest.fn(() => listSummariesQuery),
 			createList: unused,
 			renameList: unused,
 			deleteList: unused,
 		},
 		items: {
-			listItems: jest.fn(async () => []),
+			listItems: unused,
+			listItemsQuery: jest.fn((input: ListItemsInput) =>
+				itemQuery(input.listId),
+			),
 			addItem: unused,
 			setItemChecked: unused,
 		},
 	};
+}
+
+function itemQuery(listId: string): ItemQuery {
+	const query = {
+		listId,
+		compile: () => ({ sql: "SELECT items", parameters: [listId] }),
+		execute: async () => itemResults.get(listId)?.data ?? [],
+	};
+	itemQueryListIds.set(query, listId);
+	return query;
+}
+
+function queryObject(query: unknown): object | null {
+	return typeof query === "object" && query !== null ? query : null;
+}
+
+function sessionFixture(): AuthenticatedAppSession {
 	return {
 		user: {
 			id: "usr_avery",
@@ -272,15 +393,22 @@ function sessionFixture(input: {
 			role: "owner",
 			displayName: "Avery",
 		},
-		members: [],
+		members: [
+			{
+				membershipId: "mbr_blake",
+				userId: "usr_blake",
+				role: "member",
+				displayName: "Blake",
+			},
+		],
 	};
 }
 
-function summary(id: string): ListSummary {
+function summary(id: string, name = id): ListSummary {
 	return {
 		id,
 		householdId: "hh_1",
-		name: id,
+		name,
 		createdByUserId: "usr_avery",
 		createdAt: 1,
 		updatedAt: 1,
@@ -292,22 +420,19 @@ function summary(id: string): ListSummary {
 	};
 }
 
-function list(id: string, archived: boolean) {
+function item(id: string, listId: string): Item {
 	return {
 		id,
 		householdId: "hh_1",
+		listId,
 		name: id,
+		quantity: null,
+		notes: null,
+		checked: false,
+		checkedByUserId: null,
+		position: 0,
 		createdByUserId: "usr_avery",
 		createdAt: 1,
 		updatedAt: 1,
-		archived,
-		archivedAt: archived ? 1 : null,
-	};
-}
-
-function available(id: string, name: string): GetListResult {
-	return {
-		status: "available",
-		list: { ...list(id, false), name },
 	};
 }

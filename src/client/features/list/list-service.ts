@@ -6,7 +6,10 @@ import {
 } from "@/client/features/list/sql-timestamp";
 import { track } from "@/client/lib/analytics";
 import { logger as defaultLogger, type Logger } from "@/client/lib/logger";
-import type { ProductDatabase } from "@/client/lib/product-database";
+import type {
+	ProductDatabase,
+	ProductQuery,
+} from "@/client/lib/product-database";
 import { asError } from "@/shared/errors";
 import { createAppId } from "@/shared/ids";
 import type { ServiceAnalytics } from "@/shared/service-analytics";
@@ -50,10 +53,6 @@ export type CreateListInput = {
 	name: string;
 };
 
-export type GetListInput = {
-	listId: string;
-};
-
 export type RenameListInput = {
 	listId: string;
 	name: string;
@@ -66,11 +65,6 @@ export type DeleteListInput = {
 export type CreateListResult =
 	| { status: "available"; list: List; didWrite: true }
 	| { status: "invalidName"; reason: ListNameValidationError; didWrite: false };
-
-export type GetListResult =
-	| { status: "available"; list: List }
-	| { status: "deleted"; listId: string; deletedAt: number; updatedAt: number }
-	| { status: "missing"; listId: string };
 
 export type RenameListResult =
 	| { status: "available"; list: List; didWrite: boolean }
@@ -96,10 +90,10 @@ export type DeleteListResult =
 
 export type ListService = {
 	createList(input: CreateListInput): Promise<CreateListResult>;
-	getList(input: GetListInput): Promise<GetListResult>;
 	renameList(input: RenameListInput): Promise<RenameListResult>;
 	deleteList(input: DeleteListInput): Promise<DeleteListResult>;
 	listLists(input?: ListListsInput): Promise<ListSummary[]>;
+	listListsQuery(input?: ListListsInput): ProductQuery<ListSummary>;
 };
 
 export type ListServiceDeps = {
@@ -157,6 +151,80 @@ export function createListService(deps: ListServiceDeps): ListService {
 	});
 	const analytics = deps.analytics ?? { track };
 
+	function listListsStatement(input?: ListListsInput): {
+		sql: string;
+		parameters: unknown[];
+	} {
+		const archive = input?.archive ?? "active";
+		const sort = input?.sort ?? "recentActivity";
+		const conditions = [
+			"l.household_id = ?",
+			"AND l.deleted_at IS NULL",
+			ARCHIVE_FILTER_SQL[archive],
+		];
+		const parameters: unknown[] = [deps.householdId];
+
+		const searchText = input?.searchText?.trim() ?? "";
+		if (searchText) {
+			conditions.push("AND l.name LIKE ? ESCAPE '\\'");
+			parameters.push(`%${escapeLikePattern(searchText)}%`);
+		}
+		if (input?.createdByUserId !== undefined) {
+			conditions.push("AND l.created_by_user_id = ?");
+			parameters.push(input.createdByUserId);
+		}
+
+		// item_checks is one shared row per Item (Decision 9), so the plain
+		// join replaces the old latest-row subquery. Timestamps are ISO text,
+		// so last_activity_at uses the scalar MAX over text with '' as the
+		// "no activity" floor (ISO-8601 sorts lexicographically = chronologically).
+		return {
+			sql: `
+            SELECT
+              l.id,
+              l.name,
+              l.created_by_user_id,
+              l.created_at,
+              l.updated_at,
+              l.archived_at,
+              MAX(
+                l.updated_at,
+                COALESCE(MAX(i.updated_at), ''),
+                COALESCE(MAX(c.updated_at), '')
+              ) AS last_activity_at,
+              COALESCE(
+                SUM(CASE WHEN i.id IS NOT NULL AND c.checked_at IS NULL THEN 1 ELSE 0 END),
+                0
+              ) AS unchecked_item_count,
+              COALESCE(
+                SUM(CASE WHEN c.checked_at IS NOT NULL THEN 1 ELSE 0 END),
+                0
+              ) AS checked_item_count
+            FROM lists l
+            LEFT JOIN items i ON i.list_id = l.id AND i.deleted_at IS NULL
+            LEFT JOIN item_checks c ON c.item_id = i.id
+            WHERE ${conditions.filter(Boolean).join(" ")}
+            GROUP BY l.id
+            ORDER BY ${SORT_SQL[sort]}
+          `,
+			parameters,
+		};
+	}
+
+	async function listLists(input?: ListListsInput): Promise<ListSummary[]> {
+		const statement = listListsStatement(input);
+		try {
+			const rows = await deps.store.getAll(statement.sql, statement.parameters);
+
+			return rows.map((row) =>
+				listSummaryFromRow(listSummaryRowSchema.parse(row), deps.householdId),
+			);
+		} catch (error) {
+			log.error("list summaries load failed", { error: asError(error) });
+			throw error;
+		}
+	}
+
 	return {
 		async createList(input) {
 			const validated = validateListName(input.name);
@@ -208,37 +276,6 @@ export function createListService(deps: ListServiceDeps): ListService {
 				};
 			} catch (error) {
 				log.error("list create failed", { error: asError(error) });
-				throw error;
-			}
-		},
-		async getList(input) {
-			try {
-				const row = await readListRow(
-					deps.store,
-					deps.householdId,
-					input.listId,
-				);
-				if (!row) {
-					return { status: "missing", listId: input.listId };
-				}
-				if (row.deleted_at !== null) {
-					return {
-						status: "deleted",
-						listId: input.listId,
-						deletedAt: row.deleted_at,
-						updatedAt: row.updated_at,
-					};
-				}
-
-				return {
-					status: "available",
-					list: listFromRow(row, deps.householdId),
-				};
-			} catch (error) {
-				log.error("list metadata load failed", {
-					error: asError(error),
-					list_id: input.listId,
-				});
 				throw error;
 			}
 		},
@@ -397,70 +434,12 @@ export function createListService(deps: ListServiceDeps): ListService {
 				throw error;
 			}
 		},
-		async listLists(input) {
-			const archive = input?.archive ?? "active";
-			const sort = input?.sort ?? "recentActivity";
-			const conditions = [
-				"l.household_id = ?",
-				"AND l.deleted_at IS NULL",
-				ARCHIVE_FILTER_SQL[archive],
-			];
-			const args: unknown[] = [deps.householdId];
-
-			const searchText = input?.searchText?.trim() ?? "";
-			if (searchText) {
-				conditions.push("AND l.name LIKE ? ESCAPE '\\'");
-				args.push(`%${escapeLikePattern(searchText)}%`);
-			}
-			if (input?.createdByUserId !== undefined) {
-				conditions.push("AND l.created_by_user_id = ?");
-				args.push(input.createdByUserId);
-			}
-
-			try {
-				// item_checks is one shared row per Item (Decision 9), so the plain
-				// join replaces the old latest-row subquery. Timestamps are ISO text,
-				// so last_activity_at uses the scalar MAX over text with '' as the
-				// "no activity" floor (ISO-8601 sorts lexicographically = chronologically).
-				const rows = await deps.store.getAll(
-					`
-            SELECT
-              l.id,
-              l.name,
-              l.created_by_user_id,
-              l.created_at,
-              l.updated_at,
-              l.archived_at,
-              MAX(
-                l.updated_at,
-                COALESCE(MAX(i.updated_at), ''),
-                COALESCE(MAX(c.updated_at), '')
-              ) AS last_activity_at,
-              COALESCE(
-                SUM(CASE WHEN i.id IS NOT NULL AND c.checked_at IS NULL THEN 1 ELSE 0 END),
-                0
-              ) AS unchecked_item_count,
-              COALESCE(
-                SUM(CASE WHEN c.checked_at IS NOT NULL THEN 1 ELSE 0 END),
-                0
-              ) AS checked_item_count
-            FROM lists l
-            LEFT JOIN items i ON i.list_id = l.id AND i.deleted_at IS NULL
-            LEFT JOIN item_checks c ON c.item_id = i.id
-            WHERE ${conditions.filter(Boolean).join(" ")}
-            GROUP BY l.id
-            ORDER BY ${SORT_SQL[sort]}
-          `,
-					args,
-				);
-
-				return rows.map((row) =>
-					listSummaryFromRow(listSummaryRowSchema.parse(row), deps.householdId),
-				);
-			} catch (error) {
-				log.error("list summaries load failed", { error: asError(error) });
-				throw error;
-			}
+		listLists,
+		listListsQuery(input) {
+			return {
+				compile: () => listListsStatement(input),
+				execute: () => listLists(input),
+			};
 		},
 	};
 }
