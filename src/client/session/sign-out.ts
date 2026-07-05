@@ -43,38 +43,59 @@ export function createAuthenticatedAppSessionSignOut({
 	getSessionUserId,
 }: AuthenticatedAppSessionSignOutDeps): AuthenticatedAppSessionSignOut {
 	async function run() {
+		type SignOutStep =
+			| { critical: true; run: () => Promise<void> }
+			| {
+					critical: false;
+					failureLogMessage: string;
+					run: () => Promise<void>;
+			  };
+
 		const signOut = getAuth().signOut;
 		const signedOutUserId = getSessionUserId();
 
 		analytics.track("user_signed_out", {});
 		analytics.reset();
 
-		await disconnectAndClear().catch((error) => {
-			logger.error("authenticated app session sign-out disconnect failed", {
-				error: asError(error),
-			});
-		});
-
-		try {
-			await clearAuthenticatedAppSessionPresentProp();
-		} catch (error) {
-			logger.error("authenticated app session sign-out local cleanup failed", {
-				error: asError(error),
+		// Local cleanup is best-effort: a partially failed device wipe must not
+		// keep the User signed in. Clerk sign-out is the one critical step — its
+		// failure must propagate so the provider's signOutFailed path can
+		// recover the session.
+		const steps: SignOutStep[] = [
+			{
+				critical: false,
+				failureLogMessage:
+					"authenticated app session sign-out disconnect failed",
+				run: disconnectAndClear,
+			},
+			{
+				critical: false,
+				failureLogMessage:
+					"authenticated app session sign-out local cleanup failed",
+				run: clearAuthenticatedAppSessionPresentProp,
+			},
+		];
+		if (signedOutUserId) {
+			steps.push({
+				critical: false,
+				failureLogMessage:
+					"authenticated app session sign-out current list selection cleanup failed",
+				run: () => clearCurrentListSelectionsForUser(signedOutUserId),
 			});
 		}
+		steps.push({ critical: true, run: signOut });
 
-		if (signedOutUserId) {
+		for (const step of steps) {
+			if (step.critical) {
+				await step.run();
+				continue;
+			}
 			try {
-				await clearCurrentListSelectionsForUser(signedOutUserId);
+				await step.run();
 			} catch (error) {
-				logger.error(
-					"authenticated app session sign-out current list selection cleanup failed",
-					{ error: asError(error) },
-				);
+				logger.error(step.failureLogMessage, { error: asError(error) });
 			}
 		}
-
-		await signOut();
 	}
 
 	return {

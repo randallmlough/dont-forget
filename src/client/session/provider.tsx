@@ -101,7 +101,7 @@ export function AuthenticatedAppSessionProvider({
 	activationEnabled = true,
 	bootstrapService: bootstrapServiceProp,
 	connectDatabase = defaultConnectDatabase,
-	disconnectAndClear = () => db.disconnectAndClear(),
+	disconnectAndClear = defaultDisconnectAndClear,
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
 	const logger = useLogger();
@@ -155,15 +155,33 @@ export function AuthenticatedAppSessionProvider({
 				if (effect.type === "activate") {
 					return executeActivation(effect.attempt, effect.allowCached);
 				}
+				if (effect.type === "disconnectAndClear") {
+					return disconnectAndClear().catch((error) => {
+						logger.error(
+							"authenticated app session stale connect cleanup failed",
+							{
+								error: asError(error),
+							},
+						);
+					});
+				}
 				return markAuthenticatedAppSessionPresent()
 					.catch(() => undefined)
 					.then(() => undefined);
 			}
 
+			function activationSuperseded(attempt: number): boolean {
+				return machineRef.current.attempt !== attempt;
+			}
+
 			async function executeActivation(attempt: number, allowCached: boolean) {
 				try {
 					const session = await bootstrapService.getSession(getToken);
-					if (machineRef.current.attempt !== attempt) return;
+					// `attempt` is the machine's only cancellation token: consult it before
+					// starting the next side effect; terminal results are always dispatched
+					// and the reducer alone decides what a stale one means (including
+					// undoing a stale connect).
+					if (activationSuperseded(attempt)) return;
 					await connectDatabase({ getToken, getPowerSyncToken });
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
@@ -190,7 +208,14 @@ export function AuthenticatedAppSessionProvider({
 			if (!options.awaitActivation) return Promise.resolve();
 			return Promise.all(activationEffects).then(() => undefined);
 		},
-		[bootstrapService, connectDatabase, getPowerSyncToken, getToken, logger],
+		[
+			bootstrapService,
+			connectDatabase,
+			disconnectAndClear,
+			getPowerSyncToken,
+			getToken,
+			logger,
+		],
 	);
 
 	useEffect(() => {
@@ -278,6 +303,10 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 		);
 	}
 	return value;
+}
+
+function defaultDisconnectAndClear() {
+	return db.disconnectAndClear();
 }
 
 async function defaultConnectDatabase({

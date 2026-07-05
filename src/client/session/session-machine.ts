@@ -20,6 +20,10 @@ export type SessionMachineState = {
 	view: SessionView;
 	lastKnownUserId: string | null;
 	attempt: number;
+	// The attempt whose `activate` effect has been issued but not yet resolved
+	// by a current-attempt terminal event. Stale terminals never clear it;
+	// "a live activation owns the connection" means it equals `attempt`.
+	pendingActivationAttempt: number | null;
 	signingOut: boolean;
 	suppressActivationUntilSignedOut: boolean;
 	queuedReloadMode: "normal" | "freshOnly" | null;
@@ -42,7 +46,8 @@ export type SessionMachineEvent =
 
 export type SessionMachineEffect =
 	| { type: "activate"; attempt: number; allowCached: boolean }
-	| { type: "markSessionHint" };
+	| { type: "markSessionHint" }
+	| { type: "disconnectAndClear" };
 
 export type SessionMachineResult = {
 	state: SessionMachineState;
@@ -62,6 +67,7 @@ export const initialSessionMachineState: SessionMachineState = {
 	view: LOADING_VIEW,
 	lastKnownUserId: null,
 	attempt: 0,
+	pendingActivationAttempt: null,
 	signingOut: false,
 	suppressActivationUntilSignedOut: false,
 	queuedReloadMode: null,
@@ -118,10 +124,13 @@ export function reduceSessionMachine(
 			return startActivation({ ...base, signingOut: true }, mode === "normal");
 		}
 		case "activationSucceeded": {
-			if (event.attempt !== state.attempt) return noChange(state);
+			if (event.attempt !== state.attempt) {
+				return reduceStaleActivation(state, event);
+			}
 			return {
 				state: {
 					...state,
+					pendingActivationAttempt: null,
 					signingOut: false,
 					view: {
 						state: { status: "ready", refreshing: false },
@@ -133,12 +142,15 @@ export function reduceSessionMachine(
 			};
 		}
 		case "activationFailed": {
-			if (event.attempt !== state.attempt) return noChange(state);
+			if (event.attempt !== state.attempt) {
+				return reduceStaleActivation(state, event);
+			}
 			const cached = state.view.session;
 			if (event.allowCached && cached) {
 				return {
 					state: {
 						...state,
+						pendingActivationAttempt: null,
 						signingOut: false,
 						view: {
 							state: { status: "ready", refreshing: false },
@@ -151,6 +163,7 @@ export function reduceSessionMachine(
 			return {
 				state: {
 					...state,
+					pendingActivationAttempt: null,
 					signingOut: false,
 					view: {
 						state: { status: "error", message: GENERIC_ERROR_MESSAGE },
@@ -245,9 +258,53 @@ function startActivation(
 		? { state: { status: "ready", refreshing: true }, session: cached }
 		: LOADING_VIEW;
 	return {
-		state: { ...state, attempt, view },
+		state: { ...state, attempt, pendingActivationAttempt: attempt, view },
 		effects: [{ type: "activate", attempt, allowCached }],
 	};
+}
+
+// The single rule for activation results that lost the race with a newer
+// attempt, a sign-out, or an auth drop. State never changes (identity is
+// preserved for React bail-out); the only question is whether a side effect
+// already happened that must be undone: a stale *success* means the
+// superseded activation connected the PowerSync database.
+function reduceStaleActivation(
+	state: SessionMachineState,
+	event: Extract<
+		SessionMachineEvent,
+		{ type: "activationSucceeded" | "activationFailed" }
+	>,
+): SessionMachineResult {
+	if (
+		event.type === "activationSucceeded" &&
+		databaseMustBeDisconnected(state)
+	) {
+		return { state, effects: [{ type: "disconnectAndClear" }] };
+	}
+	return noChange(state);
+}
+
+// True when the PowerSync database must not be connected and no live
+// activation owns the connection. Deny-list on signed-out-ish states:
+// connected-while-signed-in is never wrong (a cached session keeps syncing),
+// and clearing local data for a signed-in User could drop queued writes.
+function databaseMustBeDisconnected(state: SessionMachineState): boolean {
+	// A live activation for the current attempt will connect (or already
+	// has) — never disconnect underneath it.
+	if (state.pendingActivationAttempt === state.attempt) return false;
+	// Sign-out cleanup is running, or sign-out failed and recovery has not
+	// started an activation.
+	if (state.signingOut) return true;
+	// Signed out; waiting for Clerk's auth flip to land.
+	if (state.suppressActivationUntilSignedOut) return true;
+	// Post-sign-out resting state (view cleared, no known User) — covers the
+	// beat where Clerk flipped before the next auth observation arrives.
+	if (state.view.state.status === "loading" && state.lastKnownUserId === null) {
+		return true;
+	}
+	// Auth was observed signed out / not ready.
+	const auth = state.lastObservedAuth;
+	return auth !== null && (!auth.authReady || !auth.signedIn);
 }
 
 function sameObservedAuth(a: ObservedAuth | null, b: ObservedAuth): boolean {

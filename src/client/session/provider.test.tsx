@@ -749,6 +749,74 @@ describe("AuthenticatedAppSessionProvider", () => {
 			await signOutFinished.promise;
 		});
 	});
+
+	it("disconnects PowerSync when sign-out completes while the database connect is in flight", async () => {
+		const connect = deferred<void>();
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockReturnValueOnce(connect.promise);
+		const disconnectAndClear = jest.fn(async () => undefined);
+		const auth = authFixture();
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<SignOutButton awaitSignOut />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(1));
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			connect.resolve(undefined);
+			await connect.promise;
+		});
+
+		await waitFor(() => expect(disconnectAndClear).toHaveBeenCalledTimes(2));
+		expect(screen.getByText("loading")).toBeTruthy();
+	});
+
+	it("leaves PowerSync connected when a superseded reload connect resolves after the replacement is ready", async () => {
+		const staleConnect = deferred<void>();
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockReturnValueOnce(staleConnect.promise);
+		const disconnectAndClear = jest.fn(async () => undefined);
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
+			>
+				<CurrentState />
+				<ReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(1));
+
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+		await act(async () => {
+			staleConnect.resolve(undefined);
+			await staleConnect.promise;
+		});
+
+		expect(disconnectAndClear).toHaveBeenCalledTimes(0);
+		expect(screen.getByText("Avery Chen")).toBeTruthy();
+		expect(mockLogger.error).not.toHaveBeenCalledWith(
+			"authenticated app session stale connect cleanup failed",
+			expect.anything(),
+		);
+	});
 });
 
 function CurrentState() {
