@@ -176,6 +176,11 @@ export function AuthenticatedAppSessionProvider({
 				return machineRef.current.attempt !== attempt;
 			}
 
+			// Waits on the chain but deliberately does not extend it: a hung
+			// connect (PowerSync retries on bad networks) must never block a
+			// later cleanup wipe. Safe because a later disconnect aborts an
+			// in-flight connect for good (@powersync/common ConnectionManager);
+			// re-verify that guarantee when upgrading the SDK.
 			function connectDatabaseForActivation(attempt: number): Promise<boolean> {
 				return databaseOperationChain.then(async () => {
 					if (activationSuperseded(attempt)) return false;
