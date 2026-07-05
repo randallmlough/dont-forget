@@ -522,6 +522,84 @@ describe("reduceSessionMachine", () => {
 		expect(result.effects).toEqual([{ type: "disconnectAndClear" }]);
 	});
 
+	it("keeps the database connected when a stale connect resolves after a quick sign-out and re-sign-in", () => {
+		const session = sessionFixture();
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const staleAttempt = activating.state.attempt;
+		const signingOut = reduceSessionMachine(activating.state, {
+			type: "signOutRequested",
+		});
+		const signOutSucceeded = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: true,
+		});
+		const signedOut = reduceSessionMachine(
+			signOutSucceeded.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const reSignedIn = reduceSessionMachine(
+			signedOut.state,
+			authStateChanged(),
+		);
+		const liveAttempt = reSignedIn.state.attempt;
+
+		expect(reSignedIn.state.pendingActivationAttempt).toBe(liveAttempt);
+
+		const result = reduceSessionMachine(reSignedIn.state, {
+			type: "activationSucceeded",
+			attempt: staleAttempt,
+			session,
+		});
+
+		expect(result.state).toBe(reSignedIn.state);
+		expect(result.effects).toEqual([]);
+	});
+
+	it("keeps the database connected when a stale connect resolves after quick re-sign-in activation succeeded", () => {
+		const staleSession = sessionFixture();
+		const liveSession = sessionFixture({ displayName: "Re-signed In" });
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const staleAttempt = activating.state.attempt;
+		const signingOut = reduceSessionMachine(activating.state, {
+			type: "signOutRequested",
+		});
+		const signOutSucceeded = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: true,
+		});
+		const signedOut = reduceSessionMachine(
+			signOutSucceeded.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const reSignedIn = reduceSessionMachine(
+			signedOut.state,
+			authStateChanged(),
+		);
+		const liveAttempt = reSignedIn.state.attempt;
+		const reactivated = reduceSessionMachine(reSignedIn.state, {
+			type: "activationSucceeded",
+			attempt: liveAttempt,
+			session: liveSession,
+		});
+
+		expect(reactivated.state.pendingActivationAttempt).toBeNull();
+
+		const result = reduceSessionMachine(reactivated.state, {
+			type: "activationSucceeded",
+			attempt: staleAttempt,
+			session: staleSession,
+		});
+
+		expect(result.state).toBe(reactivated.state);
+		expect(result.effects).toEqual([]);
+	});
+
 	it("keeps the database connected when a superseded connect resolves while a newer activation is pending", () => {
 		const session = sessionFixture();
 		const activating = reduceSessionMachine(
