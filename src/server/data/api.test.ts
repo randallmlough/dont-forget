@@ -463,17 +463,21 @@ describe("/api/data handler", () => {
 	it("production path builds ONE pool shared by auth and transaction, ended once", async () => {
 		const end = jest.fn().mockResolvedValue(undefined);
 		const pool: Pool = Object.assign(Object.create(Pool.prototype), { end });
-		jest.mocked(postgresPool).mockReturnValue(pool);
+		jest.mocked(postgresPool).mockReturnValueOnce(pool);
 		const seenPools: unknown[] = [];
-		jest.mocked(defaultAuthenticate).mockImplementation(async (_request, p) => {
-			seenPools.push(p);
-			return "user_a";
-		});
-		jest.mocked(defaultWithTransaction).mockImplementation(async (p, run) => {
-			seenPools.push(p);
-			const { tx } = fakeTransaction({});
-			return run(tx); // empty batch -> the op loop never touches tx
-		});
+		jest
+			.mocked(defaultAuthenticate)
+			.mockImplementationOnce(async (_request, p) => {
+				seenPools.push(p);
+				return "user_a";
+			});
+		jest
+			.mocked(defaultWithTransaction)
+			.mockImplementationOnce(async (p, run) => {
+				seenPools.push(p);
+				const { tx } = fakeTransaction({});
+				return run(tx); // empty batch -> the op loop never touches tx
+			});
 
 		const response = await handleDataUpload(request([])); // no deps -> production wiring
 
@@ -481,5 +485,32 @@ describe("/api/data handler", () => {
 		expect(jest.mocked(postgresPool)).toHaveBeenCalledTimes(1);
 		expect(seenPools).toEqual([pool, pool]); // the SAME pool instance, both seams
 		expect(end).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns a server error when production pool creation fails", async () => {
+		const error = new Error("missing DATABASE_URL");
+		const consoleError = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		try {
+			jest.mocked(postgresPool).mockImplementationOnce(() => {
+				throw error;
+			});
+
+			const response = await handleDataUpload(request([]));
+
+			await expect(readJsonResponse(response)).resolves.toMatchObject({
+				status: 500,
+				body: { error: "Server error" },
+			});
+			expect(consoleError).toHaveBeenCalledWith(
+				"/api/data pool creation failed",
+				error,
+			);
+			expect(jest.mocked(defaultAuthenticate)).not.toHaveBeenCalled();
+			expect(jest.mocked(defaultWithTransaction)).not.toHaveBeenCalled();
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 });

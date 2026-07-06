@@ -33,7 +33,13 @@ export async function handleDataUpload(
 	}
 	// Production: one pool per request, shared by authentication and the
 	// transaction, closed when the request is done.
-	const pool = postgresPool();
+	let pool: ReturnType<typeof postgresPool>;
+	try {
+		pool = postgresPool();
+	} catch (error) {
+		console.error("/api/data pool creation failed", error);
+		return errorResponse("Server error", 500);
+	}
 	try {
 		return await applyDataUpload(request, {
 			authenticate: (r) => defaultAuthenticate(r, pool),
