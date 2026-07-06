@@ -4,10 +4,18 @@
 
 export {
 	applyOp,
+	BATCH_MAX,
 	batchSchema,
 	DataClientError,
 	type DataOp,
 	type DataTransaction,
 } from "./applicator";
 export { DataAuthError, defaultAuthenticate } from "./authenticate";
+export { PAYLOAD_MAX_BYTES, readBoundedJsonBody } from "./payload";
 export { defaultWithTransaction } from "./pg-transaction";
+export {
+	allowDataRequest,
+	RATE_LIMIT_CAPACITY,
+	RATE_LIMIT_WINDOW_MS,
+	resetRateLimiterForTests,
+} from "./rate-limit";

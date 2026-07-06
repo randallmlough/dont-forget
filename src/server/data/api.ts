@@ -7,6 +7,7 @@
 
 import { postgresPool } from "@/server/db/client";
 import {
+	allowDataRequest,
 	applyOp,
 	batchSchema,
 	DataAuthError,
@@ -15,6 +16,8 @@ import {
 	type DataTransaction,
 	defaultAuthenticate,
 	defaultWithTransaction,
+	PAYLOAD_MAX_BYTES,
+	readBoundedJsonBody,
 } from "@/server/sync";
 
 export type DataDeps = {
@@ -66,6 +69,10 @@ async function applyDataUpload(
 		return errorResponse("Server error", 500);
 	}
 
+	if (!allowDataRequest(userId, Date.now())) {
+		return errorResponse("Too many requests", 429);
+	}
+
 	let batch: DataOp[];
 	try {
 		batch = await parseBatch(request);
@@ -97,12 +104,12 @@ async function applyDataUpload(
 }
 
 async function parseBatch(request: Request): Promise<DataOp[]> {
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		throw new DataClientError("Malformed JSON", 400);
+	const declared = Number(request.headers.get("content-length") ?? "");
+	if (Number.isFinite(declared) && declared > PAYLOAD_MAX_BYTES) {
+		throw new DataClientError("Payload too large", 413);
 	}
+
+	const body = await readBoundedJsonBody(request.body);
 	const result = batchSchema.safeParse(body);
 	if (!result.success) {
 		throw new DataClientError("Malformed batch", 400);
