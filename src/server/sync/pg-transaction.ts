@@ -5,7 +5,7 @@
 // (./applicator) decides intent and calls these methods through the
 // DataTransaction interface. Lives in the db layer (ADR-0014).
 
-import { postgresPool } from "@/server/db/pg-client";
+import type { Pool } from "pg";
 import { HOUSEHOLD_RESOLUTION } from "@/server/db/schema/postgres/sync-columns";
 import type { DataTransaction } from "./applicator";
 
@@ -19,9 +19,9 @@ export type PgQueryClient = {
 // Production transaction: one pg connection, BEGIN/COMMIT/ROLLBACK, with the
 // raw SQL applicator wired to the schema's Household-resolution paths.
 export async function defaultWithTransaction<T>(
+	pool: Pool,
 	run: (tx: DataTransaction) => Promise<T>,
 ): Promise<T> {
-	const pool = postgresPool();
 	const client = await pool.connect();
 	try {
 		await client.query("BEGIN");
@@ -34,7 +34,6 @@ export async function defaultWithTransaction<T>(
 		throw error;
 	} finally {
 		client.release();
-		await pool.end();
 	}
 }
 

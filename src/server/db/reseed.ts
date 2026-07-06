@@ -1,5 +1,5 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { directoryClient, directoryDb } from "@/server/db/client";
+import { directoryDb, postgresPool } from "@/server/db/client";
 import { resetDirectoryDatabase } from "@/server/db/reset";
 import { DRIZZLE_MIGRATIONS_TABLE } from "@/server/db/utils";
 import {
@@ -18,10 +18,10 @@ export async function reseedLocalDatabases(): Promise<void> {
 	const seedMode = readLocalSeedMode();
 	assertLocalSeedPrerequisites({ seedMode });
 	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
-	const directoryClientInstance = directoryClient();
+	const pool = postgresPool();
 
 	try {
-		const directory = directoryDb(directoryClientInstance);
+		const directory = directoryDb(pool);
 		console.log("[directory] resetting app data");
 		await resetDirectoryDatabase(directory);
 		console.log("[directory] migrating");
@@ -30,7 +30,7 @@ export async function reseedLocalDatabases(): Promise<void> {
 			migrationsTable: DRIZZLE_MIGRATIONS_TABLE,
 		});
 	} finally {
-		await directoryClientInstance.end();
+		await pool.end();
 	}
 
 	await seedLocalDatabasesForMode(seedMode);

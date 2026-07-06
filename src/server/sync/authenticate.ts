@@ -5,11 +5,12 @@
 // imported dynamically so the heavy, server-only Clerk SDK loads only when a
 // request is actually authenticated — a caller that injects its own auth (e.g.
 // the handler tests) never pulls it in. The other deps (drizzle, the pg schema,
-// @/shared/env) are already in this module's static graph via @/server/db/pg-client,
+// @/shared/env) are already in this module's static graph via @/server/db/client,
 // so importing them statically defers nothing.
 
 import { eq } from "drizzle-orm";
-import { postgresDb, postgresPool } from "@/server/db/pg-client";
+import type { Pool } from "pg";
+import { directoryDb } from "@/server/db/client";
 import { users } from "@/server/db/schema/postgres";
 import { readClerkServerConfig } from "@/shared/env";
 
@@ -23,7 +24,10 @@ export class DataAuthError extends Error {
 
 // Sub-only Clerk verification: verifyToken (no Backend-API getUser round-trip),
 // then resolve the internal users.id by clerk_user_id from the pg directory.
-export async function defaultAuthenticate(request: Request): Promise<string> {
+export async function defaultAuthenticate(
+	request: Request,
+	pool: Pool,
+): Promise<string> {
 	const [{ bearerToken }, { verifyToken }] = await Promise.all([
 		import("@/server/http"),
 		import("@clerk/backend"),
@@ -42,19 +46,14 @@ export async function defaultAuthenticate(request: Request): Promise<string> {
 		throw new DataAuthError("Invalid Clerk session token");
 	}
 
-	const pool = postgresPool();
-	try {
-		const db = postgresDb(pool);
-		const [row] = await db
-			.select({ id: users.id })
-			.from(users)
-			.where(eq(users.clerkUserId, clerkUserId))
-			.limit(1);
-		if (!row) {
-			throw new DataAuthError("Unknown User");
-		}
-		return row.id;
-	} finally {
-		await pool.end();
+	const db = directoryDb(pool);
+	const [row] = await db
+		.select({ id: users.id })
+		.from(users)
+		.where(eq(users.clerkUserId, clerkUserId))
+		.limit(1);
+	if (!row) {
+		throw new DataAuthError("Unknown User");
 	}
+	return row.id;
 }

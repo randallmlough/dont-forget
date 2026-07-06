@@ -5,8 +5,8 @@ import {
 } from "@clerk/backend";
 import {
 	type DirectoryDb,
-	directoryClient,
 	directoryDb,
+	postgresPool,
 } from "@/server/db/client";
 import type { User } from "@/server/db/schema/postgres";
 import { createUserService } from "@/server/users/user-service";
@@ -65,7 +65,7 @@ export async function withDirectory<T>(
 		return handler(deps.directory);
 	}
 
-	const client = directoryClient();
+	const client = postgresPool();
 	try {
 		return await handler(directoryDb(client));
 	} finally {

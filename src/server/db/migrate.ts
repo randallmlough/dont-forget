@@ -6,7 +6,7 @@ import {
 	readPostgresConfig,
 } from "@/shared/env";
 import { loadEnvFile } from "@/shared/load-env";
-import { directoryClient, directoryDb } from "./client";
+import { directoryDb, postgresPool } from "./client";
 
 const DIRECTORY_MIGRATIONS = "./src/server/db/migrations/postgres";
 
@@ -22,9 +22,9 @@ async function main(): Promise<void> {
 	console.log(`[env] ${postgresConfig.appEnv}`);
 	console.log("[directory] PostgreSQL");
 
-	const directoryPool = directoryClient();
+	const pool = postgresPool();
 	try {
-		const directory = directoryDb(directoryPool);
+		const directory = directoryDb(pool);
 		console.log("[directory] migrating…");
 		await migrate(directory, {
 			migrationsFolder: DIRECTORY_MIGRATIONS,
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
 		});
 		console.log("[directory] done");
 	} finally {
-		await directoryPool.end();
+		await pool.end();
 	}
 }
 

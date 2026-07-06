@@ -2,7 +2,7 @@ import {
 	bootstrapAuthenticatedAppSession,
 	createProductionAuthenticatedAppSessionBootstrapDeps,
 } from "@/server/bootstrap/bootstrap-service";
-import { directoryClient, directoryDb } from "@/server/db/client";
+import { directoryDb, postgresPool } from "@/server/db/client";
 import { UnauthorizedError, verifyClerkRequest } from "@/server/http";
 import type { BootstrapResponse } from "@/shared/contracts/bootstrap";
 import { asError } from "@/shared/errors";
@@ -11,7 +11,7 @@ import { redactAttributes } from "@/shared/redact";
 export async function handleBootstrap(request: Request): Promise<Response> {
 	try {
 		const profile = await verifyClerkRequest(request);
-		const client = directoryClient();
+		const client = postgresPool();
 
 		try {
 			const response = await bootstrapAuthenticatedAppSession(
