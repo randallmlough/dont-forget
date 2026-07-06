@@ -1,5 +1,3 @@
-export const PAYLOAD_MAX_BYTES = 256 * 1024;
-
 // In-process per-user token bucket for /api/data. Single-VPS deployment
 // (ADR-0018) makes an in-process limiter correct for the MVP; a distributed
 // limiter is deferred (see docs/tech-debt/powersync-deferred-hardening.md).

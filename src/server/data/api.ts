@@ -17,6 +17,7 @@ import {
 	defaultAuthenticate,
 	defaultWithTransaction,
 	PAYLOAD_MAX_BYTES,
+	readBoundedJsonBody,
 } from "@/server/sync";
 
 export type DataDeps = {
@@ -108,12 +109,7 @@ async function parseBatch(request: Request): Promise<DataOp[]> {
 		throw new DataClientError("Payload too large", 413);
 	}
 
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		throw new DataClientError("Malformed JSON", 400);
-	}
+	const body = await readBoundedJsonBody(request.body);
 	const result = batchSchema.safeParse(body);
 	if (!result.success) {
 		throw new DataClientError("Malformed batch", 400);

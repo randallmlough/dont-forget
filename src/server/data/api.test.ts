@@ -88,6 +88,33 @@ function request(batch: unknown): Request {
 	return createApiRequest({ method: "POST", body: { batch } });
 }
 
+function streamedRequest(body: string, headers?: HeadersInit): Request {
+	const requestInit: RequestInit & { duplex: "half" } = {
+		method: "POST",
+		headers: new Headers({
+			"content-type": "application/json",
+			...Object.fromEntries(new Headers(headers)),
+		}),
+		body: streamFromText(body),
+		duplex: "half",
+	};
+	return new Request("https://dont-forget.test/api/test", requestInit);
+}
+
+function streamFromText(text: string): ReadableStream<Uint8Array> {
+	const bytes = new TextEncoder().encode(text);
+	return new ReadableStream<Uint8Array>({
+		start(controller) {
+			controller.enqueue(bytes);
+			controller.close();
+		},
+	});
+}
+
+function overCapJsonPayload(): string {
+	return JSON.stringify({ batch: [], pad: "a".repeat(PAYLOAD_MAX_BYTES) });
+}
+
 describe("/api/data handler", () => {
 	beforeEach(() => {
 		resetRateLimiterForTests();
@@ -142,6 +169,46 @@ describe("/api/data handler", () => {
 				headers: { "content-length": String(PAYLOAD_MAX_BYTES + 1) },
 				body: { batch: [] },
 			}),
+			{
+				authenticate: async () => "user_a",
+				withTransaction: async (run) => {
+					transactionRuns.push(run);
+					throw new Error("should not reach transaction");
+				},
+			},
+		);
+
+		await expect(readJsonResponse(response)).resolves.toMatchObject({
+			status: 413,
+			body: { error: "Payload too large" },
+		});
+		expect(transactionRuns).toHaveLength(0);
+	});
+
+	it("returns 413 for a streamed payload over the cap without a content-length header", async () => {
+		const transactionRuns: unknown[] = [];
+		const response = await handleDataUpload(
+			streamedRequest(overCapJsonPayload()),
+			{
+				authenticate: async () => "user_a",
+				withTransaction: async (run) => {
+					transactionRuns.push(run);
+					throw new Error("should not reach transaction");
+				},
+			},
+		);
+
+		await expect(readJsonResponse(response)).resolves.toMatchObject({
+			status: 413,
+			body: { error: "Payload too large" },
+		});
+		expect(transactionRuns).toHaveLength(0);
+	});
+
+	it("returns 413 for a streamed payload over the cap with a malformed content-length header", async () => {
+		const transactionRuns: unknown[] = [];
+		const response = await handleDataUpload(
+			streamedRequest(overCapJsonPayload(), { "content-length": "abc" }),
 			{
 				authenticate: async () => "user_a",
 				withTransaction: async (run) => {

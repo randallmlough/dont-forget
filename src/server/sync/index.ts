@@ -11,10 +11,10 @@ export {
 	type DataTransaction,
 } from "./applicator";
 export { DataAuthError, defaultAuthenticate } from "./authenticate";
+export { PAYLOAD_MAX_BYTES, readBoundedJsonBody } from "./payload";
 export { defaultWithTransaction } from "./pg-transaction";
 export {
 	allowDataRequest,
-	PAYLOAD_MAX_BYTES,
 	RATE_LIMIT_CAPACITY,
 	RATE_LIMIT_WINDOW_MS,
 	resetRateLimiterForTests,
