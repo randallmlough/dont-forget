@@ -1,14 +1,18 @@
-import { drizzle as nodePgDrizzle } from "drizzle-orm/node-postgres";
-import type { Pool } from "pg";
-import * as directorySchema from "@/server/db/schema/postgres";
-import { postgresPool } from "./pg-client";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "@/server/db/schema/postgres";
+import { readPostgresConfig } from "@/shared/env";
 
 export type DirectoryDb = ReturnType<typeof directoryDb>;
 
-export function directoryClient(): Pool {
-	return postgresPool();
+// One Postgres holds everything (ADR-0018): this is the single way server-side
+// code reaches it. Callers own the pool lifecycle — construct one per
+// request/script and end() it in a finally.
+export function postgresPool(): Pool {
+	const { databaseUrl } = readPostgresConfig();
+	return new Pool({ connectionString: databaseUrl });
 }
 
 export function directoryDb(pool: Pool) {
-	return nodePgDrizzle(pool, { schema: directorySchema });
+	return drizzle(pool, { schema });
 }

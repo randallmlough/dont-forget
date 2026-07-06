@@ -16,7 +16,7 @@ import {
 	readPostgresConfig,
 } from "@/shared/env";
 import { loadEnvFile } from "@/shared/load-env";
-import { type DirectoryDb, directoryClient, directoryDb } from "./client";
+import { type DirectoryDb, directoryDb, postgresPool } from "./client";
 
 type ResetConfirmationSource = Record<string, string | undefined>;
 
@@ -76,14 +76,14 @@ async function main(): Promise<void> {
 	console.log(`[env] ${postgresConfig.appEnv}`);
 	console.log(`[directory] ${postgresTarget(postgresConfig.databaseUrl)}`);
 
-	const directoryClientInstance = directoryClient();
+	const pool = postgresPool();
 	try {
-		const directory = directoryDb(directoryClientInstance);
+		const directory = directoryDb(pool);
 		console.log("[directory] resetting app data");
 		await resetDirectoryDatabase(directory);
 		console.log("[directory] done");
 	} finally {
-		await directoryClientInstance.end();
+		await pool.end();
 	}
 }
 

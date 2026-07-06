@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { inArray, or } from "drizzle-orm";
 import { z } from "zod";
-import { directoryClient, directoryDb } from "@/server/db/client";
+import { directoryDb, postgresPool } from "@/server/db/client";
 import {
 	type EmailBackedPrimaryHouseholdScenarioSeed,
 	PRIMARY_HOUSEHOLD_SEED,
@@ -400,10 +400,10 @@ async function seedDeterministicLocalDatabases(
 	seedMode: Extract<SeedMode, { kind: "deterministic" }>,
 ): Promise<void> {
 	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
-	const directoryClientInstance = directoryClient();
+	const pool = postgresPool();
 
 	try {
-		const directory = directoryDb(directoryClientInstance);
+		const directory = directoryDb(pool);
 		await assertSeedDataDoesNotExist({
 			directory,
 			seedTarget: deterministicSeedTarget(),
@@ -414,7 +414,7 @@ async function seedDeterministicLocalDatabases(
 
 		logSeedSummary({ scenario, seedMode });
 	} finally {
-		await directoryClientInstance.end();
+		await pool.end();
 	}
 }
 
@@ -426,10 +426,10 @@ async function seedEmailBackedLocalDatabases(
 	const seedTarget = emailBackedSeedTargetForMode(seedMode);
 	const clerkClient = await createProductionSeedClerkClient();
 
-	const directoryClientInstance = directoryClient();
+	const pool = postgresPool();
 
 	try {
-		const directory = directoryDb(directoryClientInstance);
+		const directory = directoryDb(pool);
 		const clerkUsers = await ensureSeedClerkUsers(clerkClient, seedMode);
 
 		try {
@@ -466,7 +466,7 @@ async function seedEmailBackedLocalDatabases(
 			throw error;
 		}
 	} finally {
-		await directoryClientInstance.end();
+		await pool.end();
 	}
 }
 

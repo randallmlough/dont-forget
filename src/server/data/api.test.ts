@@ -1,6 +1,20 @@
-import { DataAuthError, type DataTransaction } from "@/server/sync";
+import { Pool } from "pg";
+import { postgresPool } from "@/server/db/client";
+import {
+	DataAuthError,
+	type DataTransaction,
+	defaultAuthenticate,
+	defaultWithTransaction,
+} from "@/server/sync";
 import { createApiRequest, readJsonResponse } from "@/test/api/requests";
 import { type DataDeps, handleDataUpload } from "./api";
+
+jest.mock("@/server/db/client", () => ({ postgresPool: jest.fn() }));
+jest.mock("@/server/sync", () => ({
+	...jest.requireActual("@/server/sync"),
+	defaultAuthenticate: jest.fn(),
+	defaultWithTransaction: jest.fn(),
+}));
 
 type FakeRowState = {
 	updatedAt: Date | null;
@@ -444,5 +458,28 @@ describe("/api/data handler", () => {
 		expect(calls).toEqual([
 			{ kind: "uncheck", id: "c1", updatedAt: new Date(at) },
 		]);
+	});
+
+	it("production path builds ONE pool shared by auth and transaction, ended once", async () => {
+		const end = jest.fn().mockResolvedValue(undefined);
+		const pool: Pool = Object.assign(Object.create(Pool.prototype), { end });
+		jest.mocked(postgresPool).mockReturnValue(pool);
+		const seenPools: unknown[] = [];
+		jest.mocked(defaultAuthenticate).mockImplementation(async (_request, p) => {
+			seenPools.push(p);
+			return "user_a";
+		});
+		jest.mocked(defaultWithTransaction).mockImplementation(async (p, run) => {
+			seenPools.push(p);
+			const { tx } = fakeTransaction({});
+			return run(tx); // empty batch -> the op loop never touches tx
+		});
+
+		const response = await handleDataUpload(request([])); // no deps -> production wiring
+
+		expect(response.status).toBe(200);
+		expect(jest.mocked(postgresPool)).toHaveBeenCalledTimes(1);
+		expect(seenPools).toEqual([pool, pool]); // the SAME pool instance, both seams
+		expect(end).toHaveBeenCalledTimes(1);
 	});
 });
