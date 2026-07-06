@@ -7,6 +7,7 @@
 
 import { postgresPool } from "@/server/db/client";
 import {
+	allowDataRequest,
 	applyOp,
 	batchSchema,
 	DataAuthError,
@@ -15,6 +16,7 @@ import {
 	type DataTransaction,
 	defaultAuthenticate,
 	defaultWithTransaction,
+	PAYLOAD_MAX_BYTES,
 } from "@/server/sync";
 
 export type DataDeps = {
@@ -66,6 +68,10 @@ async function applyDataUpload(
 		return errorResponse("Server error", 500);
 	}
 
+	if (!allowDataRequest(userId, Date.now())) {
+		return errorResponse("Too many requests", 429);
+	}
+
 	let batch: DataOp[];
 	try {
 		batch = await parseBatch(request);
@@ -97,6 +103,11 @@ async function applyDataUpload(
 }
 
 async function parseBatch(request: Request): Promise<DataOp[]> {
+	const declared = Number(request.headers.get("content-length") ?? "");
+	if (Number.isFinite(declared) && declared > PAYLOAD_MAX_BYTES) {
+		throw new DataClientError("Payload too large", 413);
+	}
+
 	let body: unknown;
 	try {
 		body = await request.json();

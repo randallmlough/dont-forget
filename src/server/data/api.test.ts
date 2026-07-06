@@ -5,6 +5,9 @@ import {
 	type DataTransaction,
 	defaultAuthenticate,
 	defaultWithTransaction,
+	PAYLOAD_MAX_BYTES,
+	RATE_LIMIT_CAPACITY,
+	resetRateLimiterForTests,
 } from "@/server/sync";
 import { createApiRequest, readJsonResponse } from "@/test/api/requests";
 import { type DataDeps, handleDataUpload } from "./api";
@@ -86,6 +89,10 @@ function request(batch: unknown): Request {
 }
 
 describe("/api/data handler", () => {
+	beforeEach(() => {
+		resetRateLimiterForTests();
+	});
+
 	it("returns 401 when authentication fails", async () => {
 		const response = await handleDataUpload(request([]), {
 			authenticate: async () => {
@@ -99,6 +106,56 @@ describe("/api/data handler", () => {
 			status: 401,
 			body: { error: "Invalid Clerk session token" },
 		});
+	});
+
+	it("returns 429 after one User exhausts the per-window request budget", async () => {
+		const now = jest.spyOn(Date, "now").mockReturnValue(10_000);
+		try {
+			const { deps: userADeps } = deps({});
+			for (let i = 0; i < RATE_LIMIT_CAPACITY; i += 1) {
+				const response = await handleDataUpload(request([]), userADeps);
+				expect(response.status).toBe(200);
+			}
+
+			const limited = await handleDataUpload(request([]), userADeps);
+			await expect(readJsonResponse(limited)).resolves.toMatchObject({
+				status: 429,
+				body: { error: "Too many requests" },
+			});
+
+			const { deps: userBDeps } = deps(
+				{},
+				{ authenticate: async () => "user_b" },
+			);
+			const secondUser = await handleDataUpload(request([]), userBDeps);
+			expect(secondUser.status).toBe(200);
+		} finally {
+			now.mockRestore();
+		}
+	});
+
+	it("returns 413 for a declared payload over the cap without opening a transaction", async () => {
+		const transactionRuns: unknown[] = [];
+		const response = await handleDataUpload(
+			createApiRequest({
+				method: "POST",
+				headers: { "content-length": String(PAYLOAD_MAX_BYTES + 1) },
+				body: { batch: [] },
+			}),
+			{
+				authenticate: async () => "user_a",
+				withTransaction: async (run) => {
+					transactionRuns.push(run);
+					throw new Error("should not reach transaction");
+				},
+			},
+		);
+
+		await expect(readJsonResponse(response)).resolves.toMatchObject({
+			status: 413,
+			body: { error: "Payload too large" },
+		});
+		expect(transactionRuns).toHaveLength(0);
 	});
 
 	it("returns 400 for a malformed batch body", async () => {

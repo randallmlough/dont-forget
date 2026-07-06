@@ -4,6 +4,7 @@
 
 export {
 	applyOp,
+	BATCH_MAX,
 	batchSchema,
 	DataClientError,
 	type DataOp,
@@ -11,3 +12,10 @@ export {
 } from "./applicator";
 export { DataAuthError, defaultAuthenticate } from "./authenticate";
 export { defaultWithTransaction } from "./pg-transaction";
+export {
+	allowDataRequest,
+	PAYLOAD_MAX_BYTES,
+	RATE_LIMIT_CAPACITY,
+	RATE_LIMIT_WINDOW_MS,
+	resetRateLimiterForTests,
+} from "./rate-limit";

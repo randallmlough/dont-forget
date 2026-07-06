@@ -32,8 +32,10 @@ const opSchema = z.object({
 	data: z.record(z.string(), z.unknown()).default({}),
 });
 
+export const BATCH_MAX = 1000;
+
 export const batchSchema = z.object({
-	batch: z.array(opSchema),
+	batch: z.array(opSchema).max(BATCH_MAX),
 });
 
 export type DataOp = z.infer<typeof opSchema>;

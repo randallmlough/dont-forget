@@ -87,6 +87,17 @@ describe("PowerSyncConnector", () => {
 		expect(tx.complete).toHaveBeenCalledTimes(1);
 	});
 
+	it("discards terminal 413 uploads by completing the transaction", async () => {
+		const { connector } = createConnector();
+		const tx = createTransaction();
+		const database = createDatabase(tx);
+		fetchMock.mockResolvedValue(responseWithStatus(413));
+
+		await expect(connector.uploadData(database)).resolves.toBeUndefined();
+
+		expect(tx.complete).toHaveBeenCalledTimes(1);
+	});
+
 	it("discards terminal 400 uploads by completing the transaction", async () => {
 		const { connector } = createConnector();
 		const tx = createTransaction();
