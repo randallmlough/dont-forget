@@ -11,35 +11,16 @@ import type {
 } from "@/client/lib/product-database";
 import { db } from "@/client/session/powersync";
 
-// The product tables synced onto the local PowerSync DB. A change to any of them
-// drives the session's `changes` refetch seam.
-const PRODUCT_TABLES = ["lists", "items", "item_checks"] as const;
-
 // The app-facing product-data handle: the narrow `ProductDatabase` the services
-// consume, plus the product-table change seam watched resources subscribe to.
-// PowerSync lifecycle and sync status are owned by the raw `db` singleton.
-export type AppProductDatabase = ProductDatabase & {
-	subscribeChanges(listener: () => void): { remove: () => void };
-};
-
+// consume over the op-sqlite-backed PowerSync handle. PowerSync lifecycle and
+// sync status are owned by the raw `db` singleton.
 export function createPowerSyncAppDatabase(
 	database: PowerSyncDatabase,
-): AppProductDatabase {
+): ProductDatabase {
 	return {
 		...querierFrom(database),
 		writeTransaction(run) {
 			return database.writeTransaction((tx) => run(querierFromTransaction(tx)));
-		},
-		subscribeChanges(listener) {
-			const dispose = database.onChange(
-				{
-					onChange() {
-						listener();
-					},
-				},
-				{ tables: [...PRODUCT_TABLES] },
-			);
-			return { remove: dispose };
 		},
 	};
 }

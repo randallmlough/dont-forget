@@ -64,19 +64,7 @@ describe("createListService", () => {
 		});
 	});
 
-	describe("getList / renameList / deleteList lifecycle", () => {
-		it("returns missing for an unknown List and for another Household's List", async () => {
-			store.seedList({ id: "lst_other", householdId: OTHER_HOUSEHOLD });
-			await expect(service.getList({ listId: "lst_x" })).resolves.toEqual({
-				status: "missing",
-				listId: "lst_x",
-			});
-			await expect(service.getList({ listId: "lst_other" })).resolves.toEqual({
-				status: "missing",
-				listId: "lst_other",
-			});
-		});
-
+	describe("renameList / deleteList lifecycle", () => {
 		it("renames an active List and no-ops an identical rename", async () => {
 			const created = await service.createList({ name: "Groceries" });
 			const listId = created.status === "available" ? created.list.id : "";
@@ -135,6 +123,52 @@ describe("createListService", () => {
 	});
 
 	describe("listLists summaries", () => {
+		it("keeps listListsQuery compile and execute paths in lockstep", async () => {
+			store.seedList({
+				id: "lst_old",
+				householdId: HOUSEHOLD,
+				updatedAtMillis: 1_000,
+			});
+			store.seedList({
+				id: "lst_new",
+				householdId: HOUSEHOLD,
+				updatedAtMillis: 2_000,
+			});
+			store.seedItem({ id: "itm_old", listId: "lst_old", position: 0 });
+			store.seedItem({ id: "itm_new", listId: "lst_new", position: 0 });
+			store.seedItemCheck({
+				id: "chk_old",
+				itemId: "itm_old",
+				checkedAtMillis: 9_000,
+				checkedByUserId: USER,
+				updatedAtMillis: 9_000,
+			});
+
+			const input = { archive: "active", sort: "recentActivity" } as const;
+			const query = service.listListsQuery(input);
+			const executed = await query.execute();
+
+			await expect(service.listLists(input)).resolves.toEqual(executed);
+			const compiled = query.compile();
+			const compiledRows = await store.getAll<
+				{ id: string } & Record<string, unknown>
+			>(compiled.sql, [...compiled.parameters]);
+			expect(compiledRows.map((row) => row.id)).toEqual(
+				executed.map((summary) => summary.id),
+			);
+		});
+
+		it("flows listListsQuery input into compiled parameters", () => {
+			const compiled = service
+				.listListsQuery({
+					searchText: "Gro_%",
+					createdByUserId: USER,
+				})
+				.compile();
+
+			expect(compiled.parameters).toEqual([HOUSEHOLD, "%Gro\\_\\%%", USER]);
+		});
+
 		it("counts checked/unchecked under the single shared-check join", async () => {
 			store.seedList({
 				id: "lst_a",

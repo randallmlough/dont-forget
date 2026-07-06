@@ -16,6 +16,19 @@ export type ProductWriteResult = {
 	rows: ProductRow[];
 };
 
+// A parameterized read a hook can hand to PowerSync's `useQuery`: `compile()`
+// exposes the SQL + parameters (the SDK resolves the query's dependent tables
+// from them), `execute()` runs the service's own read path (Zod parse +
+// domain mapping). Structurally identical to @powersync/common's
+// `CompilableQuery<T>` on purpose — services stay PowerSync-import-free.
+export type ProductQuery<T> = {
+	execute(): Promise<T[]>;
+	compile(): {
+		readonly sql: string;
+		readonly parameters: readonly unknown[];
+	};
+};
+
 export type ProductQuerier = {
 	getAll<Row extends ProductRow = ProductRow>(
 		sql: string,
