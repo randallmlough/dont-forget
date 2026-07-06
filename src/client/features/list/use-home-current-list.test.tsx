@@ -188,6 +188,34 @@ describe("useHomeCurrentList", () => {
 		);
 	});
 
+	it("clears an invalid stored selection when List summaries settled before the selection read", async () => {
+		let resolveSelection: (value: string | null) => void = () => {};
+		const pendingSelection = new Promise<string | null>((resolve) => {
+			resolveSelection = resolve;
+		});
+		mockGetSelection.mockReturnValue(pendingSelection);
+		await renderHomeCurrentList({
+			summaries: [summary("lst_recent", "Recent")],
+			itemsByListId: { lst_recent: [] },
+		});
+
+		expect(screen.getByText("loading")).toBeTruthy();
+
+		await act(async () => {
+			resolveSelection("lst_gone");
+		});
+
+		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
+		expect(screen.getByText("listName:Recent")).toBeTruthy();
+		await waitFor(() =>
+			expect(mockClearSelection).toHaveBeenCalledWith(
+				"usr_avery",
+				"hh_1",
+				"lst_gone",
+			),
+		);
+	});
+
 	it("renders zero-active when there are no active Lists", async () => {
 		await renderHomeCurrentList({ summaries: [] });
 

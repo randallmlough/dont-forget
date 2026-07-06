@@ -97,26 +97,42 @@ export function useHomeCurrentList(
 		services.items.listItemsQuery({ listId: currentListId ?? "" }),
 	);
 	const readySelectionKey = selection.status === "ready" ? selection.key : null;
+	const readySelectionInitialRead =
+		selection.status === "ready" && selection.initialRead;
+	const summariesSettled =
+		!summaries.isLoading &&
+		!summaries.isFetching &&
+		summaries.error === undefined;
 
 	useEffect(() => {
 		const guard = selectionClearGuard.current;
 		if (guard.selectionKey !== readySelectionKey) {
 			guard.selectionKey = readySelectionKey;
 			guard.summariesData = summaries.data;
-			guard.observedSummariesAfterSelection = false;
+			guard.observedSummariesAfterSelection =
+				readySelectionKey !== null &&
+				readySelectionInitialRead &&
+				summariesSettled;
 			return;
 		}
 		if (guard.summariesData !== summaries.data) {
 			guard.summariesData = summaries.data;
 			guard.observedSummariesAfterSelection = readySelectionKey !== null;
 		}
-	}, [readySelectionKey, summaries.data]);
+	}, [
+		readySelectionKey,
+		readySelectionInitialRead,
+		summaries.data,
+		summariesSettled,
+	]);
 
 	// A stored selection that is no longer an active List is stale: clear it
 	// so it cannot shadow a later explicit selection. The in-memory fallback
-	// is never persisted. The clear waits for a List summaries emission after
-	// the current selection read so a just-persisted selection is not cleared
-	// against a stale trailing-throttled watched-query snapshot.
+	// is never persisted. The clear usually waits for a List summaries emission
+	// after the current selection read so a just-persisted selection is not
+	// cleared against a stale trailing-throttled watched-query snapshot. The
+	// initial mount read has no just-persisted selection to protect, so it may
+	// clear against an already-settled, non-fetching summaries snapshot.
 	// `clearCurrentListSelectionIfMatches` is idempotent, so re-runs on later
 	// summary emissions are no-ops. Failures log and degrade: the fallback List
 	// still renders (Decision 5).
@@ -167,7 +183,12 @@ export function useHomeCurrentList(
 
 type StoredSelectionState =
 	| { status: "loading" }
-	| { status: "ready"; key: string; storedListId: string | null };
+	| {
+			status: "ready";
+			key: string;
+			initialRead: boolean;
+			storedListId: string | null;
+	  };
 
 type StoredSelectionSnapshot =
 	| { status: "loading"; key: string }
@@ -196,6 +217,7 @@ function useStoredCurrentListSelection(
 			? {
 					status: "ready",
 					key: selectionSnapshot.key,
+					initialRead: epoch === 0,
 					storedListId: selectionSnapshot.storedListId,
 				}
 			: {
