@@ -15,9 +15,10 @@ deliberate trades, not oversights.
 
 ## Deferred items
 
-1. **Server-authoritative timestamping for product writes.** Replace app-owned `updated_at` with a
-   server-assigned write time. Only matters for cross-device LWW precision, which the single-device MVP
-   does not exercise. (Decision 8.)
+1. **Server-authoritative product write ordering.** [ADR-0019](../adr/0019-server-authoritative-product-write-ordering.md)
+   decides to keep app-owned `updated_at` as action/display time, but replace it as the LWW authority
+   with a server-owned monotonic write sequence before multi-device support. The single-device MVP can
+   keep device-clock LWW until that follow-on build lands. (Decision 8.)
 2. **Request rate-limiting / payload-size / batch-size caps on `/api/data`.** The write endpoint has no
    abuse guards yet. (Decision 8.)
 3. **Join-code abuse protection.** The failed-attempt throttle was removed in PR-C1; code entropy
