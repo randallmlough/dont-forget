@@ -13,6 +13,12 @@ import type {
 	AuthenticatedAppSession,
 	AuthenticatedAppSessionReloadOptions,
 } from "@/client/session";
+import {
+	type UploadQueueMonitor,
+	uploadQueueMonitor,
+} from "@/client/session/upload-queue";
+
+const UPLOAD_QUEUE_DRAIN_TIMEOUT_MS = 10_000;
 
 export type HouseholdSettingsState =
 	| { status: "loading" }
@@ -49,11 +55,15 @@ export type HouseholdSettingsActions = {
 		membershipId: string,
 		role: "owner" | "member",
 	) => Promise<void>;
-	leaveHousehold: () => Promise<void>;
+	leaveHousehold: (options: LeaveHouseholdOptions) => Promise<void>;
 	regenerateJoinCode: () => Promise<void>;
 	setJoinCodeEnabled: (enabled: boolean) => Promise<void>;
 	copyText: (text: string, notice: string) => Promise<void>;
 	clearNotice: () => void;
+};
+
+export type LeaveHouseholdOptions = {
+	confirmDiscardUnsyncedChanges: () => Promise<boolean>;
 };
 
 type Resource =
@@ -120,6 +130,7 @@ export function useHouseholdSettings(
 	reloadSession: (
 		options?: AuthenticatedAppSessionReloadOptions,
 	) => void = () => undefined,
+	uploadQueue: UploadQueueMonitor = uploadQueueMonitor,
 ): { state: HouseholdSettingsState; actions: HouseholdSettingsActions } {
 	const { getToken } = useAuth();
 	// Latest-ref pattern: the resolved client stays stable across getToken
@@ -271,9 +282,17 @@ export function useHouseholdSettings(
 		}
 	}
 
-	async function leaveHousehold() {
+	async function leaveHousehold(options: LeaveHouseholdOptions) {
 		if (!startOperation({ status: "leavingHousehold" })) return;
 		try {
+			const drainResult = await drainUploadQueueBeforeLeave(uploadQueue);
+			if (drainResult === "blocked") {
+				const confirmed = await options.confirmDiscardUnsyncedChanges();
+				if (!confirmed) {
+					dispatch({ type: "notice", loadKey, notice: null });
+					return;
+				}
+			}
 			await resolveClient().leaveHousehold(householdId);
 			reloadSession({ mode: "retireCurrent" });
 		} catch (error) {
@@ -513,6 +532,65 @@ function invitationCreatedNotice(response: CreateInvitationResponse): string {
 	}
 	if (response.emailDelivery.status === "sent") return "Invitation emailed.";
 	return "Invitation link created.";
+}
+
+type UploadQueueDrainResult = "drained" | "blocked";
+
+async function drainUploadQueueBeforeLeave(
+	uploadQueue: UploadQueueMonitor,
+): Promise<UploadQueueDrainResult> {
+	return waitForUploadQueueDrain(uploadQueue, UPLOAD_QUEUE_DRAIN_TIMEOUT_MS);
+}
+
+function waitForUploadQueueDrain(
+	uploadQueue: UploadQueueMonitor,
+	timeoutMs: number,
+): Promise<UploadQueueDrainResult> {
+	return new Promise((resolve) => {
+		let settled = false;
+		let unsubscribe: () => void = () => undefined;
+		const timeout = setTimeout(() => settle("blocked"), timeoutMs);
+
+		function settle(result: UploadQueueDrainResult) {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeout);
+			unsubscribe();
+			resolve(result);
+		}
+
+		async function checkQueue() {
+			if (settled) return;
+			try {
+				// An empty queue is drained even while offline — there is nothing
+				// left to lose, so the count check must precede the connectivity gate.
+				const stats = await uploadQueue.getUploadQueueStats();
+				if (settled) return;
+				if (stats.count === 0) {
+					settle("drained");
+					return;
+				}
+				const state = uploadQueue.getUploadQueueState();
+				if (!state.connected && !state.connecting) settle("blocked");
+			} catch {
+				settle("blocked");
+			}
+		}
+
+		try {
+			const subscribed = uploadQueue.subscribe(() => {
+				void checkQueue();
+			});
+			if (settled) {
+				subscribed();
+			} else {
+				unsubscribe = subscribed;
+			}
+			void checkQueue();
+		} catch {
+			settle("blocked");
+		}
+	});
 }
 
 function messageFromError(error: unknown): string {
