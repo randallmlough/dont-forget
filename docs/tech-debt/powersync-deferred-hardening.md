@@ -15,9 +15,16 @@ deliberate trades, not oversights.
 
 ## Deferred items
 
-1. **Server-authoritative timestamping for product writes.** Replace app-owned `updated_at` with a
-   server-assigned write time. Only matters for cross-device LWW precision, which the single-device MVP
-   does not exercise. (Decision 8.)
+1. **Server-authoritative product write ordering.** [ADR-0019](../adr/0019-server-authoritative-product-write-ordering.md)
+   decides to keep app-owned `updated_at` as action/display time, but replace it as the LWW authority
+   with a server-owned monotonic write sequence. The current one-User, one-primary-device MVP removes
+   same-User competing device clocks, but multi-Member Households already create competing device clocks
+   on shared product rows today: every Member can write shared Lists/Items, PowerSync streams the same
+   product rows to active Members of the Household, and `item_checks` is one shared row per Item. This is
+   accepted, bounded MVP debt: shared `item_checks` toggle conflicts are user-recoverable, List delete is
+   a soft-delete tombstone, and a conflict requires a same-row cross-Member race within the clock-skew
+   window. Plan 044 is required before same-User multi-device support and before hardening multi-Member
+   conflict correctness. (Decision 8.)
 2. **Request rate-limiting / payload-size / batch-size caps on `/api/data`.** The write endpoint has no
    abuse guards yet. (Decision 8.)
 3. **Join-code abuse protection.** The failed-attempt throttle was removed in PR-C1; code entropy
@@ -39,7 +46,9 @@ deliberate trades, not oversights.
 
 ## Revisit When
 
-- Before the app supports a User on more than one device: items 1 and 6.
+- Before the app supports a User on more than one device, or before hardening multi-Member conflict
+  correctness: item 1.
+- Before the app supports a User on more than one device: item 6.
 - Before opening `/api/data` to real users or untrusted traffic: items 2 and 3.
 - If duplicate pending Invitations are observed in practice: item 4.
 - Before Member leave/removal becomes a common, data-loss-sensitive flow: item 5.
