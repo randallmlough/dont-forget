@@ -672,11 +672,35 @@ function confirmLeaveHousehold(actions: HouseholdSettingsActions) {
 				text: "Leave",
 				style: "destructive",
 				onPress: () => {
-					void actions.leaveHousehold();
+					void actions.leaveHousehold({
+						confirmDiscardUnsyncedChanges,
+					});
 				},
 			},
 		],
 	);
+}
+
+function confirmDiscardUnsyncedChanges(): Promise<boolean> {
+	return new Promise((resolve) => {
+		Alert.alert(
+			"Unsynced Changes",
+			"You have unsynced changes that will be lost. Connect and retry, or leave anyway.",
+			[
+				{
+					text: "Cancel",
+					style: "cancel",
+					onPress: () => resolve(false),
+				},
+				{
+					text: "Leave Anyway",
+					style: "destructive",
+					onPress: () => resolve(true),
+				},
+			],
+			{ cancelable: true, onDismiss: () => resolve(false) },
+		);
+	});
 }
 
 function formatDate(timestamp: number): string {
