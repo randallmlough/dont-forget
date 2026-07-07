@@ -13,7 +13,7 @@ See also: [`docs/adr/0007-unistyles-styling-foundation.md`](../adr/0007-unistyle
 ## Tokens
 
 - **Must** use theme tokens for colors, spacing, radii, typography, opacity, and border widths.
-- **Must** add or rename tokens in `lib/unistyles/unistyles.ts` before using a new recurring visual value.
+- **Must** add or rename tokens in `src/client/theme/unistyles.ts` before using a new recurring visual value.
 - **Must** define both primitive typography tokens and reusable typography roles.
 - **Must** keep typography roles limited to typography metrics such as `fontSize` and `fontWeight`; color, alignment, decoration, and state styling stay in component styles.
 - **Must** use generic UI role names for typography roles, such as `largeTitle`, `title`, `headline`, `body`, `callout`, `caption`, `captionStrong`, and `controlLabel`.

@@ -21,11 +21,11 @@ Read:
 
 Inspect current contracts:
 
-- `lib/analytics-events.ts`
-- `lib/analytics.ts`
-- `lib/logger.ts`
-- `lib/test/mocks/analytics.ts`
-- `lib/test/mocks/logger.ts`
+- `src/shared/analytics-events.ts`
+- `src/client/lib/analytics.ts`
+- `src/client/lib/logger.ts`
+- `src/test/mocks/analytics.ts`
+- `src/test/mocks/logger.ts`
 
 ## Choose analytics or logging
 
@@ -33,13 +33,13 @@ Use analytics when the event is a curated product outcome that may belong in fun
 
 Use logging when the record is diagnostic, exploratory, error-oriented, or not worth a stable schema.
 
-If you are tempted to invent an analytics event without editing `lib/analytics-events.ts`, use a log instead.
+If you are tempted to invent an analytics event without editing `src/shared/analytics-events.ts`, use a log instead.
 
 ## Adding an analytics event
 
 1. **Add the event to `EventMap`.**
 
-   Edit `lib/analytics-events.ts`:
+   Edit `src/shared/analytics-events.ts`:
 
    ```ts
    export type EventMap = {
@@ -62,7 +62,7 @@ If you are tempted to invent an analytics event without editing `lib/analytics-e
 3. **Call `track(...)` at the action boundary that knows the outcome.**
 
    ```ts
-   import { track } from "@/lib/analytics";
+   import { track } from "@/client/lib/analytics";
 
    track("list_created", {
    	household_id: householdId,
@@ -79,7 +79,7 @@ If you are tempted to invent an analytics event without editing `lib/analytics-e
 5. **Inject analytics into services/stores that own product outcomes.**
 
    ```ts
-   import { track } from "@/lib/analytics";
+   import { track } from "@/client/lib/analytics";
 
    type ExampleServiceAnalytics = {
    	track: typeof track;
@@ -139,8 +139,8 @@ For analytics changes:
 Focused examples:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath lib/services/item/item-service.test.ts
-pnpm exec jest --runInBand --runTestsByPath components/active-household/active-household-provider.test.tsx
+pnpm exec jest --runInBand --runTestsByPath src/client/features/list/item-service.test.ts
+pnpm exec jest --runInBand --runTestsByPath src/client/session/provider.test.tsx
 ```
 
 For logging changes:
@@ -161,11 +161,11 @@ make verify
 
 - Analytics was chosen only for a stable product outcome.
 - Logs were chosen for diagnostic or exploratory evidence.
-- New analytics events are declared in `lib/analytics-events.ts` before call sites.
+- New analytics events are declared in `src/shared/analytics-events.ts` before call sites.
 - Event and property names are `snake_case` and domain-shaped.
 - Event properties contain no secrets or unnecessary personal data.
 - Analytics fires after the successful product outcome.
-- Logger calls use `lib/logger.ts`, not PostHog directly.
+- Logger calls use `src/client/lib/logger.ts`, not PostHog directly.
 - Logger attributes use safe domain context and raw `{ error }` values.
 - Service/store tests use injected analytics/logger dependencies when that is the cleaner seam.
 - Focused tests, `make typecheck`, `make format`, and `make verify` pass.

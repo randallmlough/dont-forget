@@ -7,40 +7,34 @@ Expo API Routes are the HTTP boundary for server behavior. Keep them thin so nat
 Use this flow for API behavior:
 
 ```txt
-app/api/**/+api.ts -> lib/api/** -> lib/services/**
+src/app/api/**/+api.ts -> src/server/<domain>/api.ts -> same-domain services
 ```
 
 Responsibilities:
 
-- `app/api/**/+api.ts` exports HTTP method functions and lazy-loads server-only API handlers inside those functions.
-- `lib/api/**` parses requests, verifies auth, shapes HTTP responses, maps expected domain errors to status codes, and orchestrates service calls.
-- `lib/services/**` owns domain behavior, database access, Membership checks, Invitation behavior, Household Join Code behavior, and active Household selection.
+- `src/app/api/**/+api.ts` exports HTTP method functions and lazy-loads server-only API handlers inside those functions.
+- `src/server/<domain>/api.ts` parses requests, verifies auth, shapes HTTP responses, maps expected domain errors to status codes, and orchestrates service calls.
+- Same-domain server services own domain behavior, database access, Membership checks, Invitation behavior, Household Join Code behavior, and active Household selection.
 
-`lib/api` is not a data-access layer. If an API handler needs directory or product data access, call the appropriate service instead of adding SQL to the handler.
+API handlers are not a data-access layer. If a handler needs directory or product data access, call the appropriate service instead of adding SQL to the handler.
 
-The PowerSync write endpoint `/api/data` follows this rule with no exception. Its handler (`lib/api/data/handler.ts`) is a thin HTTP shim — authenticate, parse the batch, run the applicator in one transaction, map errors to status codes. The write logic, the batch contract, and the SQL live in `db/server/sync` as data-store infrastructure ([ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md)), which the shim imports downward (`lib/api -> db`). The applicator is a generic, schema-agnostic write engine for the sync transport, not domain data access, so it is not a domain service.
+The PowerSync write endpoint `/api/data` follows this rule. Its handler (`src/server/data/api.ts`) is a thin HTTP shim — authenticate, parse the batch, run the applicator in one transaction, map errors to status codes. The write logic, the batch contract, rate limiting, transaction helper, and SQL live in `src/server/sync/` as data-store infrastructure ([ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md)). The applicator is a generic, schema-agnostic write engine for the sync transport, not domain data access, so it is not a domain service.
 
-Request and response schemas can live in `lib/api/**` when they are only HTTP-boundary contracts. Put schemas in an app-safe module only when client code must parse the same shape.
-
-## Legacy Exception
-
-`app/api/bootstrap+api.ts` predates the `lib/api` boundary and still lazy-loads auth, directory DB, and `lib/services/session/server` directly, and returns directory identity only — no per-Household sync tokens, since the PowerSync connection token is fetched directly from Clerk. Do not copy that shape into new routes.
-
-When the Authenticated App Session bootstrap route is next changed for API-boundary work, move its HTTP parsing, auth/error handling, response shaping, and service orchestration into `lib/api` first. Until then, treat bootstrap as the only documented exception to the `app/api` -> `lib/api` -> `lib/services` flow.
+Request and response schemas can live with the server API handler when they are only HTTP-boundary contracts. Put schemas in `src/shared/contracts/` only when client code must parse the same shape. Bootstrap follows the same route wrapper pattern: `src/app/api/bootstrap+api.ts` lazy-imports `@/server/bootstrap/api`.
 
 ## Route Wrappers
 
-Route files under `app/api` must lazy-load server-only code inside the HTTP method function:
+Route files under `src/app/api` must lazy-load server-only code inside the HTTP method function:
 
 ```ts
 export async function POST(request: Request): Promise<Response> {
-  const { handleInvitationAccept } = await import("@/lib/api/invitations/accept");
+  const { handleDataUpload } = await import("@/server/data/api");
 
-  return handleInvitationAccept(request);
+  return handleDataUpload(request);
 }
 ```
 
-Avoid static imports from `lib/api`, server services, directory DB clients, Clerk server SDKs, or Resend in route files. Tests may import `lib/api` handlers directly.
+Avoid static imports from `src/server/`, server services, directory DB clients, Clerk server SDKs, or Resend in route files. Tests may import `src/server/<domain>/api.ts` handlers directly.
 
 ## Auth And Errors
 
@@ -222,7 +216,7 @@ Analytics properties must be safe and minimal. Include Household, Member role, o
 
 ## Testing
 
-Test `lib/api` handlers directly where practical, with real directory DB behavior and injected dependencies for external services such as email delivery. Keep route-wrapper tests focused on native registration safety and lazy-loading behavior.
+Test `src/server/<domain>/api.ts` handlers directly where practical, with real directory DB behavior and injected dependencies for external services such as email delivery. Current examples include `src/server/bootstrap/api.test.ts`, `src/server/data/api.test.ts`, `src/server/households/api.test.ts`, `src/server/invitations/api.test.ts`, and `src/server/users/api.test.ts`. Keep route-wrapper tests focused on native registration safety and lazy-loading behavior.
 
 API coverage should include:
 
@@ -234,4 +228,4 @@ API coverage should include:
 - Invitation email delivery status behavior;
 - no server-only imports during route registration for Expo API route wrappers.
 
-Shared API test helpers should live under `lib/test/api/` and should stay minimal until duplication proves a helper is needed.
+Shared API test helpers should live under `src/test/api/` and should stay minimal until duplication proves a helper is needed.

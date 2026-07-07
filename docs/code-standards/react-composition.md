@@ -20,23 +20,23 @@ type FeatureContextValue = {
 - `actions`: functions that change state or request feature operations.
 - `meta`: stable configuration, refs, permissions, and other non-reactive facts.
 
-Keep the context domain-shaped. For example, an active List provider should expose List state and List actions, not a raw database client or generic storage API.
+Keep the context domain-shaped. For example, a hypothetical List switcher provider should expose List switching state and List switching actions, not a raw database client or generic storage API.
 
 ## Compound Exports
 
 For composed feature surfaces, export a namespace object:
 
 ```tsx
-<ActiveList.Provider>
-  <ActiveList.Header />
-  <ActiveList.Items />
-  <ActiveList.AddItemForm />
-</ActiveList.Provider>
+<ListSwitcher.Provider>
+  <ListSwitcher.Row />
+  <ListSwitcher.CreateForm />
+  <ListSwitcher.DeleteDialog />
+</ListSwitcher.Provider>
 ```
 
 This keeps related pieces discoverable and lets screens arrange them without prop drilling.
 
-Only use compound exports where the pieces share a meaningful provider. Components like `AuthScreen` should stay as normal named exports unless they grow shared state.
+Only use compound exports where the pieces share a meaningful provider. Components like `AuthScreen` should stay as normal named exports unless they grow shared state. The repo currently has no live compound exemplar; Home's Current List surface was deliberately flattened into prop-driven components in `src/client/features/list/current-list.tsx`.
 
 ## Feature Surface Decomposition
 
@@ -46,7 +46,7 @@ When a reusable feature surface has shared state/actions and multiple distinct U
 - **Must** expose shared feature context as `{ state, actions, meta }`.
 - **Must** keep child components focused on one UI role, such as `Header`, `Items`, `ItemRow`, `AddItemForm`, or `Screen`.
 - **Must** keep child components free of route, auth, database, service, sync-lifecycle, and analytics ownership unless that child is explicitly the owner of that boundary.
-- **Should** use a compound namespace export when the pieces require the same provider, such as `ActiveList.Provider`, `ActiveList.Header`, `ActiveList.Items`, and `ActiveList.AddItemForm`.
+- **Should** use a compound namespace export when the pieces require the same provider, such as a future `ListSwitcher.Provider`, `ListSwitcher.Row`, and `ListSwitcher.CreateForm`.
 - **Should** keep the public import path stable through the feature folder `index.ts`.
 - **Should** keep each decomposed child component's private styles in that component file, close to the JSX that uses them.
 - **Avoid** extracting tiny one-off JSX solely to reduce line count.
@@ -74,7 +74,7 @@ Storybook should compose the same feature pieces with local state providers and 
 
 ## Naming
 
-Use project language in provider names and actions. Prefer `ActiveList`, `Household`, `Member`, `Item`, and `Invitation` over generic names like group, team, todo, task, or invite link.
+Use project language in provider names and actions. Prefer `List`, `Household`, `Member`, `Item`, and `Invitation` over generic names like group, team, todo, task, or invite link.
 
 ## When Not To Use It
 

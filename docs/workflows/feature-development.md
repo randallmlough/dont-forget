@@ -12,15 +12,15 @@ Ship the smallest vertical slice that satisfies the requested behavior, with tes
 2. Read the relevant `docs/code-standards/` files.
 3. Search `docs/adr/` and `docs/how-things-work/` for the owning system, and `docs/guides/` for artifact-specific recipes.
 4. Identify the owner boundary:
-   - route wiring in `app/`;
-   - screen-owned behavior in `screens/<surface>/`;
-   - reusable UI in `components/`;
-   - product data access in `lib/services/<domain>/`;
-   - migrations and database helpers in `db/`.
+   - route wiring in `src/app/`;
+   - screen-owned behavior in `src/client/features/<feature>/`;
+   - reusable UI primitives in `src/client/ui/`;
+   - product data access in client feature services or server domain modules;
+   - migrations and database helpers in `src/server/db/`.
 5. Define the user-visible outcome and the verification plan.
 6. Choose the lowest integration harness that proves the product collaboration:
    - temp local databases plus real services for database/service behavior;
-   - session/controller integration for Authenticated App Session resource behavior;
+   - session/provider integration for Authenticated App Session resource behavior;
    - React Native Testing Library screen/provider integration for visible List/Item behavior;
    - Expo Router utilities when route behavior is the thing being proved.
 7. If a mock is needed, name the boundary category it replaces. Do not mock local product behavior for convenience.
@@ -34,7 +34,7 @@ Ship the smallest vertical slice that satisfies the requested behavior, with tes
 5. Use domain-shaped names and avoid generic group/team/account/todo/task language.
 6. Remove only unused code created by the change; do not opportunistically refactor adjacent code.
 
-Use focused unit tests only for pure helpers, narrow adapters, or precise race-control cases where an integration harness would hide the assertion. For database-backed behavior, seed a temp local database with `db/server/fixtures/` builders/scenarios instead of mocking query results.
+Use focused unit tests only for pure helpers, narrow adapters, or precise race-control cases where an integration harness would hide the assertion. For database-backed behavior, seed a temp local database with `src/server/db/fixtures/` builders/scenarios instead of mocking query results.
 
 ## Native UI Checks
 

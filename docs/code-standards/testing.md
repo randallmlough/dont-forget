@@ -40,15 +40,15 @@ See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 
 ## Test Location
 
-- **Must** colocate tests next to the module they exercise outside `app/`.
-- **Must** not put tests in `app/`; Expo Router treats files there as routes/layouts.
-- **Should** keep reusable Jest setup and mock modules under `lib/test`.
+- **Must** colocate tests next to the module they exercise outside `src/app/`.
+- **Must** not put tests in `src/app/`; Expo Router treats files there as routes/layouts.
+- **Should** keep reusable Jest setup and mock modules under `src/test`.
 
 ## Test Organization And Shared Fixtures
 
-- **Must** move reusable cross-feature test fixtures into a domain-owned shared fixture folder, such as `db/server/fixtures/`, instead of duplicating fixture builders across test files.
-- **Must** keep `db/server/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and product databases.
-- **Must** not return services, providers, app sessions, or UI model objects from `db/server/fixtures/`.
+- **Must** move reusable cross-feature test fixtures into a domain-owned shared fixture folder, such as `src/server/db/fixtures/`, instead of duplicating fixture builders across test files.
+- **Must** keep `src/server/db/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and product databases.
+- **Must** not return services, providers, app sessions, or UI model objects from `src/server/db/fixtures/`.
 - **Should** keep shared fixtures domain-shaped and product-language-first: Household, Member, User, List, Item, and Invitation.
 - **Should** allow narrow overrides for test-specific facts while preserving realistic defaults.
 - **Should** split large test files by behavior theme when a single file starts covering several independent concerns.

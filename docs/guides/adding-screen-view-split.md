@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use this guide to add or change an Expo Router route that delegates to screen-owned code under `screens/<surface>/`.
+Use this guide to add or change an Expo Router route that delegates to screen-owned code under `src/client/features/<feature>/`.
 
 A screen/view split keeps route files thin while making UI states testable and Storybook-friendly.
 
@@ -19,26 +19,26 @@ Read:
 
 Inspect existing examples:
 
-- `app/(app)/index.tsx`
-- `app/(auth)/sign-in.tsx`
-- `app/(auth)/sign-up.tsx`
-- `screens/home/home-screen.tsx`
-- `screens/home/home-screen.test.tsx`
-- `screens/home/home-screen.stories.tsx`
+- `src/app/(app)/index.tsx`
+- `src/app/(auth)/sign-in.tsx`
+- `src/app/(auth)/sign-up.tsx`
+- `src/client/features/list/home-screen.tsx`
+- `src/client/features/list/home-screen.test.tsx`
+- `src/client/features/list/home-screen.stories.tsx`
 
 ## Files and naming
 
-Authenticated routes go under `app/(app)/`.
+Authenticated routes go under `src/app/(app)/`.
 
-Signed-out auth routes go under `app/(auth)/`.
+Signed-out auth routes go under `src/app/(auth)/`.
 
-Screen-owned code goes under `screens/<surface>/`:
+Screen-owned code goes under `src/client/features/<feature>/`:
 
 ```text
-app/(app)/example.tsx
-screens/example/example-screen.tsx
-screens/example/example-screen.test.tsx
-screens/example/example-screen.stories.tsx
+src/app/(app)/example.tsx
+src/client/features/example/example-screen.tsx
+src/client/features/example/example-screen.test.tsx
+src/client/features/example/example-screen.stories.tsx
 ```
 
 Prefer kebab-case filenames. Keep route files thin.
@@ -48,10 +48,10 @@ Prefer kebab-case filenames. Keep route files thin.
 Most route files should be a one-line export:
 
 ```tsx
-export { default } from "@/screens/example/example-screen";
+export { default } from "@/client/features/example/example-screen";
 ```
 
-Do not put tests, stories, SQL, data loading, or feature lifecycle code in `app/` route files.
+Do not put tests, stories, SQL, data loading, or feature lifecycle code in `src/app/` route files.
 
 ## Screen file shape
 
@@ -78,8 +78,8 @@ Use the container for screen-owned side effects and app dependencies. Use the vi
 ## Recipe
 
 1. **Choose the route group.**
-   - Use `app/(app)` for signed-in product routes.
-   - Use `app/(auth)` for signed-out auth routes.
+   - Use `src/app/(app)` for signed-in product routes.
+   - Use `src/app/(auth)` for signed-out auth routes.
    - Add a new route group only when a set of routes needs shared navigation options, providers, or a clear boundary.
 
 2. **Create the route file.**
@@ -87,20 +87,20 @@ Use the container for screen-owned side effects and app dependencies. Use the vi
    - Do not add duplicate Clerk or PostHog providers.
 
 3. **Create the screen file.**
-   - Place UI and screen-local behavior in `screens/<surface>/`.
-   - Put reusable product components in `components/` instead.
+   - Place UI and screen-local behavior in `src/client/features/<feature>/`.
+   - Put reusable UI primitives in `src/client/ui/` instead.
 
 4. **Separate container and view when useful.**
    - Extract a named view when Storybook or tests need deterministic state without live providers.
    - Keep simple screens as one component if a split would add ceremony without value.
 
 5. **Keep resource ownership at the right boundary.**
-   - Signed-in routes consume `useActiveHousehold()` or other provider-owned resources.
+   - Signed-in routes consume `useAuthenticatedAppSession()` and route-owned feature hooks.
    - Screens must not manage the PowerSync connection or session resources directly.
-   - PowerSync connection lifecycle belongs to the Authenticated App Session controller, not a screen.
+   - PowerSync connection lifecycle belongs to the Authenticated App Session provider, not a screen.
 
 6. **Add focused tests.**
-   - Test route/screen behavior outside `app/`.
+   - Test route/screen behavior outside `src/app/`.
    - Mock provider hooks at the screen boundary when the screen borrows provider state.
    - Test user-visible behavior through accessibility queries and visible text.
 
@@ -113,7 +113,7 @@ Use the container for screen-owned side effects and app dependencies. Use the vi
 Focused screen test:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath screens/<surface>/<surface>-screen.test.tsx
+pnpm exec jest --runInBand --runTestsByPath src/client/features/<feature>/<surface>-screen.test.tsx
 ```
 
 If stories changed:
@@ -134,11 +134,11 @@ Use RocketSim/iOS Simulator validation when the change affects navigation, keybo
 ## Review checklist
 
 - Route file is thin and under the correct route group.
-- Screen-owned code lives under `screens/<surface>/`.
-- Reusable UI lives under `components/`.
+- Screen-owned code lives under `src/client/features/<feature>/`.
+- Reusable UI lives under `src/client/ui/`.
 - Container/view split is justified by tests, stories, or dependency boundaries.
 - Screen does not own the PowerSync connection or sync lifecycle.
-- Tests live outside `app/`.
+- Tests live outside `src/app/`.
 - Stories use deterministic fixtures and no live app resources.
 - Accessibility roles, labels, states, safe areas, and keyboard behavior are considered.
 - `make format` and `make verify` pass.

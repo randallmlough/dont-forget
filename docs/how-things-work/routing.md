@@ -5,7 +5,7 @@ Don't Forget uses Expo Router with route groups. Route groups organize files wit
 ## File Tree
 
 ```text
-app/
+src/app/
   _layout.tsx
   (app)/
     _layout.tsx
@@ -20,13 +20,13 @@ Current public routes:
 
 | URL | Route File | Screen |
 | --- | --- | --- |
-| `/` | `app/(app)/index.tsx` | `screens/home/home-screen.tsx` |
-| `/sign-in` | `app/(auth)/sign-in.tsx` | `screens/auth/sign-in-screen.tsx` |
-| `/sign-up` | `app/(auth)/sign-up.tsx` | `screens/auth/sign-up-screen.tsx` |
+| `/` | `src/app/(app)/index.tsx` | `src/client/features/list/home-screen.tsx` |
+| `/sign-in` | `src/app/(auth)/sign-in.tsx` | `src/client/features/auth/sign-in-screen.tsx` |
+| `/sign-up` | `src/app/(auth)/sign-up.tsx` | `src/client/features/auth/sign-up-screen.tsx` |
 
 ## Root Layout
 
-`app/_layout.tsx` owns app-wide providers and routing side effects:
+`src/app/_layout.tsx` owns app-wide providers and routing side effects:
 
 - PostHog provider
 - Safe area provider
@@ -41,11 +41,11 @@ Do not add duplicate Clerk or PostHog providers inside route groups.
 
 ## Authenticated Layout
 
-`app/(app)/_layout.tsx` owns signed-in product providers. It mounts the Authenticated App Session provider around signed-in routes, and that provider eagerly activates the app-owned Authenticated App Session controller and exposes session state/actions to screens.
+`src/app/(app)/_layout.tsx` owns signed-in product providers. It mounts the Authenticated App Session provider around signed-in routes, and that provider activates the app-owned Authenticated App Session and exposes session state/actions to screens.
 
 Screens consume `useAuthenticatedAppSession()`. They should not manage the PowerSync connection or session resources directly, and they should not own sync lifecycle.
 
-See [Authenticated App Session](./authenticated-app-session.md) for the controller/provider boundary, snapshot model, replacement policy, and sign-out cleanup contract.
+See [Authenticated App Session](./authenticated-app-session.md) for the provider boundary, state model, replacement policy, and sign-out cleanup contract.
 
 ## Auth Gate
 
@@ -56,28 +56,26 @@ The session-owned sign-out action runs in this order:
 ```ts
 track("user_signed_out", {});
 reset();
-const disposal = await authenticatedAppSessionController.dispose();
-await clearSignedOutSessionData(disposal.householdIdsForLocalDataDeletion);
+await db.disconnectAndClear();
+await clearAuthenticatedAppSessionPresent();
+await clearUserCurrentListSelections(userId);
 await signOut();
 ```
 
-Cached Authenticated App Session metadata clearing and local synced-data clearing (PowerSync `disconnectAndClear`)
-remain separate operations so authenticated app session resources can be stopped and
-closed before destructive local cleanup. Controller disposal and local cleanup
-failures are logged and do not block Clerk sign-out.
+PowerSync cleanup, session hint clearing, and signed-out User Current List selection clearing are best-effort; failures are logged and do not block Clerk sign-out. Clerk sign-out is the critical step. If it fails, the provider dispatches the failed sign-out event and restarts activation while auth still reports signed-in.
 
 ## Adding Routes
 
-Add authenticated app routes under `app/(app)`. Add signed-out auth routes under `app/(auth)`. Create another route group only when that group needs shared navigation options, providers, or a clear route boundary.
+Add authenticated app routes under `src/app/(app)`. Add signed-out auth routes under `src/app/(auth)`. Create another route group only when that group needs shared navigation options, providers, or a clear route boundary.
 
 Keep route files thin. Prefer this shape:
 
 ```tsx
-export { default } from "@/screens/example/example-screen";
+export { default } from "@/client/features/example/example-screen";
 ```
 
-Put screen-owned code in `screens/<surface>/`. Put reusable product components in `components/`.
+Put screen-owned code in `src/client/features/<feature>/`. Put reusable UI primitives in `src/client/ui/`.
 
 ## Tests
 
-Do not put tests in `app/`; Expo Router treats files there as route entries. Route and screen behavior tests live next to the relevant screen outside `app/`.
+Do not put tests in `src/app/`; Expo Router treats files there as route entries. Route and screen behavior tests live next to the relevant screen outside `src/app/`.
