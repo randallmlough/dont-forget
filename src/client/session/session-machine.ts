@@ -354,8 +354,12 @@ function reduceAuthStateChanged(
 		next.suppressActivationUntilSignedOut = false;
 	}
 	if (!event.authReady || !event.signedIn) {
-		const hadOnlineSession =
-			next.view.session !== null && next.readySessionSource === "online";
+		const authWasSignedIn =
+			state.lastObservedAuth?.authReady === true &&
+			state.lastObservedAuth.signedIn === true;
+		const authLossRequiresSignIn =
+			(next.view.session !== null && next.readySessionSource === "online") ||
+			authWasSignedIn;
 		return {
 			state: {
 				...next,
@@ -364,13 +368,15 @@ function reduceAuthStateChanged(
 				readySessionSource: null,
 				pendingActivationRestoredUserId: null,
 				pendingRestoreAttempt: null,
-				restorableSession: hadOnlineSession ? null : next.restorableSession,
-				restoreFailed: hadOnlineSession ? false : next.restoreFailed,
-				signInRequired: next.signInRequired || hadOnlineSession,
+				restorableSession: authLossRequiresSignIn
+					? null
+					: next.restorableSession,
+				restoreFailed: authLossRequiresSignIn ? false : next.restoreFailed,
+				signInRequired: next.signInRequired || authLossRequiresSignIn,
 				restoreSuppressedUntilSignedIn:
-					next.restoreSuppressedUntilSignedIn || hadOnlineSession,
+					next.restoreSuppressedUntilSignedIn || authLossRequiresSignIn,
 			},
-			effects: hadOnlineSession ? [{ type: "clearSessionHint" }] : [],
+			effects: authLossRequiresSignIn ? [{ type: "clearSessionHint" }] : [],
 		};
 	}
 	if (!event.activationEnabled) {
@@ -442,7 +448,11 @@ function startActivation(
 ): SessionMachineResult {
 	const attempt = state.attempt + 1;
 	const pendingActivationRestoredUserId =
-		state.readySessionSource === "restored" ? state.lastKnownUserId : null;
+		state.readySessionSource === "restored"
+			? state.lastKnownUserId
+			: state.pendingRestoreAttempt === state.attempt
+				? (state.restorableSession?.user.id ?? null)
+				: null;
 	const cached =
 		allowCached && state.readySessionSource !== "restored"
 			? state.view.session

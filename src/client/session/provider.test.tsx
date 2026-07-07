@@ -662,7 +662,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(screen.queryByText("Stale")).toBeNull();
 	});
 
-	it("signs out through analytics, local wipe, hint cleanup, and Clerk", async () => {
+	it("signs out through analytics, hint cleanup, local wipe, and Clerk", async () => {
 		const order: string[] = [];
 		const analytics = createMockAnalytics();
 		analytics.track.mockImplementation(() => order.push("track"));
@@ -696,7 +696,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
-		expect(order).toEqual(["track", "reset", "disconnect", "clear", "clerk"]);
+		expect(order).toEqual(["track", "reset", "clear", "disconnect", "clerk"]);
 		expect(analytics.track).toHaveBeenCalledWith("user_signed_out", {});
 		expect(clearSessionHint).toHaveBeenCalledWith();
 	});

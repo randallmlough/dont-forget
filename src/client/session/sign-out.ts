@@ -57,20 +57,21 @@ export function createAuthenticatedAppSessionSignOut({
 		analytics.track("user_signed_out", {});
 		analytics.reset();
 
-		// Local cleanup is best-effort: a partially failed device wipe must not
-		// keep the User signed in. Clerk sign-out is the one critical step — its
-		// failure must propagate so the provider's signOutFailed path can
-		// recover the session.
+		// The persisted restore payload must be cleared before the destructive
+		// PowerSync wipe, so a storage failure leaves the signed-in User's local
+		// data intact for recovery. Clerk sign-out is also critical: its failure
+		// must propagate so the provider's signOutFailed path can recover the
+		// session. Remaining local cleanup is best-effort.
 		const steps: SignOutStep[] = [
+			{
+				critical: true,
+				run: clearAuthenticatedAppSessionPresentProp,
+			},
 			{
 				critical: false,
 				failureLogMessage:
 					"authenticated app session sign-out disconnect failed",
 				run: disconnectAndClear,
-			},
-			{
-				critical: true,
-				run: clearAuthenticatedAppSessionPresentProp,
 			},
 		];
 		if (signedOutUserId) {
