@@ -66,18 +66,18 @@ Database integration tests mirror production topology:
 
 The `test` environment means automated tests only. It is not a persistent cloud environment; staging is the persistent pre-production environment.
 
-Directory tests use helpers from `db/server/test.ts`, which run an ephemeral PGlite (embedded Postgres) database and apply the SQL in `db/migrations/postgres/*.sql`. Product-service tests (List/Item) run against an in-memory SQLite database that mirrors the PowerSync client schema (`lib/test/product-database.ts`), so the real service SQL executes without the native PowerSync layer.
+Directory tests use helpers from `src/server/db/test.ts`, which run an ephemeral PGlite (embedded Postgres) database and apply the SQL in `src/server/db/migrations/postgres/*.sql`. Product-service tests (List/Item) run against an in-memory SQLite database that mirrors the PowerSync client schema (`src/test/product-database.ts`), so the real service SQL executes without the native PowerSync layer.
 
 Do not use `pnpm db:migrate` in tests. That command is for intentionally applying migrations to configured databases.
 
 ## Database Fixtures And Scenarios
 
-`db/server/fixtures/` is the shared persistence fixture layer. It contains:
+`src/server/db/fixtures/` is the shared persistence fixture layer. It contains:
 
 - low-level Drizzle insert-shaped builders for User, Household, Membership/Member, Invitation, Household Join Code, Household Join Code use, List, Item, and `item_checks` rows;
 - scenario helpers that seed caller-provided directory and product database handles and return the inserted records/IDs.
 
-`db/server/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
+`src/server/db/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
 
 The first canonical scenario is `seedPrimaryHouseholdScenario`:
 
@@ -100,7 +100,7 @@ make db-seed EMAIL=email@email.com
 make db-reseed EMAIL=email@email.com
 ```
 
-- `db-seed` runs `scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist in the no-`EMAIL` path. It assumes the local Postgres database already exists and has migrations applied.
+- `db-seed` runs `tooling/scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist in the no-`EMAIL` path. It assumes the local Postgres database already exists and has migrations applied.
 - Without `EMAIL`, seed/reseed keep the deterministic DB-only seed behavior.
 - With `EMAIL`, `db-seed` is additive: it creates an email-scoped seed Household without resetting unrelated local Users or Households. It creates or reuses two Clerk development Users: the supplied email as the Owner and the derived `+member` email as a plain Member. Both use password `testing1234`.
 - Existing matching Clerk development Users are reused and repaired before the local duplicate seed-data check runs.
@@ -111,14 +111,14 @@ make db-reseed EMAIL=email@email.com
 
 ## File Layout
 
-- `lib/test/setup.ts` configures global Jest setup and native/SDK mocks.
-- `lib/test/mocks/` contains reusable mock modules and fixtures, including observability helpers such as analytics module mocks and logger injection fixtures.
-- `db/server/test.ts` owns local temp DB helpers.
-- Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `db/server/test.ts` for test suites.
-- Screen flow tests live next to the screen they exercise, e.g. `screens/auth/sign-in-screen.test.tsx`.
-- Non-route modules colocate tests next to source, e.g. `lib/redact.test.ts`.
+- `src/test/setup.ts` configures global Jest setup and native/SDK mocks.
+- `src/test/mocks/` contains reusable mock modules and fixtures, including observability helpers such as analytics module mocks and logger injection fixtures.
+- `src/server/db/test.ts` owns local temp DB helpers.
+- Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `src/server/db/test.ts` for test suites.
+- Screen flow tests live next to the screen they exercise, e.g. `src/client/features/auth/sign-in-screen.test.tsx`.
+- Non-route modules colocate tests next to source, e.g. `src/shared/redact.test.ts`.
 
-Do not put test files in `app/`; Expo Router treats files there as routes or layouts.
+Do not put test files in `src/app/`; Expo Router treats files there as routes or layouts.
 
 ## What Needs Tests
 
@@ -131,7 +131,7 @@ Use integration-style tests for product behavior:
 - database migrations and repository/service logic
 - analytics/logging calls when they are part of the feature contract
 
-Prefer injected logger fixtures or narrow analytics test doubles for services and stores that accept observability dependencies. Reserve module mocks such as `@/lib/analytics` for UI and screen tests that import app-wide helpers directly.
+Prefer injected logger fixtures or narrow analytics test doubles for services and stores that accept observability dependencies. Reserve module mocks such as `@/client/lib/analytics` for UI and screen tests that import app-wide helpers directly.
 
 Use focused unit tests for pure logic and narrow adapters:
 
@@ -153,6 +153,6 @@ Coverage is visible through `pnpm test:coverage`, but there is no global thresho
 
 ## Examples To Copy
 
-- `lib/redact.test.ts` shows a focused pure-helper unit test.
-- `db/migrations.test.ts` shows a local Postgres migration integration test.
-- `screens/auth/sign-in-screen.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.
+- `src/shared/redact.test.ts` shows a focused pure-helper unit test.
+- `src/server/db/migrations.test.ts` shows a local Postgres migration integration test.
+- `src/client/features/auth/sign-in-screen.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.

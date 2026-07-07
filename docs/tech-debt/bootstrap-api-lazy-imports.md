@@ -2,7 +2,7 @@
 
 ## Context
 
-`app/api/bootstrap+api.ts` lazy-loads server-only modules inside `POST` to prevent native Expo Router route registration from evaluating database, auth, and bootstrap imports during iOS bundling.
+`src/app/api/bootstrap+api.ts` lazy-loads server-only modules inside `POST` to prevent native Expo Router route registration from evaluating database, auth, and bootstrap imports during iOS bundling.
 
 This is separate from the app's data layer. The PowerSync migration replaced native Household DB access, but it did not change how Expo API Route modules are discovered or bundled.
 

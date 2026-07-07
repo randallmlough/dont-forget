@@ -10,25 +10,36 @@ Sources reviewed:
 
 ## Current Decision
 
-Keep source folders at the repository root for now:
+Keep application code under `src/`:
 
 ```text
-app/
-screens/
-components/
-lib/
-db/
+src/app/
+src/client/features/
+src/client/lib/
+src/client/session/
+src/client/theme/
+src/client/ui/
+src/server/bootstrap/
+src/server/data/
+src/server/db/
+src/server/households/
+src/server/invitations/
+src/server/sync/
+src/server/users/
+src/shared/
+src/test/
+tooling/
 docs/
 ```
 
-Expo's general guidance recommends `/src` for larger projects because it separates application code from config. Don't Forget is intentionally not moving to `/src` yet because the app already has root aliases, Jest coverage paths, Storybook generation, Unistyles setup, database tooling, and agent guidance anchored to root-level folders. Revisit `/src` only if root-level source folders become difficult to navigate.
+Expo Router still owns the route tree under `src/app/`. Product code is split into client feature folders, server domain modules, shared cross-boundary helpers, and repo tooling.
 
 ## Route Groups
 
 Use Expo Router route groups to organize routes without changing URLs:
 
 ```text
-app/
+src/app/
   _layout.tsx
   (app)/
     _layout.tsx
@@ -39,21 +50,21 @@ app/
     sign-up.tsx     # /sign-up
 ```
 
-Route groups are implementation structure only. The group names do not appear in URLs, so `app/(auth)/sign-in.tsx` remains `/sign-in`.
+Route groups are implementation structure only. The group names do not appear in URLs, so `src/app/(auth)/sign-in.tsx` remains `/sign-in`.
 
 Use `(app)` for authenticated app routes and `(auth)` for signed-out auth routes. Add more groups only when a set of routes needs shared navigation, providers, or clear separation.
 
 ## Routes And Screens
 
-Keep `app/` files thin. A route file should usually export the screen it owns:
+Keep `src/app/` files thin. A route file should usually export the screen it owns:
 
 ```tsx
-export { default } from "@/screens/home/home-screen";
+export { default } from "@/client/features/list/home-screen";
 ```
 
-Put route-owned UI and screen-local side effects in `screens/<surface>/`. This includes hooks that are specific to that screen, such as Clerk session hooks or screen-only analytics handlers.
+Put route-owned UI and screen-local side effects in `src/client/features/<feature>/`. This includes hooks that are specific to that screen, such as Clerk session hooks or screen-only analytics handlers.
 
-Put reusable feature UI in `components/`. A component belongs in `components/` when multiple screens could use it or when it is a domain feature surface with its own provider, such as `components/active-list`.
+Put reusable primitives in `src/client/ui/`. Feature-owned UI stays with the owning feature folder, for example `src/client/features/list/current-list.tsx`, `list-header.tsx`, `item-rows.tsx`, and `add-item-form.tsx`.
 
 ## Components
 
@@ -85,13 +96,13 @@ Use Unistyles for app-owned React Native styling. Do not add NativeWind, Uniwind
 
 ## Tests And Stories
 
-Do not place tests or stories in `app/`; Expo Router treats files there as routes. Colocate tests next to the module they exercise outside `app/`, and keep reusable Jest setup or mocks under `lib/test`.
+Do not place tests or stories in `src/app/`; Expo Router treats files there as routes. Colocate tests next to the module they exercise outside `src/app/`, and keep reusable Jest setup or mocks under `src/test/`.
 
 After adding, moving, or deleting stories, run `make storybook-generate`.
 
 ## Server Code
 
-When Expo API Routes are added, put them under `app/api` to avoid collisions with app screens. Keep route modules thin and lazy-load server-only helpers inside request handlers, because native Expo Router route registration can evaluate `app/api` modules in the iOS bundle. Put shared server-only helpers in a clearly server-owned folder and keep secrets out of client code. The server data client is `pg` (Postgres), used only under `db/server/` and lazy-loaded inside API-route handlers so it never enters the app bundle. On the client, PowerSync's native module (`@powersync/op-sqlite`) is configured for Metro — a Metro inline-requires block-list, `node-linker=hoisted` in `.npmrc`, and the op-sqlite native config (landed in PR-B). The existing `db/` folder stays at the root because it is shared by schema generation, Drizzle config, migrations, tests, and API routes.
+Expo API Routes live under `src/app/api` to avoid collisions with app screens. Keep route modules thin and lazy-load server-only handlers inside request handlers, because native Expo Router route registration can evaluate API modules in the iOS bundle. Server handlers and services live under `src/server/`, with Postgres and Drizzle infrastructure under `src/server/db/`. On the client, PowerSync's native module (`@powersync/op-sqlite`) is configured for Metro — a Metro inline-requires block-list, `node-linker=hoisted` in `.npmrc`, and the op-sqlite native config.
 
 ## Platform Code
 

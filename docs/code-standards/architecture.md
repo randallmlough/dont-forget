@@ -8,15 +8,15 @@
 
 ## App Structure And Routing
 
-- **Must** keep Expo Router route files in `app/` thin when practical.
-- **Must** put route-owned UI and screen-local side effects in `screens/<surface>/`.
-- **Must** colocate route-owned hooks, reducers, state-machine helpers, and helper types under the owning `screens/<surface>/` directory.
-- **Must** put reusable app UI in `components/`.
+- **Must** keep Expo Router route files in `src/app/` thin when practical.
+- **Must** put route-owned UI and screen-local side effects in `src/client/features/<feature>/`.
+- **Must** colocate route-owned hooks, reducers, state-machine helpers, and helper types under the owning `src/client/features/<feature>/` directory.
+- **Must** put reusable app UI primitives in `src/client/ui/`.
 - **Must** keep reusable component-owned hooks inside that component's directory when they are not app-wide APIs.
-- **Must** use route groups consistently: `app/(app)` for authenticated app routes and `app/(auth)` for signed-out auth routes.
+- **Must** use route groups consistently: `src/app/(app)` for authenticated app routes and `src/app/(auth)` for signed-out auth routes.
 - **Must** not add Android or Web compatibility paths unless the platform policy changes.
-- **Must** put new product data access in the domain-first service layer under `lib/services/<domain>/`.
-- **Must** treat top-level `lib/app/` and `lib/server/` as legacy locations. Do not add new data-access modules there; migrate touched code into `lib/services/`.
+- **Must** put client product data access in feature services under `src/client/features/<feature>/`.
+- **Must** put server product or directory data access in same-domain modules under `src/server/<domain>/`.
 - **Should** use `.ios.tsx` files over runtime platform branching for substantial iOS-specific implementations.
 - **Avoid** generic root `hooks/`, `utils/`, `helpers/`, or `types/` folders unless there is a documented architecture reason.
 - **Avoid** exporting internal hooks or reducers from feature entrypoints unless another feature has a real dependency on them.
@@ -25,22 +25,21 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 
 ## Service Layer
 
-- **Must** choose the service folder by domain or app-runtime boundary first: `auth`, `household`, `invitation`, `item`, `list`, `member`, `session`, or `user`.
+- **Must** choose the service folder by domain or app-runtime boundary first: client feature services under `src/client/features/<feature>/`, server services under `src/server/<domain>/`, and signed-in runtime modules under `src/client/session/`.
 - **Must** use factory-based service construction with explicit dependency types: `create<Domain>Service`, `<Domain>Service`, and `<Domain>ServiceDeps`.
-- **Must** keep server-only service code under `lib/services/<domain>/server/`.
-- **Must** not add a root `lib/services/index.ts` barrel.
-- **Must** not import or export `./server` from an app-safe `lib/services/<domain>/index.ts`.
-- **Must** keep `app/api/**` server-service imports dynamic inside request handlers until a better Expo API Route bundling solution is proven.
-- **Must** enforce server-service import boundaries with the repo ESLint rule.
-- **Must** keep server-only db infrastructure (the server Postgres client, Drizzle directory/product schema, migrations, reset, the `/api/data` write applicator, test seeding) under `db/server/` and enforce the `@/db/server` import boundary with the repo ESLint rule. The `db/` root is app-safe.
+- **Must** keep server-only service code under `src/server/`.
+- **Must** not create broad root barrels that mix unrelated domains or client/server surfaces.
+- **Must** keep `src/app/api/**/+api.ts` server imports dynamic inside request handlers until a better Expo API Route bundling solution is proven.
+- **Must** enforce client-to-server imports with the repo ESLint rule: it runs over `src/client` and non-API `src/app` files and forbids `@/server/*`. Server-to-client imports are prohibited by standards and review convention.
+- **Must** keep server-only DB infrastructure (the server Postgres client, Drizzle directory/product schema, migrations, reset, the `/api/data` write applicator, test seeding) under `src/server/db/` and `src/server/sync/`.
 - **Must** keep SQL and DB-client access inside service implementations. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
 - **Must** inject logger and analytics dependencies into services and stores that need observability instead of forcing those modules to mock global singletons in tests or non-app processes.
-- **Must** keep reusable component contracts UI-facing. Compose services into component data sources at the owning controller or feature boundary; screens should consume those boundaries instead of opening Household data resources directly.
+- **Must** keep reusable component contracts UI-facing. Compose services into component data sources at the owning provider, container, or feature boundary; screens should consume those boundaries instead of opening Household data resources directly.
 - **Must** return domain-shaped records from services, not UI component types and not raw SQL rows.
 - **Must** generate IDs inside services for newly-created domain records. Service callers and normal tests must not inject or prescribe IDs.
 - **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
-- **Should** use the `ProductDatabase` seam (`lib/services/shared/product-database.ts`) as the app-owned infrastructure boundary for the local PowerSync data store, exposing `watch()` / `writeTransaction()`. Do not name this `*-db-service`.
+- **Should** use the `ProductDatabase` seam (`src/client/lib/product-database.ts`) as the app-owned infrastructure boundary for the local PowerSync data store, exposing `getAll`, `getOptional`, `execute`, and `writeTransaction(...)`. `ProductQuery<T>` is the sibling read-query type that services construct and hooks consume. Do not name this `*-db-service`.
 - **Should** keep List and Item services separate; route-owned List loading should call them by explicit List ID after authenticated app session context exists.
 - **Avoid** coupling mutation success to remote propagation. Local writes resolve on local commit; PowerSync uploads them to `/api/data` continuously in the background, so there is no sync-timing policy for services to own.
 
@@ -56,18 +55,18 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 ## Providers And Auth
 
 - **Must** not add duplicate Clerk or PostHog providers.
-- **Must** keep app-wide providers in `app/_layout.tsx` unless a documented architecture change moves them.
+- **Must** keep app-wide providers in `src/app/_layout.tsx` unless a documented architecture change moves them.
 - **Must** keep root layout effects limited to app-wide provider, navigation, analytics, auth, theme, and native SDK lifecycle synchronization.
-- **Must** keep feature-specific data loading and mutation lifecycle out of `app/_layout.tsx`.
-- **Must** initialize signed-in authenticated app session infrastructure from the authenticated route group (`app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
-- **Must** make screens and reusable components borrow controller-owned authenticated app session resources and actions; they must not manage the PowerSync connection directly.
-- **Must** create provider-owned controllers, resource managers, and long-lived service adapters with lazy initialization, not render-time ref assignment.
-- **Must** make provider activation, subscription, and disposal effects depend on the owned controller or resource identity.
-- **Must** keep sign-out, disposal, cleanup, and recovery order centralized in the owning runtime module instead of duplicating it in components.
+- **Must** keep feature-specific data loading and mutation lifecycle out of `src/app/_layout.tsx`.
+- **Must** initialize signed-in authenticated app session infrastructure from the authenticated route group (`src/app/(app)/_layout.tsx`) through an app-owned provider, not from an individual screen.
+- **Must** make screens and reusable components borrow provider-owned authenticated app session resources and actions; they must not manage the PowerSync connection directly.
+- **Must** create provider-owned resource managers and long-lived service adapters with lazy initialization, not render-time ref assignment.
+- **Must** make provider activation and cleanup effects depend on the owned resource identity.
+- **Must** keep sign-out, cleanup, and recovery order centralized in the owning runtime module instead of duplicating it in components.
 - **Must** keep auth routing effects separate from cache probes and native SDK warmup effects.
 - **Must** derive effective auth and cache state from authoritative auth readiness state instead of storing duplicate signed-in or signed-out booleans.
 - **Must** call `setActive(...)` after successful Clerk auth attempts.
-- **Must** sign out in this order: track `user_signed_out`, reset analytics, dispose authenticated app session resources, clear local Household cache/DB files when that path exists, then call `signOut()`.
+- **Must** sign out in this order: track `user_signed_out`, reset analytics, run best-effort PowerSync `disconnectAndClear()`, clear the session hint, clear the signed-out User's Current List selections, then call Clerk `signOut()` as the critical step whose failure propagates.
 - **Should** use `useEffectEvent` when an effect needs the latest callback without reactivating provider lifecycle.
 - **Should** extract root effect logic into named hooks when it has branching, cleanup, or testable behavior.
 - **Should** keep route membership checks inside the redirect effect when the result is only used for navigation synchronization.
@@ -85,7 +84,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 ## Server And Environment Safety
 
 - **Must** keep Expo API route modules thin and lazy-load server-only helpers inside request handlers when those imports would otherwise affect native route registration.
-- **Must** follow the `app/api` -> `lib/api` -> `lib/services` boundary from [`docs/how-things-work/api-routes.md`](../how-things-work/api-routes.md) for new or changed HTTP behavior, except for explicitly documented legacy routes awaiting migration.
+- **Must** follow the `src/app/api/**/+api.ts` -> `src/server/<domain>/api.ts` -> same-domain services boundary from [`docs/how-things-work/api-routes.md`](../how-things-work/api-routes.md) for new or changed HTTP behavior.
 - **Must** expose only public config through Expo `extra`.
 - **Must** not expose the server database URL, Clerk secrets, Resend secrets, or other server/operator secrets to client code.
 - **Must** use `APP_ENV` as the app-owned backend selector.
@@ -94,8 +93,8 @@ See also: [`docs/how-things-work/environments.md`](../how-things-work/environmen
 
 ## Observability
 
-- **Must** send product analytics through `track`, `screen`, and `reset` from `lib/analytics.ts`.
-- **Must** add or change analytics events in `lib/analytics-events.ts` before calling them.
+- **Must** send product analytics through `track`, `screen`, and `reset` from `src/client/lib/analytics.ts`.
+- **Must** add or change analytics events in `src/shared/analytics-events.ts` before calling them.
 - **Must** treat analytics events and property shapes as typed product contracts.
 - **Must** name analytics events by user or domain outcome, not UI implementation details.
 - **Must** track analytics from the event or action boundary that knows what happened, not from effects that infer it later.

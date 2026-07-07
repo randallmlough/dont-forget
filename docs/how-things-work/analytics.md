@@ -1,6 +1,6 @@
 # Product analytics
 
-Product-event tracking goes through `lib/analytics.ts`. Events use a typed catalog defined in `lib/analytics-events.ts`. Identity is auto-synced from Clerk; you do not call `identify` from auth screens.
+Product-event tracking goes through `src/client/lib/analytics.ts`. Events use a typed catalog defined in `src/shared/analytics-events.ts`. Identity is auto-synced from Clerk; you do not call `identify` from auth screens.
 
 For diagnostic logs (errors, debug info, anything exploratory), use the [logger](./logger.md), not analytics.
 
@@ -18,13 +18,13 @@ Rule of thumb: if you're tempted to invent a new event name on the fly without e
 ## Quick reference
 
 ```ts
-import { track, reset, screen } from "@/lib/analytics";
+import { track, reset, screen } from "@/client/lib/analytics";
 
 // product event — name and properties are type-checked against EventMap
 track("user_signed_up", { method: "email" });
 track("user_signed_in", { method: "apple" });
 
-// screen view (already wired in app/_layout.tsx — usually you don't call this)
+// screen view (already wired in src/app/_layout.tsx — usually you don't call this)
 screen("/lists/abc123", { previous_screen: "/lists" });
 
 // sign-out — clears PostHog identity. Pair with the user_signed_out event.
@@ -37,7 +37,7 @@ You will rarely call `identify` directly. See "Identity" below.
 For services and stores, pass analytics as an explicit dependency when the module owns a product outcome. Service methods should track after the operation succeeds, not before persistence, network validation, or local side effects complete:
 
 ```ts
-import { track } from "@/lib/analytics";
+import { track } from "@/client/lib/analytics";
 
 type ItemServiceAnalytics = {
   track: typeof track;
@@ -65,7 +65,7 @@ Scope the dependency to the analytics operations the service/store actually need
 
 ## Adding a new event
 
-1. **Open `lib/analytics-events.ts`** and add the event to `EventMap`:
+1. **Open `src/shared/analytics-events.ts`** and add the event to `EventMap`:
    ```ts
    export type EventMap = {
      // ...existing events...
@@ -128,7 +128,7 @@ The typed event catalog is your first line of defense — if you don't add a `pa
 ## What not to do
 
 - **Don't call `posthog.capture/identify/reset/screen` directly.** Use the abstraction — that's why it exists.
-- **Don't force service/store tests to mock `@/lib/analytics` when the module can accept an injected analytics dependency.** Use the existing module mock for UI/screen tests that import the global helpers directly.
+- **Don't force service/store tests to mock `@/client/lib/analytics` when the module can accept an injected analytics dependency.** Use the existing module mock for UI/screen tests that import the global helpers directly.
 - **Don't add events with loose `Record<string, unknown>` properties** to escape the type check. The whole point is the schema discipline. If you genuinely need a generic event, it's almost certainly a log instead.
 - **Don't call `track` for things only you'll read once.** That's `logger.info`. Events are forever (or at least until you migrate dashboards); logs are throwaway.
 - **Don't fire events from inside render functions.** Same as logs — use event handlers and effects.
@@ -138,7 +138,7 @@ The typed event catalog is your first line of defense — if you don't add a `pa
 
 Same pattern as the logger ([ADR-0004](../adr/0004-pluggable-logger-abstraction.md), [ADR-0005](../adr/0005-pluggable-analytics-abstraction.md)):
 
-1. Implement a new class matching the `AnalyticsAdapter` interface in `lib/analytics.ts` (four methods: `track`, `identify`, `reset`, `screen`).
+1. Implement a new class matching the `AnalyticsAdapter` interface in `src/client/lib/analytics.ts` (four methods: `track`, `identify`, `reset`, `screen`).
 2. Replace `new PostHogAnalyticsAdapter()` on the `adapter` const.
 3. The `useAnalyticsIdentity()` hook keeps reading Clerk; the new adapter receives `userId` and traits identically. No call sites change.
 4. Note that swapping analytics providers also means rebuilding dashboards and funnels in the new tool — the *code* swap is cheap, the *data* migration isn't.

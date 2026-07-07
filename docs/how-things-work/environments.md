@@ -105,7 +105,7 @@ PostHog analytics and logs are tagged with `APP_ENV`. Do not derive analytics/lo
 
 App builds point at one API base URL for their selected environment. Local derives it at runtime from the Expo dev server that served the bundle (see "Local API base URL is derived, not configured" above); staging and production use separate hosted API deployments/domains.
 
-`EXPO_PUBLIC_API_BASE_URL` is required for `staging` and `production` app builds. `local` ignores it in favor of the dev-server derivation, and `test` may omit it because tests mock app/API boundaries directly.
+`EXPO_PUBLIC_API_BASE_URL` is required for `staging` and `production` app builds. `local` ignores it in favor of the dev-server derivation, and `test` may omit it because tests mock app and API boundaries directly.
 
 ## iOS App Identity
 
@@ -134,4 +134,4 @@ make db-reset APP_ENV=production CONFIRM_DB_RESET=production CONFIRM_APP_ENV=pro
 
 `CONFIRM_DB_RESET` must match `APP_ENV` for every reset. Production also requires `CONFIRM_APP_ENV=production`.
 
-Tests must not call the real migration command. They use local temp databases loaded from `db/migrations/**` through test helpers.
+Tests must not call the real migration command. They use local temp databases loaded from `src/server/db/migrations/**` through test helpers.

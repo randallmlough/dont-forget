@@ -4,7 +4,7 @@ Use this standard for native-feeling UI composition details that cross normal Re
 
 ## Bottom Sheets
 
-- **Must** use the app-owned bottom-sheet primitive in `components/ui/bottom-sheet.tsx`. A second ad-hoc `Modal pageSheet` forfeits the single swap point the primitive exists to provide.
+- **Must** use the app-owned bottom-sheet primitive in `src/client/ui/bottom-sheet.tsx`. A second ad-hoc `Modal pageSheet` forfeits the single swap point the primitive exists to provide.
 - **Must** treat native bottom sheets as native container boundaries, not just React Native `View` trees: the sheet container owns the height; the hosted content lays out within it.
 - **Must** give a sheet's row-list `ScrollView` `flex: 1` so it fills the bounded `pageSheet` height and scrolls within it, instead of sizing to its content.
 - **Avoid** adding height or detent props to the primitive. `pageSheet` provides one bounded native height today; detents return when the primitive's internals move to `@expo/ui/community/bottom-sheet` on the Expo SDK 56 upgrade (see the primitive's doc comment for the swap recipe).
@@ -12,7 +12,7 @@ Use this standard for native-feeling UI composition details that cross normal Re
 Usage:
 
 ```tsx
-import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { BottomSheet } from "@/client/ui/bottom-sheet";
 
 <BottomSheet isPresented={isPresented} onIsPresentedChange={setIsPresented}>
 	<View style={styles.sheet}>{children}</View>

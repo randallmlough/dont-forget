@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use this guide to create or change one domain service under `lib/services/<domain>/`.
+Use this guide to create or change one domain service under `src/client/features/<feature>/` or `src/server/<domain>/`.
 
 A service is the product data boundary for a domain such as Household, List, Item, Member, User, or Invitation. Services own SQL/database access and return domain-shaped records. Screens, reusable components, and hooks must not query databases directly.
 
@@ -18,48 +18,46 @@ Read:
 
 Confirm the existing pattern in nearby services before editing, for example:
 
-- `lib/services/list/list-service.ts`
-- `lib/services/item/item-service.ts`
-- `lib/services/user/server/user-service.ts`
-- `lib/services/member/server/member-service.ts`
-- `lib/services/household/server/household-service.ts`
+- `src/client/features/list/list-service.ts`
+- `src/client/features/list/item-service.ts`
+- `src/server/users/user-service.ts`
+- `src/server/households/member-service.ts`
+- `src/server/households/household-service.ts`
 
 ## Files and naming
 
-### App-safe services
+### Client product services
 
-Use this shape for app-safe domain services:
+Use this shape for client product services:
 
 ```text
-lib/services/<domain>/
+src/client/features/<feature>/
   <domain>-service.ts
   <domain>-service.test.ts
-  index.ts
 ```
 
 Examples:
 
-- `lib/services/list/list-service.ts`
-- `lib/services/item/item-service.ts`
+- `src/client/features/list/list-service.ts`
+- `src/client/features/list/item-service.ts`
 
 ### Server-only services
 
-Use `server/` for services that import server-only dependencies, directory DB infrastructure, Clerk backend helpers, the server Postgres client, Resend, or operator secrets:
+Use `src/server/<domain>/` for services that import server-only dependencies, directory DB infrastructure, Clerk backend helpers, the server Postgres client, Resend, or operator secrets:
 
 ```text
-lib/services/<domain>/server/
+src/server/<domain>/
   <domain>-service.ts
   <domain>-service.test.ts
-  index.ts
 ```
 
 Examples:
 
-- `lib/services/user/server/user-service.ts`
-- `lib/services/member/server/member-service.ts`
-- `lib/services/household/server/household-service.ts`
+- `src/server/users/user-service.ts`
+- `src/server/households/member-service.ts`
+- `src/server/households/household-service.ts`
 
-Do not add a root service barrel. Do not export `./server` from an app-safe `lib/services/<domain>/index.ts`.
+Do not add broad root barrels that mix unrelated domains or client/server surfaces.
 
 ## Service shape
 
@@ -107,18 +105,18 @@ Keep the public types named for the domain:
 1. **Choose the owning domain folder.**
    - Use existing domains when the operation naturally belongs there.
    - Create a new folder only when the domain is genuinely new.
-   - Current expected domains include `auth`, `household`, `invitation`, `item`, `list`, `member`, and `user`.
+   - Current client feature folders are `auth`, `household`, `list`, and `settings`; current server domain folders are `bootstrap`, `data`, `households`, `invitations`, `sync`, and `users`. Item services live under the List feature, and Member behavior lives under the server households module.
 
-2. **Choose app-safe or server-only placement.**
-   - App-safe services may depend on app-safe interfaces such as the `ProductDatabase` seam.
-   - Server-only services go under `lib/services/<domain>/server/`.
+2. **Choose client or server placement.**
+   - Client product services may depend on app-safe interfaces such as the `ProductDatabase` seam.
+   - Server-only services go under `src/server/<domain>/`.
 
 3. **Define domain-shaped return types.**
    - Return Household, Member, User, List, Item, or Invitation concepts.
    - Do not return raw SQL rows, Drizzle internals, or UI component props.
 
 4. **Define an explicit dependency type.**
-   - App-safe product reads/writes should use the narrow `ProductDatabase` seam (`watch()` / `writeTransaction()`).
+   - Client product reads/writes should use the narrow `ProductDatabase` seam (`getAll`, `getOptional`, `execute`, and `writeTransaction(...)`). `ProductQuery<T>` is the sibling read-query type that services construct and hooks consume.
    - Server services should receive `DirectoryDb` or a transaction-compatible type.
    - Add `logger?: Logger` only when the service logs.
    - Add a scoped analytics dependency only when the service owns a product outcome.
@@ -130,7 +128,7 @@ Keep the public types named for the domain:
 
 6. **Validate external or SQL row boundaries.**
    - Use Zod for untrusted API responses, persisted payloads, or SQL rows whose shape is not already narrowed by Drizzle.
-   - Prefer helper schemas such as `sqlNumberSchema` from `db/utils.ts` when adapting SQL values.
+   - Prefer helper schemas such as `sqlNumberSchema` from `src/shared/sql.ts` when adapting client SQL values.
 
 7. **Log once at the service boundary.**
    - Bind safe context with `.with({ household_id, service: "<domain>" })`.
@@ -138,17 +136,12 @@ Keep the public types named for the domain:
    - Do not duplicate the same error log in the screen and service unless each layer adds different context.
 
 8. **Emit analytics only after success.**
-   - Add the event to `lib/analytics-events.ts` first.
+   - Add the event to `src/shared/analytics-events.ts` first.
    - Track after the local write or product outcome succeeds.
    - Do not track exploratory diagnostics or validation failures as analytics events.
 
-9. **Export only the public service surface.**
-   - App-safe `index.ts` exports app-safe factories and types.
-   - Server `index.ts` exports server-only factories and types.
-   - Never re-export server code from an app-safe index.
-
-10. **Update callers through the owning boundary.**
-    - Screens/components should consume a controller, data source, hook, or service-composed boundary.
+9. **Update callers through the owning boundary.**
+    - Screens/components should consume a provider, data source, hook, or service-composed boundary.
     - UI should not import database clients, Drizzle schemas for data access, or stores directly.
 
 ## Tests and verification
@@ -156,8 +149,8 @@ Keep the public types named for the domain:
 Add or update a focused service test next to the service:
 
 ```text
-lib/services/<domain>/<domain>-service.test.ts
-lib/services/<domain>/server/<domain>-service.test.ts
+src/client/features/<feature>/<domain>-service.test.ts
+src/server/<domain>/<domain>-service.test.ts
 ```
 
 Test the service contract, not implementation details:
@@ -172,7 +165,8 @@ Test the service contract, not implementation details:
 Use focused checks while iterating:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath lib/services/<domain>/<domain>-service.test.ts
+pnpm exec jest --runInBand --runTestsByPath src/client/features/list/list-service.test.ts
+pnpm exec jest --runInBand --runTestsByPath src/server/households/household-service.test.ts
 make eslint-rules
 make typecheck
 ```
@@ -187,10 +181,10 @@ make verify
 ## Review checklist
 
 - Uses `CONTEXT.md` domain language.
-- Lives under the correct `lib/services/<domain>/` or `server/` path.
+- Lives under the correct `src/client/features/<feature>/` or `src/server/<domain>/` path.
 - Uses `create<Domain>Service`, `<Domain>Service`, and `<Domain>ServiceDeps` names.
-- Does not add a root service barrel.
-- Does not export server-only code through an app-safe index.
+- Does not add a broad root service barrel.
+- Does not cross the client/server boundary.
 - Keeps SQL/database access inside service implementation.
 - Returns domain-shaped records, not raw rows or UI props.
 - Generates IDs and timestamps inside the service.

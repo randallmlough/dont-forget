@@ -1,6 +1,6 @@
 # Logging
 
-Diagnostic logging goes through `lib/logger.ts`. Calls fan out to PostHog Logs in production and mirror to `console` in `__DEV__`. The provider is hidden behind an adapter — see [ADR-0004](../adr/0004-pluggable-logger-abstraction.md) for why.
+Diagnostic logging goes through `src/client/lib/logger.ts`. Calls fan out to PostHog Logs in production and mirror to `console` in `__DEV__`. The provider is hidden behind an adapter — see [ADR-0004](../adr/0004-pluggable-logger-abstraction.md) for why.
 
 ## Logs vs events — pick the right one
 
@@ -16,17 +16,17 @@ If you're tempted to `posthog.capture("debug_thing_happened", {...})`, that's a 
 
 ```ts
 // React (component, hook, screen) — auto-binds Clerk user_id
-import { useLogger } from "@/lib/logger";
+import { useLogger } from "@/client/lib/logger";
 const log = useLogger();
 log.info("list synced", { item_count: 42 });
 
 // Services/stores — receive the logger from deps or open config
-import { logger as defaultLogger, type Logger } from "@/lib/logger";
+import { logger as defaultLogger, type Logger } from "@/client/lib/logger";
 type ItemServiceDeps = { logger?: Logger };
 const serviceLog = (deps.logger ?? defaultLogger).with({ service: "item" });
 
 // Other non-React utilities without a caller-owned seam
-import { logger } from "@/lib/logger";
+import { logger } from "@/client/lib/logger";
 logger.warn("token cache read failed", { key, error });
 
 // Scoped child logger — binds attributes for every subsequent call
@@ -102,10 +102,10 @@ This is best-effort, not airtight. Still:
 
 ## Services and stores
 
-Services and stores should accept a `Logger` dependency when they log diagnostics. The app composition layer can pass `useLogger()` or the app `logger`; tests and operator processes can pass their own logger without mocking `@/lib/logger`.
+Services and stores should accept a `Logger` dependency when they log diagnostics. The app composition layer can pass `useLogger()` or the app `logger`; tests and operator processes can pass their own logger without mocking `@/client/lib/logger`.
 
 ```ts
-import { logger as defaultLogger, type Logger } from "@/lib/logger";
+import { logger as defaultLogger, type Logger } from "@/client/lib/logger";
 
 export type ItemServiceDeps = {
   householdId: string;
@@ -125,10 +125,10 @@ Bind domain context with `.with(...)` inside the service or store so every subse
 
 ## What not to do
 
-- **Don't call `posthog.logger.*` directly.** Go through `lib/logger.ts` so the swap-out path stays clean and redaction is enforced.
-- **Don't import `logger` from `lib/posthog.ts`.** The PostHog client must finish constructing before the logger module loads. The boostrap warn in `posthog.ts` stays on `console.warn` for that reason.
-- **Don't require service/store tests to mock `@/lib/logger` when a dependency can be injected.** Use `lib/test/mocks/logger.ts` for reusable logger fixtures.
-- **Don't use the logger from `db/server/migrate.ts`** or other Node CLIs. Those are operator-facing tools; their stdout *is* the UX. They keep `console.*`.
+- **Don't call `posthog.logger.*` directly.** Go through `src/client/lib/logger.ts` so the swap-out path stays clean and redaction is enforced.
+- **Don't import `logger` from `src/client/lib/posthog.ts`.** The PostHog client must finish constructing before the logger module loads. The boostrap warn in `posthog.ts` stays on `console.warn` for that reason.
+- **Don't require service/store tests to mock `@/client/lib/logger` when a dependency can be injected.** Use `src/test/mocks/logger.ts` for reusable logger fixtures.
+- **Don't use the logger from `src/server/db/migrate.ts`** or other Node CLIs. Those are operator-facing tools; their stdout *is* the UX. They keep `console.*`.
 - **Don't add new levels.** If you find yourself wanting `trace` or `fatal`, write `debug` or `error` instead. Adding levels touches the interface, the adapter, and every adapter you'd ever swap to.
 
 ## Adding a new feature? Suggested logging baseline
@@ -154,8 +154,8 @@ Bind a `feature` (or screen) attribute at the top via `.with()`, log the entry/s
 
 The whole point of the abstraction. Steps, when the day comes:
 
-1. Implement a new class in `lib/logger.ts` matching the `LoggerAdapter` interface (one method: `log(level, message, attributes)`).
-2. Keep the shared sensitive-key policy in `lib/sensitive-keys.ts`; move only provider-specific formatting or transport code into the new adapter.
+1. Implement a new class in `src/client/lib/logger.ts` matching the `LoggerAdapter` interface (one method: `log(level, message, attributes)`).
+2. Keep the shared sensitive-key policy in `src/shared/sensitive-keys.ts`; move only provider-specific formatting or transport code into the new adapter.
 3. Replace `new PostHogLoggerAdapter()` on the `logger` singleton.
 4. Decide what to do about user identity binding — `useLogger()` already passes `user_id` via `.with()`, so most providers just need to read it from attributes.
 
