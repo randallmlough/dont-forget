@@ -48,9 +48,16 @@ export type { AuthenticatedAppSessionState } from "./session-machine";
 export type AuthenticatedAppSessionContextValue = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
+	meta?: AuthenticatedAppSessionMeta;
 	retry: () => void;
 	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
 	signOut: () => Promise<void>;
+};
+
+export type AuthenticatedAppSessionMeta = {
+	restore: {
+		status: "idle" | "restoring" | "failed" | "signInRequired";
+	};
 };
 
 export type AuthenticatedAppSessionReloadOptions =
@@ -80,6 +87,7 @@ type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	activationEnabled?: boolean;
 	bootstrapService?: SessionBootstrapService;
 	connectDatabase?: AuthenticatedAppSessionConnectDatabase;
+	disconnect?: () => Promise<void>;
 	disconnectAndClear?: () => Promise<void>;
 }>;
 
@@ -111,6 +119,7 @@ export function AuthenticatedAppSessionProvider({
 	activationEnabled = true,
 	bootstrapService: bootstrapServiceProp,
 	connectDatabase = defaultConnectDatabase,
+	disconnect = defaultDisconnect,
 	disconnectAndClear = defaultDisconnectAndClear,
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
@@ -137,8 +146,8 @@ export function AuthenticatedAppSessionProvider({
 	const authRef = useRef(auth);
 	const analyticsRef = useRef(analytics);
 	const machineRef = useRef(initialSessionMachineState);
-	const [view, setViewState] = useState<SessionView>(
-		initialSessionMachineState.view,
+	const [publishedSession, setPublishedSession] = useState(
+		sessionProviderSnapshot(initialSessionMachineState),
 	);
 	const getToken = useCallback(() => authRef.current.getToken(), []);
 	const getPowerSyncToken = useCallback(
@@ -153,7 +162,11 @@ export function AuthenticatedAppSessionProvider({
 
 			function applyResult(result: ReturnType<typeof reduceSessionMachine>) {
 				machineRef.current = result.state;
-				setViewState(result.state.view);
+				setPublishedSession((current) =>
+					samePublishedSession(current, result.state)
+						? current
+						: sessionProviderSnapshot(result.state),
+				);
 				for (const effect of result.effects) {
 					const effectResult = runEffect(effect);
 					if (options.awaitActivation && effect.type === "activate") {
@@ -168,6 +181,21 @@ export function AuthenticatedAppSessionProvider({
 				}
 				if (effect.type === "restoreSession") {
 					return executeRestore(effect.attempt, effect.session);
+				}
+				if (effect.type === "clearSessionHint") {
+					return clearAuthenticatedAppSessionPresentProp()
+						.catch(() => undefined)
+						.then(() => undefined);
+				}
+				if (effect.type === "disconnect") {
+					return enqueueDatabaseOperation(disconnect).catch((error) => {
+						logger.error(
+							"authenticated app session stale connect disconnect failed",
+							{
+								error: asError(error),
+							},
+						);
+					});
 				}
 				if (effect.type === "disconnectAndClear") {
 					return enqueueDatabaseOperation(disconnectAndClear).catch((error) => {
@@ -195,12 +223,28 @@ export function AuthenticatedAppSessionProvider({
 				return machineRef.current.attempt !== attempt;
 			}
 
+			function restoredUserIdForActivation(attempt: number): string | null {
+				const machine = machineRef.current;
+				if (machine.pendingActivationAttempt !== attempt) return null;
+				return machine.pendingActivationRestoredUserId;
+			}
+
+			async function prepareRestoredUserReplacement(
+				attempt: number,
+				session: SessionBootstrap,
+			) {
+				const restoredUserId = restoredUserIdForActivation(attempt);
+				if (!restoredUserId || restoredUserId === session.user.id) return;
+				if (activationSuperseded(attempt)) return;
+				await enqueueDatabaseOperation(disconnectAndClear);
+			}
+
 			// Waits on the chain but deliberately does not extend it: a hung
 			// connect (PowerSync retries on bad networks) must never block a
 			// later cleanup wipe. Safe because a later disconnect aborts an
 			// in-flight connect for good (@powersync/common ConnectionManager);
 			// re-verify that guarantee when upgrading the SDK.
-			function connectDatabaseForActivation(attempt: number): Promise<boolean> {
+			function connectDatabaseForAttempt(attempt: number): Promise<boolean> {
 				return databaseOperationChain.then(async () => {
 					if (activationSuperseded(attempt)) return false;
 					await connectDatabase({ getToken, getPowerSyncToken });
@@ -216,7 +260,8 @@ export function AuthenticatedAppSessionProvider({
 					// and the reducer alone decides what a stale one means (including
 					// undoing a stale connect).
 					if (activationSuperseded(attempt)) return;
-					const connected = await connectDatabaseForActivation(attempt);
+					await prepareRestoredUserReplacement(attempt, session);
+					const connected = await connectDatabaseForAttempt(attempt);
 					if (!connected) return;
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
@@ -245,7 +290,7 @@ export function AuthenticatedAppSessionProvider({
 			) {
 				try {
 					if (activationSuperseded(attempt)) return;
-					const connected = await connectDatabaseForActivation(attempt);
+					const connected = await connectDatabaseForAttempt(attempt);
 					if (!connected) return;
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
@@ -273,7 +318,9 @@ export function AuthenticatedAppSessionProvider({
 		},
 		[
 			bootstrapService,
+			clearAuthenticatedAppSessionPresentProp,
 			connectDatabase,
+			disconnect,
 			disconnectAndClear,
 			getPowerSyncToken,
 			getToken,
@@ -375,7 +422,8 @@ export function AuthenticatedAppSessionProvider({
 	}
 
 	const value: AuthenticatedAppSessionContextValue = {
-		...view,
+		...publishedSession.view,
+		meta: publishedSession.meta,
 		retry,
 		reloadSession,
 		signOut: runSignOut,
@@ -396,6 +444,47 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 		);
 	}
 	return value;
+}
+
+export function useAuthenticatedAppSessionMeta(): AuthenticatedAppSessionMeta {
+	return use(AuthenticatedAppSessionContext)?.meta ?? INITIAL_SESSION_META;
+}
+
+function sessionProviderSnapshot(state: typeof initialSessionMachineState): {
+	view: SessionView;
+	meta: AuthenticatedAppSessionMeta;
+} {
+	return {
+		view: state.view,
+		meta: sessionMetaForState(state),
+	};
+}
+
+function samePublishedSession(
+	current: ReturnType<typeof sessionProviderSnapshot>,
+	state: typeof initialSessionMachineState,
+): boolean {
+	return (
+		current.view === state.view &&
+		current.meta.restore.status === sessionMetaForState(state).restore.status
+	);
+}
+
+const INITIAL_SESSION_META = sessionMetaForState(initialSessionMachineState);
+
+function sessionMetaForState(
+	state: typeof initialSessionMachineState,
+): AuthenticatedAppSessionMeta {
+	if (state.signInRequired) return { restore: { status: "signInRequired" } };
+	if (state.restoreFailed) return { restore: { status: "failed" } };
+	if (state.pendingRestoreAttempt === state.attempt) {
+		return { restore: { status: "restoring" } };
+	}
+	return { restore: { status: "idle" } };
+}
+
+function defaultDisconnect() {
+	return db.disconnect();
 }
 
 function defaultDisconnectAndClear() {

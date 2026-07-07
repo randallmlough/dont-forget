@@ -69,9 +69,7 @@ export function createAuthenticatedAppSessionSignOut({
 				run: disconnectAndClear,
 			},
 			{
-				critical: false,
-				failureLogMessage:
-					"authenticated app session sign-out local cleanup failed",
+				critical: true,
 				run: clearAuthenticatedAppSessionPresentProp,
 			},
 		];

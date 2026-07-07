@@ -280,28 +280,24 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		await expect(run).resolves.toBeUndefined();
 	});
 
-	it("continues Clerk sign-out when local cleanup fails", async () => {
-		const logger = createMockLogger();
+	it("does not call Clerk sign-out when the persisted restore payload cannot be cleared", async () => {
 		const auth = authFixture();
+		const clearError = new Error("cleanup failed");
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
 			getAuth: () => auth,
 			analytics: createMockAnalytics(),
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => {
-				throw new Error("cleanup failed");
+				throw clearError;
 			}),
 			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
-			logger,
+			logger: createMockLogger(),
 			disconnectAndClear: jest.fn(async () => undefined),
 			getSessionUserId: () => "usr_avery",
 		});
 
-		await signOutFlow.run();
+		await expect(signOutFlow.run()).rejects.toThrow("cleanup failed");
 
-		expect(auth.signOut).toHaveBeenCalledTimes(1);
-		expect(logger.error).toHaveBeenCalledWith(
-			"authenticated app session sign-out local cleanup failed",
-			{ error: expect.any(Error) },
-		);
+		expect(auth.signOut).not.toHaveBeenCalled();
 	});
 
 	it("continues Clerk sign-out when disconnect fails", async () => {

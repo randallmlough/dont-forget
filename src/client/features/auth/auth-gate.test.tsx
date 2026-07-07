@@ -1,6 +1,7 @@
 import { render, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { AuthGate } from "@/client/features/auth/auth-gate";
+import { useAuthenticatedAppSessionMeta } from "@/client/session";
 import { hasAuthenticatedAppSessionHint } from "@/client/session/session-hint";
 import { setMockAuthState } from "@/test/mocks/clerk";
 
@@ -12,6 +13,12 @@ jest.mock("@/client/lib/analytics", () =>
 
 jest.mock("@/client/session/session-hint", () => ({
 	hasAuthenticatedAppSessionHint: jest.fn(),
+}));
+
+jest.mock("@/client/session", () => ({
+	useAuthenticatedAppSessionMeta: jest.fn(() => ({
+		restore: { status: "idle" },
+	})),
 }));
 
 jest.mock("expo-router", () => {
@@ -38,6 +45,9 @@ jest.mock("expo-router", () => {
 beforeEach(() => {
 	mockReplace.mockReset();
 	jest.mocked(hasAuthenticatedAppSessionHint).mockResolvedValue(false);
+	jest.mocked(useAuthenticatedAppSessionMeta).mockReturnValue({
+		restore: { status: "idle" },
+	});
 });
 
 describe("AuthGate", () => {
@@ -63,6 +73,36 @@ describe("AuthGate", () => {
 			expect(hasAuthenticatedAppSessionHint).toHaveBeenCalledTimes(1),
 		);
 		expect(mockReplace).not.toHaveBeenCalledWith("/sign-in");
+	});
+
+	it("keeps sign-in reachable after cached restore failed", async () => {
+		jest.mocked(hasAuthenticatedAppSessionHint).mockResolvedValue(true);
+		jest.mocked(useAuthenticatedAppSessionMeta).mockReturnValue({
+			restore: { status: "failed" },
+		});
+		setMockAuthState({ isLoaded: true, isSignedIn: false });
+
+		await render(<AuthGate pathname="/sign-in" />);
+
+		await waitFor(() =>
+			expect(hasAuthenticatedAppSessionHint).toHaveBeenCalledTimes(1),
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("keeps sign-in reachable after mid-run auth loss", async () => {
+		jest.mocked(hasAuthenticatedAppSessionHint).mockResolvedValue(true);
+		jest.mocked(useAuthenticatedAppSessionMeta).mockReturnValue({
+			restore: { status: "signInRequired" },
+		});
+		setMockAuthState({ isLoaded: true, isSignedIn: false });
+
+		await render(<AuthGate pathname="/sign-in" />);
+
+		await waitFor(() =>
+			expect(hasAuthenticatedAppSessionHint).toHaveBeenCalledTimes(1),
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
 	it("redirects to sign-in when there is no Clerk session or persisted hint", async () => {

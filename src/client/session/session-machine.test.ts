@@ -98,7 +98,7 @@ describe("reduceSessionMachine", () => {
 		expect(result.effects).toEqual([]);
 	});
 
-	it("publishes loading and bumps the attempt on signed-out observations", () => {
+	it("requires sign-in and clears the restore payload when an online session loses auth", () => {
 		const session = sessionFixture();
 		const ready = activatedWith(session);
 		const result = reduceSessionMachine(
@@ -109,7 +109,8 @@ describe("reduceSessionMachine", () => {
 		expect(result.state.attempt).toBe(2);
 		expect(result.state.view).toBe(initialSessionMachineState.view);
 		expect(result.state.lastKnownUserId).toBe("usr_avery");
-		expect(result.effects).toEqual([]);
+		expect(result.state.signInRequired).toBe(true);
+		expect(result.effects).toEqual([{ type: "clearSessionHint" }]);
 	});
 
 	it("publishes ready state, records last-known User, and marks the session hint on activation success", () => {
@@ -146,6 +147,8 @@ describe("reduceSessionMachine", () => {
 		expect(restoreRequested.effects).toEqual([
 			{ type: "restoreSession", attempt: 1, session },
 		]);
+		expect(restoreRequested.state.pendingRestoreAttempt).toBe(1);
+		expect(restoreRequested.state.restorableSession).toBe(session);
 
 		const restored = reduceSessionMachine(restoreRequested.state, {
 			type: "sessionRestoreSucceeded",
@@ -159,8 +162,46 @@ describe("reduceSessionMachine", () => {
 		});
 		expect(restored.state.readySessionSource).toBe("restored");
 		expect(restored.state.lastKnownUserId).toBe("usr_avery");
+		expect(restored.state.pendingRestoreAttempt).toBeNull();
+		expect(restored.state.restorableSession).toBeNull();
 		expect(restored.effects).toEqual([
 			{ type: "trackSessionLoaded", source: "cached", session },
+		]);
+	});
+
+	it("publishes a retryable error when restore fails and retries without rereading the payload", () => {
+		const session = sessionFixture();
+		const signedOut = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ signedIn: false }),
+		);
+		const restoreRequested = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreRequested",
+			session,
+		});
+
+		const failed = reduceSessionMachine(restoreRequested.state, {
+			type: "sessionRestoreFailed",
+			attempt: 1,
+		});
+
+		expect(failed.state.view).toEqual({
+			state: { status: "error", message: GENERIC_ERROR_MESSAGE },
+			session: null,
+		});
+		expect(failed.state.restoreFailed).toBe(true);
+		expect(failed.state.restorableSession).toBe(session);
+		expect(failed.effects).toEqual([]);
+
+		const retried = reduceSessionMachine(
+			failed.state,
+			reloadRequested({ signedIn: false }),
+		);
+
+		expect(retried.state.view).toBe(initialSessionMachineState.view);
+		expect(retried.state.pendingRestoreAttempt).toBe(1);
+		expect(retried.effects).toEqual([
+			{ type: "restoreSession", attempt: 1, session },
 		]);
 	});
 
@@ -171,6 +212,7 @@ describe("reduceSessionMachine", () => {
 			ready.state,
 			authStateChanged({ signedIn: false }),
 		);
+		expect(signedOut.state.signInRequired).toBe(true);
 		const result = reduceSessionMachine(signedOut.state, {
 			type: "sessionRestoreRequested",
 			session,
@@ -180,25 +222,104 @@ describe("reduceSessionMachine", () => {
 		expect(result.effects).toEqual([]);
 	});
 
+	it("does not restore while signing out or after sign-out succeeded", () => {
+		const session = sessionFixture();
+		const signingOut = reduceSessionMachine(activatedWith(session).state, {
+			type: "signOutRequested",
+		});
+		const blockedDuringSignOut = reduceSessionMachine(signingOut.state, {
+			type: "sessionRestoreRequested",
+			session,
+		});
+		const signedOut = reduceSessionMachine(signingOut.state, {
+			type: "signOutSucceeded",
+			signedIn: false,
+		});
+		const blockedAfterSignOut = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreRequested",
+			session,
+		});
+
+		expect(blockedDuringSignOut.state).toBe(signingOut.state);
+		expect(blockedDuringSignOut.effects).toEqual([]);
+		expect(blockedAfterSignOut.state).toBe(signedOut.state);
+		expect(blockedAfterSignOut.effects).toEqual([]);
+	});
+
+	it("does not clear the database under a restore-owned connection", () => {
+		const session = sessionFixture();
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const signedOut = reduceSessionMachine(
+			activating.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const restoreRequested = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreRequested",
+			session,
+		});
+
+		const staleActivation = reduceSessionMachine(restoreRequested.state, {
+			type: "activationSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(restoreRequested.state.pendingRestoreAttempt).toBe(2);
+		expect(staleActivation.state).toBe(restoreRequested.state);
+		expect(staleActivation.effects).toEqual([]);
+	});
+
+	it("cleans up when a stale restore connection lands after sign-out starts", () => {
+		const session = sessionFixture();
+		const signedOut = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ signedIn: false }),
+		);
+		const restoreRequested = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreRequested",
+			session,
+		});
+		const signingOut = reduceSessionMachine(restoreRequested.state, {
+			type: "signOutRequested",
+		});
+
+		const staleRestore = reduceSessionMachine(signingOut.state, {
+			type: "sessionRestoreSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(staleRestore.state).toBe(signingOut.state);
+		expect(staleRestore.effects).toEqual([{ type: "disconnectAndClear" }]);
+	});
+
+	it("keeps a restored signed-out session on normal reload", () => {
+		const restored = restoredWith(sessionFixture());
+
+		const result = reduceSessionMachine(
+			restored.state,
+			reloadRequested({ signedIn: false }),
+		);
+
+		expect(result.state).toBe(restored.state);
+		expect(result.effects).toEqual([]);
+	});
+
 	it("replaces a restored session with a later fresh session from a different User", () => {
 		const restoredSession = sessionFixture();
 		const freshSession = sessionFixture({
 			displayName: "Blake",
 			userId: "usr_blake",
 		});
-		const signedOut = reduceSessionMachine(
-			initialSessionMachineState,
-			authStateChanged({ signedIn: false }),
-		);
-		const restored = reduceSessionMachine(signedOut.state, {
-			type: "sessionRestoreSucceeded",
-			attempt: 1,
-			session: restoredSession,
-		});
+		const restored = restoredWith(restoredSession);
 
 		const activating = reduceSessionMachine(restored.state, authStateChanged());
 
 		expect(activating.state.view).toBe(initialSessionMachineState.view);
+		expect(activating.state.pendingActivationRestoredUserId).toBe("usr_avery");
 		expect(activating.effects).toEqual([
 			{ type: "activate", attempt: 2, allowCached: true },
 		]);
@@ -731,17 +852,9 @@ describe("reduceSessionMachine", () => {
 		expect(result.effects).toEqual([]);
 	});
 
-	it("keeps the database connected when a stale activation resolves after a restored session is ready", () => {
+	it("disconnects non-destructively when a stale activation resolves after a restored session is ready", () => {
 		const session = sessionFixture();
-		const signedOut = reduceSessionMachine(
-			initialSessionMachineState,
-			authStateChanged({ signedIn: false }),
-		);
-		const restored = reduceSessionMachine(signedOut.state, {
-			type: "sessionRestoreSucceeded",
-			attempt: 1,
-			session,
-		});
+		const restored = restoredWith(session);
 
 		const result = reduceSessionMachine(restored.state, {
 			type: "activationSucceeded",
@@ -750,7 +863,7 @@ describe("reduceSessionMachine", () => {
 		});
 
 		expect(result.state).toBe(restored.state);
-		expect(result.effects).toEqual([]);
+		expect(result.effects).toEqual([{ type: "disconnect" }]);
 	});
 
 	it("keeps the database connected while sign-out recovery owns the activation", () => {
@@ -819,6 +932,21 @@ function activatedWith(session: SessionBootstrap): {
 		attempt: 1,
 		session,
 	});
+}
+
+function restoredWith(session: SessionBootstrap): {
+	state: SessionMachineState;
+	effects: SessionMachineEffect[];
+} {
+	return run(
+		authStateChanged({ signedIn: false }),
+		{ type: "sessionRestoreRequested", session },
+		{
+			type: "sessionRestoreSucceeded",
+			attempt: 1,
+			session,
+		},
+	);
 }
 
 function authStateChanged(

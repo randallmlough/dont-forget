@@ -123,6 +123,76 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
 	});
 
+	it("surfaces restore connect failures and retries the retained payload", async () => {
+		const connectError = new Error("restore connect failed");
+		const session = appSessionFixture({ displayName: "Cached Avery" });
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase
+			.mockRejectedValueOnce(connectError)
+			.mockResolvedValueOnce(undefined);
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockResolvedValueOnce(session);
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture({ signedIn: false })}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<RetryState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session restore failed",
+			{ error: connectError },
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+
+		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
+		expect(readPersistedAuthenticatedAppSession).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).toHaveBeenCalledTimes(2);
+		expect(bootstrapService.getSession).not.toHaveBeenCalled();
+	});
+
+	it("logs persisted payload read failures without starting restore", async () => {
+		const readError = new Error("storage unavailable");
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockRejectedValueOnce(readError);
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		const connectDatabase = connectDatabaseFixture();
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture({ signedIn: false })}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(readPersistedAuthenticatedAppSession).toHaveBeenCalledTimes(1),
+		);
+		expect(screen.getByText("loading")).toBeTruthy();
+		expect(connectDatabase).not.toHaveBeenCalled();
+		expect(bootstrapService.getSession).not.toHaveBeenCalled();
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			"authenticated app session restore read failed",
+			{ error: readError },
+		);
+	});
+
 	it("keeps the signed-out loading behavior unchanged when no persisted session exists", async () => {
 		const analytics = createMockAnalytics();
 		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
@@ -157,9 +227,18 @@ describe("AuthenticatedAppSessionProvider", () => {
 			displayName: "Blake",
 			userId: "usr_blake",
 		});
+		const order: string[] = [];
 		const analytics = createMockAnalytics();
 		const bootstrapService = bootstrapServiceFixture(freshSession);
 		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockImplementation(async () => {
+			order.push("connect");
+		});
+		const replacementWipe = deferred<void>();
+		const disconnectAndClear = jest.fn(() => {
+			order.push("wipe");
+			return replacementWipe.promise;
+		});
 		const signedOutAuth = authFixture({ signedIn: false });
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
@@ -171,6 +250,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				analytics={analytics}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
@@ -183,14 +263,73 @@ describe("AuthenticatedAppSessionProvider", () => {
 				analytics={analytics}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
 		);
 
+		await waitFor(() => expect(disconnectAndClear).toHaveBeenCalledTimes(1));
+		await Promise.resolve();
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("Blake")).toBeNull();
+
+		await act(async () => {
+			replacementWipe.resolve(undefined);
+			await replacementWipe.promise;
+		});
+
 		await waitFor(() => expect(screen.getByText("Blake")).toBeTruthy());
 		expect(screen.queryByText("Cached Avery")).toBeNull();
 		expect(connectDatabase).toHaveBeenCalledTimes(2);
+		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+		expect(order).toEqual(["connect", "wipe", "connect"]);
+		expect(persistAuthenticatedAppSession).toHaveBeenLastCalledWith(
+			freshSession,
+		);
+	});
+
+	it("replaces a restored session with the same User without wiping local data", async () => {
+		const cachedSession = appSessionFixture({ displayName: "Cached Avery" });
+		const freshSession = appSessionFixture({ displayName: "Online Avery" });
+		const analytics = createMockAnalytics();
+		const bootstrapService = bootstrapServiceFixture(freshSession);
+		const connectDatabase = connectDatabaseFixture();
+		const disconnectAndClear = jest.fn(async () => undefined);
+		const signedOutAuth = authFixture({ signedIn: false });
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockResolvedValueOnce(cachedSession);
+
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={signedOutAuth}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...signedOutAuth, signedIn: true }}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				disconnectAndClear={disconnectAndClear}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(screen.getByText("Online Avery")).toBeTruthy());
+		expect(screen.queryByText("Cached Avery")).toBeNull();
+		expect(connectDatabase).toHaveBeenCalledTimes(2);
+		expect(disconnectAndClear).not.toHaveBeenCalled();
 		expect(persistAuthenticatedAppSession).toHaveBeenLastCalledWith(
 			freshSession,
 		);
@@ -249,6 +388,37 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await Promise.resolve();
 		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("clears the persisted restore payload when an online session loses auth mid-run", async () => {
+		const clearSessionHint = jest.fn(async () => undefined);
+		const auth = authFixture();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		const { rerender } = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: false }}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+		expect(clearSessionHint).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps the previous session while a replacement is loading", async () => {

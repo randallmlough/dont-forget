@@ -16,12 +16,6 @@ export async function persistAuthenticatedAppSession(
 	await AsyncStorage.setItem(SESSION_HINT_KEY, JSON.stringify(payload));
 }
 
-export async function markAuthenticatedAppSessionPresent(
-	payload: BootstrapResponse,
-): Promise<void> {
-	await persistAuthenticatedAppSession(payload);
-}
-
 export async function clearAuthenticatedAppSessionPresent(): Promise<void> {
 	await AsyncStorage.removeItem(SESSION_HINT_KEY);
 }
