@@ -30,7 +30,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** keep server-only service code under `src/server/`.
 - **Must** not create broad root barrels that mix unrelated domains or client/server surfaces.
 - **Must** keep `src/app/api/**/+api.ts` server imports dynamic inside request handlers until a better Expo API Route bundling solution is proven.
-- **Must** enforce the `src/client` / `src/server` import boundary with the repo ESLint rule.
+- **Must** enforce client-to-server imports with the repo ESLint rule: it runs over `src/client` and non-API `src/app` files and forbids `@/server/*`. Server-to-client imports are prohibited by standards and review convention.
 - **Must** keep server-only DB infrastructure (the server Postgres client, Drizzle directory/product schema, migrations, reset, the `/api/data` write applicator, test seeding) under `src/server/db/` and `src/server/sync/`.
 - **Must** keep SQL and DB-client access inside service implementations. Screens, components, hooks, and reusable UI must not execute SQL or import DB clients/stores directly.
 - **Must** inject logger and analytics dependencies into services and stores that need observability instead of forcing those modules to mock global singletons in tests or non-app processes.
@@ -39,7 +39,7 @@ See also: [`docs/how-things-work/app-structure.md`](../how-things-work/app-struc
 - **Must** generate IDs inside services for newly-created domain records. Service callers and normal tests must not inject or prescribe IDs.
 - **Must** let services own timestamp generation directly. Do not add clock/time-provider dependencies to service dependency objects; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - **Should** start with one service file per domain and split only when independent seams appear.
-- **Should** use the `ProductDatabase` seam (`src/client/lib/product-database.ts`) as the app-owned infrastructure boundary for the local PowerSync data store, exposing `ProductQuery<T>` and `writeTransaction()`. Do not name this `*-db-service`.
+- **Should** use the `ProductDatabase` seam (`src/client/lib/product-database.ts`) as the app-owned infrastructure boundary for the local PowerSync data store, exposing `getAll`, `getOptional`, `execute`, and `writeTransaction(...)`. `ProductQuery<T>` is the sibling read-query type that services construct and hooks consume. Do not name this `*-db-service`.
 - **Should** keep List and Item services separate; route-owned List loading should call them by explicit List ID after authenticated app session context exists.
 - **Avoid** coupling mutation success to remote propagation. Local writes resolve on local commit; PowerSync uploads them to `/api/data` continuously in the background, so there is no sync-timing policy for services to own.
 

@@ -63,7 +63,7 @@ Rules:
 
 ## Runtime Boundary
 
-Client and server code cannot freely import each other. The `no-client-server-imports` ESLint rule in `tooling/eslint-plugin/` enforces the `src/client` / `src/server` boundary.
+Client and server code cannot freely import each other. The `no-client-server-imports` ESLint rule in `tooling/eslint-plugin/` blocks client-to-server imports: it runs over `src/client` and non-API `src/app` files and forbids `@/server/*`. Server-to-client imports are prohibited by standards and review convention.
 
 Client code must not import:
 
@@ -79,8 +79,8 @@ Expo API Routes keep server imports lazy inside request handlers and delegate to
 
 ```ts
 export async function POST(request: Request): Promise<Response> {
-  const { POST } = await import("@/server/data/api");
-  return POST(request);
+  const { handleDataUpload } = await import("@/server/data/api");
+  return handleDataUpload(request);
 }
 ```
 
@@ -202,7 +202,7 @@ const items = usePowerSyncQuery(
 
 PowerSync watched queries re-run when their dependent local rows change. UI consumes them through `usePowerSyncQuery`, which wraps `@powersync/react`'s `useQuery` and returns `{ data, isLoading, isFetching, error }`. Sync status comes from `useSyncState()` and is read-only connection state, not a data-reload trigger.
 
-Current List is selection state only. Home uses `useHomeCurrentList(session)` to derive the selected `listId` from local selection state and watched List summaries. List switching changes the selected `listId`, not a Household-owned Current List service or data source. `CurrentList` receives loaded List view state and explicit callbacks such as `onAddItem` and `onSetItemChecked`.
+Current List is selection state only. Production Home renders `<CurrentList session={session} />`; `CurrentList` props are `{ session, deps? }` and it resolves the Current List itself with `useHomeCurrentList(session)`. List switching changes the selected `listId`, not a Household-owned Current List service or data source. `onAddItem` / `onSetItemChecked`-style callback props live on internal children such as `ListHeader`, `ItemRows`, and `AddItemForm`, not on `CurrentList`.
 
 There is one local PowerSync database rather than a per-Household resource set, so there is no cached-to-fresh resource swap or stale-resource lease to manage: switching the active Household re-points watched queries' `household_id` filters. Membership revocation is server-authoritative — PowerSync stops streaming and purges the rows for a Household the User is no longer an active Member of.
 
@@ -229,7 +229,7 @@ Use **Authenticated App Session** for the top-level signed-in app runtime. It id
 
 Preferred app-side names:
 
-- `getSessionBootstrap`, not `bootstrapWithClerk`
+- `createSessionBootstrapService().getSession`, not `bootstrapWithClerk`
 - `src/client/session/bootstrap.ts` for fresh online session loading
 - `src/client/session/provider.tsx` and `src/client/session/session-machine.ts` for signed-in runtime orchestration
 

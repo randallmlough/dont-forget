@@ -45,7 +45,7 @@ The current route that renders the Authenticated App Session's Current List whil
 _Avoid_: dashboard, landing page
 
 **Authenticated App Session**:
-The top-level signed-in app runtime for a User. It identifies the active Household, active Member, current Members, and session-scoped services backed by short-lived Household DB connection metadata. A cached Authenticated App Session may omit secrets and allow offline startup. It does not load the Current List, Lists, or Items; those load after the Authenticated App Session exists.
+The top-level signed-in app runtime for a User. It identifies the active Household, active Member, current Members, and the User's available Households. A cached Authenticated App Session may omit secrets and allow offline startup. It does not load the Current List, Lists, or Items; those load after the Authenticated App Session exists.
 _Avoid_: auth session, bootstrap payload, account session
 
 ## Relationships
@@ -56,8 +56,8 @@ _Avoid_: auth session, bootstrap payload, account session
 - A **List** contains zero or more **Items**
 - The active **Household** has one active **Member** and one **Current List** selection for the signed-in **User**
 - A **Household Join Code** belongs to one **Household** and may be used by many authenticated **Users** until it is regenerated or disabled
-- **Home** currently renders the active **Household**'s selected **Current List**, resolved from local selection state over a watched Lists query. Active **Household** resources are owned by the signed-in Authenticated App Session controller/provider boundary rather than **Home**.
-- An **Authenticated App Session** identifies one active **Household** and one active **Member**; List and Item data is loaded separately by explicit List ID through session-scoped services after the session is established.
+- **Home** currently renders the active **Household**'s selected **Current List**, resolved from local selection state over a watched Lists query. Active **Household** resources are owned by the signed-in Authenticated App Session provider boundary rather than **Home**.
+- An **Authenticated App Session** identifies one active **Household** and one active **Member**; List and Item data is loaded separately by explicit List ID through feature services after the session is established.
 
 ## Decisions in flight
 

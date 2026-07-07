@@ -54,7 +54,7 @@ The machine uses an attempt counter as its cancellation token. A stale activatio
 
 The provider owns Authenticated App Session loading and composes the signed-in lifecycle in one place: bootstrap, PowerSync connection, session hinting, and sign-out. Activation publishes directory identity without loading the Current List, Lists, or Items. Consumers never manage the PowerSync connection or delete local data directly.
 
-Home uses `useHomeCurrentList(session)` from `src/client/features/list/use-home-current-list.ts`. That hook composes `useProductServices` with PowerSync watched queries through `usePowerSyncQuery`, derives the selected Current List for the active Household, and exposes `addItem` / `setItemChecked` actions. `CurrentList` receives loaded List view state and explicit callbacks.
+Production Home renders `<CurrentList session={session} />`. `CurrentList` props are `{ session, deps? }`; it resolves the Current List itself with `useHomeCurrentList(session)` from `src/client/features/list/use-home-current-list.ts`. That hook composes `useProductServices` with PowerSync watched queries through `usePowerSyncQuery`, derives the selected Current List for the active Household, and exposes actions. `onAddItem` / `onSetItemChecked`-style callback props live on internal children such as `ListHeader`, `ItemRows`, and `AddItemForm`, not on `CurrentList`.
 
 After accept, join, or switch mutations update directory state, screens call the provider-owned `reloadSession()` action. Screens do not call bootstrap directly and do not manage the PowerSync connection or session resources.
 

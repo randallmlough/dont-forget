@@ -105,7 +105,7 @@ Keep the public types named for the domain:
 1. **Choose the owning domain folder.**
    - Use existing domains when the operation naturally belongs there.
    - Create a new folder only when the domain is genuinely new.
-   - Current expected domains include `auth`, `household`, `invitation`, `item`, `list`, `member`, and `user`.
+   - Current client feature folders are `auth`, `household`, `list`, and `settings`; current server domain folders are `bootstrap`, `data`, `households`, `invitations`, `sync`, and `users`. Item services live under the List feature, and Member behavior lives under the server households module.
 
 2. **Choose client or server placement.**
    - Client product services may depend on app-safe interfaces such as the `ProductDatabase` seam.
@@ -116,7 +116,7 @@ Keep the public types named for the domain:
    - Do not return raw SQL rows, Drizzle internals, or UI component props.
 
 4. **Define an explicit dependency type.**
-   - Client product reads/writes should use the narrow `ProductDatabase` seam (`ProductQuery<T>` / `writeTransaction()`).
+   - Client product reads/writes should use the narrow `ProductDatabase` seam (`getAll`, `getOptional`, `execute`, and `writeTransaction(...)`). `ProductQuery<T>` is the sibling read-query type that services construct and hooks consume.
    - Server services should receive `DirectoryDb` or a transaction-compatible type.
    - Add `logger?: Logger` only when the service logs.
    - Add a scoped analytics dependency only when the service owns a product outcome.

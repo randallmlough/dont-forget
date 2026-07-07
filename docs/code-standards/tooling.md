@@ -19,7 +19,7 @@
 - **Must** treat React hook dependency correctness, explicit TypeScript safety, and React Native accessibility diagnostics as verification failures.
 - **Must** keep `react-hooks/exhaustive-deps`, `@typescript-eslint/no-unused-vars`, `@typescript-eslint/no-non-null-assertion`, `@typescript-eslint/no-explicit-any`, `@typescript-eslint/consistent-type-assertions`, and enabled `react-native-a11y/*` rules at error severity unless a later standards decision changes that policy.
 - **Must** keep repo-specific ESLint rules under `tooling/eslint-plugin/` tested with `pnpm test:eslint-rules`.
-- **Must** keep `dont-forget/no-screen-use-effect` enabled so screen implementation files render explicit state/actions and move effects to route-owned hooks or containers.
+- **Must** keep `dont-forget/no-client-server-imports` and `dont-forget/no-raw-color-literals` enabled in the Expo ESLint flat config.
 - **Must** prefer adding ESLint enforcement for mechanical, low-false-positive standards when humans or AI agents repeatedly miss the documented rule.
 - **Should** let Biome own mechanical formatting and import organization instead of hand-formatting imports or debating whitespace in reviews.
 - **Should** provide a formatting command that applies Biome's safe formatter and import-organization fixes.

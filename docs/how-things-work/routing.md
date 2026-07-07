@@ -10,19 +10,60 @@ src/app/
   (app)/
     _layout.tsx
     index.tsx
+    settings.tsx
+    household/
+      settings.tsx
+      switch.tsx
   (auth)/
     _layout.tsx
     sign-in.tsx
     sign-up.tsx
+  households/
+    join.tsx
+  invitations/
+    accept.tsx
+  api/
+    bootstrap+api.ts
+    data+api.ts
+    households+api.ts
+    households/
+      [householdId]+api.ts
+      [householdId]/
+        invitations+api.ts
+        join-code+api.ts
+        join-code/
+          regenerate+api.ts
+        members+api.ts
+        members/
+          [membershipId]+api.ts
+          me/
+            leave+api.ts
+      join-code/
+        join+api.ts
+        preview+api.ts
+    invitations+api.ts
+    invitations/
+      [invitationId]+api.ts
+      accept+api.ts
+      preview+api.ts
+    users/
+      me+api.ts
+      me/
+        active-household+api.ts
 ```
 
-Current public routes:
+Current screen routes:
 
 | URL | Route File | Screen |
 | --- | --- | --- |
 | `/` | `src/app/(app)/index.tsx` | `src/client/features/list/home-screen.tsx` |
+| `/settings` | `src/app/(app)/settings.tsx` | `src/client/features/settings/settings-screen.tsx` |
+| `/household/settings` | `src/app/(app)/household/settings.tsx` | `src/client/features/household/household-settings-screen.tsx` |
+| `/household/switch` | `src/app/(app)/household/switch.tsx` | `src/client/features/household/household-switch-screen.tsx` |
 | `/sign-in` | `src/app/(auth)/sign-in.tsx` | `src/client/features/auth/sign-in-screen.tsx` |
 | `/sign-up` | `src/app/(auth)/sign-up.tsx` | `src/client/features/auth/sign-up-screen.tsx` |
+| `/households/join` | `src/app/households/join.tsx` | `HouseholdJoinScreen` from `src/client/features/household/public-household-entry-screen.tsx` |
+| `/invitations/accept` | `src/app/invitations/accept.tsx` | `InvitationAcceptScreen` from `src/client/features/household/public-household-entry-screen.tsx` |
 
 ## Root Layout
 

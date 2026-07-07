@@ -33,9 +33,9 @@ Co-locate stories next to the component or view they describe under `src/client/
 ## Initial Scope
 
 - `AuthScreen` stories show authentication layout states.
-- `Home` stories render the selected default List for the authenticated app session.
-- Home stories cover at least an empty List and a List with Items. Home stories may use local React state for lightweight Item interactions, such as checking an Item or appending fixture Items.
-- The first implementation replaces the Expo starter Home route with a thin product-shaped composition using the same Current List surface that production backs with provider-owned Household data.
+- `Home` stories render selected Current List and no-List states for the authenticated app session.
+- Home stories cover at least an empty List, a List with Items, and the no-List state. Home stories may use local React state for lightweight Item interactions, such as checking an Item or appending fixture Items.
+- The first implementation replaces the Expo starter Home route with a thin product-shaped composition using the same Current List surface that production backs with route-owned `useHomeCurrentList(session)` over feature services and watched PowerSync queries.
 
 ## Commands
 
