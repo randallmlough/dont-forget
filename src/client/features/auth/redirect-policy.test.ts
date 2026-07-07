@@ -12,8 +12,7 @@ describe("authRedirectTarget", () => {
 				params: { token: "tok_123" },
 				isSignedIn: false,
 				isAuthLoaded: true,
-				checkedCachedSession: true,
-				hasCachedSession: false,
+				cachedSessionStatus: "unavailable",
 			}),
 		).toBeNull();
 	});
@@ -25,8 +24,7 @@ describe("authRedirectTarget", () => {
 				params: { code: "ABCDEFGH" },
 				isSignedIn: false,
 				isAuthLoaded: true,
-				checkedCachedSession: true,
-				hasCachedSession: false,
+				cachedSessionStatus: "unavailable",
 			}),
 		).toBeNull();
 	});
@@ -38,8 +36,7 @@ describe("authRedirectTarget", () => {
 				params: { next: "/household/settings" },
 				isSignedIn: true,
 				isAuthLoaded: true,
-				checkedCachedSession: true,
-				hasCachedSession: false,
+				cachedSessionStatus: "unavailable",
 			}),
 		).toBe("/household/settings");
 	});
@@ -51,8 +48,7 @@ describe("authRedirectTarget", () => {
 				params: { next: "/invitations/accept", token: "tok_123" },
 				isSignedIn: true,
 				isAuthLoaded: true,
-				checkedCachedSession: true,
-				hasCachedSession: false,
+				cachedSessionStatus: "unavailable",
 			}),
 		).toBe("/invitations/accept?token=tok_123");
 	});
@@ -64,8 +60,7 @@ describe("authRedirectTarget", () => {
 				params: { next: "/households/join", code: "ABCDEFGH" },
 				isSignedIn: true,
 				isAuthLoaded: true,
-				checkedCachedSession: true,
-				hasCachedSession: false,
+				cachedSessionStatus: "unavailable",
 			}),
 		).toBe("/households/join?code=ABCDEFGH");
 	});
@@ -77,8 +72,7 @@ describe("authRedirectTarget", () => {
 				params: { next: "/invitations/accept", token: "tok_123" },
 				isSignedIn: false,
 				isAuthLoaded: false,
-				checkedCachedSession: true,
-				hasCachedSession: true,
+				cachedSessionStatus: "available",
 			}),
 		).toBe("/invitations/accept?token=tok_123");
 
@@ -88,8 +82,7 @@ describe("authRedirectTarget", () => {
 				params: { next: "/households/join", code: "ABCDEFGH" },
 				isSignedIn: false,
 				isAuthLoaded: false,
-				checkedCachedSession: true,
-				hasCachedSession: true,
+				cachedSessionStatus: "available",
 			}),
 		).toBe("/households/join?code=ABCDEFGH");
 	});
@@ -101,10 +94,31 @@ describe("authRedirectTarget", () => {
 				params: { next: "/household/settings" },
 				isSignedIn: false,
 				isAuthLoaded: false,
-				checkedCachedSession: true,
-				hasCachedSession: true,
+				cachedSessionStatus: "available",
 			}),
 		).toBe("/");
+	});
+
+	it("keeps sign-in reachable after cached restore failed", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				isSignedIn: false,
+				isAuthLoaded: true,
+				cachedSessionStatus: "restoreFailed",
+			}),
+		).toBeNull();
+	});
+
+	it("keeps sign-in reachable when sign-in is required", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/sign-in",
+				isSignedIn: false,
+				isAuthLoaded: true,
+				cachedSessionStatus: "signInRequired",
+			}),
+		).toBeNull();
 	});
 
 	it("rejects external and malformed next targets", () => {
@@ -137,8 +151,7 @@ describe("authRedirectTarget", () => {
 				params: { next: "/invitations/accept?token=tok_123" },
 				isSignedIn: true,
 				isAuthLoaded: true,
-				checkedCachedSession: true,
-				hasCachedSession: false,
+				cachedSessionStatus: "unavailable",
 			}),
 		).toBe("/invitations/accept");
 	});

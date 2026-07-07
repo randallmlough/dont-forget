@@ -3,13 +3,19 @@ import { isSensitiveKey } from "@/shared/sensitive-keys";
 
 export type AuthRedirectParams = Record<string, string | string[] | undefined>;
 
+export type CachedSessionRedirectStatus =
+	| "checking"
+	| "available"
+	| "unavailable"
+	| "restoreFailed"
+	| "signInRequired";
+
 export type AuthRedirectInput = {
 	pathname: string;
 	params?: AuthRedirectParams;
 	isSignedIn: boolean;
 	isAuthLoaded: boolean;
-	checkedCachedSession: boolean;
-	hasCachedSession: boolean;
+	cachedSessionStatus: CachedSessionRedirectStatus;
 };
 
 export const AUTH_PATHS = new Set(["/sign-in", "/sign-up"]);
@@ -23,8 +29,7 @@ export function authRedirectTarget({
 	params = {},
 	isSignedIn,
 	isAuthLoaded,
-	checkedCachedSession,
-	hasCachedSession,
+	cachedSessionStatus,
 }: AuthRedirectInput): Href | null {
 	const onAuthPath = AUTH_PATHS.has(pathname);
 
@@ -32,9 +37,9 @@ export function authRedirectTarget({
 		return onAuthPath ? signedInAuthPathTarget(params) : null;
 	}
 
-	if (!checkedCachedSession) return null;
+	if (cachedSessionStatus === "checking") return null;
 
-	if (hasCachedSession) {
+	if (cachedSessionStatus === "available") {
 		return onAuthPath ? cachedSessionAuthPathTarget(params) : null;
 	}
 

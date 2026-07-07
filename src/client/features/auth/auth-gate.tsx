@@ -3,8 +3,13 @@ import { Stack, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useReducer } from "react";
 import { useAnalyticsIdentity } from "@/client/lib/analytics";
+import { useAuthenticatedAppSessionMeta } from "@/client/session";
 import { hasAuthenticatedAppSessionHint } from "@/client/session/session-hint";
-import { type AuthRedirectParams, authRedirectTarget } from "./redirect-policy";
+import {
+	type AuthRedirectParams,
+	authRedirectTarget,
+	type CachedSessionRedirectStatus,
+} from "./redirect-policy";
 
 type CachedSessionStatus = "checking" | "available" | "unavailable";
 
@@ -17,20 +22,20 @@ export function AuthGate({
 }) {
 	const { isSignedIn, isLoaded } = useAuth();
 	const { replace } = useRouter();
+	const sessionMeta = useAuthenticatedAppSessionMeta();
 	const [cachedSessionStatus, dispatchCachedSessionStatus] = useReducer(
 		cachedSessionStatusReducer,
 		"checking",
 	);
-	const effectiveCachedSessionStatus = isLoaded
-		? "unavailable"
-		: cachedSessionStatus;
-	const hasCachedSession = effectiveCachedSessionStatus === "available";
-	const checkedCachedSession = effectiveCachedSessionStatus !== "checking";
+	const cachedSessionRedirectStatus = cachedSessionRedirectStatusFor({
+		cachedSessionStatus,
+		restoreStatus: sessionMeta.restore.status,
+	});
 
 	useAnalyticsIdentity();
 
 	useEffect(() => {
-		if (isLoaded) return;
+		if (isSignedIn) return;
 		let cancelled = false;
 
 		void hasAuthenticatedAppSessionHint()
@@ -48,7 +53,7 @@ export function AuthGate({
 		return () => {
 			cancelled = true;
 		};
-	}, [isLoaded]);
+	}, [isSignedIn]);
 
 	useEffect(() => {
 		const target = authRedirectTarget({
@@ -56,13 +61,11 @@ export function AuthGate({
 			params,
 			isSignedIn: Boolean(isSignedIn),
 			isAuthLoaded: Boolean(isLoaded),
-			checkedCachedSession,
-			hasCachedSession,
+			cachedSessionStatus: cachedSessionRedirectStatus,
 		});
 		if (target) replace(target);
 	}, [
-		checkedCachedSession,
-		hasCachedSession,
+		cachedSessionRedirectStatus,
 		isLoaded,
 		isSignedIn,
 		params,
@@ -73,13 +76,19 @@ export function AuthGate({
 	// Warm up the OAuth browser once while truly signed-out so the first SSO tap is snappy.
 	// Hoisted out of the auth screens so swapping sign-in ↔ sign-up doesn't thrash.
 	useEffect(() => {
-		if (!isLoaded || isSignedIn || !checkedCachedSession || hasCachedSession)
+		if (
+			!isLoaded ||
+			isSignedIn ||
+			cachedSessionRedirectStatus === "checking" ||
+			cachedSessionRedirectStatus === "available"
+		) {
 			return;
+		}
 		void WebBrowser.warmUpAsync();
 		return () => {
 			void WebBrowser.coolDownAsync();
 		};
-	}, [checkedCachedSession, hasCachedSession, isLoaded, isSignedIn]);
+	}, [cachedSessionRedirectStatus, isLoaded, isSignedIn]);
 
 	return (
 		<Stack screenOptions={{ headerShown: false }}>
@@ -96,4 +105,19 @@ function cachedSessionStatusReducer(
 	nextStatus: CachedSessionStatus,
 ): CachedSessionStatus {
 	return nextStatus;
+}
+
+function cachedSessionRedirectStatusFor({
+	cachedSessionStatus,
+	restoreStatus,
+}: {
+	cachedSessionStatus: CachedSessionStatus;
+	restoreStatus: "idle" | "restoring" | "failed" | "signInRequired";
+}): CachedSessionRedirectStatus {
+	if (restoreStatus === "signInRequired") return "signInRequired";
+	if (restoreStatus === "failed") return "restoreFailed";
+	if (restoreStatus === "restoring") return "available";
+	if (cachedSessionStatus === "checking") return "checking";
+	if (cachedSessionStatus === "available") return "available";
+	return "unavailable";
 }
