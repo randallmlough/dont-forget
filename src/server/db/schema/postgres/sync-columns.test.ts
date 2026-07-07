@@ -1,5 +1,7 @@
+import { pgTable, text } from "drizzle-orm/pg-core";
 import {
 	type DataTable,
+	deriveWritableColumns,
 	HOUSEHOLD_RESOLUTION,
 	isDataTable,
 	WRITABLE_COLUMNS,
@@ -74,5 +76,54 @@ describe("sync-columns isDataTable", () => {
 		expect(isDataTable("item_checks")).toBe(true);
 		expect(isDataTable("users")).toBe(false);
 		expect(isDataTable("secrets")).toBe(false);
+	});
+});
+
+// A fixture table with one deliberately server-shaped column, so the checker's
+// failure modes are proven against a schema the live tables don't have.
+const fixture = pgTable("fixture", {
+	id: text("id").primaryKey(),
+	name: text("name"),
+	serverStamp: text("server_stamp"),
+});
+
+describe("sync-columns deriveWritableColumns (declaration check)", () => {
+	it("returns exactly the client-writable names, excluding server-owned columns", () => {
+		expect(
+			deriveWritableColumns(
+				"fixture",
+				fixture,
+				["id", "name"],
+				["server_stamp"],
+			),
+		).toEqual(new Set(["id", "name"]));
+	});
+
+	it("throws naming an unclassified schema column", () => {
+		expect(() =>
+			deriveWritableColumns("fixture", fixture, ["id", "name"], []),
+		).toThrow(/unclassified schema column\(s\): server_stamp/);
+	});
+
+	it("throws naming a declared column missing from the schema", () => {
+		expect(() =>
+			deriveWritableColumns(
+				"fixture",
+				fixture,
+				["id", "name", "ghost"],
+				["server_stamp"],
+			),
+		).toThrow(/missing from the schema: ghost/);
+	});
+
+	it("throws when a column is classified both writable and server-owned", () => {
+		expect(() =>
+			deriveWritableColumns(
+				"fixture",
+				fixture,
+				["id", "name", "server_stamp"],
+				["server_stamp"],
+			),
+		).toThrow(/both CLIENT_WRITABLE and SERVER_OWNED: server_stamp/);
 	});
 });
