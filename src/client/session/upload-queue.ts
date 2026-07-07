@@ -6,6 +6,7 @@ export type UploadQueueStats = {
 
 export type UploadQueueState = {
 	connected: boolean;
+	connecting: boolean;
 	uploadError: boolean;
 };
 
@@ -21,19 +22,20 @@ export const uploadQueueMonitor: UploadQueueMonitor = {
 	subscribe: subscribeUploadQueueChanges,
 };
 
-export async function getUploadQueueStats(): Promise<UploadQueueStats> {
+async function getUploadQueueStats(): Promise<UploadQueueStats> {
 	const stats = await db.getUploadQueueStats(false);
 	return { count: stats.count };
 }
 
-export function getUploadQueueState(): UploadQueueState {
+function getUploadQueueState(): UploadQueueState {
 	const status = db.currentStatus;
 	return {
 		connected: status.connected,
+		connecting: status.connecting,
 		uploadError: Boolean(status.dataFlowStatus.uploadError),
 	};
 }
 
-export function subscribeUploadQueueChanges(onChange: () => void): () => void {
+function subscribeUploadQueueChanges(onChange: () => void): () => void {
 	return db.registerListener({ statusChanged: onChange });
 }

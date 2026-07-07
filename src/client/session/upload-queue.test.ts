@@ -1,14 +1,11 @@
 import { db } from "@/client/session/powersync";
-import {
-	getUploadQueueState,
-	getUploadQueueStats,
-	subscribeUploadQueueChanges,
-} from "./upload-queue";
+import { uploadQueueMonitor } from "./upload-queue";
 
 type StatusListener = () => void;
 
 type TestSyncStatus = {
 	connected: boolean;
+	connecting: boolean;
 	dataFlowStatus: {
 		uploadError: Error | null;
 	};
@@ -38,7 +35,9 @@ describe("upload queue monitor", () => {
 	});
 
 	it("maps PowerSync upload queue stats to the app count shape", async () => {
-		await expect(getUploadQueueStats()).resolves.toEqual({ count: 3 });
+		await expect(uploadQueueMonitor.getUploadQueueStats()).resolves.toEqual({
+			count: 3,
+		});
 
 		expect(testDb.getUploadQueueStats).toHaveBeenCalledWith(false);
 	});
@@ -49,9 +48,23 @@ describe("upload queue monitor", () => {
 			dataFlowStatus: { uploadError: new Error("upload failed") },
 		});
 
-		expect(getUploadQueueState()).toEqual({
+		expect(uploadQueueMonitor.getUploadQueueState()).toEqual({
 			connected: true,
+			connecting: false,
 			uploadError: true,
+		});
+	});
+
+	it("maps PowerSync connecting status to the upload queue state", () => {
+		testDb.currentStatus = statusFixture({
+			connected: false,
+			connecting: true,
+		});
+
+		expect(uploadQueueMonitor.getUploadQueueState()).toEqual({
+			connected: false,
+			connecting: true,
+			uploadError: false,
 		});
 	});
 
@@ -60,7 +73,7 @@ describe("upload queue monitor", () => {
 		const unsubscribe = jest.fn();
 		testDb.registerListener.mockReturnValue(unsubscribe);
 
-		expect(subscribeUploadQueueChanges(onChange)).toBe(unsubscribe);
+		expect(uploadQueueMonitor.subscribe(onChange)).toBe(unsubscribe);
 		expect(testDb.registerListener).toHaveBeenCalledWith({
 			statusChanged: onChange,
 		});
@@ -72,6 +85,7 @@ function statusFixture(
 ): TestSyncStatus {
 	return {
 		connected: false,
+		connecting: false,
 		dataFlowStatus: {
 			uploadError: null,
 		},

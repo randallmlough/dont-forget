@@ -698,7 +698,6 @@ function confirmDiscardUnsyncedChanges(): Promise<boolean> {
 					onPress: () => resolve(true),
 				},
 			],
-			{ cancelable: true, onDismiss: () => resolve(false) },
 		);
 	});
 }

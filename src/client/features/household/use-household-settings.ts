@@ -539,10 +539,6 @@ type UploadQueueDrainResult = "drained" | "blocked";
 async function drainUploadQueueBeforeLeave(
 	uploadQueue: UploadQueueMonitor,
 ): Promise<UploadQueueDrainResult> {
-	const stats = await uploadQueue.getUploadQueueStats();
-	if (stats.count === 0) return "drained";
-	const state = uploadQueue.getUploadQueueState();
-	if (!state.connected || state.uploadError) return "blocked";
 	return waitForUploadQueueDrain(uploadQueue, UPLOAD_QUEUE_DRAIN_TIMEOUT_MS);
 }
 
@@ -567,26 +563,31 @@ function waitForUploadQueueDrain(
 			if (settled) return;
 			try {
 				const state = uploadQueue.getUploadQueueState();
-				if (!state.connected || state.uploadError) {
+				if (!state.connected && !state.connecting) {
 					settle("blocked");
 					return;
 				}
 				const stats = await uploadQueue.getUploadQueueStats();
+				if (settled) return;
 				if (stats.count === 0) settle("drained");
 			} catch {
 				settle("blocked");
 			}
 		}
 
-		const subscribed = uploadQueue.subscribe(() => {
+		try {
+			const subscribed = uploadQueue.subscribe(() => {
+				void checkQueue();
+			});
+			if (settled) {
+				subscribed();
+			} else {
+				unsubscribe = subscribed;
+			}
 			void checkQueue();
-		});
-		if (settled) {
-			subscribed();
-		} else {
-			unsubscribe = subscribed;
+		} catch {
+			settle("blocked");
 		}
-		void checkQueue();
 	});
 }
 

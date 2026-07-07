@@ -9,6 +9,7 @@ import type { AuthenticatedAppSession } from "@/client/session";
 import type {
 	UploadQueueMonitor,
 	UploadQueueState,
+	UploadQueueStats,
 } from "@/client/session/upload-queue";
 import { deferred } from "@/test/async";
 import { useHouseholdSettings } from "./use-household-settings";
@@ -34,7 +35,7 @@ describe("useHouseholdSettings leaveHousehold", () => {
 	});
 
 	it("leaves immediately when the upload queue is already empty", async () => {
-		const { result, client, reloadSession } =
+		const { result, client, reloadSession, uploadQueue } =
 			await renderUseHouseholdSettings();
 		const confirmDiscardUnsyncedChanges = jest.fn(async () => true);
 
@@ -47,6 +48,7 @@ describe("useHouseholdSettings leaveHousehold", () => {
 		expect(client.leaveHousehold).toHaveBeenCalledWith("hh_1");
 		expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" });
 		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
 	});
 
 	it("waits for a pending upload queue to drain before leaving", async () => {
@@ -79,13 +81,78 @@ describe("useHouseholdSettings leaveHousehold", () => {
 		expect(uploadQueue.listenerCount()).toBe(0);
 	});
 
-	it("gives up within the timeout and leaves only after leave-anyway confirmation", async () => {
+	it("shows the confirm at the timeout when the initial queue stats read never resolves", async () => {
+		const uploadQueue = uploadQueueFixture({ count: 1, connected: true });
+		const stats = deferred<UploadQueueStats>();
+		uploadQueue.getUploadQueueStats.mockReturnValue(stats.promise);
+		const { result, client, reloadSession } = await renderUseHouseholdSettings({
+			uploadQueue,
+		});
+		const confirmDiscardUnsyncedChanges = jest.fn(async () => false);
+		jest.useFakeTimers();
+
+		let leavePromise = Promise.resolve();
+		await act(async () => {
+			leavePromise = result.current.actions.leaveHousehold({
+				confirmDiscardUnsyncedChanges,
+			});
+			await Promise.resolve();
+		});
+
+		expect(uploadQueue.subscribe).toHaveBeenCalledTimes(1);
+		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+
+		await act(async () => {
+			jest.advanceTimersByTime(9999);
+			await Promise.resolve();
+		});
+
+		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+
+		await act(async () => {
+			jest.advanceTimersByTime(1);
+			await leavePromise;
+		});
+
+		expect(confirmDiscardUnsyncedChanges).toHaveBeenCalledTimes(1);
+		expect(client.leaveHousehold).not.toHaveBeenCalled();
+		expect(reloadSession).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
+	});
+
+	it("shows the confirm when the initial queue stats read rejects", async () => {
+		const uploadQueue = uploadQueueFixture({ count: 1, connected: true });
+		uploadQueue.getUploadQueueStats.mockRejectedValueOnce(
+			new Error("stats read failed"),
+		);
+		const { result, client, reloadSession } = await renderUseHouseholdSettings({
+			uploadQueue,
+		});
+		const confirmDiscardUnsyncedChanges = jest.fn(async () => false);
+
+		await act(async () => {
+			await result.current.actions.leaveHousehold({
+				confirmDiscardUnsyncedChanges,
+			});
+		});
+
+		expect(confirmDiscardUnsyncedChanges).toHaveBeenCalledTimes(1);
+		expect(client.leaveHousehold).not.toHaveBeenCalled();
+		expect(reloadSession).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
+		expect(result.current.state).toMatchObject({
+			status: "ready",
+			notice: null,
+			operation: { status: "idle" },
+		});
+	});
+
+	it("keeps the Membership intact when the timeout confirm is canceled", async () => {
 		const uploadQueue = uploadQueueFixture({ count: 1, connected: true });
 		const { result, client, reloadSession } = await renderUseHouseholdSettings({
 			uploadQueue,
 		});
-		const confirmation = deferred<boolean>();
-		const confirmDiscardUnsyncedChanges = jest.fn(() => confirmation.promise);
+		const confirmDiscardUnsyncedChanges = jest.fn(async () => false);
 		jest.useFakeTimers();
 
 		let leavePromise = Promise.resolve();
@@ -107,13 +174,16 @@ describe("useHouseholdSettings leaveHousehold", () => {
 		expect(client.leaveHousehold).not.toHaveBeenCalled();
 
 		await act(async () => {
-			confirmation.resolve(true);
 			await leavePromise;
 		});
 
-		expect(client.leaveHousehold).toHaveBeenCalledWith("hh_1");
-		expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" });
+		expect(client.leaveHousehold).not.toHaveBeenCalled();
+		expect(reloadSession).not.toHaveBeenCalled();
 		expect(uploadQueue.listenerCount()).toBe(0);
+		expect(result.current.state).toMatchObject({
+			status: "ready",
+			operation: { status: "idle" },
+		});
 	});
 
 	it("keeps the Membership intact when offline and leave-anyway is canceled", async () => {
@@ -132,11 +202,151 @@ describe("useHouseholdSettings leaveHousehold", () => {
 		expect(confirmDiscardUnsyncedChanges).toHaveBeenCalledTimes(1);
 		expect(client.leaveHousehold).not.toHaveBeenCalled();
 		expect(reloadSession).not.toHaveBeenCalled();
-		expect(uploadQueue.subscribe).not.toHaveBeenCalled();
+		expect(uploadQueue.subscribe).toHaveBeenCalledTimes(1);
+		expect(uploadQueue.getUploadQueueStats).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
 		expect(result.current.state).toMatchObject({
 			status: "ready",
 			operation: { status: "idle" },
 		});
+	});
+
+	it("keeps the Membership intact when the queue goes offline mid-drain and leave-anyway is canceled", async () => {
+		const uploadQueue = uploadQueueFixture({ count: 1, connected: true });
+		const { result, client, reloadSession } = await renderUseHouseholdSettings({
+			uploadQueue,
+		});
+		const confirmDiscardUnsyncedChanges = jest.fn(async () => false);
+
+		let leavePromise = Promise.resolve();
+		await act(async () => {
+			leavePromise = result.current.actions.leaveHousehold({
+				confirmDiscardUnsyncedChanges,
+			});
+			await Promise.resolve();
+		});
+		await waitFor(() => expect(uploadQueue.subscribe).toHaveBeenCalledTimes(1));
+
+		await act(async () => {
+			uploadQueue.setConnected(false);
+			uploadQueue.emitStatusChanged();
+			await leavePromise;
+		});
+
+		expect(confirmDiscardUnsyncedChanges).toHaveBeenCalledTimes(1);
+		expect(client.leaveHousehold).not.toHaveBeenCalled();
+		expect(reloadSession).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
+		expect(result.current.state).toMatchObject({
+			status: "ready",
+			operation: { status: "idle" },
+		});
+	});
+
+	it("leaves without confirm when a stale upload error is present before the queue drains", async () => {
+		const uploadQueue = uploadQueueFixture({
+			count: 1,
+			connected: true,
+			uploadError: true,
+		});
+		const { result, client, reloadSession } = await renderUseHouseholdSettings({
+			uploadQueue,
+		});
+		const confirmDiscardUnsyncedChanges = jest.fn(async () => true);
+
+		let leavePromise = Promise.resolve();
+		await act(async () => {
+			leavePromise = result.current.actions.leaveHousehold({
+				confirmDiscardUnsyncedChanges,
+			});
+			await Promise.resolve();
+		});
+		await waitFor(() => expect(uploadQueue.subscribe).toHaveBeenCalledTimes(1));
+
+		await act(async () => {
+			uploadQueue.setCount(0);
+			uploadQueue.emitStatusChanged();
+			await leavePromise;
+		});
+
+		expect(client.leaveHousehold).toHaveBeenCalledWith("hh_1");
+		expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" });
+		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
+	});
+
+	it("leaves without confirm when a stale upload error appears mid-drain and the queue drains", async () => {
+		const uploadQueue = uploadQueueFixture({ count: 1, connected: true });
+		const { result, client, reloadSession } = await renderUseHouseholdSettings({
+			uploadQueue,
+		});
+		const confirmDiscardUnsyncedChanges = jest.fn(async () => true);
+
+		let leavePromise = Promise.resolve();
+		await act(async () => {
+			leavePromise = result.current.actions.leaveHousehold({
+				confirmDiscardUnsyncedChanges,
+			});
+			await Promise.resolve();
+		});
+		await waitFor(() => expect(uploadQueue.subscribe).toHaveBeenCalledTimes(1));
+
+		await act(async () => {
+			uploadQueue.setUploadError(true);
+			uploadQueue.emitStatusChanged();
+			await Promise.resolve();
+		});
+
+		expect(client.leaveHousehold).not.toHaveBeenCalled();
+		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+
+		await act(async () => {
+			uploadQueue.setCount(0);
+			uploadQueue.emitStatusChanged();
+			await leavePromise;
+		});
+
+		expect(client.leaveHousehold).toHaveBeenCalledWith("hh_1");
+		expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" });
+		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
+	});
+
+	it("waits while the upload queue is connecting and leaves after it connects and drains", async () => {
+		const uploadQueue = uploadQueueFixture({
+			count: 1,
+			connected: false,
+			connecting: true,
+		});
+		const { result, client, reloadSession } = await renderUseHouseholdSettings({
+			uploadQueue,
+		});
+		const confirmDiscardUnsyncedChanges = jest.fn(async () => true);
+
+		let leavePromise = Promise.resolve();
+		await act(async () => {
+			leavePromise = result.current.actions.leaveHousehold({
+				confirmDiscardUnsyncedChanges,
+			});
+			await Promise.resolve();
+		});
+		await waitFor(() => expect(uploadQueue.subscribe).toHaveBeenCalledTimes(1));
+
+		expect(client.leaveHousehold).not.toHaveBeenCalled();
+		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+
+		await act(async () => {
+			uploadQueue.setConnected(true);
+			uploadQueue.setConnecting(false);
+			uploadQueue.setCount(0);
+			uploadQueue.emitStatusChanged();
+			await leavePromise;
+		});
+
+		expect(client.leaveHousehold).toHaveBeenCalledWith("hh_1");
+		expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" });
+		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
 	});
 });
 
@@ -169,20 +379,23 @@ type TestUploadQueueMonitor = jest.Mocked<UploadQueueMonitor> & {
 	listenerCount: () => number;
 	setCount: (count: number) => void;
 	setConnected: (connected: boolean) => void;
+	setConnecting: (connecting: boolean) => void;
 	setUploadError: (uploadError: boolean) => void;
 };
 
 function uploadQueueFixture({
 	count: initialCount = 0,
 	connected = true,
+	connecting = false,
 	uploadError = false,
 }: {
 	count?: number;
 	connected?: boolean;
+	connecting?: boolean;
 	uploadError?: boolean;
 } = {}): TestUploadQueueMonitor {
 	let count = initialCount;
-	let state: UploadQueueState = { connected, uploadError };
+	let state: UploadQueueState = { connected, connecting, uploadError };
 	const listeners = new Set<() => void>();
 
 	return {
@@ -203,6 +416,9 @@ function uploadQueueFixture({
 		},
 		setConnected(nextConnected) {
 			state = { ...state, connected: nextConnected };
+		},
+		setConnecting(nextConnecting) {
+			state = { ...state, connecting: nextConnecting };
 		},
 		setUploadError(nextUploadError) {
 			state = { ...state, uploadError: nextUploadError };
