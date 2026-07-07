@@ -18,6 +18,7 @@ type ObservedAuth = {
 
 export type SessionMachineState = {
 	view: SessionView;
+	readySessionSource: "online" | "restored" | null;
 	lastKnownUserId: string | null;
 	attempt: number;
 	// The attempt whose `activate` effect has been issued but not yet resolved
@@ -26,6 +27,7 @@ export type SessionMachineState = {
 	pendingActivationAttempt: number | null;
 	signingOut: boolean;
 	suppressActivationUntilSignedOut: boolean;
+	restoreSuppressedUntilSignedIn: boolean;
 	queuedReloadMode: "normal" | "freshOnly" | null;
 	lastObservedAuth: ObservedAuth | null;
 };
@@ -42,12 +44,25 @@ export type SessionMachineEvent =
 	| { type: "signOutSucceeded"; signedIn: boolean }
 	| { type: "signOutFailed"; authReady: boolean; signedIn: boolean }
 	| { type: "activationSucceeded"; attempt: number; session: SessionBootstrap }
-	| { type: "activationFailed"; attempt: number; allowCached: boolean };
+	| { type: "activationFailed"; attempt: number; allowCached: boolean }
+	| { type: "sessionRestoreRequested"; session: SessionBootstrap }
+	| {
+			type: "sessionRestoreSucceeded";
+			attempt: number;
+			session: SessionBootstrap;
+	  }
+	| { type: "sessionRestoreFailed"; attempt: number };
 
 export type SessionMachineEffect =
 	| { type: "activate"; attempt: number; allowCached: boolean }
-	| { type: "markSessionHint" }
-	| { type: "disconnectAndClear" };
+	| { type: "markSessionHint"; session: SessionBootstrap }
+	| { type: "restoreSession"; attempt: number; session: SessionBootstrap }
+	| { type: "disconnectAndClear" }
+	| {
+			type: "trackSessionLoaded";
+			source: "cached";
+			session: SessionBootstrap;
+	  };
 
 export type SessionMachineResult = {
 	state: SessionMachineState;
@@ -65,11 +80,13 @@ const LOADING_VIEW: SessionView = {
 
 export const initialSessionMachineState: SessionMachineState = {
 	view: LOADING_VIEW,
+	readySessionSource: null,
 	lastKnownUserId: null,
 	attempt: 0,
 	pendingActivationAttempt: null,
 	signingOut: false,
 	suppressActivationUntilSignedOut: false,
+	restoreSuppressedUntilSignedIn: false,
 	queuedReloadMode: null,
 	lastObservedAuth: null,
 };
@@ -91,6 +108,7 @@ export function reduceSessionMachine(
 					signingOut: true,
 					// This invalidates every in-flight activation before cleanup starts.
 					attempt: state.attempt + 1,
+					readySessionSource: null,
 					queuedReloadMode: null,
 				},
 				effects: [],
@@ -101,10 +119,12 @@ export function reduceSessionMachine(
 					...state,
 					signingOut: false,
 					view: LOADING_VIEW,
+					readySessionSource: null,
 					lastKnownUserId: null,
 					queuedReloadMode: null,
 					// Clerk may still report signed-in until its auth flip lands.
 					suppressActivationUntilSignedOut: event.signedIn,
+					restoreSuppressedUntilSignedIn: true,
 				},
 				effects: [],
 			};
@@ -112,11 +132,17 @@ export function reduceSessionMachine(
 			const base: SessionMachineState = {
 				...state,
 				view: LOADING_VIEW,
+				readySessionSource: null,
 				queuedReloadMode: null,
 			};
 			if (!event.authReady || !event.signedIn) {
 				return {
-					state: { ...base, signingOut: false, lastKnownUserId: null },
+					state: {
+						...base,
+						signingOut: false,
+						lastKnownUserId: null,
+						restoreSuppressedUntilSignedIn: true,
+					},
 					effects: [],
 				};
 			}
@@ -136,9 +162,11 @@ export function reduceSessionMachine(
 						state: { status: "ready", refreshing: false },
 						session: event.session,
 					},
+					readySessionSource: "online",
 					lastKnownUserId: event.session.user.id,
+					restoreSuppressedUntilSignedIn: false,
 				},
-				effects: [{ type: "markSessionHint" }],
+				effects: [{ type: "markSessionHint", session: event.session }],
 			};
 		}
 		case "activationFailed": {
@@ -169,10 +197,51 @@ export function reduceSessionMachine(
 						state: { status: "error", message: GENERIC_ERROR_MESSAGE },
 						session: null,
 					},
+					readySessionSource: null,
 				},
 				effects: [],
 			};
 		}
+		case "sessionRestoreRequested":
+			if (!sessionCanBeRestored(state)) return noChange(state);
+			return {
+				state,
+				effects: [
+					{
+						type: "restoreSession",
+						attempt: state.attempt,
+						session: event.session,
+					},
+				],
+			};
+		case "sessionRestoreSucceeded": {
+			if (event.attempt !== state.attempt || !sessionCanBeRestored(state)) {
+				return reduceStaleSessionConnection(state);
+			}
+			return {
+				state: {
+					...state,
+					pendingActivationAttempt: null,
+					signingOut: false,
+					view: {
+						state: { status: "ready", refreshing: false },
+						session: event.session,
+					},
+					readySessionSource: "restored",
+					lastKnownUserId: event.session.user.id,
+				},
+				effects: [
+					{
+						type: "trackSessionLoaded",
+						source: "cached",
+						session: event.session,
+					},
+				],
+			};
+		}
+		case "sessionRestoreFailed":
+			if (event.attempt !== state.attempt) return noChange(state);
+			return noChange(state);
 	}
 }
 
@@ -210,8 +279,10 @@ function reduceAuthStateChanged(
 				attempt: next.attempt + 1,
 				signingOut: false,
 				suppressActivationUntilSignedOut: false,
+				restoreSuppressedUntilSignedIn: true,
 				queuedReloadMode: null,
 				view: LOADING_VIEW,
+				readySessionSource: null,
 			},
 			effects: [{ type: "disconnectAndClear" }],
 		};
@@ -224,8 +295,16 @@ function reduceAuthStateChanged(
 		next.suppressActivationUntilSignedOut = false;
 	}
 	if (!event.authReady || !event.signedIn) {
+		const hadInMemorySession = next.view.session !== null;
 		return {
-			state: { ...next, attempt: next.attempt + 1, view: LOADING_VIEW },
+			state: {
+				...next,
+				attempt: next.attempt + 1,
+				view: LOADING_VIEW,
+				readySessionSource: null,
+				restoreSuppressedUntilSignedIn:
+					next.restoreSuppressedUntilSignedIn || hadInMemorySession,
+			},
 			effects: [],
 		};
 	}
@@ -251,6 +330,7 @@ function reduceReloadRequested(
 	if (event.mode === "retireCurrent") {
 		// Keep lastKnownUserId so sign-out can clean up Current List selections.
 		next.view = LOADING_VIEW;
+		next.readySessionSource = null;
 	}
 	if (next.signingOut) {
 		next.queuedReloadMode = event.mode === "freshOnly" ? "freshOnly" : "normal";
@@ -258,7 +338,12 @@ function reduceReloadRequested(
 	}
 	if (!event.authReady || !event.signedIn) {
 		return {
-			state: { ...next, attempt: next.attempt + 1, view: LOADING_VIEW },
+			state: {
+				...next,
+				attempt: next.attempt + 1,
+				view: LOADING_VIEW,
+				readySessionSource: null,
+			},
 			effects: [],
 		};
 	}
@@ -270,12 +355,22 @@ function startActivation(
 	allowCached: boolean,
 ): SessionMachineResult {
 	const attempt = state.attempt + 1;
-	const cached = allowCached ? state.view.session : null;
+	const cached =
+		allowCached && state.readySessionSource !== "restored"
+			? state.view.session
+			: null;
 	const view: SessionView = cached
 		? { state: { status: "ready", refreshing: true }, session: cached }
 		: LOADING_VIEW;
 	return {
-		state: { ...state, attempt, pendingActivationAttempt: attempt, view },
+		state: {
+			...state,
+			attempt,
+			pendingActivationAttempt: attempt,
+			view,
+			readySessionSource: cached ? state.readySessionSource : null,
+			restoreSuppressedUntilSignedIn: false,
+		},
 		effects: [{ type: "activate", attempt, allowCached }],
 	};
 }
@@ -301,6 +396,15 @@ function reduceStaleActivation(
 	return noChange(state);
 }
 
+function reduceStaleSessionConnection(
+	state: SessionMachineState,
+): SessionMachineResult {
+	if (databaseMustBeDisconnected(state)) {
+		return { state, effects: [{ type: "disconnectAndClear" }] };
+	}
+	return noChange(state);
+}
+
 // True when the PowerSync database must not be connected and no live
 // activation owns the connection. Deny-list on signed-out-ish states:
 // connected-while-signed-in is never wrong (a cached session keeps syncing),
@@ -314,6 +418,11 @@ function databaseMustBeDisconnected(state: SessionMachineState): boolean {
 	if (state.signingOut) return true;
 	// Signed out; waiting for Clerk's auth flip to land.
 	if (state.suppressActivationUntilSignedOut) return true;
+	// A restored Authenticated App Session intentionally keeps local PowerSync
+	// available even though Clerk could not confirm sign-in during cold start.
+	if (state.readySessionSource === "restored" && state.view.session !== null) {
+		return false;
+	}
 	// Post-sign-out resting state (view cleared, no known User) — covers the
 	// beat where Clerk flipped before the next auth observation arrives.
 	if (state.view.state.status === "loading" && state.lastKnownUserId === null) {
@@ -322,6 +431,18 @@ function databaseMustBeDisconnected(state: SessionMachineState): boolean {
 	// Auth was observed signed out / not ready.
 	const auth = state.lastObservedAuth;
 	return auth !== null && (!auth.authReady || !auth.signedIn);
+}
+
+function sessionCanBeRestored(state: SessionMachineState): boolean {
+	const auth = state.lastObservedAuth;
+	if (!auth?.authReady) return false;
+	return (
+		!auth.signedIn &&
+		auth.activationEnabled &&
+		!state.signingOut &&
+		!state.restoreSuppressedUntilSignedIn &&
+		state.view.session === null
+	);
 }
 
 function sameObservedAuth(a: ObservedAuth | null, b: ObservedAuth): boolean {

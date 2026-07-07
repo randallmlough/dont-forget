@@ -18,6 +18,7 @@ import {
 	type GetSessionToken,
 	type SessionBootstrap,
 	type SessionBootstrapService,
+	sessionAnalyticsProperties,
 } from "@/client/session/bootstrap";
 import { db, PowerSyncConnector } from "@/client/session/powersync";
 import { readPowerSyncUrl } from "@/client/session/powersync/powersync-url";
@@ -28,7 +29,8 @@ import {
 import { asError } from "@/shared/errors";
 import {
 	clearAuthenticatedAppSessionPresent,
-	markAuthenticatedAppSessionPresent,
+	persistAuthenticatedAppSession,
+	readPersistedAuthenticatedAppSession,
 } from "./session-hint";
 import {
 	type AuthenticatedAppSessionState,
@@ -73,6 +75,8 @@ type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	analytics?: AuthenticatedAppSessionSignOutAnalytics;
 	clearAuthenticatedAppSessionPresent?: typeof clearAuthenticatedAppSessionPresent;
 	clearCurrentListSelectionsForUser?: typeof clearUserCurrentListSelections;
+	persistAuthenticatedAppSession?: typeof persistAuthenticatedAppSession;
+	readPersistedAuthenticatedAppSession?: typeof readPersistedAuthenticatedAppSession;
 	activationEnabled?: boolean;
 	bootstrapService?: SessionBootstrapService;
 	connectDatabase?: AuthenticatedAppSessionConnectDatabase;
@@ -100,6 +104,10 @@ export function AuthenticatedAppSessionProvider({
 	clearAuthenticatedAppSessionPresent:
 		clearAuthenticatedAppSessionPresentProp = clearAuthenticatedAppSessionPresent,
 	clearCurrentListSelectionsForUser,
+	persistAuthenticatedAppSession:
+		persistAuthenticatedAppSessionProp = persistAuthenticatedAppSession,
+	readPersistedAuthenticatedAppSession:
+		readPersistedAuthenticatedAppSessionProp = readPersistedAuthenticatedAppSession,
 	activationEnabled = true,
 	bootstrapService: bootstrapServiceProp,
 	connectDatabase = defaultConnectDatabase,
@@ -127,6 +135,7 @@ export function AuthenticatedAppSessionProvider({
 	const authReady = auth.authReady;
 	const signedIn = auth.signedIn;
 	const authRef = useRef(auth);
+	const analyticsRef = useRef(analytics);
 	const machineRef = useRef(initialSessionMachineState);
 	const [view, setViewState] = useState<SessionView>(
 		initialSessionMachineState.view,
@@ -157,6 +166,9 @@ export function AuthenticatedAppSessionProvider({
 				if (effect.type === "activate") {
 					return executeActivation(effect.attempt, effect.allowCached);
 				}
+				if (effect.type === "restoreSession") {
+					return executeRestore(effect.attempt, effect.session);
+				}
 				if (effect.type === "disconnectAndClear") {
 					return enqueueDatabaseOperation(disconnectAndClear).catch((error) => {
 						logger.error(
@@ -167,7 +179,14 @@ export function AuthenticatedAppSessionProvider({
 						);
 					});
 				}
-				return markAuthenticatedAppSessionPresent()
+				if (effect.type === "trackSessionLoaded") {
+					analyticsRef.current.track("authenticated_app_session_loaded", {
+						...sessionAnalyticsProperties(effect.session),
+						source: effect.source,
+					});
+					return Promise.resolve();
+				}
+				return persistAuthenticatedAppSessionProp(effect.session)
 					.catch(() => undefined)
 					.then(() => undefined);
 			}
@@ -220,6 +239,34 @@ export function AuthenticatedAppSessionProvider({
 				}
 			}
 
+			async function executeRestore(
+				attempt: number,
+				session: SessionBootstrap,
+			) {
+				try {
+					if (activationSuperseded(attempt)) return;
+					const connected = await connectDatabaseForActivation(attempt);
+					if (!connected) return;
+					applyResult(
+						reduceSessionMachine(machineRef.current, {
+							type: "sessionRestoreSucceeded",
+							attempt,
+							session,
+						}),
+					);
+				} catch (error) {
+					logger.error("authenticated app session restore failed", {
+						error: asError(error),
+					});
+					applyResult(
+						reduceSessionMachine(machineRef.current, {
+							type: "sessionRestoreFailed",
+							attempt,
+						}),
+					);
+				}
+			}
+
 			applyResult(reduceSessionMachine(machineRef.current, event));
 			if (!options.awaitActivation) return Promise.resolve();
 			return Promise.all(activationEffects).then(() => undefined);
@@ -231,6 +278,7 @@ export function AuthenticatedAppSessionProvider({
 			getPowerSyncToken,
 			getToken,
 			logger,
+			persistAuthenticatedAppSessionProp,
 		],
 	);
 
@@ -241,11 +289,40 @@ export function AuthenticatedAppSessionProvider({
 			signedIn,
 			activationEnabled,
 		});
-	}, [authReady, signedIn, activationEnabled, dispatch]);
+		if (!authReady || signedIn) return;
+		let cancelled = false;
+
+		void readPersistedAuthenticatedAppSessionProp()
+			.then((session) => {
+				if (cancelled || !session) return;
+				void dispatch({ type: "sessionRestoreRequested", session });
+			})
+			.catch((error) => {
+				if (cancelled) return;
+				logger.error("authenticated app session restore read failed", {
+					error: asError(error),
+				});
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [
+		authReady,
+		signedIn,
+		activationEnabled,
+		dispatch,
+		logger,
+		readPersistedAuthenticatedAppSessionProp,
+	]);
 
 	useEffect(() => {
 		authRef.current = auth;
 	}, [auth]);
+
+	useEffect(() => {
+		analyticsRef.current = analytics;
+	}, [analytics]);
 
 	function retry() {
 		void dispatch({

@@ -18,7 +18,10 @@ import {
 	type AuthenticatedAppSessionProviderAuth,
 	useAuthenticatedAppSession,
 } from "./provider";
-import { markAuthenticatedAppSessionPresent } from "./session-hint";
+import {
+	persistAuthenticatedAppSession,
+	readPersistedAuthenticatedAppSession,
+} from "./session-hint";
 
 let mockLogger: MockLogger;
 
@@ -34,7 +37,8 @@ jest.mock("@/client/lib/analytics", () =>
 
 jest.mock("./session-hint", () => ({
 	clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
-	markAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
+	persistAuthenticatedAppSession: jest.fn(async () => undefined),
+	readPersistedAuthenticatedAppSession: jest.fn(async () => null),
 }));
 
 describe("AuthenticatedAppSessionProvider", () => {
@@ -43,6 +47,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		mockLogger = createMockLogger();
 		mockLogger.with.mockReturnValue(mockLogger);
 		jest.mocked(useLogger).mockReturnValue(mockLogger);
+		jest.mocked(readPersistedAuthenticatedAppSession).mockResolvedValue(null);
 	});
 
 	it("bootstraps, connects PowerSync, and renders ready state", async () => {
@@ -78,7 +83,117 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await expect(connectInput?.getPowerSyncToken()).resolves.toBe(
 			"powersync-token",
 		);
-		expect(markAuthenticatedAppSessionPresent).toHaveBeenCalledTimes(1);
+		expect(persistAuthenticatedAppSession).toHaveBeenCalledWith(session);
+	});
+
+	it("restores a persisted Authenticated App Session when Clerk is ready but signed out", async () => {
+		const session = appSessionFixture({ displayName: "Cached Avery" });
+		const analytics = createMockAnalytics();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		const connectDatabase = connectDatabaseFixture();
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockResolvedValueOnce(session);
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture({ signedIn: false })}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
+		expect(screen.getByText("hh_avery")).toBeTruthy();
+		expect(screen.getByText("ready")).toBeTruthy();
+		expect(bootstrapService.getSession).not.toHaveBeenCalled();
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(analytics.track).toHaveBeenCalledWith(
+			"authenticated_app_session_loaded",
+			{
+				household_id: "hh_avery",
+				member_role: "owner",
+				member_count: 1,
+				source: "cached",
+			},
+		);
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
+	});
+
+	it("keeps the signed-out loading behavior unchanged when no persisted session exists", async () => {
+		const analytics = createMockAnalytics();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		const connectDatabase = connectDatabaseFixture();
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockResolvedValueOnce(null);
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture({ signedIn: false })}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(readPersistedAuthenticatedAppSession).toHaveBeenCalledTimes(1),
+		);
+		expect(screen.getByText("loading")).toBeTruthy();
+		expect(bootstrapService.getSession).not.toHaveBeenCalled();
+		expect(connectDatabase).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalled();
+	});
+
+	it("replaces a restored session with a fresh session from a different User", async () => {
+		const cachedSession = appSessionFixture({ displayName: "Cached Avery" });
+		const freshSession = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const analytics = createMockAnalytics();
+		const bootstrapService = bootstrapServiceFixture(freshSession);
+		const connectDatabase = connectDatabaseFixture();
+		const signedOutAuth = authFixture({ signedIn: false });
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockResolvedValueOnce(cachedSession);
+
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={signedOutAuth}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...signedOutAuth, signedIn: true }}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(screen.getByText("Blake")).toBeTruthy());
+		expect(screen.queryByText("Cached Avery")).toBeNull();
+		expect(connectDatabase).toHaveBeenCalledTimes(2);
+		expect(persistAuthenticatedAppSession).toHaveBeenLastCalledWith(
+			freshSession,
+		);
 	});
 
 	it("can defer initial activation until reload is requested", async () => {
@@ -930,12 +1045,13 @@ function authFixture(
 }
 
 function appSessionFixture(
-	overrides: { displayName?: string } = {},
+	overrides: { displayName?: string; userId?: string } = {},
 ): AuthenticatedAppSession {
 	const displayName = overrides.displayName ?? "Avery Chen";
+	const userId = overrides.userId ?? "usr_avery";
 	return {
 		user: {
-			id: "usr_avery",
+			id: userId,
 			email: "avery@example.com",
 			displayName,
 			firstName: "Avery",
@@ -947,14 +1063,14 @@ function appSessionFixture(
 		],
 		activeMember: {
 			id: "mbr_avery",
-			userId: "usr_avery",
+			userId,
 			role: "owner",
 			displayName,
 		},
 		members: [
 			{
 				membershipId: "mbr_avery",
-				userId: "usr_avery",
+				userId,
 				role: "owner",
 				displayName,
 			},

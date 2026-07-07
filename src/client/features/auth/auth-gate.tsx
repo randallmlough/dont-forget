@@ -21,16 +21,13 @@ export function AuthGate({
 		cachedSessionStatusReducer,
 		"checking",
 	);
-	const effectiveCachedSessionStatus = isLoaded
-		? "unavailable"
-		: cachedSessionStatus;
-	const hasCachedSession = effectiveCachedSessionStatus === "available";
-	const checkedCachedSession = effectiveCachedSessionStatus !== "checking";
+	const hasCachedSession = cachedSessionStatus === "available";
+	const checkedCachedSession = cachedSessionStatus !== "checking";
 
 	useAnalyticsIdentity();
 
 	useEffect(() => {
-		if (isLoaded) return;
+		if (isSignedIn) return;
 		let cancelled = false;
 
 		void hasAuthenticatedAppSessionHint()
@@ -48,7 +45,7 @@ export function AuthGate({
 		return () => {
 			cancelled = true;
 		};
-	}, [isLoaded]);
+	}, [isSignedIn]);
 
 	useEffect(() => {
 		const target = authRedirectTarget({

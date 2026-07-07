@@ -129,7 +129,95 @@ describe("reduceSessionMachine", () => {
 			session,
 		});
 		expect(result.state.lastKnownUserId).toBe("usr_avery");
-		expect(result.effects).toEqual([{ type: "markSessionHint" }]);
+		expect(result.effects).toEqual([{ type: "markSessionHint", session }]);
+	});
+
+	it("restores a persisted session after a signed-out cold start observation", () => {
+		const session = sessionFixture();
+		const signedOut = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ signedIn: false }),
+		);
+		const restoreRequested = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreRequested",
+			session,
+		});
+
+		expect(restoreRequested.effects).toEqual([
+			{ type: "restoreSession", attempt: 1, session },
+		]);
+
+		const restored = reduceSessionMachine(restoreRequested.state, {
+			type: "sessionRestoreSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(restored.state.view).toEqual({
+			state: { status: "ready", refreshing: false },
+			session,
+		});
+		expect(restored.state.readySessionSource).toBe("restored");
+		expect(restored.state.lastKnownUserId).toBe("usr_avery");
+		expect(restored.effects).toEqual([
+			{ type: "trackSessionLoaded", source: "cached", session },
+		]);
+	});
+
+	it("does not restore after an in-memory session is cleared by auth loss", () => {
+		const session = sessionFixture();
+		const ready = activatedWith(session);
+		const signedOut = reduceSessionMachine(
+			ready.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const result = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreRequested",
+			session,
+		});
+
+		expect(result.state).toBe(signedOut.state);
+		expect(result.effects).toEqual([]);
+	});
+
+	it("replaces a restored session with a later fresh session from a different User", () => {
+		const restoredSession = sessionFixture();
+		const freshSession = sessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const signedOut = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ signedIn: false }),
+		);
+		const restored = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreSucceeded",
+			attempt: 1,
+			session: restoredSession,
+		});
+
+		const activating = reduceSessionMachine(restored.state, authStateChanged());
+
+		expect(activating.state.view).toBe(initialSessionMachineState.view);
+		expect(activating.effects).toEqual([
+			{ type: "activate", attempt: 2, allowCached: true },
+		]);
+
+		const activated = reduceSessionMachine(activating.state, {
+			type: "activationSucceeded",
+			attempt: 2,
+			session: freshSession,
+		});
+
+		expect(activated.state.view).toEqual({
+			state: { status: "ready", refreshing: false },
+			session: freshSession,
+		});
+		expect(activated.state.readySessionSource).toBe("online");
+		expect(activated.state.lastKnownUserId).toBe("usr_blake");
+		expect(activated.effects).toEqual([
+			{ type: "markSessionHint", session: freshSession },
+		]);
 	});
 
 	it("discards stale activation success and failure results by identity", () => {
@@ -643,6 +731,28 @@ describe("reduceSessionMachine", () => {
 		expect(result.effects).toEqual([]);
 	});
 
+	it("keeps the database connected when a stale activation resolves after a restored session is ready", () => {
+		const session = sessionFixture();
+		const signedOut = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ signedIn: false }),
+		);
+		const restored = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		const result = reduceSessionMachine(restored.state, {
+			type: "activationSucceeded",
+			attempt: 0,
+			session: sessionFixture({ displayName: "Stale" }),
+		});
+
+		expect(result.state).toBe(restored.state);
+		expect(result.effects).toEqual([]);
+	});
+
 	it("keeps the database connected while sign-out recovery owns the activation", () => {
 		const session = sessionFixture();
 		const signingOut = reduceSessionMachine(activatedWith(session).state, {
@@ -744,12 +854,13 @@ function reloadRequested(
 }
 
 function sessionFixture(
-	overrides: { displayName?: string } = {},
+	overrides: { displayName?: string; userId?: string } = {},
 ): SessionBootstrap {
 	const displayName = overrides.displayName ?? "Avery Chen";
+	const userId = overrides.userId ?? "usr_avery";
 	return {
 		user: {
-			id: "usr_avery",
+			id: userId,
 			email: "avery@example.com",
 			displayName,
 			firstName: "Avery",
@@ -761,14 +872,14 @@ function sessionFixture(
 		],
 		activeMember: {
 			id: "mbr_avery",
-			userId: "usr_avery",
+			userId,
 			role: "owner",
 			displayName,
 		},
 		members: [
 			{
 				membershipId: "mbr_avery",
-				userId: "usr_avery",
+				userId,
 				role: "owner",
 				displayName,
 			},

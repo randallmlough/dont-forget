@@ -53,14 +53,16 @@ describe("AuthGate", () => {
 		expect(mockReplace).not.toHaveBeenCalledWith("/sign-in");
 	});
 
-	it("redirects to sign-in when Clerk reports signed out even if a persisted signed-in hint exists", async () => {
+	it("keeps Home mounted when Clerk reports signed out and a persisted session exists", async () => {
 		jest.mocked(hasAuthenticatedAppSessionHint).mockResolvedValue(true);
 		setMockAuthState({ isLoaded: true, isSignedIn: false });
 
 		await render(<AuthGate pathname="/" />);
 
-		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/sign-in"));
-		expect(hasAuthenticatedAppSessionHint).not.toHaveBeenCalled();
+		await waitFor(() =>
+			expect(hasAuthenticatedAppSessionHint).toHaveBeenCalledTimes(1),
+		);
+		expect(mockReplace).not.toHaveBeenCalledWith("/sign-in");
 	});
 
 	it("redirects to sign-in when there is no Clerk session or persisted hint", async () => {

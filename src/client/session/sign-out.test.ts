@@ -45,14 +45,14 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(auth.signOut).toHaveBeenCalledTimes(1);
 	});
 
-	it("wipes the local PowerSync data and clears the cold-start hint", async () => {
+	it("wipes the local PowerSync data and clears the persisted restore payload", async () => {
 		const disconnectAndClear = jest.fn(async () => undefined);
-		const clearHint = jest.fn(async () => undefined);
+		const clearPersistedSession = jest.fn(async () => undefined);
 		const auth = authFixture();
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
 			getAuth: () => auth,
 			analytics: createMockAnalytics(),
-			clearAuthenticatedAppSessionPresent: clearHint,
+			clearAuthenticatedAppSessionPresent: clearPersistedSession,
 			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
 			logger: createMockLogger(),
 			disconnectAndClear,
@@ -62,7 +62,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		await signOutFlow.run();
 
 		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
-		expect(clearHint).toHaveBeenCalledTimes(1);
+		expect(clearPersistedSession).toHaveBeenCalledTimes(1);
 	});
 
 	it("captures the userId before local data is wiped", async () => {
