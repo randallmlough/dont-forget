@@ -203,12 +203,30 @@ describe("useHouseholdSettings leaveHousehold", () => {
 		expect(client.leaveHousehold).not.toHaveBeenCalled();
 		expect(reloadSession).not.toHaveBeenCalled();
 		expect(uploadQueue.subscribe).toHaveBeenCalledTimes(1);
-		expect(uploadQueue.getUploadQueueStats).not.toHaveBeenCalled();
 		expect(uploadQueue.listenerCount()).toBe(0);
 		expect(result.current.state).toMatchObject({
 			status: "ready",
 			operation: { status: "idle" },
 		});
+	});
+
+	it("leaves without confirm when offline with an empty upload queue", async () => {
+		const uploadQueue = uploadQueueFixture({ count: 0, connected: false });
+		const { result, client, reloadSession } = await renderUseHouseholdSettings({
+			uploadQueue,
+		});
+		const confirmDiscardUnsyncedChanges = jest.fn(async () => true);
+
+		await act(async () => {
+			await result.current.actions.leaveHousehold({
+				confirmDiscardUnsyncedChanges,
+			});
+		});
+
+		expect(client.leaveHousehold).toHaveBeenCalledWith("hh_1");
+		expect(reloadSession).toHaveBeenCalledWith({ mode: "retireCurrent" });
+		expect(confirmDiscardUnsyncedChanges).not.toHaveBeenCalled();
+		expect(uploadQueue.listenerCount()).toBe(0);
 	});
 
 	it("keeps the Membership intact when the queue goes offline mid-drain and leave-anyway is canceled", async () => {

@@ -562,14 +562,16 @@ function waitForUploadQueueDrain(
 		async function checkQueue() {
 			if (settled) return;
 			try {
-				const state = uploadQueue.getUploadQueueState();
-				if (!state.connected && !state.connecting) {
-					settle("blocked");
-					return;
-				}
+				// An empty queue is drained even while offline — there is nothing
+				// left to lose, so the count check must precede the connectivity gate.
 				const stats = await uploadQueue.getUploadQueueStats();
 				if (settled) return;
-				if (stats.count === 0) settle("drained");
+				if (stats.count === 0) {
+					settle("drained");
+					return;
+				}
+				const state = uploadQueue.getUploadQueueState();
+				if (!state.connected && !state.connecting) settle("blocked");
 			} catch {
 				settle("blocked");
 			}
