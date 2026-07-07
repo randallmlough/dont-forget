@@ -43,6 +43,36 @@ describe("reduceSessionMachine", () => {
 
 		expect(result.state.attempt).toBe(0);
 		expect(result.state.view).toBe(initialSessionMachineState.view);
+		expect(result.state.lastObservedAuth).toEqual({
+			authReady: true,
+			signedIn: true,
+			activationEnabled: false,
+		});
+		expect(result.effects).toEqual([]);
+	});
+
+	it("requires sign-in and suppresses restore when disabled activation later loses auth", () => {
+		const session = sessionFixture();
+		const disabled = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ activationEnabled: false }),
+		);
+
+		const signedOut = reduceSessionMachine(
+			disabled.state,
+			authStateChanged({ signedIn: false }),
+		);
+
+		expect(signedOut.state.signInRequired).toBe(true);
+		expect(signedOut.state.restoreSuppressedUntilSignedIn).toBe(true);
+		expect(signedOut.effects).toEqual([{ type: "clearSessionHint" }]);
+
+		const result = reduceSessionMachine(signedOut.state, {
+			type: "sessionRestoreRequested",
+			session,
+		});
+
+		expect(result.state).toBe(signedOut.state);
 		expect(result.effects).toEqual([]);
 	});
 
@@ -68,7 +98,13 @@ describe("reduceSessionMachine", () => {
 		);
 		const enabled = reduceSessionMachine(disabled.state, authStateChanged());
 
-		expect(disabled.state).toBe(ready.state);
+		expect(disabled.state.attempt).toBe(ready.state.attempt);
+		expect(disabled.state.view).toBe(ready.state.view);
+		expect(disabled.state.lastObservedAuth).toEqual({
+			authReady: true,
+			signedIn: true,
+			activationEnabled: false,
+		});
 		expect(disabled.effects).toEqual([]);
 		expect(enabled.state.attempt).toBe(ready.state.attempt);
 		expect(enabled.state.view).toEqual({

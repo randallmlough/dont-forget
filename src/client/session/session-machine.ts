@@ -319,7 +319,7 @@ function reduceAuthStateChanged(
 		!state.signingOut &&
 		!state.suppressActivationUntilSignedOut
 	) {
-		return noChange(state);
+		return { state: { ...state, lastObservedAuth: observed }, effects: [] };
 	}
 	const next: SessionMachineState = { ...state, lastObservedAuth: observed };
 	if (
@@ -380,6 +380,13 @@ function reduceAuthStateChanged(
 		};
 	}
 	if (!event.activationEnabled) {
+		return { state: next, effects: [] };
+	}
+	if (
+		next.view.session !== null &&
+		next.readySessionSource === "online" &&
+		next.pendingActivationAttempt !== next.attempt
+	) {
 		return { state: next, effects: [] };
 	}
 	return startActivation(next, true);

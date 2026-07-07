@@ -236,6 +236,8 @@ export function AuthenticatedAppSessionProvider({
 				const restoredUserId = restoredUserIdForActivation(attempt);
 				if (!restoredUserId || restoredUserId === session.user.id) return;
 				if (activationSuperseded(attempt)) return;
+				await clearAuthenticatedAppSessionPresentProp();
+				if (activationSuperseded(attempt)) return;
 				await enqueueDatabaseOperation(disconnectAndClear);
 			}
 

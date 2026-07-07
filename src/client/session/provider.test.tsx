@@ -231,8 +231,13 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const analytics = createMockAnalytics();
 		const bootstrapService = bootstrapServiceFixture(freshSession);
 		const connectDatabase = connectDatabaseFixture();
+		let connectCount = 0;
 		connectDatabase.mockImplementation(async () => {
-			order.push("connect");
+			connectCount += 1;
+			order.push(connectCount === 1 ? "restoreConnect" : "freshConnect");
+		});
+		const clearSessionHint = jest.fn(async () => {
+			order.push("clear");
 		});
 		const replacementWipe = deferred<void>();
 		const disconnectAndClear = jest.fn(() => {
@@ -251,6 +256,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
 				disconnectAndClear={disconnectAndClear}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
@@ -264,6 +270,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
 				disconnectAndClear={disconnectAndClear}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
@@ -271,7 +278,9 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await waitFor(() => expect(disconnectAndClear).toHaveBeenCalledTimes(1));
 		await Promise.resolve();
+		expect(clearSessionHint).toHaveBeenCalledTimes(1);
 		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(order).toEqual(["restoreConnect", "clear", "wipe"]);
 		expect(screen.queryByText("Blake")).toBeNull();
 
 		await act(async () => {
@@ -283,7 +292,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(screen.queryByText("Cached Avery")).toBeNull();
 		expect(connectDatabase).toHaveBeenCalledTimes(2);
 		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
-		expect(order).toEqual(["connect", "wipe", "connect"]);
+		expect(order).toEqual(["restoreConnect", "clear", "wipe", "freshConnect"]);
 		expect(persistAuthenticatedAppSession).toHaveBeenLastCalledWith(
 			freshSession,
 		);
