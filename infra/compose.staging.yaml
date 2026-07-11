@@ -1,0 +1,96 @@
+# the staging house rules applied:
+#   - NO published ports. The only ingress is the Cloudflare Tunnel reaching
+#     `dontforget-powersync:${PS_PORT}` over proxy-net; both Postgres instances
+#     are on the internal network only.
+#   - Named volumes on purpose: staging is wipeable with `docker compose down -v`
+#     (fresh DBs, re-run drizzle-kit migrate). Container names deliberately do
+#     NOT end in `-db` so the nightly backup script's pg_dumpall loop skips them.
+#   - The server's .env (never committed) sets COMPOSE_FILE=compose.staging.yaml
+#     so plain `docker compose up -d` uses this file there.
+#
+# SCHEMA AUTHORITY and REPLICATION COUPLING notes in docker-compose.yaml apply
+# here unchanged: apply schema via drizzle-kit migrate against PS_DATA_SOURCE_URI
+# (which must point at dontforget-pg-source:5432 in the server's .env), and
+# wal_level=logical + the `powersync` publication are both required.
+
+services:
+  pg-source:
+    image: postgres:18
+    container_name: dontforget-pg-source
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_DATABASE_USER}
+      POSTGRES_DB: ${PG_DATABASE_NAME}
+      POSTGRES_PASSWORD: ${PG_DATABASE_PASSWORD}
+    # wal_level=logical is REQUIRED for PowerSync replication.
+    command: ["postgres", "-c", "wal_level=logical"]
+    volumes:
+      - pg_source_data:/var/lib/postgresql
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_DATABASE_USER} -d ${PG_DATABASE_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pg-storage:
+    image: postgres:18
+    container_name: dontforget-pg-storage
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_STORAGE_DATABASE_USER}
+      POSTGRES_DB: ${PG_STORAGE_DATABASE_NAME}
+      POSTGRES_PASSWORD: ${PG_STORAGE_DATABASE_PASSWORD}
+    volumes:
+      - pg_storage_data:/var/lib/postgresql
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_STORAGE_DATABASE_USER} -d ${PG_STORAGE_DATABASE_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  powersync:
+    image: journeyapps/powersync-service:latest
+    container_name: dontforget-powersync
+    restart: unless-stopped
+    depends_on:
+      pg-source:
+        condition: service_healthy
+      pg-storage:
+        condition: service_healthy
+    command: ["start", "-r", "unified"]
+    volumes:
+      - ./powersync:/config
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      NODE_OPTIONS: --max-old-space-size=1000
+      PS_DATA_SOURCE_URI: ${PS_DATA_SOURCE_URI}
+      PS_STORAGE_SOURCE_URI: ${PS_STORAGE_SOURCE_URI}
+      PS_PORT: ${PS_PORT}
+      PS_CLERK_JWKS_URI: ${PS_CLERK_JWKS_URI}
+    networks:
+      - proxy-net # web-facing: the tunnel routes sync traffic here
+      - internal # and it reaches both Postgres instances here
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:${PS_PORT}/probes/liveness').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+volumes:
+  pg_source_data:
+  pg_storage_data:
+
+networks:
+  proxy-net:
+    external: true
+  internal:
