@@ -13,7 +13,11 @@ ENV APP_ENV=$APP_ENV \
     EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL \
     EXPO_PUBLIC_POWERSYNC_URL=$EXPO_PUBLIC_POWERSYNC_URL
 
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml carries nodeLinker/overrides recorded in the lockfile;
+# without it (and the tooling workspace manifest) the frozen install fails
+# with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH and would hoist nothing.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tooling/package.json tooling/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm expo export --platform web --no-ssg
