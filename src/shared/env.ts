@@ -91,6 +91,12 @@ export function readPublicExpoConfig(
 			);
 		}
 		validateApiBaseUrlForEnv(appEnv, apiBaseUrl);
+		if (!powersyncUrl) {
+			throw new Error(
+				`Missing required env var for ${appEnv}: EXPO_PUBLIC_POWERSYNC_URL`,
+			);
+		}
+		validatePowerSyncUrlForEnv(appEnv, powersyncUrl);
 	}
 
 	return {
@@ -203,6 +209,25 @@ export function validateApiBaseUrlForEnv(
 	if (parsed.protocol !== "https:") {
 		throw new Error(
 			`EXPO_PUBLIC_API_BASE_URL must use https:// when APP_ENV=${appEnv}`,
+		);
+	}
+}
+
+function validatePowerSyncUrlForEnv(
+	appEnv: AppEnv,
+	powersyncUrl: string,
+): void {
+	let parsed: URL;
+	try {
+		parsed = new URL(powersyncUrl);
+	} catch {
+		throw new Error(
+			`EXPO_PUBLIC_POWERSYNC_URL must be a valid URL when APP_ENV=${appEnv}`,
+		);
+	}
+	if (parsed.protocol !== "https:") {
+		throw new Error(
+			`EXPO_PUBLIC_POWERSYNC_URL must use https:// when APP_ENV=${appEnv}`,
 		);
 	}
 }
