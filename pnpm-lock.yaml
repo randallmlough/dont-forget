@@ -31,9 +31,6 @@ importers:
       '@clerk/clerk-expo':
         specifier: ^2.19.36
         version: 2.19.41(7b81b4a536cbd0ef407b94d3b52d143a)
-      '@expo/server':
-        specifier: ^0.7.5
-        version: 0.7.5
       '@expo/ui':
         specifier: ~56.0.18
         version: 56.0.18(99b5eb7cdb0592093f1af7f09a8c71cf)
@@ -127,6 +124,9 @@ importers:
       expo-secure-store:
         specifier: ~56.0.4
         version: 56.0.4(expo@56.0.12)
+      expo-server:
+        specifier: ~56.0.5
+        version: 56.0.5
       expo-splash-screen:
         specifier: ~56.0.10
         version: 56.0.10(expo@56.0.12)(typescript@6.0.3)
@@ -1309,10 +1309,6 @@ packages:
 
   '@expo/sdk-runtime-versions@1.0.0':
     resolution: {integrity: sha512-Doz2bfiPndXYFPMRwPyGa1k5QaKDVpY806UJj570epIiMzWaYyCtobasyfC++qfIXVb5Ocy7r3tP9d62hAQ7IQ==}
-
-  '@expo/server@0.7.5':
-    resolution: {integrity: sha512-aNVcerBSJEcUspvXRWChEgFhix1gTNIcgFDevaU/A1+TkfbejNIjGX4rfLEpfyRzzdLIRuOkBNjD+uTYMzohyg==}
-    engines: {node: '>=20.16.0'}
 
   '@expo/spawn-async@1.8.0':
     resolution: {integrity: sha512-eb9xxd/LbuEGSdua4NumCu/McVB9EM+F/JxB9pWgnERw4HQ9XyTNH1KapG6oqLWR8TuRK2LQfzJlmNi94CVobw==}
@@ -9092,13 +9088,6 @@ snapshots:
   '@expo/schema-utils@56.0.1': {}
 
   '@expo/sdk-runtime-versions@1.0.0': {}
-
-  '@expo/server@0.7.5':
-    dependencies:
-      abort-controller: 3.0.0
-      debug: 4.4.3
-    transitivePeerDependencies:
-      - supports-color
 
   '@expo/spawn-async@1.8.0':
     dependencies:

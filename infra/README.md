@@ -25,7 +25,9 @@ docker compose --profile tools run --rm migrate
 The migration command applies the Drizzle schema and PowerSync publication.
 The API image exports the web server bundle with
 `pnpm expo export --platform web --no-ssg`; web UI rendering is intentionally
-disabled because this deployment serves API routes only.
+disabled because this deployment serves API routes only. The public Invitation
+and Household Join Code links built from `PUBLIC_APP_BASE_URL` therefore get
+minimal open-in-the-app fallback pages from `server.mjs` instead of web screens.
 
 ## Tunnel and authentication
 
