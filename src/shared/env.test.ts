@@ -80,8 +80,41 @@ describe("environment config", () => {
 				APP_ENV: "staging",
 				EXPO_PUBLIC_API_BASE_URL: "https://api.example.com",
 				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+				EXPO_PUBLIC_POWERSYNC_URL: "https://ps.example.com",
 			}).apiBaseUrl,
 		).toBe("https://api.example.com");
+	});
+
+	it("requires PowerSync URLs for deployed app builds", () => {
+		expect(() =>
+			readPublicExpoConfig({
+				APP_ENV: "staging",
+				EXPO_PUBLIC_API_BASE_URL: "https://api.example.com",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+			}),
+		).toThrow("EXPO_PUBLIC_POWERSYNC_URL");
+	});
+
+	it("rejects non-HTTPS PowerSync URLs for deployed app builds", () => {
+		expect(() =>
+			readPublicExpoConfig({
+				APP_ENV: "staging",
+				EXPO_PUBLIC_API_BASE_URL: "https://api.example.com",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+				EXPO_PUBLIC_POWERSYNC_URL: "http://ps.example.com",
+			}),
+		).toThrow("must use https://");
+	});
+
+	it("accepts HTTPS PowerSync URLs for deployed app builds", () => {
+		expect(
+			readPublicExpoConfig({
+				APP_ENV: "staging",
+				EXPO_PUBLIC_API_BASE_URL: "https://api.example.com",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+				EXPO_PUBLIC_POWERSYNC_URL: "https://ps.example.com",
+			}).powersyncUrl,
+		).toBe("https://ps.example.com");
 	});
 
 	it("allows local builds to omit the API base URL", () => {
