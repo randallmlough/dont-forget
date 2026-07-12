@@ -8,18 +8,8 @@ concurrency:
   group: ${{ workflow.filename }}-${{ github.ref }}
 
 jobs:
-  deploy_api:
-    name: Deploy staging API
-    type: deploy
-    environment: preview
-    env:
-      APP_ENV: staging
-    params:
-      alias: staging
-
   build_ios:
     name: Build staging iOS
-    needs: [deploy_api]
     type: build
     environment: preview
     env:
