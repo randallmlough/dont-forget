@@ -1,0 +1,8 @@
+node_modules
+ios
+dist
+.git
+.expo
+.env*
+plans
+docs
