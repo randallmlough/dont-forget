@@ -1,7 +1,7 @@
 # the staging house rules applied:
 #   - NO published ports. The only ingress is the Cloudflare Tunnel reaching
-#     `dontforget-powersync:${PS_PORT}` over proxy-net; both Postgres instances
-#     are on the internal network only.
+#     `dontforget-powersync:${PS_PORT}` and `dontforget-api:8080` over proxy-net;
+#     both Postgres instances are on the internal network only.
 #   - Named volumes on purpose: staging is wipeable with `docker compose down -v`
 #     (fresh DBs, re-run drizzle-kit migrate). Container names deliberately do
 #     NOT end in `-db` so the nightly backup script's pg_dumpall loop skips them.
@@ -14,6 +14,72 @@
 # wal_level=logical + the `powersync` publication are both required.
 
 services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api/Dockerfile
+      args:
+        APP_ENV: staging
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL}
+        EXPO_PUBLIC_POWERSYNC_URL: ${EXPO_PUBLIC_POWERSYNC_URL}
+    container_name: dontforget-api
+    restart: unless-stopped
+    depends_on:
+      pg-source:
+        condition: service_healthy
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: ${DATABASE_URL}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
+      PUBLIC_APP_BASE_URL: ${PUBLIC_APP_BASE_URL}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_ADDRESS: ${RESEND_FROM_ADDRESS}
+      POSTHOG_PROJECT_TOKEN: ${POSTHOG_PROJECT_TOKEN}
+      POSTHOG_HOST: ${POSTHOG_HOST}
+    networks:
+      - proxy-net # web-facing: the tunnel routes API traffic here
+      - internal # reaches dontforget-pg-source
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:8080/api/bootstrap').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: ..
+      dockerfile: infra/api/Dockerfile
+      target: builder
+      args:
+        APP_ENV: staging
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL}
+        EXPO_PUBLIC_POWERSYNC_URL: ${EXPO_PUBLIC_POWERSYNC_URL}
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: ${PS_DATA_SOURCE_URI}
+    command:
+      [
+        "pnpm",
+        "exec",
+        "drizzle-kit",
+        "migrate",
+        "--config=src/server/db/drizzle/postgres.migrate.ts",
+      ]
+    depends_on:
+      pg-source:
+        condition: service_healthy
+    networks:
+      - internal
+
   pg-source:
     image: postgres:18
     container_name: dontforget-pg-source
@@ -53,7 +119,7 @@ services:
       retries: 10
 
   powersync:
-    image: journeyapps/powersync-service:latest
+    image: journeyapps/powersync-service:1.23.3
     container_name: dontforget-powersync
     restart: unless-stopped
     depends_on:
