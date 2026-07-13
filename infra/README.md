@@ -12,15 +12,21 @@ Run on the server:
 ```sh
 ssh homelab
 git clone <repo-url> ~/docker/dont-forget
-cd ~/docker/dont-forget/infra
-# Create .env (never commit it) with COMPOSE_FILE=compose.staging.yaml and all
-# Postgres/PowerSync, Clerk, Resend, and PostHog variables from .env.example.
+cd ~/docker/dont-forget
+# Create .env.staging (never commit it) with COMPOSE_FILE=infra/compose.staging.yaml and all
+# Postgres/PowerSync, Clerk, Resend, and PostHog variables from infra/.env.example.
 # DATABASE_URL and PS_DATA_SOURCE_URI use dontforget-pg-source:5432.
 # PS_STORAGE_SOURCE_URI uses dontforget-pg-storage:5432.
-docker compose build api
-docker compose up -d
-docker compose --profile tools run --rm migrate
+docker compose --env-file .env.staging build api
+make infra-up APP_ENV=staging
+docker compose --env-file .env.staging --profile tools run --rm migrate
 ```
+
+The `make infra-*` targets read `.env.$(APP_ENV)` from the repo root (default
+`local`), and that env file's `COMPOSE_FILE` selects the compose file — the
+Makefile hardcodes neither. Steps without a make target (build, the migrate
+tools profile) use `docker compose --env-file .env.staging` directly from the
+repo root.
 
 The migration command applies the Drizzle schema and PowerSync publication.
 The API image exports the web server bundle with
@@ -39,17 +45,17 @@ In the Cloudflare dashboard, add two public hostnames to the `homelab` tunnel:
 Do not add a Cloudflare Access policy to either hostname; Clerk owns
 authentication. Use the resulting public HTTPS URLs for
 `EXPO_PUBLIC_API_BASE_URL`, `PUBLIC_APP_BASE_URL`, and
-`EXPO_PUBLIC_POWERSYNC_URL` in the server `.env` build arguments and the EAS
+`EXPO_PUBLIC_POWERSYNC_URL` in the server `.env.staging` build arguments and the EAS
 `preview` environment used by staging iOS builds.
 
 ## Redeploy
 
 ```sh
 git pull
-docker compose build api
-docker compose up -d api
+docker compose --env-file .env.staging build api
+docker compose --env-file .env.staging up -d api
 ```
 
-Staging is deliberately wipeable with `docker compose down -v`. Its named
+Staging is deliberately wipeable with `make infra-destroy APP_ENV=staging`. Its named
 volumes and non-`-db` container names keep it outside homelab backups. Run the
 migration command again after a wipe.

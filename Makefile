@@ -5,7 +5,7 @@
 PNPM ?= pnpm
 APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
 PORT_ARG = $(if $(PORT),--port $(PORT),)
-COMPOSE = docker compose --env-file .env.local -f infra/docker-compose.yaml
+COMPOSE = docker compose --env-file .env.$(APP_ENV_VALUE)
 
 .DEFAULT_GOAL := help
 
