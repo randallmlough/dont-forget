@@ -5,7 +5,7 @@
 PNPM ?= pnpm
 APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
 PORT_ARG = $(if $(PORT),--port $(PORT),)
-COMPOSE = docker compose --env-file .env.local -f infra/docker-compose.yaml
+COMPOSE = docker compose --env-file .env.$(APP_ENV_VALUE)
 
 .DEFAULT_GOAL := help
 
@@ -137,10 +137,10 @@ db-seed: ## Seed local deterministic data without resetting (requires migrated s
 db-reseed: ## Reset, migrate, and seed local deterministic development data
 	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) db:reseed
 
-##@ PowerSync
+##@ Infrastructure
 
 .PHONY: infra-up
-infra-up: ## Start the local PowerSync stack (source + storage Postgres, service)
+infra-up: ## Start the PowerSync stack for the selected environment (APP_ENV, default local)
 	@$(COMPOSE) up -d
 
 .PHONY: infra-down
@@ -167,9 +167,16 @@ infra-logs: ## Follow stack logs. Optional: SERVICE=powersync
 infra-pull: ## Pull the latest stack images
 	@$(COMPOSE) pull
 
-.PHONY: pg-migrate
-pg-migrate: ## Apply Postgres migrations + the powersync publication (reads DATABASE_URL)
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) exec drizzle-kit migrate --config=src/server/db/drizzle/postgres.migrate.ts
+.PHONY: infra-build
+infra-build: ## Build stack images (staging/production api). Optional: SERVICE=api
+	@$(COMPOSE) build $(SERVICE)
+
+.PHONY: infra-migrate
+infra-migrate: ## Apply migrations via the stack's one-off migrate container (staging/production)
+	@$(COMPOSE) --profile tools run --build --rm migrate
+
+.PHONY: infra-deploy
+infra-deploy: infra-build infra-up infra-migrate ## Build images, start the stack, and migrate (staging/production)
 
 .PHONY: pg-shell
 pg-shell: ## Open psql on the source Postgres
