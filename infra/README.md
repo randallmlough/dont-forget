@@ -56,3 +56,19 @@ make infra-deploy APP_ENV=staging
 Staging is deliberately wipeable with `make infra-destroy APP_ENV=staging`. Its named
 volumes and non-`-db` container names keep it outside homelab backups. Run
 `make infra-deploy APP_ENV=staging` again after a wipe.
+
+## Database GUI access
+
+Staging Postgres publishes no ports. For ad-hoc inspection from a database GUI
+(TablePlus etc.), opt into `compose.staging.debug.yaml`, which publishes the
+source Postgres on the homelab's loopback only:
+
+```sh
+# in .env.staging on the homelab
+COMPOSE_FILE=infra/compose.staging.yaml:infra/compose.staging.debug.yaml
+```
+
+Run `make infra-up APP_ENV=staging`, then connect through the GUI's SSH tunnel
+(SSH host: homelab; database host: `127.0.0.1:5432`; credentials from the
+`PG_DATABASE_*` values). Remove the override from `COMPOSE_FILE` and re-run
+`make infra-up APP_ENV=staging` to close the port.

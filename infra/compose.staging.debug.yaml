@@ -1,0 +1,13 @@
+# Opt-in debug override: publishes the source Postgres on the homelab host's
+# loopback so a GUI (TablePlus etc.) can reach it through an SSH tunnel.
+# 127.0.0.1 binding keeps it invisible off-host; staging's no-public-ingress
+# rule is unchanged.
+#
+# Enable by appending this file to COMPOSE_FILE in .env.staging:
+#   COMPOSE_FILE=infra/compose.staging.yaml:infra/compose.staging.debug.yaml
+# then `make infra-up APP_ENV=staging`. Remove it and re-run infra-up to close
+# the port.
+services:
+  pg-source:
+    ports:
+      - "127.0.0.1:5432:5432"
