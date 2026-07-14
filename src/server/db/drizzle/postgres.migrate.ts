@@ -3,8 +3,9 @@ import { requireEnv } from "@/shared/env";
 import { loadEnvFile } from "@/shared/load-env";
 import base from "./postgres.config";
 
-// Connection-bearing variant of postgres.config.ts, used ONLY by
-// `drizzle-kit migrate` (make pg-migrate). The base config is intentionally
+// Connection-bearing variant of postgres.config.ts, used ONLY by the deploy
+// containers' `drizzle-kit migrate` (the compose `migrate` tools-profile
+// service); operators use `make db-migrate` instead. The base config is intentionally
 // connectionless because db/server/generate.ts evaluates it without a
 // DATABASE_URL; `migrate` must connect, so this loads the env file and supplies
 // DATABASE_URL (the source Postgres from the host). Schema/out are reused from

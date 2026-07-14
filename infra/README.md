@@ -17,16 +17,14 @@ cd ~/docker/dont-forget
 # Postgres/PowerSync, Clerk, Resend, and PostHog variables from infra/.env.example.
 # DATABASE_URL and PS_DATA_SOURCE_URI use dontforget-pg-source:5432.
 # PS_STORAGE_SOURCE_URI uses dontforget-pg-storage:5432.
-docker compose --env-file .env.staging build api
-make infra-up APP_ENV=staging
-docker compose --env-file .env.staging --profile tools run --rm migrate
+make infra-deploy APP_ENV=staging
 ```
 
 The `make infra-*` targets read `.env.$(APP_ENV)` from the repo root (default
 `local`), and that env file's `COMPOSE_FILE` selects the compose file — the
-Makefile hardcodes neither. Steps without a make target (build, the migrate
-tools profile) use `docker compose --env-file .env.staging` directly from the
-repo root.
+Makefile hardcodes neither. `infra-deploy` chains `infra-build`, `infra-up`,
+and `infra-migrate` (the one-off migrate container from the `tools` profile);
+each is also runnable on its own.
 
 The migration command applies the Drizzle schema and PowerSync publication.
 The API image exports the web server bundle with
@@ -52,10 +50,9 @@ authentication. Use the resulting public HTTPS URLs for
 
 ```sh
 git pull
-docker compose --env-file .env.staging build api
-docker compose --env-file .env.staging up -d api
+make infra-deploy APP_ENV=staging
 ```
 
 Staging is deliberately wipeable with `make infra-destroy APP_ENV=staging`. Its named
-volumes and non-`-db` container names keep it outside homelab backups. Run the
-migration command again after a wipe.
+volumes and non-`-db` container names keep it outside homelab backups. Run
+`make infra-deploy APP_ENV=staging` again after a wipe.

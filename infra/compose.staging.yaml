@@ -5,12 +5,13 @@
 #   - Named volumes on purpose: staging is wipeable with `docker compose down -v`
 #     (fresh DBs, re-run drizzle-kit migrate). Container names deliberately do
 #     NOT end in `-db` so the nightly backup script's pg_dumpall loop skips them.
-#   - The server's .env (never committed) sets COMPOSE_FILE=compose.staging.yaml
-#     so plain `docker compose up -d` uses this file there.
+#   - The server's repo-root .env.staging (never committed) sets
+#     COMPOSE_FILE=infra/compose.staging.yaml so `make infra-up APP_ENV=staging`
+#     and `docker compose --env-file .env.staging` use this file there.
 #
 # SCHEMA AUTHORITY and REPLICATION COUPLING notes in docker-compose.yaml apply
 # here unchanged: apply schema via drizzle-kit migrate against PS_DATA_SOURCE_URI
-# (which must point at dontforget-pg-source:5432 in the server's .env), and
+# (which must point at dontforget-pg-source:5432 in the server's .env.staging), and
 # wal_level=logical + the `powersync` publication are both required.
 
 services:
