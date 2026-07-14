@@ -10,9 +10,10 @@
 #     and `docker compose --env-file .env.staging` use this file there.
 #
 # SCHEMA AUTHORITY and REPLICATION COUPLING notes in docker-compose.yaml apply
-# here unchanged: apply schema via drizzle-kit migrate against PS_DATA_SOURCE_URI
-# (which must point at dontforget-pg-source:5432 in the server's .env.staging), and
-# wal_level=logical + the `powersync` publication are both required.
+# here unchanged: apply schema via drizzle-kit migrate against the source
+# Postgres, and wal_level=logical + the `powersync` publication are both
+# required. Connection URIs are assembled HERE from the PG_* parts in
+# .env.staging so each credential is stated exactly once.
 
 services:
   api:
@@ -31,7 +32,7 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: staging
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
       PUBLIC_APP_BASE_URL: ${PUBLIC_APP_BASE_URL}
       RESEND_API_KEY: ${RESEND_API_KEY}
@@ -66,7 +67,7 @@ services:
         EXPO_PUBLIC_POWERSYNC_URL: ${EXPO_PUBLIC_POWERSYNC_URL}
     environment:
       APP_ENV: staging
-      DATABASE_URL: ${PS_DATA_SOURCE_URI}
+      DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
     command:
       [
         "pnpm",
@@ -134,8 +135,8 @@ services:
     environment:
       POWERSYNC_CONFIG_PATH: /config/service.yaml
       NODE_OPTIONS: --max-old-space-size=1000
-      PS_DATA_SOURCE_URI: ${PS_DATA_SOURCE_URI}
-      PS_STORAGE_SOURCE_URI: ${PS_STORAGE_SOURCE_URI}
+      PS_DATA_SOURCE_URI: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
+      PS_STORAGE_SOURCE_URI: postgresql://${PG_STORAGE_DATABASE_USER}:${PG_STORAGE_DATABASE_PASSWORD}@pg-storage:5432/${PG_STORAGE_DATABASE_NAME}
       PS_PORT: ${PS_PORT}
       PS_CLERK_JWKS_URI: ${PS_CLERK_JWKS_URI}
     networks:
