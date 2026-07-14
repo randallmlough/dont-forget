@@ -173,7 +173,7 @@ infra-build: ## Build stack images (staging/production api). Optional: SERVICE=a
 
 .PHONY: infra-migrate
 infra-migrate: ## Apply migrations via the stack's one-off migrate container (staging/production)
-	@$(COMPOSE) --profile tools run --rm migrate
+	@$(COMPOSE) --profile tools run --build --rm migrate
 
 .PHONY: infra-deploy
 infra-deploy: infra-build infra-up infra-migrate ## Build images, start the stack, and migrate (staging/production)
