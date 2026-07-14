@@ -15,8 +15,8 @@ git clone <repo-url> ~/docker/dont-forget
 cd ~/docker/dont-forget
 # Create .env.staging (never commit it) with COMPOSE_FILE=infra/compose.staging.yaml and all
 # Postgres/PowerSync, Clerk, Resend, and PostHog variables from infra/.env.example.
-# DATABASE_URL and PS_DATA_SOURCE_URI use dontforget-pg-source:5432.
-# PS_STORAGE_SOURCE_URI uses dontforget-pg-storage:5432.
+# Postgres/PowerSync connection URIs are assembled inside compose.staging.yaml
+# from the PG_* variables — the env file holds only user/name/password parts.
 make infra-deploy APP_ENV=staging
 ```
 
