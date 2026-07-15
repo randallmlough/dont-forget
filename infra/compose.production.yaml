@@ -1,21 +1,29 @@
-# the staging house rules applied:
-#   - NO published ports. The only ingress is the Cloudflare Tunnel reaching
-#     `dontforget-staging-powersync:${PS_PORT}` and `dontforget-staging-api:8080`
-#     over proxy-net; both Postgres instances are on the internal network only.
-#   - Named volumes on purpose: staging is wipeable with `docker compose down -v`
-#     (fresh DBs, re-run drizzle-kit migrate). Container names deliberately do
-#     NOT end in `-db` so the nightly backup script's pg_dumpall loop skips them.
-#   - The server's repo-root .env.staging (never committed) sets
-#     COMPOSE_FILE=infra/compose.staging.yaml so `make infra-up APP_ENV=staging`
-#     and `docker compose --env-file .env.staging` use this file there.
+# PRODUCTION stack. Runs side by side with compose.staging.yaml on the same
+# server; the `name:` below gives this stack its own Compose project, so its
+# `internal` network, containers, and data are fully isolated from staging.
+#
+# Where staging deliberately opts OUT of the homelab house rules, production
+# opts back IN:
+#   - NO published ports (same as staging). The only ingress is the Cloudflare
+#     Tunnel reaching `dontforget-prod-powersync:${PS_PORT}` and
+#     `dontforget-prod-api:8080` over proxy-net; both Postgres instances are on
+#     the internal network only.
+#   - Bind mounts under ./data/ instead of named volumes: production is NOT
+#     wipeable, and `docker compose down -v` must never be able to destroy it.
+#   - Postgres container names END in `-db` so the nightly backup script's
+#     pg_dumpall loop picks them up. (The storage DB is rebuildable from the
+#     source DB, but backing it up is harmless and keeps the rule simple.)
+#   - The server's repo-root .env.production (never committed) sets
+#     COMPOSE_FILE=infra/compose.production.yaml plus production-only PG_*
+#     credentials, Clerk keys, and public URLs — never reuse staging values.
 #
 # SCHEMA AUTHORITY and REPLICATION COUPLING notes in docker-compose.yaml apply
 # here unchanged: apply schema via drizzle-kit migrate against the source
 # Postgres, and wal_level=logical + the `powersync` publication are both
 # required. Connection URIs are assembled HERE from the PG_* parts in
-# .env.staging so each credential is stated exactly once.
+# .env.production so each credential is stated exactly once.
 
-name: dontforget-staging
+name: dontforget-prod
 
 services:
   api:
@@ -23,17 +31,17 @@ services:
       context: ..
       dockerfile: infra/api/Dockerfile
       args:
-        APP_ENV: staging
+        APP_ENV: production
         EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
         EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL}
         EXPO_PUBLIC_POWERSYNC_URL: ${EXPO_PUBLIC_POWERSYNC_URL}
-    container_name: dontforget-staging-api
+    container_name: dontforget-prod-api
     restart: unless-stopped
     depends_on:
       pg-source:
         condition: service_healthy
     environment:
-      APP_ENV: staging
+      APP_ENV: production
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
       PUBLIC_APP_BASE_URL: ${PUBLIC_APP_BASE_URL}
@@ -43,7 +51,7 @@ services:
       POSTHOG_HOST: ${POSTHOG_HOST}
     networks:
       - proxy-net # web-facing: the tunnel routes API traffic here
-      - internal # reaches dontforget-staging-pg-source
+      - internal # reaches dontforget-prod-source-db
     healthcheck:
       test:
         [
@@ -63,12 +71,12 @@ services:
       dockerfile: infra/api/Dockerfile
       target: builder
       args:
-        APP_ENV: staging
+        APP_ENV: production
         EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
         EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL}
         EXPO_PUBLIC_POWERSYNC_URL: ${EXPO_PUBLIC_POWERSYNC_URL}
     environment:
-      APP_ENV: staging
+      APP_ENV: production
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
     command:
       [
@@ -86,7 +94,7 @@ services:
 
   pg-source:
     image: postgres:18
-    container_name: dontforget-staging-pg-source
+    container_name: dontforget-prod-source-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PG_DATABASE_USER}
@@ -95,7 +103,8 @@ services:
     # wal_level=logical is REQUIRED for PowerSync replication.
     command: ["postgres", "-c", "wal_level=logical"]
     volumes:
-      - pg_source_data:/var/lib/postgresql
+      # Relative to this file, so on the server: <repo>/infra/data/pg-source
+      - ./data/pg-source:/var/lib/postgresql
     networks:
       - internal
     healthcheck:
@@ -106,14 +115,14 @@ services:
 
   pg-storage:
     image: postgres:18
-    container_name: dontforget-staging-pg-storage
+    container_name: dontforget-prod-storage-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PG_STORAGE_DATABASE_USER}
       POSTGRES_DB: ${PG_STORAGE_DATABASE_NAME}
       POSTGRES_PASSWORD: ${PG_STORAGE_DATABASE_PASSWORD}
     volumes:
-      - pg_storage_data:/var/lib/postgresql
+      - ./data/pg-storage:/var/lib/postgresql
     networks:
       - internal
     healthcheck:
@@ -124,7 +133,7 @@ services:
 
   powersync:
     image: journeyapps/powersync-service:1.23.3
-    container_name: dontforget-staging-powersync
+    container_name: dontforget-prod-powersync
     restart: unless-stopped
     depends_on:
       pg-source:
@@ -155,10 +164,6 @@ services:
       interval: 5s
       timeout: 2s
       retries: 20
-
-volumes:
-  pg_source_data:
-  pg_storage_data:
 
 networks:
   proxy-net:
