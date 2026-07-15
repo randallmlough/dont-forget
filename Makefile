@@ -4,6 +4,9 @@
 
 PNPM ?= pnpm
 APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
+# Expo CLI's built-in dotenv support always loads .env.local, which would shadow
+# .env.$(APP_ENV); loadEnvFile() in app.config.ts is the single env loader.
+export EXPO_NO_DOTENV = 1
 PORT_ARG = $(if $(PORT),--port $(PORT),)
 COMPOSE = docker compose --env-file .env.$(APP_ENV_VALUE)
 
@@ -42,6 +45,18 @@ prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to 
 .PHONY: --clean
 --clean:
 	@:
+
+# eas.json build profiles are named after APP_ENV except local, whose profile is "development".
+# PROFILE overrides the mapping (e.g. PROFILE=preview for a QR-installable staging build).
+EAS_BUILD_PROFILE = $(if $(PROFILE),$(PROFILE),$(if $(filter local,$(APP_ENV_VALUE)),development,$(APP_ENV_VALUE)))
+
+.PHONY: eas-build
+eas-build: ## Build on EAS for the selected environment (APP_ENV, default local; PROFILE overrides)
+	@APP_ENV="$(APP_ENV_VALUE)" eas build --profile $(EAS_BUILD_PROFILE) --platform ios
+
+.PHONY: submit
+submit: ## Submit the latest EAS build for the selected environment to TestFlight/App Store
+	@APP_ENV="$(APP_ENV_VALUE)" eas submit --profile $(APP_ENV_VALUE) --platform ios --latest
 
 .PHONY: storybook
 storybook: ## Start Storybook for the native iOS build *common*

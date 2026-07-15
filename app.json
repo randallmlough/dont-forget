@@ -10,7 +10,10 @@
 		"ios": {
 			"supportsTablet": true,
 			"bundleIdentifier": "com.dont-forget.app",
-			"usesAppleSignIn": true
+			"usesAppleSignIn": true,
+			"infoPlist": {
+				"ITSAppUsesNonExemptEncryption": false
+			}
 		},
 		"android": {
 			"adaptiveIcon": {
