@@ -1,17 +1,13 @@
-# ---- Builder: runs `expo export` (bakes EXPO_PUBLIC_* into dist/) ----
+# ---- Builder: runs `expo export` for the API routes. The app is iOS-only,
+# so the web client bundle in dist/ is unused and no EXPO_PUBLIC_* vars are
+# needed; app.config.ts tolerates their absence. ----
 FROM node:22-alpine AS builder
 RUN corepack enable
 WORKDIR /app
 
-# Baked at export time — build args, never runtime env.
+# Baked at export time — build arg, never runtime env.
 ARG APP_ENV
-ARG EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
-ARG EXPO_PUBLIC_API_BASE_URL
-ARG EXPO_PUBLIC_POWERSYNC_URL
-ENV APP_ENV=$APP_ENV \
-    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=$EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY \
-    EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL \
-    EXPO_PUBLIC_POWERSYNC_URL=$EXPO_PUBLIC_POWERSYNC_URL
+ENV APP_ENV=$APP_ENV
 
 # pnpm-workspace.yaml carries nodeLinker/overrides recorded in the lockfile;
 # without it (and the tooling workspace manifest) the frozen install fails
