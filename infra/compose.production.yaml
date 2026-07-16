@@ -32,9 +32,6 @@ services:
       dockerfile: infra/api/Dockerfile
       args:
         APP_ENV: production
-        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
-        EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL}
-        EXPO_PUBLIC_POWERSYNC_URL: ${EXPO_PUBLIC_POWERSYNC_URL}
     container_name: dontforget-prod-api
     restart: unless-stopped
     depends_on:
@@ -72,9 +69,6 @@ services:
       target: builder
       args:
         APP_ENV: production
-        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
-        EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL}
-        EXPO_PUBLIC_POWERSYNC_URL: ${EXPO_PUBLIC_POWERSYNC_URL}
     environment:
       APP_ENV: production
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}

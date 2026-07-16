@@ -114,6 +114,20 @@ export function readPublicExpoConfig(
 	};
 }
 
+// EAS CLI evaluates app.config.ts once BEFORE it fetches env vars from the
+// EAS environment (it needs the projectId to fetch them), so the public vars
+// are legitimately absent during that bootstrap pass. Absence of the Clerk
+// key is the signal; any partially-set env still fails loudly above.
+export function readPublicExpoConfigIfPresent(
+	source: EnvSource = process.env,
+): PublicExpoConfig | undefined {
+	if (!optionalEnv("EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY", source)) {
+		return undefined;
+	}
+
+	return readPublicExpoConfig(source);
+}
+
 export function readPostgresConfig(
 	source: EnvSource = process.env,
 ): PostgresConfig {

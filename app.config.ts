@@ -3,12 +3,18 @@ import { resolve } from "node:path";
 
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
-import { type AppEnv, readPublicExpoConfig } from "./src/shared/env.ts";
+import {
+	type AppEnv,
+	readPublicExpoConfigIfPresent,
+} from "./src/shared/env.ts";
 import { loadEnvFile } from "./src/shared/load-env.ts";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-	loadEnvFile();
-	const publicConfig = readPublicExpoConfig();
+	const appEnv = loadEnvFile();
+	// undefined only during the EAS CLI bootstrap evaluation (see
+	// readPublicExpoConfigIfPresent); identifiers derive from APP_ENV alone,
+	// and the second, env-injected evaluation fills the extras.
+	const publicConfig = readPublicExpoConfigIfPresent();
 	const baseBundleIdentifier =
 		config.ios?.bundleIdentifier ?? "com.dont-forget.app";
 	const baseScheme =
@@ -19,26 +25,27 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		plugins: withLocalConfigPlugins(config.plugins),
 		name:
 			process.env.EXPO_APP_NAME ??
-			appNameForEnv(config.name ?? "Don't Forget", publicConfig.appEnv),
+			appNameForEnv(config.name ?? "Don't Forget", appEnv),
 		slug: config.slug ?? "dont-forget",
-		scheme:
-			process.env.EXPO_SCHEME ?? schemeForEnv(baseScheme, publicConfig.appEnv),
+		scheme: process.env.EXPO_SCHEME ?? schemeForEnv(baseScheme, appEnv),
 		ios: {
 			...config.ios,
 			bundleIdentifier:
 				process.env.IOS_BUNDLE_IDENTIFIER ??
-				bundleIdentifierForEnv(baseBundleIdentifier, publicConfig.appEnv),
+				bundleIdentifierForEnv(baseBundleIdentifier, appEnv),
 		},
 		extra: {
 			...config.extra,
-			appEnv: publicConfig.appEnv,
-			apiBaseUrl: publicConfig.apiBaseUrl,
-			posthogProjectToken: publicConfig.posthogProjectToken,
-			posthogHost: publicConfig.posthogHost,
-			powersyncUrl: publicConfig.powersyncUrl,
-			// EXPO_PUBLIC_PRIVACY_POLICY_URL is parsed in lib/env.ts and exposed here.
-			privacyPolicyUrl: publicConfig.privacyPolicyUrl,
-			termsUrl: publicConfig.termsUrl,
+			appEnv,
+			...(publicConfig && {
+				apiBaseUrl: publicConfig.apiBaseUrl,
+				posthogProjectToken: publicConfig.posthogProjectToken,
+				posthogHost: publicConfig.posthogHost,
+				powersyncUrl: publicConfig.powersyncUrl,
+				// EXPO_PUBLIC_PRIVACY_POLICY_URL is parsed in lib/env.ts and exposed here.
+				privacyPolicyUrl: publicConfig.privacyPolicyUrl,
+				termsUrl: publicConfig.termsUrl,
+			}),
 		},
 	};
 };

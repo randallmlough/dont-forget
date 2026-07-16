@@ -41,10 +41,12 @@ In the Cloudflare dashboard, add two public hostnames to the `homelab` tunnel:
 - PowerSync: `dontforget-powersync:<PS_PORT>`
 
 Do not add a Cloudflare Access policy to either hostname; Clerk owns
-authentication. Use the resulting public HTTPS URLs for
-`EXPO_PUBLIC_API_BASE_URL`, `PUBLIC_APP_BASE_URL`, and
-`EXPO_PUBLIC_POWERSYNC_URL` in the server `.env.staging` build arguments and the EAS
-`preview` environment used by staging iOS builds.
+authentication. Use the resulting public HTTPS URLs for `PUBLIC_APP_BASE_URL`
+in the server `.env.staging`, and for `EXPO_PUBLIC_API_BASE_URL` and
+`EXPO_PUBLIC_POWERSYNC_URL` in the EAS `preview` environment used by staging
+iOS builds. The server env files need no `EXPO_PUBLIC_*` variables — the API
+image's web export serves API routes only, and app.config.ts tolerates their
+absence.
 
 ## Redeploy
 

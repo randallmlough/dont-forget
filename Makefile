@@ -52,7 +52,7 @@ EAS_BUILD_PROFILE = $(if $(PROFILE),$(PROFILE),$(if $(filter local,$(APP_ENV_VAL
 
 .PHONY: eas-build
 eas-build: ## Build on EAS for the selected environment (APP_ENV, default local; PROFILE overrides)
-	@APP_ENV="$(APP_ENV_VALUE)" eas build --profile $(EAS_BUILD_PROFILE) --platform ios
+	APP_ENV="$(APP_ENV_VALUE)" eas build --profile $(EAS_BUILD_PROFILE) --platform ios
 
 .PHONY: submit
 submit: ## Submit the latest EAS build for the selected environment to TestFlight/App Store
