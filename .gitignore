@@ -53,3 +53,6 @@ storybook-static
 docs/.local
 plans/
 
+# Production Postgres bind mounts (server-only data, root-owned)
+infra/data/
+

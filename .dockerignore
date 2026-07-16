@@ -6,3 +6,5 @@ dist
 .env*
 plans
 docs
+# Production Postgres bind mounts (root-owned; unreadable during context transfer)
+infra/data
