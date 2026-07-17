@@ -1,5 +1,5 @@
-import { type SFSymbol, SymbolView } from "expo-symbols";
 import { usePathname, useRouter } from "expo-router";
+import { type SFSymbol, SymbolView } from "expo-symbols";
 import { useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -28,9 +28,14 @@ type DrawerRowProps = {
 export type NavigationDrawerProps = {
 	isOpen: boolean;
 	onClose: () => void;
+	onDismissed?: () => void;
 };
 
-export function NavigationDrawer({ isOpen, onClose }: NavigationDrawerProps) {
+export function NavigationDrawer({
+	isOpen,
+	onClose,
+	onDismissed,
+}: NavigationDrawerProps) {
 	const { session } = useAuthenticatedAppSession();
 	const router = useRouter();
 	const pathname = usePathname();
@@ -38,7 +43,10 @@ export function NavigationDrawer({ isOpen, onClose }: NavigationDrawerProps) {
 
 	if (!session) return null;
 
-	function navigate(destination: DrawerDestination, beforeNavigate?: () => void) {
+	function navigate(
+		destination: DrawerDestination,
+		beforeNavigate?: () => void,
+	) {
 		if (pathname === destination) {
 			onClose();
 			return;
@@ -61,6 +69,7 @@ export function NavigationDrawer({ isOpen, onClose }: NavigationDrawerProps) {
 				const action = pendingAction.current;
 				pendingAction.current = null;
 				action?.();
+				onDismissed?.();
 			}}
 			onNavigate={navigate}
 		/>

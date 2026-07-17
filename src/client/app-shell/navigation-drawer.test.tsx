@@ -49,10 +49,7 @@ describe("NavigationDrawer", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 		expect(mockReplace).not.toHaveBeenCalled();
 
-		await fireEvent(
-			screen.getByTestId("navigation-drawer-modal"),
-			"dismiss",
-		);
+		await fireEvent(screen.getByTestId("navigation-drawer-modal"), "dismiss");
 
 		expect(track).toHaveBeenCalledWith("settings_opened", {
 			source: "navigation_drawer",

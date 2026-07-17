@@ -20,7 +20,9 @@ it("opens navigation and renders the screen heading", async () => {
 	expect(screen.getByText("App settings")).toBeTruthy();
 	expect(screen.getByText("Screen content")).toBeTruthy();
 
-	await fireEvent.press(screen.getByRole("button", { name: "Open navigation" }));
+	await fireEvent.press(
+		screen.getByRole("button", { name: "Open navigation" }),
+	);
 
 	expect(open).toHaveBeenCalledTimes(1);
 });

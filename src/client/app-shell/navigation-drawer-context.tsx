@@ -9,9 +9,8 @@ type NavigationDrawerContextValue = {
 	open: () => void;
 };
 
-const NavigationDrawerContext = createContext<NavigationDrawerContextValue | null>(
-	null,
-);
+const NavigationDrawerContext =
+	createContext<NavigationDrawerContextValue | null>(null);
 
 export function NavigationDrawerProvider({
 	open,
