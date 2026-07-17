@@ -58,9 +58,6 @@ export function HomeScreenView({
 	const displayMemberName = homeSessionMemberName(session);
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const [listSwitcherOpen, setListSwitcherOpen] = useState(false);
-	const openSettings = onOpenSettings ?? noop;
-	const openHouseholdSettings = onOpenHouseholdSettings ?? noop;
-	const switchHousehold = onSwitchHousehold ?? noop;
 
 	return (
 		<SafeAreaView edges={["top"]} style={styles.root}>
@@ -91,12 +88,9 @@ export function HomeScreenView({
 					householdName={session.activeHousehold.name}
 					onClose={() => setDrawerOpen(false)}
 					onOpenAllLists={() => setListSwitcherOpen(true)}
-					onOpenHousehold={openHouseholdSettings}
-					onOpenMembers={openHouseholdSettings}
-					onOpenSettings={openSettings}
-					onOpenAppearance={openSettings}
-					onOpenHelp={openSettings}
-					onSwitchHousehold={switchHousehold}
+					onOpenHousehold={onOpenHouseholdSettings ?? noop}
+					onOpenSettings={onOpenSettings ?? noop}
+					onSwitchHousehold={onSwitchHousehold ?? noop}
 				/>
 			) : null}
 		</SafeAreaView>

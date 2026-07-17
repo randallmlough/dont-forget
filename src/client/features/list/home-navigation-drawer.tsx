@@ -18,10 +18,7 @@ export type HomeNavigationDrawerProps = {
 	onClose: () => void;
 	onOpenAllLists: () => void;
 	onOpenHousehold: () => void;
-	onOpenMembers: () => void;
 	onOpenSettings: () => void;
-	onOpenAppearance: () => void;
-	onOpenHelp: () => void;
 	onSwitchHousehold: () => void;
 };
 
@@ -39,10 +36,7 @@ export function HomeNavigationDrawer({
 	onClose,
 	onOpenAllLists,
 	onOpenHousehold,
-	onOpenMembers,
 	onOpenSettings,
-	onOpenAppearance,
-	onOpenHelp,
 	onSwitchHousehold,
 }: HomeNavigationDrawerProps) {
 	const { width } = useWindowDimensions();
@@ -129,6 +123,9 @@ export function HomeNavigationDrawer({
 						<View style={styles.separator} />
 
 						<View style={styles.destinationGroup}>
+							{/* Members live on the Household screen; Appearance and Help
+							    live on the Settings screen. Dedicated rows keep the
+							    destinations discoverable until those screens exist. */}
 							<DrawerRow
 								icon="house"
 								label="Household"
@@ -137,7 +134,7 @@ export function HomeNavigationDrawer({
 							<DrawerRow
 								icon="person.2"
 								label="Members & Invitations"
-								onPress={() => navigate(onOpenMembers)}
+								onPress={() => navigate(onOpenHousehold)}
 							/>
 							<DrawerRow
 								icon="gearshape"
@@ -147,12 +144,12 @@ export function HomeNavigationDrawer({
 							<DrawerRow
 								icon="circle.lefthalf.filled"
 								label="Appearance"
-								onPress={() => navigate(onOpenAppearance)}
+								onPress={() => navigate(onOpenSettings)}
 							/>
 							<DrawerRow
 								icon="questionmark.circle"
 								label="Help"
-								onPress={() => navigate(onOpenHelp)}
+								onPress={() => navigate(onOpenSettings)}
 							/>
 						</View>
 
@@ -240,9 +237,8 @@ const styles = StyleSheet.create((theme) => ({
 		paddingBottom: theme.spacing(5),
 	},
 	brand: {
-		...theme.typography.captionStrong,
+		...theme.typography.overline,
 		color: theme.colors.textMuted,
-		letterSpacing: 1.5,
 	},
 	memberRow: {
 		flexDirection: "row",

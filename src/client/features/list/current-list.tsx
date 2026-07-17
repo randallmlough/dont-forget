@@ -1,9 +1,6 @@
-import { useRef } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { setCurrentListSelection } from "@/client/features/list/current-selection";
 import type { ListSummary } from "@/client/features/list/list-service";
-import { track } from "@/client/lib/analytics";
 import { type AuthenticatedAppSession, useSyncState } from "@/client/session";
 import { AddItemForm } from "./add-item-form";
 import { HomeListSwitcher } from "./home-list-switcher";
@@ -15,8 +12,12 @@ import {
 	type HomeCurrentListData,
 	useHomeCurrentList,
 } from "./use-home-current-list";
-import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
+import {
+	type HomeListSwitcherRows,
+	useHomeListSwitcherRows,
+} from "./use-home-list-switcher-rows";
 import { useListActions } from "./use-list-actions";
+import { useSelectList } from "./use-select-list";
 
 export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
@@ -45,7 +46,7 @@ export function CurrentList({
 				list={deps.currentList}
 				syncState={deps.syncState}
 				allowListSwitcher={false}
-				listSummaries={[]}
+				listRows={{ status: "ready", summaries: [] }}
 				listSwitcherOpen={listSwitcherOpen}
 				onListSwitcherOpenChange={onListSwitcherOpenChange}
 				onOpenNavigation={onOpenNavigation}
@@ -74,6 +75,8 @@ function HomeCurrentListResource({
 }: HomeCurrentListResourceProps) {
 	const list = useHomeCurrentList(session);
 	const syncState = useSyncState();
+	// The single live rows watch: feeds both the header quick-list chips and
+	// the switcher sheet.
 	const { rows } = useHomeListSwitcherRows(session);
 	return (
 		<HomeCurrentListContent
@@ -81,7 +84,7 @@ function HomeCurrentListResource({
 			list={list}
 			syncState={syncState}
 			allowListSwitcher
-			listSummaries={rows.status === "ready" ? rows.summaries : []}
+			listRows={rows}
 			listSwitcherOpen={listSwitcherOpen}
 			onListSwitcherOpenChange={onListSwitcherOpenChange}
 			onOpenNavigation={onOpenNavigation}
@@ -94,7 +97,7 @@ type HomeCurrentListContentProps = {
 	list: HomeCurrentListData;
 	syncState: ActiveListSyncState;
 	allowListSwitcher: boolean;
-	listSummaries: ListSummary[];
+	listRows: HomeListSwitcherRows;
 	listSwitcherOpen: boolean;
 	onListSwitcherOpenChange: (isOpen: boolean) => void;
 	onOpenNavigation: () => void;
@@ -105,35 +108,18 @@ function HomeCurrentListContent({
 	list,
 	syncState,
 	allowListSwitcher,
-	listSummaries,
+	listRows,
 	listSwitcherOpen,
 	onListSwitcherOpenChange,
 	onOpenNavigation,
 }: HomeCurrentListContentProps) {
 	const currentMemberName = homeSessionMemberName(session);
 	const loadState = list.state;
-	const switchingRef = useRef(false);
+	const selectList = useSelectList(session);
+	const listSummaries = listRows.status === "ready" ? listRows.summaries : [];
 
-	async function selectList(listId: string, currentListId: string) {
-		if (listId === currentListId || switchingRef.current) return;
-		switchingRef.current = true;
-		try {
-			await setCurrentListSelection(
-				session.activeMember.userId,
-				session.activeHousehold.id,
-				listId,
-			);
-		} catch {
-			switchingRef.current = false;
-			return;
-		}
-		track("list_switched", {
-			household_id: session.activeHousehold.id,
-			list_id: listId,
-			user_id: session.activeMember.userId,
-		});
-		list.reload();
-		switchingRef.current = false;
+	async function switchList(listId: string, currentListId: string) {
+		if (await selectList(listId, currentListId)) list.reload();
 	}
 
 	if (loadState.status === "loading") {
@@ -180,6 +166,7 @@ function HomeCurrentListContent({
 				{listSwitcherOpen ? (
 					<HomeListSwitcher
 						session={session}
+						rows={listRows}
 						currentListId={null}
 						initialMode="create"
 						onDismiss={() => onListSwitcherOpenChange(false)}
@@ -201,7 +188,7 @@ function HomeCurrentListContent({
 				syncState={syncState}
 				listSummaries={listSummaries}
 				onOpenNavigation={onOpenNavigation}
-				onSelectList={(listId) => void selectList(listId, loadState.listId)}
+				onSelectList={(listId) => void switchList(listId, loadState.listId)}
 				onPressListName={
 					allowListSwitcher ? () => onListSwitcherOpenChange(true) : undefined
 				}
@@ -209,6 +196,7 @@ function HomeCurrentListContent({
 			{listSwitcherOpen ? (
 				<HomeListSwitcher
 					session={session}
+					rows={listRows}
 					currentListId={loadState.listId}
 					onDismiss={() => onListSwitcherOpenChange(false)}
 					// Task 5 re-resolution: re-reads the freshly stored selection and

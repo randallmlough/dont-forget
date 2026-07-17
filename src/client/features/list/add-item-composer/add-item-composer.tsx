@@ -40,6 +40,9 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
+// SwiftUI fields hug their content; an effectively-unbounded maxWidth makes
+// them fill the available width instead.
+const FILL_AVAILABLE_WIDTH = 1000;
 export const ADD_ITEM_COMPOSER_SCROLL_CLEARANCE = 128;
 
 export type AddItemComposerProps = {
@@ -113,7 +116,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 			>
 				<RestingGlassComposer
 					colorScheme={colorScheme}
-					draft={draft}
+					name={draft.name}
 					actions={actions}
 				/>
 			</View>
@@ -155,15 +158,15 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 
 function RestingGlassComposer({
 	colorScheme,
-	draft,
+	name: nameValue,
 	actions,
 }: {
 	colorScheme: "light" | "dark";
-	draft: AddItemComposerDraft;
+	name: string;
 	actions: AddItemComposerActions;
 }) {
 	const { theme } = useUnistyles();
-	const name = useMirroredNativeState(draft.name);
+	const name = useMirroredNativeState(nameValue);
 
 	return (
 		<Host colorScheme={colorScheme} style={styles.entryHost}>
@@ -181,7 +184,10 @@ function RestingGlassComposer({
 						textInputAutocapitalization("sentences"),
 						font({ textStyle: "body" }),
 						foregroundStyle(theme.colors.text),
-						frame({ minHeight: theme.spacing(13), maxWidth: 1000 }),
+						frame({
+							minHeight: theme.spacing(13),
+							maxWidth: FILL_AVAILABLE_WIDTH,
+						}),
 						padding({ horizontal: theme.spacing(4) }),
 						glassEffect({
 							glass: { variant: "regular", interactive: true },
@@ -221,7 +227,7 @@ function ExpandedGlassComposer({
 					alignment="leading"
 					spacing={theme.spacing(3)}
 					modifiers={[
-						frame({ maxWidth: 1000 }),
+						frame({ maxWidth: FILL_AVAILABLE_WIDTH }),
 						padding({ all: theme.spacing(3) }),
 						glassEffect({
 							glass: { variant: "regular", interactive: false },
@@ -240,7 +246,10 @@ function ExpandedGlassComposer({
 							textFieldStyle("roundedBorder"),
 							textInputAutocapitalization("sentences"),
 							font({ textStyle: "body" }),
-							frame({ minHeight: theme.spacing(11), maxWidth: 1000 }),
+							frame({
+								minHeight: theme.spacing(11),
+								maxWidth: FILL_AVAILABLE_WIDTH,
+							}),
 							submitLabel("done"),
 							onSubmit(actions.submit),
 						]}
@@ -267,7 +276,10 @@ function ExpandedGlassComposer({
 								accessibilityLabel("Quantity"),
 								textFieldStyle("plain"),
 								font({ textStyle: "subheadline" }),
-								frame({ minHeight: theme.spacing(10), maxWidth: 1000 }),
+								frame({
+									minHeight: theme.spacing(10),
+									maxWidth: FILL_AVAILABLE_WIDTH,
+								}),
 								padding({ horizontal: theme.spacing(3) }),
 								submitLabel("done"),
 								onSubmit(actions.submit),
@@ -286,7 +298,10 @@ function ExpandedGlassComposer({
 								textFieldStyle("roundedBorder"),
 								font({ textStyle: "subheadline" }),
 								lineLimit({ min: 2, max: 3 }),
-								frame({ minHeight: theme.spacing(15), maxWidth: 1000 }),
+								frame({
+									minHeight: theme.spacing(15),
+									maxWidth: FILL_AVAILABLE_WIDTH,
+								}),
 							]}
 						/>
 					) : null}

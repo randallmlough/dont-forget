@@ -21,18 +21,21 @@ const fontWeights = {
 	bold: "700",
 } as const;
 
+const fontFamilies = {
+	serif: "Georgia",
+} as const;
+
 const radii = {
 	card: 22,
 	control: 14,
 	pill: 999,
 	checkbox: 12,
-	checkboxMark: 6,
 } as const;
 
 const typography = {
 	largeTitle: {
 		fontSize: fontSizes.largeTitle,
-		fontFamily: "Georgia",
+		fontFamily: fontFamilies.serif,
 		lineHeight: 50,
 	},
 	title: {
@@ -56,6 +59,11 @@ const typography = {
 		fontSize: fontSizes.caption,
 		fontWeight: fontWeights.semibold,
 	},
+	overline: {
+		fontSize: fontSizes.caption,
+		fontWeight: fontWeights.semibold,
+		letterSpacing: 1.5,
+	},
 	controlLabel: {
 		fontSize: fontSizes.body,
 		fontWeight: fontWeights.bold,
@@ -70,7 +78,6 @@ const opacities = {
 const borders = {
 	hairline: StyleSheet.hairlineWidth,
 	thin: 1,
-	thick: 2,
 } as const;
 
 const spacing = (step: number) => step * 4;
@@ -99,6 +106,7 @@ export const lightTheme = {
 	radii,
 	fontSizes,
 	fontWeights,
+	fontFamilies,
 	typography,
 	opacities,
 	borders,
@@ -129,6 +137,7 @@ export const darkTheme = {
 	radii,
 	fontSizes,
 	fontWeights,
+	fontFamilies,
 	typography,
 	opacities,
 	borders,

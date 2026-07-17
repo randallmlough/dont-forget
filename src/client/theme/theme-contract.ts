@@ -36,7 +36,6 @@ export type AppTheme = {
 		control: number;
 		pill: number;
 		checkbox: number;
-		checkboxMark: number;
 	};
 	fontSizes: {
 		caption: number;
@@ -54,6 +53,9 @@ export type AppTheme = {
 		semibold: FontWeight;
 		bold: FontWeight;
 	};
+	fontFamilies: {
+		serif: string;
+	};
 	typography: {
 		largeTitle: TypographyStyle;
 		title: TypographyStyle;
@@ -62,6 +64,7 @@ export type AppTheme = {
 		callout: TypographyStyle;
 		caption: TypographyStyle;
 		captionStrong: TypographyStyle;
+		overline: TypographyStyle;
 		controlLabel: TypographyStyle;
 	};
 	opacities: {
@@ -71,7 +74,6 @@ export type AppTheme = {
 	borders: {
 		hairline: number;
 		thin: number;
-		thick: number;
 	};
 	spacing: (step: number) => number;
 };

@@ -1,4 +1,5 @@
 import { SymbolView } from "expo-symbols";
+import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { ListSummary } from "./list-service";
@@ -35,10 +36,10 @@ export function ListHeader({
 		itemCount === 0
 			? "No Items yet"
 			: `${checkedCount} of ${itemCount} Items checked`;
-	const quickLists = quickListOptions(
-		state.listName,
-		currentListId,
-		listSummaries,
+	// Item toggles re-render the header; only List changes rebuild the chips.
+	const quickLists = useMemo(
+		() => quickListOptions(state.listName, currentListId, listSummaries),
+		[state.listName, currentListId, listSummaries],
 	);
 
 	return (
@@ -199,10 +200,8 @@ const styles = StyleSheet.create((theme) => ({
 		borderRadius: theme.radii.pill,
 	},
 	householdName: {
+		...theme.typography.overline,
 		color: theme.colors.textMuted,
-		fontSize: theme.fontSizes.caption,
-		fontWeight: theme.fontWeights.semibold,
-		letterSpacing: 1.5,
 	},
 	listNameButton: {
 		alignSelf: "flex-start",

@@ -1,3 +1,4 @@
+import { SymbolView } from "expo-symbols";
 import { memo, useCallback } from "react";
 import {
 	FlatList,
@@ -6,7 +7,7 @@ import {
 	Text,
 	View,
 } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useAddItemComposerScrollInset } from "@/client/features/list/add-item-composer";
 import type { ActiveListItem } from "./list-view-types";
 
@@ -48,6 +49,7 @@ function ItemRowComponent({
 	item: ActiveListItem;
 	onToggle: (id: string) => void;
 }) {
+	const { theme } = useUnistyles();
 	const detailText = itemDetailText(item);
 
 	function toggle() {
@@ -70,7 +72,14 @@ function ItemRowComponent({
 					item.checked ? styles.checkboxChecked : undefined,
 				]}
 			>
-				{item.checked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+				{item.checked ? (
+					<SymbolView
+						name="checkmark"
+						size={14}
+						tintColor={theme.colors.inverseText}
+						weight="bold"
+					/>
+				) : null}
 			</View>
 			<View style={styles.itemTextGroup}>
 				<Text
@@ -165,18 +174,13 @@ const styles = StyleSheet.create((theme) => ({
 		borderColor: theme.colors.primary,
 		backgroundColor: theme.colors.primary,
 	},
-	checkboxMark: {
-		color: theme.colors.inverseText,
-		fontSize: theme.fontSizes.callout,
-		fontWeight: theme.fontWeights.bold,
-	},
 	itemTextGroup: {
 		flex: 1,
 		minWidth: 0,
 	},
 	itemName: {
 		color: theme.colors.text,
-		fontFamily: theme.typography.largeTitle.fontFamily,
+		fontFamily: theme.fontFamilies.serif,
 		fontSize: theme.fontSizes.titleSmall,
 	},
 	itemNameChecked: {

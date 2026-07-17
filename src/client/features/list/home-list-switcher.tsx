@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 import {
 	ActivityIndicator,
 	Pressable,
@@ -19,21 +19,22 @@ import type {
 	ListSummary,
 	RenameListResult,
 } from "@/client/features/list/list-service";
-import { track } from "@/client/lib/analytics";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { BottomSheet } from "@/client/ui/bottom-sheet";
-import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
+import type { HomeListSwitcherRows } from "./use-home-list-switcher-rows";
 import { useProductServices } from "./use-product-services";
+import { useSelectList } from "./use-select-list";
 
 /**
  * Home-owned List sheet: one shell with internal modes
  * `switcher | create | rename | confirmDelete`. Mounted only while open.
  *
- * Selecting a non-current row persists the explicit local Current List
- * selection, emits `list_switched` only after persistence succeeds, hands
- * control back to the task 5 resolver path via `onSwitched` (re-resolution
- * reads the stored selection and remounts the Active List boundary), and
- * closes the sheet. A current-row tap is a complete no-op.
+ * Selecting a non-current row runs the shared `useSelectList` switch flow
+ * (persist the explicit local Current List selection, emit `list_switched`
+ * only after persistence succeeds), hands control back to the task 5 resolver
+ * path via `onSwitched` (re-resolution reads the stored selection and remounts
+ * the Active List boundary), and closes the sheet. A current-row tap is a
+ * complete no-op.
  *
  * Lifecycle writes (create/rename/delete) go through the task 2 ListService;
  * PowerSync uploads the change continuously, so this component never requests a
@@ -48,52 +49,35 @@ import { useProductServices } from "./use-product-services";
  */
 export function HomeListSwitcher({
 	session,
+	rows,
 	currentListId,
 	initialMode = "switcher",
 	onDismiss,
 	onSwitched,
 }: {
 	session: AuthenticatedAppSession;
+	rows: HomeListSwitcherRows;
 	currentListId: string | null;
 	initialMode?: "switcher" | "create";
 	onDismiss: () => void;
 	onSwitched: () => void;
 }) {
-	const { rows } = useHomeListSwitcherRows(session);
 	const services = useProductServices({
 		householdId: session.activeHousehold.id,
 		userId: session.activeMember.userId,
 	});
 	const [mode, setMode] = useState<SheetMode>({ kind: initialMode });
-	const switchingRef = useRef(false);
+	const selectList = useSelectList(session);
 	const userId = session.activeMember.userId;
 	const householdId = session.activeHousehold.id;
 
-	const selectList = useCallback(
-		async (listId: string) => {
-			// Current row tap: no persistence, no analytics, sheet stays open.
-			if (listId === currentListId) return;
-			if (switchingRef.current) return;
-			switchingRef.current = true;
-			try {
-				await setCurrentListSelection(userId, householdId, listId);
-			} catch {
-				// Persistence failed: emit nothing, change nothing, keep the sheet
-				// open so the User can try the row again.
-				switchingRef.current = false;
-				return;
-			}
-			// Only after the local selection persisted: the explicit switch boundary.
-			track("list_switched", {
-				household_id: householdId,
-				list_id: listId,
-				user_id: userId,
-			});
-			onSwitched();
-			onDismiss();
-		},
-		[currentListId, householdId, onDismiss, onSwitched, userId],
-	);
+	async function switchList(listId: string) {
+		// A current-row tap or a failed persistence resolves false: the sheet
+		// stays open so the User can try the row again.
+		if (!(await selectList(listId, currentListId))) return;
+		onSwitched();
+		onDismiss();
+	}
 
 	async function submitCreate(name: string): Promise<string | null> {
 		let result: CreateListResult;
@@ -202,7 +186,7 @@ export function HomeListSwitcher({
 
 	// The switcher subtree is mounted only while open and `onDismiss` unmounts
 	// it, so `isPresented` is constant `true`; unmount-on-close resets the
-	// per-open mode/rows state.
+	// per-open mode state.
 	return (
 		<BottomSheet
 			isPresented
@@ -236,7 +220,7 @@ export function HomeListSwitcher({
 										key={summary.id}
 										summary={summary}
 										isCurrent={summary.id === currentListId}
-										onSelect={() => void selectList(summary.id)}
+										onSelect={() => void switchList(summary.id)}
 										onRename={() =>
 											setMode({
 												kind: "rename",
