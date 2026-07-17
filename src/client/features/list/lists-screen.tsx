@@ -2,8 +2,8 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
 	ActivityIndicator,
+	FlatList,
 	Pressable,
-	ScrollView,
 	Text,
 	TextInput,
 	View,
@@ -188,7 +188,10 @@ export function ListsScreenView({
 	async function submitCreate(name: string): Promise<string | null> {
 		const outcome = await onCreateList(name);
 		if (outcome.status === "error") return outcome.message;
-		if (outcome.status === "selectionFailed") setMode({ kind: "rows" });
+		if (outcome.status === "selectionFailed") {
+			setEmptyCreateDismissed(true);
+			setMode({ kind: "rows" });
+		}
 		return null;
 	}
 
@@ -301,18 +304,21 @@ function ListRowsView({
 					<Text style={styles.errorMessage}>Unable to load your Lists.</Text>
 				</View>
 			) : (
-				<ScrollView alwaysBounceVertical={false} style={styles.rowsScroll}>
-					{rows.summaries.map((summary) => (
+				<FlatList
+					alwaysBounceVertical={false}
+					data={rows.summaries}
+					keyExtractor={(summary) => summary.id}
+					renderItem={({ item: summary }) => (
 						<ListRow
-							key={summary.id}
 							summary={summary}
 							isCurrent={summary.id === currentListId}
 							onSelect={() => void onSelectList(summary.id)}
 							onRename={() => onRename(summary)}
 							onDelete={() => onDelete(summary)}
 						/>
-					))}
-				</ScrollView>
+					)}
+					style={styles.rowsScroll}
+				/>
 			)}
 			<Pressable
 				accessibilityRole="button"
@@ -437,6 +443,7 @@ function ListNameForm({
 			<View style={styles.formActions}>
 				<Pressable
 					accessibilityRole="button"
+					accessibilityState={{ disabled: submitting }}
 					disabled={submitting}
 					onPress={onCancel}
 					style={({ pressed }) => [
@@ -448,6 +455,7 @@ function ListNameForm({
 				</Pressable>
 				<Pressable
 					accessibilityRole="button"
+					accessibilityState={{ disabled: submitting }}
 					disabled={submitting}
 					onPress={() => void submit()}
 					style={({ pressed }) => [
@@ -496,6 +504,7 @@ function ConfirmDeleteList({
 			<View style={styles.formActions}>
 				<Pressable
 					accessibilityRole="button"
+					accessibilityState={{ disabled: deleting }}
 					disabled={deleting}
 					onPress={onCancel}
 					style={({ pressed }) => [
@@ -507,6 +516,7 @@ function ConfirmDeleteList({
 				</Pressable>
 				<Pressable
 					accessibilityRole="button"
+					accessibilityState={{ disabled: deleting }}
 					disabled={deleting}
 					onPress={() => void confirm()}
 					style={({ pressed }) => [

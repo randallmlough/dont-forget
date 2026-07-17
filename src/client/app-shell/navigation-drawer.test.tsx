@@ -1,18 +1,66 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { track } from "@/client/lib/analytics";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useAuthenticatedAppSession } from "@/client/session";
+import { AppShellLayout } from "./app-shell-layout";
 import { NavigationDrawer } from "./navigation-drawer";
 
 const mockReplace = jest.fn();
 const mockUsePathname = jest.fn(() => "/");
 
-jest.mock("expo-router", () => ({
-	usePathname: () => mockUsePathname(),
-	useRouter: () => ({ replace: mockReplace }),
-}));
+jest.mock("react-native", () => {
+	const React = jest.requireActual<typeof import("react")>("react");
+	const reactNative =
+		jest.requireActual<typeof import("react-native")>("react-native");
+
+	function Modal({
+		children,
+		...props
+	}: import("react-native").ModalProps & { children?: React.ReactNode }) {
+		return React.createElement(reactNative.View, props, children);
+	}
+
+	return new Proxy(reactNative, {
+		get(target, property, receiver) {
+			if (property === "Modal") return Modal;
+			return Reflect.get(target, property, receiver);
+		},
+	});
+});
+
+jest.mock("expo-router", () => {
+	const React = jest.requireActual<typeof import("react")>("react");
+	const { Pressable, Text } =
+		jest.requireActual<typeof import("react-native")>("react-native");
+	const { useNavigationDrawer } = jest.requireActual<
+		typeof import("./navigation-drawer-context")
+	>("./navigation-drawer-context");
+
+	function Stack() {
+		const { open } = useNavigationDrawer();
+		return React.createElement(
+			Pressable,
+			{
+				accessibilityRole: "button",
+				onPress: open,
+			},
+			React.createElement(Text, null, "Open test navigation"),
+		);
+	}
+
+	return {
+		Stack,
+		usePathname: () => mockUsePathname(),
+		useRouter: () => ({ replace: mockReplace }),
+	};
+});
 
 jest.mock("@/client/session", () => ({
 	sessionMemberDisplayName: (session: AuthenticatedAppSession | null) =>
@@ -39,14 +87,18 @@ beforeEach(() => {
 
 describe("NavigationDrawer", () => {
 	it("waits for native dismissal before replacing the destination", async () => {
-		const onClose = jest.fn();
-		await render(<NavigationDrawer isOpen onClose={onClose} />, {
+		await render(<AppShellLayout />, {
 			wrapper: TestSafeAreaProvider,
 		});
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Open test navigation" }),
+		);
 
 		await fireEvent.press(screen.getByRole("button", { name: "Settings" }));
 
-		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId("navigation-drawer-modal").props.visible).toBe(
+			false,
+		);
 		expect(mockReplace).not.toHaveBeenCalled();
 
 		await fireEvent(screen.getByTestId("navigation-drawer-modal"), "dismiss");
@@ -55,6 +107,9 @@ describe("NavigationDrawer", () => {
 			source: "navigation_drawer",
 		});
 		expect(mockReplace).toHaveBeenCalledWith("/settings");
+		await waitFor(() =>
+			expect(screen.queryByTestId("navigation-drawer-modal")).toBeNull(),
+		);
 	});
 
 	it("renders all app destinations", async () => {

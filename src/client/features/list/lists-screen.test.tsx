@@ -184,6 +184,34 @@ describe("ListsScreen", () => {
 		expect(mockReplace).toHaveBeenCalledWith("/");
 	});
 
+	it("returns an empty Household to retryable rows when created List selection persistence fails", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: { status: "ready", summaries: [] },
+		});
+		mockCreateList.mockResolvedValue({
+			status: "available",
+			list: listFixture("lst_created", "Hardware"),
+			didWrite: true,
+		});
+		jest
+			.mocked(setCurrentListSelection)
+			.mockRejectedValueOnce(new Error("storage unavailable"));
+		await renderScreen();
+
+		await fireEvent.changeText(screen.getByLabelText("List name"), "Hardware");
+		await fireEvent.press(screen.getByRole("button", { name: "Create" }));
+
+		await waitFor(() =>
+			expect(screen.queryByLabelText("List name")).toBeNull(),
+		);
+		const createButton = screen.getByRole("button", { name: "Create List" });
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		await fireEvent.press(createButton);
+
+		expect(screen.getByLabelText("List name")).toBeTruthy();
+	});
+
 	it("shows the service validation message for an invalid create name", async () => {
 		mockCreateList.mockResolvedValue({
 			status: "invalidName",
@@ -227,6 +255,95 @@ describe("ListsScreen", () => {
 			"lst_pantry",
 		);
 		expect(screen.getByText("Groceries")).toBeTruthy();
+		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("clears selection after deleting the only current List", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: { status: "ready", summaries: [summariesFixture()[0]] },
+		});
+		mockDeleteList.mockResolvedValue({
+			status: "deleted",
+			listId: "lst_groceries",
+			deletedAt: 2,
+			updatedAt: 2,
+			didWrite: true,
+		});
+		mockListLists.mockResolvedValue([]);
+		await renderScreen();
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Groceries" }),
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+
+		await waitFor(() =>
+			expect(clearCurrentListSelection).toHaveBeenCalledWith(
+				"usr_avery",
+				"hh_juniper",
+			),
+		);
+		expect(setCurrentListSelection).not.toHaveBeenCalled();
+		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("returns to rows when current List repair cannot read remaining Lists", async () => {
+		mockDeleteList.mockResolvedValue({
+			status: "deleted",
+			listId: "lst_groceries",
+			deletedAt: 2,
+			updatedAt: 2,
+			didWrite: true,
+		});
+		mockListLists.mockRejectedValue(new Error("database unavailable"));
+		await renderScreen();
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Groceries" }),
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+
+		expect(
+			await screen.findByRole("button", { name: "Delete Groceries" }),
+		).toBeTruthy();
+		expect(setCurrentListSelection).not.toHaveBeenCalled();
+		expect(clearCurrentListSelection).not.toHaveBeenCalled();
+		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("returns to rows when current List repair cannot persist its fallback", async () => {
+		mockDeleteList.mockResolvedValue({
+			status: "deleted",
+			listId: "lst_groceries",
+			deletedAt: 2,
+			updatedAt: 2,
+			didWrite: true,
+		});
+		mockListLists.mockResolvedValue([summariesFixture()[1]]);
+		jest
+			.mocked(setCurrentListSelection)
+			.mockRejectedValueOnce(new Error("storage unavailable"));
+		await renderScreen();
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Delete Groceries" }),
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+
+		expect(
+			await screen.findByRole("button", { name: "Delete Groceries" }),
+		).toBeTruthy();
+		expect(setCurrentListSelection).toHaveBeenCalledWith(
+			"usr_avery",
+			"hh_juniper",
+			"lst_pantry",
+		);
+		expect(clearCurrentListSelection).not.toHaveBeenCalled();
+		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
+		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
 	it("renders the create form directly when there are no Lists", async () => {
