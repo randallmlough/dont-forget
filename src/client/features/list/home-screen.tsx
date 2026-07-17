@@ -1,40 +1,34 @@
-import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
+import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
-	sessionMemberDisplayName,
 	useAuthenticatedAppSession,
 } from "@/client/session";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
-import { HomeNavigationDrawer } from "./home-navigation-drawer";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 
 export type HomeScreenViewProps = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
 	onRetry?: () => void;
-	onOpenSettings?: () => void;
-	onOpenHouseholdSettings?: () => void;
-	onSwitchHousehold?: () => void;
+	onOpenNavigation?: () => void;
 	currentListDeps?: HomeCurrentListDeps;
 };
 
 export default function HomeScreen() {
 	const { state, session, retry } = useAuthenticatedAppSession();
-	const router = useRouter();
+	const { open } = useNavigationDrawer();
 
 	return (
 		<HomeScreenView
 			state={state}
 			session={session}
 			onRetry={retry}
-			onOpenSettings={() => router.push("/settings")}
-			onOpenHouseholdSettings={() => router.push("/household/settings")}
-			onSwitchHousehold={() => router.push("/household/switch")}
+			onOpenNavigation={open}
 		/>
 	);
 }
@@ -43,13 +37,9 @@ export function HomeScreenView({
 	state,
 	session,
 	onRetry,
-	onOpenSettings,
-	onOpenHouseholdSettings,
-	onSwitchHousehold,
+	onOpenNavigation,
 	currentListDeps,
 }: HomeScreenViewProps) {
-	const displayMemberName = sessionMemberDisplayName(session);
-	const [drawerOpen, setDrawerOpen] = useState(false);
 	const [listSwitcherOpen, setListSwitcherOpen] = useState(false);
 
 	return (
@@ -60,7 +50,7 @@ export function HomeScreenView({
 					deps={currentListDeps}
 					listSwitcherOpen={listSwitcherOpen}
 					onListSwitcherOpenChange={setListSwitcherOpen}
-					onOpenNavigation={() => setDrawerOpen(true)}
+					onOpenNavigation={onOpenNavigation ?? noop}
 				/>
 			) : state.status === "error" ? (
 				<HomeStatus title="Household unavailable" body={state.message}>
@@ -74,18 +64,6 @@ export function HomeScreenView({
 					<ActivityIndicator />
 				</HomeStatus>
 			)}
-			{session ? (
-				<HomeNavigationDrawer
-					isOpen={drawerOpen}
-					memberName={displayMemberName}
-					householdName={session.activeHousehold.name}
-					onClose={() => setDrawerOpen(false)}
-					onOpenAllLists={() => setListSwitcherOpen(true)}
-					onOpenHousehold={onOpenHouseholdSettings ?? noop}
-					onOpenSettings={onOpenSettings ?? noop}
-					onSwitchHousehold={onSwitchHousehold ?? noop}
-				/>
-			) : null}
 		</SafeAreaView>
 	);
 }

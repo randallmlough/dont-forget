@@ -67,6 +67,7 @@ describe("HomeScreenView", () => {
 				state={{ status: "ready", refreshing: false }}
 				session={sessionFixture()}
 				currentListDeps={currentListDeps}
+				onOpenNavigation={jest.fn()}
 			/>,
 			{ wrapper: TestSafeAreaProvider },
 		);
@@ -86,53 +87,7 @@ describe("HomeScreenView", () => {
 			notes: null,
 		});
 	});
-
-	it("opens the Home navigation with truthful destinations", async () => {
-		await render(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
-				session={sessionFixture()}
-				currentListDeps={activeListDeps()}
-			/>,
-			{ wrapper: TestSafeAreaProvider },
-		);
-
-		await fireEvent.press(await screen.findByLabelText("Open navigation"));
-
-		expect(await screen.findByText("Current List")).toBeTruthy();
-		expect(await screen.findByText("All Lists")).toBeTruthy();
-		expect(await screen.findByText("Household")).toBeTruthy();
-		expect(await screen.findByText("Members & Invitations")).toBeTruthy();
-		expect(await screen.findByText("Settings")).toBeTruthy();
-		expect(await screen.findByText("Appearance")).toBeTruthy();
-		expect(await screen.findByText("Switch Household")).toBeTruthy();
-		expect(screen.queryByText("Help")).toBeNull();
-		expect(screen.queryByText("Synced just now")).toBeNull();
-	});
 });
-
-function activeListDeps(): HomeCurrentListDeps {
-	return {
-		currentList: {
-			state: {
-				status: "active",
-				listId: "lst_groceries",
-				list: {
-					householdName: "Avery",
-					listName: "Groceries",
-					items: [],
-				},
-				actions: {
-					addItem: jest.fn(async () => undefined),
-					setItemChecked: jest.fn(async () => undefined),
-				},
-			},
-			retry: jest.fn(),
-			reload: jest.fn(),
-		},
-		syncState: "synced",
-	};
-}
 
 function sessionFixture(): AuthenticatedAppSession {
 	return {

@@ -36,7 +36,7 @@ export const EmptyList: Story = {
 	args: {
 		state: { status: "ready", refreshing: false },
 		session: readySession(emptyActiveListState),
-		onOpenSettings: noop,
+		onOpenNavigation: noop,
 	},
 	render: () => <HomeStory initialList={emptyActiveListState} />,
 };
@@ -45,7 +45,7 @@ export const WithItems: Story = {
 	args: {
 		state: { status: "ready", refreshing: false },
 		session: readySession(populatedActiveListState),
-		onOpenSettings: noop,
+		onOpenNavigation: noop,
 	},
 	render: () => <HomeStory initialList={populatedActiveListState} />,
 };
@@ -54,7 +54,7 @@ export const Loading: Story = {
 	args: {
 		state: { status: "loading" },
 		session: null,
-		onOpenSettings: noop,
+		onOpenNavigation: noop,
 	},
 };
 
@@ -66,7 +66,7 @@ export const AuthenticatedAppSessionError: Story = {
 		},
 		session: null,
 		onRetry: noop,
-		onOpenSettings: noop,
+		onOpenNavigation: noop,
 	},
 };
 
@@ -101,7 +101,7 @@ function HomeStory({ initialList }: { initialList: ActiveListState }) {
 		<HomeScreenView
 			state={{ status: "ready", refreshing: false }}
 			session={readySession(list)}
-			onOpenSettings={noop}
+			onOpenNavigation={noop}
 			currentListDeps={currentListDeps}
 		/>
 	);
