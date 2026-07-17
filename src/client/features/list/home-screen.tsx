@@ -3,17 +3,13 @@ import { useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
-import { track } from "@/client/lib/analytics";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
+	sessionMemberDisplayName,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import {
-	CurrentList,
-	type HomeCurrentListDeps,
-	homeSessionMemberName,
-} from "./current-list";
+import { CurrentList, type HomeCurrentListDeps } from "./current-list";
 import { HomeNavigationDrawer } from "./home-navigation-drawer";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 
@@ -36,10 +32,7 @@ export default function HomeScreen() {
 			state={state}
 			session={session}
 			onRetry={retry}
-			onOpenSettings={() => {
-				track("settings_opened", { source: "home" });
-				router.push("/settings");
-			}}
+			onOpenSettings={() => router.push("/settings")}
 			onOpenHouseholdSettings={() => router.push("/household/settings")}
 			onSwitchHousehold={() => router.push("/household/switch")}
 		/>
@@ -55,7 +48,7 @@ export function HomeScreenView({
 	onSwitchHousehold,
 	currentListDeps,
 }: HomeScreenViewProps) {
-	const displayMemberName = homeSessionMemberName(session);
+	const displayMemberName = sessionMemberDisplayName(session);
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const [listSwitcherOpen, setListSwitcherOpen] = useState(false);
 

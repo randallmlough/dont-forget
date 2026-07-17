@@ -1,7 +1,11 @@
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { ListSummary } from "@/client/features/list/list-service";
-import { type AuthenticatedAppSession, useSyncState } from "@/client/session";
+import {
+	type AuthenticatedAppSession,
+	sessionMemberDisplayName,
+	useSyncState,
+} from "@/client/session";
 import { AddItemForm } from "./add-item-form";
 import { HomeListSwitcher } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
@@ -113,7 +117,7 @@ function HomeCurrentListContent({
 	onListSwitcherOpenChange,
 	onOpenNavigation,
 }: HomeCurrentListContentProps) {
-	const currentMemberName = homeSessionMemberName(session);
+	const currentMemberName = sessionMemberDisplayName(session);
 	const loadState = list.state;
 	const selectList = useSelectList(session);
 	const listSummaries = listRows.status === "ready" ? listRows.summaries : [];
@@ -258,18 +262,6 @@ function ActiveCurrentList({
 				onAddItem={actions.addItem}
 			/>
 		</View>
-	);
-}
-
-export function homeSessionMemberName(
-	session: AuthenticatedAppSession | null,
-): string {
-	if (!session) return "Member";
-	return (
-		session.activeMember.displayName ??
-		session.user.displayName ??
-		session.user.email ??
-		"Member"
 	);
 }
 
