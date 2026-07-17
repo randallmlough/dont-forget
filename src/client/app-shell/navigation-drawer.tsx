@@ -231,7 +231,7 @@ const styles = StyleSheet.create((theme) => ({
 		paddingTop: theme.spacing(4),
 		paddingBottom: theme.spacing(5),
 	},
-	brand: { ...theme.typography.overline, color: theme.colors.textMuted },
+	brand: { ...theme.typography.title, color: theme.colors.textMuted },
 	memberRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -258,7 +258,7 @@ const styles = StyleSheet.create((theme) => ({
 		fontWeight: theme.fontWeights.semibold,
 		color: theme.colors.text,
 	},
-	householdName: { ...theme.typography.caption, color: theme.colors.textMuted },
+	householdName: { ...theme.typography.body, color: theme.colors.textMuted,paddingHorizontal: theme.spacing(2), },
 	destinationGroup: {
 		gap: theme.spacing(1),
 		paddingHorizontal: theme.spacing(3),

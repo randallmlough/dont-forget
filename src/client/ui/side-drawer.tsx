@@ -7,12 +7,13 @@ import {
 	useWindowDimensions,
 	View,
 } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
 /**
- * App-owned side-drawer primitive. It owns only native modal, scrim, panel,
- * and entrance-animation mechanics; callers own safe areas, content, and any
- * action that must wait for native dismissal.
+ * App-owned side-drawer primitive. It owns native modal, safe-area provider,
+ * scrim, panel, and entrance-animation mechanics; callers own safe-area edges,
+ * content, and any action that must wait for native dismissal.
  */
 export type SideDrawerProps = {
 	children: ReactElement;
@@ -57,22 +58,24 @@ export function SideDrawer({
 			transparent
 			visible={isOpen}
 		>
-			<View accessibilityViewIsModal style={styles.modalRoot}>
-				<Pressable
-					accessibilityLabel="Close navigation"
-					accessibilityRole="button"
-					onPress={onClose}
-					style={styles.scrim}
-				/>
-				<Animated.View
-					style={[
-						styles.drawer,
-						{ width: drawerWidth, transform: [{ translateX }] },
-					]}
-				>
-					{children}
-				</Animated.View>
-			</View>
+			<SafeAreaProvider>
+				<View accessibilityViewIsModal style={styles.modalRoot}>
+					<Pressable
+						accessibilityLabel="Close navigation"
+						accessibilityRole="button"
+						onPress={onClose}
+						style={styles.scrim}
+					/>
+					<Animated.View
+						style={[
+							styles.drawer,
+							{ width: drawerWidth, transform: [{ translateX }] },
+						]}
+					>
+						{children}
+					</Animated.View>
+				</View>
+			</SafeAreaProvider>
 		</Modal>
 	);
 }
