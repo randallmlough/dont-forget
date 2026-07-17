@@ -108,22 +108,12 @@ export function NavigationDrawerView({
 			<SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
 				<View style={styles.brandBlock}>
 					<Text style={styles.brand}>DON&apos;T FORGET</Text>
-					<View style={styles.memberRow}>
-						<View style={styles.avatar}>
-							<Text style={styles.avatarLabel}>{initials(memberName)}</Text>
-						</View>
-						<View style={styles.memberText}>
-							<Text numberOfLines={1} style={styles.memberName}>
-								{memberName}
-							</Text>
-							<Text numberOfLines={1} style={styles.householdName}>
-								{householdName}
-							</Text>
-						</View>
-					</View>
 				</View>
 
 				<View style={styles.destinationGroup}>
+					<Text numberOfLines={1} style={styles.householdName}>
+						{householdName}
+					</Text>
 					<DrawerRow
 						icon="checklist"
 						label="Home"
@@ -136,14 +126,10 @@ export function NavigationDrawerView({
 						selected={pathname === "/lists"}
 						onPress={() => onNavigate("/lists")}
 					/>
-				</View>
 
-				<View style={styles.separator} />
-
-				<View style={styles.destinationGroup}>
 					<DrawerRow
 						icon="house"
-						label="Household"
+						label="Household Settings"
 						selected={pathname === "/household/settings"}
 						onPress={() => onNavigate("/household/settings")}
 					/>
@@ -152,6 +138,17 @@ export function NavigationDrawerView({
 						label="Members & Invitations"
 						selected={pathname === "/household/settings"}
 						onPress={() => onNavigate("/household/settings")}
+					/>
+				</View>
+
+				<View style={styles.separator} />
+
+				<View style={styles.destinationGroup}>
+					<DrawerRow
+						icon="arrow.left.arrow.right"
+						label="Switch Household"
+						selected={pathname === "/household/switch"}
+						onPress={() => onNavigate("/household/switch")}
 					/>
 					<DrawerRow
 						icon="gearshape"
@@ -170,14 +167,17 @@ export function NavigationDrawerView({
 						onPress={() => onNavigate("/settings")}
 					/>
 				</View>
-
 				<View style={styles.drawerFooter}>
-					<DrawerRow
-						icon="arrow.left.arrow.right"
-						label="Switch Household"
-						selected={pathname === "/household/switch"}
-						onPress={() => onNavigate("/household/switch")}
-					/>
+					<View style={styles.memberRow}>
+						<View style={styles.avatar}>
+							<Text style={styles.avatarLabel}>{initials(memberName)}</Text>
+						</View>
+						<View style={styles.memberText}>
+							<Text numberOfLines={1} style={styles.memberName}>
+								{memberName}
+							</Text>
+						</View>
+					</View>
 				</View>
 			</SafeAreaView>
 		</SideDrawer>
