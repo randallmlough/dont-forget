@@ -11,9 +11,9 @@ import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { WebBrowserResultType } from "expo-web-browser";
 import type { PropsWithChildren, ReactElement } from "react";
-import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { UnistylesRuntime } from "react-native-unistyles";
+import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import { createUsersApiClient } from "@/client/features/settings/api";
 import { track } from "@/client/lib/analytics";
 import { useLogger } from "@/client/lib/logger";
@@ -34,7 +34,6 @@ const mockUpdateUserName = jest.fn(async () => ({
 	firstName: "Avery",
 	lastName: "Lough",
 }));
-const devClientHeaderActionGutter = 56;
 const setAdaptiveThemesSpy = jest
 	.spyOn(UnistylesRuntime, "setAdaptiveThemes")
 	.mockImplementation(() => undefined);
@@ -127,6 +126,9 @@ describe("SettingsScreen", () => {
 	it("renders settings sections and configured legal rows", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
 
+		expect(
+			screen.getByRole("button", { name: "Open navigation" }),
+		).toBeTruthy();
 		expect(screen.getByText("User")).toBeTruthy();
 		expect(screen.getByText("User name")).toBeTruthy();
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
@@ -137,9 +139,6 @@ describe("SettingsScreen", () => {
 		expect(screen.getByText("Terms of Service")).toBeTruthy();
 		expect(screen.getByText("Version")).toBeTruthy();
 		expect(screen.getByText("1.2.3 (local)")).toBeTruthy();
-		expect(track).not.toHaveBeenCalledWith("settings_opened", {
-			source: "home",
-		});
 	});
 
 	it("hides legal rows when public URLs are unset", async () => {
@@ -193,21 +192,6 @@ describe("SettingsScreen", () => {
 		await fireEvent.press(screen.getByText("Household settings"));
 
 		expect(mockRouterPush).toHaveBeenCalledWith("/household/settings");
-	});
-
-	it("shows a visible Home action for returning to the Current List", async () => {
-		await renderWithSafeArea(<SettingsScreen />);
-
-		const headerAction = screen.getByTestId("settings-header-action");
-
-		expect(StyleSheet.flatten(headerAction.props.style)).toMatchObject({
-			paddingRight: devClientHeaderActionGutter,
-		});
-		expect(screen.getByText("Home")).toBeTruthy();
-
-		await fireEvent.press(screen.getByRole("button", { name: "Back to Home" }));
-
-		expect(mockRouterReplace).toHaveBeenCalledWith("/");
 	});
 
 	it("invokes authenticated app session sign-out", async () => {
@@ -384,7 +368,9 @@ function TestSafeAreaProvider({ children }: PropsWithChildren) {
 				insets: { top: 47, right: 0, bottom: 34, left: 0 },
 			}}
 		>
-			{children}
+			<NavigationDrawerProvider open={jest.fn()}>
+				{children}
+			</NavigationDrawerProvider>
 		</SafeAreaProvider>
 	);
 }

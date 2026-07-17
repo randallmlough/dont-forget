@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
 import { type ReactNode, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
+import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import { AuthTextInput } from "@/client/features/auth/auth-text-input";
 import type { AppearancePreference } from "@/client/theme/appearance-preference";
 import {
@@ -48,28 +48,7 @@ export function SettingsScreenView({
 	}
 
 	return (
-		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
-			<View style={styles.header}>
-				<View style={styles.headerTextGroup}>
-					<Text style={styles.headerLabel}>Settings</Text>
-					<Text style={styles.headerTitle} numberOfLines={1}>
-						App settings
-					</Text>
-				</View>
-				<View style={styles.headerAction} testID="settings-header-action">
-					<Pressable
-						accessibilityLabel="Back to Home"
-						accessibilityRole="button"
-						onPress={() => router.replace("/")}
-						style={({ pressed }) => [
-							styles.headerButton,
-							pressed ? styles.headerButtonPressed : undefined,
-						]}
-					>
-						<Text style={styles.headerButtonLabel}>Home</Text>
-					</Pressable>
-				</View>
-			</View>
+		<ScreenScaffold label="Settings" title="App settings">
 			<ScrollView
 				contentContainerStyle={styles.content}
 				keyboardShouldPersistTaps="handled"
@@ -86,7 +65,7 @@ export function SettingsScreenView({
 					</View>
 				))}
 			</ScrollView>
-		</SafeAreaView>
+		</ScreenScaffold>
 	);
 }
 
@@ -441,56 +420,6 @@ function emptyToNull(value: string): string | null {
 }
 
 const styles = StyleSheet.create((theme) => ({
-	root: {
-		flex: 1,
-		backgroundColor: theme.colors.background,
-	},
-	header: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: theme.spacing(3),
-		paddingHorizontal: theme.spacing(5),
-		paddingTop: theme.spacing(4.5),
-		paddingBottom: theme.spacing(3),
-		backgroundColor: theme.colors.surface,
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.border,
-	},
-	headerTextGroup: {
-		flex: 1,
-		minWidth: 0,
-	},
-	headerAction: {
-		paddingRight: theme.spacing(14),
-	},
-	headerLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
-	},
-	headerTitle: {
-		...theme.typography.headline,
-		color: theme.colors.text,
-	},
-	headerButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
-	},
-	headerButtonPressed: {
-		opacity: theme.opacities.pressed,
-	},
-	headerButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.text,
-		fontWeight: theme.fontWeights.bold,
-	},
 	content: {
 		padding: theme.spacing(4),
 		paddingBottom: theme.spacing(12),

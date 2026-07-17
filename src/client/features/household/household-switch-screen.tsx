@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
+import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionReloadOptions,
@@ -73,13 +74,10 @@ export function HouseholdSwitchView({
 	const router = useRouter();
 
 	return (
-		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
-			<View style={styles.header}>
-				<Text style={styles.headerLabel}>Switch Household</Text>
-				<Text style={styles.headerTitle} numberOfLines={1}>
-					{session.activeHousehold.name}
-				</Text>
-			</View>
+		<ScreenScaffold
+			label="Switch Household"
+			title={session.activeHousehold.name}
+		>
 			<View style={styles.topActions}>
 				<HouseholdButton
 					label="Settings"
@@ -116,7 +114,7 @@ export function HouseholdSwitchView({
 					/>
 				)}
 			/>
-		</SafeAreaView>
+		</ScreenScaffold>
 	);
 }
 
@@ -264,22 +262,6 @@ const styles = StyleSheet.create((theme) => ({
 	root: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
-	},
-	header: {
-		paddingHorizontal: theme.spacing(5),
-		paddingTop: theme.spacing(4.5),
-		paddingBottom: theme.spacing(3),
-		backgroundColor: theme.colors.surface,
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.border,
-	},
-	headerLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
-	},
-	headerTitle: {
-		...theme.typography.headline,
-		color: theme.colors.text,
 	},
 	topActions: {
 		padding: theme.spacing(4),

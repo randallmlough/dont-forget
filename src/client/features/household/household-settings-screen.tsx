@@ -9,8 +9,8 @@ import {
 	TextInput,
 	View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
+import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import type {
 	HouseholdJoinCode,
 	HouseholdMember,
@@ -89,7 +89,6 @@ export function HouseholdSettingsView({
 	return (
 		<HouseholdSettingsShell title={householdName}>
 			<View style={styles.topActions}>
-				<HouseholdButton label="Home" onPress={() => router.replace("/")} />
 				<HouseholdButton
 					label="Switch Household"
 					onPress={() => router.push("/household/switch")}
@@ -518,15 +517,9 @@ function HouseholdSettingsShell({
 	children: ReactNode;
 }) {
 	return (
-		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
-			<View style={styles.header}>
-				<Text style={styles.headerLabel}>Household settings</Text>
-				<Text style={styles.headerTitle} numberOfLines={1}>
-					{title}
-				</Text>
-			</View>
+		<ScreenScaffold label="Household settings" title={title}>
 			{children}
-		</SafeAreaView>
+		</ScreenScaffold>
 	);
 }
 
@@ -711,26 +704,6 @@ function formatJoinCode(code: string): string {
 }
 
 const styles = StyleSheet.create((theme) => ({
-	root: {
-		flex: 1,
-		backgroundColor: theme.colors.background,
-	},
-	header: {
-		paddingHorizontal: theme.spacing(5),
-		paddingTop: theme.spacing(4.5),
-		paddingBottom: theme.spacing(3),
-		backgroundColor: theme.colors.surface,
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.border,
-	},
-	headerLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
-	},
-	headerTitle: {
-		...theme.typography.headline,
-		color: theme.colors.text,
-	},
 	topActions: {
 		flexDirection: "row",
 		gap: theme.spacing(2),
