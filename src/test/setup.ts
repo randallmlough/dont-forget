@@ -32,6 +32,7 @@ jest.mock("react-native-reanimated", () => {
 				},
 			};
 		},
+		withSpring: (value: unknown) => value,
 		withTiming: (value: unknown) => value,
 	};
 });

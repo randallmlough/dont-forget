@@ -1,12 +1,11 @@
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
-import {
-	Animated,
-	Modal,
-	Pressable,
-	useWindowDimensions,
-	View,
-} from "react-native";
+import { useEffect } from "react";
+import { Modal, Pressable, useWindowDimensions, View } from "react-native";
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withSpring,
+} from "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -33,23 +32,27 @@ export function SideDrawer({
 }: SideDrawerProps) {
 	const { width } = useWindowDimensions();
 	const drawerWidth = Math.min(width * 0.84, 360);
-	const [translateX] = useState(() => new Animated.Value(-drawerWidth));
+	const translateX = useSharedValue(-drawerWidth);
 
 	useEffect(() => {
 		if (!isOpen) return;
-		translateX.setValue(-drawerWidth);
-		Animated.spring(translateX, {
-			toValue: 0,
-			useNativeDriver: true,
-			damping: 23,
-			stiffness: 230,
-			mass: 0.8,
-		}).start();
+		translateX.set(-drawerWidth);
+		translateX.set(
+			withSpring(0, {
+				damping: 23,
+				stiffness: 230,
+				mass: 0.8,
+			}),
+		);
 	}, [drawerWidth, isOpen, translateX]);
+
+	const animatedDrawerStyle = useAnimatedStyle(() => ({
+		transform: [{ translateX: translateX.get() }],
+	}));
 
 	return (
 		<Modal
-			animationType="fade"
+			animationType="none"
 			onDismiss={onDismissed}
 			onRequestClose={onClose}
 			presentationStyle="overFullScreen"
@@ -67,10 +70,7 @@ export function SideDrawer({
 						style={styles.scrim}
 					/>
 					<Animated.View
-						style={[
-							styles.drawer,
-							{ width: drawerWidth, transform: [{ translateX }] },
-						]}
+						style={[styles.drawer, { width: drawerWidth }, animatedDrawerStyle]}
 					>
 						{children}
 					</Animated.View>
