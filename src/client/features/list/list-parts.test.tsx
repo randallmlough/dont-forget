@@ -139,7 +139,9 @@ describe("List parts", () => {
 			await screen.findByLabelText("Item name"),
 			" Milk ",
 		);
-		await fireEvent.press(await screen.findByLabelText("Submit Item"));
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Add Item" }),
+		);
 
 		await waitFor(() => {
 			expect(onAddItem).toHaveBeenCalledWith({

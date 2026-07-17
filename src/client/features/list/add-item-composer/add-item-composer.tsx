@@ -42,7 +42,7 @@ const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
 // SwiftUI fields hug their content; an effectively-unbounded maxWidth makes
 // them fill the available width instead.
-const FILL_AVAILABLE_WIDTH = 1000;
+const FILL_AVAILABLE_WIDTH = Infinity;
 export const ADD_ITEM_COMPOSER_SCROLL_CLEARANCE = 128;
 
 export type AddItemComposerProps = {
@@ -166,7 +166,7 @@ function RestingGlassComposer({
 	actions: AddItemComposerActions;
 }) {
 	const { theme } = useUnistyles();
-	const name = useMirroredNativeState(nameValue);
+	const name = useNativeState(nameValue);
 
 	return (
 		<Host colorScheme={colorScheme} style={styles.entryHost}>
@@ -212,9 +212,9 @@ function ExpandedGlassComposer({
 	actions: AddItemComposerActions;
 }) {
 	const { theme } = useUnistyles();
-	const name = useMirroredNativeState(draft.name);
-	const quantity = useMirroredNativeState(draft.quantity);
-	const notes = useMirroredNativeState(draft.notes);
+	const name = useNativeState(draft.name);
+	const quantity = useNativeState(draft.quantity);
+	const notes = useNativeState(draft.notes);
 
 	return (
 		<Host
@@ -351,7 +351,6 @@ function ExpandedGlassComposer({
 							label="Add Item"
 							onPress={actions.submit}
 							modifiers={[
-								accessibilityLabel("Submit Item"),
 								buttonStyle("glass"),
 								buttonBorderShape("capsule"),
 								controlSize("regular"),
@@ -364,16 +363,6 @@ function ExpandedGlassComposer({
 			</GlassEffectContainer>
 		</Host>
 	);
-}
-
-function useMirroredNativeState(value: string) {
-	const state = useNativeState(value);
-
-	useEffect(() => {
-		if (state.get() !== value) state.set(value);
-	}, [state, value]);
-
-	return state;
 }
 
 export function useAddItemComposerScrollInset(): number {

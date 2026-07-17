@@ -163,7 +163,7 @@ function HomeCurrentListContent({
 						<Text style={styles.createButtonLabel}>Create List</Text>
 					</Pressable>
 				</HomeStatus>
-				{listSwitcherOpen ? (
+				{allowListSwitcher && listSwitcherOpen ? (
 					<HomeListSwitcher
 						session={session}
 						rows={listRows}
@@ -193,7 +193,7 @@ function HomeCurrentListContent({
 					allowListSwitcher ? () => onListSwitcherOpenChange(true) : undefined
 				}
 			/>
-			{listSwitcherOpen ? (
+			{allowListSwitcher && listSwitcherOpen ? (
 				<HomeListSwitcher
 					session={session}
 					rows={listRows}

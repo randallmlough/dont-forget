@@ -56,6 +56,7 @@ export function HomeNavigationDrawer({
 		}).start();
 	}, [drawerWidth, isOpen, translateX]);
 
+	// Destination callbacks wait for the iOS drawer modal to dismiss before presenting the next screen.
 	function navigate(action: () => void) {
 		pendingAction.current = action;
 		onClose();
@@ -72,6 +73,7 @@ export function HomeNavigationDrawer({
 			onRequestClose={onClose}
 			presentationStyle="overFullScreen"
 			statusBarTranslucent
+			testID="home-navigation-drawer-modal"
 			transparent
 			visible={isOpen}
 		>
@@ -123,9 +125,6 @@ export function HomeNavigationDrawer({
 						<View style={styles.separator} />
 
 						<View style={styles.destinationGroup}>
-							{/* Members live on the Household screen; Appearance and Help
-							    live on the Settings screen. Dedicated rows keep the
-							    destinations discoverable until those screens exist. */}
 							<DrawerRow
 								icon="house"
 								label="Household"
@@ -146,18 +145,9 @@ export function HomeNavigationDrawer({
 								label="Appearance"
 								onPress={() => navigate(onOpenSettings)}
 							/>
-							<DrawerRow
-								icon="questionmark.circle"
-								label="Help"
-								onPress={() => navigate(onOpenSettings)}
-							/>
 						</View>
 
 						<View style={styles.drawerFooter}>
-							<View style={styles.syncRow}>
-								<View style={styles.syncDot} />
-								<Text style={styles.syncLabel}>Synced just now</Text>
-							</View>
 							<DrawerRow
 								icon="arrow.left.arrow.right"
 								label="Switch Household"
@@ -309,22 +299,6 @@ const styles = StyleSheet.create((theme) => ({
 		gap: theme.spacing(2),
 		paddingHorizontal: theme.spacing(3),
 		paddingBottom: theme.spacing(2),
-	},
-	syncRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-		paddingHorizontal: theme.spacing(3),
-	},
-	syncDot: {
-		width: theme.spacing(2),
-		height: theme.spacing(2),
-		borderRadius: theme.radii.pill,
-		backgroundColor: theme.colors.primary,
-	},
-	syncLabel: {
-		...theme.typography.caption,
-		color: theme.colors.textSubtle,
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

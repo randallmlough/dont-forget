@@ -76,7 +76,9 @@ describe("HomeScreenView", () => {
 			await screen.findByLabelText("Item name"),
 			" Milk ",
 		);
-		await fireEvent.press(await screen.findByLabelText("Submit Item"));
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Add Item" }),
+		);
 
 		expect(addItem).toHaveBeenCalledWith({
 			name: "Milk",
@@ -85,7 +87,7 @@ describe("HomeScreenView", () => {
 		});
 	});
 
-	it("opens the Home navigation with every planned destination", async () => {
+	it("opens the Home navigation with truthful destinations", async () => {
 		await render(
 			<HomeScreenView
 				state={{ status: "ready", refreshing: false }}
@@ -103,8 +105,9 @@ describe("HomeScreenView", () => {
 		expect(await screen.findByText("Members & Invitations")).toBeTruthy();
 		expect(await screen.findByText("Settings")).toBeTruthy();
 		expect(await screen.findByText("Appearance")).toBeTruthy();
-		expect(await screen.findByText("Help")).toBeTruthy();
 		expect(await screen.findByText("Switch Household")).toBeTruthy();
+		expect(screen.queryByText("Help")).toBeNull();
+		expect(screen.queryByText("Synced just now")).toBeNull();
 	});
 });
 
