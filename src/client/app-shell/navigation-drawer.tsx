@@ -258,7 +258,11 @@ const styles = StyleSheet.create((theme) => ({
 		fontWeight: theme.fontWeights.semibold,
 		color: theme.colors.text,
 	},
-	householdName: { ...theme.typography.body, color: theme.colors.textMuted,paddingHorizontal: theme.spacing(2), },
+	householdName: {
+		...theme.typography.body,
+		color: theme.colors.textMuted,
+		paddingHorizontal: theme.spacing(2),
+	},
 	destinationGroup: {
 		gap: theme.spacing(1),
 		paddingHorizontal: theme.spacing(3),

@@ -20,40 +20,51 @@ export function ScreenScaffold({
 	const { theme } = useUnistyles();
 
 	return (
-		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
-			<View style={styles.header}>
-				<Pressable
-					accessibilityLabel="Open navigation"
-					accessibilityRole="button"
-					onPress={open}
-					style={({ pressed }) => [
-						styles.menuButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<SymbolView
-						accessibilityElementsHidden
-						accessible={false}
-						name="line.3.horizontal"
-						size={22}
-						tintColor={theme.colors.text}
-						weight="medium"
-					/>
-				</Pressable>
-				<View style={styles.headerTextGroup}>
-					<Text style={styles.headerLabel}>{label}</Text>
-					<Text numberOfLines={1} style={styles.headerTitle}>
-						{title}
-					</Text>
+		<View style={styles.root}>
+			<SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+				<View style={styles.header}>
+					<Pressable
+						accessibilityLabel="Open navigation"
+						accessibilityRole="button"
+						onPress={open}
+						style={({ pressed }) => [
+							styles.menuButton,
+							pressed ? styles.pressed : undefined,
+						]}
+					>
+						<SymbolView
+							accessibilityElementsHidden
+							accessible={false}
+							name="line.3.horizontal"
+							size={22}
+							tintColor={theme.colors.text}
+							weight="medium"
+						/>
+					</Pressable>
+					<View style={styles.headerTextGroup}>
+						<Text style={styles.headerLabel}>{label}</Text>
+						<Text numberOfLines={1} style={styles.headerTitle}>
+							{title}
+						</Text>
+					</View>
 				</View>
-			</View>
-			{children}
-		</SafeAreaView>
+			</SafeAreaView>
+			<SafeAreaView edges={["bottom"]} style={styles.contentSafeArea}>
+				{children}
+			</SafeAreaView>
+		</View>
 	);
 }
 
 const styles = StyleSheet.create((theme) => ({
 	root: {
+		flex: 1,
+		backgroundColor: theme.colors.background,
+	},
+	headerSafeArea: {
+		backgroundColor: theme.colors.surface,
+	},
+	contentSafeArea: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
 	},

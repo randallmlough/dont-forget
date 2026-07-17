@@ -120,7 +120,7 @@ describe("NavigationDrawer", () => {
 		for (const label of [
 			"Home",
 			"Lists",
-			"Household",
+			"Household Settings",
 			"Members & Invitations",
 			"Settings",
 			"Appearance",
