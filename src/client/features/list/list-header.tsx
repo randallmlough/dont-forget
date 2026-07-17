@@ -69,7 +69,7 @@ export function ListHeader({
 				<Pressable
 					accessibilityRole="button"
 					accessibilityLabel="Switch List"
-					accessibilityHint="Opens the List switcher"
+					accessibilityHint="Opens Lists"
 					onPress={onPressListName}
 					style={({ pressed }) => [
 						styles.listNameButton,

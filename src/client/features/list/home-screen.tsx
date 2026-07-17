@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRouter } from "expo-router";
 import { ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
@@ -16,12 +16,14 @@ export type HomeScreenViewProps = {
 	session: AuthenticatedAppSession | null;
 	onRetry?: () => void;
 	onOpenNavigation?: () => void;
+	onOpenLists?: () => void;
 	currentListDeps?: HomeCurrentListDeps;
 };
 
 export default function HomeScreen() {
 	const { state, session, retry } = useAuthenticatedAppSession();
 	const { open } = useNavigationDrawer();
+	const router = useRouter();
 
 	return (
 		<HomeScreenView
@@ -29,6 +31,7 @@ export default function HomeScreen() {
 			session={session}
 			onRetry={retry}
 			onOpenNavigation={open}
+			onOpenLists={() => router.replace("/lists")}
 		/>
 	);
 }
@@ -38,19 +41,17 @@ export function HomeScreenView({
 	session,
 	onRetry,
 	onOpenNavigation,
+	onOpenLists,
 	currentListDeps,
 }: HomeScreenViewProps) {
-	const [listSwitcherOpen, setListSwitcherOpen] = useState(false);
-
 	return (
 		<SafeAreaView edges={["top"]} style={styles.root}>
 			{session ? (
 				<CurrentList
 					session={session}
 					deps={currentListDeps}
-					listSwitcherOpen={listSwitcherOpen}
-					onListSwitcherOpenChange={setListSwitcherOpen}
 					onOpenNavigation={onOpenNavigation ?? noop}
+					onOpenLists={onOpenLists ?? noop}
 				/>
 			) : state.status === "error" ? (
 				<HomeStatus title="Household unavailable" body={state.message}>

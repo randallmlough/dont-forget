@@ -7,7 +7,6 @@ import {
 	useSyncState,
 } from "@/client/session";
 import { AddItemForm } from "./add-item-form";
-import { HomeListSwitcher } from "./home-list-switcher";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { ItemRows } from "./item-rows";
 import { ListHeader } from "./list-header";
@@ -16,11 +15,8 @@ import {
 	type HomeCurrentListData,
 	useHomeCurrentList,
 } from "./use-home-current-list";
-import {
-	type HomeListSwitcherRows,
-	useHomeListSwitcherRows,
-} from "./use-home-list-switcher-rows";
 import { useListActions } from "./use-list-actions";
+import { type ListRows, useListRows } from "./use-list-rows";
 import { useSelectList } from "./use-select-list";
 
 export type HomeCurrentListDeps = {
@@ -31,17 +27,15 @@ export type HomeCurrentListDeps = {
 export type CurrentListProps = {
 	session: AuthenticatedAppSession;
 	deps?: HomeCurrentListDeps;
-	listSwitcherOpen: boolean;
-	onListSwitcherOpenChange: (isOpen: boolean) => void;
 	onOpenNavigation: () => void;
+	onOpenLists?: () => void;
 };
 
 export function CurrentList({
 	session,
 	deps,
-	listSwitcherOpen,
-	onListSwitcherOpenChange,
 	onOpenNavigation,
+	onOpenLists,
 }: CurrentListProps) {
 	if (deps) {
 		return (
@@ -49,11 +43,10 @@ export function CurrentList({
 				session={session}
 				list={deps.currentList}
 				syncState={deps.syncState}
-				allowListSwitcher={false}
+				allowListsEntry={false}
 				listRows={{ status: "ready", summaries: [] }}
-				listSwitcherOpen={listSwitcherOpen}
-				onListSwitcherOpenChange={onListSwitcherOpenChange}
 				onOpenNavigation={onOpenNavigation}
+				onOpenLists={onOpenLists}
 			/>
 		);
 	}
@@ -62,9 +55,8 @@ export function CurrentList({
 		<HomeCurrentListResource
 			key={session.activeHousehold.id}
 			session={session}
-			listSwitcherOpen={listSwitcherOpen}
-			onListSwitcherOpenChange={onListSwitcherOpenChange}
 			onOpenNavigation={onOpenNavigation}
+			onOpenLists={onOpenLists}
 		/>
 	);
 }
@@ -73,25 +65,22 @@ type HomeCurrentListResourceProps = Omit<CurrentListProps, "deps">;
 
 function HomeCurrentListResource({
 	session,
-	listSwitcherOpen,
-	onListSwitcherOpenChange,
 	onOpenNavigation,
+	onOpenLists,
 }: HomeCurrentListResourceProps) {
 	const list = useHomeCurrentList(session);
 	const syncState = useSyncState();
-	// The single live rows watch: feeds both the header quick-list chips and
-	// the switcher sheet.
-	const { rows } = useHomeListSwitcherRows(session);
+	// The single live rows watch feeds the header quick-list chips.
+	const { rows } = useListRows(session);
 	return (
 		<HomeCurrentListContent
 			session={session}
 			list={list}
 			syncState={syncState}
-			allowListSwitcher
+			allowListsEntry
 			listRows={rows}
-			listSwitcherOpen={listSwitcherOpen}
-			onListSwitcherOpenChange={onListSwitcherOpenChange}
 			onOpenNavigation={onOpenNavigation}
+			onOpenLists={onOpenLists}
 		/>
 	);
 }
@@ -100,22 +89,20 @@ type HomeCurrentListContentProps = {
 	session: AuthenticatedAppSession;
 	list: HomeCurrentListData;
 	syncState: ActiveListSyncState;
-	allowListSwitcher: boolean;
-	listRows: HomeListSwitcherRows;
-	listSwitcherOpen: boolean;
-	onListSwitcherOpenChange: (isOpen: boolean) => void;
+	allowListsEntry: boolean;
+	listRows: ListRows;
 	onOpenNavigation: () => void;
+	onOpenLists?: () => void;
 };
 
 function HomeCurrentListContent({
 	session,
 	list,
 	syncState,
-	allowListSwitcher,
+	allowListsEntry,
 	listRows,
-	listSwitcherOpen,
-	onListSwitcherOpenChange,
 	onOpenNavigation,
+	onOpenLists,
 }: HomeCurrentListContentProps) {
 	const currentMemberName = sessionMemberDisplayName(session);
 	const loadState = list.state;
@@ -147,68 +134,35 @@ function HomeCurrentListContent({
 
 	if (loadState.status === "zeroActive") {
 		return (
-			<>
-				<HomeStatus
-					title="No active Lists"
-					body="Create a List to start adding Items."
+			<HomeStatus
+				title="No active Lists"
+				body="Create a List to start adding Items."
+			>
+				<Pressable
+					accessibilityRole="button"
+					onPress={allowListsEntry ? onOpenLists : undefined}
+					style={({ pressed }) => [
+						styles.createButton,
+						pressed ? styles.createButtonPressed : undefined,
+					]}
 				>
-					<Pressable
-						accessibilityRole="button"
-						onPress={
-							allowListSwitcher
-								? () => onListSwitcherOpenChange(true)
-								: undefined
-						}
-						style={({ pressed }) => [
-							styles.createButton,
-							pressed ? styles.createButtonPressed : undefined,
-						]}
-					>
-						<Text style={styles.createButtonLabel}>Create List</Text>
-					</Pressable>
-				</HomeStatus>
-				{allowListSwitcher && listSwitcherOpen ? (
-					<HomeListSwitcher
-						session={session}
-						rows={listRows}
-						currentListId={null}
-						initialMode="create"
-						onDismiss={() => onListSwitcherOpenChange(false)}
-						// A successful create persists the selection, then re-resolution
-						// renders the new empty Current List.
-						onSwitched={list.reload}
-					/>
-				) : null}
-			</>
+					<Text style={styles.createButtonLabel}>Create List</Text>
+				</Pressable>
+			</HomeStatus>
 		);
 	}
 
 	return (
-		<>
-			<ActiveCurrentList
-				key={`${session.activeHousehold.id}:${loadState.listId}`}
-				loadState={loadState}
-				currentMemberName={currentMemberName}
-				syncState={syncState}
-				listSummaries={listSummaries}
-				onOpenNavigation={onOpenNavigation}
-				onSelectList={(listId) => void switchList(listId, loadState.listId)}
-				onPressListName={
-					allowListSwitcher ? () => onListSwitcherOpenChange(true) : undefined
-				}
-			/>
-			{allowListSwitcher && listSwitcherOpen ? (
-				<HomeListSwitcher
-					session={session}
-					rows={listRows}
-					currentListId={loadState.listId}
-					onDismiss={() => onListSwitcherOpenChange(false)}
-					// Task 5 re-resolution: re-reads the freshly stored selection and
-					// remounts the Current List body via the listId-keyed boundary.
-					onSwitched={list.reload}
-				/>
-			) : null}
-		</>
+		<ActiveCurrentList
+			key={`${session.activeHousehold.id}:${loadState.listId}`}
+			loadState={loadState}
+			currentMemberName={currentMemberName}
+			syncState={syncState}
+			listSummaries={listSummaries}
+			onOpenNavigation={onOpenNavigation}
+			onSelectList={(listId) => void switchList(listId, loadState.listId)}
+			onPressListName={allowListsEntry ? onOpenLists : undefined}
+		/>
 	);
 }
 

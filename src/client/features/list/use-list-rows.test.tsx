@@ -2,7 +2,7 @@ import { useQuery } from "@powersync/react";
 import { renderHook } from "@testing-library/react-native";
 import type { ListSummary } from "@/client/features/list/list-service";
 import type { AuthenticatedAppSession } from "@/client/session";
-import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
+import { useListRows } from "./use-list-rows";
 import {
 	type ProductServices,
 	useProductServices,
@@ -14,7 +14,7 @@ jest.mock("./use-product-services", () => ({ useProductServices: jest.fn() }));
 const mockUseQuery = jest.mocked(useQuery);
 const mockUseProductServices = jest.mocked(useProductServices);
 
-describe("useHomeListSwitcherRows", () => {
+describe("useListRows", () => {
 	const summaries = [summary("lst_recent"), summary("lst_pantry")];
 	const listListsQuery = {
 		compile: () => ({ sql: "SELECT lists", parameters: [] }),
@@ -37,7 +37,7 @@ describe("useHomeListSwitcherRows", () => {
 			queryResult({ data: [], isLoading: true, isFetching: true }),
 		);
 
-		const { result } = await renderUseHomeListSwitcherRows();
+		const { result } = await renderUseListRows();
 
 		expect(result.current.rows).toEqual({ status: "loading" });
 	});
@@ -45,7 +45,7 @@ describe("useHomeListSwitcherRows", () => {
 	it("maps watched query data to ready summaries", async () => {
 		mockUseQuery.mockReturnValue(queryResult({ data: summaries }));
 
-		const { result } = await renderUseHomeListSwitcherRows();
+		const { result } = await renderUseListRows();
 
 		expect(result.current.rows).toEqual({ status: "ready", summaries });
 	});
@@ -55,13 +55,13 @@ describe("useHomeListSwitcherRows", () => {
 			queryResult({ data: summaries, error: new Error("db unavailable") }),
 		);
 
-		const { result } = await renderUseHomeListSwitcherRows();
+		const { result } = await renderUseListRows();
 
 		expect(result.current.rows).toEqual({ status: "error" });
 	});
 
 	it("builds the active recent-activity summaries query and passes it to useQuery", async () => {
-		await renderUseHomeListSwitcherRows();
+		await renderUseListRows();
 
 		expect(listListsQueryMock).toHaveBeenCalledWith({
 			archive: "active",
@@ -71,8 +71,8 @@ describe("useHomeListSwitcherRows", () => {
 	});
 });
 
-function renderUseHomeListSwitcherRows() {
-	return renderHook(() => useHomeListSwitcherRows(sessionFixture()));
+function renderUseListRows() {
+	return renderHook(() => useListRows(sessionFixture()));
 }
 
 function queryResult(input: {

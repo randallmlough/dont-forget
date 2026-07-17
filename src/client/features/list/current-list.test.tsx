@@ -17,7 +17,7 @@ describe("CurrentList", () => {
 			deps: zeroActiveListDeps(),
 			visibleText: "No active Lists",
 		},
-	])("does not mount the List switcher for injected $name state", async ({
+	])("does not wire Lists entry points for injected $name state", async ({
 		deps,
 		visibleText,
 	}) => {
@@ -25,15 +25,14 @@ describe("CurrentList", () => {
 			<CurrentList
 				session={sessionFixture()}
 				deps={deps}
-				listSwitcherOpen
-				onListSwitcherOpenChange={jest.fn()}
 				onOpenNavigation={jest.fn()}
+				onOpenLists={jest.fn()}
 			/>,
 			{ wrapper: TestSafeAreaProvider },
 		);
 
 		expect(await screen.findByText(visibleText)).toBeTruthy();
-		expect(screen.queryByText("Switch List")).toBeNull();
+		expect(screen.queryByRole("button", { name: "Switch List" })).toBeNull();
 		expect(screen.queryByLabelText("List name")).toBeNull();
 	});
 });
