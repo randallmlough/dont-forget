@@ -1,6 +1,34 @@
-import { BlurView } from "expo-blur";
+import {
+	Button,
+	GlassEffectContainer,
+	Host,
+	HStack,
+	Spacer,
+	Text,
+	TextField,
+	useNativeState,
+	VStack,
+} from "@expo/ui/swift-ui";
+import {
+	accessibilityLabel,
+	buttonBorderShape,
+	buttonStyle,
+	controlSize,
+	disabled,
+	font,
+	foregroundStyle,
+	frame,
+	glassEffect,
+	lineLimit,
+	onSubmit,
+	padding,
+	submitLabel,
+	textFieldStyle,
+	textInputAutocapitalization,
+	tint,
+} from "@expo/ui/swift-ui/modifiers";
 import { useEffect, useState } from "react";
-import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, View } from "react-native";
 import Animated, {
 	Easing,
 	useAnimatedStyle,
@@ -46,9 +74,8 @@ export type AddItemComposerActions = {
 
 export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
-	const { rt, theme } = useUnistyles();
-	const placeholderColor = theme.colors.textSubtle;
-	const blurTint = rt.themeName === "dark" ? "dark" : "light";
+	const { rt } = useUnistyles();
+	const colorScheme = rt.themeName === "dark" ? "dark" : "light";
 	const visibility = useSharedValue(0);
 	const keyboardHeight = useKeyboardHeight();
 
@@ -84,19 +111,11 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					{ paddingBottom: insets.bottom + ENTRY_BOTTOM_GAP },
 				]}
 			>
-				<Pressable
-					accessibilityLabel="Add Item"
-					accessibilityRole="button"
-					onPress={actions.open}
-					style={({ pressed }) => [
-						styles.entryHost,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.entryLabel}>
-						{draft.name.trim() ? draft.name.trim() : "Add Item"}
-					</Text>
-				</Pressable>
+				<RestingGlassComposer
+					colorScheme={colorScheme}
+					draft={draft}
+					actions={actions}
+				/>
 			</View>
 		);
 	}
@@ -123,91 +142,223 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					},
 				]}
 			>
-				<BlurView intensity={34} tint={blurTint} style={styles.tray}>
-					<View style={styles.primaryRow}>
-						<TextInput
-							accessibilityLabel="Item name"
-							autoFocus
-							value={draft.name}
-							onChangeText={actions.changeName}
-							placeholder="Item name"
-							placeholderTextColor={placeholderColor}
-							returnKeyType="done"
-							onSubmitEditing={actions.submit}
-							style={styles.itemInput}
-						/>
-						<Pressable
-							accessibilityLabel="Submit Item"
-							accessibilityRole="button"
-							accessibilityState={{ disabled: !ui.canSubmit }}
-							disabled={!ui.canSubmit}
-							onPress={actions.submit}
-							style={({ pressed }) => [
-								styles.submitButton,
-								!ui.canSubmit ? styles.submitButtonDisabled : undefined,
-								pressed && ui.canSubmit ? styles.pressed : undefined,
-							]}
-						>
-							<Text style={styles.submitLabel}>+</Text>
-						</Pressable>
-					</View>
-					{ui.errorMessage ? (
-						<Text accessibilityRole="alert" style={styles.errorMessage}>
-							{ui.errorMessage}
-						</Text>
-					) : null}
-					<View style={styles.quantityRow}>
-						<Text style={styles.quantityLabel}>Quantity</Text>
-						<TextInput
-							accessibilityLabel="Quantity"
-							value={draft.quantity}
-							onChangeText={actions.changeQuantity}
-							placeholder="1, dozen, 1 gallon"
-							placeholderTextColor={placeholderColor}
-							returnKeyType="done"
-							onSubmitEditing={actions.submit}
-							style={styles.quantityInput}
-						/>
-					</View>
-					<View style={styles.pillRow}>
-						<Pressable
-							accessibilityLabel="Add note"
-							accessibilityRole="button"
-							accessibilityState={{ selected: ui.isNoteOpen }}
-							onPress={actions.toggleNote}
-							style={({ pressed }) => [
-								styles.pill,
-								ui.isNoteOpen ? styles.pillSelected : undefined,
-								pressed ? styles.pressed : undefined,
-							]}
-						>
-							<Text style={styles.pillText}>
-								{ui.isNoteOpen ? "Note" : "Add note"}
-							</Text>
-						</Pressable>
-						<View
-							accessibilityLabel={`Selected List: ${ui.listName}`}
-							style={styles.pill}
-						>
-							<Text numberOfLines={1} style={styles.pillText}>
-								{ui.listName}
-							</Text>
-						</View>
-					</View>
-					{ui.isNoteOpen ? (
-						<TextInput
-							accessibilityLabel="Item note"
-							value={draft.notes}
-							onChangeText={actions.changeNotes}
-							placeholder="Note"
-							placeholderTextColor={placeholderColor}
-							style={styles.noteInput}
-						/>
-					) : null}
-				</BlurView>
+				<ExpandedGlassComposer
+					colorScheme={colorScheme}
+					draft={draft}
+					ui={ui}
+					actions={actions}
+				/>
 			</Animated.View>
 		</View>
 	);
+}
+
+function RestingGlassComposer({
+	colorScheme,
+	draft,
+	actions,
+}: {
+	colorScheme: "light" | "dark";
+	draft: AddItemComposerDraft;
+	actions: AddItemComposerActions;
+}) {
+	const { theme } = useUnistyles();
+	const name = useMirroredNativeState(draft.name);
+
+	return (
+		<Host colorScheme={colorScheme} style={styles.entryHost}>
+			<GlassEffectContainer spacing={theme.spacing(3)}>
+				<TextField
+					placeholder="Add an Item…"
+					text={name}
+					onTextChange={actions.changeName}
+					onFocusChange={(focused) => {
+						if (focused) actions.open();
+					}}
+					modifiers={[
+						accessibilityLabel("Add Item"),
+						textFieldStyle("plain"),
+						textInputAutocapitalization("sentences"),
+						font({ textStyle: "body" }),
+						foregroundStyle(theme.colors.text),
+						frame({ minHeight: theme.spacing(13), maxWidth: 1000 }),
+						padding({ horizontal: theme.spacing(4) }),
+						glassEffect({
+							glass: { variant: "regular", interactive: true },
+							shape: "capsule",
+						}),
+					]}
+				/>
+			</GlassEffectContainer>
+		</Host>
+	);
+}
+
+function ExpandedGlassComposer({
+	colorScheme,
+	draft,
+	ui,
+	actions,
+}: {
+	colorScheme: "light" | "dark";
+	draft: AddItemComposerDraft;
+	ui: AddItemComposerUiState;
+	actions: AddItemComposerActions;
+}) {
+	const { theme } = useUnistyles();
+	const name = useMirroredNativeState(draft.name);
+	const quantity = useMirroredNativeState(draft.quantity);
+	const notes = useMirroredNativeState(draft.notes);
+
+	return (
+		<Host
+			colorScheme={colorScheme}
+			matchContents={{ vertical: true }}
+			style={styles.expandedHost}
+		>
+			<GlassEffectContainer spacing={theme.spacing(3)}>
+				<VStack
+					alignment="leading"
+					spacing={theme.spacing(3)}
+					modifiers={[
+						frame({ maxWidth: 1000 }),
+						padding({ all: theme.spacing(3) }),
+						glassEffect({
+							glass: { variant: "regular", interactive: false },
+							shape: "roundedRectangle",
+							cornerRadius: theme.radii.card,
+						}),
+					]}
+				>
+					<TextField
+						autoFocus
+						placeholder="Item name"
+						text={name}
+						onTextChange={actions.changeName}
+						modifiers={[
+							accessibilityLabel("Item name"),
+							textFieldStyle("roundedBorder"),
+							textInputAutocapitalization("sentences"),
+							font({ textStyle: "body" }),
+							frame({ minHeight: theme.spacing(11), maxWidth: 1000 }),
+							submitLabel("done"),
+							onSubmit(actions.submit),
+						]}
+					/>
+
+					<HStack alignment="center" spacing={theme.spacing(3)}>
+						<Text
+							modifiers={[
+								font({ textStyle: "subheadline", weight: "semibold" }),
+								foregroundStyle({
+									type: "hierarchical",
+									style: "secondary",
+								}),
+								frame({ width: theme.spacing(18), alignment: "leading" }),
+							]}
+						>
+							Quantity
+						</Text>
+						<TextField
+							placeholder="1, dozen, 1 gallon"
+							text={quantity}
+							onTextChange={actions.changeQuantity}
+							modifiers={[
+								accessibilityLabel("Quantity"),
+								textFieldStyle("plain"),
+								font({ textStyle: "subheadline" }),
+								frame({ minHeight: theme.spacing(10), maxWidth: 1000 }),
+								padding({ horizontal: theme.spacing(3) }),
+								submitLabel("done"),
+								onSubmit(actions.submit),
+							]}
+						/>
+					</HStack>
+
+					{ui.isNoteOpen ? (
+						<TextField
+							axis="vertical"
+							placeholder="Add a note"
+							text={notes}
+							onTextChange={actions.changeNotes}
+							modifiers={[
+								accessibilityLabel("Item note"),
+								textFieldStyle("roundedBorder"),
+								font({ textStyle: "subheadline" }),
+								lineLimit({ min: 2, max: 3 }),
+								frame({ minHeight: theme.spacing(15), maxWidth: 1000 }),
+							]}
+						/>
+					) : null}
+
+					{ui.errorMessage ? (
+						<Text
+							modifiers={[
+								accessibilityLabel(ui.errorMessage),
+								font({ textStyle: "caption", weight: "semibold" }),
+								foregroundStyle(theme.colors.destructive),
+							]}
+						>
+							{ui.errorMessage}
+						</Text>
+					) : null}
+
+					<HStack alignment="center" spacing={theme.spacing(2)}>
+						<Button
+							label={ui.isNoteOpen ? "Remove Note" : "Add Note"}
+							onPress={actions.toggleNote}
+							modifiers={[
+								accessibilityLabel(ui.isNoteOpen ? "Remove note" : "Add note"),
+								buttonStyle("glass"),
+								buttonBorderShape("capsule"),
+								controlSize("regular"),
+							]}
+						/>
+						<Text
+							modifiers={[
+								accessibilityLabel(`Selected List: ${ui.listName}`),
+								font({ textStyle: "caption", weight: "semibold" }),
+								foregroundStyle({
+									type: "hierarchical",
+									style: "secondary",
+								}),
+								padding({
+									horizontal: theme.spacing(3),
+									vertical: theme.spacing(2),
+								}),
+								glassEffect({ glass: { variant: "clear" }, shape: "capsule" }),
+							]}
+						>
+							{ui.listName}
+						</Text>
+						<Spacer minLength={theme.spacing(2)} />
+						<Button
+							label="Add Item"
+							onPress={actions.submit}
+							modifiers={[
+								accessibilityLabel("Submit Item"),
+								buttonStyle("glass"),
+								buttonBorderShape("capsule"),
+								controlSize("regular"),
+								tint(theme.colors.primary),
+								disabled(!ui.canSubmit),
+							]}
+						/>
+					</HStack>
+				</VStack>
+			</GlassEffectContainer>
+		</Host>
+	);
+}
+
+function useMirroredNativeState(value: string) {
+	const state = useNativeState(value);
+
+	useEffect(() => {
+		if (state.get() !== value) state.set(value);
+	}, [state, value]);
+
+	return state;
 }
 
 export function useAddItemComposerScrollInset(): number {
@@ -267,19 +418,8 @@ const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.background,
 	},
 	entryHost: {
-		minHeight: theme.spacing(11),
-		height: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.spacing(5.5),
-		backgroundColor: theme.effects.addItemComposer.entryBackground,
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.effects.addItemComposer.entryBorder,
-		boxShadow: theme.effects.addItemComposer.entryShadow,
-		justifyContent: "center",
-	},
-	entryLabel: {
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.callout,
+		width: "100%",
+		height: theme.spacing(14),
 	},
 	composerHost: {
 		position: "absolute",
@@ -287,113 +427,7 @@ const styles = StyleSheet.create((theme) => ({
 		right: theme.spacing(2.5),
 		zIndex: 20,
 	},
-	tray: {
-		gap: theme.spacing(2),
-		padding: theme.spacing(2.5),
-		borderRadius: theme.spacing(4),
-		borderCurve: "continuous",
-		overflow: "hidden",
-		backgroundColor: theme.effects.addItemComposer.trayBackground,
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.effects.addItemComposer.trayBorder,
-		boxShadow: theme.effects.addItemComposer.trayShadow,
-	},
-	primaryRow: {
-		minHeight: theme.spacing(10),
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	itemInput: {
-		flex: 1,
-		minWidth: 0,
-		minHeight: theme.spacing(10),
-		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		backgroundColor: theme.effects.addItemComposer.inputBackground,
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.effects.addItemComposer.inputBorder,
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.body,
-	},
-	submitButton: {
-		width: theme.spacing(9),
-		height: theme.spacing(9),
-		borderRadius: theme.spacing(4.5),
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.primary,
-	},
-	submitButtonDisabled: {
-		backgroundColor: theme.colors.primaryDisabled,
-	},
-	submitLabel: {
-		color: theme.colors.inverseText,
-		fontSize: theme.fontSizes.headline,
-		fontWeight: theme.fontWeights.semibold,
-		lineHeight: theme.spacing(6),
-	},
-	errorMessage: {
-		...theme.typography.captionStrong,
-		color: theme.colors.destructive,
-	},
-	quantityRow: {
-		minHeight: theme.spacing(8),
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	quantityLabel: {
-		width: theme.spacing(17),
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
-	},
-	quantityInput: {
-		flex: 1,
-		minWidth: 0,
-		minHeight: theme.spacing(8),
-		paddingHorizontal: theme.spacing(2.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		backgroundColor: theme.effects.addItemComposer.fieldBackground,
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.callout,
-	},
-	pillRow: {
-		minHeight: theme.spacing(8),
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	pill: {
-		maxWidth: "52%",
-		minHeight: theme.spacing(8),
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.spacing(4),
-		backgroundColor: theme.effects.addItemComposer.pillBackground,
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.effects.addItemComposer.pillBorder,
-	},
-	pillSelected: {
-		backgroundColor: theme.effects.addItemComposer.selectedPillBackground,
-		borderColor: theme.effects.addItemComposer.selectedPillBorder,
-	},
-	pillText: {
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
-	},
-	noteInput: {
-		minHeight: theme.spacing(8),
-		paddingHorizontal: theme.spacing(2.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		backgroundColor: theme.effects.addItemComposer.fieldBackground,
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.callout,
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
+	expandedHost: {
+		width: "100%",
 	},
 }));

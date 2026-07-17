@@ -1,25 +1,11 @@
 import { render, screen } from "@testing-library/react-native";
 import type { PropsWithChildren, ReactElement } from "react";
-import { View as MockView } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { UnistylesRuntime } from "react-native-unistyles";
 import { AddItemComposer } from "./add-item-composer";
 
-jest.mock("expo-blur", () => {
-	return {
-		BlurView: ({
-			children,
-			...props
-		}: PropsWithChildren<Record<string, unknown>>) => (
-			<MockView {...props} testID="add-item-composer-blur">
-				{children}
-			</MockView>
-		),
-	};
-});
-
 describe("AddItemComposer", () => {
-	it("uses the dark blur tint with the dark theme", async () => {
+	it("passes dark appearance through the SwiftUI Host", async () => {
 		(UnistylesRuntime as unknown as { themeName?: string }).themeName = "dark";
 
 		await renderWithSafeArea(
@@ -44,8 +30,10 @@ describe("AddItemComposer", () => {
 			/>,
 		);
 
-		expect(screen.getByTestId("add-item-composer-blur").props.tint).toBe(
-			"dark",
+		expect(screen.getByTestId("expo-ui-host").props.accessibilityValue).toEqual(
+			{
+				text: "dark",
+			},
 		);
 	});
 });

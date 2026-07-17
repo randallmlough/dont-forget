@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useRef } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { setCurrentListSelection } from "@/client/features/list/current-selection";
+import type { ListSummary } from "@/client/features/list/list-service";
+import { track } from "@/client/lib/analytics";
 import { type AuthenticatedAppSession, useSyncState } from "@/client/session";
 import { AddItemForm } from "./add-item-form";
 import { HomeListSwitcher } from "./home-list-switcher";
@@ -12,6 +15,7 @@ import {
 	type HomeCurrentListData,
 	useHomeCurrentList,
 } from "./use-home-current-list";
+import { useHomeListSwitcherRows } from "./use-home-list-switcher-rows";
 import { useListActions } from "./use-list-actions";
 
 export type HomeCurrentListDeps = {
@@ -22,9 +26,18 @@ export type HomeCurrentListDeps = {
 export type CurrentListProps = {
 	session: AuthenticatedAppSession;
 	deps?: HomeCurrentListDeps;
+	listSwitcherOpen: boolean;
+	onListSwitcherOpenChange: (isOpen: boolean) => void;
+	onOpenNavigation: () => void;
 };
 
-export function CurrentList({ session, deps }: CurrentListProps) {
+export function CurrentList({
+	session,
+	deps,
+	listSwitcherOpen,
+	onListSwitcherOpenChange,
+	onOpenNavigation,
+}: CurrentListProps) {
 	if (deps) {
 		return (
 			<HomeCurrentListContent
@@ -32,6 +45,10 @@ export function CurrentList({ session, deps }: CurrentListProps) {
 				list={deps.currentList}
 				syncState={deps.syncState}
 				allowListSwitcher={false}
+				listSummaries={[]}
+				listSwitcherOpen={listSwitcherOpen}
+				onListSwitcherOpenChange={onListSwitcherOpenChange}
+				onOpenNavigation={onOpenNavigation}
 			/>
 		);
 	}
@@ -40,23 +57,34 @@ export function CurrentList({ session, deps }: CurrentListProps) {
 		<HomeCurrentListResource
 			key={session.activeHousehold.id}
 			session={session}
+			listSwitcherOpen={listSwitcherOpen}
+			onListSwitcherOpenChange={onListSwitcherOpenChange}
+			onOpenNavigation={onOpenNavigation}
 		/>
 	);
 }
 
-type HomeCurrentListResourceProps = {
-	session: AuthenticatedAppSession;
-};
+type HomeCurrentListResourceProps = Omit<CurrentListProps, "deps">;
 
-function HomeCurrentListResource({ session }: HomeCurrentListResourceProps) {
+function HomeCurrentListResource({
+	session,
+	listSwitcherOpen,
+	onListSwitcherOpenChange,
+	onOpenNavigation,
+}: HomeCurrentListResourceProps) {
 	const list = useHomeCurrentList(session);
 	const syncState = useSyncState();
+	const { rows } = useHomeListSwitcherRows(session);
 	return (
 		<HomeCurrentListContent
 			session={session}
 			list={list}
 			syncState={syncState}
 			allowListSwitcher
+			listSummaries={rows.status === "ready" ? rows.summaries : []}
+			listSwitcherOpen={listSwitcherOpen}
+			onListSwitcherOpenChange={onListSwitcherOpenChange}
+			onOpenNavigation={onOpenNavigation}
 		/>
 	);
 }
@@ -66,6 +94,10 @@ type HomeCurrentListContentProps = {
 	list: HomeCurrentListData;
 	syncState: ActiveListSyncState;
 	allowListSwitcher: boolean;
+	listSummaries: ListSummary[];
+	listSwitcherOpen: boolean;
+	onListSwitcherOpenChange: (isOpen: boolean) => void;
+	onOpenNavigation: () => void;
 };
 
 function HomeCurrentListContent({
@@ -73,10 +105,36 @@ function HomeCurrentListContent({
 	list,
 	syncState,
 	allowListSwitcher,
+	listSummaries,
+	listSwitcherOpen,
+	onListSwitcherOpenChange,
+	onOpenNavigation,
 }: HomeCurrentListContentProps) {
 	const currentMemberName = homeSessionMemberName(session);
 	const loadState = list.state;
-	const [switcherOpen, setSwitcherOpen] = useState(false);
+	const switchingRef = useRef(false);
+
+	async function selectList(listId: string, currentListId: string) {
+		if (listId === currentListId || switchingRef.current) return;
+		switchingRef.current = true;
+		try {
+			await setCurrentListSelection(
+				session.activeMember.userId,
+				session.activeHousehold.id,
+				listId,
+			);
+		} catch {
+			switchingRef.current = false;
+			return;
+		}
+		track("list_switched", {
+			household_id: session.activeHousehold.id,
+			list_id: listId,
+			user_id: session.activeMember.userId,
+		});
+		list.reload();
+		switchingRef.current = false;
+	}
 
 	if (loadState.status === "loading") {
 		return (
@@ -107,7 +165,9 @@ function HomeCurrentListContent({
 					<Pressable
 						accessibilityRole="button"
 						onPress={
-							allowListSwitcher ? () => setSwitcherOpen(true) : undefined
+							allowListSwitcher
+								? () => onListSwitcherOpenChange(true)
+								: undefined
 						}
 						style={({ pressed }) => [
 							styles.createButton,
@@ -117,12 +177,12 @@ function HomeCurrentListContent({
 						<Text style={styles.createButtonLabel}>Create List</Text>
 					</Pressable>
 				</HomeStatus>
-				{switcherOpen ? (
+				{listSwitcherOpen ? (
 					<HomeListSwitcher
 						session={session}
 						currentListId={null}
 						initialMode="create"
-						onDismiss={() => setSwitcherOpen(false)}
+						onDismiss={() => onListSwitcherOpenChange(false)}
 						// A successful create persists the selection, then re-resolution
 						// renders the new empty Current List.
 						onSwitched={list.reload}
@@ -139,15 +199,18 @@ function HomeCurrentListContent({
 				loadState={loadState}
 				currentMemberName={currentMemberName}
 				syncState={syncState}
+				listSummaries={listSummaries}
+				onOpenNavigation={onOpenNavigation}
+				onSelectList={(listId) => void selectList(listId, loadState.listId)}
 				onPressListName={
-					allowListSwitcher ? () => setSwitcherOpen(true) : undefined
+					allowListSwitcher ? () => onListSwitcherOpenChange(true) : undefined
 				}
 			/>
-			{switcherOpen ? (
+			{listSwitcherOpen ? (
 				<HomeListSwitcher
 					session={session}
 					currentListId={loadState.listId}
-					onDismiss={() => setSwitcherOpen(false)}
+					onDismiss={() => onListSwitcherOpenChange(false)}
 					// Task 5 re-resolution: re-reads the freshly stored selection and
 					// remounts the Current List body via the listId-keyed boundary.
 					onSwitched={list.reload}
@@ -161,6 +224,9 @@ type ActiveCurrentListProps = {
 	loadState: Extract<HomeCurrentListData["state"], { status: "active" }>;
 	currentMemberName: string;
 	syncState: ActiveListSyncState;
+	listSummaries: ListSummary[];
+	onOpenNavigation: () => void;
+	onSelectList: (listId: string) => void;
 	onPressListName?: () => void;
 };
 
@@ -168,6 +234,9 @@ function ActiveCurrentList({
 	loadState,
 	currentMemberName,
 	syncState,
+	listSummaries,
+	onOpenNavigation,
+	onSelectList,
 	onPressListName,
 }: ActiveCurrentListProps) {
 	const actions = useListActions({
@@ -179,12 +248,16 @@ function ActiveCurrentList({
 	return (
 		<View style={styles.currentList}>
 			<ListHeader
+				currentListId={loadState.listId}
 				state={loadState.list}
 				meta={{
 					currentMemberName,
 					errorMessage: actions.errorMessage,
 					syncState,
 				}}
+				listSummaries={listSummaries}
+				onOpenNavigation={onOpenNavigation}
+				onSelectList={onSelectList}
 				onPressListName={onPressListName}
 			/>
 			<ItemRows

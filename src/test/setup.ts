@@ -36,6 +36,10 @@ jest.mock("react-native-reanimated", () => {
 	};
 });
 
+jest.mock("@expo/ui/swift-ui", () =>
+	jest.requireActual("./mocks/expo-ui-swift"),
+);
+
 jest.mock("expo-apple-authentication", () => {
 	const React = jest.requireActual<typeof import("react")>("react");
 	const { Pressable, Text } =

@@ -14,15 +14,32 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Focused: Story = {
-	render: () => <FocusedAddItemComposerStory />,
+export const Resting: Story = {
+	render: () => <InteractiveAddItemComposerStory initiallyOpen={false} />,
 };
 
-function FocusedAddItemComposerStory() {
+export const Focused: Story = {
+	render: () => <InteractiveAddItemComposerStory initiallyOpen />,
+};
+
+export const FocusedWithNote: Story = {
+	render: () => (
+		<InteractiveAddItemComposerStory initiallyOpen initiallyNoting />
+	),
+};
+
+function InteractiveAddItemComposerStory({
+	initiallyOpen,
+	initiallyNoting = false,
+}: {
+	initiallyOpen: boolean;
+	initiallyNoting?: boolean;
+}) {
 	const [name, setName] = useState("");
 	const [quantity, setQuantity] = useState("");
 	const [notes, setNotes] = useState("");
-	const [isNoteOpen, setIsNoteOpen] = useState(false);
+	const [isOpen, setIsOpen] = useState(initiallyOpen);
+	const [isNoteOpen, setIsNoteOpen] = useState(initiallyNoting);
 	const canSubmit = name.trim().length > 0;
 
 	function toggleNote() {
@@ -43,15 +60,15 @@ function FocusedAddItemComposerStory() {
 				<AddItemComposer
 					draft={{ name, quantity, notes }}
 					ui={{
-						isOpen: true,
+						isOpen,
 						isNoteOpen,
 						canSubmit,
 						listName: "Groceries",
 						errorMessage: null,
 					}}
 					actions={{
-						open: () => undefined,
-						dismiss: () => undefined,
+						open: () => setIsOpen(true),
+						dismiss: () => setIsOpen(false),
 						submit: () => undefined,
 						changeName: setName,
 						changeQuantity: setQuantity,

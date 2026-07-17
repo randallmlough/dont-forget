@@ -71,7 +71,7 @@ describe("HomeScreenView", () => {
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await fireEvent.press(await screen.findByText("Add Item"));
+		await fireEvent(await screen.findByLabelText("Add Item"), "focus");
 		await fireEvent.changeText(
 			await screen.findByLabelText("Item name"),
 			" Milk ",
@@ -84,7 +84,52 @@ describe("HomeScreenView", () => {
 			notes: null,
 		});
 	});
+
+	it("opens the Home navigation with every planned destination", async () => {
+		await render(
+			<HomeScreenView
+				state={{ status: "ready", refreshing: false }}
+				session={sessionFixture()}
+				currentListDeps={activeListDeps()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(await screen.findByLabelText("Open navigation"));
+
+		expect(await screen.findByText("Current List")).toBeTruthy();
+		expect(await screen.findByText("All Lists")).toBeTruthy();
+		expect(await screen.findByText("Household")).toBeTruthy();
+		expect(await screen.findByText("Members & Invitations")).toBeTruthy();
+		expect(await screen.findByText("Settings")).toBeTruthy();
+		expect(await screen.findByText("Appearance")).toBeTruthy();
+		expect(await screen.findByText("Help")).toBeTruthy();
+		expect(await screen.findByText("Switch Household")).toBeTruthy();
+	});
 });
+
+function activeListDeps(): HomeCurrentListDeps {
+	return {
+		currentList: {
+			state: {
+				status: "active",
+				listId: "lst_groceries",
+				list: {
+					householdName: "Avery",
+					listName: "Groceries",
+					items: [],
+				},
+				actions: {
+					addItem: jest.fn(async () => undefined),
+					setItemChecked: jest.fn(async () => undefined),
+				},
+			},
+			retry: jest.fn(),
+			reload: jest.fn(),
+		},
+		syncState: "synced",
+	};
+}
 
 function sessionFixture(): AuthenticatedAppSession {
 	return {
