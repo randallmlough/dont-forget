@@ -4,25 +4,26 @@ import { useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
-	FlatList,
+	ScrollView,
 	Text,
 	TextInput,
 	View,
 } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
-import type {
-	HouseholdJoinCode,
-	HouseholdMember,
-	PendingInvitation,
-} from "@/client/features/household/api";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { HouseholdButton } from "./household-button";
+import { AppButton } from "@/client/ui/app-button";
+import {
+	InitialsAvatar,
+	SurfaceCard,
+	SurfaceRow,
+	SurfaceSection,
+} from "@/client/ui/settings-surface";
 import {
 	type HouseholdSettingsActions,
 	type HouseholdSettingsOperation,
@@ -30,24 +31,14 @@ import {
 	useHouseholdSettings,
 } from "./use-household-settings";
 
-type SettingsRow =
-	| { type: "householdName" }
-	| { type: "invitationForm" }
-	| { type: "joinCode" }
-	| { type: "section"; id: string; title: string }
-	| { type: "member"; member: HouseholdMember }
-	| { type: "leaveHousehold" }
-	| { type: "invitation"; invitation: PendingInvitation }
-	| { type: "empty"; id: string; label: string };
-
 export default function HouseholdSettingsScreen() {
 	const { state, session, retry, reloadSession } = useAuthenticatedAppSession();
 
 	if (!session) {
 		return (
-			<HouseholdSettingsShell title="Household settings">
+			<HouseholdScreenShell label="Household" title="Household">
 				<SessionState state={state} onRetry={retry} />
-			</HouseholdSettingsShell>
+			</HouseholdScreenShell>
 		);
 	}
 
@@ -87,35 +78,173 @@ export function HouseholdSettingsView({
 	const householdName = householdNameForSettings(state, session);
 
 	return (
-		<HouseholdSettingsShell title={householdName}>
-			<View style={styles.topActions}>
-				<HouseholdButton
-					label="Switch Household"
-					onPress={() => router.push("/household/switch")}
-				/>
-			</View>
+		<HouseholdScreenShell label={householdName} title="Household">
 			{state.status === "loading" ? (
-				<CenteredStatus title="Loading Household settings">
+				<CenteredStatus title="Loading Household">
 					<ActivityIndicator />
 				</CenteredStatus>
 			) : state.status === "error" ? (
-				<CenteredStatus title="Household settings unavailable">
+				<CenteredStatus title="Household unavailable">
 					<Text style={styles.statusBody}>{state.message}</Text>
-					<HouseholdButton
-						variant="primary"
+					<AppButton
 						label="Try again"
 						onPress={actions.retry}
+						variant="primary"
 					/>
 				</CenteredStatus>
 			) : (
-				<SettingsList
+				<HouseholdReadyView
+					actions={actions}
+					householdName={householdName}
+					onOpenMembers={() => router.push("/household/members")}
 					session={session}
 					state={state}
-					householdName={householdName}
-					actions={actions}
 				/>
 			)}
-		</HouseholdSettingsShell>
+		</HouseholdScreenShell>
+	);
+}
+
+function HouseholdReadyView({
+	actions,
+	householdName,
+	onOpenMembers,
+	session,
+	state,
+}: {
+	actions: HouseholdSettingsActions;
+	householdName: string;
+	onOpenMembers: () => void;
+	session: AuthenticatedAppSession;
+	state: Extract<HouseholdSettingsState, { status: "ready" }>;
+}) {
+	const roleLabel = session.activeMember.role === "owner" ? "Owner" : "Member";
+	const memberCount = state.members.length;
+	const invitationCount = state.invitations.length;
+
+	return (
+		<ScrollView
+			contentContainerStyle={styles.content}
+			contentInsetAdjustmentBehavior="automatic"
+			keyboardShouldPersistTaps="handled"
+		>
+			{state.notice ? (
+				<SurfaceCard>
+					<Text style={styles.notice}>{state.notice}</Text>
+				</SurfaceCard>
+			) : null}
+
+			<SurfaceCard>
+				<View style={styles.identityCard}>
+					<InitialsAvatar label={householdName} size="large" />
+					<View style={styles.identityText}>
+						<Text style={styles.identityName}>{householdName}</Text>
+						<Text style={styles.identityDetail}>
+							{roleLabel} · {memberCountLabel(memberCount)}
+						</Text>
+					</View>
+				</View>
+			</SurfaceCard>
+
+			<SurfaceSection title="Household Details">
+				<SurfaceCard>
+					<HouseholdNameRow
+						actions={actions}
+						canRename={session.activeMember.role === "owner"}
+						name={householdName}
+						operation={state.operation}
+					/>
+					<SurfaceRow label="Your Membership" value={roleLabel} />
+				</SurfaceCard>
+				<SurfaceCard>
+					<SurfaceRow
+						accessibilityHint="Opens Member and Invitation management"
+						detail={`${memberCountLabel(memberCount)} · ${pendingInvitationLabel(invitationCount)}`}
+						label="Members & Invitations"
+						onPress={onOpenMembers}
+					/>
+				</SurfaceCard>
+			</SurfaceSection>
+
+			<SurfaceSection title="Membership">
+				<SurfaceCard>
+					<SurfaceRow
+						disclosure={false}
+						label="Leave Household"
+						onPress={() => confirmLeaveHousehold(actions)}
+						symbol="rectangle.portrait.and.arrow.right"
+						tone="destructive"
+					/>
+				</SurfaceCard>
+			</SurfaceSection>
+		</ScrollView>
+	);
+}
+
+function HouseholdNameRow({
+	actions,
+	canRename,
+	name,
+	operation,
+}: {
+	actions: HouseholdSettingsActions;
+	canRename: boolean;
+	name: string;
+	operation: HouseholdSettingsOperation;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [draftName, setDraftName] = useState(name);
+	const renaming = operation.status === "renamingHousehold";
+
+	if (!editing) {
+		return (
+			<SurfaceRow
+				divider
+				disclosure={canRename}
+				label="Household Name"
+				onPress={
+					canRename
+						? () => {
+								setDraftName(name);
+								setEditing(true);
+							}
+						: undefined
+				}
+				value={name}
+			/>
+		);
+	}
+
+	return (
+		<View style={styles.renameForm}>
+			<Text style={styles.inputLabel}>Household Name</Text>
+			<TextInput
+				accessibilityLabel="Household name"
+				autoCapitalize="words"
+				editable={!renaming}
+				onChangeText={setDraftName}
+				placeholder="Household name"
+				style={styles.input}
+				value={draftName}
+			/>
+			<View style={styles.formActions}>
+				<AppButton
+					disabled={renaming}
+					label={renaming ? "Renaming" : "Rename"}
+					onPress={() => {
+						void actions.renameHousehold(draftName).then((renamed) => {
+							if (renamed) setEditing(false);
+						});
+					}}
+					variant="primary"
+				/>
+				<AppButton
+					disabled={renaming}
+					label="Cancel"
+					onPress={() => setEditing(false)}
+				/>
+			</View>
+		</View>
 	);
 }
 
@@ -127,397 +256,25 @@ function householdNameForSettings(
 	return state.renamedHouseholdName ?? session.activeHousehold.name;
 }
 
-function SettingsList({
-	session,
-	state,
-	householdName,
-	actions,
-}: {
-	session: AuthenticatedAppSession;
-	state: Extract<HouseholdSettingsState, { status: "ready" }>;
-	householdName: string;
-	actions: HouseholdSettingsActions;
-}) {
-	const rows = settingsRows(state, session.activeMember.role === "owner");
-
-	return (
-		<FlatList
-			data={rows}
-			keyExtractor={settingsRowKey}
-			contentContainerStyle={styles.listContent}
-			keyboardShouldPersistTaps="handled"
-			renderItem={({ item }) => (
-				<SettingsRowView
-					row={item}
-					session={session}
-					state={state}
-					householdName={householdName}
-					actions={actions}
-				/>
-			)}
-			ListHeaderComponent={
-				state.notice ? (
-					<View style={styles.notice}>
-						<Text style={styles.noticeText}>{state.notice}</Text>
-					</View>
-				) : null
-			}
-		/>
-	);
+function memberCountLabel(count: number): string {
+	return `${count} ${count === 1 ? "Member" : "Members"}`;
 }
 
-function SettingsRowView({
-	row,
-	session,
-	state,
-	householdName,
-	actions,
-}: {
-	row: SettingsRow;
-	session: AuthenticatedAppSession;
-	state: Extract<HouseholdSettingsState, { status: "ready" }>;
-	householdName: string;
-	actions: HouseholdSettingsActions;
-}) {
-	if (row.type === "section") {
-		return <Text style={styles.sectionTitle}>{row.title}</Text>;
-	}
-	if (row.type === "empty") {
-		return <Text style={styles.emptyText}>{row.label}</Text>;
-	}
-	if (row.type === "member") {
-		return (
-			<MemberRow
-				member={row.member}
-				session={session}
-				operation={state.operation}
-				actions={actions}
-			/>
-		);
-	}
-	if (row.type === "householdName") {
-		return (
-			<HouseholdNamePanel
-				name={householdName}
-				operation={state.operation}
-				actions={actions}
-			/>
-		);
-	}
-	if (row.type === "leaveHousehold") {
-		return <LeaveHouseholdRow operation={state.operation} actions={actions} />;
-	}
-	if (row.type === "invitation") {
-		return (
-			<InvitationRow
-				invitation={row.invitation}
-				operation={state.operation}
-				actions={actions}
-			/>
-		);
-	}
-	if (row.type === "joinCode") {
-		return (
-			<JoinCodeControls
-				joinCode={state.joinCode}
-				operation={state.operation}
-				actions={actions}
-			/>
-		);
-	}
-	return <CreateInvitationForm operation={state.operation} actions={actions} />;
+function pendingInvitationLabel(count: number): string {
+	return `${count} pending`;
 }
 
-function HouseholdNamePanel({
-	name,
-	operation,
-	actions,
-}: {
-	name: string;
-	operation: HouseholdSettingsOperation;
-	actions: HouseholdSettingsActions;
-}) {
-	const [editing, setEditing] = useState(false);
-	const [draftName, setDraftName] = useState(name);
-	const disabled = operation.status === "renamingHousehold";
-
-	if (!editing) {
-		return (
-			<View style={styles.panel}>
-				<Text style={styles.panelTitle}>Household Name</Text>
-				<Text style={styles.nameText}>{name}</Text>
-				<HouseholdButton
-					label="Rename"
-					onPress={() => {
-						setDraftName(name);
-						setEditing(true);
-					}}
-				/>
-			</View>
-		);
-	}
-
-	return (
-		<View style={styles.panel}>
-			<Text style={styles.panelTitle}>Household Name</Text>
-			<TextInput
-				accessibilityLabel="Household name"
-				autoCapitalize="words"
-				editable={!disabled}
-				onChangeText={setDraftName}
-				placeholder="Household name"
-				style={styles.input}
-				value={draftName}
-			/>
-			<View style={styles.rowActions}>
-				<HouseholdButton
-					variant="primary"
-					label={disabled ? "Renaming" : "Rename"}
-					onPress={() => {
-						void actions.renameHousehold(draftName).then((renamed) => {
-							if (renamed) setEditing(false);
-						});
-					}}
-					disabled={disabled}
-				/>
-				<HouseholdButton
-					label="Cancel"
-					onPress={() => setEditing(false)}
-					disabled={disabled}
-				/>
-			</View>
-		</View>
-	);
-}
-
-function CreateInvitationForm({
-	operation,
-	actions,
-}: {
-	operation: HouseholdSettingsOperation;
-	actions: HouseholdSettingsActions;
-}) {
-	const [email, setEmail] = useState("");
-	const disabled = operation.status === "creatingInvitation";
-
-	return (
-		<View style={styles.panel}>
-			<Text style={styles.panelTitle}>Create Invitation</Text>
-			<TextInput
-				accessibilityLabel="Invitation email"
-				autoCapitalize="none"
-				autoComplete="email"
-				editable={!disabled}
-				keyboardType="email-address"
-				onChangeText={setEmail}
-				placeholder="Email address"
-				style={styles.input}
-				textContentType="emailAddress"
-				value={email}
-			/>
-			<HouseholdButton
-				variant="primary"
-				label={disabled ? "Creating" : "Create Invitation"}
-				onPress={() => actions.createInvitation(email)}
-				disabled={disabled}
-			/>
-		</View>
-	);
-}
-
-function JoinCodeControls({
-	joinCode,
-	operation,
-	actions,
-}: {
-	joinCode: HouseholdJoinCode;
-	operation: HouseholdSettingsOperation;
-	actions: HouseholdSettingsActions;
-}) {
-	const disabled = operation.status === "settingJoinCodeEnabled";
-	const regenerating = operation.status === "regeneratingJoinCode";
-
-	return (
-		<View style={styles.panel}>
-			<Text style={styles.panelTitle}>Household Join Code</Text>
-			{joinCode.enabled ? (
-				<>
-					<Text style={styles.codeText}>{formatJoinCode(joinCode.code)}</Text>
-					<View style={styles.rowActions}>
-						<HouseholdButton
-							label="Copy code"
-							onPress={() =>
-								actions.copyText(joinCode.code, "Household Join Code copied.")
-							}
-						/>
-						<HouseholdButton
-							label="Copy link"
-							onPress={() =>
-								actions.copyText(
-									joinCode.joinUrl,
-									"Household join link copied.",
-								)
-							}
-						/>
-					</View>
-					<View style={styles.rowActions}>
-						<HouseholdButton
-							label={regenerating ? "Regenerating" : "Regenerate"}
-							onPress={actions.regenerateJoinCode}
-							disabled={regenerating}
-						/>
-						<HouseholdButton
-							variant="danger"
-							label={disabled ? "Disabling" : "Disable"}
-							onPress={() => actions.setJoinCodeEnabled(false)}
-							disabled={disabled}
-						/>
-					</View>
-				</>
-			) : (
-				<>
-					<Text style={styles.mutedText}>Household Join Code is disabled.</Text>
-					<HouseholdButton
-						variant="primary"
-						label={disabled ? "Enabling" : "Enable Join Code"}
-						onPress={() => actions.setJoinCodeEnabled(true)}
-						disabled={disabled}
-					/>
-				</>
-			)}
-		</View>
-	);
-}
-
-function MemberRow({
-	member,
-	session,
-	operation,
-	actions,
-}: {
-	member: HouseholdMember;
-	session: AuthenticatedAppSession;
-	operation: HouseholdSettingsOperation;
-	actions: HouseholdSettingsActions;
-}) {
-	const canManageMembers =
-		session.activeMember.role === "owner" &&
-		member.userId !== session.activeMember.userId;
-	const removing =
-		operation.status === "removingMember" &&
-		operation.membershipId === member.membershipId;
-	const changingRole =
-		operation.status === "changingRole" &&
-		operation.membershipId === member.membershipId;
-	const nextRole = member.role === "owner" ? "member" : "owner";
-	const memberName = member.displayName ?? "this Member";
-
-	return (
-		<View style={styles.row}>
-			<View style={styles.rowTextGroup}>
-				<Text style={styles.rowTitle} numberOfLines={1}>
-					{member.displayName ?? "Member"}
-				</Text>
-				<Text style={styles.rowSubtitle}>
-					{member.role === "owner" ? "Owner" : "Member"}
-				</Text>
-			</View>
-			{canManageMembers ? (
-				<View style={styles.memberActions}>
-					<HouseholdButton
-						accessibilityLabel={`Make ${memberName} ${
-							nextRole === "owner" ? "an Owner" : "a Member"
-						}`}
-						label={changingRole ? "Changing" : roleActionLabel(nextRole)}
-						onPress={() => confirmRoleChange(member, nextRole, actions)}
-						disabled={changingRole}
-					/>
-					<HouseholdButton
-						accessibilityLabel={`Remove ${memberName} from this Household`}
-						variant="danger"
-						label={removing ? "Removing" : "Remove"}
-						onPress={() => confirmRemoveMember(member, actions)}
-						disabled={removing}
-					/>
-				</View>
-			) : null}
-		</View>
-	);
-}
-
-function LeaveHouseholdRow({
-	operation,
-	actions,
-}: {
-	operation: HouseholdSettingsOperation;
-	actions: HouseholdSettingsActions;
-}) {
-	const leaving = operation.status === "leavingHousehold";
-	return (
-		<View style={styles.row}>
-			<View style={styles.rowTextGroup}>
-				<Text style={styles.rowTitle}>Leave Household</Text>
-				<Text style={styles.rowSubtitle}>Remove your Membership</Text>
-			</View>
-			<HouseholdButton
-				variant="danger"
-				label={leaving ? "Leaving" : "Leave"}
-				onPress={() => confirmLeaveHousehold(actions)}
-				disabled={leaving}
-			/>
-		</View>
-	);
-}
-
-function InvitationRow({
-	invitation,
-	operation,
-	actions,
-}: {
-	invitation: PendingInvitation;
-	operation: HouseholdSettingsOperation;
-	actions: HouseholdSettingsActions;
-}) {
-	const revoking =
-		operation.status === "revokingInvitation" &&
-		operation.invitationId === invitation.id;
-	return (
-		<View style={styles.row}>
-			<View style={styles.rowTextGroup}>
-				<Text style={styles.rowTitle} numberOfLines={1}>
-					{invitation.email ?? "Invitation link"}
-				</Text>
-				<Text style={styles.rowSubtitle}>
-					Expires {formatDate(invitation.expiresAt)}
-				</Text>
-			</View>
-			<View style={styles.invitationActions}>
-				<HouseholdButton
-					label="Copy"
-					onPress={() =>
-						actions.copyText(invitation.acceptUrl, "Invitation link copied.")
-					}
-				/>
-				<HouseholdButton
-					variant="danger"
-					label={revoking ? "Revoking" : "Revoke"}
-					onPress={() => actions.revokeInvitation(invitation.id)}
-					disabled={revoking}
-				/>
-			</View>
-		</View>
-	);
-}
-
-function HouseholdSettingsShell({
-	title,
+function HouseholdScreenShell({
 	children,
+	label,
+	title,
 }: {
-	title: string;
 	children: ReactNode;
+	label: string;
+	title: string;
 }) {
 	return (
-		<ScreenScaffold label="Household settings" title={title}>
+		<ScreenScaffold label={label} title={title}>
 			{children}
 		</ScreenScaffold>
 	);
@@ -534,11 +291,7 @@ function SessionState({
 		return (
 			<CenteredStatus title="Household unavailable">
 				<Text style={styles.statusBody}>{state.message}</Text>
-				<HouseholdButton
-					variant="primary"
-					label="Try again"
-					onPress={onRetry}
-				/>
+				<AppButton label="Try again" onPress={onRetry} variant="primary" />
 			</CenteredStatus>
 		);
 	}
@@ -561,97 +314,6 @@ function CenteredStatus({
 			<Text style={styles.statusTitle}>{title}</Text>
 			{children}
 		</View>
-	);
-}
-
-function settingsRows(
-	state: Extract<HouseholdSettingsState, { status: "ready" }>,
-	canRenameHousehold: boolean,
-) {
-	const rows: SettingsRow[] = [];
-	if (canRenameHousehold) rows.push({ type: "householdName" });
-	rows.push(
-		{ type: "invitationForm" },
-		{ type: "joinCode" },
-		{ type: "section", id: "members", title: "Members" },
-	);
-	for (const member of state.members) rows.push({ type: "member", member });
-	if (state.members.length === 0) {
-		rows.push({
-			type: "empty",
-			id: "members-empty",
-			label: "No Members found.",
-		});
-	}
-	rows.push({ type: "leaveHousehold" });
-	rows.push({
-		type: "section",
-		id: "invitations",
-		title: "Pending Invitations",
-	});
-	for (const invitation of state.invitations) {
-		rows.push({ type: "invitation", invitation });
-	}
-	if (state.invitations.length === 0) {
-		rows.push({
-			type: "empty",
-			id: "invitations-empty",
-			label: "No pending Invitations.",
-		});
-	}
-	return rows;
-}
-
-function settingsRowKey(row: SettingsRow): string {
-	if (row.type === "member") return `member:${row.member.membershipId}`;
-	if (row.type === "invitation") return `invitation:${row.invitation.id}`;
-	if (row.type === "section" || row.type === "empty") return row.id;
-	return row.type;
-}
-
-function roleActionLabel(role: "owner" | "member"): string {
-	return role === "owner" ? "Make Owner" : "Make Member";
-}
-
-function confirmRemoveMember(
-	member: HouseholdMember,
-	actions: HouseholdSettingsActions,
-) {
-	Alert.alert(
-		"Remove Member",
-		`Remove ${member.displayName ?? "this Member"} from this Household?`,
-		[
-			{ text: "Cancel", style: "cancel" },
-			{
-				text: "Remove",
-				style: "destructive",
-				onPress: () => {
-					void actions.removeMember(member.membershipId);
-				},
-			},
-		],
-	);
-}
-
-function confirmRoleChange(
-	member: HouseholdMember,
-	role: "owner" | "member",
-	actions: HouseholdSettingsActions,
-) {
-	Alert.alert(
-		roleActionLabel(role),
-		`Change ${member.displayName ?? "this Member"} to ${
-			role === "owner" ? "Owner" : "Member"
-		}?`,
-		[
-			{ text: "Cancel", style: "cancel" },
-			{
-				text: "Change",
-				onPress: () => {
-					void actions.setMemberRole(member.membershipId, role);
-				},
-			},
-		],
 	);
 }
 
@@ -695,120 +357,60 @@ function confirmDiscardUnsyncedChanges(): Promise<boolean> {
 	});
 }
 
-function formatDate(timestamp: number): string {
-	return new Date(timestamp).toLocaleDateString();
-}
-
-function formatJoinCode(code: string): string {
-	return code.replace(/(.{4})/g, "$1 ").trim();
-}
-
 const styles = StyleSheet.create((theme) => ({
-	topActions: {
-		flexDirection: "row",
-		gap: theme.spacing(2),
-		padding: theme.spacing(4),
-		backgroundColor: theme.colors.surface,
-	},
-	listContent: {
-		padding: theme.spacing(4),
+	content: {
+		paddingHorizontal: theme.spacing(5),
 		paddingBottom: theme.spacing(12),
-		gap: theme.spacing(3),
+		gap: theme.spacing(6),
 	},
-	panel: {
-		gap: theme.spacing(3),
+	identityCard: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(4),
 		padding: theme.spacing(4),
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		borderRadius: theme.radii.card,
-		backgroundColor: theme.colors.surface,
 	},
-	panelTitle: {
+	identityText: {
+		flex: 1,
+		minWidth: 0,
+		gap: theme.spacing(1),
+	},
+	identityName: {
 		...theme.typography.headline,
 		color: theme.colors.text,
+	},
+	identityDetail: {
+		...theme.typography.callout,
+		color: theme.colors.textMuted,
+	},
+	notice: {
+		...theme.typography.callout,
+		color: theme.colors.text,
+		padding: theme.spacing(4),
+	},
+	renameForm: {
+		gap: theme.spacing(3),
+		padding: theme.spacing(4),
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.divider,
+	},
+	inputLabel: {
+		...theme.typography.captionStrong,
+		color: theme.colors.textMuted,
+		textTransform: "uppercase",
 	},
 	input: {
 		minHeight: theme.spacing(12),
 		paddingHorizontal: theme.spacing(3),
-		borderWidth: theme.borders.thin,
+		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.inputBorder,
 		borderRadius: theme.radii.control,
-		backgroundColor: theme.colors.surface,
+		backgroundColor: theme.colors.glassTint,
 		color: theme.colors.text,
 		...theme.typography.body,
 	},
-	codeText: {
-		...theme.typography.title,
-		color: theme.colors.text,
-	},
-	nameText: {
-		...theme.typography.body,
-		color: theme.colors.text,
-	},
-	mutedText: {
-		...theme.typography.body,
-		color: theme.colors.textMuted,
-	},
-	rowActions: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		gap: theme.spacing(2),
-	},
-	sectionTitle: {
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
-		textTransform: "uppercase",
-		marginTop: theme.spacing(3),
-	},
-	row: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(3),
-		padding: theme.spacing(4),
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		borderRadius: theme.radii.card,
-		backgroundColor: theme.colors.surface,
-	},
-	rowTextGroup: {
-		flex: 1,
-		minWidth: 0,
-	},
-	rowTitle: {
-		...theme.typography.body,
-		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.text,
-	},
-	rowSubtitle: {
-		...theme.typography.caption,
-		color: theme.colors.textMuted,
-	},
-	invitationActions: {
+	formActions: {
 		flexDirection: "row",
 		gap: theme.spacing(2),
-	},
-	memberActions: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		justifyContent: "flex-end",
-		gap: theme.spacing(2),
-	},
-	emptyText: {
-		...theme.typography.body,
-		color: theme.colors.textMuted,
-		paddingVertical: theme.spacing(2),
-	},
-	notice: {
-		padding: theme.spacing(3),
-		marginBottom: theme.spacing(3),
-		borderRadius: theme.radii.card,
-		backgroundColor: theme.colors.surface,
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.primary,
-	},
-	noticeText: {
-		...theme.typography.callout,
-		color: theme.colors.text,
 	},
 	centered: {
 		flex: 1,

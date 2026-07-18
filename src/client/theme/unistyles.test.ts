@@ -15,12 +15,21 @@ describe("unistyles themes", () => {
 			authBorder: "#DDD6CA",
 			divider: "#DDD6CA",
 			primary: "#263A2A",
+			primaryActionBackground: "#263A2A",
+			primaryActionText: "#FFFFFF",
 			primaryDisabled: "#C8C0B3",
 			destructive: "#A23D36",
 			link: "#396A8E",
 			authPrimary: "#191B17",
 			inverseText: "#FFFFFF",
 			scrim: "rgba(16, 18, 15, 0.46)",
+			glassTint: "rgba(255, 255, 255, 0.64)",
+			glassTintSelected: "rgba(63, 93, 67, 0.22)",
+			glassBorder: "rgba(255, 255, 255, 0.82)",
+			appearanceLightBackground: "#F7F4EE",
+			appearanceLightSurface: "#FFFFFF",
+			appearanceDarkBackground: "#10120F",
+			appearanceDarkSurface: "#22261F",
 		});
 	});
 

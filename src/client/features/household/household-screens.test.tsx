@@ -5,10 +5,16 @@ import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-c
 import type { AuthenticatedAppSession } from "@/client/session";
 import { HouseholdSettingsView } from "./household-settings-screen";
 import { HouseholdSwitchView } from "./household-switch-screen";
-import type { HouseholdSettingsActions } from "./use-household-settings";
+import { MembersInvitationsView } from "./members-invitations-screen";
+import type {
+	HouseholdSettingsActions,
+	HouseholdSettingsState,
+} from "./use-household-settings";
+
+const mockPush = jest.fn();
 
 jest.mock("expo-router", () => ({
-	useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+	useRouter: () => ({ push: mockPush, replace: jest.fn() }),
 }));
 
 jest.mock("@/client/session/powersync", () => ({
@@ -18,7 +24,7 @@ jest.mock("@/client/session/powersync", () => ({
 }));
 
 describe("HouseholdSwitchView", () => {
-	it("switches Households without a manual sync barrier", async () => {
+	it("switches Households by pressing the destination row", async () => {
 		const onSwitchHousehold = jest.fn();
 		await render(
 			<HouseholdSwitchView
@@ -41,14 +47,18 @@ describe("HouseholdSwitchView", () => {
 		expect(
 			screen.getByRole("button", { name: "Open navigation" }),
 		).toBeTruthy();
-		await screen.findByText("River");
-		await fireEvent.press(await screen.findByText("Switch"));
+		expect(
+			screen.getByRole("button", { name: "Avery" }).props.accessibilityState,
+		).toMatchObject({ selected: true, disabled: true });
+		await fireEvent.press(screen.getByRole("button", { name: "River" }));
 
 		expect(onSwitchHousehold).toHaveBeenCalledWith("hh_river");
 	});
 });
 
 describe("HouseholdSettingsView", () => {
+	beforeEach(() => mockPush.mockReset());
+
 	it("renders shared navigation chrome", async () => {
 		await render(
 			<HouseholdSettingsView
@@ -63,6 +73,47 @@ describe("HouseholdSettingsView", () => {
 			screen.getByRole("button", { name: "Open navigation" }),
 		).toBeTruthy();
 		expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+	});
+
+	it("keeps Household controls separate from Member management", async () => {
+		await render(
+			<HouseholdSettingsView
+				session={sessionFixture()}
+				state={settingsReadyFixture()}
+				actions={settingsActionsFixture()}
+			/>,
+			{ wrapper: TestAppShellProvider },
+		);
+
+		expect(screen.getByText("Household Details")).toBeTruthy();
+		expect(screen.getByText("Your Membership")).toBeTruthy();
+		expect(screen.queryByText("Invite People")).toBeNull();
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Members & Invitations" }),
+		);
+		expect(mockPush).toHaveBeenCalledWith("/household/members");
+	});
+});
+
+describe("MembersInvitationsView", () => {
+	it("renders Members, Invitation creation, Join Code, and pending Invitations", async () => {
+		await render(
+			<MembersInvitationsView
+				session={sessionFixture()}
+				state={settingsReadyFixture()}
+				actions={settingsActionsFixture()}
+			/>,
+			{ wrapper: TestAppShellProvider },
+		);
+
+		expect(screen.getByText("Members")).toBeTruthy();
+		expect(screen.getAllByText("Avery").length).toBeGreaterThanOrEqual(1);
+		expect(screen.getByText("Invite People")).toBeTruthy();
+		expect(screen.getByLabelText("Invitation email")).toBeTruthy();
+		expect(screen.getByText("Household Join Code")).toBeTruthy();
+		expect(screen.getByText("Pending")).toBeTruthy();
+		expect(screen.getByText("jordan@example.com")).toBeTruthy();
 	});
 });
 
@@ -94,6 +145,43 @@ function settingsActionsFixture(): HouseholdSettingsActions {
 		setJoinCodeEnabled: jest.fn(async () => undefined),
 		copyText: jest.fn(async () => undefined),
 		clearNotice: jest.fn(),
+	};
+}
+
+function settingsReadyFixture(): HouseholdSettingsState {
+	return {
+		status: "ready",
+		members: [
+			{
+				membershipId: "mbr_1",
+				userId: "usr_1",
+				role: "owner",
+				displayName: "Avery",
+			},
+		],
+		invitations: [
+			{
+				id: "inv_1",
+				householdId: "hh_avery",
+				email: "jordan@example.com",
+				createdByUserId: "usr_1",
+				creatorDisplayName: "Avery",
+				createdAt: 1,
+				expiresAt: Date.UTC(2026, 6, 23),
+				acceptUrl: "https://example.com/invitations/inv_1",
+			},
+		],
+		joinCode: {
+			enabled: true,
+			id: "join_1",
+			householdId: "hh_avery",
+			code: "Q7K9M4P2",
+			joinUrl: "https://example.com/households/join/Q7K9M4P2",
+			createdAt: 1,
+		},
+		renamedHouseholdName: null,
+		notice: null,
+		operation: { status: "idle" },
 	};
 }
 

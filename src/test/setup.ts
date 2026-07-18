@@ -41,6 +41,19 @@ jest.mock("@expo/ui/swift-ui", () =>
 	jest.requireActual("./mocks/expo-ui-swift"),
 );
 
+jest.mock("expo-glass-effect", () => {
+	const React = jest.requireActual<typeof import("react")>("react");
+	const { View } =
+		jest.requireActual<typeof import("react-native")>("react-native");
+	return {
+		GlassView: ({ children, ...props }: { children?: React.ReactNode }) =>
+			React.createElement(View, props, children),
+		GlassContainer: View,
+		isGlassEffectAPIAvailable: () => false,
+		isLiquidGlassAvailable: () => false,
+	};
+});
+
 jest.mock("expo-apple-authentication", () => {
 	const React = jest.requireActual<typeof import("react")>("react");
 	const { Pressable, Text } =

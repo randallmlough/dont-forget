@@ -3,47 +3,59 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { GlassSurface } from "@/client/ui/glass-surface";
 import { useNavigationDrawer } from "./navigation-drawer-context";
+
+export type ScreenScaffoldNavigation =
+	| { kind: "drawer" }
+	| { kind: "back"; onPress: () => void };
 
 export type ScreenScaffoldProps = {
 	label: string;
 	title: string;
 	children: ReactNode;
+	navigation?: ScreenScaffoldNavigation;
 };
 
 export function ScreenScaffold({
 	label,
 	title,
 	children,
+	navigation = { kind: "drawer" },
 }: ScreenScaffoldProps) {
 	const { open } = useNavigationDrawer();
 	const { theme } = useUnistyles();
+	const isBackNavigation = navigation.kind === "back";
+	const navigationLabel = isBackNavigation ? "Go back" : "Open navigation";
+	const onNavigate = isBackNavigation ? navigation.onPress : open;
 
 	return (
 		<View style={styles.root}>
 			<SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
 				<View style={styles.header}>
 					<Pressable
-						accessibilityLabel="Open navigation"
+						accessibilityLabel={navigationLabel}
 						accessibilityRole="button"
-						onPress={open}
+						onPress={onNavigate}
 						style={({ pressed }) => [
 							styles.menuButton,
 							pressed ? styles.pressed : undefined,
 						]}
 					>
-						<SymbolView
-							accessibilityElementsHidden
-							accessible={false}
-							name="line.3.horizontal"
-							size={22}
-							tintColor={theme.colors.text}
-							weight="medium"
-						/>
+						<GlassSurface interactive style={styles.navigationGlass}>
+							<SymbolView
+								accessibilityElementsHidden
+								accessible={false}
+								name={isBackNavigation ? "chevron.left" : "line.3.horizontal"}
+								size={20}
+								tintColor={theme.colors.text}
+								weight="medium"
+							/>
+						</GlassSurface>
 					</Pressable>
 					<View style={styles.headerTextGroup}>
 						<Text style={styles.headerLabel}>{label}</Text>
-						<Text numberOfLines={1} style={styles.headerTitle}>
+						<Text numberOfLines={2} style={styles.headerTitle}>
 							{title}
 						</Text>
 					</View>
@@ -62,41 +74,43 @@ const styles = StyleSheet.create((theme) => ({
 		backgroundColor: theme.colors.background,
 	},
 	headerSafeArea: {
-		backgroundColor: theme.colors.surface,
+		backgroundColor: theme.colors.background,
 	},
 	contentSafeArea: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
 	},
 	header: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(3),
+		gap: theme.spacing(2),
 		paddingHorizontal: theme.spacing(5),
-		paddingTop: theme.spacing(4.5),
-		paddingBottom: theme.spacing(3),
-		backgroundColor: theme.colors.surface,
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.border,
+		paddingTop: theme.spacing(3),
+		paddingBottom: theme.spacing(4),
+		backgroundColor: theme.colors.background,
 	},
 	menuButton: {
 		width: theme.spacing(11),
 		height: theme.spacing(11),
-		marginLeft: -theme.spacing(2.5),
+		marginLeft: -theme.spacing(1),
+		borderRadius: theme.radii.pill,
+	},
+	navigationGlass: {
+		width: theme.spacing(11),
+		height: theme.spacing(11),
 		alignItems: "center",
 		justifyContent: "center",
 		borderRadius: theme.radii.pill,
 	},
 	headerTextGroup: {
-		flex: 1,
+		alignSelf: "stretch",
 		minWidth: 0,
 	},
 	headerLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
+		...theme.typography.overline,
+		color: theme.colors.destructive,
+		textTransform: "uppercase",
 	},
 	headerTitle: {
-		...theme.typography.headline,
+		...theme.typography.largeTitle,
 		color: theme.colors.text,
 	},
 	pressed: {

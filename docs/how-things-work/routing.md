@@ -10,8 +10,12 @@ src/app/
   (app)/
     _layout.tsx
     index.tsx
+    profile.tsx
     settings.tsx
+    settings/
+      appearance.tsx
     household/
+      members.tsx
       settings.tsx
       switch.tsx
   (auth)/
@@ -58,7 +62,10 @@ Current screen routes:
 | --- | --- | --- |
 | `/` | `src/app/(app)/index.tsx` | `src/client/features/list/home-screen.tsx` |
 | `/settings` | `src/app/(app)/settings.tsx` | `src/client/features/settings/settings-screen.tsx` |
+| `/settings/appearance` | `src/app/(app)/settings/appearance.tsx` | `src/client/features/settings/appearance-screen.tsx` |
+| `/profile` | `src/app/(app)/profile.tsx` | `src/client/features/settings/profile-screen.tsx` |
 | `/household/settings` | `src/app/(app)/household/settings.tsx` | `src/client/features/household/household-settings-screen.tsx` |
+| `/household/members` | `src/app/(app)/household/members.tsx` | `src/client/features/household/members-invitations-screen.tsx` |
 | `/household/switch` | `src/app/(app)/household/switch.tsx` | `src/client/features/household/household-switch-screen.tsx` |
 | `/sign-in` | `src/app/(auth)/sign-in.tsx` | `src/client/features/auth/sign-in-screen.tsx` |
 | `/sign-up` | `src/app/(auth)/sign-up.tsx` | `src/client/features/auth/sign-up-screen.tsx` |
