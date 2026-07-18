@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import {
-	ActionSheetIOS,
 	ActivityIndicator,
 	FlatList,
 	Pressable,
@@ -28,7 +27,10 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { ActionMenuButton } from "@/client/ui/action-menu-button";
+import {
+	ActionMenuButton,
+	type ActionMenuItem,
+} from "@/client/ui/action-menu-button";
 import { AppButton } from "@/client/ui/app-button";
 import { GlassSurface } from "@/client/ui/glass-surface";
 import { SurfaceCard } from "@/client/ui/settings-surface";
@@ -423,7 +425,7 @@ function CurrentListCard({
 				</View>
 				<ActionMenuButton
 					accessibilityLabel={`List actions for ${summary.name}`}
-					onPress={() => showListActions(summary, onRename, onDelete)}
+					actions={listMenuActions(onRename, onDelete)}
 				/>
 			</View>
 			<Pressable
@@ -497,7 +499,7 @@ function ListRow({
 				</Pressable>
 				<ActionMenuButton
 					accessibilityLabel={`List actions for ${summary.name}`}
-					onPress={() => showListActions(summary, onRename, onDelete)}
+					actions={listMenuActions(onRename, onDelete)}
 				/>
 			</View>
 		</SurfaceCard>
@@ -530,23 +532,19 @@ function groupPosition(
 	return "middle";
 }
 
-function showListActions(
-	summary: ListSummary,
+function listMenuActions(
 	onRename: () => void,
 	onDelete: () => void,
-) {
-	ActionSheetIOS.showActionSheetWithOptions(
+): ActionMenuItem[] {
+	return [
+		{ label: "Rename", symbol: "pencil", onPress: onRename },
 		{
-			title: summary.name,
-			options: ["Cancel", "Rename", "Delete"],
-			cancelButtonIndex: 0,
-			destructiveButtonIndex: 2,
+			label: "Delete",
+			symbol: "trash",
+			role: "destructive",
+			onPress: onDelete,
 		},
-		(index) => {
-			if (index === 1) onRename();
-			if (index === 2) onDelete();
-		},
-	);
+	];
 }
 
 function ListNameForm({

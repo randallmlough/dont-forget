@@ -115,6 +115,49 @@ describe("MembersInvitationsView", () => {
 		expect(screen.getByText("Pending")).toBeTruthy();
 		expect(screen.getByText("jordan@example.com")).toBeTruthy();
 	});
+
+	it("uses native action menus for manageable Members and Invitations", async () => {
+		const actions = settingsActionsFixture();
+		const state = settingsReadyFixture();
+		state.members.push({
+			membershipId: "mbr_2",
+			userId: "usr_2",
+			role: "member",
+			displayName: "Jordan",
+		});
+		await render(
+			<MembersInvitationsView
+				session={sessionFixture()}
+				state={state}
+				actions={actions}
+			/>,
+			{ wrapper: TestAppShellProvider },
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Manage Jordan" }),
+		);
+		expect(
+			await screen.findByRole("button", { name: "Make Owner" }),
+		).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Remove Member" })).toBeTruthy();
+
+		await fireEvent.press(
+			screen.getByRole("button", {
+				name: "Manage jordan@example.com",
+			}),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Copy Invitation" }),
+		);
+		expect(actions.copyText).toHaveBeenCalledWith(
+			"https://example.com/invitations/inv_1",
+			"Invitation copied.",
+		);
+		expect(
+			screen.getByRole("button", { name: "Revoke Invitation" }),
+		).toBeTruthy();
+	});
 });
 
 function TestAppShellProvider({ children }: PropsWithChildren) {
@@ -148,7 +191,10 @@ function settingsActionsFixture(): HouseholdSettingsActions {
 	};
 }
 
-function settingsReadyFixture(): HouseholdSettingsState {
+function settingsReadyFixture(): Extract<
+	HouseholdSettingsState,
+	{ status: "ready" }
+> {
 	return {
 		status: "ready",
 		members: [

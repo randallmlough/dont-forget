@@ -5,7 +5,6 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
-import { ActionSheetIOS } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import {
@@ -25,10 +24,6 @@ import {
 } from "./use-product-services";
 
 const mockReplace = jest.fn();
-const mockShowActionSheet = jest.spyOn(
-	ActionSheetIOS,
-	"showActionSheetWithOptions",
-);
 
 jest.mock("expo-router", () => ({
 	useRouter: () => ({ replace: mockReplace }),
@@ -63,7 +58,6 @@ beforeEach(() => {
 	mockRenameList.mockReset();
 	mockDeleteList.mockReset();
 	mockListLists.mockReset();
-	mockShowActionSheet.mockReset();
 	jest.mocked(track).mockClear();
 	jest.mocked(setCurrentListSelection).mockReset().mockResolvedValue();
 	jest.mocked(clearCurrentListSelection).mockReset().mockResolvedValue();
@@ -241,7 +235,7 @@ describe("ListsScreen", () => {
 		});
 		await renderScreen();
 
-		chooseListAction("Pantry", 1);
+		await chooseListAction("Pantry", "Rename");
 		const listNameInput = await screen.findByLabelText("List name");
 		await fireEvent.changeText(listNameInput, "Weekly Pantry");
 		await fireEvent.press(screen.getByRole("button", { name: "Save" }));
@@ -268,7 +262,7 @@ describe("ListsScreen", () => {
 		mockListLists.mockResolvedValue([summariesFixture()[1]]);
 		await renderScreen();
 
-		chooseListAction("Groceries", 2);
+		await chooseListAction("Groceries", "Delete");
 		await fireEvent.press(
 			await screen.findByRole("button", { name: "Delete" }),
 		);
@@ -303,7 +297,7 @@ describe("ListsScreen", () => {
 		mockListLists.mockResolvedValue([]);
 		await renderScreen();
 
-		chooseListAction("Groceries", 2);
+		await chooseListAction("Groceries", "Delete");
 		await fireEvent.press(
 			await screen.findByRole("button", { name: "Delete" }),
 		);
@@ -330,7 +324,7 @@ describe("ListsScreen", () => {
 		mockListLists.mockRejectedValue(new Error("database unavailable"));
 		await renderScreen();
 
-		chooseListAction("Groceries", 2);
+		await chooseListAction("Groceries", "Delete");
 		await fireEvent.press(
 			await screen.findByRole("button", { name: "Delete" }),
 		);
@@ -360,7 +354,7 @@ describe("ListsScreen", () => {
 			.mockRejectedValueOnce(new Error("storage unavailable"));
 		await renderScreen();
 
-		chooseListAction("Groceries", 2);
+		await chooseListAction("Groceries", "Delete");
 		await fireEvent.press(
 			await screen.findByRole("button", { name: "Delete" }),
 		);
@@ -396,17 +390,13 @@ function renderScreen() {
 	return render(<ListsScreen />, { wrapper: TestAppShellProvider });
 }
 
-function chooseListAction(listName: string, actionIndex: number) {
-	fireEvent.press(
+async function chooseListAction(listName: string, actionLabel: string) {
+	await fireEvent.press(
 		screen.getByRole("button", { name: `List actions for ${listName}` }),
 	);
-	const selectAction = mockShowActionSheet.mock.calls.at(-1)?.[1];
-	if (!selectAction) throw new Error("Expected the List action menu to open.");
-	expect(mockShowActionSheet).toHaveBeenCalledWith(
-		expect.objectContaining({ options: ["Cancel", "Rename", "Delete"] }),
-		expect.any(Function),
+	await fireEvent.press(
+		await screen.findByRole("button", { name: actionLabel }),
 	);
-	selectAction(actionIndex);
 }
 
 function TestAppShellProvider({ children }: PropsWithChildren) {

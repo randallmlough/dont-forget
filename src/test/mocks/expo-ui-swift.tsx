@@ -38,6 +38,12 @@ type MockButtonProps = {
 	onPress?: () => void;
 };
 
+type MockMenuProps = {
+	children?: ReactNode;
+	label: ReactNode;
+	modifiers?: MockModifier[];
+};
+
 type MockPickerProps = {
 	children?: ReactNode;
 	label?: ReactNode;
@@ -153,6 +159,31 @@ export function Button({
 		>
 			{children ?? <ReactNativeText>{label}</ReactNativeText>}
 		</Pressable>
+	);
+}
+
+export function Menu({ children, label, modifiers }: MockMenuProps) {
+	const [isOpen, setIsOpen] = useState(false);
+	const isDisabled = modifier(modifiers, "disabled")?.disabled ?? false;
+	const textLabel = typeof label === "string" ? label : undefined;
+
+	return (
+		<View>
+			<Pressable
+				accessibilityLabel={modifierLabel(modifiers) ?? textLabel}
+				accessibilityRole="button"
+				accessibilityState={{ disabled: isDisabled, expanded: isOpen }}
+				disabled={isDisabled}
+				onPress={() => setIsOpen(true)}
+			>
+				{typeof label === "string" ? (
+					<ReactNativeText>{label}</ReactNativeText>
+				) : (
+					label
+				)}
+			</Pressable>
+			{isOpen ? children : null}
+		</View>
 	);
 }
 

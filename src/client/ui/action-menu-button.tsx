@@ -1,67 +1,80 @@
-import { SymbolView } from "expo-symbols";
-import { Pressable } from "react-native";
+import { Button, type ButtonProps, Host, Image, Menu } from "@expo/ui/swift-ui";
+import {
+	accessibilityHidden,
+	accessibilityLabel,
+	disabled as disabledModifier,
+	foregroundStyle,
+	frame,
+	glassEffect,
+	padding,
+} from "@expo/ui/swift-ui/modifiers";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { GlassSurface } from "./glass-surface";
+
+export type ActionMenuItem = {
+	label: string;
+	onPress: () => void;
+	role?: ButtonProps["role"];
+	symbol?: ButtonProps["systemImage"];
+};
 
 export type ActionMenuButtonProps = {
 	accessibilityLabel: string;
+	actions: readonly ActionMenuItem[];
 	disabled?: boolean;
-	onPress: () => void;
 };
 
 export function ActionMenuButton({
-	accessibilityLabel,
+	accessibilityLabel: menuAccessibilityLabel,
+	actions,
 	disabled = false,
-	onPress,
 }: ActionMenuButtonProps) {
-	const { theme } = useUnistyles();
+	const { rt, theme } = useUnistyles();
+	const colorScheme = rt.themeName === "dark" ? "dark" : "light";
 
 	return (
-		<Pressable
-			accessibilityLabel={accessibilityLabel}
-			accessibilityRole="button"
-			accessibilityState={{ disabled }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.pressable,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<GlassSurface interactive style={styles.surface}>
-				<SymbolView
-					accessibilityElementsHidden
-					accessible={false}
-					name="ellipsis"
-					size={17}
-					tintColor={theme.colors.text}
-					weight="medium"
-				/>
-			</GlassSurface>
-		</Pressable>
+		<Host colorScheme={colorScheme} style={styles.host}>
+			<Menu
+				label={
+					<Image
+						modifiers={[
+							accessibilityHidden(),
+							foregroundStyle(theme.colors.text),
+							frame({
+								width: theme.spacing(8),
+								height: theme.spacing(8),
+							}),
+							glassEffect({
+								glass: { variant: "regular", interactive: true },
+								shape: "circle",
+							}),
+							padding({ all: theme.spacing(1.5) }),
+						]}
+						size={17}
+						systemName="ellipsis"
+					/>
+				}
+				modifiers={[
+					accessibilityLabel(menuAccessibilityLabel),
+					disabledModifier(disabled),
+				]}
+			>
+				{actions.map((action) => (
+					<Button
+						key={action.label}
+						label={action.label}
+						onPress={action.onPress}
+						role={action.role}
+						systemImage={action.symbol}
+					/>
+				))}
+			</Menu>
+		</Host>
 	);
 }
 
 const styles = StyleSheet.create((theme) => ({
-	pressable: {
+	host: {
 		width: theme.spacing(11),
 		height: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		borderRadius: theme.radii.pill,
-	},
-	surface: {
-		width: theme.spacing(8),
-		height: theme.spacing(8),
-		alignItems: "center",
-		justifyContent: "center",
-		borderRadius: theme.radii.pill,
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
-	},
-	disabled: {
-		opacity: theme.opacities.disabled,
 	},
 }));

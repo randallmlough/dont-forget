@@ -2,7 +2,6 @@ import { SymbolView } from "expo-symbols";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import {
-	ActionSheetIOS,
 	ActivityIndicator,
 	Alert,
 	FlatList,
@@ -24,7 +23,10 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { ActionMenuButton } from "@/client/ui/action-menu-button";
+import {
+	ActionMenuButton,
+	type ActionMenuItem,
+} from "@/client/ui/action-menu-button";
 import { AppButton } from "@/client/ui/app-button";
 import {
 	InitialsAvatar,
@@ -255,8 +257,8 @@ function MemberRow({
 					canManage ? (
 						<ActionMenuButton
 							accessibilityLabel={`Manage ${displayName}`}
+							actions={memberMenuActions(member, actions)}
 							disabled={operation.status !== "idle"}
-							onPress={() => showMemberActions(member, actions)}
 						/>
 					) : undefined
 				}
@@ -414,8 +416,8 @@ function InvitationRow({
 				trailing={
 					<ActionMenuButton
 						accessibilityLabel={`Manage ${label}`}
+						actions={invitationMenuActions(invitation, actions)}
 						disabled={revoking}
-						onPress={() => showInvitationActions(invitation, actions)}
 					/>
 				}
 			/>
@@ -510,44 +512,47 @@ function groupPosition(index: number, length: number): GroupPosition {
 	return "middle";
 }
 
-function showMemberActions(
+function memberMenuActions(
 	member: HouseholdMember,
 	actions: HouseholdSettingsActions,
-) {
+): ActionMenuItem[] {
 	const role = member.role === "owner" ? "member" : "owner";
 	const roleAction = role === "owner" ? "Make Owner" : "Make Member";
-	ActionSheetIOS.showActionSheetWithOptions(
+
+	return [
 		{
-			title: member.displayName ?? "Member",
-			options: ["Cancel", roleAction, "Remove Member"],
-			cancelButtonIndex: 0,
-			destructiveButtonIndex: 2,
+			label: roleAction,
+			symbol: role === "owner" ? "crown" : "person",
+			onPress: () => confirmRoleChange(member, role, actions),
 		},
-		(index) => {
-			if (index === 1) confirmRoleChange(member, role, actions);
-			if (index === 2) confirmRemoveMember(member, actions);
+		{
+			label: "Remove Member",
+			symbol: "person.badge.minus",
+			role: "destructive",
+			onPress: () => confirmRemoveMember(member, actions),
 		},
-	);
+	];
 }
 
-function showInvitationActions(
+function invitationMenuActions(
 	invitation: PendingInvitation,
 	actions: HouseholdSettingsActions,
-) {
-	ActionSheetIOS.showActionSheetWithOptions(
+): ActionMenuItem[] {
+	return [
 		{
-			title: invitation.email ?? "Invitation",
-			options: ["Cancel", "Copy Invitation", "Revoke Invitation"],
-			cancelButtonIndex: 0,
-			destructiveButtonIndex: 2,
-		},
-		(index) => {
-			if (index === 1) {
+			label: "Copy Invitation",
+			symbol: "doc.on.doc",
+			onPress: () => {
 				void actions.copyText(invitation.acceptUrl, "Invitation copied.");
-			}
-			if (index === 2) confirmRevokeInvitation(invitation, actions);
+			},
 		},
-	);
+		{
+			label: "Revoke Invitation",
+			symbol: "xmark.circle",
+			role: "destructive",
+			onPress: () => confirmRevokeInvitation(invitation, actions),
+		},
+	];
 }
 
 function confirmRemoveMember(
