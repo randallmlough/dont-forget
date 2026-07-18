@@ -195,7 +195,7 @@ export function InitialsAvatar({ label, size = "small" }: InitialsAvatarProps) {
 	);
 }
 
-export function initials(label: string): string {
+function initials(label: string): string {
 	const parts = label.trim().split(/\s+/).filter(Boolean).slice(0, 2);
 	return parts.map((part) => part[0]?.toUpperCase()).join("") || "?";
 }

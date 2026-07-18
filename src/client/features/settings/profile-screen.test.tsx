@@ -18,6 +18,7 @@ import { createMockLogger } from "@/test/mocks/logger";
 import ProfileScreen from "./profile-screen";
 
 const mockBack = jest.fn();
+const mockCanGoBack = jest.fn();
 const mockReplace = jest.fn();
 const mockReloadSession = jest.fn();
 const mockSignOut = jest.fn(async () => undefined);
@@ -30,7 +31,11 @@ const mockUpdateUserName = jest.fn(async () => ({
 }));
 
 jest.mock("expo-router", () => ({
-	useRouter: () => ({ back: mockBack, replace: mockReplace }),
+	useRouter: () => ({
+		back: mockBack,
+		canGoBack: mockCanGoBack,
+		replace: mockReplace,
+	}),
 }));
 jest.mock("@clerk/clerk-expo", () => ({ useAuth: jest.fn() }));
 jest.mock("@/client/session", () => ({
@@ -50,6 +55,8 @@ jest.mock("@/client/lib/logger", () =>
 
 beforeEach(() => {
 	mockBack.mockReset();
+	mockCanGoBack.mockReset();
+	mockCanGoBack.mockReturnValue(true);
 	mockReplace.mockReset();
 	mockReloadSession.mockReset();
 	mockSignOut.mockClear();
@@ -130,6 +137,16 @@ describe("ProfileScreen", () => {
 		await renderProfile();
 		await fireEvent.press(screen.getByRole("button", { name: "Go back" }));
 		expect(mockBack).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns to Settings when opened directly from the drawer", async () => {
+		mockCanGoBack.mockReturnValue(false);
+		await renderProfile();
+
+		await fireEvent.press(screen.getByRole("button", { name: "Go back" }));
+
+		expect(mockReplace).toHaveBeenCalledWith("/settings");
+		expect(mockBack).not.toHaveBeenCalled();
 	});
 });
 

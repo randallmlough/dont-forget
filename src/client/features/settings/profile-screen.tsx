@@ -19,6 +19,13 @@ import {
 export default function ProfileScreen() {
 	const router = useRouter();
 	const { state, actions } = useSettings();
+	const returnToSettings = () => {
+		if (router.canGoBack()) {
+			router.back();
+			return;
+		}
+		router.replace("/settings");
+	};
 
 	async function signOutFromProfile() {
 		router.replace("/");
@@ -33,7 +40,7 @@ export default function ProfileScreen() {
 	return (
 		<ProfileScreenView
 			actions={{ ...actions, signOut: signOutFromProfile }}
-			onBack={() => router.back()}
+			onBack={returnToSettings}
 			state={state}
 		/>
 	);

@@ -18,6 +18,8 @@ import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
 import AppearanceScreen from "./appearance-screen";
 
 const mockBack = jest.fn();
+const mockCanGoBack = jest.fn();
+const mockReplace = jest.fn();
 const setAdaptiveThemesSpy = jest
 	.spyOn(UnistylesRuntime, "setAdaptiveThemes")
 	.mockImplementation(() => undefined);
@@ -27,7 +29,11 @@ const setThemeSpy = jest
 let mockLogger: MockLogger;
 
 jest.mock("expo-router", () => ({
-	useRouter: () => ({ back: mockBack }),
+	useRouter: () => ({
+		back: mockBack,
+		canGoBack: mockCanGoBack,
+		replace: mockReplace,
+	}),
 }));
 jest.mock("@clerk/clerk-expo", () => ({ useAuth: jest.fn() }));
 jest.mock("@/client/session", () => ({
@@ -46,6 +52,9 @@ beforeEach(() => {
 	mockLogger = createMockLogger();
 	jest.mocked(useLogger).mockReturnValue(mockLogger);
 	mockBack.mockReset();
+	mockCanGoBack.mockReset();
+	mockCanGoBack.mockReturnValue(false);
+	mockReplace.mockReset();
 	setAdaptiveThemesSpy.mockClear();
 	setThemeSpy.mockClear();
 	jest.mocked(track).mockClear();
@@ -118,6 +127,15 @@ describe("AppearanceScreen", () => {
 			"settings appearance preference write failed",
 			{ error },
 		);
+	});
+
+	it("returns to Settings when opened directly from the drawer", async () => {
+		await renderAppearance();
+
+		await fireEvent.press(screen.getByRole("button", { name: "Go back" }));
+
+		expect(mockReplace).toHaveBeenCalledWith("/settings");
+		expect(mockBack).not.toHaveBeenCalled();
 	});
 });
 

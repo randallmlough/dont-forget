@@ -17,11 +17,18 @@ const appearanceOptions = ["system", "light", "dark"] as const;
 export default function AppearanceScreen() {
 	const router = useRouter();
 	const { state, actions } = useSettings();
+	const returnToSettings = () => {
+		if (router.canGoBack()) {
+			router.back();
+			return;
+		}
+		router.replace("/settings");
+	};
 
 	return (
 		<AppearanceScreenView
 			actions={actions}
-			onBack={() => router.back()}
+			onBack={returnToSettings}
 			state={state}
 		/>
 	);
