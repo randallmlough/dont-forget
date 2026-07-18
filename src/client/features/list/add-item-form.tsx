@@ -5,6 +5,7 @@ import type { AddActiveListItemDraft } from "./list-view-types";
 export type AddItemFormProps = {
 	listName: string;
 	errorMessage: string | null;
+	onOpenLists?: () => void;
 	onAddItem: (input: AddActiveListItemDraft) => Promise<void>;
 };
 
@@ -13,7 +14,6 @@ type ComposerState = {
 	name: string;
 	quantity: string;
 	notes: string;
-	isNoteOpen: boolean;
 	isSubmitting: boolean;
 };
 
@@ -23,7 +23,6 @@ type ComposerAction =
 	| { type: "nameChanged"; value: string }
 	| { type: "quantityChanged"; value: string }
 	| { type: "notesChanged"; value: string }
-	| { type: "noteToggled" }
 	| { type: "submitStarted" }
 	| { type: "submitSucceeded" }
 	| { type: "submitFailed" };
@@ -31,6 +30,7 @@ type ComposerAction =
 export function AddItemForm({
 	listName,
 	errorMessage,
+	onOpenLists,
 	onAddItem,
 }: AddItemFormProps) {
 	const [composer, dispatchComposer] = useReducer(
@@ -75,7 +75,6 @@ export function AddItemForm({
 			}}
 			ui={{
 				isOpen: composer.isOpen,
-				isNoteOpen: composer.isNoteOpen,
 				canSubmit,
 				listName,
 				errorMessage,
@@ -83,13 +82,13 @@ export function AddItemForm({
 			actions={{
 				open: openComposer,
 				dismiss: dismissComposer,
+				openLists: onOpenLists,
 				submit,
 				changeName: (value) => dispatchComposer({ type: "nameChanged", value }),
 				changeQuantity: (value) =>
 					dispatchComposer({ type: "quantityChanged", value }),
 				changeNotes: (value) =>
 					dispatchComposer({ type: "notesChanged", value }),
-				toggleNote: () => dispatchComposer({ type: "noteToggled" }),
 			}}
 		/>
 	);
@@ -101,7 +100,6 @@ function initialComposerState(): ComposerState {
 		name: "",
 		quantity: "",
 		notes: "",
-		isNoteOpen: false,
 		isSubmitting: false,
 	};
 }
@@ -121,10 +119,6 @@ function composerReducer(
 			return { ...state, quantity: action.value };
 		case "notesChanged":
 			return { ...state, notes: action.value };
-		case "noteToggled":
-			return state.isNoteOpen
-				? { ...state, isNoteOpen: false, notes: "" }
-				: { ...state, isNoteOpen: true };
 		case "submitStarted":
 			return { ...state, isSubmitting: true };
 		case "submitSucceeded":
@@ -133,7 +127,6 @@ function composerReducer(
 				name: "",
 				quantity: "",
 				notes: "",
-				isNoteOpen: false,
 				isSubmitting: false,
 			};
 		case "submitFailed":

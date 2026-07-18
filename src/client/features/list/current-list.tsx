@@ -213,6 +213,7 @@ function ActiveCurrentList({
 			<AddItemForm
 				listName={loadState.list.listName}
 				errorMessage={actions.errorMessage}
+				onOpenLists={onPressListName}
 				onAddItem={actions.addItem}
 			/>
 		</View>

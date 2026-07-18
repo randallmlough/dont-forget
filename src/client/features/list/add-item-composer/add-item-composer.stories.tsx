@@ -22,32 +22,31 @@ export const Focused: Story = {
 	render: () => <InteractiveAddItemComposerStory initiallyOpen />,
 };
 
-export const FocusedWithNote: Story = {
+export const FocusedWithDetails: Story = {
 	render: () => (
-		<InteractiveAddItemComposerStory initiallyOpen initiallyNoting />
+		<InteractiveAddItemComposerStory
+			initiallyOpen
+			initialDraft={{
+				name: "Whole milk",
+				quantity: "1 gallon",
+				notes: "Organic if available",
+			}}
+		/>
 	),
 };
 
 function InteractiveAddItemComposerStory({
 	initiallyOpen,
-	initiallyNoting = false,
+	initialDraft = { name: "", quantity: "", notes: "" },
 }: {
 	initiallyOpen: boolean;
-	initiallyNoting?: boolean;
+	initialDraft?: { name: string; quantity: string; notes: string };
 }) {
-	const [name, setName] = useState("");
-	const [quantity, setQuantity] = useState("");
-	const [notes, setNotes] = useState("");
+	const [name, setName] = useState(initialDraft.name);
+	const [quantity, setQuantity] = useState(initialDraft.quantity);
+	const [notes, setNotes] = useState(initialDraft.notes);
 	const [isOpen, setIsOpen] = useState(initiallyOpen);
-	const [isNoteOpen, setIsNoteOpen] = useState(initiallyNoting);
 	const canSubmit = name.trim().length > 0;
-
-	function toggleNote() {
-		if (isNoteOpen) {
-			setNotes("");
-		}
-		setIsNoteOpen(!isNoteOpen);
-	}
 
 	return (
 		<SafeAreaProvider
@@ -61,7 +60,6 @@ function InteractiveAddItemComposerStory({
 					draft={{ name, quantity, notes }}
 					ui={{
 						isOpen,
-						isNoteOpen,
 						canSubmit,
 						listName: "Groceries",
 						errorMessage: null,
@@ -69,11 +67,11 @@ function InteractiveAddItemComposerStory({
 					actions={{
 						open: () => setIsOpen(true),
 						dismiss: () => setIsOpen(false),
+						openLists: () => undefined,
 						submit: () => undefined,
 						changeName: setName,
 						changeQuantity: setQuantity,
 						changeNotes: setNotes,
-						toggleNote,
 					}}
 				/>
 			</View>

@@ -76,6 +76,12 @@ export function Spacer() {
 	return <View />;
 }
 
+export function Image({ systemName }: { systemName?: string }) {
+	return (
+		<ReactNativeText accessibilityElementsHidden>{systemName}</ReactNativeText>
+	);
+}
+
 export function Text({
 	children,
 	modifiers,
