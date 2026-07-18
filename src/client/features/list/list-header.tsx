@@ -62,9 +62,6 @@ export function ListHeader({
 					/>
 				</Pressable>
 			) : null}
-			<Text style={styles.householdName}>
-				{state.householdName.toUpperCase()}
-			</Text>
 			{onPressListName ? (
 				<Pressable
 					accessibilityRole="button"

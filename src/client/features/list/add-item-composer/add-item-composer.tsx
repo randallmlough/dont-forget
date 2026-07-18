@@ -95,8 +95,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 		const currentVisibility = visibility.get();
 
 		return {
-			opacity: currentVisibility,
-			transform: [{ translateY: (1 - currentVisibility) * 10 }],
+			transform: [{ translateY: (1 - currentVisibility) * 16 }],
 		};
 	});
 
