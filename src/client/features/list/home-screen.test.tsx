@@ -67,16 +67,19 @@ describe("HomeScreenView", () => {
 				state={{ status: "ready", refreshing: false }}
 				session={sessionFixture()}
 				currentListDeps={currentListDeps}
+				onOpenNavigation={jest.fn()}
 			/>,
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await fireEvent.press(await screen.findByText("Add Item"));
+		await fireEvent(await screen.findByLabelText("Add Item"), "focus");
 		await fireEvent.changeText(
 			await screen.findByLabelText("Item name"),
 			" Milk ",
 		);
-		await fireEvent.press(await screen.findByLabelText("Submit Item"));
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Add Item" }),
+		);
 
 		expect(addItem).toHaveBeenCalledWith({
 			name: "Milk",

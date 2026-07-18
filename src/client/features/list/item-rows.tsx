@@ -1,3 +1,4 @@
+import { SymbolView } from "expo-symbols";
 import { memo, useCallback } from "react";
 import {
 	FlatList,
@@ -6,7 +7,7 @@ import {
 	Text,
 	View,
 } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useAddItemComposerScrollInset } from "@/client/features/list/add-item-composer";
 import type { ActiveListItem } from "./list-view-types";
 
@@ -48,6 +49,7 @@ function ItemRowComponent({
 	item: ActiveListItem;
 	onToggle: (id: string) => void;
 }) {
+	const { theme } = useUnistyles();
 	const detailText = itemDetailText(item);
 
 	function toggle() {
@@ -70,7 +72,14 @@ function ItemRowComponent({
 					item.checked ? styles.checkboxChecked : undefined,
 				]}
 			>
-				{item.checked ? <View style={styles.checkboxMark} /> : null}
+				{item.checked ? (
+					<SymbolView
+						name="checkmark"
+						size={14}
+						tintColor={theme.colors.inverseText}
+						weight="bold"
+					/>
+				) : null}
 			</View>
 			<View style={styles.itemTextGroup}>
 				<Text
@@ -120,7 +129,7 @@ function itemDetailText(item: ActiveListItem): string | null {
 
 const styles = StyleSheet.create((theme) => ({
 	itemsContent: {
-		padding: theme.spacing(5),
+		paddingHorizontal: theme.spacing(5),
 	},
 	emptyItemsContent: {
 		flexGrow: 1,
@@ -129,12 +138,7 @@ const styles = StyleSheet.create((theme) => ({
 	emptyState: {
 		alignItems: "center",
 		gap: theme.spacing(2),
-		padding: theme.spacing(7),
-		borderRadius: theme.radii.card,
-		borderCurve: "continuous",
-		backgroundColor: theme.colors.surface,
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.border,
+		padding: theme.spacing(8),
 	},
 	emptyTitle: {
 		fontSize: theme.fontSizes.titleSmall,
@@ -148,16 +152,11 @@ const styles = StyleSheet.create((theme) => ({
 		textAlign: "center",
 	},
 	itemRow: {
-		minHeight: theme.spacing(16),
+		minHeight: theme.spacing(17),
 		flexDirection: "row",
 		alignItems: "center",
 		gap: theme.spacing(3),
-		padding: theme.spacing(3.5),
-		borderRadius: theme.radii.card,
-		borderCurve: "continuous",
-		backgroundColor: theme.colors.surface,
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.border,
+		paddingVertical: theme.spacing(2.5),
 	},
 	itemRowPressed: {
 		opacity: theme.opacities.pressed,
@@ -166,8 +165,7 @@ const styles = StyleSheet.create((theme) => ({
 		width: theme.spacing(6),
 		height: theme.spacing(6),
 		borderRadius: theme.radii.checkbox,
-		borderCurve: "continuous",
-		borderWidth: theme.borders.thick,
+		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.textSubtle,
 		alignItems: "center",
 		justifyContent: "center",
@@ -176,20 +174,14 @@ const styles = StyleSheet.create((theme) => ({
 		borderColor: theme.colors.primary,
 		backgroundColor: theme.colors.primary,
 	},
-	checkboxMark: {
-		width: theme.spacing(2.5),
-		height: theme.spacing(2.5),
-		borderRadius: theme.radii.checkboxMark,
-		backgroundColor: theme.colors.inverseText,
-	},
 	itemTextGroup: {
 		flex: 1,
 		minWidth: 0,
 	},
 	itemName: {
 		color: theme.colors.text,
-		fontSize: theme.fontSizes.subheadline,
-		fontWeight: theme.fontWeights.semibold,
+		fontFamily: theme.fontFamilies.serif,
+		fontSize: theme.fontSizes.titleSmall,
 	},
 	itemNameChecked: {
 		color: theme.colors.textMuted,
@@ -201,6 +193,8 @@ const styles = StyleSheet.create((theme) => ({
 		marginTop: theme.spacing(0.5),
 	},
 	itemSeparator: {
-		height: theme.spacing(2.5),
+		height: theme.borders.hairline,
+		marginLeft: theme.spacing(9),
+		backgroundColor: theme.colors.border,
 	},
 }));

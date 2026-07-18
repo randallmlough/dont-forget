@@ -122,7 +122,7 @@ export type EventMap = {
 		household_id: string;
 		user_id: string;
 	};
-	settings_opened: { source: "home" };
+	settings_opened: { source: "navigation_drawer" };
 	appearance_preference_changed: {
 		preference: "system" | "light" | "dark";
 	};

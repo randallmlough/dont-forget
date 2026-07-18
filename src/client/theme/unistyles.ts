@@ -11,8 +11,8 @@ const fontSizes = {
 	subheadline: 17,
 	titleSmall: 18,
 	headline: 20,
-	title: 28,
-	largeTitle: 30,
+	title: 30,
+	largeTitle: 44,
 } as const;
 
 const fontWeights = {
@@ -21,17 +21,22 @@ const fontWeights = {
 	bold: "700",
 } as const;
 
+const fontFamilies = {
+	serif: "Georgia",
+} as const;
+
 const radii = {
-	card: 8,
-	control: 8,
-	checkbox: 6,
-	checkboxMark: 5,
+	card: 22,
+	control: 14,
+	pill: 999,
+	checkbox: 12,
 } as const;
 
 const typography = {
 	largeTitle: {
 		fontSize: fontSizes.largeTitle,
-		fontWeight: fontWeights.bold,
+		fontFamily: fontFamilies.serif,
+		lineHeight: 50,
 	},
 	title: {
 		fontSize: fontSizes.title,
@@ -54,6 +59,11 @@ const typography = {
 		fontSize: fontSizes.caption,
 		fontWeight: fontWeights.semibold,
 	},
+	overline: {
+		fontSize: fontSizes.caption,
+		fontWeight: fontWeights.semibold,
+		letterSpacing: 1.5,
+	},
 	controlLabel: {
 		fontSize: fontSizes.body,
 		fontWeight: fontWeights.bold,
@@ -68,51 +78,35 @@ const opacities = {
 const borders = {
 	hairline: StyleSheet.hairlineWidth,
 	thin: 1,
-	thick: 2,
 } as const;
 
 const spacing = (step: number) => step * 4;
 
 export const lightTheme = {
 	colors: {
-		background: brandPalette.slate50,
+		background: brandPalette.cream50,
 		authBackground: brandPalette.white,
 		surface: brandPalette.white,
-		text: brandPalette.navy900,
-		textStrong: brandPalette.neutral950,
-		textMuted: brandPalette.slate600,
-		textSubtle: brandPalette.slate500,
-		border: brandPalette.slate200,
-		inputBorder: brandPalette.slate300,
-		authBorder: brandPalette.gray200,
-		divider: brandPalette.gray300,
-		primary: brandPalette.green700,
-		primaryDisabled: brandPalette.slate400,
-		destructive: brandPalette.red500,
-		link: brandPalette.blue600,
-		authPrimary: brandPalette.neutral950,
+		text: brandPalette.ink950,
+		textStrong: brandPalette.ink950,
+		textMuted: brandPalette.ink600,
+		textSubtle: brandPalette.ink500,
+		border: brandPalette.cream200,
+		inputBorder: brandPalette.cream300,
+		authBorder: brandPalette.cream200,
+		divider: brandPalette.cream200,
+		primary: brandPalette.moss900,
+		primaryDisabled: brandPalette.cream300,
+		destructive: brandPalette.red600,
+		link: brandPalette.blue700,
+		authPrimary: brandPalette.ink950,
 		inverseText: brandPalette.white,
-	},
-	effects: {
-		addItemComposer: {
-			entryBackground: withAlpha(brandPalette.white, 0.86),
-			entryBorder: withAlpha(brandPalette.slate500, 0.38),
-			trayBackground: withAlpha(brandPalette.white, 0.78),
-			trayBorder: withAlpha(brandPalette.slate500, 0.4),
-			inputBackground: withAlpha(brandPalette.white, 0.74),
-			inputBorder: withAlpha(brandPalette.slate500, 0.36),
-			fieldBackground: withAlpha(brandPalette.white, 0.58),
-			pillBackground: withAlpha(brandPalette.white, 0.62),
-			pillBorder: withAlpha(brandPalette.slate500, 0.34),
-			selectedPillBackground: withAlpha(brandPalette.green700, 0.12),
-			selectedPillBorder: withAlpha(brandPalette.green700, 0.28),
-			entryShadow: shadow(0, 6, 18, withAlpha(brandPalette.navy900, 0.12)),
-			trayShadow: shadow(0, 8, 28, withAlpha(brandPalette.navy900, 0.18)),
-		},
+		scrim: withAlpha(brandPalette.charcoal950, 0.46),
 	},
 	radii,
 	fontSizes,
 	fontWeights,
+	fontFamilies,
 	typography,
 	opacities,
 	borders,
@@ -121,44 +115,29 @@ export const lightTheme = {
 
 export const darkTheme = {
 	colors: {
-		background: brandPalette.navy950,
-		authBackground: brandPalette.navy950,
-		surface: brandPalette.navy900,
-		text: brandPalette.slate50,
+		background: brandPalette.charcoal950,
+		authBackground: brandPalette.charcoal950,
+		surface: brandPalette.charcoal900,
+		text: brandPalette.cream50,
 		textStrong: brandPalette.white,
-		textMuted: brandPalette.slate300,
-		textSubtle: brandPalette.slate400,
-		border: brandPalette.slate700,
-		inputBorder: brandPalette.slate600,
-		authBorder: brandPalette.slate700,
-		divider: brandPalette.slate700,
-		primary: brandPalette.green300,
-		primaryDisabled: brandPalette.slate600,
-		destructive: brandPalette.red400,
+		textMuted: brandPalette.warmGray300,
+		textSubtle: brandPalette.warmGray400,
+		border: brandPalette.charcoal700,
+		inputBorder: brandPalette.charcoal700,
+		authBorder: brandPalette.charcoal700,
+		divider: brandPalette.charcoal700,
+		primary: brandPalette.moss300,
+		primaryDisabled: brandPalette.charcoal700,
+		destructive: brandPalette.red300,
 		link: brandPalette.blue300,
-		authPrimary: brandPalette.slate50,
-		inverseText: brandPalette.navy950,
-	},
-	effects: {
-		addItemComposer: {
-			entryBackground: withAlpha(brandPalette.navy900, 0.86),
-			entryBorder: withAlpha(brandPalette.slate600, 0.42),
-			trayBackground: withAlpha(brandPalette.navy900, 0.82),
-			trayBorder: withAlpha(brandPalette.slate600, 0.46),
-			inputBackground: withAlpha(brandPalette.navy950, 0.72),
-			inputBorder: withAlpha(brandPalette.slate600, 0.42),
-			fieldBackground: withAlpha(brandPalette.navy950, 0.58),
-			pillBackground: withAlpha(brandPalette.navy950, 0.62),
-			pillBorder: withAlpha(brandPalette.slate600, 0.38),
-			selectedPillBackground: withAlpha(brandPalette.green300, 0.16),
-			selectedPillBorder: withAlpha(brandPalette.green300, 0.34),
-			entryShadow: shadow(0, 6, 18, withAlpha(brandPalette.navy950, 0.32)),
-			trayShadow: shadow(0, 8, 28, withAlpha(brandPalette.navy950, 0.38)),
-		},
+		authPrimary: brandPalette.cream50,
+		inverseText: brandPalette.charcoal950,
+		scrim: withAlpha(brandPalette.charcoal950, 0.72),
 	},
 	radii,
 	fontSizes,
 	fontWeights,
+	fontFamilies,
 	typography,
 	opacities,
 	borders,
@@ -200,8 +179,4 @@ function withAlpha(color: string, alpha: number): string {
 	const blue = Number.parseInt(color.slice(5, 7), 16);
 
 	return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-}
-
-function shadow(x: number, y: number, blur: number, color: string): string {
-	return `${x} ${y}px ${blur}px ${color}`;
 }

@@ -1,3 +1,4 @@
+export { sessionMemberDisplayName } from "./member-display-name";
 export {
 	type AuthenticatedAppSession,
 	AuthenticatedAppSessionProvider,

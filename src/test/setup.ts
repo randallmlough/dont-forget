@@ -32,9 +32,14 @@ jest.mock("react-native-reanimated", () => {
 				},
 			};
 		},
+		withSpring: (value: unknown) => value,
 		withTiming: (value: unknown) => value,
 	};
 });
+
+jest.mock("@expo/ui/swift-ui", () =>
+	jest.requireActual("./mocks/expo-ui-swift"),
+);
 
 jest.mock("expo-apple-authentication", () => {
 	const React = jest.requireActual<typeof import("react")>("react");

@@ -4,7 +4,10 @@ type FontWeight = NonNullable<TextStyle["fontWeight"]>;
 
 type TypographyStyle = {
 	fontSize: number;
+	fontFamily?: string;
 	fontWeight?: FontWeight;
+	letterSpacing?: number;
+	lineHeight?: number;
 };
 
 export type AppTheme = {
@@ -26,29 +29,13 @@ export type AppTheme = {
 		link: string;
 		authPrimary: string;
 		inverseText: string;
-	};
-	effects: {
-		addItemComposer: {
-			entryBackground: string;
-			entryBorder: string;
-			trayBackground: string;
-			trayBorder: string;
-			inputBackground: string;
-			inputBorder: string;
-			fieldBackground: string;
-			pillBackground: string;
-			pillBorder: string;
-			selectedPillBackground: string;
-			selectedPillBorder: string;
-			entryShadow: string;
-			trayShadow: string;
-		};
+		scrim: string;
 	};
 	radii: {
 		card: number;
 		control: number;
+		pill: number;
 		checkbox: number;
-		checkboxMark: number;
 	};
 	fontSizes: {
 		caption: number;
@@ -66,6 +53,9 @@ export type AppTheme = {
 		semibold: FontWeight;
 		bold: FontWeight;
 	};
+	fontFamilies: {
+		serif: string;
+	};
 	typography: {
 		largeTitle: TypographyStyle;
 		title: TypographyStyle;
@@ -74,6 +64,7 @@ export type AppTheme = {
 		callout: TypographyStyle;
 		caption: TypographyStyle;
 		captionStrong: TypographyStyle;
+		overline: TypographyStyle;
 		controlLabel: TypographyStyle;
 	};
 	opacities: {
@@ -83,7 +74,6 @@ export type AppTheme = {
 	borders: {
 		hairline: number;
 		thin: number;
-		thick: number;
 	};
 	spacing: (step: number) => number;
 };

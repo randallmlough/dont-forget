@@ -3,19 +3,19 @@ import type { AuthenticatedAppSession } from "@/client/session";
 import { usePowerSyncQuery } from "./use-powersync-query";
 import { useProductServices } from "./use-product-services";
 
-export type HomeListSwitcherRows =
+export type ListRows =
 	| { status: "loading" }
 	| { status: "error" }
 	| { status: "ready"; summaries: ListSummary[] };
 
 /**
- * Watches the active List summaries for the Home List switcher: exactly
+ * Watches the active List summaries for List-management surfaces: exactly
  * `listLists({ archive: "active", sort: "recentActivity" })`, no searchText.
  * PowerSync re-runs the query whenever its tables change, so create/rename/
  * delete need no manual reload; query errors self-heal on the next change.
  */
-export function useHomeListSwitcherRows(session: AuthenticatedAppSession): {
-	rows: HomeListSwitcherRows;
+export function useListRows(session: AuthenticatedAppSession): {
+	rows: ListRows;
 } {
 	const services = useProductServices({
 		householdId: session.activeHousehold.id,
