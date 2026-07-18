@@ -1,11 +1,15 @@
 import { useReducer } from "react";
-import { AddItemComposer } from "@/client/features/list/add-item-composer";
-import type { AddActiveListItemDraft } from "./list-view-types";
+import {
+	AddItemComposer,
+	type AddItemListOption,
+} from "@/client/features/list/add-item-composer";
+import type { AddListItemDraft } from "./list-view-types";
 
 export type AddItemFormProps = {
-	listName: string;
+	currentListId: string;
+	listOptions: readonly AddItemListOption[];
 	errorMessage: string | null;
-	onAddItem: (input: AddActiveListItemDraft) => Promise<void>;
+	onAddItem: (input: AddListItemDraft) => Promise<void>;
 };
 
 type ComposerState = {
@@ -13,7 +17,7 @@ type ComposerState = {
 	name: string;
 	quantity: string;
 	notes: string;
-	isNoteOpen: boolean;
+	selectedListId: string;
 	isSubmitting: boolean;
 };
 
@@ -23,19 +27,20 @@ type ComposerAction =
 	| { type: "nameChanged"; value: string }
 	| { type: "quantityChanged"; value: string }
 	| { type: "notesChanged"; value: string }
-	| { type: "noteToggled" }
+	| { type: "listChanged"; listId: string }
 	| { type: "submitStarted" }
 	| { type: "submitSucceeded" }
 	| { type: "submitFailed" };
 
 export function AddItemForm({
-	listName,
+	currentListId,
+	listOptions,
 	errorMessage,
 	onAddItem,
 }: AddItemFormProps) {
 	const [composer, dispatchComposer] = useReducer(
 		composerReducer,
-		undefined,
+		currentListId,
 		initialComposerState,
 	);
 	const trimmedName = composer.name.trim();
@@ -55,6 +60,7 @@ export function AddItemForm({
 		dispatchComposer({ type: "submitStarted" });
 		try {
 			await onAddItem({
+				listId: composer.selectedListId,
 				name: trimmedName,
 				quantity: composer.quantity,
 				notes: composer.notes,
@@ -75,33 +81,34 @@ export function AddItemForm({
 			}}
 			ui={{
 				isOpen: composer.isOpen,
-				isNoteOpen: composer.isNoteOpen,
 				canSubmit,
-				listName,
+				selectedListId: composer.selectedListId,
+				listOptions,
 				errorMessage,
 			}}
 			actions={{
 				open: openComposer,
 				dismiss: dismissComposer,
+				changeList: (listId) =>
+					dispatchComposer({ type: "listChanged", listId }),
 				submit,
 				changeName: (value) => dispatchComposer({ type: "nameChanged", value }),
 				changeQuantity: (value) =>
 					dispatchComposer({ type: "quantityChanged", value }),
 				changeNotes: (value) =>
 					dispatchComposer({ type: "notesChanged", value }),
-				toggleNote: () => dispatchComposer({ type: "noteToggled" }),
 			}}
 		/>
 	);
 }
 
-function initialComposerState(): ComposerState {
+function initialComposerState(currentListId: string): ComposerState {
 	return {
 		isOpen: false,
 		name: "",
 		quantity: "",
 		notes: "",
-		isNoteOpen: false,
+		selectedListId: currentListId,
 		isSubmitting: false,
 	};
 }
@@ -121,10 +128,8 @@ function composerReducer(
 			return { ...state, quantity: action.value };
 		case "notesChanged":
 			return { ...state, notes: action.value };
-		case "noteToggled":
-			return state.isNoteOpen
-				? { ...state, isNoteOpen: false, notes: "" }
-				: { ...state, isNoteOpen: true };
+		case "listChanged":
+			return { ...state, selectedListId: action.listId };
 		case "submitStarted":
 			return { ...state, isSubmitting: true };
 		case "submitSucceeded":
@@ -133,7 +138,6 @@ function composerReducer(
 				name: "",
 				quantity: "",
 				notes: "",
-				isNoteOpen: false,
 				isSubmitting: false,
 			};
 		case "submitFailed":

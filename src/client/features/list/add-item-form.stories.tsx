@@ -45,7 +45,11 @@ function AddItemFormStory() {
 		>
 			<View style={styles.canvas}>
 				<AddItemForm
-					listName={state.listName}
+					currentListId="lst_groceries"
+					listOptions={[
+						{ id: "lst_groceries", name: state.listName },
+						{ id: "lst_costco", name: "Costco" },
+					]}
 					errorMessage={actions.errorMessage}
 					onAddItem={actions.addItem}
 				/>

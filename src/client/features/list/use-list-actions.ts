@@ -1,18 +1,18 @@
 import { useCallback, useState } from "react";
 import type {
 	ActiveListItem,
-	AddActiveListItemDraft,
-	AddActiveListItemInput,
+	AddListItemDraft,
+	AddListItemInput,
 } from "./list-view-types";
 
 export type UseListActionsInput = {
 	items: readonly ActiveListItem[];
-	onAddItem: (input: AddActiveListItemInput) => Promise<void>;
+	onAddItem: (input: AddListItemInput) => Promise<void>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
 export type UseListActionsResult = {
-	addItem: (draft: AddActiveListItemDraft) => Promise<void>;
+	addItem: (draft: AddListItemDraft) => Promise<void>;
 	toggleItem: (itemId: string) => Promise<void>;
 	errorMessage: string | null;
 };
@@ -24,14 +24,14 @@ export function useListActions(
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
 	const addItem = useCallback(
-		async (draft: AddActiveListItemDraft) => {
+		async (draft: AddListItemDraft) => {
 			const name = draft.name.trim();
 			if (!name) return;
 			const quantity = nullableTrimmed(draft.quantity);
 			const notes = nullableTrimmed(draft.notes);
 
 			try {
-				await onAddItem({ name, quantity, notes });
+				await onAddItem({ listId: draft.listId, name, quantity, notes });
 				setErrorMessage(null);
 			} catch (error) {
 				setErrorMessage("Unable to save that Item. Please try again.");

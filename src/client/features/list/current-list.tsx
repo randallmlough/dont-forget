@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import type { AddItemListOption } from "@/client/features/list/add-item-composer";
 import type { ListSummary } from "@/client/features/list/list-service";
 import {
 	type AuthenticatedAppSession,
@@ -190,6 +191,11 @@ function ActiveCurrentList({
 		onAddItem: loadState.actions.addItem,
 		onSetItemChecked: loadState.actions.setItemChecked,
 	});
+	const composerListOptions = addItemListOptions({
+		currentListId: loadState.listId,
+		currentListName: loadState.list.listName,
+		summaries: listSummaries,
+	});
 
 	return (
 		<View style={styles.currentList}>
@@ -211,12 +217,30 @@ function ActiveCurrentList({
 				onToggleItem={actions.toggleItem}
 			/>
 			<AddItemForm
-				listName={loadState.list.listName}
+				currentListId={loadState.listId}
+				listOptions={composerListOptions}
 				errorMessage={actions.errorMessage}
 				onAddItem={actions.addItem}
 			/>
 		</View>
 	);
+}
+
+function addItemListOptions({
+	currentListId,
+	currentListName,
+	summaries,
+}: {
+	currentListId: string;
+	currentListName: string;
+	summaries: readonly ListSummary[];
+}): AddItemListOption[] {
+	return [
+		{ id: currentListId, name: currentListName },
+		...summaries
+			.filter((summary) => summary.id !== currentListId)
+			.map((summary) => ({ id: summary.id, name: summary.name })),
+	];
 }
 
 const styles = StyleSheet.create((theme) => ({

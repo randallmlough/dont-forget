@@ -8,7 +8,12 @@ describe("useListActions", () => {
 		const { result } = await renderUseListActions({ onAddItem });
 
 		await act(async () => {
-			await result.current.addItem({ name: "   ", quantity: "", notes: "" });
+			await result.current.addItem({
+				listId: "lst_groceries",
+				name: "   ",
+				quantity: "",
+				notes: "",
+			});
 		});
 
 		expect(onAddItem).not.toHaveBeenCalled();
@@ -20,6 +25,7 @@ describe("useListActions", () => {
 
 		await act(async () => {
 			await result.current.addItem({
+				listId: "lst_groceries",
 				name: " Milk ",
 				quantity: " 1 gallon ",
 				notes: " Organic ",
@@ -27,6 +33,7 @@ describe("useListActions", () => {
 		});
 
 		expect(onAddItem).toHaveBeenCalledWith({
+			listId: "lst_groceries",
 			name: "Milk",
 			quantity: "1 gallon",
 			notes: "Organic",
@@ -39,6 +46,7 @@ describe("useListActions", () => {
 
 		await act(async () => {
 			await result.current.addItem({
+				listId: "lst_groceries",
 				name: "Milk",
 				quantity: " ",
 				notes: "",
@@ -46,6 +54,7 @@ describe("useListActions", () => {
 		});
 
 		expect(onAddItem).toHaveBeenCalledWith({
+			listId: "lst_groceries",
 			name: "Milk",
 			quantity: null,
 			notes: null,
@@ -63,6 +72,7 @@ describe("useListActions", () => {
 		await act(async () => {
 			try {
 				await result.current.addItem({
+					listId: "lst_groceries",
 					name: "Milk",
 					quantity: "",
 					notes: "",
@@ -109,6 +119,7 @@ describe("useListActions", () => {
 		await act(async () => {
 			try {
 				await result.current.addItem({
+					listId: "lst_groceries",
 					name: "Milk",
 					quantity: "",
 					notes: "",
@@ -127,6 +138,7 @@ describe("useListActions", () => {
 
 		await act(async () => {
 			await result.current.addItem({
+				listId: "lst_groceries",
 				name: "Eggs",
 				quantity: "",
 				notes: "",

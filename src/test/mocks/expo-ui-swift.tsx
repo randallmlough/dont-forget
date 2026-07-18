@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { Children, isValidElement, type ReactNode, useState } from "react";
 import {
 	Pressable,
 	Text as ReactNativeText,
@@ -11,6 +11,7 @@ type MockModifier = {
 	disabled?: boolean;
 	eventListener?: () => void;
 	label?: string;
+	tag?: string | number;
 };
 
 type MockContainerProps = {
@@ -35,6 +36,19 @@ type MockButtonProps = {
 	label?: string;
 	modifiers?: MockModifier[];
 	onPress?: () => void;
+};
+
+type MockPickerProps = {
+	children?: ReactNode;
+	label?: ReactNode;
+	modifiers?: MockModifier[];
+	onSelectionChange?: (selection: string) => void;
+	selection?: string;
+};
+
+type MockPickerOptionProps = {
+	children?: ReactNode;
+	modifiers?: MockModifier[];
 };
 
 type MockObservableState<T> = {
@@ -74,6 +88,12 @@ export function GlassEffectContainer({ children }: MockContainerProps) {
 
 export function Spacer() {
 	return <View />;
+}
+
+export function Image({ systemName }: { systemName?: string }) {
+	return (
+		<ReactNativeText accessibilityElementsHidden>{systemName}</ReactNativeText>
+	);
 }
 
 export function Text({
@@ -133,6 +153,45 @@ export function Button({
 		>
 			{children ?? <ReactNativeText>{label}</ReactNativeText>}
 		</Pressable>
+	);
+}
+
+export function Picker({
+	children,
+	label,
+	modifiers,
+	onSelectionChange,
+	selection,
+}: MockPickerProps) {
+	const isDisabled = modifier(modifiers, "disabled")?.disabled ?? false;
+	return (
+		<View
+			accessibilityLabel={modifierLabel(modifiers)}
+			accessibilityRole="button"
+			accessibilityState={{ disabled: isDisabled }}
+			accessibilityValue={{ text: selection }}
+		>
+			{label}
+			{Children.map(children, (child) => {
+				if (!isValidElement<MockPickerOptionProps>(child)) return null;
+				const optionTag = modifier(child.props.modifiers, "tag")?.tag;
+				if (typeof optionTag !== "string") return null;
+				const optionLabel =
+					typeof child.props.children === "string"
+						? child.props.children
+						: optionTag;
+				return (
+					<Pressable
+						accessibilityLabel={`Select List: ${optionLabel}`}
+						accessibilityRole="menuitem"
+						disabled={isDisabled}
+						onPress={() => onSelectionChange?.(optionTag)}
+					>
+						<ReactNativeText>{optionLabel}</ReactNativeText>
+					</Pressable>
+				);
+			})}
+		</View>
 	);
 }
 

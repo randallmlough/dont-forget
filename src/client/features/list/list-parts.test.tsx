@@ -128,7 +128,11 @@ describe("List parts", () => {
 		const onAddItem = jest.fn(async () => undefined);
 		await renderWithSafeArea(
 			<AddItemForm
-				listName="Groceries"
+				currentListId="lst_groceries"
+				listOptions={[
+					{ id: "lst_groceries", name: "Groceries" },
+					{ id: "lst_costco", name: "Costco" },
+				]}
 				errorMessage={null}
 				onAddItem={onAddItem}
 			/>,
@@ -145,7 +149,47 @@ describe("List parts", () => {
 
 		await waitFor(() => {
 			expect(onAddItem).toHaveBeenCalledWith({
+				listId: "lst_groceries",
 				name: "Milk",
+				quantity: "",
+				notes: "",
+			});
+		});
+	});
+
+	it("keeps the composer open while selecting a destination List", async () => {
+		const onAddItem = jest.fn(async () => undefined);
+		await renderWithSafeArea(
+			<AddItemForm
+				currentListId="lst_groceries"
+				listOptions={[
+					{ id: "lst_groceries", name: "Groceries" },
+					{ id: "lst_costco", name: "Costco" },
+				]}
+				errorMessage={null}
+				onAddItem={onAddItem}
+			/>,
+		);
+
+		await fireEvent(await screen.findByLabelText("Add Item"), "focus");
+		await fireEvent.changeText(
+			await screen.findByLabelText("Item name"),
+			"Coffee",
+		);
+		await fireEvent.press(
+			await screen.findByRole("menuitem", { name: "Select List: Costco" }),
+		);
+
+		expect(screen.getByLabelText("Item name")).toHaveDisplayValue("Coffee");
+		expect(screen.getByLabelText("Add Item composer")).toBeOnTheScreen();
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Add Item" }),
+		);
+		await waitFor(() => {
+			expect(onAddItem).toHaveBeenCalledWith({
+				listId: "lst_costco",
+				name: "Coffee",
 				quantity: "",
 				notes: "",
 			});

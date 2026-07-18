@@ -3,6 +3,8 @@ import {
 	GlassEffectContainer,
 	Host,
 	HStack,
+	Image,
+	Picker,
 	Spacer,
 	Text,
 	TextField,
@@ -10,6 +12,7 @@ import {
 	VStack,
 } from "@expo/ui/swift-ui";
 import {
+	accessibilityHidden,
 	accessibilityLabel,
 	buttonBorderShape,
 	buttonStyle,
@@ -22,7 +25,9 @@ import {
 	lineLimit,
 	onSubmit,
 	padding,
+	pickerStyle,
 	submitLabel,
+	tag,
 	textFieldStyle,
 	textInputAutocapitalization,
 	tint,
@@ -57,22 +62,27 @@ export type AddItemComposerDraft = {
 	notes: string;
 };
 
+export type AddItemListOption = {
+	id: string;
+	name: string;
+};
+
 export type AddItemComposerUiState = {
 	isOpen: boolean;
-	isNoteOpen: boolean;
 	canSubmit: boolean;
-	listName: string;
+	selectedListId: string;
+	listOptions: readonly AddItemListOption[];
 	errorMessage: string | null;
 };
 
 export type AddItemComposerActions = {
 	open: () => void;
 	dismiss: () => void;
+	changeList: (listId: string) => void;
 	submit: () => void;
 	changeName: (value: string) => void;
 	changeQuantity: (value: string) => void;
 	changeNotes: (value: string) => void;
-	toggleNote: () => void;
 };
 
 export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
@@ -149,6 +159,7 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					draft={draft}
 					ui={ui}
 					actions={actions}
+					onCancel={dismissComposer}
 				/>
 			</Animated.View>
 		</View>
@@ -204,16 +215,19 @@ function ExpandedGlassComposer({
 	draft,
 	ui,
 	actions,
+	onCancel,
 }: {
 	colorScheme: "light" | "dark";
 	draft: AddItemComposerDraft;
 	ui: AddItemComposerUiState;
 	actions: AddItemComposerActions;
+	onCancel: () => void;
 }) {
 	const { theme } = useUnistyles();
 	const name = useNativeState(draft.name);
 	const quantity = useNativeState(draft.quantity);
 	const notes = useNativeState(draft.notes);
+	const fieldCornerRadius = theme.spacing(2.5);
 
 	return (
 		<Host
@@ -224,10 +238,10 @@ function ExpandedGlassComposer({
 			<GlassEffectContainer spacing={theme.spacing(3)}>
 				<VStack
 					alignment="leading"
-					spacing={theme.spacing(3)}
+					spacing={theme.spacing(2.5)}
 					modifiers={[
 						frame({ maxWidth: FILL_AVAILABLE_WIDTH }),
-						padding({ all: theme.spacing(3) }),
+						padding({ all: theme.spacing(3.5) }),
 						glassEffect({
 							glass: { variant: "regular", interactive: false },
 							shape: "roundedRectangle",
@@ -235,75 +249,136 @@ function ExpandedGlassComposer({
 						}),
 					]}
 				>
-					<TextField
-						autoFocus
-						placeholder="Item name"
-						text={name}
-						onTextChange={actions.changeName}
-						modifiers={[
-							accessibilityLabel("Item name"),
-							textFieldStyle("roundedBorder"),
-							textInputAutocapitalization("sentences"),
-							font({ textStyle: "body" }),
-							frame({
-								minHeight: theme.spacing(11),
-								maxWidth: FILL_AVAILABLE_WIDTH,
-							}),
-							submitLabel("done"),
-							onSubmit(actions.submit),
-						]}
-					/>
-
-					<HStack alignment="center" spacing={theme.spacing(3)}>
+					<HStack alignment="center" spacing={theme.spacing(2)}>
 						<Text
 							modifiers={[
-								font({ textStyle: "subheadline", weight: "semibold" }),
-								foregroundStyle({
-									type: "hierarchical",
-									style: "secondary",
-								}),
-								frame({ width: theme.spacing(18), alignment: "leading" }),
+								font({ textStyle: "callout", weight: "medium" }),
+								foregroundStyle(theme.colors.text),
 							]}
 						>
-							Quantity
+							New Item
 						</Text>
-						<TextField
-							placeholder="1, dozen, 1 gallon"
-							text={quantity}
-							onTextChange={actions.changeQuantity}
+						<Spacer minLength={theme.spacing(2)} />
+						<Button
+							label="Cancel"
+							onPress={onCancel}
 							modifiers={[
-								accessibilityLabel("Quantity"),
+								accessibilityLabel("Cancel Item composer"),
+								buttonStyle("plain"),
+								controlSize("small"),
+								tint(theme.colors.primary),
+							]}
+						/>
+					</HStack>
+
+					<VStack
+						alignment="leading"
+						spacing={theme.spacing(1)}
+						modifiers={[frame({ maxWidth: FILL_AVAILABLE_WIDTH })]}
+					>
+						<ComposerFieldLabel>Item Name</ComposerFieldLabel>
+						<TextField
+							autoFocus
+							placeholder="Item name"
+							text={name}
+							onTextChange={actions.changeName}
+							modifiers={[
+								accessibilityLabel("Item name"),
 								textFieldStyle("plain"),
-								font({ textStyle: "subheadline" }),
+								textInputAutocapitalization("sentences"),
+								font({ textStyle: "body" }),
 								frame({
 									minHeight: theme.spacing(10),
 									maxWidth: FILL_AVAILABLE_WIDTH,
 								}),
 								padding({ horizontal: theme.spacing(3) }),
+								glassEffect({
+									glass: { variant: "clear", interactive: true },
+									shape: "roundedRectangle",
+									cornerRadius: fieldCornerRadius,
+								}),
 								submitLabel("done"),
 								onSubmit(actions.submit),
 							]}
 						/>
+					</VStack>
+
+					<HStack alignment="top" spacing={theme.spacing(2.5)}>
+						<VStack
+							alignment="leading"
+							spacing={theme.spacing(1)}
+							modifiers={[frame({ maxWidth: FILL_AVAILABLE_WIDTH })]}
+						>
+							<ComposerFieldLabel>Quantity</ComposerFieldLabel>
+							<TextField
+								placeholder="1, dozen, 1 gallon"
+								text={quantity}
+								onTextChange={actions.changeQuantity}
+								modifiers={[
+									accessibilityLabel("Quantity"),
+									textFieldStyle("plain"),
+									font({ textStyle: "callout" }),
+									frame({
+										minHeight: theme.spacing(10),
+										maxWidth: FILL_AVAILABLE_WIDTH,
+									}),
+									padding({ horizontal: theme.spacing(3) }),
+									glassEffect({
+										glass: { variant: "clear", interactive: true },
+										shape: "roundedRectangle",
+										cornerRadius: fieldCornerRadius,
+									}),
+									submitLabel("done"),
+									onSubmit(actions.submit),
+								]}
+							/>
+						</VStack>
+
+						<VStack
+							alignment="leading"
+							spacing={theme.spacing(1)}
+							modifiers={[frame({ maxWidth: FILL_AVAILABLE_WIDTH })]}
+						>
+							<ComposerFieldLabel>List</ComposerFieldLabel>
+							<CurrentListPicker
+								cornerRadius={fieldCornerRadius}
+								options={ui.listOptions}
+								selectedListId={ui.selectedListId}
+								onSelectionChange={actions.changeList}
+							/>
+						</VStack>
 					</HStack>
 
-					{ui.isNoteOpen ? (
+					<VStack
+						alignment="leading"
+						spacing={theme.spacing(1)}
+						modifiers={[frame({ maxWidth: FILL_AVAILABLE_WIDTH })]}
+					>
+						<ComposerFieldLabel>Note</ComposerFieldLabel>
 						<TextField
-							axis="vertical"
-							placeholder="Add a note"
+							placeholder="Optional note"
 							text={notes}
 							onTextChange={actions.changeNotes}
 							modifiers={[
 								accessibilityLabel("Item note"),
-								textFieldStyle("roundedBorder"),
-								font({ textStyle: "subheadline" }),
-								lineLimit({ min: 2, max: 3 }),
+								textFieldStyle("plain"),
+								textInputAutocapitalization("sentences"),
+								font({ textStyle: "callout" }),
 								frame({
-									minHeight: theme.spacing(15),
+									minHeight: theme.spacing(10),
 									maxWidth: FILL_AVAILABLE_WIDTH,
 								}),
+								padding({ horizontal: theme.spacing(3) }),
+								glassEffect({
+									glass: { variant: "clear", interactive: true },
+									shape: "roundedRectangle",
+									cornerRadius: fieldCornerRadius,
+								}),
+								submitLabel("done"),
+								onSubmit(actions.submit),
 							]}
 						/>
-					) : null}
+					</VStack>
 
 					{ui.errorMessage ? (
 						<Text
@@ -317,41 +392,25 @@ function ExpandedGlassComposer({
 						</Text>
 					) : null}
 
-					<HStack alignment="center" spacing={theme.spacing(2)}>
-						<Button
-							label={ui.isNoteOpen ? "Remove Note" : "Add Note"}
-							onPress={actions.toggleNote}
-							modifiers={[
-								accessibilityLabel(ui.isNoteOpen ? "Remove note" : "Add note"),
-								buttonStyle("glass"),
-								buttonBorderShape("capsule"),
-								controlSize("regular"),
-							]}
-						/>
+					<HStack alignment="center" spacing={theme.spacing(3)}>
 						<Text
 							modifiers={[
-								accessibilityLabel(`Selected List: ${ui.listName}`),
-								font({ textStyle: "caption", weight: "semibold" }),
+								font({ textStyle: "caption" }),
 								foregroundStyle({
 									type: "hierarchical",
 									style: "secondary",
 								}),
-								padding({
-									horizontal: theme.spacing(3),
-									vertical: theme.spacing(2),
-								}),
-								glassEffect({ glass: { variant: "clear" }, shape: "capsule" }),
 							]}
 						>
-							{ui.listName}
+							Press Return to add quickly
 						</Text>
 						<Spacer minLength={theme.spacing(2)} />
 						<Button
 							label="Add Item"
 							onPress={actions.submit}
 							modifiers={[
-								buttonStyle("glass"),
-								buttonBorderShape("capsule"),
+								buttonStyle("glassProminent"),
+								buttonBorderShape("roundedRectangle", fieldCornerRadius),
 								controlSize("regular"),
 								tint(theme.colors.primary),
 								disabled(!ui.canSubmit),
@@ -361,6 +420,111 @@ function ExpandedGlassComposer({
 				</VStack>
 			</GlassEffectContainer>
 		</Host>
+	);
+}
+
+function ComposerFieldLabel({ children }: { children: string }) {
+	return (
+		<Text
+			modifiers={[
+				font({ size: 10, weight: "semibold" }),
+				foregroundStyle({ type: "hierarchical", style: "secondary" }),
+			]}
+		>
+			{children.toUpperCase()}
+		</Text>
+	);
+}
+
+function CurrentListPicker({
+	cornerRadius,
+	options,
+	selectedListId,
+	onSelectionChange,
+}: {
+	cornerRadius: number;
+	options: readonly AddItemListOption[];
+	selectedListId: string;
+	onSelectionChange: (listId: string) => void;
+}) {
+	const { theme } = useUnistyles();
+	const selectedList =
+		options.find((option) => option.id === selectedListId) ?? options[0];
+	const canSelect = options.length > 1;
+	const field = (
+		<HStack
+			alignment="center"
+			spacing={theme.spacing(2)}
+			modifiers={[
+				frame({
+					minHeight: theme.spacing(10),
+					maxWidth: FILL_AVAILABLE_WIDTH,
+				}),
+				padding({ horizontal: theme.spacing(3) }),
+				glassEffect({
+					glass: { variant: "clear", interactive: canSelect },
+					shape: "roundedRectangle",
+					cornerRadius,
+				}),
+			]}
+		>
+			<Text
+				modifiers={[
+					font({ textStyle: "callout" }),
+					foregroundStyle(theme.colors.text),
+					lineLimit(1),
+				]}
+			>
+				{selectedList?.name ?? "List"}
+			</Text>
+			<Spacer minLength={theme.spacing(1)} />
+			{canSelect ? (
+				<Image
+					systemName="chevron.down"
+					modifiers={[
+						accessibilityHidden(true),
+						font({ textStyle: "caption2", weight: "semibold" }),
+						foregroundStyle({
+							type: "hierarchical",
+							style: "secondary",
+						}),
+					]}
+				/>
+			) : null}
+		</HStack>
+	);
+
+	if (!selectedList) {
+		return field;
+	}
+
+	return (
+		<Picker<string>
+			label={field}
+			selection={selectedList.id}
+			onSelectionChange={onSelectionChange}
+			modifiers={[
+				accessibilityLabel(`List: ${selectedList.name}. Select List`),
+				pickerStyle("menu"),
+				buttonStyle("plain"),
+				disabled(!canSelect),
+				frame({
+					minHeight: theme.spacing(10),
+					maxWidth: FILL_AVAILABLE_WIDTH,
+				}),
+				glassEffect({
+					glass: { variant: "clear", interactive: canSelect },
+					shape: "roundedRectangle",
+					cornerRadius,
+				}),
+			]}
+		>
+			{options.map((option) => (
+				<Text key={option.id} modifiers={[tag(option.id)]}>
+					{option.name}
+				</Text>
+			))}
+		</Picker>
 	);
 }
 

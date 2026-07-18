@@ -5,5 +5,6 @@ export {
 	type AddItemComposerDraft,
 	type AddItemComposerProps,
 	type AddItemComposerUiState,
+	type AddItemListOption,
 	useAddItemComposerScrollInset,
 } from "./add-item-composer";
