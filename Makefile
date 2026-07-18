@@ -49,10 +49,12 @@ prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to 
 # eas.json build profiles are named after APP_ENV except local, whose profile is "development".
 # PROFILE overrides the mapping (e.g. PROFILE=preview for a QR-installable staging build).
 EAS_BUILD_PROFILE = $(if $(PROFILE),$(PROFILE),$(if $(filter local,$(APP_ENV_VALUE)),development,$(APP_ENV_VALUE)))
+# Skips eas-cli's Apple team picker during credential setup; must match appleTeamId in eas.json.
+APPLE_TEAM_ID = D64V4GPNLJ
 
 .PHONY: eas-build
 eas-build: ## Build on EAS for the selected environment (APP_ENV, default local; PROFILE overrides)
-	APP_ENV="$(APP_ENV_VALUE)" eas build --profile $(EAS_BUILD_PROFILE) --platform ios
+	APP_ENV="$(APP_ENV_VALUE)" EXPO_APPLE_TEAM_ID="$(APPLE_TEAM_ID)" eas build --profile $(EAS_BUILD_PROFILE) --platform ios
 
 .PHONY: submit
 submit: ## Submit the latest EAS build for the selected environment to TestFlight/App Store
