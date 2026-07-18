@@ -60,7 +60,8 @@ function ListPartsStory({ initialState }: { initialState: ActiveListState }) {
 			/>
 			<ItemRows items={state.items} onToggleItem={actions.toggleItem} />
 			<AddItemForm
-				listName={state.listName}
+				currentListId="lst_story"
+				listOptions={[{ id: "lst_story", name: state.listName }]}
 				errorMessage={actions.errorMessage}
 				onAddItem={actions.addItem}
 			/>

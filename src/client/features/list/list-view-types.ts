@@ -21,6 +21,14 @@ export type AddActiveListItemInput = {
 	notes: string | null;
 };
 
+export type AddListItemDraft = AddActiveListItemDraft & {
+	listId: string;
+};
+
+export type AddListItemInput = AddActiveListItemInput & {
+	listId: string;
+};
+
 export type ActiveListState = {
 	householdName: string;
 	listName: string;

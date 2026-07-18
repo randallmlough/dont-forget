@@ -42,8 +42,8 @@ describe("AddItemComposer", () => {
 		expect(screen.getByLabelText("Item name")).toBeOnTheScreen();
 		expect(screen.getByText("QUANTITY")).toBeOnTheScreen();
 		expect(screen.getByLabelText("Quantity")).toBeOnTheScreen();
-		expect(screen.getByText("CURRENT LIST")).toBeOnTheScreen();
-		expect(screen.getByText("Groceries")).toBeOnTheScreen();
+		expect(screen.getByText("LIST")).toBeOnTheScreen();
+		expect(screen.getAllByText("Groceries")).not.toHaveLength(0);
 		expect(screen.getByText("NOTE")).toBeOnTheScreen();
 		expect(screen.getByLabelText("Item note")).toBeOnTheScreen();
 		expect(screen.getByText("Press Return to add quickly")).toBeOnTheScreen();
@@ -55,20 +55,18 @@ describe("AddItemComposer", () => {
 		expect(dismiss).toHaveBeenCalledTimes(1);
 	});
 
-	it("dismisses before opening the existing Lists destination", async () => {
+	it("selects a destination List without dismissing the composer", async () => {
 		const dismiss = jest.fn();
-		const openLists = jest.fn();
+		const changeList = jest.fn();
 
-		await renderOpenComposer({ dismiss, openLists });
+		await renderOpenComposer({ changeList, dismiss });
 
 		fireEvent.press(
-			screen.getByRole("button", {
-				name: "Current List: Groceries. Open Lists",
-			}),
+			screen.getByRole("menuitem", { name: "Select List: Costco" }),
 		);
 
-		expect(dismiss).toHaveBeenCalledTimes(1);
-		expect(openLists).toHaveBeenCalledTimes(1);
+		expect(changeList).toHaveBeenCalledWith("lst_costco");
+		expect(dismiss).not.toHaveBeenCalled();
 	});
 
 	it("submits from the native keyboard action", async () => {
@@ -82,12 +80,12 @@ describe("AddItemComposer", () => {
 });
 
 function renderOpenComposer({
+	changeList = () => undefined,
 	dismiss = () => undefined,
-	openLists,
 	submit = () => undefined,
 }: {
+	changeList?: (listId: string) => void;
 	dismiss?: () => void;
-	openLists?: () => void;
 	submit?: () => void;
 } = {}) {
 	return renderWithSafeArea(
@@ -96,13 +94,17 @@ function renderOpenComposer({
 			ui={{
 				isOpen: true,
 				canSubmit: false,
-				listName: "Groceries",
+				selectedListId: "lst_groceries",
+				listOptions: [
+					{ id: "lst_groceries", name: "Groceries" },
+					{ id: "lst_costco", name: "Costco" },
+				],
 				errorMessage: null,
 			}}
 			actions={{
 				open() {},
 				dismiss,
-				openLists,
+				changeList,
 				submit,
 				changeName() {},
 				changeQuantity() {},

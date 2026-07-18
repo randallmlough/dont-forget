@@ -11,7 +11,7 @@ import { asError } from "@/shared/errors";
 import type {
 	ActiveListItem,
 	ActiveListState,
-	AddActiveListItemInput,
+	AddListItemInput,
 } from "./list-view-types";
 import { usePowerSyncQuery } from "./use-powersync-query";
 import {
@@ -20,7 +20,7 @@ import {
 } from "./use-product-services";
 
 export type HomeCurrentListActions = {
-	addItem: (input: AddActiveListItemInput) => Promise<void>;
+	addItem: (input: AddListItemInput) => Promise<void>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -329,9 +329,9 @@ function homeCurrentListActions(
 	listId: string,
 ): HomeCurrentListActions {
 	return {
-		async addItem(input: AddActiveListItemInput) {
+		async addItem(input: AddListItemInput) {
 			await services.items.addItem({
-				listId,
+				listId: input.listId,
 				userId: session.activeMember.userId,
 				name: input.name,
 				quantity: input.quantity,

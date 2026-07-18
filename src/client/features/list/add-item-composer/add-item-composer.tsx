@@ -4,6 +4,7 @@ import {
 	Host,
 	HStack,
 	Image,
+	Picker,
 	Spacer,
 	Text,
 	TextField,
@@ -24,7 +25,9 @@ import {
 	lineLimit,
 	onSubmit,
 	padding,
+	pickerStyle,
 	submitLabel,
+	tag,
 	textFieldStyle,
 	textInputAutocapitalization,
 	tint,
@@ -59,17 +62,23 @@ export type AddItemComposerDraft = {
 	notes: string;
 };
 
+export type AddItemListOption = {
+	id: string;
+	name: string;
+};
+
 export type AddItemComposerUiState = {
 	isOpen: boolean;
 	canSubmit: boolean;
-	listName: string;
+	selectedListId: string;
+	listOptions: readonly AddItemListOption[];
 	errorMessage: string | null;
 };
 
 export type AddItemComposerActions = {
 	open: () => void;
 	dismiss: () => void;
-	openLists?: () => void;
+	changeList: (listId: string) => void;
 	submit: () => void;
 	changeName: (value: string) => void;
 	changeQuantity: (value: string) => void;
@@ -103,12 +112,6 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	function dismissComposer() {
 		Keyboard.dismiss();
 		actions.dismiss();
-	}
-
-	function openLists() {
-		Keyboard.dismiss();
-		actions.dismiss();
-		actions.openLists?.();
 	}
 
 	if (!ui.isOpen) {
@@ -157,7 +160,6 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 					ui={ui}
 					actions={actions}
 					onCancel={dismissComposer}
-					onOpenLists={actions.openLists ? openLists : undefined}
 				/>
 			</Animated.View>
 		</View>
@@ -214,14 +216,12 @@ function ExpandedGlassComposer({
 	ui,
 	actions,
 	onCancel,
-	onOpenLists,
 }: {
 	colorScheme: "light" | "dark";
 	draft: AddItemComposerDraft;
 	ui: AddItemComposerUiState;
 	actions: AddItemComposerActions;
 	onCancel: () => void;
-	onOpenLists?: () => void;
 }) {
 	const { theme } = useUnistyles();
 	const name = useNativeState(draft.name);
@@ -339,11 +339,12 @@ function ExpandedGlassComposer({
 							spacing={theme.spacing(1)}
 							modifiers={[frame({ maxWidth: FILL_AVAILABLE_WIDTH })]}
 						>
-							<ComposerFieldLabel>Current List</ComposerFieldLabel>
-							<CurrentListField
+							<ComposerFieldLabel>List</ComposerFieldLabel>
+							<CurrentListPicker
 								cornerRadius={fieldCornerRadius}
-								listName={ui.listName}
-								onPress={onOpenLists}
+								options={ui.listOptions}
+								selectedListId={ui.selectedListId}
+								onSelectionChange={actions.changeList}
 							/>
 						</VStack>
 					</HStack>
@@ -435,16 +436,21 @@ function ComposerFieldLabel({ children }: { children: string }) {
 	);
 }
 
-function CurrentListField({
+function CurrentListPicker({
 	cornerRadius,
-	listName,
-	onPress,
+	options,
+	selectedListId,
+	onSelectionChange,
 }: {
 	cornerRadius: number;
-	listName: string;
-	onPress?: () => void;
+	options: readonly AddItemListOption[];
+	selectedListId: string;
+	onSelectionChange: (listId: string) => void;
 }) {
 	const { theme } = useUnistyles();
+	const selectedList =
+		options.find((option) => option.id === selectedListId) ?? options[0];
+	const canSelect = options.length > 1;
 	const field = (
 		<HStack
 			alignment="center"
@@ -456,7 +462,7 @@ function CurrentListField({
 				}),
 				padding({ horizontal: theme.spacing(3) }),
 				glassEffect({
-					glass: { variant: "clear", interactive: Boolean(onPress) },
+					glass: { variant: "clear", interactive: canSelect },
 					shape: "roundedRectangle",
 					cornerRadius,
 				}),
@@ -469,10 +475,10 @@ function CurrentListField({
 					lineLimit(1),
 				]}
 			>
-				{listName}
+				{selectedList?.name ?? "List"}
 			</Text>
 			<Spacer minLength={theme.spacing(1)} />
-			{onPress ? (
+			{canSelect ? (
 				<Image
 					systemName="chevron.down"
 					modifiers={[
@@ -488,21 +494,37 @@ function CurrentListField({
 		</HStack>
 	);
 
-	if (!onPress) {
+	if (!selectedList) {
 		return field;
 	}
 
 	return (
-		<Button
-			onPress={onPress}
+		<Picker<string>
+			label={field}
+			selection={selectedList.id}
+			onSelectionChange={onSelectionChange}
 			modifiers={[
-				accessibilityLabel(`Current List: ${listName}. Open Lists`),
+				accessibilityLabel(`List: ${selectedList.name}. Select List`),
+				pickerStyle("menu"),
 				buttonStyle("plain"),
-				frame({ maxWidth: FILL_AVAILABLE_WIDTH }),
+				disabled(!canSelect),
+				frame({
+					minHeight: theme.spacing(10),
+					maxWidth: FILL_AVAILABLE_WIDTH,
+				}),
+				glassEffect({
+					glass: { variant: "clear", interactive: canSelect },
+					shape: "roundedRectangle",
+					cornerRadius,
+				}),
 			]}
 		>
-			{field}
-		</Button>
+			{options.map((option) => (
+				<Text key={option.id} modifiers={[tag(option.id)]}>
+					{option.name}
+				</Text>
+			))}
+		</Picker>
 	);
 }
 

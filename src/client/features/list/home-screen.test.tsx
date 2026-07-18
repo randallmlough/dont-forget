@@ -82,6 +82,7 @@ describe("HomeScreenView", () => {
 		);
 
 		expect(addItem).toHaveBeenCalledWith({
+			listId: "lst_groceries",
 			name: "Milk",
 			quantity: null,
 			notes: null,

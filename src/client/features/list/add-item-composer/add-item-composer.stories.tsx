@@ -46,6 +46,7 @@ function InteractiveAddItemComposerStory({
 	const [quantity, setQuantity] = useState(initialDraft.quantity);
 	const [notes, setNotes] = useState(initialDraft.notes);
 	const [isOpen, setIsOpen] = useState(initiallyOpen);
+	const [selectedListId, setSelectedListId] = useState("lst_groceries");
 	const canSubmit = name.trim().length > 0;
 
 	return (
@@ -61,13 +62,18 @@ function InteractiveAddItemComposerStory({
 					ui={{
 						isOpen,
 						canSubmit,
-						listName: "Groceries",
+						selectedListId,
+						listOptions: [
+							{ id: "lst_groceries", name: "Groceries" },
+							{ id: "lst_costco", name: "Costco" },
+							{ id: "lst_hardware", name: "Hardware" },
+						],
 						errorMessage: null,
 					}}
 					actions={{
 						open: () => setIsOpen(true),
 						dismiss: () => setIsOpen(false),
-						openLists: () => undefined,
+						changeList: setSelectedListId,
 						submit: () => undefined,
 						changeName: setName,
 						changeQuantity: setQuantity,
