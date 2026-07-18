@@ -24,12 +24,21 @@ export type AppTheme = {
 		authBorder: string;
 		divider: string;
 		primary: string;
+		primaryActionBackground: string;
+		primaryActionText: string;
 		primaryDisabled: string;
 		destructive: string;
 		link: string;
 		authPrimary: string;
 		inverseText: string;
 		scrim: string;
+		glassTint: string;
+		glassTintSelected: string;
+		glassBorder: string;
+		appearanceLightBackground: string;
+		appearanceLightSurface: string;
+		appearanceDarkBackground: string;
+		appearanceDarkSurface: string;
 	};
 	radii: {
 		card: number;

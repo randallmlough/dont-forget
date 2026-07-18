@@ -120,11 +120,12 @@ describe("NavigationDrawer", () => {
 		for (const label of [
 			"Home",
 			"Lists",
-			"Household Settings",
+			"Household",
 			"Members & Invitations",
 			"Settings",
 			"Appearance",
 			"Switch Household",
+			"Profile",
 		]) {
 			expect(screen.getByRole("button", { name: label })).toBeTruthy();
 		}

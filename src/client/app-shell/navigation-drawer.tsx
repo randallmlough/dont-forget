@@ -15,8 +15,11 @@ type DrawerDestination =
 	| "/"
 	| "/lists"
 	| "/household/settings"
+	| "/household/members"
 	| "/settings"
-	| "/household/switch";
+	| "/settings/appearance"
+	| "/household/switch"
+	| "/profile";
 
 type DrawerRowProps = {
 	icon: SFSymbol;
@@ -98,6 +101,8 @@ export function NavigationDrawerView({
 	onDismissed,
 	onNavigate,
 }: NavigationDrawerViewProps) {
+	const { theme } = useUnistyles();
+
 	return (
 		<SideDrawer
 			isOpen={isOpen}
@@ -129,15 +134,15 @@ export function NavigationDrawerView({
 
 					<DrawerRow
 						icon="house"
-						label="Household Settings"
+						label="Household"
 						selected={pathname === "/household/settings"}
 						onPress={() => onNavigate("/household/settings")}
 					/>
 					<DrawerRow
 						icon="person.2"
 						label="Members & Invitations"
-						selected={pathname === "/household/settings"}
-						onPress={() => onNavigate("/household/settings")}
+						selected={pathname === "/household/members"}
+						onPress={() => onNavigate("/household/members")}
 					/>
 				</View>
 
@@ -163,12 +168,22 @@ export function NavigationDrawerView({
 					<DrawerRow
 						icon="circle.lefthalf.filled"
 						label="Appearance"
-						selected={pathname === "/settings"}
-						onPress={() => onNavigate("/settings")}
+						selected={pathname === "/settings/appearance"}
+						onPress={() => onNavigate("/settings/appearance")}
 					/>
 				</View>
 				<View style={styles.drawerFooter}>
-					<View style={styles.memberRow}>
+					<Pressable
+						accessibilityLabel="Profile"
+						accessibilityRole="button"
+						accessibilityState={{ selected: pathname === "/profile" }}
+						onPress={() => onNavigate("/profile")}
+						style={({ pressed }) => [
+							styles.memberRow,
+							pathname === "/profile" ? styles.destinationSelected : undefined,
+							pressed ? styles.pressed : undefined,
+						]}
+					>
 						<View style={styles.avatar}>
 							<Text style={styles.avatarLabel}>{initials(memberName)}</Text>
 						</View>
@@ -177,7 +192,15 @@ export function NavigationDrawerView({
 								{memberName}
 							</Text>
 						</View>
-					</View>
+						<SymbolView
+							accessibilityElementsHidden
+							accessible={false}
+							name="chevron.right"
+							size={14}
+							tintColor={theme.colors.textMuted}
+							weight="semibold"
+						/>
+					</Pressable>
 				</View>
 			</SafeAreaView>
 		</SideDrawer>
@@ -233,9 +256,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	brand: { ...theme.typography.title, color: theme.colors.textMuted },
 	memberRow: {
+		minHeight: theme.spacing(14),
 		flexDirection: "row",
 		alignItems: "center",
 		gap: theme.spacing(3),
+		paddingHorizontal: theme.spacing(2),
+		borderRadius: theme.radii.control,
 	},
 	avatar: {
 		width: theme.spacing(12),
