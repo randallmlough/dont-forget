@@ -1,12 +1,11 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useState } from "react";
 import {
 	ActivityIndicator,
+	Alert,
 	FlatList,
 	Pressable,
 	Text,
-	TextInput,
 	View,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -185,106 +184,48 @@ export function ListsScreenView({
 	onRenameList,
 	onDeleteList,
 }: ListsScreenViewProps) {
-	const [mode, setMode] = useState<ListsMode>({ kind: "rows" });
-	const [emptyCreateDismissed, setEmptyCreateDismissed] = useState(false);
-	const showAutomaticCreate =
-		mode.kind === "rows" &&
-		rows.status === "ready" &&
-		rows.summaries.length === 0 &&
-		!emptyCreateDismissed;
-
-	async function submitCreate(name: string): Promise<string | null> {
-		const outcome = await onCreateList(name);
-		if (outcome.status === "error") return outcome.message;
-		if (outcome.status === "selectionFailed") {
-			setEmptyCreateDismissed(true);
-			setMode({ kind: "rows" });
-		}
-		return null;
-	}
-
-	async function submitRename(
-		listId: string,
-		name: string,
-	): Promise<string | null> {
-		const outcome = await onRenameList(listId, name);
-		if (outcome.status === "error") return outcome.message;
-		setMode({ kind: "rows" });
-		return null;
-	}
-
-	async function submitDelete(listId: string): Promise<string | null> {
-		const outcome = await onDeleteList(listId);
-		if (outcome.status === "error") return outcome.message;
-		setMode({ kind: "rows" });
-		return null;
-	}
+	const { rt } = useUnistyles();
+	const userInterfaceStyle = rt.themeName === "dark" ? "dark" : "light";
 
 	return (
 		<ScreenScaffold label="Lists" title={session.activeHousehold.name}>
 			<View style={styles.pageContent}>
-				{showAutomaticCreate ? (
-					<ListNameForm
-						title="Create List"
-						initialName=""
-						submitLabel="Create"
-						onSubmit={submitCreate}
-						onCancel={() => setEmptyCreateDismissed(true)}
-					/>
-				) : mode.kind === "create" ? (
-					<ListNameForm
-						title="Create List"
-						initialName=""
-						submitLabel="Create"
-						onSubmit={submitCreate}
-						onCancel={() => setMode({ kind: "rows" })}
-					/>
-				) : mode.kind === "rename" ? (
-					<ListNameForm
-						title="Rename List"
-						initialName={mode.name}
-						submitLabel="Save"
-						onSubmit={(name) => submitRename(mode.listId, name)}
-						onCancel={() => setMode({ kind: "rows" })}
-					/>
-				) : mode.kind === "confirmDelete" ? (
-					<ConfirmDeleteList
-						name={mode.name}
-						onConfirm={() => submitDelete(mode.listId)}
-						onCancel={() => setMode({ kind: "rows" })}
-					/>
-				) : (
-					<ListRowsView
-						rows={rows}
-						currentListId={currentListId}
-						onSelectList={onSelectList}
-						onCreate={() => setMode({ kind: "create" })}
-						onRename={(summary) =>
-							setMode({
-								kind: "rename",
-								listId: summary.id,
-								name: summary.name,
-							})
-						}
-						onDelete={(summary) =>
-							setMode({
-								kind: "confirmDelete",
-								listId: summary.id,
-								name: summary.name,
-							})
-						}
-					/>
-				)}
+				<ListRowsView
+					rows={rows}
+					currentListId={currentListId}
+					onSelectList={onSelectList}
+					onCreate={() =>
+						promptForListName({
+							title: "Create List",
+							actionLabel: "Create",
+							initialName: "",
+							failureTitle: "Unable to Create List",
+							onSubmit: onCreateList,
+							userInterfaceStyle,
+						})
+					}
+					onRename={(summary) =>
+						promptForListName({
+							title: "Rename List",
+							actionLabel: "Save",
+							initialName: summary.name,
+							failureTitle: "Unable to Rename List",
+							onSubmit: (name) => onRenameList(summary.id, name),
+							userInterfaceStyle,
+						})
+					}
+					onDelete={(summary) =>
+						confirmListDeletion({
+							summary,
+							onDeleteList,
+							userInterfaceStyle,
+						})
+					}
+				/>
 			</View>
 		</ScreenScaffold>
 	);
 }
-
-type ListsMode =
-	| { kind: "rows" }
-	| { kind: "create" }
-	| { kind: "rename"; listId: string; name: string }
-	| { kind: "confirmDelete"; listId: string; name: string };
 
 function ListRowsView({
 	rows,
@@ -547,106 +488,101 @@ function listMenuActions(
 	];
 }
 
-function ListNameForm({
+type NativeDialogStyle = "light" | "dark";
+
+function promptForListName({
 	title,
 	initialName,
-	submitLabel,
+	actionLabel,
+	failureTitle,
 	onSubmit,
-	onCancel,
+	userInterfaceStyle,
 }: {
 	title: string;
 	initialName: string;
-	submitLabel: string;
-	onSubmit: (name: string) => Promise<string | null>;
-	onCancel: () => void;
+	actionLabel: string;
+	failureTitle: string;
+	onSubmit: (name: string) => Promise<MutationOutcome>;
+	userInterfaceStyle: NativeDialogStyle;
 }) {
-	const [name, setName] = useState(initialName);
-	const [error, setError] = useState<string | null>(null);
-	const [submitting, setSubmitting] = useState(false);
-
-	async function submit() {
-		if (submitting) return;
-		setSubmitting(true);
-		setError(null);
-		const failure = await onSubmit(name);
-		if (failure !== null) {
-			setError(failure);
-			setSubmitting(false);
-		}
-	}
-
-	return (
-		<GlassSurface style={styles.formSurface}>
-			<View style={styles.formContent}>
-				<Text style={styles.formTitle}>{title}</Text>
-				<TextInput
-					accessibilityLabel="List name"
-					autoFocus
-					value={name}
-					onChangeText={setName}
-					placeholder="List name"
-					returnKeyType="done"
-					onSubmitEditing={() => void submit()}
-					style={styles.nameInput}
-				/>
-				{error ? <Text style={styles.errorMessage}>{error}</Text> : null}
-				<View style={styles.formActions}>
-					<AppButton disabled={submitting} label="Cancel" onPress={onCancel} />
-					<AppButton
-						disabled={submitting}
-						label={submitLabel}
-						onPress={() => void submit()}
-						variant="primary"
-					/>
-				</View>
-			</View>
-		</GlassSurface>
+	Alert.prompt(
+		title,
+		undefined,
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: actionLabel,
+				isPreferred: true,
+				onPress: (value?: string | { login: string; password: string }) => {
+					const name = typeof value === "string" ? value : "";
+					void runListMutation({
+						failureTitle,
+						mutation: () => onSubmit(name),
+						userInterfaceStyle,
+					});
+				},
+			},
+		],
+		"plain-text",
+		initialName,
+		"default",
+		{ userInterfaceStyle },
 	);
 }
 
-function ConfirmDeleteList({
-	name,
-	onConfirm,
-	onCancel,
+function confirmListDeletion({
+	summary,
+	onDeleteList,
+	userInterfaceStyle,
 }: {
-	name: string;
-	onConfirm: () => Promise<string | null>;
-	onCancel: () => void;
+	summary: ListSummary;
+	onDeleteList: (listId: string) => Promise<MutationOutcome>;
+	userInterfaceStyle: NativeDialogStyle;
 }) {
-	const [error, setError] = useState<string | null>(null);
-	const [deleting, setDeleting] = useState(false);
-
-	async function confirm() {
-		if (deleting) return;
-		setDeleting(true);
-		setError(null);
-		const failure = await onConfirm();
-		if (failure !== null) {
-			setError(failure);
-			setDeleting(false);
-		}
-	}
-
-	return (
-		<GlassSurface style={styles.formSurface}>
-			<View style={styles.formContent}>
-				<Text style={styles.formTitle}>Delete List</Text>
-				<Text style={styles.confirmBody}>
-					{`Delete "${name}"? Its Items will no longer be available.`}
-				</Text>
-				{error ? <Text style={styles.errorMessage}>{error}</Text> : null}
-				<View style={styles.formActions}>
-					<AppButton disabled={deleting} label="Cancel" onPress={onCancel} />
-					<AppButton
-						disabled={deleting}
-						label="Delete"
-						onPress={() => void confirm()}
-						variant="destructive"
-					/>
-				</View>
-			</View>
-		</GlassSurface>
+	Alert.alert(
+		"Delete List",
+		`Delete "${summary.name}"? Its Items will no longer be available.`,
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Delete",
+				style: "destructive",
+				onPress: () => {
+					void runListMutation({
+						failureTitle: "Unable to Delete List",
+						mutation: () => onDeleteList(summary.id),
+						userInterfaceStyle,
+					});
+				},
+			},
+		],
+		{ userInterfaceStyle },
 	);
+}
+
+async function runListMutation({
+	mutation,
+	failureTitle,
+	userInterfaceStyle,
+}: {
+	mutation: () => Promise<MutationOutcome>;
+	failureTitle: string;
+	userInterfaceStyle: NativeDialogStyle;
+}) {
+	const outcome = await mutation();
+	if (outcome.status === "handled") return;
+	if (outcome.status === "selectionFailed") {
+		Alert.alert(
+			"Unable to Open List",
+			"The List was created, but it could not be opened. Select it from Lists to try again.",
+			undefined,
+			{ userInterfaceStyle },
+		);
+		return;
+	}
+	Alert.alert(failureTitle, outcome.message, undefined, {
+		userInterfaceStyle,
+	});
 }
 
 function ListsSessionState({
@@ -819,41 +755,10 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(5),
 		borderRadius: theme.radii.card,
 	},
-	formSurface: {
-		borderRadius: theme.radii.card,
-		borderCurve: "continuous",
-	},
-	formContent: {
-		gap: theme.spacing(4),
-		padding: theme.spacing(5),
-	},
-	formTitle: {
-		...theme.typography.headline,
-		fontFamily: theme.fontFamilies.serif,
-		color: theme.colors.text,
-	},
 	errorMessage: {
 		...theme.typography.callout,
 		color: theme.colors.destructive,
 		textAlign: "center",
-	},
-	confirmBody: { ...theme.typography.callout, color: theme.colors.text },
-	nameInput: {
-		minHeight: theme.spacing(12),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.background,
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.body,
-	},
-	formActions: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		justifyContent: "flex-end",
-		gap: theme.spacing(2),
 	},
 	pressed: { opacity: theme.opacities.pressed },
 }));
