@@ -1,6 +1,8 @@
 import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import {
+	ActionSheetIOS,
 	ActivityIndicator,
 	FlatList,
 	Pressable,
@@ -8,7 +10,7 @@ import {
 	TextInput,
 	View,
 } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
 	clearCurrentListSelection,
@@ -26,6 +28,10 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
+import { ActionMenuButton } from "@/client/ui/action-menu-button";
+import { AppButton } from "@/client/ui/app-button";
+import { GlassSurface } from "@/client/ui/glass-surface";
+import { SurfaceCard } from "@/client/ui/settings-surface";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";
 import { type ListRows, useListRows } from "./use-list-rows";
@@ -293,108 +299,253 @@ function ListRowsView({
 	onRename: (summary: ListSummary) => void;
 	onDelete: (summary: ListSummary) => void;
 }) {
+	if (rows.status !== "ready") {
+		return (
+			<View style={styles.listLayout}>
+				<View style={styles.statusContainer}>
+					<GlassSurface style={styles.statusSurface}>
+						{rows.status === "loading" ? (
+							<ActivityIndicator />
+						) : (
+							<Text style={styles.errorMessage}>
+								Unable to load your Lists.
+							</Text>
+						)}
+					</GlassSurface>
+				</View>
+				<NewListButton onPress={onCreate} />
+			</View>
+		);
+	}
+
+	const currentSummary = rows.summaries.find(
+		(summary) => summary.id === currentListId,
+	);
+	const otherSummaries = currentSummary
+		? rows.summaries.filter((summary) => summary.id !== currentSummary.id)
+		: rows.summaries;
+
 	return (
-		<>
-			{rows.status === "loading" ? (
-				<View style={styles.statusContainer}>
-					<ActivityIndicator />
-				</View>
-			) : rows.status === "error" ? (
-				<View style={styles.statusContainer}>
-					<Text style={styles.errorMessage}>Unable to load your Lists.</Text>
-				</View>
-			) : (
-				<FlatList
-					alwaysBounceVertical={false}
-					data={rows.summaries}
-					keyExtractor={(summary) => summary.id}
-					renderItem={({ item: summary }) => (
-						<ListRow
-							summary={summary}
-							isCurrent={summary.id === currentListId}
-							onSelect={() => void onSelectList(summary.id)}
-							onRename={() => onRename(summary)}
-							onDelete={() => onDelete(summary)}
-						/>
-					)}
-					style={styles.rowsScroll}
-				/>
-			)}
-			<Pressable
-				accessibilityRole="button"
-				onPress={onCreate}
-				style={({ pressed }) => [
-					styles.primaryButton,
-					pressed ? styles.pressed : undefined,
-				]}
-			>
-				<Text style={styles.primaryButtonLabel}>Create List</Text>
-			</Pressable>
-		</>
+		<View style={styles.listLayout}>
+			<FlatList
+				alwaysBounceVertical={false}
+				contentContainerStyle={styles.rowsContent}
+				data={otherSummaries}
+				keyExtractor={listSummaryKey}
+				ListHeaderComponent={
+					<ListCollectionHeader
+						currentSummary={currentSummary}
+						listCount={otherSummaries.length}
+						onDelete={onDelete}
+						onRename={onRename}
+						onSelectList={onSelectList}
+					/>
+				}
+				renderItem={({ index, item: summary }) => (
+					<ListRow
+						groupPosition={groupPosition(index, otherSummaries.length)}
+						onDelete={() => onDelete(summary)}
+						onRename={() => onRename(summary)}
+						onSelect={() => void onSelectList(summary.id)}
+						summary={summary}
+					/>
+				)}
+				style={styles.rowsScroll}
+			/>
+			<NewListButton onPress={onCreate} />
+		</View>
 	);
 }
 
-function ListRow({
+function ListCollectionHeader({
+	currentSummary,
+	listCount,
+	onSelectList,
+	onRename,
+	onDelete,
+}: {
+	currentSummary: ListSummary | undefined;
+	listCount: number;
+	onSelectList: (listId: string) => Promise<void>;
+	onRename: (summary: ListSummary) => void;
+	onDelete: (summary: ListSummary) => void;
+}) {
+	return (
+		<View style={styles.collectionHeader}>
+			{currentSummary ? (
+				<CurrentListCard
+					onDelete={() => onDelete(currentSummary)}
+					onRename={() => onRename(currentSummary)}
+					onSelect={() => void onSelectList(currentSummary.id)}
+					summary={currentSummary}
+				/>
+			) : null}
+			{listCount > 0 ? (
+				<View style={styles.sectionHeading}>
+					<Text style={styles.sectionTitle}>
+						{currentSummary ? "Other Lists" : "All Lists"}
+					</Text>
+					<Text style={styles.sectionCount}>{listCount}</Text>
+				</View>
+			) : null}
+		</View>
+	);
+}
+
+function CurrentListCard({
 	summary,
-	isCurrent,
 	onSelect,
 	onRename,
 	onDelete,
 }: {
 	summary: ListSummary;
-	isCurrent: boolean;
+	onSelect: () => void;
+	onRename: () => void;
+	onDelete: () => void;
+}) {
+	const { theme } = useUnistyles();
+
+	return (
+		<GlassSurface interactive style={styles.currentCard} tone="selected">
+			<View style={styles.currentCardHeader}>
+				<View style={styles.currentStatus}>
+					<View style={styles.currentCheck}>
+						<SymbolView
+							accessibilityElementsHidden
+							accessible={false}
+							name="checkmark"
+							size={12}
+							tintColor={theme.colors.primaryActionText}
+							weight="bold"
+						/>
+					</View>
+					<Text style={styles.currentLabel}>Current List</Text>
+				</View>
+				<ActionMenuButton
+					accessibilityLabel={`List actions for ${summary.name}`}
+					onPress={() => showListActions(summary, onRename, onDelete)}
+				/>
+			</View>
+			<Pressable
+				accessibilityHint="Opens the Current List"
+				accessibilityLabel={summary.name}
+				accessibilityRole="button"
+				accessibilityState={{ selected: true }}
+				onPress={onSelect}
+				style={({ pressed }) => [
+					styles.currentCardContent,
+					pressed ? styles.pressed : undefined,
+				]}
+			>
+				<Text numberOfLines={2} style={styles.currentName}>
+					{summary.name}
+				</Text>
+				<Text style={styles.listCounts}>{listCounts(summary)}</Text>
+				<View style={styles.openListLabel}>
+					<Text style={styles.openListText}>Open List</Text>
+					<SymbolView
+						accessibilityElementsHidden
+						accessible={false}
+						name="chevron.right"
+						size={14}
+						tintColor={theme.colors.textMuted}
+						weight="semibold"
+					/>
+				</View>
+			</Pressable>
+		</GlassSurface>
+	);
+}
+
+function ListRow({
+	summary,
+	groupPosition,
+	onSelect,
+	onRename,
+	onDelete,
+}: {
+	summary: ListSummary;
+	groupPosition: "only" | "first" | "middle" | "last";
 	onSelect: () => void;
 	onRename: () => void;
 	onDelete: () => void;
 }) {
 	return (
-		<View style={styles.row}>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel={summary.name}
-				accessibilityState={{ selected: isCurrent }}
-				onPress={onSelect}
-				style={({ pressed }) => [
-					styles.rowSelect,
-					pressed ? styles.pressed : undefined,
+		<SurfaceCard groupPosition={groupPosition}>
+			<View
+				style={[
+					styles.listRow,
+					groupPosition === "first" || groupPosition === "middle"
+						? styles.listRowDivider
+						: undefined,
 				]}
 			>
-				<View style={styles.rowTextGroup}>
-					<Text numberOfLines={1} style={styles.rowName}>
+				<Pressable
+					accessibilityHint="Makes this the Current List and opens it"
+					accessibilityLabel={summary.name}
+					accessibilityRole="button"
+					onPress={onSelect}
+					style={({ pressed }) => [
+						styles.listRowSelect,
+						pressed ? styles.pressed : undefined,
+					]}
+				>
+					<Text numberOfLines={1} style={styles.listRowName}>
 						{summary.name}
 					</Text>
-					<Text style={styles.rowCounts}>
-						{summary.uncheckedItemCount} unchecked · {summary.checkedItemCount}{" "}
-						checked
-					</Text>
-				</View>
-				{isCurrent ? <Text style={styles.currentBadge}>Current</Text> : null}
-			</Pressable>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel={`Rename ${summary.name}`}
-				onPress={onRename}
-				style={({ pressed }) => [
-					styles.rowAction,
-					pressed ? styles.pressed : undefined,
-				]}
-			>
-				<Text style={styles.rowActionLabel}>Rename</Text>
-			</Pressable>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel={`Delete ${summary.name}`}
-				onPress={onDelete}
-				style={({ pressed }) => [
-					styles.rowAction,
-					pressed ? styles.pressed : undefined,
-				]}
-			>
-				<Text style={[styles.rowActionLabel, styles.rowActionDestructive]}>
-					Delete
-				</Text>
-			</Pressable>
+					<Text style={styles.listRowCounts}>{listCounts(summary)}</Text>
+				</Pressable>
+				<ActionMenuButton
+					accessibilityLabel={`List actions for ${summary.name}`}
+					onPress={() => showListActions(summary, onRename, onDelete)}
+				/>
+			</View>
+		</SurfaceCard>
+	);
+}
+
+function NewListButton({ onPress }: { onPress: () => void }) {
+	return (
+		<View style={styles.newListButton}>
+			<AppButton fullWidth label="New List" onPress={onPress} symbol="plus" />
 		</View>
+	);
+}
+
+function listSummaryKey(summary: ListSummary): string {
+	return summary.id;
+}
+
+function listCounts(summary: ListSummary): string {
+	return `${summary.uncheckedItemCount} unchecked · ${summary.checkedItemCount} checked`;
+}
+
+function groupPosition(
+	index: number,
+	length: number,
+): "only" | "first" | "middle" | "last" {
+	if (length === 1) return "only";
+	if (index === 0) return "first";
+	if (index === length - 1) return "last";
+	return "middle";
+}
+
+function showListActions(
+	summary: ListSummary,
+	onRename: () => void,
+	onDelete: () => void,
+) {
+	ActionSheetIOS.showActionSheetWithOptions(
+		{
+			title: summary.name,
+			options: ["Cancel", "Rename", "Delete"],
+			cancelButtonIndex: 0,
+			destructiveButtonIndex: 2,
+		},
+		(index) => {
+			if (index === 1) onRename();
+			if (index === 2) onDelete();
+		},
 	);
 }
 
@@ -427,47 +578,31 @@ function ListNameForm({
 	}
 
 	return (
-		<View style={styles.formContent}>
-			<Text style={styles.title}>{title}</Text>
-			<TextInput
-				accessibilityLabel="List name"
-				autoFocus
-				value={name}
-				onChangeText={setName}
-				placeholder="List name"
-				returnKeyType="done"
-				onSubmitEditing={() => void submit()}
-				style={styles.nameInput}
-			/>
-			{error ? <Text style={styles.errorMessage}>{error}</Text> : null}
-			<View style={styles.formActions}>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ disabled: submitting }}
-					disabled={submitting}
-					onPress={onCancel}
-					style={({ pressed }) => [
-						styles.secondaryButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.secondaryButtonLabel}>Cancel</Text>
-				</Pressable>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ disabled: submitting }}
-					disabled={submitting}
-					onPress={() => void submit()}
-					style={({ pressed }) => [
-						styles.primaryButton,
-						styles.formSubmitButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.primaryButtonLabel}>{submitLabel}</Text>
-				</Pressable>
+		<GlassSurface style={styles.formSurface}>
+			<View style={styles.formContent}>
+				<Text style={styles.formTitle}>{title}</Text>
+				<TextInput
+					accessibilityLabel="List name"
+					autoFocus
+					value={name}
+					onChangeText={setName}
+					placeholder="List name"
+					returnKeyType="done"
+					onSubmitEditing={() => void submit()}
+					style={styles.nameInput}
+				/>
+				{error ? <Text style={styles.errorMessage}>{error}</Text> : null}
+				<View style={styles.formActions}>
+					<AppButton disabled={submitting} label="Cancel" onPress={onCancel} />
+					<AppButton
+						disabled={submitting}
+						label={submitLabel}
+						onPress={() => void submit()}
+						variant="primary"
+					/>
+				</View>
 			</View>
-		</View>
+		</GlassSurface>
 	);
 }
 
@@ -495,40 +630,24 @@ function ConfirmDeleteList({
 	}
 
 	return (
-		<View style={styles.formContent}>
-			<Text style={styles.title}>Delete List</Text>
-			<Text style={styles.confirmBody}>
-				{`Delete "${name}"? Its Items will no longer be available.`}
-			</Text>
-			{error ? <Text style={styles.errorMessage}>{error}</Text> : null}
-			<View style={styles.formActions}>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ disabled: deleting }}
-					disabled={deleting}
-					onPress={onCancel}
-					style={({ pressed }) => [
-						styles.secondaryButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.secondaryButtonLabel}>Cancel</Text>
-				</Pressable>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ disabled: deleting }}
-					disabled={deleting}
-					onPress={() => void confirm()}
-					style={({ pressed }) => [
-						styles.destructiveButton,
-						styles.formSubmitButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.destructiveButtonLabel}>Delete</Text>
-				</Pressable>
+		<GlassSurface style={styles.formSurface}>
+			<View style={styles.formContent}>
+				<Text style={styles.formTitle}>Delete List</Text>
+				<Text style={styles.confirmBody}>
+					{`Delete "${name}"? Its Items will no longer be available.`}
+				</Text>
+				{error ? <Text style={styles.errorMessage}>{error}</Text> : null}
+				<View style={styles.formActions}>
+					<AppButton disabled={deleting} label="Cancel" onPress={onCancel} />
+					<AppButton
+						disabled={deleting}
+						label="Delete"
+						onPress={() => void confirm()}
+						variant="destructive"
+					/>
+				</View>
 			</View>
-		</View>
+		</GlassSurface>
 	);
 }
 
@@ -568,19 +687,152 @@ function listNameValidationMessage(reason: ListNameValidationError): string {
 const styles = StyleSheet.create((theme) => ({
 	pageContent: {
 		flex: 1,
-		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(5),
-		paddingTop: theme.spacing(5),
+		paddingTop: theme.spacing(2),
+		paddingBottom: theme.spacing(2),
+	},
+	listLayout: {
+		flex: 1,
+	},
+	rowsScroll: {
+		flex: 1,
+	},
+	rowsContent: {
+		paddingBottom: theme.spacing(3),
+	},
+	collectionHeader: {
+		gap: theme.spacing(3),
+	},
+	currentCard: {
+		borderRadius: theme.radii.card,
+		borderCurve: "continuous",
+	},
+	currentCardHeader: {
+		minHeight: theme.spacing(11),
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(2),
+		paddingTop: theme.spacing(1),
+	},
+	currentStatus: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(2),
+	},
+	currentCheck: {
+		width: theme.spacing(5),
+		height: theme.spacing(5),
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: theme.radii.pill,
+		backgroundColor: theme.colors.primary,
+	},
+	currentLabel: {
+		...theme.typography.overline,
+		color: theme.colors.primary,
+		textTransform: "uppercase",
+	},
+	currentCardContent: {
+		minHeight: theme.spacing(26),
+		paddingHorizontal: theme.spacing(4),
+		paddingTop: theme.spacing(1),
 		paddingBottom: theme.spacing(4),
 	},
-	formContent: { gap: theme.spacing(3) },
-	title: { ...theme.typography.captionStrong, color: theme.colors.textMuted },
+	currentName: {
+		fontFamily: theme.fontFamilies.serif,
+		fontSize: theme.fontSizes.title,
+		color: theme.colors.text,
+	},
+	listCounts: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
+		marginTop: theme.spacing(1),
+	},
+	openListLabel: {
+		minHeight: theme.spacing(8),
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "flex-end",
+		gap: theme.spacing(2),
+		marginTop: theme.spacing(2),
+	},
+	openListText: {
+		...theme.typography.callout,
+		color: theme.colors.text,
+	},
+	sectionHeading: {
+		minHeight: theme.spacing(7),
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingHorizontal: theme.spacing(1),
+	},
+	sectionTitle: {
+		...theme.typography.overline,
+		color: theme.colors.textMuted,
+		textTransform: "uppercase",
+	},
+	sectionCount: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
+	},
+	listRow: {
+		minHeight: theme.spacing(14),
+		flexDirection: "row",
+		alignItems: "center",
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(2),
+	},
+	listRowDivider: {
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.divider,
+	},
+	listRowSelect: {
+		flex: 1,
+		minWidth: 0,
+		justifyContent: "center",
+		alignSelf: "stretch",
+		gap: theme.spacing(0.5),
+		paddingVertical: theme.spacing(2.5),
+	},
+	listRowName: {
+		...theme.typography.body,
+		color: theme.colors.text,
+	},
+	listRowCounts: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
+	},
+	newListButton: {
+		paddingTop: theme.spacing(3),
+	},
 	statusContainer: {
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		gap: theme.spacing(3),
 		paddingVertical: theme.spacing(6),
+	},
+	statusSurface: {
+		minWidth: "78%",
+		alignItems: "center",
+		justifyContent: "center",
+		padding: theme.spacing(5),
+		borderRadius: theme.radii.card,
+	},
+	formSurface: {
+		borderRadius: theme.radii.card,
+		borderCurve: "continuous",
+	},
+	formContent: {
+		gap: theme.spacing(4),
+		padding: theme.spacing(5),
+	},
+	formTitle: {
+		...theme.typography.headline,
+		fontFamily: theme.fontFamilies.serif,
+		color: theme.colors.text,
 	},
 	errorMessage: {
 		...theme.typography.callout,
@@ -589,7 +841,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	confirmBody: { ...theme.typography.callout, color: theme.colors.text },
 	nameInput: {
-		minHeight: theme.spacing(11),
+		minHeight: theme.spacing(12),
 		paddingHorizontal: theme.spacing(3.5),
 		borderRadius: theme.radii.control,
 		borderCurve: "continuous",
@@ -601,89 +853,9 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	formActions: {
 		flexDirection: "row",
+		flexWrap: "wrap",
 		justifyContent: "flex-end",
 		gap: theme.spacing(2),
-	},
-	formSubmitButton: { minWidth: theme.spacing(24) },
-	rowsScroll: { flex: 1 },
-	primaryButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.primary,
-	},
-	primaryButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.inverseText,
-		fontWeight: theme.fontWeights.bold,
-	},
-	secondaryButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
-	},
-	secondaryButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.text,
-		fontWeight: theme.fontWeights.bold,
-	},
-	destructiveButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.destructive,
-	},
-	destructiveButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.inverseText,
-		fontWeight: theme.fontWeights.bold,
-	},
-	row: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-		minHeight: theme.spacing(13),
-		paddingVertical: theme.spacing(2.5),
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.border,
-	},
-	rowSelect: {
-		flex: 1,
-		minWidth: 0,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: theme.spacing(3),
-	},
-	rowTextGroup: { flex: 1, minWidth: 0, gap: theme.spacing(0.5) },
-	rowName: { ...theme.typography.headline, color: theme.colors.text },
-	rowCounts: { ...theme.typography.caption, color: theme.colors.textMuted },
-	rowAction: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(1.5),
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	rowActionLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.primary,
-	},
-	rowActionDestructive: { color: theme.colors.destructive },
-	currentBadge: {
-		...theme.typography.captionStrong,
-		color: theme.colors.primary,
 	},
 	pressed: { opacity: theme.opacities.pressed },
 }));

@@ -5,6 +5,7 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
+import { ActionSheetIOS } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import {
@@ -24,6 +25,10 @@ import {
 } from "./use-product-services";
 
 const mockReplace = jest.fn();
+const mockShowActionSheet = jest.spyOn(
+	ActionSheetIOS,
+	"showActionSheetWithOptions",
+);
 
 jest.mock("expo-router", () => ({
 	useRouter: () => ({ replace: mockReplace }),
@@ -58,6 +63,7 @@ beforeEach(() => {
 	mockRenameList.mockReset();
 	mockDeleteList.mockReset();
 	mockListLists.mockReset();
+	mockShowActionSheet.mockReset();
 	jest.mocked(track).mockClear();
 	jest.mocked(setCurrentListSelection).mockReset().mockResolvedValue();
 	jest.mocked(clearCurrentListSelection).mockReset().mockResolvedValue();
@@ -98,7 +104,7 @@ describe("ListsScreen", () => {
 		});
 		await renderScreen();
 
-		expect(screen.getByText("Create List")).toBeTruthy();
+		expect(screen.getByText("New List")).toBeTruthy();
 	});
 
 	it("renders the error rows state", async () => {
@@ -113,7 +119,7 @@ describe("ListsScreen", () => {
 
 		expect(screen.getByText("Groceries")).toBeTruthy();
 		expect(screen.getByText("3 unchecked · 2 checked")).toBeTruthy();
-		expect(screen.getByText("Current")).toBeTruthy();
+		expect(screen.getByText("Current List")).toBeTruthy();
 	});
 
 	it("uses the current List without persisting or tracking a switch", async () => {
@@ -170,7 +176,7 @@ describe("ListsScreen", () => {
 		});
 		await renderScreen();
 
-		await fireEvent.press(screen.getByRole("button", { name: "Create List" }));
+		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
 		await fireEvent.changeText(screen.getByLabelText("List name"), "Hardware");
 		await fireEvent.press(screen.getByRole("button", { name: "Create" }));
 
@@ -204,7 +210,7 @@ describe("ListsScreen", () => {
 		await waitFor(() =>
 			expect(screen.queryByLabelText("List name")).toBeNull(),
 		);
-		const createButton = screen.getByRole("button", { name: "Create List" });
+		const createButton = screen.getByRole("button", { name: "New List" });
 		expect(mockReplace).not.toHaveBeenCalled();
 
 		await fireEvent.press(createButton);
@@ -220,11 +226,35 @@ describe("ListsScreen", () => {
 		});
 		await renderScreen();
 
-		await fireEvent.press(screen.getByRole("button", { name: "Create List" }));
+		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
 		await fireEvent.press(screen.getByRole("button", { name: "Create" }));
 
 		expect(await screen.findByText("List name is required.")).toBeTruthy();
 		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("renames a List from its native action menu", async () => {
+		mockRenameList.mockResolvedValue({
+			status: "available",
+			list: listFixture("lst_pantry", "Weekly Pantry"),
+			didWrite: true,
+		});
+		await renderScreen();
+
+		chooseListAction("Pantry", 1);
+		const listNameInput = await screen.findByLabelText("List name");
+		await fireEvent.changeText(listNameInput, "Weekly Pantry");
+		await fireEvent.press(screen.getByRole("button", { name: "Save" }));
+
+		await waitFor(() =>
+			expect(mockRenameList).toHaveBeenCalledWith({
+				listId: "lst_pantry",
+				name: "Weekly Pantry",
+			}),
+		);
+		expect(
+			screen.getByRole("button", { name: "List actions for Pantry" }),
+		).toBeTruthy();
 	});
 
 	it("repairs selection after deleting the current List", async () => {
@@ -238,10 +268,10 @@ describe("ListsScreen", () => {
 		mockListLists.mockResolvedValue([summariesFixture()[1]]);
 		await renderScreen();
 
+		chooseListAction("Groceries", 2);
 		await fireEvent.press(
-			screen.getByRole("button", { name: "Delete Groceries" }),
+			await screen.findByRole("button", { name: "Delete" }),
 		);
-		await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 
 		await waitFor(() =>
 			expect(mockListLists).toHaveBeenCalledWith({
@@ -273,10 +303,10 @@ describe("ListsScreen", () => {
 		mockListLists.mockResolvedValue([]);
 		await renderScreen();
 
+		chooseListAction("Groceries", 2);
 		await fireEvent.press(
-			screen.getByRole("button", { name: "Delete Groceries" }),
+			await screen.findByRole("button", { name: "Delete" }),
 		);
-		await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 
 		await waitFor(() =>
 			expect(clearCurrentListSelection).toHaveBeenCalledWith(
@@ -300,13 +330,15 @@ describe("ListsScreen", () => {
 		mockListLists.mockRejectedValue(new Error("database unavailable"));
 		await renderScreen();
 
+		chooseListAction("Groceries", 2);
 		await fireEvent.press(
-			screen.getByRole("button", { name: "Delete Groceries" }),
+			await screen.findByRole("button", { name: "Delete" }),
 		);
-		await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 
 		expect(
-			await screen.findByRole("button", { name: "Delete Groceries" }),
+			await screen.findByRole("button", {
+				name: "List actions for Groceries",
+			}),
 		).toBeTruthy();
 		expect(setCurrentListSelection).not.toHaveBeenCalled();
 		expect(clearCurrentListSelection).not.toHaveBeenCalled();
@@ -328,13 +360,15 @@ describe("ListsScreen", () => {
 			.mockRejectedValueOnce(new Error("storage unavailable"));
 		await renderScreen();
 
+		chooseListAction("Groceries", 2);
 		await fireEvent.press(
-			screen.getByRole("button", { name: "Delete Groceries" }),
+			await screen.findByRole("button", { name: "Delete" }),
 		);
-		await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
 
 		expect(
-			await screen.findByRole("button", { name: "Delete Groceries" }),
+			await screen.findByRole("button", {
+				name: "List actions for Groceries",
+			}),
 		).toBeTruthy();
 		expect(setCurrentListSelection).toHaveBeenCalledWith(
 			"usr_avery",
@@ -360,6 +394,19 @@ describe("ListsScreen", () => {
 
 function renderScreen() {
 	return render(<ListsScreen />, { wrapper: TestAppShellProvider });
+}
+
+function chooseListAction(listName: string, actionIndex: number) {
+	fireEvent.press(
+		screen.getByRole("button", { name: `List actions for ${listName}` }),
+	);
+	const selectAction = mockShowActionSheet.mock.calls.at(-1)?.[1];
+	if (!selectAction) throw new Error("Expected the List action menu to open.");
+	expect(mockShowActionSheet).toHaveBeenCalledWith(
+		expect.objectContaining({ options: ["Cancel", "Rename", "Delete"] }),
+		expect.any(Function),
+	);
+	selectAction(actionIndex);
 }
 
 function TestAppShellProvider({ children }: PropsWithChildren) {

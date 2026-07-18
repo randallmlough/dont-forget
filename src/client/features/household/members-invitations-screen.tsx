@@ -24,6 +24,7 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
+import { ActionMenuButton } from "@/client/ui/action-menu-button";
 import { AppButton } from "@/client/ui/app-button";
 import {
 	InitialsAvatar,
@@ -252,7 +253,7 @@ function MemberRow({
 				leading={<InitialsAvatar label={displayName} />}
 				trailing={
 					canManage ? (
-						<EllipsisButton
+						<ActionMenuButton
 							accessibilityLabel={`Manage ${displayName}`}
 							disabled={operation.status !== "idle"}
 							onPress={() => showMemberActions(member, actions)}
@@ -411,7 +412,7 @@ function InvitationRow({
 				label={label}
 				symbol="envelope"
 				trailing={
-					<EllipsisButton
+					<ActionMenuButton
 						accessibilityLabel={`Manage ${label}`}
 						disabled={revoking}
 						onPress={() => showInvitationActions(invitation, actions)}
@@ -419,41 +420,6 @@ function InvitationRow({
 				}
 			/>
 		</SurfaceCard>
-	);
-}
-
-function EllipsisButton({
-	accessibilityLabel,
-	disabled,
-	onPress,
-}: {
-	accessibilityLabel: string;
-	disabled: boolean;
-	onPress: () => void;
-}) {
-	const { theme } = useUnistyles();
-	return (
-		<Pressable
-			accessibilityLabel={accessibilityLabel}
-			accessibilityRole="button"
-			accessibilityState={{ disabled }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.iconButton,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<SymbolView
-				accessibilityElementsHidden
-				accessible={false}
-				name="ellipsis"
-				size={18}
-				tintColor={theme.colors.text}
-				weight="medium"
-			/>
-		</Pressable>
 	);
 }
 
@@ -762,15 +728,6 @@ const styles = StyleSheet.create((theme) => ({
 		gap: theme.spacing(2),
 		paddingHorizontal: theme.spacing(3),
 		paddingBottom: theme.spacing(3),
-	},
-	iconButton: {
-		minWidth: theme.spacing(11),
-		minHeight: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.border,
-		borderRadius: theme.radii.pill,
 	},
 	copyButton: {
 		width: theme.spacing(11),

@@ -39,6 +39,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Rows: Story = {};
 
+export const NoCurrentList: Story = {
+	args: { currentListId: null },
+};
+
 export const Empty: Story = {
 	args: { rows: { status: "ready", summaries: [] }, currentListId: null },
 };
@@ -57,8 +61,10 @@ function listSummaries(): ListSummary[] {
 		householdId: "hh_story",
 		name:
 			index === 0
-				? "Groceries and household essentials for the weekend"
-				: `List ${index + 1}`,
+				? "The Home Depot"
+				: index === 1
+					? "Groceries and household essentials for the weekend"
+					: `List ${index + 1}`,
 		createdByUserId: "usr_avery",
 		createdAt: index + 1,
 		updatedAt: index + 1,
@@ -79,11 +85,11 @@ function sessionFixture() {
 			firstName: "Avery",
 			lastName: "Chen",
 		},
-		activeHousehold: { id: "hh_story", name: "Juniper House" },
+		activeHousehold: { id: "hh_story", name: "Golden Pantry" },
 		households: [
 			{
 				id: "hh_story",
-				name: "Juniper House",
+				name: "Golden Pantry",
 				role: "owner" as const,
 				isActive: true,
 			},
