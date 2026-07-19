@@ -9,19 +9,22 @@ export type SurfaceSectionProps = {
 		label: string;
 		onPress: () => void;
 	};
-	children: ReactNode;
+	children?: ReactNode;
+	detail?: string;
 	title: string;
 };
 
 export function SurfaceSection({
 	action,
 	children,
+	detail,
 	title,
 }: SurfaceSectionProps) {
 	return (
 		<View style={styles.section}>
 			<View style={styles.sectionHeading}>
 				<Text style={styles.sectionTitle}>{title}</Text>
+				{detail ? <Text style={styles.sectionDetail}>{detail}</Text> : null}
 				{action ? (
 					<Pressable
 						accessibilityRole="button"
@@ -40,9 +43,18 @@ export function SurfaceSection({
 	);
 }
 
+export type GroupPosition = "only" | "first" | "middle" | "last";
+
+export function groupPosition(index: number, length: number): GroupPosition {
+	if (length === 1) return "only";
+	if (index === 0) return "first";
+	if (index === length - 1) return "last";
+	return "middle";
+}
+
 export type SurfaceCardProps = {
 	children: ReactNode;
-	groupPosition?: "only" | "first" | "middle" | "last";
+	groupPosition?: GroupPosition;
 	testID?: string;
 	tone?: "default" | "selected";
 };
@@ -215,6 +227,10 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.overline,
 		color: theme.colors.textMuted,
 		textTransform: "uppercase",
+	},
+	sectionDetail: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
 	},
 	sectionAction: {
 		minHeight: theme.spacing(11),

@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
+import { useMemo } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	FlatList,
 	Pressable,
 	Text,
@@ -32,7 +32,14 @@ import {
 } from "@/client/ui/action-menu-button";
 import { AppButton } from "@/client/ui/app-button";
 import { GlassSurface } from "@/client/ui/glass-surface";
-import { SurfaceCard } from "@/client/ui/settings-surface";
+import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
+import {
+	type GroupPosition,
+	groupPosition,
+	SurfaceCard,
+	SurfaceRow,
+	SurfaceSection,
+} from "@/client/ui/settings-surface";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";
 import { type ListRows, useListRows } from "./use-list-rows";
@@ -184,9 +191,6 @@ export function ListsScreenView({
 	onRenameList,
 	onDeleteList,
 }: ListsScreenViewProps) {
-	const { rt } = useUnistyles();
-	const userInterfaceStyle = rt.themeName === "dark" ? "dark" : "light";
-
 	return (
 		<ScreenScaffold label="Lists" title={session.activeHousehold.name}>
 			<View style={styles.pageContent}>
@@ -201,7 +205,6 @@ export function ListsScreenView({
 							initialName: "",
 							failureTitle: "Unable to Create List",
 							onSubmit: onCreateList,
-							userInterfaceStyle,
 						})
 					}
 					onRename={(summary) =>
@@ -211,16 +214,9 @@ export function ListsScreenView({
 							initialName: summary.name,
 							failureTitle: "Unable to Rename List",
 							onSubmit: (name) => onRenameList(summary.id, name),
-							userInterfaceStyle,
 						})
 					}
-					onDelete={(summary) =>
-						confirmListDeletion({
-							summary,
-							onDeleteList,
-							userInterfaceStyle,
-						})
-					}
+					onDelete={(summary) => confirmListDeletion({ summary, onDeleteList })}
 				/>
 			</View>
 		</ScreenScaffold>
@@ -242,9 +238,23 @@ function ListRowsView({
 	onRename: (summary: ListSummary) => void;
 	onDelete: (summary: ListSummary) => void;
 }) {
-	if (rows.status !== "ready") {
-		return (
-			<View style={styles.listLayout}>
+	const { currentSummary, otherSummaries } = useMemo(() => {
+		if (rows.status !== "ready") {
+			return { currentSummary: undefined, otherSummaries: [] };
+		}
+		return {
+			currentSummary: rows.summaries.find(
+				(summary) => summary.id === currentListId,
+			),
+			otherSummaries: rows.summaries.filter(
+				(summary) => summary.id !== currentListId,
+			),
+		};
+	}, [rows, currentListId]);
+
+	return (
+		<View style={styles.listLayout}>
+			{rows.status !== "ready" ? (
 				<View style={styles.statusContainer}>
 					<GlassSurface style={styles.statusSurface}>
 						{rows.status === "loading" ? (
@@ -256,81 +266,50 @@ function ListRowsView({
 						)}
 					</GlassSurface>
 				</View>
-				<NewListButton onPress={onCreate} />
-			</View>
-		);
-	}
-
-	const currentSummary = rows.summaries.find(
-		(summary) => summary.id === currentListId,
-	);
-	const otherSummaries = currentSummary
-		? rows.summaries.filter((summary) => summary.id !== currentSummary.id)
-		: rows.summaries;
-
-	return (
-		<View style={styles.listLayout}>
-			<FlatList
-				alwaysBounceVertical={false}
-				contentContainerStyle={styles.rowsContent}
-				data={otherSummaries}
-				keyExtractor={listSummaryKey}
-				ListHeaderComponent={
-					<ListCollectionHeader
-						currentSummary={currentSummary}
-						listCount={otherSummaries.length}
-						onDelete={onDelete}
-						onRename={onRename}
-						onSelectList={onSelectList}
-					/>
-				}
-				renderItem={({ index, item: summary }) => (
-					<ListRow
-						groupPosition={groupPosition(index, otherSummaries.length)}
-						onDelete={() => onDelete(summary)}
-						onRename={() => onRename(summary)}
-						onSelect={() => void onSelectList(summary.id)}
-						summary={summary}
-					/>
-				)}
-				style={styles.rowsScroll}
-			/>
-			<NewListButton onPress={onCreate} />
-		</View>
-	);
-}
-
-function ListCollectionHeader({
-	currentSummary,
-	listCount,
-	onSelectList,
-	onRename,
-	onDelete,
-}: {
-	currentSummary: ListSummary | undefined;
-	listCount: number;
-	onSelectList: (listId: string) => Promise<void>;
-	onRename: (summary: ListSummary) => void;
-	onDelete: (summary: ListSummary) => void;
-}) {
-	return (
-		<View style={styles.collectionHeader}>
-			{currentSummary ? (
-				<CurrentListCard
-					onDelete={() => onDelete(currentSummary)}
-					onRename={() => onRename(currentSummary)}
-					onSelect={() => void onSelectList(currentSummary.id)}
-					summary={currentSummary}
+			) : (
+				<FlatList
+					alwaysBounceVertical={false}
+					contentContainerStyle={styles.rowsContent}
+					data={otherSummaries}
+					keyExtractor={listSummaryKey}
+					ListHeaderComponent={
+						<View style={styles.collectionHeader}>
+							{currentSummary ? (
+								<CurrentListCard
+									onDelete={() => onDelete(currentSummary)}
+									onRename={() => onRename(currentSummary)}
+									onSelect={() => void onSelectList(currentSummary.id)}
+									summary={currentSummary}
+								/>
+							) : null}
+							{otherSummaries.length > 0 ? (
+								<SurfaceSection
+									detail={String(otherSummaries.length)}
+									title={currentSummary ? "Other Lists" : "All Lists"}
+								/>
+							) : null}
+						</View>
+					}
+					renderItem={({ index, item: summary }) => (
+						<ListRow
+							groupPosition={groupPosition(index, otherSummaries.length)}
+							onDelete={() => onDelete(summary)}
+							onRename={() => onRename(summary)}
+							onSelect={() => void onSelectList(summary.id)}
+							summary={summary}
+						/>
+					)}
+					style={styles.rowsScroll}
 				/>
-			) : null}
-			{listCount > 0 ? (
-				<View style={styles.sectionHeading}>
-					<Text style={styles.sectionTitle}>
-						{currentSummary ? "Other Lists" : "All Lists"}
-					</Text>
-					<Text style={styles.sectionCount}>{listCount}</Text>
-				</View>
-			) : null}
+			)}
+			<View style={styles.newListButton}>
+				<AppButton
+					fullWidth
+					label="New List"
+					onPress={onCreate}
+					symbol="plus"
+				/>
+			</View>
 		</View>
 	);
 }
@@ -408,50 +387,27 @@ function ListRow({
 	onDelete,
 }: {
 	summary: ListSummary;
-	groupPosition: "only" | "first" | "middle" | "last";
+	groupPosition: GroupPosition;
 	onSelect: () => void;
 	onRename: () => void;
 	onDelete: () => void;
 }) {
 	return (
 		<SurfaceCard groupPosition={groupPosition}>
-			<View
-				style={[
-					styles.listRow,
-					groupPosition === "first" || groupPosition === "middle"
-						? styles.listRowDivider
-						: undefined,
-				]}
-			>
-				<Pressable
-					accessibilityHint="Makes this the Current List and opens it"
-					accessibilityLabel={summary.name}
-					accessibilityRole="button"
-					onPress={onSelect}
-					style={({ pressed }) => [
-						styles.listRowSelect,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text numberOfLines={1} style={styles.listRowName}>
-						{summary.name}
-					</Text>
-					<Text style={styles.listRowCounts}>{listCounts(summary)}</Text>
-				</Pressable>
-				<ActionMenuButton
-					accessibilityLabel={`List actions for ${summary.name}`}
-					actions={listMenuActions(onRename, onDelete)}
-				/>
-			</View>
+			<SurfaceRow
+				accessibilityHint="Makes this the Current List and opens it"
+				detail={listCounts(summary)}
+				divider={groupPosition === "first" || groupPosition === "middle"}
+				label={summary.name}
+				onPress={onSelect}
+				trailing={
+					<ActionMenuButton
+						accessibilityLabel={`List actions for ${summary.name}`}
+						actions={listMenuActions(onRename, onDelete)}
+					/>
+				}
+			/>
 		</SurfaceCard>
-	);
-}
-
-function NewListButton({ onPress }: { onPress: () => void }) {
-	return (
-		<View style={styles.newListButton}>
-			<AppButton fullWidth label="New List" onPress={onPress} symbol="plus" />
-		</View>
 	);
 }
 
@@ -461,16 +417,6 @@ function listSummaryKey(summary: ListSummary): string {
 
 function listCounts(summary: ListSummary): string {
 	return `${summary.uncheckedItemCount} unchecked · ${summary.checkedItemCount} checked`;
-}
-
-function groupPosition(
-	index: number,
-	length: number,
-): "only" | "first" | "middle" | "last" {
-	if (length === 1) return "only";
-	if (index === 0) return "first";
-	if (index === length - 1) return "last";
-	return "middle";
 }
 
 function listMenuActions(
@@ -488,58 +434,46 @@ function listMenuActions(
 	];
 }
 
-type NativeDialogStyle = "light" | "dark";
-
 function promptForListName({
 	title,
 	initialName,
 	actionLabel,
 	failureTitle,
 	onSubmit,
-	userInterfaceStyle,
 }: {
 	title: string;
 	initialName: string;
 	actionLabel: string;
 	failureTitle: string;
 	onSubmit: (name: string) => Promise<MutationOutcome>;
-	userInterfaceStyle: NativeDialogStyle;
 }) {
-	Alert.prompt(
+	themedPrompt(
 		title,
-		undefined,
 		[
 			{ text: "Cancel", style: "cancel" },
 			{
 				text: actionLabel,
 				isPreferred: true,
-				onPress: (value?: string | { login: string; password: string }) => {
-					const name = typeof value === "string" ? value : "";
+				onPress: (value?: string) => {
 					void runListMutation({
 						failureTitle,
-						mutation: () => onSubmit(name),
-						userInterfaceStyle,
+						mutation: () => onSubmit(value ?? ""),
 					});
 				},
 			},
 		],
-		"plain-text",
 		initialName,
-		"default",
-		{ userInterfaceStyle },
 	);
 }
 
 function confirmListDeletion({
 	summary,
 	onDeleteList,
-	userInterfaceStyle,
 }: {
 	summary: ListSummary;
 	onDeleteList: (listId: string) => Promise<MutationOutcome>;
-	userInterfaceStyle: NativeDialogStyle;
 }) {
-	Alert.alert(
+	themedAlert(
 		"Delete List",
 		`Delete "${summary.name}"? Its Items will no longer be available.`,
 		[
@@ -551,38 +485,30 @@ function confirmListDeletion({
 					void runListMutation({
 						failureTitle: "Unable to Delete List",
 						mutation: () => onDeleteList(summary.id),
-						userInterfaceStyle,
 					});
 				},
 			},
 		],
-		{ userInterfaceStyle },
 	);
 }
 
 async function runListMutation({
 	mutation,
 	failureTitle,
-	userInterfaceStyle,
 }: {
 	mutation: () => Promise<MutationOutcome>;
 	failureTitle: string;
-	userInterfaceStyle: NativeDialogStyle;
 }) {
 	const outcome = await mutation();
 	if (outcome.status === "handled") return;
 	if (outcome.status === "selectionFailed") {
-		Alert.alert(
+		themedAlert(
 			"Unable to Open List",
 			"The List was created, but it could not be opened. Select it from Lists to try again.",
-			undefined,
-			{ userInterfaceStyle },
 		);
 		return;
 	}
-	Alert.alert(failureTitle, outcome.message, undefined, {
-		userInterfaceStyle,
-	});
+	themedAlert(failureTitle, outcome.message);
 }
 
 function ListsSessionState({
@@ -695,49 +621,6 @@ const styles = StyleSheet.create((theme) => ({
 	openListText: {
 		...theme.typography.callout,
 		color: theme.colors.text,
-	},
-	sectionHeading: {
-		minHeight: theme.spacing(7),
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: theme.spacing(1),
-	},
-	sectionTitle: {
-		...theme.typography.overline,
-		color: theme.colors.textMuted,
-		textTransform: "uppercase",
-	},
-	sectionCount: {
-		...theme.typography.caption,
-		color: theme.colors.textMuted,
-	},
-	listRow: {
-		minHeight: theme.spacing(14),
-		flexDirection: "row",
-		alignItems: "center",
-		paddingLeft: theme.spacing(4),
-		paddingRight: theme.spacing(2),
-	},
-	listRowDivider: {
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.divider,
-	},
-	listRowSelect: {
-		flex: 1,
-		minWidth: 0,
-		justifyContent: "center",
-		alignSelf: "stretch",
-		gap: theme.spacing(0.5),
-		paddingVertical: theme.spacing(2.5),
-	},
-	listRowName: {
-		...theme.typography.body,
-		color: theme.colors.text,
-	},
-	listRowCounts: {
-		...theme.typography.caption,
-		color: theme.colors.textMuted,
 	},
 	newListButton: {
 		paddingTop: theme.spacing(3),

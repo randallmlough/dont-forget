@@ -8,7 +8,9 @@ import {
 	labelStyle,
 	padding,
 } from "@expo/ui/swift-ui/modifiers";
+import { View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { nativeColorScheme } from "@/client/theme/native-color-scheme";
 
 export type ActionMenuItem = {
 	label: string;
@@ -29,46 +31,58 @@ export function ActionMenuButton({
 	disabled = false,
 }: ActionMenuButtonProps) {
 	const { rt, theme } = useUnistyles();
-	const colorScheme = rt.themeName === "dark" ? "dark" : "light";
+	const colorScheme = nativeColorScheme(rt.themeName);
 
 	return (
-		<Host colorScheme={colorScheme} style={styles.host}>
-			<Menu
-				label="Actions"
-				modifiers={[
-					accessibilityLabel(menuAccessibilityLabel),
-					disabledModifier(disabled),
-					labelStyle("iconOnly"),
-					foregroundStyle(theme.colors.text),
-					frame({
-						width: theme.spacing(8),
-						height: theme.spacing(8),
-					}),
-					glassEffect({
-						glass: { variant: "regular", interactive: true },
-						shape: "circle",
-					}),
-					padding({ all: theme.spacing(1.5) }),
-				]}
-				systemImage="ellipsis"
-			>
-				{actions.map((action) => (
-					<Button
-						key={action.label}
-						label={action.label}
-						onPress={action.onPress}
-						role={action.role}
-						systemImage={action.symbol}
-					/>
-				))}
-			</Menu>
-		</Host>
+		// The SwiftUI Host does not join RN's responder system, so an enclosing
+		// Pressable (e.g. SurfaceRow) would also fire on menu taps. Claiming the
+		// responder here keeps the touch from reaching that ancestor.
+		<View onStartShouldSetResponder={returnTrue} style={styles.host}>
+			<Host colorScheme={colorScheme} style={styles.hostFill}>
+				<Menu
+					label="Actions"
+					modifiers={[
+						accessibilityLabel(menuAccessibilityLabel),
+						disabledModifier(disabled),
+						labelStyle("iconOnly"),
+						foregroundStyle(theme.colors.text),
+						frame({
+							width: theme.spacing(8),
+							height: theme.spacing(8),
+						}),
+						glassEffect({
+							glass: { variant: "regular", interactive: true },
+							shape: "circle",
+						}),
+						padding({ all: theme.spacing(1.5) }),
+					]}
+					systemImage="ellipsis"
+				>
+					{actions.map((action) => (
+						<Button
+							key={action.label}
+							label={action.label}
+							onPress={action.onPress}
+							role={action.role}
+							systemImage={action.symbol}
+						/>
+					))}
+				</Menu>
+			</Host>
+		</View>
 	);
+}
+
+function returnTrue(): boolean {
+	return true;
 }
 
 const styles = StyleSheet.create((theme) => ({
 	host: {
 		width: theme.spacing(11),
 		height: theme.spacing(11),
+	},
+	hostFill: {
+		flex: 1,
 	},
 }));

@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import {
 	ActivityIndicator,
-	Alert,
 	FlatList,
 	Pressable,
 	Text,
@@ -28,7 +27,10 @@ import {
 	type ActionMenuItem,
 } from "@/client/ui/action-menu-button";
 import { AppButton } from "@/client/ui/app-button";
+import { themedAlert } from "@/client/ui/native-dialogs";
 import {
+	type GroupPosition,
+	groupPosition,
 	InitialsAvatar,
 	SurfaceCard,
 	SurfaceRow,
@@ -39,8 +41,6 @@ import {
 	type HouseholdSettingsState,
 	useHouseholdSettings,
 } from "./use-household-settings";
-
-type GroupPosition = "only" | "first" | "middle" | "last";
 
 type CollaborationRow =
 	| { type: "section"; id: string; title: string }
@@ -505,13 +505,6 @@ function collaborationRowKey(row: CollaborationRow): string {
 	}
 }
 
-function groupPosition(index: number, length: number): GroupPosition {
-	if (length === 1) return "only";
-	if (index === 0) return "first";
-	if (index === length - 1) return "last";
-	return "middle";
-}
-
 function memberMenuActions(
 	member: HouseholdMember,
 	actions: HouseholdSettingsActions,
@@ -559,7 +552,7 @@ function confirmRemoveMember(
 	member: HouseholdMember,
 	actions: HouseholdSettingsActions,
 ) {
-	Alert.alert(
+	themedAlert(
 		"Remove Member",
 		`Remove ${member.displayName ?? "this Member"} from this Household?`,
 		[
@@ -581,7 +574,7 @@ function confirmRoleChange(
 	actions: HouseholdSettingsActions,
 ) {
 	const actionLabel = role === "owner" ? "Make Owner" : "Make Member";
-	Alert.alert(
+	themedAlert(
 		actionLabel,
 		`Change ${member.displayName ?? "this Member"} to ${
 			role === "owner" ? "Owner" : "Member"
@@ -602,7 +595,7 @@ function confirmRevokeInvitation(
 	invitation: PendingInvitation,
 	actions: HouseholdSettingsActions,
 ) {
-	Alert.alert(
+	themedAlert(
 		"Revoke Invitation",
 		`Revoke the Invitation for ${invitation.email ?? "this recipient"}?`,
 		[
@@ -742,9 +735,6 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,
-	},
-	disabled: {
-		opacity: theme.opacities.disabled,
 	},
 	centered: {
 		flex: 1,

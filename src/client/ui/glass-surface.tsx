@@ -2,6 +2,7 @@ import { GlassView, isGlassEffectAPIAvailable } from "expo-glass-effect";
 import type { ReactNode } from "react";
 import { type StyleProp, View, type ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { nativeColorScheme } from "@/client/theme/native-color-scheme";
 
 const canRenderNativeGlass = isGlassEffectAPIAvailable();
 
@@ -21,7 +22,7 @@ export function GlassSurface({
 	tone = "default",
 }: GlassSurfaceProps) {
 	const { rt, theme } = useUnistyles();
-	const colorScheme = rt.themeName === "dark" ? "dark" : "light";
+	const colorScheme = nativeColorScheme(rt.themeName);
 	const toneStyle =
 		tone === "selected" ? styles.selectedSurface : styles.defaultSurface;
 
