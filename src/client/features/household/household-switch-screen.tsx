@@ -18,6 +18,8 @@ import {
 } from "@/client/session";
 import { AppButton } from "@/client/ui/app-button";
 import {
+	type GroupPosition,
+	groupPosition,
 	InitialsAvatar,
 	SurfaceCard,
 	SurfaceRow,
@@ -134,7 +136,7 @@ function HouseholdListRow({
 }: {
 	household: HouseholdRow;
 	operation: HouseholdSwitchOperation;
-	position: "only" | "first" | "middle" | "last";
+	position: GroupPosition;
 	onSwitchHousehold: (householdId: string) => void;
 }) {
 	const busy = operation.status !== "idle";
@@ -366,16 +368,6 @@ function CenteredStatus({
 			{children}
 		</View>
 	);
-}
-
-function groupPosition(
-	index: number,
-	length: number,
-): "only" | "first" | "middle" | "last" {
-	if (length === 1) return "only";
-	if (index === 0) return "first";
-	if (index === length - 1) return "last";
-	return "middle";
 }
 
 const styles = StyleSheet.create((theme) => ({

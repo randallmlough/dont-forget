@@ -1,14 +1,14 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { SymbolView } from "expo-symbols";
+import { useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
 	Pressable,
 	Text,
-	TextInput,
 	View,
 } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
 	clearCurrentListSelection,
@@ -26,16 +26,35 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
+import {
+	ActionMenuButton,
+	type ActionMenuItem,
+} from "@/client/ui/action-menu-button";
+import { AppButton } from "@/client/ui/app-button";
+import { GlassSurface } from "@/client/ui/glass-surface";
+import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
+import {
+	type GroupPosition,
+	groupPosition,
+	SurfaceCard,
+	SurfaceRow,
+	SurfaceSection,
+} from "@/client/ui/settings-surface";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";
 import { type ListRows, useListRows } from "./use-list-rows";
 import { useProductServices } from "./use-product-services";
 import { useSelectList } from "./use-select-list";
 
-type MutationOutcome =
+type ListMutationOutcome =
 	| { status: "handled" }
-	| { status: "selectionFailed" }
 	| { status: "error"; message: string };
+
+type CreateListMutationOutcome =
+	| ListMutationOutcome
+	| { status: "selectionFailed" };
+
+type GuardedListMutationOutcome = ListMutationOutcome | { status: "ignored" };
 
 export default function ListsScreen() {
 	const { state, session, retry } = useAuthenticatedAppSession();
@@ -72,7 +91,7 @@ function ListsScreenResource({
 		if (await selectList(listId, currentListId)) router.replace("/");
 	}
 
-	async function create(name: string): Promise<MutationOutcome> {
+	async function create(name: string): Promise<CreateListMutationOutcome> {
 		let result: CreateListResult;
 		try {
 			result = await services.lists.createList({ name });
@@ -97,7 +116,7 @@ function ListsScreenResource({
 	async function rename(
 		listId: string,
 		name: string,
-	): Promise<MutationOutcome> {
+	): Promise<ListMutationOutcome> {
 		let result: RenameListResult;
 		try {
 			result = await services.lists.renameList({ listId, name });
@@ -116,7 +135,7 @@ function ListsScreenResource({
 		return { status: "handled" };
 	}
 
-	async function deleteList(listId: string): Promise<MutationOutcome> {
+	async function deleteList(listId: string): Promise<ListMutationOutcome> {
 		let result: DeleteListResult;
 		try {
 			result = await services.lists.deleteList({ listId });
@@ -163,9 +182,9 @@ export type ListsScreenViewProps = {
 	rows: ListRows;
 	currentListId: string | null;
 	onSelectList: (listId: string) => Promise<void>;
-	onCreateList: (name: string) => Promise<MutationOutcome>;
-	onRenameList: (listId: string, name: string) => Promise<MutationOutcome>;
-	onDeleteList: (listId: string) => Promise<MutationOutcome>;
+	onCreateList: (name: string) => Promise<CreateListMutationOutcome>;
+	onRenameList: (listId: string, name: string) => Promise<ListMutationOutcome>;
+	onDeleteList: (listId: string) => Promise<ListMutationOutcome>;
 };
 
 export function ListsScreenView({
@@ -177,110 +196,79 @@ export function ListsScreenView({
 	onRenameList,
 	onDeleteList,
 }: ListsScreenViewProps) {
-	const [mode, setMode] = useState<ListsMode>({ kind: "rows" });
-	const [emptyCreateDismissed, setEmptyCreateDismissed] = useState(false);
-	const showAutomaticCreate =
-		mode.kind === "rows" &&
-		rows.status === "ready" &&
-		rows.summaries.length === 0 &&
-		!emptyCreateDismissed;
+	const listMutationInFlight = useRef(false);
+	const [listMutationPending, setListMutationPending] = useState(false);
 
-	async function submitCreate(name: string): Promise<string | null> {
-		const outcome = await onCreateList(name);
-		if (outcome.status === "error") return outcome.message;
-		if (outcome.status === "selectionFailed") {
-			setEmptyCreateDismissed(true);
-			setMode({ kind: "rows" });
+	async function runListMutation<TOutcome>(
+		mutation: () => Promise<TOutcome>,
+	): Promise<TOutcome | { status: "ignored" }> {
+		if (listMutationInFlight.current) return { status: "ignored" };
+
+		listMutationInFlight.current = true;
+		setListMutationPending(true);
+		try {
+			return await mutation();
+		} finally {
+			listMutationInFlight.current = false;
+			setListMutationPending(false);
 		}
-		return null;
 	}
 
-	async function submitRename(
-		listId: string,
-		name: string,
-	): Promise<string | null> {
-		const outcome = await onRenameList(listId, name);
-		if (outcome.status === "error") return outcome.message;
-		setMode({ kind: "rows" });
-		return null;
-	}
+	async function createList(name: string): Promise<GuardedListMutationOutcome> {
+		const outcome = await runListMutation(() => onCreateList(name));
+		if (outcome.status !== "selectionFailed") return outcome;
 
-	async function submitDelete(listId: string): Promise<string | null> {
-		const outcome = await onDeleteList(listId);
-		if (outcome.status === "error") return outcome.message;
-		setMode({ kind: "rows" });
-		return null;
+		themedAlert(
+			"Unable to Open List",
+			"The List was created, but it could not be opened. Select it from Lists to try again.",
+		);
+		return { status: "handled" };
 	}
 
 	return (
 		<ScreenScaffold label="Lists" title={session.activeHousehold.name}>
 			<View style={styles.pageContent}>
-				{showAutomaticCreate ? (
-					<ListNameForm
-						title="Create List"
-						initialName=""
-						submitLabel="Create"
-						onSubmit={submitCreate}
-						onCancel={() => setEmptyCreateDismissed(true)}
-					/>
-				) : mode.kind === "create" ? (
-					<ListNameForm
-						title="Create List"
-						initialName=""
-						submitLabel="Create"
-						onSubmit={submitCreate}
-						onCancel={() => setMode({ kind: "rows" })}
-					/>
-				) : mode.kind === "rename" ? (
-					<ListNameForm
-						title="Rename List"
-						initialName={mode.name}
-						submitLabel="Save"
-						onSubmit={(name) => submitRename(mode.listId, name)}
-						onCancel={() => setMode({ kind: "rows" })}
-					/>
-				) : mode.kind === "confirmDelete" ? (
-					<ConfirmDeleteList
-						name={mode.name}
-						onConfirm={() => submitDelete(mode.listId)}
-						onCancel={() => setMode({ kind: "rows" })}
-					/>
-				) : (
-					<ListRowsView
-						rows={rows}
-						currentListId={currentListId}
-						onSelectList={onSelectList}
-						onCreate={() => setMode({ kind: "create" })}
-						onRename={(summary) =>
-							setMode({
-								kind: "rename",
-								listId: summary.id,
-								name: summary.name,
-							})
-						}
-						onDelete={(summary) =>
-							setMode({
-								kind: "confirmDelete",
-								listId: summary.id,
-								name: summary.name,
-							})
-						}
-					/>
-				)}
+				<ListRowsView
+					rows={rows}
+					currentListId={currentListId}
+					listMutationPending={listMutationPending}
+					onSelectList={onSelectList}
+					onCreate={() =>
+						promptForListName({
+							title: "Create List",
+							actionLabel: "Create",
+							initialName: "",
+							failureTitle: "Unable to Create List",
+							onSubmit: createList,
+						})
+					}
+					onRename={(summary) =>
+						promptForListName({
+							title: "Rename List",
+							actionLabel: "Save",
+							initialName: summary.name,
+							failureTitle: "Unable to Rename List",
+							onSubmit: (name) =>
+								runListMutation(() => onRenameList(summary.id, name)),
+						})
+					}
+					onDelete={(summary) =>
+						confirmListDeletion({
+							summary,
+							onDeleteList: (listId) =>
+								runListMutation(() => onDeleteList(listId)),
+						})
+					}
+				/>
 			</View>
 		</ScreenScaffold>
 	);
 }
 
-type ListsMode =
-	| { kind: "rows" }
-	| { kind: "create" }
-	| { kind: "rename"; listId: string; name: string }
-	| { kind: "confirmDelete"; listId: string; name: string };
-
 function ListRowsView({
 	rows,
 	currentListId,
+	listMutationPending,
 	onSelectList,
 	onCreate,
 	onRename,
@@ -288,248 +276,325 @@ function ListRowsView({
 }: {
 	rows: ListRows;
 	currentListId: string | null;
+	listMutationPending: boolean;
 	onSelectList: (listId: string) => Promise<void>;
 	onCreate: () => void;
 	onRename: (summary: ListSummary) => void;
 	onDelete: (summary: ListSummary) => void;
 }) {
+	const { currentSummary, otherSummaries } = useMemo(() => {
+		if (rows.status !== "ready") {
+			return { currentSummary: undefined, otherSummaries: [] };
+		}
+		return {
+			currentSummary: rows.summaries.find(
+				(summary) => summary.id === currentListId,
+			),
+			otherSummaries: rows.summaries.filter(
+				(summary) => summary.id !== currentListId,
+			),
+		};
+	}, [rows, currentListId]);
+
 	return (
-		<>
-			{rows.status === "loading" ? (
+		<View style={styles.listLayout}>
+			{rows.status !== "ready" ? (
 				<View style={styles.statusContainer}>
-					<ActivityIndicator />
-				</View>
-			) : rows.status === "error" ? (
-				<View style={styles.statusContainer}>
-					<Text style={styles.errorMessage}>Unable to load your Lists.</Text>
+					<GlassSurface style={styles.statusSurface}>
+						{rows.status === "loading" ? (
+							<ActivityIndicator />
+						) : (
+							<Text style={styles.errorMessage}>
+								Unable to load your Lists.
+							</Text>
+						)}
+					</GlassSurface>
 				</View>
 			) : (
 				<FlatList
 					alwaysBounceVertical={false}
-					data={rows.summaries}
-					keyExtractor={(summary) => summary.id}
-					renderItem={({ item: summary }) => (
+					contentContainerStyle={styles.rowsContent}
+					data={otherSummaries}
+					keyExtractor={listSummaryKey}
+					ListHeaderComponent={
+						<View style={styles.collectionHeader}>
+							{currentSummary ? (
+								<CurrentListCard
+									actionsDisabled={listMutationPending}
+									onDelete={() => onDelete(currentSummary)}
+									onRename={() => onRename(currentSummary)}
+									onSelect={() => void onSelectList(currentSummary.id)}
+									summary={currentSummary}
+								/>
+							) : null}
+							{otherSummaries.length > 0 ? (
+								<SurfaceSection
+									detail={String(otherSummaries.length)}
+									title={currentSummary ? "Other Lists" : "All Lists"}
+								/>
+							) : null}
+						</View>
+					}
+					renderItem={({ index, item: summary }) => (
 						<ListRow
-							summary={summary}
-							isCurrent={summary.id === currentListId}
-							onSelect={() => void onSelectList(summary.id)}
-							onRename={() => onRename(summary)}
+							actionsDisabled={listMutationPending}
+							groupPosition={groupPosition(index, otherSummaries.length)}
 							onDelete={() => onDelete(summary)}
+							onRename={() => onRename(summary)}
+							onSelect={() => void onSelectList(summary.id)}
+							summary={summary}
 						/>
 					)}
 					style={styles.rowsScroll}
 				/>
 			)}
-			<Pressable
-				accessibilityRole="button"
-				onPress={onCreate}
-				style={({ pressed }) => [
-					styles.primaryButton,
-					pressed ? styles.pressed : undefined,
-				]}
-			>
-				<Text style={styles.primaryButtonLabel}>Create List</Text>
-			</Pressable>
-		</>
+			<View style={styles.newListButton}>
+				<AppButton
+					disabled={listMutationPending}
+					fullWidth
+					label="New List"
+					onPress={onCreate}
+					symbol="plus"
+				/>
+			</View>
+		</View>
 	);
 }
 
-function ListRow({
+function CurrentListCard({
 	summary,
-	isCurrent,
+	actionsDisabled,
 	onSelect,
 	onRename,
 	onDelete,
 }: {
 	summary: ListSummary;
-	isCurrent: boolean;
+	actionsDisabled: boolean;
+	onSelect: () => void;
+	onRename: () => void;
+	onDelete: () => void;
+}) {
+	const { theme } = useUnistyles();
+
+	return (
+		<GlassSurface interactive style={styles.currentCard} tone="selected">
+			<View style={styles.currentCardHeader}>
+				<View style={styles.currentStatus}>
+					<View style={styles.currentCheck}>
+						<SymbolView
+							accessibilityElementsHidden
+							accessible={false}
+							name="checkmark"
+							size={12}
+							tintColor={theme.colors.primaryActionText}
+							weight="bold"
+						/>
+					</View>
+					<Text style={styles.currentLabel}>Current List</Text>
+				</View>
+				<ActionMenuButton
+					accessibilityLabel={`List actions for ${summary.name}`}
+					actions={listMenuActions(onRename, onDelete)}
+					disabled={actionsDisabled}
+				/>
+			</View>
+			<Pressable
+				accessibilityHint="Opens the Current List"
+				accessibilityLabel={summary.name}
+				accessibilityRole="button"
+				accessibilityState={{ selected: true }}
+				onPress={onSelect}
+				style={({ pressed }) => [
+					styles.currentCardContent,
+					pressed ? styles.pressed : undefined,
+				]}
+			>
+				<Text numberOfLines={2} style={styles.currentName}>
+					{summary.name}
+				</Text>
+				<Text style={styles.listCounts}>{listCounts(summary)}</Text>
+				<View style={styles.openListLabel}>
+					<Text style={styles.openListText}>Open List</Text>
+					<SymbolView
+						accessibilityElementsHidden
+						accessible={false}
+						name="chevron.right"
+						size={14}
+						tintColor={theme.colors.textMuted}
+						weight="semibold"
+					/>
+				</View>
+			</Pressable>
+		</GlassSurface>
+	);
+}
+
+function ListRow({
+	summary,
+	groupPosition,
+	actionsDisabled,
+	onSelect,
+	onRename,
+	onDelete,
+}: {
+	summary: ListSummary;
+	groupPosition: GroupPosition;
+	actionsDisabled: boolean;
 	onSelect: () => void;
 	onRename: () => void;
 	onDelete: () => void;
 }) {
 	return (
-		<View style={styles.row}>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel={summary.name}
-				accessibilityState={{ selected: isCurrent }}
+		<SurfaceCard groupPosition={groupPosition}>
+			<SurfaceRow
+				accessibilityHint="Makes this the Current List and opens it"
+				detail={listCounts(summary)}
+				divider={groupPosition === "first" || groupPosition === "middle"}
+				label={summary.name}
 				onPress={onSelect}
-				style={({ pressed }) => [
-					styles.rowSelect,
-					pressed ? styles.pressed : undefined,
-				]}
-			>
-				<View style={styles.rowTextGroup}>
-					<Text numberOfLines={1} style={styles.rowName}>
-						{summary.name}
-					</Text>
-					<Text style={styles.rowCounts}>
-						{summary.uncheckedItemCount} unchecked · {summary.checkedItemCount}{" "}
-						checked
-					</Text>
-				</View>
-				{isCurrent ? <Text style={styles.currentBadge}>Current</Text> : null}
-			</Pressable>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel={`Rename ${summary.name}`}
-				onPress={onRename}
-				style={({ pressed }) => [
-					styles.rowAction,
-					pressed ? styles.pressed : undefined,
-				]}
-			>
-				<Text style={styles.rowActionLabel}>Rename</Text>
-			</Pressable>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel={`Delete ${summary.name}`}
-				onPress={onDelete}
-				style={({ pressed }) => [
-					styles.rowAction,
-					pressed ? styles.pressed : undefined,
-				]}
-			>
-				<Text style={[styles.rowActionLabel, styles.rowActionDestructive]}>
-					Delete
-				</Text>
-			</Pressable>
-		</View>
+				trailing={
+					<ActionMenuButton
+						accessibilityLabel={`List actions for ${summary.name}`}
+						actions={listMenuActions(onRename, onDelete)}
+						disabled={actionsDisabled}
+					/>
+				}
+			/>
+		</SurfaceCard>
 	);
 }
 
-function ListNameForm({
+function listSummaryKey(summary: ListSummary): string {
+	return summary.id;
+}
+
+function listCounts(summary: ListSummary): string {
+	return `${summary.uncheckedItemCount} unchecked · ${summary.checkedItemCount} checked`;
+}
+
+function listMenuActions(
+	onRename: () => void,
+	onDelete: () => void,
+): ActionMenuItem[] {
+	return [
+		{ label: "Rename", symbol: "pencil", onPress: onRename },
+		{
+			label: "Delete",
+			symbol: "trash",
+			role: "destructive",
+			onPress: onDelete,
+		},
+	];
+}
+
+function promptForListName({
 	title,
 	initialName,
-	submitLabel,
+	actionLabel,
+	failureTitle,
 	onSubmit,
-	onCancel,
 }: {
 	title: string;
 	initialName: string;
-	submitLabel: string;
-	onSubmit: (name: string) => Promise<string | null>;
-	onCancel: () => void;
+	actionLabel: string;
+	failureTitle: string;
+	onSubmit: (name: string) => Promise<GuardedListMutationOutcome>;
 }) {
-	const [name, setName] = useState(initialName);
-	const [error, setError] = useState<string | null>(null);
-	const [submitting, setSubmitting] = useState(false);
-
-	async function submit() {
-		if (submitting) return;
-		setSubmitting(true);
-		setError(null);
-		const failure = await onSubmit(name);
-		if (failure !== null) {
-			setError(failure);
-			setSubmitting(false);
-		}
-	}
-
-	return (
-		<View style={styles.formContent}>
-			<Text style={styles.title}>{title}</Text>
-			<TextInput
-				accessibilityLabel="List name"
-				autoFocus
-				value={name}
-				onChangeText={setName}
-				placeholder="List name"
-				returnKeyType="done"
-				onSubmitEditing={() => void submit()}
-				style={styles.nameInput}
-			/>
-			{error ? <Text style={styles.errorMessage}>{error}</Text> : null}
-			<View style={styles.formActions}>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ disabled: submitting }}
-					disabled={submitting}
-					onPress={onCancel}
-					style={({ pressed }) => [
-						styles.secondaryButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.secondaryButtonLabel}>Cancel</Text>
-				</Pressable>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ disabled: submitting }}
-					disabled={submitting}
-					onPress={() => void submit()}
-					style={({ pressed }) => [
-						styles.primaryButton,
-						styles.formSubmitButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.primaryButtonLabel}>{submitLabel}</Text>
-				</Pressable>
-			</View>
-		</View>
+	themedPrompt(
+		title,
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: actionLabel,
+				isPreferred: true,
+				onPress: (value?: string) => {
+					const attemptedName = value ?? "";
+					void submitListNamePrompt({
+						title,
+						actionLabel,
+						attemptedName,
+						failureTitle,
+						onSubmit,
+					});
+				},
+			},
+		],
+		initialName,
 	);
 }
 
-function ConfirmDeleteList({
-	name,
-	onConfirm,
-	onCancel,
+async function submitListNamePrompt({
+	title,
+	actionLabel,
+	attemptedName,
+	failureTitle,
+	onSubmit,
 }: {
-	name: string;
-	onConfirm: () => Promise<string | null>;
-	onCancel: () => void;
+	title: string;
+	actionLabel: string;
+	attemptedName: string;
+	failureTitle: string;
+	onSubmit: (name: string) => Promise<GuardedListMutationOutcome>;
 }) {
-	const [error, setError] = useState<string | null>(null);
-	const [deleting, setDeleting] = useState(false);
+	const outcome = await onSubmit(attemptedName);
+	showListMutationError({
+		outcome,
+		failureTitle,
+		buttons: [
+			{
+				text: "OK",
+				onPress: () =>
+					promptForListName({
+						title,
+						actionLabel,
+						initialName: attemptedName,
+						failureTitle,
+						onSubmit,
+					}),
+			},
+		],
+	});
+}
 
-	async function confirm() {
-		if (deleting) return;
-		setDeleting(true);
-		setError(null);
-		const failure = await onConfirm();
-		if (failure !== null) {
-			setError(failure);
-			setDeleting(false);
-		}
-	}
-
-	return (
-		<View style={styles.formContent}>
-			<Text style={styles.title}>Delete List</Text>
-			<Text style={styles.confirmBody}>
-				{`Delete "${name}"? Its Items will no longer be available.`}
-			</Text>
-			{error ? <Text style={styles.errorMessage}>{error}</Text> : null}
-			<View style={styles.formActions}>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ disabled: deleting }}
-					disabled={deleting}
-					onPress={onCancel}
-					style={({ pressed }) => [
-						styles.secondaryButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.secondaryButtonLabel}>Cancel</Text>
-				</Pressable>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{ disabled: deleting }}
-					disabled={deleting}
-					onPress={() => void confirm()}
-					style={({ pressed }) => [
-						styles.destructiveButton,
-						styles.formSubmitButton,
-						pressed ? styles.pressed : undefined,
-					]}
-				>
-					<Text style={styles.destructiveButtonLabel}>Delete</Text>
-				</Pressable>
-			</View>
-		</View>
+function confirmListDeletion({
+	summary,
+	onDeleteList,
+}: {
+	summary: ListSummary;
+	onDeleteList: (listId: string) => Promise<GuardedListMutationOutcome>;
+}) {
+	themedAlert(
+		"Delete List",
+		`Delete "${summary.name}"? Its Items will no longer be available.`,
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Delete",
+				style: "destructive",
+				onPress: () =>
+					void onDeleteList(summary.id).then((outcome) =>
+						showListMutationError({
+							outcome,
+							failureTitle: "Unable to Delete List",
+						}),
+					),
+			},
+		],
 	);
+}
+
+function showListMutationError({
+	outcome,
+	failureTitle,
+	buttons,
+}: {
+	outcome: GuardedListMutationOutcome;
+	failureTitle: string;
+	buttons?: Parameters<typeof themedAlert>[2];
+}) {
+	if (outcome.status === "error") {
+		themedAlert(failureTitle, outcome.message, buttons);
+	}
 }
 
 function ListsSessionState({
@@ -568,122 +633,101 @@ function listNameValidationMessage(reason: ListNameValidationError): string {
 const styles = StyleSheet.create((theme) => ({
 	pageContent: {
 		flex: 1,
-		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(5),
-		paddingTop: theme.spacing(5),
+		paddingTop: theme.spacing(2),
+		paddingBottom: theme.spacing(2),
+	},
+	listLayout: {
+		flex: 1,
+	},
+	rowsScroll: {
+		flex: 1,
+	},
+	rowsContent: {
+		paddingBottom: theme.spacing(3),
+	},
+	collectionHeader: {
+		gap: theme.spacing(3),
+	},
+	currentCard: {
+		borderRadius: theme.radii.card,
+		borderCurve: "continuous",
+	},
+	currentCardHeader: {
+		minHeight: theme.spacing(11),
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(2),
+		paddingTop: theme.spacing(1),
+	},
+	currentStatus: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(2),
+	},
+	currentCheck: {
+		width: theme.spacing(5),
+		height: theme.spacing(5),
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: theme.radii.pill,
+		backgroundColor: theme.colors.primary,
+	},
+	currentLabel: {
+		...theme.typography.overline,
+		color: theme.colors.primary,
+		textTransform: "uppercase",
+	},
+	currentCardContent: {
+		minHeight: theme.spacing(26),
+		paddingHorizontal: theme.spacing(4),
+		paddingTop: theme.spacing(1),
 		paddingBottom: theme.spacing(4),
 	},
-	formContent: { gap: theme.spacing(3) },
-	title: { ...theme.typography.captionStrong, color: theme.colors.textMuted },
+	currentName: {
+		fontFamily: theme.fontFamilies.serif,
+		fontSize: theme.fontSizes.title,
+		color: theme.colors.text,
+	},
+	listCounts: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
+		marginTop: theme.spacing(1),
+	},
+	openListLabel: {
+		minHeight: theme.spacing(8),
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "flex-end",
+		gap: theme.spacing(2),
+		marginTop: theme.spacing(2),
+	},
+	openListText: {
+		...theme.typography.callout,
+		color: theme.colors.text,
+	},
+	newListButton: {
+		paddingTop: theme.spacing(3),
+	},
 	statusContainer: {
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
-		gap: theme.spacing(3),
 		paddingVertical: theme.spacing(6),
+	},
+	statusSurface: {
+		minWidth: "78%",
+		alignItems: "center",
+		justifyContent: "center",
+		padding: theme.spacing(5),
+		borderRadius: theme.radii.card,
 	},
 	errorMessage: {
 		...theme.typography.callout,
 		color: theme.colors.destructive,
 		textAlign: "center",
-	},
-	confirmBody: { ...theme.typography.callout, color: theme.colors.text },
-	nameInput: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.background,
-		color: theme.colors.text,
-		fontSize: theme.fontSizes.body,
-	},
-	formActions: {
-		flexDirection: "row",
-		justifyContent: "flex-end",
-		gap: theme.spacing(2),
-	},
-	formSubmitButton: { minWidth: theme.spacing(24) },
-	rowsScroll: { flex: 1 },
-	primaryButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.primary,
-	},
-	primaryButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.inverseText,
-		fontWeight: theme.fontWeights.bold,
-	},
-	secondaryButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
-	},
-	secondaryButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.text,
-		fontWeight: theme.fontWeights.bold,
-	},
-	destructiveButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3.5),
-		borderRadius: theme.radii.control,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.destructive,
-	},
-	destructiveButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.inverseText,
-		fontWeight: theme.fontWeights.bold,
-	},
-	row: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-		minHeight: theme.spacing(13),
-		paddingVertical: theme.spacing(2.5),
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.border,
-	},
-	rowSelect: {
-		flex: 1,
-		minWidth: 0,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: theme.spacing(3),
-	},
-	rowTextGroup: { flex: 1, minWidth: 0, gap: theme.spacing(0.5) },
-	rowName: { ...theme.typography.headline, color: theme.colors.text },
-	rowCounts: { ...theme.typography.caption, color: theme.colors.textMuted },
-	rowAction: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(1.5),
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	rowActionLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.primary,
-	},
-	rowActionDestructive: { color: theme.colors.destructive },
-	currentBadge: {
-		...theme.typography.captionStrong,
-		color: theme.colors.primary,
 	},
 	pressed: { opacity: theme.opacities.pressed },
 }));

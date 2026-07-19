@@ -9,19 +9,22 @@ export type SurfaceSectionProps = {
 		label: string;
 		onPress: () => void;
 	};
-	children: ReactNode;
+	children?: ReactNode;
+	detail?: string;
 	title: string;
 };
 
 export function SurfaceSection({
 	action,
 	children,
+	detail,
 	title,
 }: SurfaceSectionProps) {
 	return (
 		<View style={styles.section}>
 			<View style={styles.sectionHeading}>
 				<Text style={styles.sectionTitle}>{title}</Text>
+				{detail ? <Text style={styles.sectionDetail}>{detail}</Text> : null}
 				{action ? (
 					<Pressable
 						accessibilityRole="button"
@@ -40,9 +43,18 @@ export function SurfaceSection({
 	);
 }
 
+export type GroupPosition = "only" | "first" | "middle" | "last";
+
+export function groupPosition(index: number, length: number): GroupPosition {
+	if (length === 1) return "only";
+	if (index === 0) return "first";
+	if (index === length - 1) return "last";
+	return "middle";
+}
+
 export type SurfaceCardProps = {
 	children: ReactNode;
-	groupPosition?: "only" | "first" | "middle" | "last";
+	groupPosition?: GroupPosition;
 	testID?: string;
 	tone?: "default" | "selected";
 };
@@ -102,8 +114,8 @@ export function SurfaceRow({
 }: SurfaceRowProps) {
 	const { theme } = useUnistyles();
 	const showDisclosure = disclosure ?? Boolean(onPress && !trailing);
-	const content = (
-		<View style={[styles.row, divider ? styles.rowDivider : undefined]}>
+	const rowContent = (
+		<>
 			{leading ??
 				(symbol ? (
 					<View style={styles.symbolBackground}>
@@ -138,23 +150,30 @@ export function SurfaceRow({
 					{value}
 				</Text>
 			) : null}
+		</>
+	);
+	const disclosureSymbol = showDisclosure ? (
+		<SymbolView
+			accessibilityElementsHidden
+			accessible={false}
+			name="chevron.right"
+			size={14}
+			tintColor={theme.colors.textMuted}
+			weight="semibold"
+		/>
+	) : null;
+
+	const content = (
+		<View style={[styles.row, divider ? styles.rowDivider : undefined]}>
+			{rowContent}
 			{trailing}
-			{showDisclosure ? (
-				<SymbolView
-					accessibilityElementsHidden
-					accessible={false}
-					name="chevron.right"
-					size={14}
-					tintColor={theme.colors.textMuted}
-					weight="semibold"
-				/>
-			) : null}
+			{disclosureSymbol}
 		</View>
 	);
 
 	if (!onPress) return content;
 
-	return (
+	const control = (
 		<Pressable
 			accessibilityHint={accessibilityHint}
 			accessibilityLabel={accessibilityLabel ?? label}
@@ -163,12 +182,36 @@ export function SurfaceRow({
 			disabled={disabled}
 			onPress={onPress}
 			style={({ pressed }) => [
+				trailing ? styles.rowControl : undefined,
 				pressed ? styles.pressed : undefined,
+				!trailing && disabled ? styles.disabled : undefined,
+			]}
+		>
+			{trailing ? (
+				<>
+					{rowContent}
+					{disclosureSymbol}
+				</>
+			) : (
+				content
+			)}
+		</Pressable>
+	);
+
+	if (!trailing) return control;
+
+	return (
+		<View
+			accessible={false}
+			style={[
+				styles.rowWithTrailing,
+				divider ? styles.rowDivider : undefined,
 				disabled ? styles.disabled : undefined,
 			]}
 		>
-			{content}
-		</Pressable>
+			{control}
+			<View style={styles.rowTrailing}>{trailing}</View>
+		</View>
 	);
 }
 
@@ -216,6 +259,10 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.textMuted,
 		textTransform: "uppercase",
 	},
+	sectionDetail: {
+		...theme.typography.caption,
+		color: theme.colors.textMuted,
+	},
 	sectionAction: {
 		minHeight: theme.spacing(11),
 		justifyContent: "center",
@@ -244,6 +291,25 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
+		paddingVertical: theme.spacing(2.5),
+	},
+	rowWithTrailing: {
+		minHeight: theme.spacing(14),
+		flexDirection: "row",
+		alignItems: "stretch",
+	},
+	rowControl: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(3),
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(3),
+		paddingVertical: theme.spacing(2.5),
+	},
+	rowTrailing: {
+		justifyContent: "center",
+		paddingRight: theme.spacing(4),
 		paddingVertical: theme.spacing(2.5),
 	},
 	rowDivider: {

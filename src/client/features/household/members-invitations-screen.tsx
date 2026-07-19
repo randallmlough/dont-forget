@@ -2,9 +2,7 @@ import { SymbolView } from "expo-symbols";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import {
-	ActionSheetIOS,
 	ActivityIndicator,
-	Alert,
 	FlatList,
 	Pressable,
 	Text,
@@ -24,8 +22,15 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { AppButton } from "@/client/ui/app-button";
 import {
+	ActionMenuButton,
+	type ActionMenuItem,
+} from "@/client/ui/action-menu-button";
+import { AppButton } from "@/client/ui/app-button";
+import { themedAlert } from "@/client/ui/native-dialogs";
+import {
+	type GroupPosition,
+	groupPosition,
 	InitialsAvatar,
 	SurfaceCard,
 	SurfaceRow,
@@ -36,8 +41,6 @@ import {
 	type HouseholdSettingsState,
 	useHouseholdSettings,
 } from "./use-household-settings";
-
-type GroupPosition = "only" | "first" | "middle" | "last";
 
 type CollaborationRow =
 	| { type: "section"; id: string; title: string }
@@ -252,10 +255,10 @@ function MemberRow({
 				leading={<InitialsAvatar label={displayName} />}
 				trailing={
 					canManage ? (
-						<EllipsisButton
+						<ActionMenuButton
 							accessibilityLabel={`Manage ${displayName}`}
+							actions={memberMenuActions(member, actions)}
 							disabled={operation.status !== "idle"}
-							onPress={() => showMemberActions(member, actions)}
 						/>
 					) : undefined
 				}
@@ -411,49 +414,14 @@ function InvitationRow({
 				label={label}
 				symbol="envelope"
 				trailing={
-					<EllipsisButton
+					<ActionMenuButton
 						accessibilityLabel={`Manage ${label}`}
+						actions={invitationMenuActions(invitation, actions)}
 						disabled={revoking}
-						onPress={() => showInvitationActions(invitation, actions)}
 					/>
 				}
 			/>
 		</SurfaceCard>
-	);
-}
-
-function EllipsisButton({
-	accessibilityLabel,
-	disabled,
-	onPress,
-}: {
-	accessibilityLabel: string;
-	disabled: boolean;
-	onPress: () => void;
-}) {
-	const { theme } = useUnistyles();
-	return (
-		<Pressable
-			accessibilityLabel={accessibilityLabel}
-			accessibilityRole="button"
-			accessibilityState={{ disabled }}
-			disabled={disabled}
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.iconButton,
-				pressed ? styles.pressed : undefined,
-				disabled ? styles.disabled : undefined,
-			]}
-		>
-			<SymbolView
-				accessibilityElementsHidden
-				accessible={false}
-				name="ellipsis"
-				size={18}
-				tintColor={theme.colors.text}
-				weight="medium"
-			/>
-		</Pressable>
 	);
 }
 
@@ -537,58 +505,54 @@ function collaborationRowKey(row: CollaborationRow): string {
 	}
 }
 
-function groupPosition(index: number, length: number): GroupPosition {
-	if (length === 1) return "only";
-	if (index === 0) return "first";
-	if (index === length - 1) return "last";
-	return "middle";
-}
-
-function showMemberActions(
+function memberMenuActions(
 	member: HouseholdMember,
 	actions: HouseholdSettingsActions,
-) {
+): ActionMenuItem[] {
 	const role = member.role === "owner" ? "member" : "owner";
 	const roleAction = role === "owner" ? "Make Owner" : "Make Member";
-	ActionSheetIOS.showActionSheetWithOptions(
+
+	return [
 		{
-			title: member.displayName ?? "Member",
-			options: ["Cancel", roleAction, "Remove Member"],
-			cancelButtonIndex: 0,
-			destructiveButtonIndex: 2,
+			label: roleAction,
+			symbol: role === "owner" ? "crown" : "person",
+			onPress: () => confirmRoleChange(member, role, actions),
 		},
-		(index) => {
-			if (index === 1) confirmRoleChange(member, role, actions);
-			if (index === 2) confirmRemoveMember(member, actions);
+		{
+			label: "Remove Member",
+			symbol: "person.badge.minus",
+			role: "destructive",
+			onPress: () => confirmRemoveMember(member, actions),
 		},
-	);
+	];
 }
 
-function showInvitationActions(
+function invitationMenuActions(
 	invitation: PendingInvitation,
 	actions: HouseholdSettingsActions,
-) {
-	ActionSheetIOS.showActionSheetWithOptions(
+): ActionMenuItem[] {
+	return [
 		{
-			title: invitation.email ?? "Invitation",
-			options: ["Cancel", "Copy Invitation", "Revoke Invitation"],
-			cancelButtonIndex: 0,
-			destructiveButtonIndex: 2,
-		},
-		(index) => {
-			if (index === 1) {
+			label: "Copy Invitation",
+			symbol: "doc.on.doc",
+			onPress: () => {
 				void actions.copyText(invitation.acceptUrl, "Invitation copied.");
-			}
-			if (index === 2) confirmRevokeInvitation(invitation, actions);
+			},
 		},
-	);
+		{
+			label: "Revoke Invitation",
+			symbol: "xmark.circle",
+			role: "destructive",
+			onPress: () => confirmRevokeInvitation(invitation, actions),
+		},
+	];
 }
 
 function confirmRemoveMember(
 	member: HouseholdMember,
 	actions: HouseholdSettingsActions,
 ) {
-	Alert.alert(
+	themedAlert(
 		"Remove Member",
 		`Remove ${member.displayName ?? "this Member"} from this Household?`,
 		[
@@ -610,7 +574,7 @@ function confirmRoleChange(
 	actions: HouseholdSettingsActions,
 ) {
 	const actionLabel = role === "owner" ? "Make Owner" : "Make Member";
-	Alert.alert(
+	themedAlert(
 		actionLabel,
 		`Change ${member.displayName ?? "this Member"} to ${
 			role === "owner" ? "Owner" : "Member"
@@ -631,7 +595,7 @@ function confirmRevokeInvitation(
 	invitation: PendingInvitation,
 	actions: HouseholdSettingsActions,
 ) {
-	Alert.alert(
+	themedAlert(
 		"Revoke Invitation",
 		`Revoke the Invitation for ${invitation.email ?? "this recipient"}?`,
 		[
@@ -763,15 +727,6 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(3),
 		paddingBottom: theme.spacing(3),
 	},
-	iconButton: {
-		minWidth: theme.spacing(11),
-		minHeight: theme.spacing(11),
-		alignItems: "center",
-		justifyContent: "center",
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.border,
-		borderRadius: theme.radii.pill,
-	},
 	copyButton: {
 		width: theme.spacing(11),
 		height: theme.spacing(11),
@@ -780,9 +735,6 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,
-	},
-	disabled: {
-		opacity: theme.opacities.disabled,
 	},
 	centered: {
 		flex: 1,

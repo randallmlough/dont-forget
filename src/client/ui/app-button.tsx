@@ -6,6 +6,7 @@ import { GlassSurface } from "./glass-surface";
 export type AppButtonProps = {
 	accessibilityLabel?: string;
 	disabled?: boolean;
+	fullWidth?: boolean;
 	label: string;
 	onPress: () => void;
 	symbol?: SFSymbol;
@@ -15,6 +16,7 @@ export type AppButtonProps = {
 export function AppButton({
 	accessibilityLabel,
 	disabled = false,
+	fullWidth = false,
 	label,
 	onPress,
 	symbol,
@@ -30,13 +32,14 @@ export function AppButton({
 
 	return (
 		<Pressable
-			accessibilityLabel={accessibilityLabel}
+			accessibilityLabel={accessibilityLabel ?? label}
 			accessibilityRole="button"
 			accessibilityState={{ disabled }}
 			disabled={disabled}
 			onPress={onPress}
 			style={({ pressed }) => [
 				styles.pressable,
+				fullWidth ? styles.fullWidth : undefined,
 				pressed ? styles.pressed : undefined,
 				disabled ? styles.disabled : undefined,
 			]}
@@ -78,6 +81,9 @@ export function AppButton({
 const styles = StyleSheet.create((theme) => ({
 	pressable: {
 		alignSelf: "flex-start",
+	},
+	fullWidth: {
+		alignSelf: "stretch",
 	},
 	surface: {
 		minHeight: theme.spacing(11),

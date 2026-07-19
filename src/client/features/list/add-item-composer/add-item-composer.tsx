@@ -42,6 +42,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { nativeColorScheme } from "@/client/theme/native-color-scheme";
 
 const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
@@ -88,7 +89,7 @@ export type AddItemComposerActions = {
 export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
 	const { rt } = useUnistyles();
-	const colorScheme = rt.themeName === "dark" ? "dark" : "light";
+	const colorScheme = nativeColorScheme(rt.themeName);
 	const visibility = useSharedValue(0);
 	const keyboardHeight = useKeyboardHeight();
 
