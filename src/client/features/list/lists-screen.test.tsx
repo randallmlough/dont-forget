@@ -1,4 +1,5 @@
 import {
+	act,
 	fireEvent,
 	render,
 	screen,
@@ -12,10 +13,15 @@ import {
 	clearCurrentListSelection,
 	setCurrentListSelection,
 } from "@/client/features/list/current-selection";
-import type { List, ListSummary } from "@/client/features/list/list-service";
+import type {
+	CreateListResult,
+	List,
+	ListSummary,
+} from "@/client/features/list/list-service";
 import { track } from "@/client/lib/analytics";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useAuthenticatedAppSession } from "@/client/session";
+import { deferred } from "@/test/async";
 import ListsScreen from "./lists-screen";
 import { useHomeCurrentList } from "./use-home-current-list";
 import { useListRows } from "./use-list-rows";
@@ -181,7 +187,7 @@ describe("ListsScreen", () => {
 			actionLabel: "Create",
 			initialName: "",
 		});
-		submitListPrompt("Create", "Hardware");
+		await submitListPrompt("Create", "Hardware");
 
 		await waitFor(() =>
 			expect(setCurrentListSelection).toHaveBeenCalledWith(
@@ -209,7 +215,7 @@ describe("ListsScreen", () => {
 
 		expect(mockPrompt).not.toHaveBeenCalled();
 		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
-		submitListPrompt("Create", "Hardware");
+		await submitListPrompt("Create", "Hardware");
 
 		await waitFor(() =>
 			expect(mockAlert).toHaveBeenCalledWith(
@@ -236,17 +242,101 @@ describe("ListsScreen", () => {
 		await renderScreen();
 
 		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
-		submitListPrompt("Create", "");
+		await submitListPrompt("Create", "");
 
 		await waitFor(() =>
 			expect(mockAlert).toHaveBeenCalledWith(
 				"Unable to Create List",
 				"List name is required.",
-				undefined,
+				[
+					expect.objectContaining({
+						text: "OK",
+						onPress: expect.any(Function),
+					}),
+				],
 				{ userInterfaceStyle: "light" },
 			),
 		);
 		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it("restores the attempted name after create fails", async () => {
+		mockCreateList.mockRejectedValue(new Error("database unavailable"));
+		await renderScreen();
+
+		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
+		await submitListPrompt("Create", "Hardware run");
+
+		await waitFor(() =>
+			expect(mockAlert).toHaveBeenCalledWith(
+				"Unable to Create List",
+				"Something went wrong. Please try again.",
+				[
+					expect.objectContaining({
+						text: "OK",
+						onPress: expect.any(Function),
+					}),
+				],
+				{ userInterfaceStyle: "light" },
+			),
+		);
+
+		pressAlertAction("OK");
+
+		expectListNamePrompt({
+			title: "Create List",
+			actionLabel: "Create",
+			initialName: "Hardware run",
+		});
+	});
+
+	it("serializes List mutations and exposes disabled controls", async () => {
+		const pendingCreate = deferred<CreateListResult>();
+		mockCreateList.mockReturnValue(pendingCreate.promise);
+		await renderScreen();
+
+		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
+		const createAction = listPromptAction("Create");
+		await act(async () => createAction("Hardware"));
+		await waitFor(() => expect(mockCreateList).toHaveBeenCalledTimes(1));
+
+		expect(
+			screen.getByRole("button", { name: "New List" }).props.accessibilityState,
+		).toMatchObject({ disabled: true });
+		expect(
+			screen.getByRole("button", { name: "List actions for Groceries" }).props
+				.accessibilityState,
+		).toMatchObject({ disabled: true });
+		expect(
+			screen.getByRole("button", { name: "List actions for Pantry" }).props
+				.accessibilityState,
+		).toMatchObject({ disabled: true });
+
+		await act(async () => createAction("Duplicate Hardware"));
+		expect(mockCreateList).toHaveBeenCalledTimes(1);
+
+		await act(async () =>
+			pendingCreate.resolve({
+				status: "available",
+				list: listFixture("lst_created", "Hardware"),
+				didWrite: true,
+			}),
+		);
+
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "New List" }).props
+					.accessibilityState,
+			).toMatchObject({ disabled: false }),
+		);
+		expect(
+			screen.getByRole("button", { name: "List actions for Groceries" }).props
+				.accessibilityState,
+		).toMatchObject({ disabled: false });
+		expect(
+			screen.getByRole("button", { name: "List actions for Pantry" }).props
+				.accessibilityState,
+		).toMatchObject({ disabled: false });
 	});
 
 	it("renames a List from its native action menu", async () => {
@@ -263,7 +353,7 @@ describe("ListsScreen", () => {
 			actionLabel: "Save",
 			initialName: "Pantry",
 		});
-		submitListPrompt("Save", "Weekly Pantry");
+		await submitListPrompt("Save", "Weekly Pantry");
 
 		await waitFor(() =>
 			expect(mockRenameList).toHaveBeenCalledWith({
@@ -274,6 +364,40 @@ describe("ListsScreen", () => {
 		expect(
 			screen.getByRole("button", { name: "List actions for Pantry" }),
 		).toBeTruthy();
+	});
+
+	it("restores the attempted name after rename finds a missing List", async () => {
+		mockRenameList.mockResolvedValue({
+			status: "missing",
+			listId: "lst_pantry",
+			didWrite: false,
+		});
+		await renderScreen();
+
+		await chooseListAction("Pantry", "Rename");
+		await submitListPrompt("Save", "Weekly Pantry");
+
+		await waitFor(() =>
+			expect(mockAlert).toHaveBeenCalledWith(
+				"Unable to Rename List",
+				"This List is no longer available.",
+				[
+					expect.objectContaining({
+						text: "OK",
+						onPress: expect.any(Function),
+					}),
+				],
+				{ userInterfaceStyle: "light" },
+			),
+		);
+
+		pressAlertAction("OK");
+
+		expectListNamePrompt({
+			title: "Rename List",
+			actionLabel: "Save",
+			initialName: "Weekly Pantry",
+		});
 	});
 
 	it("repairs selection after deleting the current List", async () => {
@@ -288,7 +412,7 @@ describe("ListsScreen", () => {
 		await renderScreen();
 
 		await chooseListAction("Groceries", "Delete");
-		confirmListDeletion("Groceries");
+		await confirmListDeletion("Groceries");
 
 		await waitFor(() =>
 			expect(mockListLists).toHaveBeenCalledWith({
@@ -321,7 +445,7 @@ describe("ListsScreen", () => {
 		await renderScreen();
 
 		await chooseListAction("Groceries", "Delete");
-		confirmListDeletion("Groceries");
+		await confirmListDeletion("Groceries");
 
 		await waitFor(() =>
 			expect(clearCurrentListSelection).toHaveBeenCalledWith(
@@ -346,7 +470,7 @@ describe("ListsScreen", () => {
 		await renderScreen();
 
 		await chooseListAction("Groceries", "Delete");
-		confirmListDeletion("Groceries");
+		await confirmListDeletion("Groceries");
 
 		expect(
 			await screen.findByRole("button", {
@@ -374,7 +498,7 @@ describe("ListsScreen", () => {
 		await renderScreen();
 
 		await chooseListAction("Groceries", "Delete");
-		confirmListDeletion("Groceries");
+		await confirmListDeletion("Groceries");
 
 		expect(
 			await screen.findByRole("button", {
@@ -448,7 +572,11 @@ function expectListNamePrompt({
 	);
 }
 
-function submitListPrompt(actionLabel: string, value: string) {
+async function submitListPrompt(actionLabel: string, value: string) {
+	await act(async () => listPromptAction(actionLabel)(value));
+}
+
+function listPromptAction(actionLabel: string): (value?: string) => void {
 	const buttons = mockPrompt.mock.calls.at(-1)?.[2];
 	if (!Array.isArray(buttons)) {
 		throw new Error("Expected a native List name prompt.");
@@ -459,10 +587,19 @@ function submitListPrompt(actionLabel: string, value: string) {
 	if (typeof onPress !== "function") {
 		throw new Error(`Expected the ${actionLabel} prompt action.`);
 	}
-	onPress(value);
+	return (value?: string) => onPress(value);
 }
 
-function confirmListDeletion(listName: string) {
+function pressAlertAction(actionLabel: string) {
+	const buttons = mockAlert.mock.calls.at(-1)?.[2];
+	const onPress = buttons?.find(
+		(button) => button.text === actionLabel,
+	)?.onPress;
+	if (!onPress) throw new Error(`Expected the ${actionLabel} alert action.`);
+	onPress();
+}
+
+async function confirmListDeletion(listName: string) {
 	expect(mockAlert).toHaveBeenLastCalledWith(
 		"Delete List",
 		`Delete "${listName}"? Its Items will no longer be available.`,
@@ -479,7 +616,7 @@ function confirmListDeletion(listName: string) {
 	const buttons = mockAlert.mock.calls.at(-1)?.[2];
 	const onPress = buttons?.find((button) => button.text === "Delete")?.onPress;
 	if (!onPress) throw new Error("Expected the destructive Delete action.");
-	onPress();
+	await act(async () => onPress());
 }
 
 function TestAppShellProvider({ children }: PropsWithChildren) {

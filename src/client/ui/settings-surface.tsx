@@ -114,8 +114,8 @@ export function SurfaceRow({
 }: SurfaceRowProps) {
 	const { theme } = useUnistyles();
 	const showDisclosure = disclosure ?? Boolean(onPress && !trailing);
-	const content = (
-		<View style={[styles.row, divider ? styles.rowDivider : undefined]}>
+	const rowContent = (
+		<>
 			{leading ??
 				(symbol ? (
 					<View style={styles.symbolBackground}>
@@ -150,23 +150,30 @@ export function SurfaceRow({
 					{value}
 				</Text>
 			) : null}
+		</>
+	);
+	const disclosureSymbol = showDisclosure ? (
+		<SymbolView
+			accessibilityElementsHidden
+			accessible={false}
+			name="chevron.right"
+			size={14}
+			tintColor={theme.colors.textMuted}
+			weight="semibold"
+		/>
+	) : null;
+
+	const content = (
+		<View style={[styles.row, divider ? styles.rowDivider : undefined]}>
+			{rowContent}
 			{trailing}
-			{showDisclosure ? (
-				<SymbolView
-					accessibilityElementsHidden
-					accessible={false}
-					name="chevron.right"
-					size={14}
-					tintColor={theme.colors.textMuted}
-					weight="semibold"
-				/>
-			) : null}
+			{disclosureSymbol}
 		</View>
 	);
 
 	if (!onPress) return content;
 
-	return (
+	const control = (
 		<Pressable
 			accessibilityHint={accessibilityHint}
 			accessibilityLabel={accessibilityLabel ?? label}
@@ -175,12 +182,36 @@ export function SurfaceRow({
 			disabled={disabled}
 			onPress={onPress}
 			style={({ pressed }) => [
+				trailing ? styles.rowControl : undefined,
 				pressed ? styles.pressed : undefined,
+				!trailing && disabled ? styles.disabled : undefined,
+			]}
+		>
+			{trailing ? (
+				<>
+					{rowContent}
+					{disclosureSymbol}
+				</>
+			) : (
+				content
+			)}
+		</Pressable>
+	);
+
+	if (!trailing) return control;
+
+	return (
+		<View
+			accessible={false}
+			style={[
+				styles.rowWithTrailing,
+				divider ? styles.rowDivider : undefined,
 				disabled ? styles.disabled : undefined,
 			]}
 		>
-			{content}
-		</Pressable>
+			{control}
+			<View style={styles.rowTrailing}>{trailing}</View>
+		</View>
 	);
 }
 
@@ -260,6 +291,25 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(4),
+		paddingVertical: theme.spacing(2.5),
+	},
+	rowWithTrailing: {
+		minHeight: theme.spacing(14),
+		flexDirection: "row",
+		alignItems: "stretch",
+	},
+	rowControl: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(3),
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(3),
+		paddingVertical: theme.spacing(2.5),
+	},
+	rowTrailing: {
+		justifyContent: "center",
+		paddingRight: theme.spacing(4),
 		paddingVertical: theme.spacing(2.5),
 	},
 	rowDivider: {

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
@@ -46,10 +46,15 @@ import { type ListRows, useListRows } from "./use-list-rows";
 import { useProductServices } from "./use-product-services";
 import { useSelectList } from "./use-select-list";
 
-type MutationOutcome =
+type ListMutationOutcome =
 	| { status: "handled" }
-	| { status: "selectionFailed" }
 	| { status: "error"; message: string };
+
+type CreateListMutationOutcome =
+	| ListMutationOutcome
+	| { status: "selectionFailed" };
+
+type GuardedListMutationOutcome = ListMutationOutcome | { status: "ignored" };
 
 export default function ListsScreen() {
 	const { state, session, retry } = useAuthenticatedAppSession();
@@ -86,7 +91,7 @@ function ListsScreenResource({
 		if (await selectList(listId, currentListId)) router.replace("/");
 	}
 
-	async function create(name: string): Promise<MutationOutcome> {
+	async function create(name: string): Promise<CreateListMutationOutcome> {
 		let result: CreateListResult;
 		try {
 			result = await services.lists.createList({ name });
@@ -111,7 +116,7 @@ function ListsScreenResource({
 	async function rename(
 		listId: string,
 		name: string,
-	): Promise<MutationOutcome> {
+	): Promise<ListMutationOutcome> {
 		let result: RenameListResult;
 		try {
 			result = await services.lists.renameList({ listId, name });
@@ -130,7 +135,7 @@ function ListsScreenResource({
 		return { status: "handled" };
 	}
 
-	async function deleteList(listId: string): Promise<MutationOutcome> {
+	async function deleteList(listId: string): Promise<ListMutationOutcome> {
 		let result: DeleteListResult;
 		try {
 			result = await services.lists.deleteList({ listId });
@@ -177,9 +182,9 @@ export type ListsScreenViewProps = {
 	rows: ListRows;
 	currentListId: string | null;
 	onSelectList: (listId: string) => Promise<void>;
-	onCreateList: (name: string) => Promise<MutationOutcome>;
-	onRenameList: (listId: string, name: string) => Promise<MutationOutcome>;
-	onDeleteList: (listId: string) => Promise<MutationOutcome>;
+	onCreateList: (name: string) => Promise<CreateListMutationOutcome>;
+	onRenameList: (listId: string, name: string) => Promise<ListMutationOutcome>;
+	onDeleteList: (listId: string) => Promise<ListMutationOutcome>;
 };
 
 export function ListsScreenView({
@@ -191,12 +196,42 @@ export function ListsScreenView({
 	onRenameList,
 	onDeleteList,
 }: ListsScreenViewProps) {
+	const listMutationInFlight = useRef(false);
+	const [listMutationPending, setListMutationPending] = useState(false);
+
+	async function runListMutation<TOutcome>(
+		mutation: () => Promise<TOutcome>,
+	): Promise<TOutcome | { status: "ignored" }> {
+		if (listMutationInFlight.current) return { status: "ignored" };
+
+		listMutationInFlight.current = true;
+		setListMutationPending(true);
+		try {
+			return await mutation();
+		} finally {
+			listMutationInFlight.current = false;
+			setListMutationPending(false);
+		}
+	}
+
+	async function createList(name: string): Promise<GuardedListMutationOutcome> {
+		const outcome = await runListMutation(() => onCreateList(name));
+		if (outcome.status !== "selectionFailed") return outcome;
+
+		themedAlert(
+			"Unable to Open List",
+			"The List was created, but it could not be opened. Select it from Lists to try again.",
+		);
+		return { status: "handled" };
+	}
+
 	return (
 		<ScreenScaffold label="Lists" title={session.activeHousehold.name}>
 			<View style={styles.pageContent}>
 				<ListRowsView
 					rows={rows}
 					currentListId={currentListId}
+					listMutationPending={listMutationPending}
 					onSelectList={onSelectList}
 					onCreate={() =>
 						promptForListName({
@@ -204,7 +239,7 @@ export function ListsScreenView({
 							actionLabel: "Create",
 							initialName: "",
 							failureTitle: "Unable to Create List",
-							onSubmit: onCreateList,
+							onSubmit: createList,
 						})
 					}
 					onRename={(summary) =>
@@ -213,10 +248,17 @@ export function ListsScreenView({
 							actionLabel: "Save",
 							initialName: summary.name,
 							failureTitle: "Unable to Rename List",
-							onSubmit: (name) => onRenameList(summary.id, name),
+							onSubmit: (name) =>
+								runListMutation(() => onRenameList(summary.id, name)),
 						})
 					}
-					onDelete={(summary) => confirmListDeletion({ summary, onDeleteList })}
+					onDelete={(summary) =>
+						confirmListDeletion({
+							summary,
+							onDeleteList: (listId) =>
+								runListMutation(() => onDeleteList(listId)),
+						})
+					}
 				/>
 			</View>
 		</ScreenScaffold>
@@ -226,6 +268,7 @@ export function ListsScreenView({
 function ListRowsView({
 	rows,
 	currentListId,
+	listMutationPending,
 	onSelectList,
 	onCreate,
 	onRename,
@@ -233,6 +276,7 @@ function ListRowsView({
 }: {
 	rows: ListRows;
 	currentListId: string | null;
+	listMutationPending: boolean;
 	onSelectList: (listId: string) => Promise<void>;
 	onCreate: () => void;
 	onRename: (summary: ListSummary) => void;
@@ -276,6 +320,7 @@ function ListRowsView({
 						<View style={styles.collectionHeader}>
 							{currentSummary ? (
 								<CurrentListCard
+									actionsDisabled={listMutationPending}
 									onDelete={() => onDelete(currentSummary)}
 									onRename={() => onRename(currentSummary)}
 									onSelect={() => void onSelectList(currentSummary.id)}
@@ -292,6 +337,7 @@ function ListRowsView({
 					}
 					renderItem={({ index, item: summary }) => (
 						<ListRow
+							actionsDisabled={listMutationPending}
 							groupPosition={groupPosition(index, otherSummaries.length)}
 							onDelete={() => onDelete(summary)}
 							onRename={() => onRename(summary)}
@@ -304,6 +350,7 @@ function ListRowsView({
 			)}
 			<View style={styles.newListButton}>
 				<AppButton
+					disabled={listMutationPending}
 					fullWidth
 					label="New List"
 					onPress={onCreate}
@@ -316,11 +363,13 @@ function ListRowsView({
 
 function CurrentListCard({
 	summary,
+	actionsDisabled,
 	onSelect,
 	onRename,
 	onDelete,
 }: {
 	summary: ListSummary;
+	actionsDisabled: boolean;
 	onSelect: () => void;
 	onRename: () => void;
 	onDelete: () => void;
@@ -346,6 +395,7 @@ function CurrentListCard({
 				<ActionMenuButton
 					accessibilityLabel={`List actions for ${summary.name}`}
 					actions={listMenuActions(onRename, onDelete)}
+					disabled={actionsDisabled}
 				/>
 			</View>
 			<Pressable
@@ -382,12 +432,14 @@ function CurrentListCard({
 function ListRow({
 	summary,
 	groupPosition,
+	actionsDisabled,
 	onSelect,
 	onRename,
 	onDelete,
 }: {
 	summary: ListSummary;
 	groupPosition: GroupPosition;
+	actionsDisabled: boolean;
 	onSelect: () => void;
 	onRename: () => void;
 	onDelete: () => void;
@@ -404,6 +456,7 @@ function ListRow({
 					<ActionMenuButton
 						accessibilityLabel={`List actions for ${summary.name}`}
 						actions={listMenuActions(onRename, onDelete)}
+						disabled={actionsDisabled}
 					/>
 				}
 			/>
@@ -445,7 +498,7 @@ function promptForListName({
 	initialName: string;
 	actionLabel: string;
 	failureTitle: string;
-	onSubmit: (name: string) => Promise<MutationOutcome>;
+	onSubmit: (name: string) => Promise<GuardedListMutationOutcome>;
 }) {
 	themedPrompt(
 		title,
@@ -455,9 +508,13 @@ function promptForListName({
 				text: actionLabel,
 				isPreferred: true,
 				onPress: (value?: string) => {
-					void runListMutation({
+					const attemptedName = value ?? "";
+					void submitListNamePrompt({
+						title,
+						actionLabel,
+						attemptedName,
 						failureTitle,
-						mutation: () => onSubmit(value ?? ""),
+						onSubmit,
 					});
 				},
 			},
@@ -466,12 +523,45 @@ function promptForListName({
 	);
 }
 
+async function submitListNamePrompt({
+	title,
+	actionLabel,
+	attemptedName,
+	failureTitle,
+	onSubmit,
+}: {
+	title: string;
+	actionLabel: string;
+	attemptedName: string;
+	failureTitle: string;
+	onSubmit: (name: string) => Promise<GuardedListMutationOutcome>;
+}) {
+	const outcome = await onSubmit(attemptedName);
+	showListMutationError({
+		outcome,
+		failureTitle,
+		buttons: [
+			{
+				text: "OK",
+				onPress: () =>
+					promptForListName({
+						title,
+						actionLabel,
+						initialName: attemptedName,
+						failureTitle,
+						onSubmit,
+					}),
+			},
+		],
+	});
+}
+
 function confirmListDeletion({
 	summary,
 	onDeleteList,
 }: {
 	summary: ListSummary;
-	onDeleteList: (listId: string) => Promise<MutationOutcome>;
+	onDeleteList: (listId: string) => Promise<GuardedListMutationOutcome>;
 }) {
 	themedAlert(
 		"Delete List",
@@ -481,34 +571,30 @@ function confirmListDeletion({
 			{
 				text: "Delete",
 				style: "destructive",
-				onPress: () => {
-					void runListMutation({
-						failureTitle: "Unable to Delete List",
-						mutation: () => onDeleteList(summary.id),
-					});
-				},
+				onPress: () =>
+					void onDeleteList(summary.id).then((outcome) =>
+						showListMutationError({
+							outcome,
+							failureTitle: "Unable to Delete List",
+						}),
+					),
 			},
 		],
 	);
 }
 
-async function runListMutation({
-	mutation,
+function showListMutationError({
+	outcome,
 	failureTitle,
+	buttons,
 }: {
-	mutation: () => Promise<MutationOutcome>;
+	outcome: GuardedListMutationOutcome;
 	failureTitle: string;
+	buttons?: Parameters<typeof themedAlert>[2];
 }) {
-	const outcome = await mutation();
-	if (outcome.status === "handled") return;
-	if (outcome.status === "selectionFailed") {
-		themedAlert(
-			"Unable to Open List",
-			"The List was created, but it could not be opened. Select it from Lists to try again.",
-		);
-		return;
+	if (outcome.status === "error") {
+		themedAlert(failureTitle, outcome.message, buttons);
 	}
-	themedAlert(failureTitle, outcome.message);
 }
 
 function ListsSessionState({
