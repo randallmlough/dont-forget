@@ -1,11 +1,11 @@
-import { Button, type ButtonProps, Host, Image, Menu } from "@expo/ui/swift-ui";
+import { Button, type ButtonProps, Host, Menu } from "@expo/ui/swift-ui";
 import {
-	accessibilityHidden,
 	accessibilityLabel,
 	disabled as disabledModifier,
 	foregroundStyle,
 	frame,
 	glassEffect,
+	labelStyle,
 	padding,
 } from "@expo/ui/swift-ui/modifiers";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -34,29 +34,23 @@ export function ActionMenuButton({
 	return (
 		<Host colorScheme={colorScheme} style={styles.host}>
 			<Menu
-				label={
-					<Image
-						modifiers={[
-							accessibilityHidden(),
-							foregroundStyle(theme.colors.text),
-							frame({
-								width: theme.spacing(8),
-								height: theme.spacing(8),
-							}),
-							glassEffect({
-								glass: { variant: "regular", interactive: true },
-								shape: "circle",
-							}),
-							padding({ all: theme.spacing(1.5) }),
-						]}
-						size={17}
-						systemName="ellipsis"
-					/>
-				}
+				label="Actions"
 				modifiers={[
 					accessibilityLabel(menuAccessibilityLabel),
 					disabledModifier(disabled),
+					labelStyle("iconOnly"),
+					foregroundStyle(theme.colors.text),
+					frame({
+						width: theme.spacing(8),
+						height: theme.spacing(8),
+					}),
+					glassEffect({
+						glass: { variant: "regular", interactive: true },
+						shape: "circle",
+					}),
+					padding({ all: theme.spacing(1.5) }),
 				]}
+				systemImage="ellipsis"
 			>
 				{actions.map((action) => (
 					<Button
