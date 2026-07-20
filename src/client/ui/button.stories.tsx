@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { SymbolView } from "expo-symbols";
 import type { ReactNode } from "react";
 import { Text, View } from "react-native";
-import { ScopedTheme, StyleSheet } from "react-native-unistyles";
+import { ScopedTheme, StyleSheet, useUnistyles } from "react-native-unistyles";
 
 import {
 	Button,
@@ -67,6 +68,37 @@ export const DarkTheme: Story = {
 	render: () => <ButtonGallery themeName="dark" />,
 };
 
+function IconButtons() {
+	const { theme } = useUnistyles();
+
+	return (
+		<>
+			<Button onPress={noop} variant="outline">
+				<SymbolView
+					accessibilityElementsHidden
+					accessible={false}
+					name="chevron.left"
+					size={theme.spacing(4)}
+					tintColor={theme.colors.foreground}
+					weight="medium"
+				/>
+				<Text style={styles.outlineLabel}>Previous</Text>
+			</Button>
+			<Button onPress={noop}>
+				<Text style={styles.defaultLabel}>Next</Text>
+				<SymbolView
+					accessibilityElementsHidden
+					accessible={false}
+					name="chevron.right"
+					size={theme.spacing(4)}
+					tintColor={theme.colors.primaryForeground}
+					weight="medium"
+				/>
+			</Button>
+		</>
+	);
+}
+
 function ButtonGallery({ themeName }: { themeName: "light" | "dark" }) {
 	return (
 		<ScopedTheme name={themeName}>
@@ -88,6 +120,10 @@ function ButtonGallery({ themeName }: { themeName: "light" | "dark" }) {
 					<Button accessibilityLabel="Add Item" onPress={noop} size="icon">
 						+
 					</Button>
+				</StorySection>
+
+				<StorySection title="With icons">
+					<IconButtons />
 				</StorySection>
 
 				<StorySection title="Radii">
@@ -146,6 +182,16 @@ const styles = StyleSheet.create((theme) => ({
 		gap: theme.spacing(6),
 		padding: theme.spacing(6),
 		backgroundColor: theme.colors.background,
+	},
+	defaultLabel: {
+		...theme.typography.callout,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.primaryForeground,
+	},
+	outlineLabel: {
+		...theme.typography.callout,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.foreground,
 	},
 	section: {
 		gap: theme.spacing(3),
