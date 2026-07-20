@@ -14,6 +14,17 @@ const fontSizes = {
 	"5xl": 44,
 } as const;
 
+const lineHeights = {
+	xs: 16,
+	sm: 20,
+	base: 24,
+	lg: 26,
+	xl: 28,
+	"2xl": 32,
+	"3xl": 38,
+	"5xl": 50,
+} as const;
+
 const fontWeights = {
 	medium: "500",
 	semibold: "600",
@@ -37,37 +48,45 @@ const typography = {
 	largeTitle: {
 		fontSize: fontSizes["5xl"],
 		fontFamily: fontFamilies.serif,
-		lineHeight: 50,
+		lineHeight: lineHeights["5xl"],
 	},
 	title: {
 		fontSize: fontSizes["3xl"],
 		fontWeight: fontWeights.bold,
+		lineHeight: lineHeights["3xl"],
 	},
 	headline: {
 		fontSize: fontSizes.xl,
 		fontWeight: fontWeights.bold,
+		lineHeight: lineHeights.xl,
 	},
 	body: {
 		fontSize: fontSizes.base,
+		lineHeight: lineHeights.base,
 	},
 	callout: {
 		fontSize: fontSizes.sm,
+		lineHeight: lineHeights.sm,
 	},
 	caption: {
 		fontSize: fontSizes.xs,
+		lineHeight: lineHeights.xs,
 	},
 	captionStrong: {
 		fontSize: fontSizes.xs,
 		fontWeight: fontWeights.semibold,
+		lineHeight: lineHeights.xs,
 	},
 	overline: {
 		fontSize: fontSizes.xs,
 		fontWeight: fontWeights.semibold,
 		letterSpacing: 1.5,
+		lineHeight: lineHeights.xs,
 	},
 	controlLabel: {
 		fontSize: fontSizes.base,
 		fontWeight: fontWeights.bold,
+		lineHeight: lineHeights.base,
 	},
 } as const;
 
@@ -112,6 +131,7 @@ export const lightTheme = {
 	},
 	radii,
 	fontSizes,
+	lineHeights,
 	fontWeights,
 	fontFamilies,
 	typography,
@@ -149,6 +169,7 @@ export const darkTheme = {
 	},
 	radii,
 	fontSizes,
+	lineHeights,
 	fontWeights,
 	fontFamilies,
 	typography,

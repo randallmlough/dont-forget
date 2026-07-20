@@ -33,6 +33,12 @@ describe("unistyles themes", () => {
 	it("keeps light and dark theme contracts aligned", () => {
 		expect(themeKeyPaths(darkTheme)).toEqual(themeKeyPaths(lightTheme));
 	});
+
+	it("gives every typography style an explicit line height", () => {
+		for (const style of Object.values(lightTheme.typography)) {
+			expect(style.lineHeight).toEqual(expect.any(Number));
+		}
+	});
 });
 
 function themeKeyPaths(value: unknown, prefix = ""): string[] {

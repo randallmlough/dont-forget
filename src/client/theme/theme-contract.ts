@@ -55,6 +55,16 @@ export type AppTheme = {
 		"3xl": number;
 		"5xl": number;
 	};
+	lineHeights: {
+		xs: number;
+		sm: number;
+		base: number;
+		lg: number;
+		xl: number;
+		"2xl": number;
+		"3xl": number;
+		"5xl": number;
+	};
 	fontWeights: {
 		medium: FontWeight;
 		semibold: FontWeight;
