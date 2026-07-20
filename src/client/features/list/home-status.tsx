@@ -48,7 +48,7 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		gap: theme.spacing(3),
 		padding: theme.spacing(7),
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 		borderCurve: "continuous",
 		backgroundColor: theme.colors.card,
 		borderWidth: theme.borders.hairline,
@@ -67,7 +67,7 @@ const styles = StyleSheet.create((theme) => ({
 	retryButton: {
 		minHeight: theme.spacing(11),
 		paddingHorizontal: theme.spacing(4),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		borderCurve: "continuous",
 		alignItems: "center",
 		justifyContent: "center",

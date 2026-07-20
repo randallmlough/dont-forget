@@ -164,7 +164,7 @@ const styles = StyleSheet.create((theme) => ({
 	checkbox: {
 		width: theme.spacing(6),
 		height: theme.spacing(6),
-		borderRadius: theme.radii.checkbox,
+		borderRadius: theme.radii.lg,
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.subtleForeground,
 		alignItems: "center",

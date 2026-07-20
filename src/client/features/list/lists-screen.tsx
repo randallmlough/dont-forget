@@ -650,7 +650,7 @@ const styles = StyleSheet.create((theme) => ({
 		gap: theme.spacing(3),
 	},
 	currentCard: {
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 		borderCurve: "continuous",
 	},
 	currentCardHeader: {
@@ -672,7 +672,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(5),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	currentLabel: {
@@ -722,7 +722,7 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		justifyContent: "center",
 		padding: theme.spacing(5),
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 	},
 	errorMessage: {
 		...theme.typography.callout,

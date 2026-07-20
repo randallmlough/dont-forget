@@ -35,7 +35,7 @@ export function PrimaryButton({
 const styles = StyleSheet.create((theme) => ({
 	button: {
 		height: theme.spacing(13),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		borderCurve: "continuous",
 		backgroundColor: theme.colors.primary,
 		alignItems: "center",

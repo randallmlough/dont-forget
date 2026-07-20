@@ -280,7 +280,7 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(3),
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.input,
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		backgroundColor: theme.colors.glassTint,
 		color: theme.colors.foreground,
 		...theme.typography.body,

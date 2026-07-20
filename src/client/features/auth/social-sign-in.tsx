@@ -77,7 +77,7 @@ export function SocialSignIn() {
 			<AppleAuthentication.AppleAuthenticationButton
 				buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
 				buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-				cornerRadius={theme.radii.control}
+				cornerRadius={theme.radii.xl}
 				style={styles.providerButton}
 				onPress={onApplePress}
 			/>
@@ -137,7 +137,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	googleButton: {
 		backgroundColor: theme.colors.card,
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		borderCurve: "continuous",
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.border,

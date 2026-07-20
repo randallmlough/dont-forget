@@ -53,7 +53,7 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 	},
 	primary: {
 		paddingHorizontal: theme.spacing(4),

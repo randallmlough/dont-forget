@@ -113,7 +113,7 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(5),
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.border,
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 		backgroundColor: theme.colors.card,
 	},
 	title: {

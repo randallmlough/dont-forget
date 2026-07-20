@@ -246,7 +246,7 @@ function ExpandedGlassComposer({
 						glassEffect({
 							glass: { variant: "regular", interactive: false },
 							shape: "roundedRectangle",
-							cornerRadius: theme.radii.card,
+							cornerRadius: theme.radii["2xl"],
 						}),
 					]}
 				>

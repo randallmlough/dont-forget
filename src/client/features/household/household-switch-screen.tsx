@@ -413,7 +413,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(7),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	actions: {
@@ -434,7 +434,7 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(3),
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.input,
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		backgroundColor: theme.colors.glassTint,
 		color: theme.colors.foreground,
 		...theme.typography.body,

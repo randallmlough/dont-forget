@@ -88,7 +88,7 @@ const styles = StyleSheet.create((theme) => ({
 	surface: {
 		minHeight: theme.spacing(11),
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	primarySurface: {
 		backgroundColor: theme.colors.primary,

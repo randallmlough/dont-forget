@@ -91,14 +91,14 @@ const styles = StyleSheet.create((theme) => ({
 		width: theme.spacing(11),
 		height: theme.spacing(11),
 		marginLeft: -theme.spacing(1),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	navigationGlass: {
 		width: theme.spacing(11),
 		height: theme.spacing(11),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	headerTextGroup: {
 		alignSelf: "stretch",

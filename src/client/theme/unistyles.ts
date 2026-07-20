@@ -26,10 +26,12 @@ const fontFamilies = {
 } as const;
 
 const radii = {
-	card: 22,
-	control: 14,
-	pill: 999,
-	checkbox: 12,
+	sm: 6,
+	md: 8,
+	lg: 12,
+	xl: 16,
+	"2xl": 24,
+	full: 999,
 } as const;
 
 const typography = {

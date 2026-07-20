@@ -17,7 +17,7 @@ export function AuthTextInput(props: TextInputProps) {
 const styles = StyleSheet.create((theme) => ({
 	input: {
 		height: theme.spacing(12),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		borderCurve: "continuous",
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.border,

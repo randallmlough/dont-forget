@@ -38,10 +38,12 @@ export type AppTheme = {
 		appearanceDarkSurface: string;
 	};
 	radii: {
-		card: number;
-		control: number;
-		pill: number;
-		checkbox: number;
+		sm: number;
+		md: number;
+		lg: number;
+		xl: number;
+		"2xl": number;
+		full: number;
 	};
 	fontSizes: {
 		caption: number;

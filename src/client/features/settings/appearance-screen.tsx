@@ -256,7 +256,7 @@ const styles = StyleSheet.create((theme) => ({
 		justifyContent: "center",
 		gap: theme.spacing(2),
 		padding: theme.spacing(2),
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 	},
 	optionPreview: {
 		position: "relative",
@@ -273,7 +273,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(7),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	miniature: {
@@ -281,7 +281,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(24),
 		gap: theme.spacing(2),
 		padding: theme.spacing(2),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		overflow: "hidden",
 	},
 	miniatureLight: {
@@ -301,12 +301,12 @@ const styles = StyleSheet.create((theme) => ({
 	miniatureTitle: {
 		width: "48%",
 		height: theme.spacing(1),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	miniatureRow: {
 		width: "100%",
 		height: theme.spacing(3),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	miniatureLineLight: {
 		backgroundColor: theme.colors.appearanceLightSurface,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create((theme) => ({
 	previewRows: {
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.border,
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		overflow: "hidden",
 	},
 	previewRow: {
@@ -348,7 +348,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(5),
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.mutedForeground,
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	previewItemLabel: {
 		...theme.typography.callout,
@@ -360,7 +360,7 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		gap: theme.spacing(2),
 		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	previewComposerLabel: {
 		...theme.typography.callout,

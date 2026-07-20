@@ -274,16 +274,16 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.primary,
 	},
 	card: {
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 	},
 	cardFirst: {
-		borderTopLeftRadius: theme.radii.card,
-		borderTopRightRadius: theme.radii.card,
+		borderTopLeftRadius: theme.radii["2xl"],
+		borderTopRightRadius: theme.radii["2xl"],
 	},
 	cardMiddle: {},
 	cardLast: {
-		borderBottomLeftRadius: theme.radii.card,
-		borderBottomRightRadius: theme.radii.card,
+		borderBottomLeftRadius: theme.radii["2xl"],
+		borderBottomRightRadius: theme.radii["2xl"],
 	},
 	row: {
 		minHeight: theme.spacing(14),
@@ -339,7 +339,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(9),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	destructive: {
@@ -350,7 +350,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(11),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	avatarLarge: {

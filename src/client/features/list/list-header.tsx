@@ -194,7 +194,7 @@ const styles = StyleSheet.create((theme) => ({
 		marginLeft: -theme.spacing(2.5),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	householdName: {
 		...theme.typography.overline,
@@ -223,7 +223,7 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.border,
 		backgroundColor: theme.colors.card,
@@ -252,13 +252,13 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	progressTrack: {
 		height: theme.spacing(0.75),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		overflow: "hidden",
 		backgroundColor: theme.colors.border,
 	},
 	progressFill: {
 		height: "100%",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	syncStatus: {
