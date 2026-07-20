@@ -34,6 +34,11 @@ describe("unistyles themes", () => {
 		expect(themeKeyPaths(darkTheme)).toEqual(themeKeyPaths(lightTheme));
 	});
 
+	it("defines a zero radius token for square surfaces", () => {
+		expect(lightTheme.radii.none).toBe(0);
+		expect(darkTheme.radii.none).toBe(0);
+	});
+
 	it("gives every typography style an explicit line height", () => {
 		for (const style of Object.values(lightTheme.typography)) {
 			expect(style.lineHeight).toEqual(expect.any(Number));

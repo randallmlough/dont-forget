@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
+import type { AppTheme } from "@/client/theme/theme-contract";
+
 export type ButtonVariant =
 	| "default"
 	| "destructive"
@@ -20,6 +22,7 @@ export type ButtonVariant =
 	| "link";
 
 export type ButtonSize = "default" | "sm" | "lg" | "icon";
+export type ButtonRadius = keyof AppTheme["radii"];
 
 /**
  * Native press props are intentionally exposed because Button is the shared UI
@@ -29,6 +32,8 @@ export type ButtonProps = Omit<PressableProps, "children" | "style"> & {
 	children?: ReactNode;
 	variant?: ButtonVariant;
 	size?: ButtonSize;
+	/** Theme radius token applied to the button container. @default "md" */
+	radius?: ButtonRadius;
 	loading?: boolean;
 	style?: StyleProp<ViewStyle>;
 	textStyle?: StyleProp<TextStyle>;
@@ -43,6 +48,7 @@ export const Button = forwardRef<ButtonRef, ButtonProps>(function Button(
 		children,
 		disabled = false,
 		loading = false,
+		radius = "md",
 		size = "default",
 		style,
 		textStyle,
@@ -63,6 +69,7 @@ export const Button = forwardRef<ButtonRef, ButtonProps>(function Button(
 	};
 
 	styles.useVariants({
+		radius,
 		size: size === "default" ? undefined : size,
 		variant: variant === "default" ? undefined : variant,
 	});
@@ -125,6 +132,29 @@ const styles = StyleSheet.create((theme) => ({
 		borderRadius: theme.radii.md,
 		backgroundColor: theme.colors.primary,
 		variants: {
+			radius: {
+				none: {
+					borderRadius: theme.radii.none,
+				},
+				sm: {
+					borderRadius: theme.radii.sm,
+				},
+				md: {
+					borderRadius: theme.radii.md,
+				},
+				lg: {
+					borderRadius: theme.radii.lg,
+				},
+				xl: {
+					borderRadius: theme.radii.xl,
+				},
+				"2xl": {
+					borderRadius: theme.radii["2xl"],
+				},
+				full: {
+					borderRadius: theme.radii.full,
+				},
+			},
 			variant: {
 				default: {
 					backgroundColor: theme.colors.primary,

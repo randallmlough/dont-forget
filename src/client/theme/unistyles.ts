@@ -36,6 +36,7 @@ const fontFamilies = {
 } as const;
 
 const radii = {
+	none: 0,
 	sm: 6,
 	md: 8,
 	lg: 12,

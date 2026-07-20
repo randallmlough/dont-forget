@@ -3,28 +3,12 @@ import type { ReactNode } from "react";
 import { Text, View } from "react-native";
 import { ScopedTheme, StyleSheet } from "react-native-unistyles";
 
-import { Button, type ButtonSize, type ButtonVariant } from "./button";
-
-const meta = {
-	title: "UI/Button",
-	component: Button,
-	args: {
-		children: "Add Item",
-		onPress: noop,
-	},
-} satisfies Meta<typeof Button>;
-
-export default meta;
-
-type Story = StoryObj<typeof meta>;
-
-export const LightTheme: Story = {
-	render: () => <ButtonGallery themeName="light" />,
-};
-
-export const DarkTheme: Story = {
-	render: () => <ButtonGallery themeName="dark" />,
-};
+import {
+	Button,
+	type ButtonRadius,
+	type ButtonSize,
+	type ButtonVariant,
+} from "./button";
 
 const variants = [
 	"default",
@@ -36,6 +20,52 @@ const variants = [
 ] satisfies ButtonVariant[];
 
 const sizes = ["sm", "default", "lg"] satisfies ButtonSize[];
+
+const radii = [
+	"none",
+	"sm",
+	"md",
+	"lg",
+	"xl",
+	"2xl",
+	"full",
+] satisfies ButtonRadius[];
+
+const meta = {
+	title: "UI/Button",
+	component: Button,
+	args: {
+		children: "Add Item",
+		disabled: false,
+		loading: false,
+		onPress: noop,
+		radius: "md",
+		size: "default",
+		variant: "default",
+	},
+	argTypes: {
+		children: { control: "text" },
+		disabled: { control: "boolean" },
+		loading: { control: "boolean" },
+		radius: { control: "select", options: radii },
+		size: { control: "select", options: [...sizes, "icon"] },
+		variant: { control: "select", options: variants },
+	},
+} satisfies Meta<typeof Button>;
+
+export default meta;
+
+type Story = StoryObj<typeof meta>;
+
+export const Playground: Story = {};
+
+export const LightTheme: Story = {
+	render: () => <ButtonGallery themeName="light" />,
+};
+
+export const DarkTheme: Story = {
+	render: () => <ButtonGallery themeName="dark" />,
+};
 
 function ButtonGallery({ themeName }: { themeName: "light" | "dark" }) {
 	return (
@@ -58,6 +88,14 @@ function ButtonGallery({ themeName }: { themeName: "light" | "dark" }) {
 					<Button accessibilityLabel="Add Item" onPress={noop} size="icon">
 						+
 					</Button>
+				</StorySection>
+
+				<StorySection title="Radii">
+					{radii.map((radius) => (
+						<Button key={radius} onPress={noop} radius={radius}>
+							{radiusLabel(radius)}
+						</Button>
+					))}
 				</StorySection>
 
 				<StorySection title="States">
@@ -94,6 +132,10 @@ function variantLabel(variant: ButtonVariant): string {
 
 function sizeLabel(size: Exclude<ButtonSize, "icon">): string {
 	return size === "default" ? "Default" : size.toUpperCase();
+}
+
+function radiusLabel(radius: ButtonRadius): string {
+	return radius === "md" ? "MD (Default)" : radius.toUpperCase();
 }
 
 function noop() {}
