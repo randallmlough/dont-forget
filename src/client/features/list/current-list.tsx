@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { AddItemListOption } from "@/client/features/list/add-item-composer";
 import type { ListSummary } from "@/client/features/list/list-service";
@@ -7,6 +7,7 @@ import {
 	sessionMemberDisplayName,
 	useSyncState,
 } from "@/client/session";
+import { Button } from "@/client/ui/button";
 import { AddItemForm } from "./add-item-form";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { ItemRows } from "./item-rows";
@@ -139,16 +140,9 @@ function HomeCurrentListContent({
 				title="No active Lists"
 				body="Create a List to start adding Items."
 			>
-				<Pressable
-					accessibilityRole="button"
-					onPress={allowListsEntry ? onOpenLists : undefined}
-					style={({ pressed }) => [
-						styles.createButton,
-						pressed ? styles.createButtonPressed : undefined,
-					]}
-				>
-					<Text style={styles.createButtonLabel}>Create List</Text>
-				</Pressable>
+				<Button onPress={allowListsEntry ? onOpenLists : undefined}>
+					Create List
+				</Button>
 			</HomeStatus>
 		);
 	}
@@ -243,25 +237,8 @@ function addItemListOptions({
 	];
 }
 
-const styles = StyleSheet.create((theme) => ({
+const styles = StyleSheet.create({
 	currentList: {
 		flex: 1,
 	},
-	createButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(4),
-		borderRadius: theme.radii.xl,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.primary,
-	},
-	createButtonPressed: {
-		opacity: theme.opacities.pressed,
-	},
-	createButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.primaryForeground,
-		fontWeight: theme.fontWeights.bold,
-	},
-}));
+});

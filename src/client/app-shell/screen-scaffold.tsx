@@ -1,8 +1,9 @@
 import { SymbolView } from "expo-symbols";
 import type { ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { Button } from "@/client/ui/button";
 import { GlassSurface } from "@/client/ui/glass-surface";
 import { useNavigationDrawer } from "./navigation-drawer-context";
 
@@ -33,14 +34,12 @@ export function ScreenScaffold({
 		<View style={styles.root}>
 			<SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
 				<View style={styles.header}>
-					<Pressable
+					<Button
 						accessibilityLabel={navigationLabel}
-						accessibilityRole="button"
 						onPress={onNavigate}
-						style={({ pressed }) => [
-							styles.menuButton,
-							pressed ? styles.pressed : undefined,
-						]}
+						size="icon"
+						style={styles.menuButton}
+						variant="link"
 					>
 						<GlassSurface interactive style={styles.navigationGlass}>
 							<SymbolView
@@ -52,7 +51,7 @@ export function ScreenScaffold({
 								weight="medium"
 							/>
 						</GlassSurface>
-					</Pressable>
+					</Button>
 					<View style={styles.headerTextGroup}>
 						<Text style={styles.headerLabel}>{label}</Text>
 						<Text numberOfLines={2} style={styles.headerTitle}>
@@ -112,8 +111,5 @@ const styles = StyleSheet.create((theme) => ({
 	headerTitle: {
 		...theme.typography.largeTitle,
 		color: theme.colors.foreground,
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
 	},
 }));

@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
-	Pressable,
 	Text,
 	TextInput,
 	View,
@@ -26,7 +25,7 @@ import {
 	ActionMenuButton,
 	type ActionMenuItem,
 } from "@/client/ui/action-menu-button";
-import { AppButton } from "@/client/ui/app-button";
+import { Button } from "@/client/ui/button";
 import { themedAlert } from "@/client/ui/native-dialogs";
 import {
 	type GroupPosition,
@@ -113,11 +112,7 @@ export function MembersInvitationsView({
 			) : state.status === "error" ? (
 				<CenteredStatus title="Members and Invitations unavailable">
 					<Text style={styles.statusBody}>{state.message}</Text>
-					<AppButton
-						label="Try again"
-						onPress={actions.retry}
-						variant="primary"
-					/>
+					<Button onPress={actions.retry}>Try again</Button>
 				</CenteredStatus>
 			) : (
 				<MembersInvitationsList
@@ -295,14 +290,14 @@ function InvitationForm({
 						value={email}
 					/>
 				</View>
-				<AppButton
+				<Button
 					disabled={creating}
-					label={creating ? "Sending" : "Send Invite"}
 					onPress={() => {
 						void actions.createInvitation(email);
 					}}
-					variant="primary"
-				/>
+				>
+					{creating ? "Sending" : "Send Invite"}
+				</Button>
 			</View>
 		</SurfaceCard>
 	);
@@ -317,6 +312,7 @@ function JoinCodeCard({
 	joinCode: HouseholdJoinCode;
 	operation: HouseholdSettingsOperation;
 }) {
+	const { theme } = useUnistyles();
 	const [expanded, setExpanded] = useState(false);
 	const settingEnabled = operation.status === "settingJoinCodeEnabled";
 	const regenerating = operation.status === "regeneratingJoinCode";
@@ -353,35 +349,47 @@ function JoinCodeCard({
 					<View style={styles.joinCodeActions}>
 						{joinCode.enabled ? (
 							<>
-								<AppButton
-									label="Copy Link"
+								<Button
 									onPress={() =>
 										actions.copyText(
 											joinCode.joinUrl,
 											"Household Join Code URL copied.",
 										)
 									}
-									symbol="doc.on.doc"
-								/>
-								<AppButton
+									variant="outline"
+								>
+									<SymbolView
+										accessibilityElementsHidden
+										accessible={false}
+										name="doc.on.doc"
+										size={17}
+										tintColor={theme.colors.foreground}
+										weight="medium"
+									/>
+									<Text style={styles.outlineButtonLabel}>Copy Link</Text>
+								</Button>
+								<Button
 									disabled={regenerating}
-									label={regenerating ? "Regenerating" : "Regenerate"}
 									onPress={actions.regenerateJoinCode}
-								/>
-								<AppButton
+									variant="outline"
+								>
+									{regenerating ? "Regenerating" : "Regenerate"}
+								</Button>
+								<Button
 									disabled={settingEnabled}
-									label={settingEnabled ? "Disabling" : "Disable"}
 									onPress={() => actions.setJoinCodeEnabled(false)}
 									variant="destructive"
-								/>
+								>
+									{settingEnabled ? "Disabling" : "Disable"}
+								</Button>
 							</>
 						) : (
-							<AppButton
+							<Button
 								disabled={settingEnabled}
-								label={settingEnabled ? "Enabling" : "Enable Join Code"}
 								onPress={() => actions.setJoinCodeEnabled(true)}
-								variant="primary"
-							/>
+							>
+								{settingEnabled ? "Enabling" : "Enable Join Code"}
+							</Button>
 						)}
 					</View>
 				) : null}
@@ -434,14 +442,12 @@ function CopyButton({
 }) {
 	const { theme } = useUnistyles();
 	return (
-		<Pressable
+		<Button
 			accessibilityLabel={accessibilityLabel}
-			accessibilityRole="button"
 			onPress={onPress}
-			style={({ pressed }) => [
-				styles.copyButton,
-				pressed ? styles.pressed : undefined,
-			]}
+			size="icon"
+			style={styles.copyButton}
+			variant="ghost"
 		>
 			<SymbolView
 				accessibilityElementsHidden
@@ -451,7 +457,7 @@ function CopyButton({
 				tintColor={theme.colors.mutedForeground}
 				weight="medium"
 			/>
-		</Pressable>
+		</Button>
 	);
 }
 
@@ -622,7 +628,7 @@ function SessionState({
 		return (
 			<CenteredStatus title="Household unavailable">
 				<Text style={styles.statusBody}>{state.message}</Text>
-				<AppButton label="Try again" onPress={onRetry} variant="primary" />
+				<Button onPress={onRetry}>Try again</Button>
 			</CenteredStatus>
 		);
 	}
@@ -720,6 +726,11 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.caption,
 		color: theme.colors.mutedForeground,
 	},
+	outlineButtonLabel: {
+		...theme.typography.callout,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.foreground,
+	},
 	joinCodeActions: {
 		flexDirection: "row",
 		flexWrap: "wrap",
@@ -732,9 +743,6 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(11),
 		alignItems: "center",
 		justifyContent: "center",
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
 	},
 	centered: {
 		flex: 1,

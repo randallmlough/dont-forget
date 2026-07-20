@@ -1,17 +1,17 @@
 import { useSignUp } from "@clerk/clerk-expo";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, Text } from "react-native";
+import { Alert } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { AuthFooterLink } from "@/client/features/auth/auth-footer-link";
 import { AuthScreen } from "@/client/features/auth/auth-screen";
 import { AuthTextInput } from "@/client/features/auth/auth-text-input";
 import { OrDivider } from "@/client/features/auth/or-divider";
-import { PrimaryButton } from "@/client/features/auth/primary-button";
 import { authHrefWithIntent } from "@/client/features/auth/redirect-policy";
 import { SocialSignIn } from "@/client/features/auth/social-sign-in";
 import { track } from "@/client/lib/analytics";
 import { userMessage } from "@/client/lib/clerk-errors";
+import { Button } from "@/client/ui/button";
 
 export default function SignUpScreen() {
 	const [pendingEmail, setPendingEmail] = useState<string | null>(null);
@@ -121,11 +121,9 @@ function CreateAccountForm({
 				editable={!submitting}
 				onSubmitEditing={onCreate}
 			/>
-			<PrimaryButton
-				label="Create account"
-				onPress={onCreate}
-				loading={submitting}
-			/>
+			<Button loading={submitting} onPress={onCreate} radius="xl" size="lg">
+				Create account
+			</Button>
 		</>
 	);
 }
@@ -175,20 +173,18 @@ function VerifyEmailForm({ onBack }: { onBack: () => void }) {
 				editable={!submitting}
 				onSubmitEditing={onVerify}
 			/>
-			<PrimaryButton
-				label="Verify email"
-				onPress={onVerify}
-				loading={submitting}
-			/>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityState={{ disabled: submitting }}
-				onPress={onBack}
+			<Button loading={submitting} onPress={onVerify} radius="xl" size="lg">
+				Verify email
+			</Button>
+			<Button
 				disabled={submitting}
+				onPress={onBack}
 				style={styles.backButton}
+				textStyle={styles.backLabel}
+				variant="ghost"
 			>
-				<Text style={styles.backLabel}>Use a different email</Text>
-			</Pressable>
+				Use a different email
+			</Button>
 		</>
 	);
 }

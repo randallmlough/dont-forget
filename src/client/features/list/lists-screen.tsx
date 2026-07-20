@@ -1,13 +1,7 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useMemo, useRef, useState } from "react";
-import {
-	ActivityIndicator,
-	FlatList,
-	Pressable,
-	Text,
-	View,
-} from "react-native";
+import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
@@ -30,7 +24,7 @@ import {
 	ActionMenuButton,
 	type ActionMenuItem,
 } from "@/client/ui/action-menu-button";
-import { AppButton } from "@/client/ui/app-button";
+import { Button } from "@/client/ui/button";
 import { GlassSurface } from "@/client/ui/glass-surface";
 import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
 import {
@@ -282,6 +276,7 @@ function ListRowsView({
 	onRename: (summary: ListSummary) => void;
 	onDelete: (summary: ListSummary) => void;
 }) {
+	const { theme } = useUnistyles();
 	const { currentSummary, otherSummaries } = useMemo(() => {
 		if (rows.status !== "ready") {
 			return { currentSummary: undefined, otherSummaries: [] };
@@ -349,13 +344,22 @@ function ListRowsView({
 				/>
 			)}
 			<View style={styles.newListButton}>
-				<AppButton
+				<Button
 					disabled={listMutationPending}
-					fullWidth
-					label="New List"
 					onPress={onCreate}
-					symbol="plus"
-				/>
+					style={styles.fullWidthButton}
+					variant="outline"
+				>
+					<SymbolView
+						accessibilityElementsHidden
+						accessible={false}
+						name="plus"
+						size={17}
+						tintColor={theme.colors.foreground}
+						weight="medium"
+					/>
+					<Text style={styles.outlineButtonLabel}>New List</Text>
+				</Button>
 			</View>
 		</View>
 	);
@@ -398,16 +402,13 @@ function CurrentListCard({
 					disabled={actionsDisabled}
 				/>
 			</View>
-			<Pressable
+			<Button
 				accessibilityHint="Opens the Current List"
 				accessibilityLabel={summary.name}
-				accessibilityRole="button"
 				accessibilityState={{ selected: true }}
 				onPress={onSelect}
-				style={({ pressed }) => [
-					styles.currentCardContent,
-					pressed ? styles.pressed : undefined,
-				]}
+				style={styles.currentCardContent}
+				variant="link"
 			>
 				<Text numberOfLines={2} style={styles.currentName}>
 					{summary.name}
@@ -424,7 +425,7 @@ function CurrentListCard({
 						weight="semibold"
 					/>
 				</View>
-			</Pressable>
+			</Button>
 		</GlassSurface>
 	);
 }
@@ -682,6 +683,9 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	currentCardContent: {
 		minHeight: theme.spacing(26),
+		flexDirection: "column",
+		alignItems: "stretch",
+		justifyContent: "flex-start",
 		paddingHorizontal: theme.spacing(4),
 		paddingTop: theme.spacing(1),
 		paddingBottom: theme.spacing(4),
@@ -711,6 +715,14 @@ const styles = StyleSheet.create((theme) => ({
 	newListButton: {
 		paddingTop: theme.spacing(3),
 	},
+	fullWidthButton: {
+		alignSelf: "stretch",
+	},
+	outlineButtonLabel: {
+		...theme.typography.callout,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.foreground,
+	},
 	statusContainer: {
 		flex: 1,
 		alignItems: "center",
@@ -729,5 +741,4 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.destructive,
 		textAlign: "center",
 	},
-	pressed: { opacity: theme.opacities.pressed },
 }));

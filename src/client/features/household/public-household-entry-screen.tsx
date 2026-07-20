@@ -3,7 +3,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useAuthenticatedAppSession } from "@/client/session";
-import { HouseholdButton } from "./household-button";
+import { Button } from "@/client/ui/button";
 import {
 	type PublicHouseholdEntryState,
 	usePublicHouseholdEntry,
@@ -83,12 +83,9 @@ export function PublicHouseholdEntryView({
 						{state.error ? (
 							<Text style={styles.errorText}>{state.error}</Text>
 						) : null}
-						<HouseholdButton
-							variant="primary"
-							label={state.working ? "Joining" : primaryLabel}
-							onPress={onSubmit}
-							disabled={state.working}
-						/>
+						<Button onPress={onSubmit} disabled={state.working}>
+							{state.working ? "Joining" : primaryLabel}
+						</Button>
 					</>
 				)}
 			</View>

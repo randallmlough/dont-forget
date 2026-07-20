@@ -1,7 +1,8 @@
 import { SymbolView } from "expo-symbols";
 import { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { Button } from "@/client/ui/button";
 import type { ListSummary } from "./list-service";
 import type {
 	ActiveListMeta,
@@ -45,33 +46,30 @@ export function ListHeader({
 	return (
 		<View style={styles.header}>
 			{onOpenNavigation ? (
-				<Pressable
+				<Button
 					accessibilityLabel="Open navigation"
-					accessibilityRole="button"
 					onPress={onOpenNavigation}
-					style={({ pressed }) => [
-						styles.menuButton,
-						pressed ? styles.pressed : undefined,
-					]}
+					size="icon"
+					style={styles.menuButton}
+					variant="link"
 				>
 					<SymbolView
+						accessibilityElementsHidden
+						accessible={false}
 						name="line.3.horizontal"
 						size={22}
 						tintColor={theme.colors.foreground}
 						weight="medium"
 					/>
-				</Pressable>
+				</Button>
 			) : null}
 			{onPressListName ? (
-				<Pressable
-					accessibilityRole="button"
+				<Button
 					accessibilityLabel="Switch List"
 					accessibilityHint="Opens Lists"
 					onPress={onPressListName}
-					style={({ pressed }) => [
-						styles.listNameButton,
-						pressed ? styles.pressed : undefined,
-					]}
+					style={styles.listNameButton}
+					variant="link"
 				>
 					<Text style={styles.listName}>{state.listName}</Text>
 					<SymbolView
@@ -80,7 +78,7 @@ export function ListHeader({
 						tintColor={theme.colors.foreground}
 						weight="semibold"
 					/>
-				</Pressable>
+				</Button>
 			) : (
 				<Text style={styles.listName}>{state.listName}</Text>
 			)}
@@ -90,19 +88,18 @@ export function ListHeader({
 						? list.id === currentListId
 						: list.name === state.listName;
 					return (
-						<Pressable
+						<Button
 							key={list.id ?? `current:${list.name}`}
-							accessibilityRole="button"
 							accessibilityState={{ selected }}
 							disabled={selected || !list.id || !onSelectList}
 							onPress={() => {
 								if (list.id) onSelectList?.(list.id);
 							}}
-							style={({ pressed }) => [
+							style={[
 								styles.quickList,
 								selected ? styles.quickListSelected : undefined,
-								pressed ? styles.pressed : undefined,
 							]}
+							variant="link"
 						>
 							<Text
 								numberOfLines={1}
@@ -113,7 +110,7 @@ export function ListHeader({
 							>
 								{list.name}
 							</Text>
-						</Pressable>
+						</Button>
 					);
 				})}
 			</View>
@@ -279,8 +276,5 @@ const styles = StyleSheet.create((theme) => ({
 		fontWeight: theme.fontWeights.semibold,
 		marginTop: theme.spacing(2),
 		color: theme.colors.destructive,
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
 	},
 }));

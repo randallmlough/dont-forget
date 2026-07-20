@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
-import { AppButton } from "@/client/ui/app-button";
+import { Button } from "@/client/ui/button";
 import {
 	InitialsAvatar,
 	SurfaceCard,
@@ -213,19 +213,21 @@ function UserNameForm({
 					<Text style={styles.formNotice}>{state.userNotice}</Text>
 				) : null}
 				<View style={styles.formActions}>
-					<AppButton
+					<Button
 						disabled={state.userUpdateInFlight}
-						label={state.userUpdateInFlight ? "Saving" : "Save"}
 						onPress={() => {
 							void saveUserName();
 						}}
-						variant="primary"
-					/>
-					<AppButton
+					>
+						{state.userUpdateInFlight ? "Saving" : "Save"}
+					</Button>
+					<Button
 						disabled={state.userUpdateInFlight}
-						label="Cancel"
 						onPress={onCancel}
-					/>
+						variant="outline"
+					>
+						Cancel
+					</Button>
 				</View>
 			</View>
 		</SurfaceCard>
