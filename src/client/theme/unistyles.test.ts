@@ -4,24 +4,21 @@ describe("unistyles themes", () => {
 	it("defines the Editorial Pantry light palette", () => {
 		expect(lightTheme.colors).toEqual({
 			background: "#F7F4EE",
-			authBackground: "#FFFFFF",
-			surface: "#FFFFFF",
-			text: "#191B17",
-			textStrong: "#191B17",
-			textMuted: "#686B63",
-			textSubtle: "#85867E",
-			border: "#DDD6CA",
-			inputBorder: "#C8C0B3",
-			authBorder: "#DDD6CA",
-			divider: "#DDD6CA",
+			foreground: "#191B17",
+			card: "#FFFFFF",
+			cardForeground: "#191B17",
 			primary: "#263A2A",
-			primaryActionBackground: "#263A2A",
-			primaryActionText: "#FFFFFF",
-			primaryDisabled: "#C8C0B3",
+			primaryForeground: "#FFFFFF",
+			secondary: "#EFEAE1",
+			secondaryForeground: "#191B17",
+			muted: "#EFEAE1",
+			mutedForeground: "#686B63",
+			subtleForeground: "#85867E",
 			destructive: "#A23D36",
+			destructiveForeground: "#FFFFFF",
+			border: "#DDD6CA",
+			input: "#C8C0B3",
 			link: "#396A8E",
-			authPrimary: "#191B17",
-			inverseText: "#FFFFFF",
 			scrim: "rgba(16, 18, 15, 0.46)",
 			glassTint: "rgba(255, 255, 255, 0.64)",
 			glassTintSelected: "rgba(63, 93, 67, 0.22)",
@@ -35,6 +32,12 @@ describe("unistyles themes", () => {
 
 	it("keeps light and dark theme contracts aligned", () => {
 		expect(themeKeyPaths(darkTheme)).toEqual(themeKeyPaths(lightTheme));
+	});
+
+	it("gives every typography style an explicit line height", () => {
+		for (const style of Object.values(lightTheme.typography)) {
+			expect(style.lineHeight).toEqual(expect.any(Number));
+		}
 	});
 });
 

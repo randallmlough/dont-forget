@@ -57,7 +57,7 @@ export function ListHeader({
 					<SymbolView
 						name="line.3.horizontal"
 						size={22}
-						tintColor={theme.colors.text}
+						tintColor={theme.colors.foreground}
 						weight="medium"
 					/>
 				</Pressable>
@@ -77,7 +77,7 @@ export function ListHeader({
 					<SymbolView
 						name="chevron.down"
 						size={16}
-						tintColor={theme.colors.text}
+						tintColor={theme.colors.foreground}
 						weight="semibold"
 					/>
 				</Pressable>
@@ -194,11 +194,11 @@ const styles = StyleSheet.create((theme) => ({
 		marginLeft: -theme.spacing(2.5),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	householdName: {
 		...theme.typography.overline,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	listNameButton: {
 		alignSelf: "flex-start",
@@ -208,7 +208,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	listName: {
 		...theme.typography.largeTitle,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	quickLists: {
 		flexDirection: "row",
@@ -223,10 +223,10 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
+		backgroundColor: theme.colors.card,
 	},
 	quickListSelected: {
 		borderColor: theme.colors.primary,
@@ -234,10 +234,10 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	quickListLabel: {
 		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	quickListLabelSelected: {
-		color: theme.colors.inverseText,
+		color: theme.colors.primaryForeground,
 	},
 	progressMeta: {
 		flexDirection: "row",
@@ -248,22 +248,22 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	progressLabel: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	progressTrack: {
 		height: theme.spacing(0.75),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		overflow: "hidden",
 		backgroundColor: theme.colors.border,
 	},
 	progressFill: {
 		height: "100%",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	syncStatus: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	syncStatusSynced: {
 		color: theme.colors.primary,
@@ -275,7 +275,7 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.destructive,
 	},
 	errorMessage: {
-		fontSize: theme.fontSizes.footnote,
+		fontSize: theme.fontSizes.sm,
 		fontWeight: theme.fontWeights.semibold,
 		marginTop: theme.spacing(2),
 		color: theme.colors.destructive,

@@ -105,6 +105,6 @@ function noop() {}
 const styles = StyleSheet.create((theme) => ({
 	canvas: {
 		flex: 1,
-		backgroundColor: theme.colors.authBackground,
+		backgroundColor: theme.colors.background,
 	},
 }));

@@ -124,7 +124,7 @@ export function SurfaceRow({
 							accessible={false}
 							name={symbol}
 							size={19}
-							tintColor={theme.colors.inverseText}
+							tintColor={theme.colors.primaryForeground}
 							weight="medium"
 						/>
 					</View>
@@ -158,7 +158,7 @@ export function SurfaceRow({
 			accessible={false}
 			name="chevron.right"
 			size={14}
-			tintColor={theme.colors.textMuted}
+			tintColor={theme.colors.mutedForeground}
 			weight="semibold"
 		/>
 	) : null;
@@ -256,12 +256,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	sectionTitle: {
 		...theme.typography.overline,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textTransform: "uppercase",
 	},
 	sectionDetail: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	sectionAction: {
 		minHeight: theme.spacing(11),
@@ -274,16 +274,16 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.primary,
 	},
 	card: {
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 	},
 	cardFirst: {
-		borderTopLeftRadius: theme.radii.card,
-		borderTopRightRadius: theme.radii.card,
+		borderTopLeftRadius: theme.radii["2xl"],
+		borderTopRightRadius: theme.radii["2xl"],
 	},
 	cardMiddle: {},
 	cardLast: {
-		borderBottomLeftRadius: theme.radii.card,
-		borderBottomRightRadius: theme.radii.card,
+		borderBottomLeftRadius: theme.radii["2xl"],
+		borderBottomRightRadius: theme.radii["2xl"],
 	},
 	row: {
 		minHeight: theme.spacing(14),
@@ -314,7 +314,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	rowDivider: {
 		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.divider,
+		borderBottomColor: theme.colors.border,
 	},
 	rowText: {
 		flex: 1,
@@ -323,15 +323,15 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	rowLabel: {
 		...theme.typography.body,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	rowDetail: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	rowValue: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		maxWidth: "45%",
 	},
 	symbolBackground: {
@@ -339,7 +339,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(9),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	destructive: {
@@ -350,7 +350,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(11),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	avatarLarge: {
@@ -360,11 +360,11 @@ const styles = StyleSheet.create((theme) => ({
 	avatarLabel: {
 		...theme.typography.callout,
 		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.inverseText,
+		color: theme.colors.primaryForeground,
 	},
 	avatarLabelLarge: {
 		fontFamily: theme.fontFamilies.serif,
-		fontSize: theme.fontSizes.title,
+		fontSize: theme.fontSizes["3xl"],
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

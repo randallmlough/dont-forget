@@ -448,7 +448,7 @@ function CopyButton({
 				accessible={false}
 				name="doc.on.doc"
 				size={17}
-				tintColor={theme.colors.textMuted}
+				tintColor={theme.colors.mutedForeground}
 				weight="medium"
 			/>
 		</Pressable>
@@ -666,7 +666,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	sectionTitle: {
 		...theme.typography.overline,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textTransform: "uppercase",
 		paddingHorizontal: theme.spacing(1),
 		paddingTop: theme.spacing(6),
@@ -674,12 +674,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	notice: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		padding: theme.spacing(4),
 	},
 	emptyText: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		padding: theme.spacing(4),
 	},
 	invitationForm: {
@@ -695,17 +695,17 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	inputLabel: {
 		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textTransform: "uppercase",
 	},
 	input: {
 		minHeight: theme.spacing(11),
 		paddingHorizontal: theme.spacing(3),
 		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.inputBorder,
-		borderRadius: theme.radii.control,
+		borderColor: theme.colors.input,
+		borderRadius: theme.radii.xl,
 		backgroundColor: theme.colors.glassTint,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		...theme.typography.callout,
 	},
 	joinCodeSpacing: {
@@ -718,7 +718,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	codeText: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	joinCodeActions: {
 		flexDirection: "row",
@@ -745,12 +745,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	statusTitle: {
 		...theme.typography.headline,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		textAlign: "center",
 	},
 	statusBody: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textAlign: "center",
 	},
 }));

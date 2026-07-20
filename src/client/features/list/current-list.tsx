@@ -250,7 +250,7 @@ const styles = StyleSheet.create((theme) => ({
 	createButton: {
 		minHeight: theme.spacing(11),
 		paddingHorizontal: theme.spacing(4),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		borderCurve: "continuous",
 		alignItems: "center",
 		justifyContent: "center",
@@ -261,7 +261,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	createButtonLabel: {
 		...theme.typography.callout,
-		color: theme.colors.inverseText,
+		color: theme.colors.primaryForeground,
 		fontWeight: theme.fontWeights.bold,
 	},
 }));

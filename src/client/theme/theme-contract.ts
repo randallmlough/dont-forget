@@ -13,24 +13,21 @@ type TypographyStyle = {
 export type AppTheme = {
 	colors: {
 		background: string;
-		authBackground: string;
-		surface: string;
-		text: string;
-		textStrong: string;
-		textMuted: string;
-		textSubtle: string;
-		border: string;
-		inputBorder: string;
-		authBorder: string;
-		divider: string;
+		foreground: string;
+		card: string;
+		cardForeground: string;
 		primary: string;
-		primaryActionBackground: string;
-		primaryActionText: string;
-		primaryDisabled: string;
+		primaryForeground: string;
+		secondary: string;
+		secondaryForeground: string;
+		muted: string;
+		mutedForeground: string;
+		subtleForeground: string;
 		destructive: string;
+		destructiveForeground: string;
+		border: string;
+		input: string;
 		link: string;
-		authPrimary: string;
-		inverseText: string;
 		scrim: string;
 		glassTint: string;
 		glassTintSelected: string;
@@ -41,21 +38,32 @@ export type AppTheme = {
 		appearanceDarkSurface: string;
 	};
 	radii: {
-		card: number;
-		control: number;
-		pill: number;
-		checkbox: number;
+		sm: number;
+		md: number;
+		lg: number;
+		xl: number;
+		"2xl": number;
+		full: number;
 	};
 	fontSizes: {
-		caption: number;
-		footnote: number;
-		callout: number;
-		body: number;
-		subheadline: number;
-		titleSmall: number;
-		headline: number;
-		title: number;
-		largeTitle: number;
+		xs: number;
+		sm: number;
+		base: number;
+		lg: number;
+		xl: number;
+		"2xl": number;
+		"3xl": number;
+		"5xl": number;
+	};
+	lineHeights: {
+		xs: number;
+		sm: number;
+		base: number;
+		lg: number;
+		xl: number;
+		"2xl": number;
+		"3xl": number;
+		"5xl": number;
 	};
 	fontWeights: {
 		medium: FontWeight;

@@ -48,7 +48,7 @@ export function ScreenScaffold({
 								accessible={false}
 								name={isBackNavigation ? "chevron.left" : "line.3.horizontal"}
 								size={20}
-								tintColor={theme.colors.text}
+								tintColor={theme.colors.foreground}
 								weight="medium"
 							/>
 						</GlassSurface>
@@ -91,14 +91,14 @@ const styles = StyleSheet.create((theme) => ({
 		width: theme.spacing(11),
 		height: theme.spacing(11),
 		marginLeft: -theme.spacing(1),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	navigationGlass: {
 		width: theme.spacing(11),
 		height: theme.spacing(11),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	headerTextGroup: {
 		alignSelf: "stretch",
@@ -111,7 +111,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	headerTitle: {
 		...theme.typography.largeTitle,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

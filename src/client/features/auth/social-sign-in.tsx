@@ -77,7 +77,7 @@ export function SocialSignIn() {
 			<AppleAuthentication.AppleAuthenticationButton
 				buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
 				buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-				cornerRadius={theme.radii.control}
+				cornerRadius={theme.radii.xl}
 				style={styles.providerButton}
 				onPress={onApplePress}
 			/>
@@ -136,11 +136,11 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(13),
 	},
 	googleButton: {
-		backgroundColor: theme.colors.authBackground,
-		borderRadius: theme.radii.control,
+		backgroundColor: theme.colors.card,
+		borderRadius: theme.radii.xl,
 		borderCurve: "continuous",
 		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.authBorder,
+		borderColor: theme.colors.border,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -148,8 +148,8 @@ const styles = StyleSheet.create((theme) => ({
 		opacity: theme.opacities.disabled,
 	},
 	googleLabel: {
-		color: theme.colors.textStrong,
-		fontSize: theme.fontSizes.subheadline,
+		color: theme.colors.foreground,
+		fontSize: theme.fontSizes.lg,
 		fontWeight: theme.fontWeights.medium,
 	},
 }));

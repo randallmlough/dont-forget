@@ -4,15 +4,25 @@ import { brandPalette } from "./palette";
 import type { AppTheme } from "./theme-contract";
 
 const fontSizes = {
-	caption: 13,
-	footnote: 14,
-	callout: 15,
-	body: 16,
-	subheadline: 17,
-	titleSmall: 18,
-	headline: 20,
-	title: 30,
-	largeTitle: 44,
+	xs: 12,
+	sm: 14,
+	base: 16,
+	lg: 18,
+	xl: 20,
+	"2xl": 24,
+	"3xl": 30,
+	"5xl": 44,
+} as const;
+
+const lineHeights = {
+	xs: 16,
+	sm: 20,
+	base: 24,
+	lg: 26,
+	xl: 28,
+	"2xl": 32,
+	"3xl": 38,
+	"5xl": 50,
 } as const;
 
 const fontWeights = {
@@ -26,47 +36,57 @@ const fontFamilies = {
 } as const;
 
 const radii = {
-	card: 22,
-	control: 14,
-	pill: 999,
-	checkbox: 12,
+	sm: 6,
+	md: 8,
+	lg: 12,
+	xl: 16,
+	"2xl": 24,
+	full: 999,
 } as const;
 
 const typography = {
 	largeTitle: {
-		fontSize: fontSizes.largeTitle,
+		fontSize: fontSizes["5xl"],
 		fontFamily: fontFamilies.serif,
-		lineHeight: 50,
+		lineHeight: lineHeights["5xl"],
 	},
 	title: {
-		fontSize: fontSizes.title,
+		fontSize: fontSizes["3xl"],
 		fontWeight: fontWeights.bold,
+		lineHeight: lineHeights["3xl"],
 	},
 	headline: {
-		fontSize: fontSizes.headline,
+		fontSize: fontSizes.xl,
 		fontWeight: fontWeights.bold,
+		lineHeight: lineHeights.xl,
 	},
 	body: {
-		fontSize: fontSizes.body,
+		fontSize: fontSizes.base,
+		lineHeight: lineHeights.base,
 	},
 	callout: {
-		fontSize: fontSizes.callout,
+		fontSize: fontSizes.sm,
+		lineHeight: lineHeights.sm,
 	},
 	caption: {
-		fontSize: fontSizes.caption,
+		fontSize: fontSizes.xs,
+		lineHeight: lineHeights.xs,
 	},
 	captionStrong: {
-		fontSize: fontSizes.caption,
+		fontSize: fontSizes.xs,
 		fontWeight: fontWeights.semibold,
+		lineHeight: lineHeights.xs,
 	},
 	overline: {
-		fontSize: fontSizes.caption,
+		fontSize: fontSizes.xs,
 		fontWeight: fontWeights.semibold,
 		letterSpacing: 1.5,
+		lineHeight: lineHeights.xs,
 	},
 	controlLabel: {
-		fontSize: fontSizes.body,
+		fontSize: fontSizes.base,
 		fontWeight: fontWeights.bold,
+		lineHeight: lineHeights.base,
 	},
 } as const;
 
@@ -85,24 +105,21 @@ const spacing = (step: number) => step * 4;
 export const lightTheme = {
 	colors: {
 		background: brandPalette.cream50,
-		authBackground: brandPalette.white,
-		surface: brandPalette.white,
-		text: brandPalette.ink950,
-		textStrong: brandPalette.ink950,
-		textMuted: brandPalette.ink600,
-		textSubtle: brandPalette.ink500,
-		border: brandPalette.cream200,
-		inputBorder: brandPalette.cream300,
-		authBorder: brandPalette.cream200,
-		divider: brandPalette.cream200,
+		foreground: brandPalette.ink950,
+		card: brandPalette.white,
+		cardForeground: brandPalette.ink950,
 		primary: brandPalette.moss900,
-		primaryActionBackground: brandPalette.moss900,
-		primaryActionText: brandPalette.white,
-		primaryDisabled: brandPalette.cream300,
+		primaryForeground: brandPalette.white,
+		secondary: brandPalette.cream100,
+		secondaryForeground: brandPalette.ink950,
+		muted: brandPalette.cream100,
+		mutedForeground: brandPalette.ink600,
+		subtleForeground: brandPalette.ink500,
 		destructive: brandPalette.red600,
+		destructiveForeground: brandPalette.white,
+		border: brandPalette.cream200,
+		input: brandPalette.cream300,
 		link: brandPalette.blue700,
-		authPrimary: brandPalette.ink950,
-		inverseText: brandPalette.white,
 		scrim: withAlpha(brandPalette.charcoal950, 0.46),
 		glassTint: withAlpha(brandPalette.white, 0.64),
 		glassTintSelected: withAlpha(brandPalette.moss700, 0.22),
@@ -114,6 +131,7 @@ export const lightTheme = {
 	},
 	radii,
 	fontSizes,
+	lineHeights,
 	fontWeights,
 	fontFamilies,
 	typography,
@@ -125,24 +143,21 @@ export const lightTheme = {
 export const darkTheme = {
 	colors: {
 		background: brandPalette.charcoal950,
-		authBackground: brandPalette.charcoal950,
-		surface: brandPalette.charcoal900,
-		text: brandPalette.cream50,
-		textStrong: brandPalette.white,
-		textMuted: brandPalette.warmGray300,
-		textSubtle: brandPalette.warmGray400,
-		border: brandPalette.charcoal700,
-		inputBorder: brandPalette.charcoal700,
-		authBorder: brandPalette.charcoal700,
-		divider: brandPalette.charcoal700,
+		foreground: brandPalette.cream50,
+		card: brandPalette.charcoal900,
+		cardForeground: brandPalette.cream50,
 		primary: brandPalette.moss300,
-		primaryActionBackground: brandPalette.moss700,
-		primaryActionText: brandPalette.white,
-		primaryDisabled: brandPalette.charcoal700,
+		primaryForeground: brandPalette.charcoal950,
+		secondary: brandPalette.charcoal800,
+		secondaryForeground: brandPalette.cream50,
+		muted: brandPalette.charcoal800,
+		mutedForeground: brandPalette.warmGray300,
+		subtleForeground: brandPalette.warmGray400,
 		destructive: brandPalette.red300,
+		destructiveForeground: brandPalette.charcoal950,
+		border: brandPalette.charcoal700,
+		input: brandPalette.charcoal700,
 		link: brandPalette.blue300,
-		authPrimary: brandPalette.cream50,
-		inverseText: brandPalette.charcoal950,
 		scrim: withAlpha(brandPalette.charcoal950, 0.72),
 		glassTint: withAlpha(brandPalette.charcoal800, 0.7),
 		glassTintSelected: withAlpha(brandPalette.moss700, 0.38),
@@ -154,6 +169,7 @@ export const darkTheme = {
 	},
 	radii,
 	fontSizes,
+	lineHeights,
 	fontWeights,
 	fontFamilies,
 	typography,
@@ -162,7 +178,12 @@ export const darkTheme = {
 	spacing,
 } satisfies AppTheme;
 
-const appThemes = {
+type AppThemes = {
+	light: AppTheme;
+	dark: AppTheme;
+};
+
+const appThemes: AppThemes = {
 	light: lightTheme,
 	dark: darkTheme,
 };
@@ -172,13 +193,13 @@ const breakpoints = {
 	regular: 768,
 };
 
-type AppThemes = typeof appThemes;
 type AppBreakpoints = typeof breakpoints;
 
 declare module "react-native-unistyles" {
-	// Module augmentation requires empty extension interfaces for Unistyles.
-	// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-	export interface UnistylesThemes extends AppThemes {}
+	export interface UnistylesThemes {
+		light: AppTheme;
+		dark: AppTheme;
+	}
 	// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 	export interface UnistylesBreakpoints extends AppBreakpoints {}
 }

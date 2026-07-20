@@ -45,7 +45,7 @@ export function ActionMenuButton({
 						accessibilityLabel(menuAccessibilityLabel),
 						disabledModifier(disabled),
 						labelStyle("iconOnly"),
-						foregroundStyle(theme.colors.text),
+						foregroundStyle(theme.colors.foreground),
 						frame({
 							width: theme.spacing(8),
 							height: theme.spacing(8),

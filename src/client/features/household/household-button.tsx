@@ -37,7 +37,8 @@ export function HouseholdButton({
 				style={[
 					styles.label,
 					variant === "secondary" ? styles.secondaryLabel : undefined,
-					variant !== "secondary" ? styles.inverseLabel : undefined,
+					variant === "primary" ? styles.primaryLabel : undefined,
+					variant === "danger" ? styles.dangerLabel : undefined,
 				]}
 			>
 				{label}
@@ -52,7 +53,7 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 	},
 	primary: {
 		paddingHorizontal: theme.spacing(4),
@@ -61,7 +62,7 @@ const styles = StyleSheet.create((theme) => ({
 	secondary: {
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
+		backgroundColor: theme.colors.card,
 	},
 	danger: {
 		backgroundColor: theme.colors.destructive,
@@ -71,10 +72,13 @@ const styles = StyleSheet.create((theme) => ({
 		fontWeight: theme.fontWeights.semibold,
 	},
 	secondaryLabel: {
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
-	inverseLabel: {
-		color: theme.colors.inverseText,
+	primaryLabel: {
+		color: theme.colors.primaryForeground,
+	},
+	dangerLabel: {
+		color: theme.colors.destructiveForeground,
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

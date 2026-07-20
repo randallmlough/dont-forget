@@ -127,7 +127,7 @@ function AppearanceOption({
 								accessible={false}
 								name="checkmark"
 								size={13}
-								tintColor={theme.colors.inverseText}
+								tintColor={theme.colors.primaryForeground}
 								weight="bold"
 							/>
 						</View>
@@ -138,7 +138,7 @@ function AppearanceOption({
 					accessible={false}
 					name={symbol}
 					size={17}
-					tintColor={theme.colors.textMuted}
+					tintColor={theme.colors.mutedForeground}
 					weight="medium"
 				/>
 				<Text style={styles.optionLabel}>{appearanceLabel(preference)}</Text>
@@ -240,7 +240,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	intro: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		marginTop: -theme.spacing(2),
 	},
 	options: {
@@ -256,14 +256,14 @@ const styles = StyleSheet.create((theme) => ({
 		justifyContent: "center",
 		gap: theme.spacing(2),
 		padding: theme.spacing(2),
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 	},
 	optionPreview: {
 		position: "relative",
 	},
 	optionLabel: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	checkmark: {
 		position: "absolute",
@@ -273,7 +273,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(7),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	miniature: {
@@ -281,7 +281,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(24),
 		gap: theme.spacing(2),
 		padding: theme.spacing(2),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		overflow: "hidden",
 	},
 	miniatureLight: {
@@ -301,12 +301,12 @@ const styles = StyleSheet.create((theme) => ({
 	miniatureTitle: {
 		width: "48%",
 		height: theme.spacing(1),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	miniatureRow: {
 		width: "100%",
 		height: theme.spacing(3),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	miniatureLineLight: {
 		backgroundColor: theme.colors.appearanceLightSurface,
@@ -326,12 +326,12 @@ const styles = StyleSheet.create((theme) => ({
 	previewTitle: {
 		fontSize: theme.typography.title.fontSize,
 		fontFamily: theme.fontFamilies.serif,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	previewRows: {
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.border,
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		overflow: "hidden",
 	},
 	previewRow: {
@@ -341,18 +341,18 @@ const styles = StyleSheet.create((theme) => ({
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(3),
 		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.divider,
+		borderBottomColor: theme.colors.border,
 	},
 	previewCheckbox: {
 		width: theme.spacing(5),
 		height: theme.spacing(5),
 		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.textMuted,
-		borderRadius: theme.radii.pill,
+		borderColor: theme.colors.mutedForeground,
+		borderRadius: theme.radii.full,
 	},
 	previewItemLabel: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	previewComposer: {
 		minHeight: theme.spacing(12),
@@ -360,20 +360,20 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		gap: theme.spacing(2),
 		paddingHorizontal: theme.spacing(3),
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 	},
 	previewComposerLabel: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	notice: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		padding: theme.spacing(4),
 	},
 	footer: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

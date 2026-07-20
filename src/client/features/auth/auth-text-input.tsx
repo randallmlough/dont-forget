@@ -6,7 +6,7 @@ export function AuthTextInput(props: TextInputProps) {
 
 	return (
 		<TextInput
-			placeholderTextColor={theme.colors.textSubtle}
+			placeholderTextColor={theme.colors.subtleForeground}
 			autoCapitalize="none"
 			{...props}
 			style={[styles.input, props.style]}
@@ -17,13 +17,13 @@ export function AuthTextInput(props: TextInputProps) {
 const styles = StyleSheet.create((theme) => ({
 	input: {
 		height: theme.spacing(12),
-		borderRadius: theme.radii.control,
+		borderRadius: theme.radii.xl,
 		borderCurve: "continuous",
 		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.authBorder,
+		borderColor: theme.colors.border,
 		paddingHorizontal: theme.spacing(3.5),
-		fontSize: theme.fontSizes.body,
-		backgroundColor: theme.colors.authBackground,
-		color: theme.colors.textStrong,
+		fontSize: theme.fontSizes.base,
+		backgroundColor: theme.colors.card,
+		color: theme.colors.foreground,
 	},
 }));

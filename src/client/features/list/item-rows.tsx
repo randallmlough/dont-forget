@@ -76,7 +76,7 @@ function ItemRowComponent({
 					<SymbolView
 						name="checkmark"
 						size={14}
-						tintColor={theme.colors.inverseText}
+						tintColor={theme.colors.primaryForeground}
 						weight="bold"
 					/>
 				) : null}
@@ -141,14 +141,14 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(8),
 	},
 	emptyTitle: {
-		fontSize: theme.fontSizes.titleSmall,
+		fontSize: theme.fontSizes.lg,
 		fontWeight: theme.fontWeights.bold,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		textAlign: "center",
 	},
 	emptyBody: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textAlign: "center",
 	},
 	itemRow: {
@@ -164,9 +164,9 @@ const styles = StyleSheet.create((theme) => ({
 	checkbox: {
 		width: theme.spacing(6),
 		height: theme.spacing(6),
-		borderRadius: theme.radii.checkbox,
+		borderRadius: theme.radii.lg,
 		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.textSubtle,
+		borderColor: theme.colors.subtleForeground,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -179,17 +179,17 @@ const styles = StyleSheet.create((theme) => ({
 		minWidth: 0,
 	},
 	itemName: {
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		fontFamily: theme.fontFamilies.serif,
-		fontSize: theme.fontSizes.titleSmall,
+		fontSize: theme.fontSizes.lg,
 	},
 	itemNameChecked: {
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textDecorationLine: "line-through",
 	},
 	itemMeta: {
 		...theme.typography.caption,
-		color: theme.colors.textSubtle,
+		color: theme.colors.subtleForeground,
 		marginTop: theme.spacing(0.5),
 	},
 	itemSeparator: {

@@ -386,7 +386,7 @@ function CurrentListCard({
 							accessible={false}
 							name="checkmark"
 							size={12}
-							tintColor={theme.colors.primaryActionText}
+							tintColor={theme.colors.primaryForeground}
 							weight="bold"
 						/>
 					</View>
@@ -420,7 +420,7 @@ function CurrentListCard({
 						accessible={false}
 						name="chevron.right"
 						size={14}
-						tintColor={theme.colors.textMuted}
+						tintColor={theme.colors.mutedForeground}
 						weight="semibold"
 					/>
 				</View>
@@ -650,7 +650,7 @@ const styles = StyleSheet.create((theme) => ({
 		gap: theme.spacing(3),
 	},
 	currentCard: {
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 		borderCurve: "continuous",
 	},
 	currentCardHeader: {
@@ -672,7 +672,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(5),
 		alignItems: "center",
 		justifyContent: "center",
-		borderRadius: theme.radii.pill,
+		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.primary,
 	},
 	currentLabel: {
@@ -688,12 +688,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	currentName: {
 		fontFamily: theme.fontFamilies.serif,
-		fontSize: theme.fontSizes.title,
-		color: theme.colors.text,
+		fontSize: theme.fontSizes["3xl"],
+		color: theme.colors.foreground,
 	},
 	listCounts: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		marginTop: theme.spacing(1),
 	},
 	openListLabel: {
@@ -706,7 +706,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	openListText: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	newListButton: {
 		paddingTop: theme.spacing(3),
@@ -722,7 +722,7 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		justifyContent: "center",
 		padding: theme.spacing(5),
-		borderRadius: theme.radii.card,
+		borderRadius: theme.radii["2xl"],
 	},
 	errorMessage: {
 		...theme.typography.callout,
