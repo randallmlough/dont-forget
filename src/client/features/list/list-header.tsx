@@ -275,7 +275,7 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.destructive,
 	},
 	errorMessage: {
-		fontSize: theme.fontSizes.footnote,
+		fontSize: theme.fontSizes.sm,
 		fontWeight: theme.fontWeights.semibold,
 		marginTop: theme.spacing(2),
 		color: theme.colors.destructive,

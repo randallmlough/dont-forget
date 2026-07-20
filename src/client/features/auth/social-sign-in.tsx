@@ -149,7 +149,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	googleLabel: {
 		color: theme.colors.foreground,
-		fontSize: theme.fontSizes.subheadline,
+		fontSize: theme.fontSizes.lg,
 		fontWeight: theme.fontWeights.medium,
 	},
 }));

@@ -46,7 +46,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	label: {
 		color: theme.colors.primaryForeground,
-		fontSize: theme.fontSizes.subheadline,
+		fontSize: theme.fontSizes.lg,
 		fontWeight: theme.fontWeights.semibold,
 	},
 }));

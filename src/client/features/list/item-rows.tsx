@@ -141,7 +141,7 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(8),
 	},
 	emptyTitle: {
-		fontSize: theme.fontSizes.titleSmall,
+		fontSize: theme.fontSizes.lg,
 		fontWeight: theme.fontWeights.bold,
 		color: theme.colors.foreground,
 		textAlign: "center",
@@ -181,7 +181,7 @@ const styles = StyleSheet.create((theme) => ({
 	itemName: {
 		color: theme.colors.foreground,
 		fontFamily: theme.fontFamilies.serif,
-		fontSize: theme.fontSizes.titleSmall,
+		fontSize: theme.fontSizes.lg,
 	},
 	itemNameChecked: {
 		color: theme.colors.mutedForeground,

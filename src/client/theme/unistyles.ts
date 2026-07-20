@@ -4,15 +4,14 @@ import { brandPalette } from "./palette";
 import type { AppTheme } from "./theme-contract";
 
 const fontSizes = {
-	caption: 13,
-	footnote: 14,
-	callout: 15,
-	body: 16,
-	subheadline: 17,
-	titleSmall: 18,
-	headline: 20,
-	title: 30,
-	largeTitle: 44,
+	xs: 12,
+	sm: 14,
+	base: 16,
+	lg: 18,
+	xl: 20,
+	"2xl": 24,
+	"3xl": 30,
+	"5xl": 44,
 } as const;
 
 const fontWeights = {
@@ -36,38 +35,38 @@ const radii = {
 
 const typography = {
 	largeTitle: {
-		fontSize: fontSizes.largeTitle,
+		fontSize: fontSizes["5xl"],
 		fontFamily: fontFamilies.serif,
 		lineHeight: 50,
 	},
 	title: {
-		fontSize: fontSizes.title,
+		fontSize: fontSizes["3xl"],
 		fontWeight: fontWeights.bold,
 	},
 	headline: {
-		fontSize: fontSizes.headline,
+		fontSize: fontSizes.xl,
 		fontWeight: fontWeights.bold,
 	},
 	body: {
-		fontSize: fontSizes.body,
+		fontSize: fontSizes.base,
 	},
 	callout: {
-		fontSize: fontSizes.callout,
+		fontSize: fontSizes.sm,
 	},
 	caption: {
-		fontSize: fontSizes.caption,
+		fontSize: fontSizes.xs,
 	},
 	captionStrong: {
-		fontSize: fontSizes.caption,
+		fontSize: fontSizes.xs,
 		fontWeight: fontWeights.semibold,
 	},
 	overline: {
-		fontSize: fontSizes.caption,
+		fontSize: fontSizes.xs,
 		fontWeight: fontWeights.semibold,
 		letterSpacing: 1.5,
 	},
 	controlLabel: {
-		fontSize: fontSizes.body,
+		fontSize: fontSizes.base,
 		fontWeight: fontWeights.bold,
 	},
 } as const;

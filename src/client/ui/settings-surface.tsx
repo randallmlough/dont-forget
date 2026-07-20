@@ -364,7 +364,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	avatarLabelLarge: {
 		fontFamily: theme.fontFamilies.serif,
-		fontSize: theme.fontSizes.title,
+		fontSize: theme.fontSizes["3xl"],
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

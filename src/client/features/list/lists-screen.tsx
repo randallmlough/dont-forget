@@ -688,7 +688,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	currentName: {
 		fontFamily: theme.fontFamilies.serif,
-		fontSize: theme.fontSizes.title,
+		fontSize: theme.fontSizes["3xl"],
 		color: theme.colors.foreground,
 	},
 	listCounts: {

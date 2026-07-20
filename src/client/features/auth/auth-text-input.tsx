@@ -22,7 +22,7 @@ const styles = StyleSheet.create((theme) => ({
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.border,
 		paddingHorizontal: theme.spacing(3.5),
-		fontSize: theme.fontSizes.body,
+		fontSize: theme.fontSizes.base,
 		backgroundColor: theme.colors.card,
 		color: theme.colors.foreground,
 	},

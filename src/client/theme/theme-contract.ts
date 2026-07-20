@@ -46,15 +46,14 @@ export type AppTheme = {
 		full: number;
 	};
 	fontSizes: {
-		caption: number;
-		footnote: number;
-		callout: number;
-		body: number;
-		subheadline: number;
-		titleSmall: number;
-		headline: number;
-		title: number;
-		largeTitle: number;
+		xs: number;
+		sm: number;
+		base: number;
+		lg: number;
+		xl: number;
+		"2xl": number;
+		"3xl": number;
+		"5xl": number;
 	};
 	fontWeights: {
 		medium: FontWeight;
