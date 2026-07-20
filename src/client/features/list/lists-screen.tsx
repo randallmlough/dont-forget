@@ -386,7 +386,7 @@ function CurrentListCard({
 							accessible={false}
 							name="checkmark"
 							size={12}
-							tintColor={theme.colors.primaryActionText}
+							tintColor={theme.colors.primaryForeground}
 							weight="bold"
 						/>
 					</View>
@@ -420,7 +420,7 @@ function CurrentListCard({
 						accessible={false}
 						name="chevron.right"
 						size={14}
-						tintColor={theme.colors.textMuted}
+						tintColor={theme.colors.mutedForeground}
 						weight="semibold"
 					/>
 				</View>
@@ -689,11 +689,11 @@ const styles = StyleSheet.create((theme) => ({
 	currentName: {
 		fontFamily: theme.fontFamilies.serif,
 		fontSize: theme.fontSizes.title,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	listCounts: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		marginTop: theme.spacing(1),
 	},
 	openListLabel: {
@@ -706,7 +706,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	openListText: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	newListButton: {
 		paddingTop: theme.spacing(3),

@@ -194,7 +194,7 @@ function RestingGlassComposer({
 						textFieldStyle("plain"),
 						textInputAutocapitalization("sentences"),
 						font({ textStyle: "body" }),
-						foregroundStyle(theme.colors.text),
+						foregroundStyle(theme.colors.foreground),
 						frame({
 							minHeight: theme.spacing(13),
 							maxWidth: FILL_AVAILABLE_WIDTH,
@@ -254,7 +254,7 @@ function ExpandedGlassComposer({
 						<Text
 							modifiers={[
 								font({ textStyle: "callout", weight: "medium" }),
-								foregroundStyle(theme.colors.text),
+								foregroundStyle(theme.colors.foreground),
 							]}
 						>
 							New Item
@@ -472,7 +472,7 @@ function CurrentListPicker({
 			<Text
 				modifiers={[
 					font({ textStyle: "callout" }),
-					foregroundStyle(theme.colors.text),
+					foregroundStyle(theme.colors.foreground),
 					lineLimit(1),
 				]}
 			>

@@ -143,7 +143,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	notice: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		padding: theme.spacing(4),
 	},
 }));

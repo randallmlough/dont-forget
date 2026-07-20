@@ -376,36 +376,36 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	identityName: {
 		...theme.typography.headline,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	identityDetail: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	notice: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		padding: theme.spacing(4),
 	},
 	renameForm: {
 		gap: theme.spacing(3),
 		padding: theme.spacing(4),
 		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.divider,
+		borderBottomColor: theme.colors.border,
 	},
 	inputLabel: {
 		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textTransform: "uppercase",
 	},
 	input: {
 		minHeight: theme.spacing(12),
 		paddingHorizontal: theme.spacing(3),
 		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.inputBorder,
+		borderColor: theme.colors.input,
 		borderRadius: theme.radii.control,
 		backgroundColor: theme.colors.glassTint,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		...theme.typography.body,
 	},
 	formActions: {
@@ -421,12 +421,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	statusTitle: {
 		...theme.typography.headline,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		textAlign: "center",
 	},
 	statusBody: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textAlign: "center",
 	},
 }));

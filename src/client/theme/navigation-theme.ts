@@ -10,10 +10,10 @@ export function navigationThemeFor(theme: AppTheme, dark: boolean): Theme {
 			...DefaultTheme.colors,
 			background: theme.colors.background,
 			border: theme.colors.border,
-			card: theme.colors.surface,
+			card: theme.colors.card,
 			notification: theme.colors.destructive,
 			primary: theme.colors.primary,
-			text: theme.colors.text,
+			text: theme.colors.foreground,
 		},
 	};
 }

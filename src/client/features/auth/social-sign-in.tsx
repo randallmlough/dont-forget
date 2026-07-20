@@ -136,11 +136,11 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(13),
 	},
 	googleButton: {
-		backgroundColor: theme.colors.authBackground,
+		backgroundColor: theme.colors.card,
 		borderRadius: theme.radii.control,
 		borderCurve: "continuous",
 		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.authBorder,
+		borderColor: theme.colors.border,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -148,7 +148,7 @@ const styles = StyleSheet.create((theme) => ({
 		opacity: theme.opacities.disabled,
 	},
 	googleLabel: {
-		color: theme.colors.textStrong,
+		color: theme.colors.foreground,
 		fontSize: theme.fontSizes.subheadline,
 		fontWeight: theme.fontWeights.medium,
 	},

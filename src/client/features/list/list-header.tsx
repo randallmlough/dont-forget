@@ -57,7 +57,7 @@ export function ListHeader({
 					<SymbolView
 						name="line.3.horizontal"
 						size={22}
-						tintColor={theme.colors.text}
+						tintColor={theme.colors.foreground}
 						weight="medium"
 					/>
 				</Pressable>
@@ -77,7 +77,7 @@ export function ListHeader({
 					<SymbolView
 						name="chevron.down"
 						size={16}
-						tintColor={theme.colors.text}
+						tintColor={theme.colors.foreground}
 						weight="semibold"
 					/>
 				</Pressable>
@@ -198,7 +198,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	householdName: {
 		...theme.typography.overline,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	listNameButton: {
 		alignSelf: "flex-start",
@@ -208,7 +208,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	listName: {
 		...theme.typography.largeTitle,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	quickLists: {
 		flexDirection: "row",
@@ -226,7 +226,7 @@ const styles = StyleSheet.create((theme) => ({
 		borderRadius: theme.radii.pill,
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
+		backgroundColor: theme.colors.card,
 	},
 	quickListSelected: {
 		borderColor: theme.colors.primary,
@@ -234,10 +234,10 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	quickListLabel: {
 		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	quickListLabelSelected: {
-		color: theme.colors.inverseText,
+		color: theme.colors.primaryForeground,
 	},
 	progressMeta: {
 		flexDirection: "row",
@@ -248,7 +248,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	progressLabel: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	progressTrack: {
 		height: theme.spacing(0.75),
@@ -263,7 +263,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	syncStatus: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	syncStatusSynced: {
 		color: theme.colors.primary,

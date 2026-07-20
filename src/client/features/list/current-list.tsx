@@ -261,7 +261,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	createButtonLabel: {
 		...theme.typography.callout,
-		color: theme.colors.inverseText,
+		color: theme.colors.primaryForeground,
 		fontWeight: theme.fontWeights.bold,
 	},
 }));

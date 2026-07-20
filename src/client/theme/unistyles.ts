@@ -85,24 +85,21 @@ const spacing = (step: number) => step * 4;
 export const lightTheme = {
 	colors: {
 		background: brandPalette.cream50,
-		authBackground: brandPalette.white,
-		surface: brandPalette.white,
-		text: brandPalette.ink950,
-		textStrong: brandPalette.ink950,
-		textMuted: brandPalette.ink600,
-		textSubtle: brandPalette.ink500,
-		border: brandPalette.cream200,
-		inputBorder: brandPalette.cream300,
-		authBorder: brandPalette.cream200,
-		divider: brandPalette.cream200,
+		foreground: brandPalette.ink950,
+		card: brandPalette.white,
+		cardForeground: brandPalette.ink950,
 		primary: brandPalette.moss900,
-		primaryActionBackground: brandPalette.moss900,
-		primaryActionText: brandPalette.white,
-		primaryDisabled: brandPalette.cream300,
+		primaryForeground: brandPalette.white,
+		secondary: brandPalette.cream100,
+		secondaryForeground: brandPalette.ink950,
+		muted: brandPalette.cream100,
+		mutedForeground: brandPalette.ink600,
+		subtleForeground: brandPalette.ink500,
 		destructive: brandPalette.red600,
+		destructiveForeground: brandPalette.white,
+		border: brandPalette.cream200,
+		input: brandPalette.cream300,
 		link: brandPalette.blue700,
-		authPrimary: brandPalette.ink950,
-		inverseText: brandPalette.white,
 		scrim: withAlpha(brandPalette.charcoal950, 0.46),
 		glassTint: withAlpha(brandPalette.white, 0.64),
 		glassTintSelected: withAlpha(brandPalette.moss700, 0.22),
@@ -125,24 +122,21 @@ export const lightTheme = {
 export const darkTheme = {
 	colors: {
 		background: brandPalette.charcoal950,
-		authBackground: brandPalette.charcoal950,
-		surface: brandPalette.charcoal900,
-		text: brandPalette.cream50,
-		textStrong: brandPalette.white,
-		textMuted: brandPalette.warmGray300,
-		textSubtle: brandPalette.warmGray400,
-		border: brandPalette.charcoal700,
-		inputBorder: brandPalette.charcoal700,
-		authBorder: brandPalette.charcoal700,
-		divider: brandPalette.charcoal700,
+		foreground: brandPalette.cream50,
+		card: brandPalette.charcoal900,
+		cardForeground: brandPalette.cream50,
 		primary: brandPalette.moss300,
-		primaryActionBackground: brandPalette.moss700,
-		primaryActionText: brandPalette.white,
-		primaryDisabled: brandPalette.charcoal700,
+		primaryForeground: brandPalette.charcoal950,
+		secondary: brandPalette.charcoal800,
+		secondaryForeground: brandPalette.cream50,
+		muted: brandPalette.charcoal800,
+		mutedForeground: brandPalette.warmGray300,
+		subtleForeground: brandPalette.warmGray400,
 		destructive: brandPalette.red300,
+		destructiveForeground: brandPalette.charcoal950,
+		border: brandPalette.charcoal700,
+		input: brandPalette.charcoal700,
 		link: brandPalette.blue300,
-		authPrimary: brandPalette.cream50,
-		inverseText: brandPalette.charcoal950,
 		scrim: withAlpha(brandPalette.charcoal950, 0.72),
 		glassTint: withAlpha(brandPalette.charcoal800, 0.7),
 		glassTintSelected: withAlpha(brandPalette.moss700, 0.38),
@@ -162,7 +156,12 @@ export const darkTheme = {
 	spacing,
 } satisfies AppTheme;
 
-const appThemes = {
+type AppThemes = {
+	light: AppTheme;
+	dark: AppTheme;
+};
+
+const appThemes: AppThemes = {
 	light: lightTheme,
 	dark: darkTheme,
 };
@@ -172,13 +171,13 @@ const breakpoints = {
 	regular: 768,
 };
 
-type AppThemes = typeof appThemes;
 type AppBreakpoints = typeof breakpoints;
 
 declare module "react-native-unistyles" {
-	// Module augmentation requires empty extension interfaces for Unistyles.
-	// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-	export interface UnistylesThemes extends AppThemes {}
+	export interface UnistylesThemes {
+		light: AppTheme;
+		dark: AppTheme;
+	}
 	// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 	export interface UnistylesBreakpoints extends AppBreakpoints {}
 }

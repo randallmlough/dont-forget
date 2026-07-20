@@ -27,8 +27,8 @@ export function AppButton({
 		variant === "destructive"
 			? theme.colors.destructive
 			: variant === "primary"
-				? theme.colors.primaryActionText
-				: theme.colors.text;
+				? theme.colors.primaryForeground
+				: theme.colors.foreground;
 
 	return (
 		<Pressable
@@ -91,8 +91,8 @@ const styles = StyleSheet.create((theme) => ({
 		borderRadius: theme.radii.pill,
 	},
 	primarySurface: {
-		backgroundColor: theme.colors.primaryActionBackground,
-		borderColor: theme.colors.primaryActionBackground,
+		backgroundColor: theme.colors.primary,
+		borderColor: theme.colors.primary,
 	},
 	content: {
 		minHeight: theme.spacing(11),
@@ -105,10 +105,10 @@ const styles = StyleSheet.create((theme) => ({
 	label: {
 		...theme.typography.callout,
 		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	primaryLabel: {
-		color: theme.colors.primaryActionText,
+		color: theme.colors.primaryForeground,
 	},
 	destructiveLabel: {
 		color: theme.colors.destructive,

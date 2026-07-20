@@ -255,12 +255,12 @@ const styles = StyleSheet.create((theme) => ({
 	heroName: {
 		...theme.typography.title,
 		fontFamily: theme.fontFamilies.serif,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		textAlign: "center",
 	},
 	heroEmail: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textAlign: "center",
 	},
 	form: {
@@ -272,17 +272,17 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	fieldLabel: {
 		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textTransform: "uppercase",
 	},
 	input: {
 		minHeight: theme.spacing(12),
 		paddingHorizontal: theme.spacing(3),
 		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.inputBorder,
+		borderColor: theme.colors.input,
 		borderRadius: theme.radii.control,
 		backgroundColor: theme.colors.glassTint,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		...theme.typography.body,
 	},
 	formActions: {

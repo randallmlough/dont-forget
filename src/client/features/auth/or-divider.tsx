@@ -21,10 +21,10 @@ const styles = StyleSheet.create((theme) => ({
 	line: {
 		flex: 1,
 		height: theme.borders.hairline,
-		backgroundColor: theme.colors.divider,
+		backgroundColor: theme.colors.border,
 	},
 	text: {
 		...theme.typography.caption,
-		color: theme.colors.textSubtle,
+		color: theme.colors.subtleForeground,
 	},
 }));

@@ -50,18 +50,18 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(7),
 		borderRadius: theme.radii.card,
 		borderCurve: "continuous",
-		backgroundColor: theme.colors.surface,
+		backgroundColor: theme.colors.card,
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.border,
 	},
 	statusTitle: {
 		...theme.typography.headline,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		textAlign: "center",
 	},
 	statusBody: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textAlign: "center",
 	},
 	retryButton: {
@@ -78,7 +78,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	retryButtonLabel: {
 		...theme.typography.callout,
-		color: theme.colors.inverseText,
+		color: theme.colors.primaryForeground,
 		fontWeight: theme.fontWeights.bold,
 	},
 }));

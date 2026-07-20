@@ -197,7 +197,7 @@ export function NavigationDrawerView({
 							accessible={false}
 							name="chevron.right"
 							size={14}
-							tintColor={theme.colors.textMuted}
+							tintColor={theme.colors.mutedForeground}
 							weight="semibold"
 						/>
 					</Pressable>
@@ -226,7 +226,9 @@ function DrawerRow({ icon, label, selected, onPress }: DrawerRowProps) {
 				accessible={false}
 				name={icon}
 				size={20}
-				tintColor={selected ? theme.colors.primary : theme.colors.textMuted}
+				tintColor={
+					selected ? theme.colors.primary : theme.colors.mutedForeground
+				}
 				weight={selected ? "semibold" : "regular"}
 			/>
 			<Text
@@ -254,7 +256,7 @@ const styles = StyleSheet.create((theme) => ({
 		paddingTop: theme.spacing(4),
 		paddingBottom: theme.spacing(5),
 	},
-	brand: { ...theme.typography.title, color: theme.colors.textMuted },
+	brand: { ...theme.typography.title, color: theme.colors.mutedForeground },
 	memberRow: {
 		minHeight: theme.spacing(14),
 		flexDirection: "row",
@@ -271,22 +273,22 @@ const styles = StyleSheet.create((theme) => ({
 		borderRadius: theme.radii.pill,
 		borderWidth: theme.borders.hairline,
 		borderColor: theme.colors.border,
-		backgroundColor: theme.colors.surface,
+		backgroundColor: theme.colors.card,
 	},
 	avatarLabel: {
 		...theme.typography.callout,
 		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	memberText: { flex: 1, minWidth: 0, gap: theme.spacing(0.5) },
 	memberName: {
 		...theme.typography.body,
 		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	householdName: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		paddingHorizontal: theme.spacing(2),
 	},
 	destinationGroup: {
@@ -302,8 +304,11 @@ const styles = StyleSheet.create((theme) => ({
 		borderRadius: theme.radii.control,
 		borderCurve: "continuous",
 	},
-	destinationSelected: { backgroundColor: theme.colors.surface },
-	destinationLabel: { ...theme.typography.body, color: theme.colors.text },
+	destinationSelected: { backgroundColor: theme.colors.card },
+	destinationLabel: {
+		...theme.typography.body,
+		color: theme.colors.foreground,
+	},
 	destinationLabelSelected: {
 		fontWeight: theme.fontWeights.semibold,
 		color: theme.colors.primary,

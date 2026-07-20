@@ -114,15 +114,15 @@ const styles = StyleSheet.create((theme) => ({
 		borderWidth: theme.borders.thin,
 		borderColor: theme.colors.border,
 		borderRadius: theme.radii.card,
-		backgroundColor: theme.colors.surface,
+		backgroundColor: theme.colors.card,
 	},
 	title: {
 		...theme.typography.title,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	body: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	errorText: {
 		...theme.typography.callout,

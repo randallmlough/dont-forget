@@ -127,7 +127,7 @@ function AppearanceOption({
 								accessible={false}
 								name="checkmark"
 								size={13}
-								tintColor={theme.colors.inverseText}
+								tintColor={theme.colors.primaryForeground}
 								weight="bold"
 							/>
 						</View>
@@ -138,7 +138,7 @@ function AppearanceOption({
 					accessible={false}
 					name={symbol}
 					size={17}
-					tintColor={theme.colors.textMuted}
+					tintColor={theme.colors.mutedForeground}
 					weight="medium"
 				/>
 				<Text style={styles.optionLabel}>{appearanceLabel(preference)}</Text>
@@ -240,7 +240,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	intro: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		marginTop: -theme.spacing(2),
 	},
 	options: {
@@ -263,7 +263,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	optionLabel: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	checkmark: {
 		position: "absolute",
@@ -326,7 +326,7 @@ const styles = StyleSheet.create((theme) => ({
 	previewTitle: {
 		fontSize: theme.typography.title.fontSize,
 		fontFamily: theme.fontFamilies.serif,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	previewRows: {
 		borderWidth: theme.borders.hairline,
@@ -341,18 +341,18 @@ const styles = StyleSheet.create((theme) => ({
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(3),
 		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.divider,
+		borderBottomColor: theme.colors.border,
 	},
 	previewCheckbox: {
 		width: theme.spacing(5),
 		height: theme.spacing(5),
 		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.textMuted,
+		borderColor: theme.colors.mutedForeground,
 		borderRadius: theme.radii.pill,
 	},
 	previewItemLabel: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 	},
 	previewComposer: {
 		minHeight: theme.spacing(12),
@@ -364,16 +364,16 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	previewComposerLabel: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	notice: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		padding: theme.spacing(4),
 	},
 	footer: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

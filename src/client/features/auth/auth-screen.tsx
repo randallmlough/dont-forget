@@ -28,7 +28,7 @@ export function AuthScreen({
 }
 
 const styles = StyleSheet.create((theme) => ({
-	flex: { flex: 1, backgroundColor: theme.colors.authBackground },
+	flex: { flex: 1, backgroundColor: theme.colors.background },
 	container: {
 		flexGrow: 1,
 		justifyContent: "center",
@@ -38,12 +38,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	title: {
 		...theme.typography.title,
-		color: theme.colors.textStrong,
+		color: theme.colors.foreground,
 		textAlign: "center",
 	},
 	subtitle: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textAlign: "center",
 		marginBottom: theme.spacing(4),
 	},

@@ -29,7 +29,7 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	text: {
 		...theme.typography.callout,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	link: {
 		...theme.typography.callout,

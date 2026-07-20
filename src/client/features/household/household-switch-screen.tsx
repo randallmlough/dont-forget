@@ -176,7 +176,7 @@ function HouseholdRowTrailing({ selected }: { selected: boolean }) {
 				accessible={false}
 				name="chevron.right"
 				size={14}
-				tintColor={theme.colors.textMuted}
+				tintColor={theme.colors.mutedForeground}
 				weight="semibold"
 			/>
 		);
@@ -191,7 +191,7 @@ function HouseholdRowTrailing({ selected }: { selected: boolean }) {
 					accessible={false}
 					name="checkmark"
 					size={13}
-					tintColor={theme.colors.inverseText}
+					tintColor={theme.colors.primaryForeground}
 					weight="bold"
 				/>
 			</View>
@@ -384,16 +384,16 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	intro: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 	},
 	notice: {
 		...theme.typography.callout,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		padding: theme.spacing(4),
 	},
 	sectionTitle: {
 		...theme.typography.overline,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textTransform: "uppercase",
 		paddingHorizontal: theme.spacing(1),
 		paddingTop: theme.spacing(2),
@@ -426,22 +426,22 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	fieldLabel: {
 		...theme.typography.captionStrong,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textTransform: "uppercase",
 	},
 	input: {
 		minHeight: theme.spacing(12),
 		paddingHorizontal: theme.spacing(3),
 		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.inputBorder,
+		borderColor: theme.colors.input,
 		borderRadius: theme.radii.control,
 		backgroundColor: theme.colors.glassTint,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		...theme.typography.body,
 	},
 	footer: {
 		...theme.typography.caption,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		paddingHorizontal: theme.spacing(1),
 	},
 	centered: {
@@ -453,12 +453,12 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	statusTitle: {
 		...theme.typography.headline,
-		color: theme.colors.text,
+		color: theme.colors.foreground,
 		textAlign: "center",
 	},
 	statusBody: {
 		...theme.typography.body,
-		color: theme.colors.textMuted,
+		color: theme.colors.mutedForeground,
 		textAlign: "center",
 	},
 }));

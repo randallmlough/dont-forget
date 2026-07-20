@@ -24,7 +24,7 @@ export function PrimaryButton({
 			]}
 		>
 			{loading ? (
-				<ActivityIndicator color={theme.colors.inverseText} />
+				<ActivityIndicator color={theme.colors.primaryForeground} />
 			) : (
 				<Text style={styles.label}>{label}</Text>
 			)}
@@ -37,7 +37,7 @@ const styles = StyleSheet.create((theme) => ({
 		height: theme.spacing(13),
 		borderRadius: theme.radii.control,
 		borderCurve: "continuous",
-		backgroundColor: theme.colors.authPrimary,
+		backgroundColor: theme.colors.primary,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -45,7 +45,7 @@ const styles = StyleSheet.create((theme) => ({
 		opacity: theme.opacities.disabled,
 	},
 	label: {
-		color: theme.colors.inverseText,
+		color: theme.colors.primaryForeground,
 		fontSize: theme.fontSizes.subheadline,
 		fontWeight: theme.fontWeights.semibold,
 	},
