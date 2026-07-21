@@ -16,15 +16,21 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
+import { Avatar, AvatarFallback } from "@/client/ui/avatar";
+import { Badge } from "@/client/ui/badge";
 import { Button } from "@/client/ui/button";
+import { Card, CardContent } from "@/client/ui/card";
 import {
-	type GroupPosition,
-	groupPosition,
-	InitialsAvatar,
-	SurfaceCard,
-	SurfaceRow,
-	SurfaceSection,
-} from "@/client/ui/settings-surface";
+	ItemActions,
+	ItemContent,
+	ItemDescription,
+	ItemGroup,
+	ItemMedia,
+	ItemPressable,
+	ItemSeparator,
+	ItemTitle,
+} from "@/client/ui/item";
+import { ScreenSection } from "@/client/ui/screen-section";
 import {
 	type HouseholdSwitchOperation,
 	type HouseholdSwitchState,
@@ -91,15 +97,18 @@ export function HouseholdSwitchView({
 				data={session.households}
 				keyboardShouldPersistTaps="handled"
 				keyExtractor={(household) => household.id}
+				ItemSeparatorComponent={ListItemSeparator}
 				ListHeaderComponent={
 					<View style={styles.listHeader}>
 						<Text style={styles.intro}>
 							Choose the Household you want to use.
 						</Text>
 						{state.notice ? (
-							<SurfaceCard>
-								<Text style={styles.notice}>{state.notice}</Text>
-							</SurfaceCard>
+							<Card>
+								<CardContent style={styles.noticeContent}>
+									<Text style={styles.notice}>{state.notice}</Text>
+								</CardContent>
+							</Card>
 						) : null}
 						<Text style={styles.sectionTitle}>Your Households</Text>
 					</View>
@@ -115,12 +124,11 @@ export function HouseholdSwitchView({
 						state={state}
 					/>
 				}
-				renderItem={({ item, index }) => (
+				renderItem={({ item }) => (
 					<HouseholdListRow
 						household={item}
 						onSwitchHousehold={onSwitchHousehold}
 						operation={state.operation}
-						position={groupPosition(index, session.households.length)}
 					/>
 				)}
 			/>
@@ -131,12 +139,10 @@ export function HouseholdSwitchView({
 function HouseholdListRow({
 	household,
 	operation,
-	position,
 	onSwitchHousehold,
 }: {
 	household: HouseholdRow;
 	operation: HouseholdSwitchOperation;
-	position: GroupPosition;
 	onSwitchHousehold: (householdId: string) => void;
 }) {
 	const busy = operation.status !== "idle";
@@ -146,25 +152,37 @@ function HouseholdListRow({
 	const roleLabel = household.role === "owner" ? "Owner" : "Member";
 
 	return (
-		<SurfaceCard
-			groupPosition={position}
-			tone={household.isActive ? "selected" : "default"}
+		<ItemPressable
+			accessibilityHint={
+				household.isActive ? undefined : `Switches to ${household.name}`
+			}
+			accessibilityLabel={household.name}
+			accessibilityState={{ selected: household.isActive }}
+			disabled={household.isActive || busy}
+			onPress={() => onSwitchHousehold(household.id)}
+			size="sm"
+			variant={household.isActive ? "muted" : "default"}
 		>
-			<SurfaceRow
-				accessibilityHint={
-					household.isActive ? undefined : `Switches to ${household.name}`
-				}
-				detail={switching ? `${roleLabel} · Switching` : roleLabel}
-				disabled={household.isActive || busy}
-				divider={position === "first" || position === "middle"}
-				label={household.name}
-				leading={<InitialsAvatar label={household.name} />}
-				onPress={() => onSwitchHousehold(household.id)}
-				selected={household.isActive}
-				trailing={<HouseholdRowTrailing selected={household.isActive} />}
-			/>
-		</SurfaceCard>
+			<ItemMedia>
+				<Avatar accessibilityLabel={household.name}>
+					<AvatarFallback name={household.name} />
+				</Avatar>
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle>{household.name}</ItemTitle>
+				<ItemDescription>
+					{switching ? `${roleLabel} · Switching` : roleLabel}
+				</ItemDescription>
+			</ItemContent>
+			<ItemActions>
+				<HouseholdRowTrailing selected={household.isActive} />
+			</ItemActions>
+		</ItemPressable>
 	);
+}
+
+function ListItemSeparator() {
+	return <ItemSeparator />;
 }
 
 function HouseholdRowTrailing({ selected }: { selected: boolean }) {
@@ -183,19 +201,17 @@ function HouseholdRowTrailing({ selected }: { selected: boolean }) {
 	}
 
 	return (
-		<View style={styles.currentTrailing}>
-			<Text style={styles.currentLabel}>Current</Text>
-			<View style={styles.currentCheck}>
-				<SymbolView
-					accessibilityElementsHidden
-					accessible={false}
-					name="checkmark"
-					size={13}
-					tintColor={theme.colors.primaryForeground}
-					weight="bold"
-				/>
-			</View>
-		</View>
+		<Badge style={styles.currentBadge}>
+			<SymbolView
+				accessibilityElementsHidden
+				accessible={false}
+				name="checkmark"
+				size={12}
+				tintColor={theme.colors.primaryForeground}
+				weight="bold"
+			/>
+			<Text style={styles.currentBadgeLabel}>Current</Text>
+		</Badge>
 	);
 }
 
@@ -218,24 +234,24 @@ function HouseholdActions({
 }) {
 	return (
 		<View style={styles.actions}>
-			<SurfaceSection title="Add a Household">
-				<SurfaceCard>
-					<SurfaceRow
-						divider
-						label="Create Household"
+			<ScreenSection title="Add a Household">
+				<ItemGroup variant="outline">
+					<HouseholdActionItem
+						title="Create Household"
 						onPress={() =>
 							onFormModeChange(formMode === "create" ? "none" : "create")
 						}
 						symbol="plus"
 					/>
-					<SurfaceRow
-						label="Join with Code"
+					<ItemSeparator />
+					<HouseholdActionItem
+						title="Join with Code"
 						onPress={() =>
 							onFormModeChange(formMode === "join" ? "none" : "join")
 						}
 						symbol="link"
 					/>
-				</SurfaceCard>
+				</ItemGroup>
 				{formMode === "create" ? (
 					<CreateHouseholdForm
 						onCreateHousehold={onCreateHousehold}
@@ -250,7 +266,7 @@ function HouseholdActions({
 						state={state}
 					/>
 				) : null}
-			</SurfaceSection>
+			</ScreenSection>
 			<Text style={styles.footer}>
 				Your Lists change with the selected Household.
 			</Text>
@@ -270,8 +286,8 @@ function CreateHouseholdForm({
 	const busy = state.operation.status !== "idle";
 	const creating = state.operation.status === "creatingHousehold";
 	return (
-		<SurfaceCard>
-			<View style={styles.form}>
+		<Card>
+			<CardContent style={styles.form}>
 				<Text style={styles.fieldLabel}>Household Name</Text>
 				<TextInput
 					accessibilityLabel="New Household name"
@@ -285,8 +301,8 @@ function CreateHouseholdForm({
 				<Button disabled={busy} onPress={onCreateHousehold}>
 					{creating ? "Creating" : "Create Household"}
 				</Button>
-			</View>
-		</SurfaceCard>
+			</CardContent>
+		</Card>
 	);
 }
 
@@ -302,8 +318,8 @@ function JoinByCodeForm({
 	const busy = state.operation.status !== "idle";
 	const joining = state.operation.status === "joiningByCode";
 	return (
-		<SurfaceCard>
-			<View style={styles.form}>
+		<Card>
+			<CardContent style={styles.form}>
 				<Text style={styles.fieldLabel}>Household Join Code</Text>
 				<TextInput
 					accessibilityLabel="Household Join Code"
@@ -317,8 +333,47 @@ function JoinByCodeForm({
 				<Button disabled={busy} onPress={onJoinByCode}>
 					{joining ? "Joining" : "Join Household"}
 				</Button>
-			</View>
-		</SurfaceCard>
+			</CardContent>
+		</Card>
+	);
+}
+
+function HouseholdActionItem({
+	onPress,
+	symbol,
+	title,
+}: {
+	onPress: () => void;
+	symbol: "link" | "plus";
+	title: string;
+}) {
+	const { theme } = useUnistyles();
+	return (
+		<ItemPressable accessibilityLabel={title} onPress={onPress} size="sm">
+			<ItemMedia variant="icon">
+				<SymbolView
+					accessibilityElementsHidden
+					accessible={false}
+					name={symbol}
+					size={theme.spacing(4)}
+					tintColor={theme.colors.foreground}
+					weight="medium"
+				/>
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle>{title}</ItemTitle>
+			</ItemContent>
+			<ItemActions>
+				<SymbolView
+					accessibilityElementsHidden
+					accessible={false}
+					name="chevron.right"
+					size={theme.spacing(3.5)}
+					tintColor={theme.colors.mutedForeground}
+					weight="semibold"
+				/>
+			</ItemActions>
+		</ItemPressable>
 	);
 }
 
@@ -383,7 +438,10 @@ const styles = StyleSheet.create((theme) => ({
 	notice: {
 		...theme.typography.callout,
 		color: theme.colors.foreground,
+	},
+	noticeContent: {
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	sectionTitle: {
 		...theme.typography.overline,
@@ -393,22 +451,13 @@ const styles = StyleSheet.create((theme) => ({
 		paddingTop: theme.spacing(2),
 		paddingBottom: theme.spacing(2),
 	},
-	currentTrailing: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	currentLabel: {
-		...theme.typography.caption,
-		color: theme.colors.primary,
-	},
-	currentCheck: {
-		width: theme.spacing(7),
-		height: theme.spacing(7),
-		alignItems: "center",
-		justifyContent: "center",
+	currentBadge: {
+		gap: theme.spacing(1),
 		borderRadius: theme.radii.full,
-		backgroundColor: theme.colors.primary,
+	},
+	currentBadgeLabel: {
+		...theme.typography.captionStrong,
+		color: theme.colors.primaryForeground,
 	},
 	actions: {
 		gap: theme.spacing(4),
@@ -417,6 +466,7 @@ const styles = StyleSheet.create((theme) => ({
 	form: {
 		gap: theme.spacing(3),
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	fieldLabel: {
 		...theme.typography.captionStrong,

@@ -4,8 +4,9 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import type { AppearancePreference } from "@/client/theme/appearance-preference";
+import { Card, CardContent } from "@/client/ui/card";
 import { GlassSurface } from "@/client/ui/glass-surface";
-import { SurfaceCard, SurfaceSection } from "@/client/ui/settings-surface";
+import { ScreenSection } from "@/client/ui/screen-section";
 import {
 	type SettingsActions,
 	type SettingsState,
@@ -71,14 +72,16 @@ export function AppearanceScreenView({
 				</View>
 
 				{state.notice ? (
-					<SurfaceCard>
-						<Text style={styles.notice}>{state.notice}</Text>
-					</SurfaceCard>
+					<Card>
+						<CardContent style={styles.noticeContent}>
+							<Text style={styles.notice}>{state.notice}</Text>
+						</CardContent>
+					</Card>
 				) : null}
 
-				<SurfaceSection title="Preview">
+				<ScreenSection title="Preview">
 					<AppearancePreview />
-				</SurfaceSection>
+				</ScreenSection>
 				<Text style={styles.footer}>Changes apply immediately.</Text>
 			</ScrollView>
 		</ScreenScaffold>
@@ -181,7 +184,7 @@ function ThemeMiniature({ preference }: { preference: AppearancePreference }) {
 
 function AppearancePreview() {
 	return (
-		<SurfaceCard>
+		<Card>
 			<View style={styles.previewCard}>
 				<View style={styles.previewHeading}>
 					<Text style={styles.previewTitle}>Groceries</Text>
@@ -208,7 +211,7 @@ function AppearancePreview() {
 					<Text style={styles.previewComposerLabel}>Add an Item</Text>
 				</GlassSurface>
 			</View>
-		</SurfaceCard>
+		</Card>
 	);
 }
 
@@ -369,7 +372,10 @@ const styles = StyleSheet.create((theme) => ({
 	notice: {
 		...theme.typography.callout,
 		color: theme.colors.foreground,
+	},
+	noticeContent: {
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	footer: {
 		...theme.typography.caption,

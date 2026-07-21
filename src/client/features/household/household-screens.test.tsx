@@ -116,6 +116,34 @@ describe("MembersInvitationsView", () => {
 		expect(screen.getByText("jordan@example.com")).toBeTruthy();
 	});
 
+	it("exposes whether the Household Join Code actions are expanded", async () => {
+		await render(
+			<MembersInvitationsView
+				session={sessionFixture()}
+				state={settingsReadyFixture()}
+				actions={settingsActionsFixture()}
+			/>,
+			{ wrapper: TestAppShellProvider },
+		);
+
+		const joinCodeToggle = screen.getByRole("button", {
+			name: "Household Join Code",
+		});
+		expect(joinCodeToggle).toHaveStyle({ minHeight: 56 });
+		expect(joinCodeToggle.props.accessibilityState).toMatchObject({
+			expanded: false,
+		});
+		expect(screen.queryByRole("button", { name: "Copy Link" })).toBeNull();
+
+		await fireEvent.press(joinCodeToggle);
+
+		expect(
+			screen.getByRole("button", { name: "Household Join Code" }).props
+				.accessibilityState,
+		).toMatchObject({ expanded: true });
+		expect(screen.getByRole("button", { name: "Copy Link" })).toBeTruthy();
+	});
+
 	it("uses native action menus for manageable Members and Invitations", async () => {
 		const actions = settingsActionsFixture();
 		const state = settingsReadyFixture();

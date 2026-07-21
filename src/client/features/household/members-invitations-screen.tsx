@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
+	Pressable,
 	Text,
 	TextInput,
 	View,
@@ -25,15 +26,20 @@ import {
 	ActionMenuButton,
 	type ActionMenuItem,
 } from "@/client/ui/action-menu-button";
+import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
-import { themedAlert } from "@/client/ui/native-dialogs";
+import { Card, CardContent } from "@/client/ui/card";
 import {
-	type GroupPosition,
-	groupPosition,
-	InitialsAvatar,
-	SurfaceCard,
-	SurfaceRow,
-} from "@/client/ui/settings-surface";
+	Item,
+	ItemActions,
+	ItemActionsLabel,
+	ItemContent,
+	ItemDescription,
+	ItemFooter,
+	ItemMedia,
+	ItemTitle,
+} from "@/client/ui/item";
+import { themedAlert } from "@/client/ui/native-dialogs";
 import {
 	type HouseholdSettingsActions,
 	type HouseholdSettingsOperation,
@@ -43,14 +49,13 @@ import {
 
 type CollaborationRow =
 	| { type: "section"; id: string; title: string }
-	| { type: "member"; member: HouseholdMember; position: GroupPosition }
+	| { type: "member"; member: HouseholdMember }
 	| { type: "membersEmpty" }
 	| { type: "invitationForm" }
 	| { type: "joinCode" }
 	| {
 			type: "invitation";
 			invitation: PendingInvitation;
-			position: GroupPosition;
 	  }
 	| { type: "invitationsEmpty" };
 
@@ -145,9 +150,11 @@ function MembersInvitationsList({
 			keyExtractor={collaborationRowKey}
 			ListHeaderComponent={
 				state.notice ? (
-					<SurfaceCard>
-						<Text style={styles.notice}>{state.notice}</Text>
-					</SurfaceCard>
+					<Card>
+						<CardContent style={styles.noticeContent}>
+							<Text style={styles.notice}>{state.notice}</Text>
+						</CardContent>
+					</Card>
 				) : null
 			}
 			renderItem={({ item }) => (
@@ -182,7 +189,6 @@ function CollaborationRowView({
 				actions={actions}
 				member={row.member}
 				operation={state.operation}
-				position={row.position}
 				session={session}
 			/>
 		);
@@ -205,19 +211,20 @@ function CollaborationRowView({
 				actions={actions}
 				invitation={row.invitation}
 				operation={state.operation}
-				position={row.position}
 			/>
 		);
 	}
 
 	return (
-		<SurfaceCard>
-			<Text style={styles.emptyText}>
-				{row.type === "membersEmpty"
-					? "No Members found."
-					: "No pending Invitations."}
-			</Text>
-		</SurfaceCard>
+		<Item variant="outline">
+			<ItemContent>
+				<ItemDescription>
+					{row.type === "membersEmpty"
+						? "No Members found."
+						: "No pending Invitations."}
+				</ItemDescription>
+			</ItemContent>
+		</Item>
 	);
 }
 
@@ -225,13 +232,11 @@ function MemberRow({
 	actions,
 	member,
 	operation,
-	position,
 	session,
 }: {
 	actions: HouseholdSettingsActions;
 	member: HouseholdMember;
 	operation: HouseholdSettingsOperation;
-	position: GroupPosition;
 	session: AuthenticatedAppSession;
 }) {
 	const canManage =
@@ -242,23 +247,29 @@ function MemberRow({
 	const displayName = member.displayName ?? "Unnamed Member";
 
 	return (
-		<SurfaceCard groupPosition={position}>
-			<SurfaceRow
-				detail={`${roleLabel}${isCurrentUser ? " · You" : ""}`}
-				divider={position === "first" || position === "middle"}
-				label={displayName}
-				leading={<InitialsAvatar label={displayName} />}
-				trailing={
-					canManage ? (
-						<ActionMenuButton
-							accessibilityLabel={`Manage ${displayName}`}
-							actions={memberMenuActions(member, actions)}
-							disabled={operation.status !== "idle"}
-						/>
-					) : undefined
-				}
-			/>
-		</SurfaceCard>
+		<Item size="sm" variant="outline">
+			<ItemMedia>
+				<Avatar accessibilityLabel={displayName}>
+					<AvatarFallback name={displayName} />
+				</Avatar>
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle>{displayName}</ItemTitle>
+				<ItemDescription>
+					{roleLabel}
+					{isCurrentUser ? " · You" : ""}
+				</ItemDescription>
+			</ItemContent>
+			{canManage ? (
+				<ItemActions>
+					<ActionMenuButton
+						accessibilityLabel={`Manage ${displayName}`}
+						actions={memberMenuActions(member, actions)}
+						disabled={operation.status !== "idle"}
+					/>
+				</ItemActions>
+			) : null}
+		</Item>
 	);
 }
 
@@ -273,8 +284,8 @@ function InvitationForm({
 	const creating = operation.status === "creatingInvitation";
 
 	return (
-		<SurfaceCard>
-			<View style={styles.invitationForm}>
+		<Card>
+			<CardContent style={styles.invitationForm}>
 				<View style={styles.invitationInputGroup}>
 					<Text style={styles.inputLabel}>Email Address</Text>
 					<TextInput
@@ -298,8 +309,8 @@ function InvitationForm({
 				>
 					{creating ? "Sending" : "Send Invite"}
 				</Button>
-			</View>
-		</SurfaceCard>
+			</CardContent>
+		</Card>
 	);
 }
 
@@ -319,34 +330,46 @@ function JoinCodeCard({
 
 	return (
 		<View style={styles.joinCodeSpacing}>
-			<SurfaceCard>
-				<SurfaceRow
-					disclosure
-					label="Household Join Code"
+			<Item style={styles.joinCodeCard} variant="outline">
+				<Pressable
+					accessibilityLabel="Household Join Code"
+					accessibilityRole="button"
+					accessibilityState={{ expanded }}
 					onPress={() => setExpanded((current) => !current)}
-					trailing={
-						joinCode.enabled ? (
-							<View style={styles.codeTrailing}>
-								<Text style={styles.codeText}>
-									{formatJoinCode(joinCode.code)}
-								</Text>
-								<CopyButton
-									accessibilityLabel="Copy Household Join Code"
-									onPress={() =>
-										actions.copyText(
-											joinCode.code,
-											"Household Join Code copied.",
-										)
-									}
-								/>
-							</View>
-						) : (
-							<Text style={styles.codeText}>Disabled</Text>
-						)
-					}
-				/>
+					style={({ pressed }) => [
+						styles.joinCodeToggle,
+						pressed ? styles.pressed : undefined,
+					]}
+				>
+					<ItemContent>
+						<ItemTitle>Household Join Code</ItemTitle>
+					</ItemContent>
+					<ItemActions>
+						<ItemActionsLabel>
+							{joinCode.enabled ? formatJoinCode(joinCode.code) : "Disabled"}
+						</ItemActionsLabel>
+						<SymbolView
+							accessibilityElementsHidden
+							accessible={false}
+							name="chevron.right"
+							size={theme.spacing(3.5)}
+							tintColor={theme.colors.mutedForeground}
+							weight="semibold"
+						/>
+					</ItemActions>
+				</Pressable>
+				{joinCode.enabled ? (
+					<ItemActions style={styles.joinCodeCopyAction}>
+						<CopyButton
+							accessibilityLabel="Copy Household Join Code"
+							onPress={() =>
+								actions.copyText(joinCode.code, "Household Join Code copied.")
+							}
+						/>
+					</ItemActions>
+				) : null}
 				{expanded ? (
-					<View style={styles.joinCodeActions}>
+					<ItemFooter style={styles.joinCodeActions}>
 						{joinCode.enabled ? (
 							<>
 								<Button
@@ -391,9 +414,9 @@ function JoinCodeCard({
 								{settingEnabled ? "Enabling" : "Enable Join Code"}
 							</Button>
 						)}
-					</View>
+					</ItemFooter>
 				) : null}
-			</SurfaceCard>
+			</Item>
 		</View>
 	);
 }
@@ -402,34 +425,43 @@ function InvitationRow({
 	actions,
 	invitation,
 	operation,
-	position,
 }: {
 	actions: HouseholdSettingsActions;
 	invitation: PendingInvitation;
 	operation: HouseholdSettingsOperation;
-	position: GroupPosition;
 }) {
+	const { theme } = useUnistyles();
 	const label = invitation.email ?? "Invitation";
 	const revoking =
 		operation.status === "revokingInvitation" &&
 		operation.invitationId === invitation.id;
 
 	return (
-		<SurfaceCard groupPosition={position}>
-			<SurfaceRow
-				detail={`Expires ${formatDate(invitation.expiresAt)}`}
-				divider={position === "first" || position === "middle"}
-				label={label}
-				symbol="envelope"
-				trailing={
-					<ActionMenuButton
-						accessibilityLabel={`Manage ${label}`}
-						actions={invitationMenuActions(invitation, actions)}
-						disabled={revoking}
-					/>
-				}
-			/>
-		</SurfaceCard>
+		<Item size="sm" variant="outline">
+			<ItemMedia variant="icon">
+				<SymbolView
+					accessibilityElementsHidden
+					accessible={false}
+					name="envelope"
+					size={theme.spacing(4)}
+					tintColor={theme.colors.foreground}
+					weight="medium"
+				/>
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle>{label}</ItemTitle>
+				<ItemDescription>
+					Expires {formatDate(invitation.expiresAt)}
+				</ItemDescription>
+			</ItemContent>
+			<ItemActions>
+				<ActionMenuButton
+					accessibilityLabel={`Manage ${label}`}
+					actions={invitationMenuActions(invitation, actions)}
+					disabled={revoking}
+				/>
+			</ItemActions>
+		</Item>
 	);
 }
 
@@ -470,11 +502,10 @@ function collaborationRows(
 	if (state.members.length === 0) {
 		rows.push({ type: "membersEmpty" });
 	} else {
-		state.members.forEach((member, index) => {
+		state.members.forEach((member) => {
 			rows.push({
 				type: "member",
 				member,
-				position: groupPosition(index, state.members.length),
 			});
 		});
 	}
@@ -487,11 +518,10 @@ function collaborationRows(
 	if (state.invitations.length === 0) {
 		rows.push({ type: "invitationsEmpty" });
 	} else {
-		state.invitations.forEach((invitation, index) => {
+		state.invitations.forEach((invitation) => {
 			rows.push({
 				type: "invitation",
 				invitation,
-				position: groupPosition(index, state.invitations.length),
 			});
 		});
 	}
@@ -681,18 +711,17 @@ const styles = StyleSheet.create((theme) => ({
 	notice: {
 		...theme.typography.callout,
 		color: theme.colors.foreground,
-		padding: theme.spacing(4),
 	},
-	emptyText: {
-		...theme.typography.callout,
-		color: theme.colors.mutedForeground,
+	noticeContent: {
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	invitationForm: {
 		flexDirection: "row",
 		alignItems: "flex-end",
 		gap: theme.spacing(3),
 		padding: theme.spacing(3),
+		paddingTop: theme.spacing(3),
 	},
 	invitationInputGroup: {
 		flex: 1,
@@ -717,14 +746,27 @@ const styles = StyleSheet.create((theme) => ({
 	joinCodeSpacing: {
 		paddingTop: theme.spacing(3),
 	},
-	codeTrailing: {
+	joinCodeCard: {
+		gap: theme.spacing(0),
+		paddingHorizontal: theme.spacing(0),
+		paddingVertical: theme.spacing(0),
+	},
+	joinCodeToggle: {
+		flex: 1,
+		minWidth: 0,
+		minHeight: theme.spacing(14),
 		flexDirection: "row",
 		alignItems: "center",
-		gap: theme.spacing(1),
+		gap: theme.spacing(2),
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(2.5),
+		paddingVertical: theme.spacing(2.5),
 	},
-	codeText: {
-		...theme.typography.caption,
-		color: theme.colors.mutedForeground,
+	joinCodeCopyAction: {
+		paddingRight: theme.spacing(4),
+	},
+	pressed: {
+		opacity: theme.opacities.pressed,
 	},
 	outlineButtonLabel: {
 		...theme.typography.callout,
@@ -734,8 +776,10 @@ const styles = StyleSheet.create((theme) => ({
 	joinCodeActions: {
 		flexDirection: "row",
 		flexWrap: "wrap",
+		justifyContent: "flex-start",
 		gap: theme.spacing(2),
 		paddingHorizontal: theme.spacing(3),
+		paddingTop: theme.spacing(3),
 		paddingBottom: theme.spacing(3),
 	},
 	copyButton: {

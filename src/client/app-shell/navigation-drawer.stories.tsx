@@ -1,5 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useState } from "react";
+import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { StyleSheet } from "react-native-unistyles";
+import { Button } from "@/client/ui/button";
 import {
 	NavigationDrawerView,
 	type NavigationDrawerViewProps,
@@ -8,6 +12,10 @@ import {
 const meta = {
 	title: "AppShell/NavigationDrawer",
 	component: NavigationDrawerView,
+	excludeStories: ["NavigationDrawerStory"],
+	argTypes: {
+		isOpen: { control: false },
+	},
 	decorators: [
 		(Story) => (
 			<SafeAreaProvider
@@ -29,6 +37,7 @@ const meta = {
 		onDismissed: noop,
 		onNavigate: noopNavigate,
 	},
+	render: (args) => <NavigationDrawerStory {...args} />,
 } satisfies Meta<typeof NavigationDrawerView>;
 
 export default meta;
@@ -41,8 +50,39 @@ export const SettingsSelected: Story = {
 	args: { pathname: "/settings" },
 };
 
+export function NavigationDrawerStory({
+	isOpen: initiallyOpen,
+	onClose,
+	...props
+}: NavigationDrawerViewProps) {
+	const [isOpen, setIsOpen] = useState(initiallyOpen);
+
+	return (
+		<View style={styles.canvas}>
+			<Button onPress={() => setIsOpen(true)}>Open navigation</Button>
+			<NavigationDrawerView
+				{...props}
+				isOpen={isOpen}
+				onClose={() => {
+					onClose();
+					setIsOpen(false);
+				}}
+			/>
+		</View>
+	);
+}
+
 function noop() {}
 
 function noopNavigate(
 	_destination: Parameters<NavigationDrawerViewProps["onNavigate"]>[0],
 ) {}
+
+const styles = StyleSheet.create((theme) => ({
+	canvas: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		padding: theme.spacing(4),
+	},
+}));

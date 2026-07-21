@@ -9,6 +9,10 @@ nodeLinker: hoisted
 # Supply-chain cooldown: don't install versions published < 7 days ago (minutes),
 # incl. transitive deps. pnpm 11 also defaults to 1 day; this extends it.
 minimumReleaseAge: 10080
+# Security hotfix: 3.1.4 resolves the current high-severity advisories while
+# preserving ajv's fast-uri 3.x compatibility.
+minimumReleaseAgeExclude:
+  - 'fast-uri@3.1.4'
 
 # Dependency build (install/postinstall) scripts. pnpm 11 replaced
 # pnpm.onlyBuiltDependencies with this { name: true|false } map.
@@ -45,3 +49,4 @@ overrides:
   'js-yaml@>=3.0.0 <3.15.0': '^3.15.0'
   'js-yaml@>=4.0.0 <4.3.0': '^4.3.0'
   'uuid@<11.1.1': '>=11.1.1'
+  'fast-uri@<3.1.4': '^3.1.4'

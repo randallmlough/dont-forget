@@ -1,7 +1,13 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import {
+	ActivityIndicator,
+	FlatList,
+	Pressable,
+	Text,
+	View,
+} from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
@@ -24,16 +30,19 @@ import {
 	ActionMenuButton,
 	type ActionMenuItem,
 } from "@/client/ui/action-menu-button";
+import { Badge } from "@/client/ui/badge";
 import { Button } from "@/client/ui/button";
 import { GlassSurface } from "@/client/ui/glass-surface";
-import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
 import {
-	type GroupPosition,
-	groupPosition,
-	SurfaceCard,
-	SurfaceRow,
-	SurfaceSection,
-} from "@/client/ui/settings-surface";
+	Item,
+	ItemActions,
+	ItemContent,
+	ItemDescription,
+	ItemSeparator,
+	ItemTitle,
+} from "@/client/ui/item";
+import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
+import { ScreenSection } from "@/client/ui/screen-section";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";
 import { type ListRows, useListRows } from "./use-list-rows";
@@ -310,6 +319,7 @@ function ListRowsView({
 					alwaysBounceVertical={false}
 					contentContainerStyle={styles.rowsContent}
 					data={otherSummaries}
+					ItemSeparatorComponent={ListItemSeparator}
 					keyExtractor={listSummaryKey}
 					ListHeaderComponent={
 						<View style={styles.collectionHeader}>
@@ -323,17 +333,16 @@ function ListRowsView({
 								/>
 							) : null}
 							{otherSummaries.length > 0 ? (
-								<SurfaceSection
+								<ScreenSection
 									detail={String(otherSummaries.length)}
 									title={currentSummary ? "Other Lists" : "All Lists"}
 								/>
 							) : null}
 						</View>
 					}
-					renderItem={({ index, item: summary }) => (
+					renderItem={({ item: summary }) => (
 						<ListRow
 							actionsDisabled={listMutationPending}
-							groupPosition={groupPosition(index, otherSummaries.length)}
 							onDelete={() => onDelete(summary)}
 							onRename={() => onRename(summary)}
 							onSelect={() => void onSelectList(summary.id)}
@@ -383,19 +392,17 @@ function CurrentListCard({
 	return (
 		<GlassSurface interactive style={styles.currentCard} tone="selected">
 			<View style={styles.currentCardHeader}>
-				<View style={styles.currentStatus}>
-					<View style={styles.currentCheck}>
-						<SymbolView
-							accessibilityElementsHidden
-							accessible={false}
-							name="checkmark"
-							size={12}
-							tintColor={theme.colors.primaryForeground}
-							weight="bold"
-						/>
-					</View>
-					<Text style={styles.currentLabel}>Current List</Text>
-				</View>
+				<Badge style={styles.currentBadge}>
+					<SymbolView
+						accessibilityElementsHidden
+						accessible={false}
+						name="checkmark"
+						size={11}
+						tintColor={theme.colors.primaryForeground}
+						weight="bold"
+					/>
+					<Text style={styles.currentBadgeLabel}>Current List</Text>
+				</Badge>
 				<ActionMenuButton
 					accessibilityLabel={`List actions for ${summary.name}`}
 					actions={listMenuActions(onRename, onDelete)}
@@ -432,37 +439,47 @@ function CurrentListCard({
 
 function ListRow({
 	summary,
-	groupPosition,
 	actionsDisabled,
 	onSelect,
 	onRename,
 	onDelete,
 }: {
 	summary: ListSummary;
-	groupPosition: GroupPosition;
 	actionsDisabled: boolean;
 	onSelect: () => void;
 	onRename: () => void;
 	onDelete: () => void;
 }) {
 	return (
-		<SurfaceCard groupPosition={groupPosition}>
-			<SurfaceRow
+		<Item size="sm" style={styles.listRow}>
+			<Pressable
 				accessibilityHint="Makes this the Current List and opens it"
-				detail={listCounts(summary)}
-				divider={groupPosition === "first" || groupPosition === "middle"}
-				label={summary.name}
+				accessibilityLabel={summary.name}
+				accessibilityRole="button"
 				onPress={onSelect}
-				trailing={
-					<ActionMenuButton
-						accessibilityLabel={`List actions for ${summary.name}`}
-						actions={listMenuActions(onRename, onDelete)}
-						disabled={actionsDisabled}
-					/>
-				}
-			/>
-		</SurfaceCard>
+				style={({ pressed }) => [
+					styles.listRowAction,
+					pressed ? styles.pressed : undefined,
+				]}
+			>
+				<ItemContent>
+					<ItemTitle>{summary.name}</ItemTitle>
+					<ItemDescription>{listCounts(summary)}</ItemDescription>
+				</ItemContent>
+			</Pressable>
+			<ItemActions style={styles.listRowActions}>
+				<ActionMenuButton
+					accessibilityLabel={`List actions for ${summary.name}`}
+					actions={listMenuActions(onRename, onDelete)}
+					disabled={actionsDisabled}
+				/>
+			</ItemActions>
+		</Item>
 	);
+}
+
+function ListItemSeparator() {
+	return <ItemSeparator />;
 }
 
 function listSummaryKey(summary: ListSummary): string {
@@ -663,22 +680,13 @@ const styles = StyleSheet.create((theme) => ({
 		paddingRight: theme.spacing(2),
 		paddingTop: theme.spacing(1),
 	},
-	currentStatus: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	currentCheck: {
-		width: theme.spacing(5),
-		height: theme.spacing(5),
-		alignItems: "center",
-		justifyContent: "center",
+	currentBadge: {
+		gap: theme.spacing(1),
 		borderRadius: theme.radii.full,
-		backgroundColor: theme.colors.primary,
 	},
-	currentLabel: {
+	currentBadgeLabel: {
 		...theme.typography.overline,
-		color: theme.colors.primary,
+		color: theme.colors.primaryForeground,
 		textTransform: "uppercase",
 	},
 	currentCardContent: {
@@ -722,6 +730,25 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.callout,
 		fontWeight: theme.fontWeights.semibold,
 		color: theme.colors.foreground,
+	},
+	listRow: {
+		gap: theme.spacing(0),
+		paddingHorizontal: theme.spacing(0),
+		paddingVertical: theme.spacing(0),
+	},
+	listRowAction: {
+		flex: 1,
+		minWidth: 0,
+		justifyContent: "center",
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(2.5),
+		paddingVertical: theme.spacing(3),
+	},
+	listRowActions: {
+		paddingRight: theme.spacing(4),
+	},
+	pressed: {
+		opacity: theme.opacities.pressed,
 	},
 	statusContainer: {
 		flex: 1,
