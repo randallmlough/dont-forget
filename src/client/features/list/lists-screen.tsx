@@ -24,6 +24,7 @@ import {
 	ActionMenuButton,
 	type ActionMenuItem,
 } from "@/client/ui/action-menu-button";
+import { Badge } from "@/client/ui/badge";
 import { Button } from "@/client/ui/button";
 import { GlassSurface } from "@/client/ui/glass-surface";
 import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
@@ -383,19 +384,17 @@ function CurrentListCard({
 	return (
 		<GlassSurface interactive style={styles.currentCard} tone="selected">
 			<View style={styles.currentCardHeader}>
-				<View style={styles.currentStatus}>
-					<View style={styles.currentCheck}>
-						<SymbolView
-							accessibilityElementsHidden
-							accessible={false}
-							name="checkmark"
-							size={12}
-							tintColor={theme.colors.primaryForeground}
-							weight="bold"
-						/>
-					</View>
-					<Text style={styles.currentLabel}>Current List</Text>
-				</View>
+				<Badge style={styles.currentBadge}>
+					<SymbolView
+						accessibilityElementsHidden
+						accessible={false}
+						name="checkmark"
+						size={11}
+						tintColor={theme.colors.primaryForeground}
+						weight="bold"
+					/>
+					<Text style={styles.currentBadgeLabel}>Current List</Text>
+				</Badge>
 				<ActionMenuButton
 					accessibilityLabel={`List actions for ${summary.name}`}
 					actions={listMenuActions(onRename, onDelete)}
@@ -663,22 +662,13 @@ const styles = StyleSheet.create((theme) => ({
 		paddingRight: theme.spacing(2),
 		paddingTop: theme.spacing(1),
 	},
-	currentStatus: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	currentCheck: {
-		width: theme.spacing(5),
-		height: theme.spacing(5),
-		alignItems: "center",
-		justifyContent: "center",
+	currentBadge: {
+		gap: theme.spacing(1),
 		borderRadius: theme.radii.full,
-		backgroundColor: theme.colors.primary,
 	},
-	currentLabel: {
+	currentBadgeLabel: {
 		...theme.typography.overline,
-		color: theme.colors.primary,
+		color: theme.colors.primaryForeground,
 		textTransform: "uppercase",
 	},
 	currentCardContent: {

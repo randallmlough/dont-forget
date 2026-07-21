@@ -18,6 +18,7 @@ import {
 	useAuthenticatedAppSession,
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
+import { Card, CardContent } from "@/client/ui/card";
 import {
 	InitialsAvatar,
 	SurfaceCard,
@@ -125,9 +126,11 @@ function HouseholdReadyView({
 			keyboardShouldPersistTaps="handled"
 		>
 			{state.notice ? (
-				<SurfaceCard>
-					<Text style={styles.notice}>{state.notice}</Text>
-				</SurfaceCard>
+				<Card>
+					<CardContent style={styles.noticeContent}>
+						<Text style={styles.notice}>{state.notice}</Text>
+					</CardContent>
+				</Card>
 			) : null}
 
 			<SurfaceCard>
@@ -383,7 +386,10 @@ const styles = StyleSheet.create((theme) => ({
 	notice: {
 		...theme.typography.callout,
 		color: theme.colors.foreground,
+	},
+	noticeContent: {
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	renameForm: {
 		gap: theme.spacing(3),

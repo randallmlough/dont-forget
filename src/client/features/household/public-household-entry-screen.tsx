@@ -1,9 +1,10 @@
 import { useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useAuthenticatedAppSession } from "@/client/session";
 import { Button } from "@/client/ui/button";
+import { Card, CardDescription, CardTitle } from "@/client/ui/card";
 import {
 	type PublicHouseholdEntryState,
 	usePublicHouseholdEntry,
@@ -56,30 +57,34 @@ export function PublicHouseholdEntryView({
 }) {
 	return (
 		<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
-			<View style={styles.panel}>
+			<Card style={styles.panel}>
 				{state.status === "loading" ? (
 					<>
-						<Text style={styles.title}>Loading Household</Text>
+						<CardTitle style={styles.title}>Loading Household</CardTitle>
 						<ActivityIndicator />
 					</>
 				) : state.status === "unavailable" ? (
 					<>
-						<Text style={styles.title}>Household unavailable</Text>
-						<Text style={styles.body}>{state.message}</Text>
+						<CardTitle style={styles.title}>Household unavailable</CardTitle>
+						<CardDescription style={styles.body}>
+							{state.message}
+						</CardDescription>
 					</>
 				) : state.status === "complete" ? (
 					<>
-						<Text style={styles.title}>Household joined</Text>
-						<Text style={styles.body}>{state.message}</Text>
+						<CardTitle style={styles.title}>Household joined</CardTitle>
+						<CardDescription style={styles.body}>
+							{state.message}
+						</CardDescription>
 					</>
 				) : (
 					<>
-						<Text style={styles.title}>{state.householdName}</Text>
-						<Text style={styles.body}>
+						<CardTitle style={styles.title}>{state.householdName}</CardTitle>
+						<CardDescription style={styles.body}>
 							{state.kind === "invitation"
 								? `${state.inviterDisplayName ?? "A Member"} invited you to join this Household.`
 								: "Join this Household with the shared Household Join Code link."}
-						</Text>
+						</CardDescription>
 						{state.error ? (
 							<Text style={styles.errorText}>{state.error}</Text>
 						) : null}
@@ -88,7 +93,7 @@ export function PublicHouseholdEntryView({
 						</Button>
 					</>
 				)}
-			</View>
+			</Card>
 		</SafeAreaView>
 	);
 }
@@ -108,10 +113,7 @@ const styles = StyleSheet.create((theme) => ({
 	panel: {
 		gap: theme.spacing(4),
 		padding: theme.spacing(5),
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
 		borderRadius: theme.radii["2xl"],
-		backgroundColor: theme.colors.card,
 	},
 	title: {
 		...theme.typography.title,

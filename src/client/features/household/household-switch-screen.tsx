@@ -16,7 +16,9 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
+import { Badge } from "@/client/ui/badge";
 import { Button } from "@/client/ui/button";
+import { Card, CardContent } from "@/client/ui/card";
 import {
 	type GroupPosition,
 	groupPosition,
@@ -97,9 +99,11 @@ export function HouseholdSwitchView({
 							Choose the Household you want to use.
 						</Text>
 						{state.notice ? (
-							<SurfaceCard>
-								<Text style={styles.notice}>{state.notice}</Text>
-							</SurfaceCard>
+							<Card>
+								<CardContent style={styles.noticeContent}>
+									<Text style={styles.notice}>{state.notice}</Text>
+								</CardContent>
+							</Card>
 						) : null}
 						<Text style={styles.sectionTitle}>Your Households</Text>
 					</View>
@@ -183,19 +187,17 @@ function HouseholdRowTrailing({ selected }: { selected: boolean }) {
 	}
 
 	return (
-		<View style={styles.currentTrailing}>
-			<Text style={styles.currentLabel}>Current</Text>
-			<View style={styles.currentCheck}>
-				<SymbolView
-					accessibilityElementsHidden
-					accessible={false}
-					name="checkmark"
-					size={13}
-					tintColor={theme.colors.primaryForeground}
-					weight="bold"
-				/>
-			</View>
-		</View>
+		<Badge style={styles.currentBadge}>
+			<SymbolView
+				accessibilityElementsHidden
+				accessible={false}
+				name="checkmark"
+				size={12}
+				tintColor={theme.colors.primaryForeground}
+				weight="bold"
+			/>
+			<Text style={styles.currentBadgeLabel}>Current</Text>
+		</Badge>
 	);
 }
 
@@ -383,7 +385,10 @@ const styles = StyleSheet.create((theme) => ({
 	notice: {
 		...theme.typography.callout,
 		color: theme.colors.foreground,
+	},
+	noticeContent: {
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	sectionTitle: {
 		...theme.typography.overline,
@@ -393,22 +398,13 @@ const styles = StyleSheet.create((theme) => ({
 		paddingTop: theme.spacing(2),
 		paddingBottom: theme.spacing(2),
 	},
-	currentTrailing: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	currentLabel: {
-		...theme.typography.caption,
-		color: theme.colors.primary,
-	},
-	currentCheck: {
-		width: theme.spacing(7),
-		height: theme.spacing(7),
-		alignItems: "center",
-		justifyContent: "center",
+	currentBadge: {
+		gap: theme.spacing(1),
 		borderRadius: theme.radii.full,
-		backgroundColor: theme.colors.primary,
+	},
+	currentBadgeLabel: {
+		...theme.typography.captionStrong,
+		color: theme.colors.primaryForeground,
 	},
 	actions: {
 		gap: theme.spacing(4),

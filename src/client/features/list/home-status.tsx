@@ -1,7 +1,14 @@
 import type { ReactNode } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "@/client/ui/button";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/client/ui/card";
 
 export function HomeStatus({
 	title,
@@ -14,11 +21,15 @@ export function HomeStatus({
 }) {
 	return (
 		<View style={styles.statusRoot}>
-			<View style={styles.statusCard}>
-				<Text style={styles.statusTitle}>{title}</Text>
-				<Text style={styles.statusBody}>{body}</Text>
-				{children}
-			</View>
+			<Card style={styles.statusCard}>
+				<CardHeader style={styles.statusHeader}>
+					<CardTitle style={styles.statusTitle}>{title}</CardTitle>
+					<CardDescription style={styles.statusBody}>{body}</CardDescription>
+				</CardHeader>
+				{children ? (
+					<CardContent style={styles.statusContent}>{children}</CardContent>
+				) : null}
+			</Card>
 		</View>
 	);
 }
@@ -40,9 +51,17 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(7),
 		borderRadius: theme.radii["2xl"],
 		borderCurve: "continuous",
-		backgroundColor: theme.colors.card,
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.border,
+	},
+	statusHeader: {
+		alignItems: "center",
+		gap: theme.spacing(3),
+		padding: 0,
+		paddingBottom: 0,
+	},
+	statusContent: {
+		alignItems: "center",
+		padding: 0,
+		paddingTop: 0,
 	},
 	statusTitle: {
 		...theme.typography.headline,

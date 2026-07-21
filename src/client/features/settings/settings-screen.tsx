@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { ScrollView, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
+import { Card, CardContent } from "@/client/ui/card";
 import {
 	SurfaceCard,
 	SurfaceRow,
@@ -35,9 +36,11 @@ export function SettingsScreenView({
 				contentInsetAdjustmentBehavior="automatic"
 			>
 				{state.notice ? (
-					<SurfaceCard>
-						<Text style={styles.notice}>{state.notice}</Text>
-					</SurfaceCard>
+					<Card>
+						<CardContent style={styles.noticeContent}>
+							<Text style={styles.notice}>{state.notice}</Text>
+						</CardContent>
+					</Card>
 				) : null}
 
 				<SurfaceSection title="Your App">
@@ -144,6 +147,9 @@ const styles = StyleSheet.create((theme) => ({
 	notice: {
 		...theme.typography.callout,
 		color: theme.colors.foreground,
+	},
+	noticeContent: {
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 }));

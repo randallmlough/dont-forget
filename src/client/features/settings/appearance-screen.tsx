@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import type { AppearancePreference } from "@/client/theme/appearance-preference";
+import { Card, CardContent } from "@/client/ui/card";
 import { GlassSurface } from "@/client/ui/glass-surface";
 import { SurfaceCard, SurfaceSection } from "@/client/ui/settings-surface";
 import {
@@ -71,9 +72,11 @@ export function AppearanceScreenView({
 				</View>
 
 				{state.notice ? (
-					<SurfaceCard>
-						<Text style={styles.notice}>{state.notice}</Text>
-					</SurfaceCard>
+					<Card>
+						<CardContent style={styles.noticeContent}>
+							<Text style={styles.notice}>{state.notice}</Text>
+						</CardContent>
+					</Card>
 				) : null}
 
 				<SurfaceSection title="Preview">
@@ -369,7 +372,10 @@ const styles = StyleSheet.create((theme) => ({
 	notice: {
 		...theme.typography.callout,
 		color: theme.colors.foreground,
+	},
+	noticeContent: {
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	footer: {
 		...theme.typography.caption,

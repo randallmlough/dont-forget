@@ -26,6 +26,7 @@ import {
 	type ActionMenuItem,
 } from "@/client/ui/action-menu-button";
 import { Button } from "@/client/ui/button";
+import { Card, CardContent } from "@/client/ui/card";
 import { themedAlert } from "@/client/ui/native-dialogs";
 import {
 	type GroupPosition,
@@ -145,9 +146,11 @@ function MembersInvitationsList({
 			keyExtractor={collaborationRowKey}
 			ListHeaderComponent={
 				state.notice ? (
-					<SurfaceCard>
-						<Text style={styles.notice}>{state.notice}</Text>
-					</SurfaceCard>
+					<Card>
+						<CardContent style={styles.noticeContent}>
+							<Text style={styles.notice}>{state.notice}</Text>
+						</CardContent>
+					</Card>
 				) : null
 			}
 			renderItem={({ item }) => (
@@ -681,7 +684,10 @@ const styles = StyleSheet.create((theme) => ({
 	notice: {
 		...theme.typography.callout,
 		color: theme.colors.foreground,
+	},
+	noticeContent: {
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	emptyText: {
 		...theme.typography.callout,
