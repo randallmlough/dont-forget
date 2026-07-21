@@ -1,7 +1,7 @@
 import { usePathname, useRouter } from "expo-router";
 import { type SFSymbol, SymbolView } from "expo-symbols";
 import { useRef } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { track } from "@/client/lib/analytics";
@@ -9,6 +9,7 @@ import {
 	sessionMemberDisplayName,
 	useAuthenticatedAppSession,
 } from "@/client/session";
+import { Button } from "@/client/ui/button";
 import { SideDrawer } from "@/client/ui/side-drawer";
 
 type DrawerDestination =
@@ -173,16 +174,15 @@ export function NavigationDrawerView({
 					/>
 				</View>
 				<View style={styles.drawerFooter}>
-					<Pressable
+					<Button
 						accessibilityLabel="Profile"
-						accessibilityRole="button"
 						accessibilityState={{ selected: pathname === "/profile" }}
 						onPress={() => onNavigate("/profile")}
-						style={({ pressed }) => [
+						style={[
 							styles.memberRow,
 							pathname === "/profile" ? styles.destinationSelected : undefined,
-							pressed ? styles.pressed : undefined,
 						]}
+						variant="link"
 					>
 						<View style={styles.avatar}>
 							<Text style={styles.avatarLabel}>{initials(memberName)}</Text>
@@ -200,7 +200,7 @@ export function NavigationDrawerView({
 							tintColor={theme.colors.mutedForeground}
 							weight="semibold"
 						/>
-					</Pressable>
+					</Button>
 				</View>
 			</SafeAreaView>
 		</SideDrawer>
@@ -211,15 +211,14 @@ function DrawerRow({ icon, label, selected, onPress }: DrawerRowProps) {
 	const { theme } = useUnistyles();
 
 	return (
-		<Pressable
-			accessibilityRole="button"
+		<Button
 			accessibilityState={{ selected }}
 			onPress={onPress}
-			style={({ pressed }) => [
+			style={[
 				styles.destination,
 				selected ? styles.destinationSelected : undefined,
-				pressed ? styles.pressed : undefined,
 			]}
+			variant="link"
 		>
 			<SymbolView
 				accessibilityElementsHidden
@@ -239,7 +238,7 @@ function DrawerRow({ icon, label, selected, onPress }: DrawerRowProps) {
 			>
 				{label}
 			</Text>
-		</Pressable>
+		</Button>
 	);
 }
 
@@ -299,6 +298,7 @@ const styles = StyleSheet.create((theme) => ({
 		minHeight: theme.spacing(12),
 		flexDirection: "row",
 		alignItems: "center",
+		justifyContent: "flex-start",
 		gap: theme.spacing(3),
 		paddingHorizontal: theme.spacing(3),
 		borderRadius: theme.radii.xl,
@@ -325,5 +325,4 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(3),
 		paddingBottom: theme.spacing(2),
 	},
-	pressed: { opacity: theme.opacities.pressed },
 }));

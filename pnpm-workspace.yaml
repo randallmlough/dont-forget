@@ -37,5 +37,11 @@ overrides:
   'form-data@>=4.0.0 <4.0.6': '>=4.0.6'
   'ws@>=7.0.0 <7.5.11': '>=7.5.11'
   'ws@>=8.0.0 <8.21.0': '>=8.21.0'
-  'brace-expansion@>=5.0.0 <5.0.6': '>=5.0.6'
+  # Caret replacements on purpose: an open-ended '>=' resolves to the newest
+  # major (ESM-only brace-expansion 5.x under CJS minimatch@3, js-yaml without
+  # safeLoad under 3.x consumers), which breaks Jest at runtime.
+  'brace-expansion@<1.1.16': '^1.1.16'
+  'brace-expansion@>=5.0.0 <5.0.7': '^5.0.7'
+  'js-yaml@>=3.0.0 <3.15.0': '^3.15.0'
+  'js-yaml@>=4.0.0 <4.3.0': '^4.3.0'
   'uuid@<11.1.1': '>=11.1.1'

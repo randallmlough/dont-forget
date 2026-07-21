@@ -17,7 +17,7 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { AppButton } from "@/client/ui/app-button";
+import { Button } from "@/client/ui/button";
 import {
 	InitialsAvatar,
 	SurfaceCard,
@@ -86,11 +86,7 @@ export function HouseholdSettingsView({
 			) : state.status === "error" ? (
 				<CenteredStatus title="Household unavailable">
 					<Text style={styles.statusBody}>{state.message}</Text>
-					<AppButton
-						label="Try again"
-						onPress={actions.retry}
-						variant="primary"
-					/>
+					<Button onPress={actions.retry}>Try again</Button>
 				</CenteredStatus>
 			) : (
 				<HouseholdReadyView
@@ -228,21 +224,23 @@ function HouseholdNameRow({
 				value={draftName}
 			/>
 			<View style={styles.formActions}>
-				<AppButton
+				<Button
 					disabled={renaming}
-					label={renaming ? "Renaming" : "Rename"}
 					onPress={() => {
 						void actions.renameHousehold(draftName).then((renamed) => {
 							if (renamed) setEditing(false);
 						});
 					}}
-					variant="primary"
-				/>
-				<AppButton
+				>
+					{renaming ? "Renaming" : "Rename"}
+				</Button>
+				<Button
 					disabled={renaming}
-					label="Cancel"
 					onPress={() => setEditing(false)}
-				/>
+					variant="outline"
+				>
+					Cancel
+				</Button>
 			</View>
 		</View>
 	);
@@ -291,7 +289,7 @@ function SessionState({
 		return (
 			<CenteredStatus title="Household unavailable">
 				<Text style={styles.statusBody}>{state.message}</Text>
-				<AppButton label="Try again" onPress={onRetry} variant="primary" />
+				<Button onPress={onRetry}>Try again</Button>
 			</CenteredStatus>
 		);
 	}

@@ -1,11 +1,11 @@
 import {
-	Button,
 	GlassEffectContainer,
 	Host,
 	HStack,
 	Image,
 	Picker,
 	Spacer,
+	Button as SwiftUIButton,
 	Text,
 	TextField,
 	useNativeState,
@@ -33,7 +33,7 @@ import {
 	tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useEffect, useState } from "react";
-import { Keyboard, Pressable, View } from "react-native";
+import { Keyboard, View } from "react-native";
 import Animated, {
 	Easing,
 	useAnimatedStyle,
@@ -43,6 +43,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { nativeColorScheme } from "@/client/theme/native-color-scheme";
+import { Button } from "@/client/ui/button";
 
 const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
@@ -140,11 +141,11 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 			pointerEvents="box-none"
 			style={styles.overlay}
 		>
-			<Pressable
+			<Button
 				accessibilityLabel="Dismiss add Item composer"
-				accessibilityRole="button"
 				onPress={dismissComposer}
 				style={styles.dismissLayer}
+				variant="link"
 			/>
 			<Animated.View
 				style={[
@@ -260,7 +261,7 @@ function ExpandedGlassComposer({
 							New Item
 						</Text>
 						<Spacer minLength={theme.spacing(2)} />
-						<Button
+						<SwiftUIButton
 							label="Cancel"
 							onPress={onCancel}
 							modifiers={[
@@ -406,7 +407,7 @@ function ExpandedGlassComposer({
 							Press Return to add quickly
 						</Text>
 						<Spacer minLength={theme.spacing(2)} />
-						<Button
+						<SwiftUIButton
 							label="Add Item"
 							onPress={actions.submit}
 							modifiers={[

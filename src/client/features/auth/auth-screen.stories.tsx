@@ -6,7 +6,7 @@ import { AuthFooterLink } from "@/client/features/auth/auth-footer-link";
 import { AuthScreen } from "@/client/features/auth/auth-screen";
 import { AuthTextInput } from "@/client/features/auth/auth-text-input";
 import { OrDivider } from "@/client/features/auth/or-divider";
-import { PrimaryButton } from "@/client/features/auth/primary-button";
+import { Button } from "@/client/ui/button";
 
 const meta = {
 	title: "Auth/AuthScreen",
@@ -50,7 +50,9 @@ export const SignIn: Story = {
 				value=""
 				onChangeText={noop}
 			/>
-			<PrimaryButton label="Sign in" onPress={noop} />
+			<Button onPress={noop} radius="xl" size="lg">
+				Sign in
+			</Button>
 			<AuthFooterLink
 				prompt="Don't have an account?"
 				label="Sign up"
@@ -74,7 +76,9 @@ export const Verification: Story = {
 				value=""
 				onChangeText={noop}
 			/>
-			<PrimaryButton label="Verify email" onPress={noop} />
+			<Button onPress={noop} radius="xl" size="lg">
+				Verify email
+			</Button>
 		</AuthScreen>
 	),
 };
@@ -85,7 +89,9 @@ export const WithDivider: Story = {
 			title="Create your account"
 			subtitle="Join your Household in seconds."
 		>
-			<PrimaryButton label="Continue with Apple" onPress={noop} />
+			<Button onPress={noop} radius="xl" size="lg">
+				Continue with Apple
+			</Button>
 			<OrDivider />
 			<AuthTextInput
 				placeholder="Email"
@@ -95,7 +101,9 @@ export const WithDivider: Story = {
 				value=""
 				onChangeText={noop}
 			/>
-			<PrimaryButton label="Create account" onPress={noop} />
+			<Button onPress={noop} radius="xl" size="lg">
+				Create account
+			</Button>
 		</AuthScreen>
 	),
 };

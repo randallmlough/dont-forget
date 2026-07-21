@@ -38,6 +38,7 @@ export type AppTheme = {
 		appearanceDarkSurface: string;
 	};
 	radii: {
+		none: number;
 		sm: number;
 		md: number;
 		lg: number;

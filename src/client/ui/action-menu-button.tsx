@@ -1,4 +1,9 @@
-import { Button, type ButtonProps, Host, Menu } from "@expo/ui/swift-ui";
+import {
+	type ButtonProps,
+	Host,
+	Menu,
+	Button as SwiftUIButton,
+} from "@expo/ui/swift-ui";
 import {
 	accessibilityLabel,
 	disabled as disabledModifier,
@@ -59,7 +64,7 @@ export function ActionMenuButton({
 					systemImage="ellipsis"
 				>
 					{actions.map((action) => (
-						<Button
+						<SwiftUIButton
 							key={action.label}
 							label={action.label}
 							onPress={action.onPress}

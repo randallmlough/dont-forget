@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { Button } from "@/client/ui/button";
 
 export function HomeStatus({
 	title,
@@ -23,18 +24,7 @@ export function HomeStatus({
 }
 
 export function HomeRetryButton({ onPress }: { onPress: () => void }) {
-	return (
-		<Pressable
-			accessibilityRole="button"
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.retryButton,
-				pressed ? styles.retryButtonPressed : undefined,
-			]}
-		>
-			<Text style={styles.retryButtonLabel}>Try again</Text>
-		</Pressable>
-	);
+	return <Button onPress={onPress}>Try again</Button>;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -63,22 +53,5 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.callout,
 		color: theme.colors.mutedForeground,
 		textAlign: "center",
-	},
-	retryButton: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(4),
-		borderRadius: theme.radii.xl,
-		borderCurve: "continuous",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: theme.colors.primary,
-	},
-	retryButtonPressed: {
-		opacity: theme.opacities.pressed,
-	},
-	retryButtonLabel: {
-		...theme.typography.callout,
-		color: theme.colors.primaryForeground,
-		fontWeight: theme.fontWeights.bold,
 	},
 }));

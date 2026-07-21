@@ -16,7 +16,7 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { AppButton } from "@/client/ui/app-button";
+import { Button } from "@/client/ui/button";
 import {
 	type GroupPosition,
 	groupPosition,
@@ -282,12 +282,9 @@ function CreateHouseholdForm({
 					style={styles.input}
 					value={state.householdName}
 				/>
-				<AppButton
-					disabled={busy}
-					label={creating ? "Creating" : "Create Household"}
-					onPress={onCreateHousehold}
-					variant="primary"
-				/>
+				<Button disabled={busy} onPress={onCreateHousehold}>
+					{creating ? "Creating" : "Create Household"}
+				</Button>
 			</View>
 		</SurfaceCard>
 	);
@@ -317,12 +314,9 @@ function JoinByCodeForm({
 					style={styles.input}
 					value={state.code}
 				/>
-				<AppButton
-					disabled={busy}
-					label={joining ? "Joining" : "Join Household"}
-					onPress={onJoinByCode}
-					variant="primary"
-				/>
+				<Button disabled={busy} onPress={onJoinByCode}>
+					{joining ? "Joining" : "Join Household"}
+				</Button>
 			</View>
 		</SurfaceCard>
 	);
@@ -340,7 +334,7 @@ function SwitchSessionState({
 			<SafeAreaView edges={["top", "bottom"]} style={styles.root}>
 				<CenteredStatus title="Household unavailable">
 					<Text style={styles.statusBody}>{state.message}</Text>
-					<AppButton label="Try again" onPress={onRetry} variant="primary" />
+					<Button onPress={onRetry}>Try again</Button>
 				</CenteredStatus>
 			</SafeAreaView>
 		);

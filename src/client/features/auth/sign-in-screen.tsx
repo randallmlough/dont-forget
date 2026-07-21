@@ -6,11 +6,11 @@ import { AuthFooterLink } from "@/client/features/auth/auth-footer-link";
 import { AuthScreen } from "@/client/features/auth/auth-screen";
 import { AuthTextInput } from "@/client/features/auth/auth-text-input";
 import { OrDivider } from "@/client/features/auth/or-divider";
-import { PrimaryButton } from "@/client/features/auth/primary-button";
 import { authHrefWithIntent } from "@/client/features/auth/redirect-policy";
 import { SocialSignIn } from "@/client/features/auth/social-sign-in";
 import { track } from "@/client/lib/analytics";
 import { userMessage } from "@/client/lib/clerk-errors";
+import { Button } from "@/client/ui/button";
 
 export default function SignInScreen() {
 	const { signIn, setActive, isLoaded } = useSignIn();
@@ -71,7 +71,9 @@ export default function SignInScreen() {
 				editable={!submitting}
 				onSubmitEditing={onSubmit}
 			/>
-			<PrimaryButton label="Sign in" onPress={onSubmit} loading={submitting} />
+			<Button loading={submitting} onPress={onSubmit} radius="xl" size="lg">
+				Sign in
+			</Button>
 			<AuthFooterLink
 				prompt="Don't have an account?"
 				label="Sign up"

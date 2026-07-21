@@ -1,7 +1,8 @@
 import { type SFSymbol, SymbolView } from "expo-symbols";
 import type { ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { Button } from "./button";
 import { GlassSurface } from "./glass-surface";
 
 export type SurfaceSectionProps = {
@@ -26,16 +27,14 @@ export function SurfaceSection({
 				<Text style={styles.sectionTitle}>{title}</Text>
 				{detail ? <Text style={styles.sectionDetail}>{detail}</Text> : null}
 				{action ? (
-					<Pressable
-						accessibilityRole="button"
+					<Button
 						onPress={action.onPress}
-						style={({ pressed }) => [
-							styles.sectionAction,
-							pressed ? styles.pressed : undefined,
-						]}
+						style={styles.sectionAction}
+						textStyle={styles.sectionActionLabel}
+						variant="ghost"
 					>
-						<Text style={styles.sectionActionLabel}>{action.label}</Text>
-					</Pressable>
+						{action.label}
+					</Button>
 				) : null}
 			</View>
 			{children}
@@ -174,18 +173,14 @@ export function SurfaceRow({
 	if (!onPress) return content;
 
 	const control = (
-		<Pressable
+		<Button
 			accessibilityHint={accessibilityHint}
 			accessibilityLabel={accessibilityLabel ?? label}
-			accessibilityRole="button"
 			accessibilityState={{ disabled, selected }}
 			disabled={disabled}
 			onPress={onPress}
-			style={({ pressed }) => [
-				trailing ? styles.rowControl : undefined,
-				pressed ? styles.pressed : undefined,
-				!trailing && disabled ? styles.disabled : undefined,
-			]}
+			style={trailing ? styles.rowControl : styles.rowButton}
+			variant="link"
 		>
 			{trailing ? (
 				<>
@@ -195,7 +190,7 @@ export function SurfaceRow({
 			) : (
 				content
 			)}
-		</Pressable>
+		</Button>
 	);
 
 	if (!trailing) return control;
@@ -307,6 +302,11 @@ const styles = StyleSheet.create((theme) => ({
 		paddingRight: theme.spacing(3),
 		paddingVertical: theme.spacing(2.5),
 	},
+	rowButton: {
+		alignSelf: "stretch",
+		flexDirection: "column",
+		alignItems: "stretch",
+	},
 	rowTrailing: {
 		justifyContent: "center",
 		paddingRight: theme.spacing(4),
@@ -365,9 +365,6 @@ const styles = StyleSheet.create((theme) => ({
 	avatarLabelLarge: {
 		fontFamily: theme.fontFamilies.serif,
 		fontSize: theme.fontSizes["3xl"],
-	},
-	pressed: {
-		opacity: theme.opacities.pressed,
 	},
 	disabled: {
 		opacity: theme.opacities.disabled,
