@@ -2,13 +2,8 @@ import type { ReactNode } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
-import { Button } from "./button";
-
 export type ScreenSectionProps = {
-	action?: {
-		label: string;
-		onPress: () => void;
-	};
+	action?: ReactNode;
 	children?: ReactNode;
 	detail?: string;
 	title: string;
@@ -25,16 +20,7 @@ export function ScreenSection({
 			<View style={styles.heading}>
 				<Text style={styles.title}>{title}</Text>
 				{detail ? <Text style={styles.detail}>{detail}</Text> : null}
-				{action ? (
-					<Button
-						onPress={action.onPress}
-						style={styles.action}
-						textStyle={styles.actionLabel}
-						variant="ghost"
-					>
-						{action.label}
-					</Button>
-				) : null}
+				{action}
 			</View>
 			{children}
 		</View>
@@ -60,15 +46,5 @@ const styles = StyleSheet.create((theme) => ({
 	detail: {
 		...theme.typography.caption,
 		color: theme.colors.mutedForeground,
-	},
-	action: {
-		minHeight: theme.spacing(11),
-		justifyContent: "center",
-		paddingHorizontal: theme.spacing(2),
-		marginVertical: -theme.spacing(2),
-	},
-	actionLabel: {
-		...theme.typography.callout,
-		color: theme.colors.primary,
 	},
 }));

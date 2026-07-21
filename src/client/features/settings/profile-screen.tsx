@@ -94,9 +94,16 @@ export function ProfileScreenView({
 
 				<ScreenSection
 					action={
-						editing
-							? undefined
-							: { label: "Edit", onPress: () => setEditing(true) }
+						editing ? undefined : (
+							<Button
+								onPress={() => setEditing(true)}
+								style={styles.sectionAction}
+								textStyle={styles.sectionActionLabel}
+								variant="ghost"
+							>
+								Edit
+							</Button>
+						)
 					}
 					title="Personal Information"
 				>
@@ -347,6 +354,16 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.destructive,
 	},
 	formNotice: {
+		...theme.typography.callout,
+		color: theme.colors.primary,
+	},
+	sectionAction: {
+		minHeight: theme.spacing(11),
+		justifyContent: "center",
+		paddingHorizontal: theme.spacing(2),
+		marginVertical: -theme.spacing(2),
+	},
+	sectionActionLabel: {
 		...theme.typography.callout,
 		color: theme.colors.primary,
 	},
