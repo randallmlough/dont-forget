@@ -242,6 +242,7 @@ const fallbackStyles = StyleSheet.create((theme) => ({
 				xl: {
 					fontFamily: theme.fontFamilies.serif,
 					fontSize: theme.fontSizes["3xl"],
+					lineHeight: theme.lineHeights["3xl"],
 				},
 			},
 		},
