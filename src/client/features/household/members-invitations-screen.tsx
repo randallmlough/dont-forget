@@ -334,6 +334,7 @@ function JoinCodeCard({
 				<Pressable
 					accessibilityLabel="Household Join Code"
 					accessibilityRole="button"
+					accessibilityState={{ expanded }}
 					onPress={() => setExpanded((current) => !current)}
 					style={({ pressed }) => [
 						styles.joinCodeToggle,

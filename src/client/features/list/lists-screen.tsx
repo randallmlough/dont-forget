@@ -451,7 +451,7 @@ function ListRow({
 	onDelete: () => void;
 }) {
 	return (
-		<Item size="sm">
+		<Item size="sm" style={styles.listRow}>
 			<Pressable
 				accessibilityHint="Makes this the Current List and opens it"
 				accessibilityLabel={summary.name}
@@ -467,7 +467,7 @@ function ListRow({
 					<ItemDescription>{listCounts(summary)}</ItemDescription>
 				</ItemContent>
 			</Pressable>
-			<ItemActions>
+			<ItemActions style={styles.listRowActions}>
 				<ActionMenuButton
 					accessibilityLabel={`List actions for ${summary.name}`}
 					actions={listMenuActions(onRename, onDelete)}
@@ -731,9 +731,21 @@ const styles = StyleSheet.create((theme) => ({
 		fontWeight: theme.fontWeights.semibold,
 		color: theme.colors.foreground,
 	},
+	listRow: {
+		gap: theme.spacing(0),
+		paddingHorizontal: theme.spacing(0),
+		paddingVertical: theme.spacing(0),
+	},
 	listRowAction: {
 		flex: 1,
 		minWidth: 0,
+		justifyContent: "center",
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(2.5),
+		paddingVertical: theme.spacing(3),
+	},
+	listRowActions: {
+		paddingRight: theme.spacing(4),
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,
