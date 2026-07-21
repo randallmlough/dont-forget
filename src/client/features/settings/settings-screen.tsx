@@ -1,13 +1,21 @@
 import { useRouter } from "expo-router";
+import { type SFSymbol, SymbolView } from "expo-symbols";
 import { ScrollView, Text } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import { Card, CardContent } from "@/client/ui/card";
 import {
-	SurfaceCard,
-	SurfaceRow,
-	SurfaceSection,
-} from "@/client/ui/settings-surface";
+	Item,
+	ItemActions,
+	ItemActionsLabel,
+	ItemContent,
+	ItemGroup,
+	ItemMedia,
+	ItemPressable,
+	ItemSeparator,
+	ItemTitle,
+} from "@/client/ui/item";
+import { ScreenSection } from "@/client/ui/screen-section";
 import {
 	type SettingsActions,
 	type SettingsState,
@@ -43,77 +51,128 @@ export function SettingsScreenView({
 					</Card>
 				) : null}
 
-				<SurfaceSection title="Your App">
-					<SurfaceCard>
-						<SurfaceRow
-							divider
-							label="Profile"
+				<ScreenSection title="Your App">
+					<ItemGroup variant="outline">
+						<SettingsItem
+							title="Profile"
 							onPress={() => router.push("/profile")}
 							symbol="person.crop.circle"
 							value={userName}
 						/>
-						<SurfaceRow
-							label="Appearance"
+						<ItemSeparator />
+						<SettingsItem
+							title="Appearance"
 							onPress={() => router.push("/settings/appearance")}
 							symbol="circle.lefthalf.filled"
 							value={appearanceLabel(state.appearancePreference)}
 						/>
-					</SurfaceCard>
-				</SurfaceSection>
+					</ItemGroup>
+				</ScreenSection>
 
-				<SurfaceSection title="Household">
-					<SurfaceCard>
-						<SurfaceRow
-							divider
-							label="Household"
+				<ScreenSection title="Household">
+					<ItemGroup variant="outline">
+						<SettingsItem
+							title="Household"
 							onPress={() => router.push("/household/settings")}
 							symbol="house"
 						/>
-						<SurfaceRow
-							divider
-							label="Members & Invitations"
+						<ItemSeparator />
+						<SettingsItem
+							title="Members & Invitations"
 							onPress={() => router.push("/household/members")}
 							symbol="person.2"
 						/>
-						<SurfaceRow
-							label="Switch Household"
+						<ItemSeparator />
+						<SettingsItem
+							title="Switch Household"
 							onPress={() => router.push("/household/switch")}
 							symbol="arrow.left.arrow.right"
 						/>
-					</SurfaceCard>
-				</SurfaceSection>
+					</ItemGroup>
+				</ScreenSection>
 
-				<SurfaceSection title="About">
-					<SurfaceCard>
+				<ScreenSection title="About">
+					<ItemGroup variant="outline">
 						{state.privacyPolicyUrl ? (
-							<SurfaceRow
-								divider
-								label="Privacy Policy"
+							<SettingsItem
+								title="Privacy Policy"
 								onPress={() => {
 									void actions.openPrivacyPolicy();
 								}}
 								symbol="hand.raised"
 							/>
 						) : null}
+						{state.privacyPolicyUrl ? <ItemSeparator /> : null}
 						{state.termsUrl ? (
-							<SurfaceRow
-								divider
-								label="Terms of Service"
+							<SettingsItem
+								title="Terms of Service"
 								onPress={() => {
 									void actions.openTerms();
 								}}
 								symbol="doc.text"
 							/>
 						) : null}
-						<SurfaceRow
-							label="Version"
+						{state.termsUrl ? <ItemSeparator /> : null}
+						<SettingsItem
+							title="Version"
 							symbol="info.circle"
 							value={versionLabel(state.appVersion, state.appEnv)}
 						/>
-					</SurfaceCard>
-				</SurfaceSection>
+					</ItemGroup>
+				</ScreenSection>
 			</ScrollView>
 		</ScreenScaffold>
+	);
+}
+
+function SettingsItem({
+	onPress,
+	symbol,
+	title,
+	value,
+}: {
+	onPress?: () => void;
+	symbol: SFSymbol;
+	title: string;
+	value?: string;
+}) {
+	const { theme } = useUnistyles();
+	const content = (
+		<>
+			<ItemMedia variant="icon">
+				<SymbolView
+					accessibilityElementsHidden
+					accessible={false}
+					name={symbol}
+					size={theme.spacing(4)}
+					tintColor={theme.colors.foreground}
+					weight="medium"
+				/>
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle>{title}</ItemTitle>
+			</ItemContent>
+			<ItemActions>
+				{value ? <ItemActionsLabel>{value}</ItemActionsLabel> : null}
+				{onPress ? (
+					<SymbolView
+						accessibilityElementsHidden
+						accessible={false}
+						name="chevron.right"
+						size={theme.spacing(3.5)}
+						tintColor={theme.colors.mutedForeground}
+						weight="semibold"
+					/>
+				) : null}
+			</ItemActions>
+		</>
+	);
+
+	if (!onPress) return <Item size="sm">{content}</Item>;
+	return (
+		<ItemPressable accessibilityLabel={title} onPress={onPress} size="sm">
+			{content}
+		</ItemPressable>
 	);
 }
 

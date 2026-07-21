@@ -1,15 +1,25 @@
 import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
+import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
+import { Card, CardContent } from "@/client/ui/card";
 import {
-	InitialsAvatar,
-	SurfaceCard,
-	SurfaceRow,
-	SurfaceSection,
-} from "@/client/ui/settings-surface";
+	Item,
+	ItemActions,
+	ItemActionsLabel,
+	ItemContent,
+	ItemDescription,
+	ItemGroup,
+	ItemMedia,
+	ItemPressable,
+	ItemSeparator,
+	ItemTitle,
+} from "@/client/ui/item";
+import { ScreenSection } from "@/client/ui/screen-section";
 import {
 	type SettingsActions,
 	type SettingsState,
@@ -71,7 +81,9 @@ export function ProfileScreenView({
 				keyboardShouldPersistTaps="handled"
 			>
 				<View style={styles.hero}>
-					<InitialsAvatar label={displayName} size="large" />
+					<Avatar accessibilityLabel={displayName} size="xl">
+						<AvatarFallback name={displayName} />
+					</Avatar>
 					<View style={styles.heroText}>
 						<Text style={styles.heroName}>{displayName}</Text>
 						{state.user.email ? (
@@ -80,7 +92,7 @@ export function ProfileScreenView({
 					</View>
 				</View>
 
-				<SurfaceSection
+				<ScreenSection
 					action={
 						editing
 							? undefined
@@ -96,43 +108,47 @@ export function ProfileScreenView({
 							state={state}
 						/>
 					) : (
-						<SurfaceCard>
-							<SurfaceRow
-								divider
-								label="First Name"
+						<ItemGroup variant="outline">
+							<ProfileDetailItem
+								title="First Name"
 								value={state.user.firstName ?? "Not set"}
 							/>
-							<SurfaceRow
-								label="Last Name"
+							<ItemSeparator />
+							<ProfileDetailItem
+								title="Last Name"
 								value={state.user.lastName ?? "Not set"}
 							/>
-						</SurfaceCard>
+						</ItemGroup>
 					)}
-				</SurfaceSection>
+				</ScreenSection>
 
-				<SurfaceSection title="User">
-					<SurfaceCard>
-						<SurfaceRow
-							detail="Managed by your sign-in provider"
-							label="Email"
-							value={state.user.email ?? "Unavailable"}
-						/>
-					</SurfaceCard>
-				</SurfaceSection>
+				<ScreenSection title="User">
+					<ItemGroup variant="outline">
+						<Item size="sm">
+							<ItemContent>
+								<ItemTitle>Email</ItemTitle>
+								<ItemDescription>
+									Managed by your sign-in provider
+								</ItemDescription>
+							</ItemContent>
+							<ItemActions>
+								<ItemActionsLabel>
+									{state.user.email ?? "Unavailable"}
+								</ItemActionsLabel>
+							</ItemActions>
+						</Item>
+					</ItemGroup>
+				</ScreenSection>
 
-				<SurfaceSection title="Session">
-					<SurfaceCard>
-						<SurfaceRow
-							disclosure={false}
-							label="Sign Out"
+				<ScreenSection title="Session">
+					<ItemGroup variant="outline">
+						<SignOutItem
 							onPress={() => {
 								void actions.signOut();
 							}}
-							symbol="rectangle.portrait.and.arrow.right"
-							tone="destructive"
 						/>
-					</SurfaceCard>
-				</SurfaceSection>
+					</ItemGroup>
+				</ScreenSection>
 			</ScrollView>
 		</ScreenScaffold>
 	);
@@ -173,8 +189,8 @@ function UserNameForm({
 	}
 
 	return (
-		<SurfaceCard>
-			<View style={styles.form}>
+		<Card>
+			<CardContent style={styles.form}>
 				<View style={styles.field}>
 					<Text style={styles.fieldLabel}>First Name</Text>
 					<TextInput
@@ -229,8 +245,42 @@ function UserNameForm({
 						Cancel
 					</Button>
 				</View>
-			</View>
-		</SurfaceCard>
+			</CardContent>
+		</Card>
+	);
+}
+
+function ProfileDetailItem({ title, value }: { title: string; value: string }) {
+	return (
+		<Item size="sm">
+			<ItemContent>
+				<ItemTitle>{title}</ItemTitle>
+			</ItemContent>
+			<ItemActions>
+				<ItemActionsLabel>{value}</ItemActionsLabel>
+			</ItemActions>
+		</Item>
+	);
+}
+
+function SignOutItem({ onPress }: { onPress: () => void }) {
+	const { theme } = useUnistyles();
+	return (
+		<ItemPressable accessibilityLabel="Sign Out" onPress={onPress} size="sm">
+			<ItemMedia variant="icon">
+				<SymbolView
+					accessibilityElementsHidden
+					accessible={false}
+					name="rectangle.portrait.and.arrow.right"
+					size={theme.spacing(4)}
+					tintColor={theme.colors.destructive}
+					weight="medium"
+				/>
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle style={styles.destructiveTitle}>Sign Out</ItemTitle>
+			</ItemContent>
+		</ItemPressable>
 	);
 }
 
@@ -268,6 +318,7 @@ const styles = StyleSheet.create((theme) => ({
 	form: {
 		gap: theme.spacing(3),
 		padding: theme.spacing(4),
+		paddingTop: theme.spacing(4),
 	},
 	field: {
 		gap: theme.spacing(1),
@@ -298,5 +349,8 @@ const styles = StyleSheet.create((theme) => ({
 	formNotice: {
 		...theme.typography.callout,
 		color: theme.colors.primary,
+	},
+	destructiveTitle: {
+		color: theme.colors.destructive,
 	},
 }));

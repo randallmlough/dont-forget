@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import {
@@ -9,7 +10,7 @@ import {
 	TextInput,
 	View,
 } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
 	type AuthenticatedAppSession,
@@ -17,14 +18,22 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
+import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
 import { Card, CardContent } from "@/client/ui/card";
 import {
-	InitialsAvatar,
-	SurfaceCard,
-	SurfaceRow,
-	SurfaceSection,
-} from "@/client/ui/settings-surface";
+	Item,
+	ItemActions,
+	ItemActionsLabel,
+	ItemContent,
+	ItemDescription,
+	ItemGroup,
+	ItemMedia,
+	ItemPressable,
+	ItemSeparator,
+	ItemTitle,
+} from "@/client/ui/item";
+import { ScreenSection } from "@/client/ui/screen-section";
 import {
 	type HouseholdSettingsActions,
 	type HouseholdSettingsOperation,
@@ -133,49 +142,53 @@ function HouseholdReadyView({
 				</Card>
 			) : null}
 
-			<SurfaceCard>
-				<View style={styles.identityCard}>
-					<InitialsAvatar label={householdName} size="large" />
-					<View style={styles.identityText}>
-						<Text style={styles.identityName}>{householdName}</Text>
-						<Text style={styles.identityDetail}>
-							{roleLabel} · {memberCountLabel(memberCount)}
-						</Text>
-					</View>
-				</View>
-			</SurfaceCard>
+			<Item variant="outline">
+				<Avatar accessibilityLabel={householdName} size="xl">
+					<AvatarFallback name={householdName} />
+				</Avatar>
+				<ItemContent>
+					<ItemTitle style={styles.identityName}>{householdName}</ItemTitle>
+					<ItemDescription style={styles.identityDetail}>
+						{roleLabel} · {memberCountLabel(memberCount)}
+					</ItemDescription>
+				</ItemContent>
+			</Item>
 
-			<SurfaceSection title="Household Details">
-				<SurfaceCard>
+			<ScreenSection title="Household Details">
+				<ItemGroup variant="outline">
 					<HouseholdNameRow
 						actions={actions}
 						canRename={session.activeMember.role === "owner"}
 						name={householdName}
 						operation={state.operation}
 					/>
-					<SurfaceRow label="Your Membership" value={roleLabel} />
-				</SurfaceCard>
-				<SurfaceCard>
-					<SurfaceRow
+					<ItemSeparator />
+					<HouseholdDetailItem title="Your Membership" value={roleLabel} />
+				</ItemGroup>
+				<ItemGroup variant="outline">
+					<ItemPressable
 						accessibilityHint="Opens Member and Invitation management"
-						detail={`${memberCountLabel(memberCount)} · ${pendingInvitationLabel(invitationCount)}`}
-						label="Members & Invitations"
+						accessibilityLabel="Members & Invitations"
 						onPress={onOpenMembers}
-					/>
-				</SurfaceCard>
-			</SurfaceSection>
+						size="sm"
+					>
+						<ItemContent>
+							<ItemTitle>Members & Invitations</ItemTitle>
+							<ItemDescription>
+								{memberCountLabel(memberCount)} ·{" "}
+								{pendingInvitationLabel(invitationCount)}
+							</ItemDescription>
+						</ItemContent>
+						<DisclosureIndicator />
+					</ItemPressable>
+				</ItemGroup>
+			</ScreenSection>
 
-			<SurfaceSection title="Membership">
-				<SurfaceCard>
-					<SurfaceRow
-						disclosure={false}
-						label="Leave Household"
-						onPress={() => confirmLeaveHousehold(actions)}
-						symbol="rectangle.portrait.and.arrow.right"
-						tone="destructive"
-					/>
-				</SurfaceCard>
-			</SurfaceSection>
+			<ScreenSection title="Membership">
+				<ItemGroup variant="outline">
+					<LeaveHouseholdItem onPress={() => confirmLeaveHousehold(actions)} />
+				</ItemGroup>
+			</ScreenSection>
 		</ScrollView>
 	);
 }
@@ -191,26 +204,44 @@ function HouseholdNameRow({
 	name: string;
 	operation: HouseholdSettingsOperation;
 }) {
+	const { theme } = useUnistyles();
 	const [editing, setEditing] = useState(false);
 	const [draftName, setDraftName] = useState(name);
 	const renaming = operation.status === "renamingHousehold";
 
 	if (!editing) {
+		const content = (
+			<>
+				<ItemContent>
+					<ItemTitle>Household Name</ItemTitle>
+				</ItemContent>
+				<ItemActions>
+					<ItemActionsLabel>{name}</ItemActionsLabel>
+					{canRename ? (
+						<SymbolView
+							accessibilityElementsHidden
+							accessible={false}
+							name="chevron.right"
+							size={theme.spacing(3.5)}
+							tintColor={theme.colors.mutedForeground}
+							weight="semibold"
+						/>
+					) : null}
+				</ItemActions>
+			</>
+		);
+		if (!canRename) return <Item size="sm">{content}</Item>;
 		return (
-			<SurfaceRow
-				divider
-				disclosure={canRename}
-				label="Household Name"
-				onPress={
-					canRename
-						? () => {
-								setDraftName(name);
-								setEditing(true);
-							}
-						: undefined
-				}
-				value={name}
-			/>
+			<ItemPressable
+				accessibilityLabel="Household Name"
+				onPress={() => {
+					setDraftName(name);
+					setEditing(true);
+				}}
+				size="sm"
+			>
+				{content}
+			</ItemPressable>
 		);
 	}
 
@@ -246,6 +277,66 @@ function HouseholdNameRow({
 				</Button>
 			</View>
 		</View>
+	);
+}
+
+function HouseholdDetailItem({
+	title,
+	value,
+}: {
+	title: string;
+	value: string;
+}) {
+	return (
+		<Item size="sm">
+			<ItemContent>
+				<ItemTitle>{title}</ItemTitle>
+			</ItemContent>
+			<ItemActions>
+				<ItemActionsLabel>{value}</ItemActionsLabel>
+			</ItemActions>
+		</Item>
+	);
+}
+
+function DisclosureIndicator() {
+	const { theme } = useUnistyles();
+	return (
+		<ItemActions>
+			<SymbolView
+				accessibilityElementsHidden
+				accessible={false}
+				name="chevron.right"
+				size={theme.spacing(3.5)}
+				tintColor={theme.colors.mutedForeground}
+				weight="semibold"
+			/>
+		</ItemActions>
+	);
+}
+
+function LeaveHouseholdItem({ onPress }: { onPress: () => void }) {
+	const { theme } = useUnistyles();
+	return (
+		<ItemPressable
+			accessibilityLabel="Leave Household"
+			onPress={onPress}
+			size="sm"
+		>
+			<ItemMedia variant="icon">
+				<SymbolView
+					accessibilityElementsHidden
+					accessible={false}
+					name="rectangle.portrait.and.arrow.right"
+					size={theme.spacing(4)}
+					tintColor={theme.colors.destructive}
+					weight="medium"
+				/>
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle style={styles.destructiveTitle}>Leave Household</ItemTitle>
+			</ItemContent>
+		</ItemPressable>
 	);
 }
 
@@ -364,17 +455,6 @@ const styles = StyleSheet.create((theme) => ({
 		paddingBottom: theme.spacing(12),
 		gap: theme.spacing(6),
 	},
-	identityCard: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(4),
-		padding: theme.spacing(4),
-	},
-	identityText: {
-		flex: 1,
-		minWidth: 0,
-		gap: theme.spacing(1),
-	},
 	identityName: {
 		...theme.typography.headline,
 		color: theme.colors.foreground,
@@ -432,5 +512,8 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.body,
 		color: theme.colors.mutedForeground,
 		textAlign: "center",
+	},
+	destructiveTitle: {
+		color: theme.colors.destructive,
 	},
 }));

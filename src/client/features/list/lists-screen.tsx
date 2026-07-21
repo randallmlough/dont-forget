@@ -1,7 +1,13 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import {
+	ActivityIndicator,
+	FlatList,
+	Pressable,
+	Text,
+	View,
+} from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
@@ -27,14 +33,16 @@ import {
 import { Badge } from "@/client/ui/badge";
 import { Button } from "@/client/ui/button";
 import { GlassSurface } from "@/client/ui/glass-surface";
-import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
 import {
-	type GroupPosition,
-	groupPosition,
-	SurfaceCard,
-	SurfaceRow,
-	SurfaceSection,
-} from "@/client/ui/settings-surface";
+	Item,
+	ItemActions,
+	ItemContent,
+	ItemDescription,
+	ItemSeparator,
+	ItemTitle,
+} from "@/client/ui/item";
+import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
+import { ScreenSection } from "@/client/ui/screen-section";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { useHomeCurrentList } from "./use-home-current-list";
 import { type ListRows, useListRows } from "./use-list-rows";
@@ -311,6 +319,7 @@ function ListRowsView({
 					alwaysBounceVertical={false}
 					contentContainerStyle={styles.rowsContent}
 					data={otherSummaries}
+					ItemSeparatorComponent={ListItemSeparator}
 					keyExtractor={listSummaryKey}
 					ListHeaderComponent={
 						<View style={styles.collectionHeader}>
@@ -324,17 +333,16 @@ function ListRowsView({
 								/>
 							) : null}
 							{otherSummaries.length > 0 ? (
-								<SurfaceSection
+								<ScreenSection
 									detail={String(otherSummaries.length)}
 									title={currentSummary ? "Other Lists" : "All Lists"}
 								/>
 							) : null}
 						</View>
 					}
-					renderItem={({ index, item: summary }) => (
+					renderItem={({ item: summary }) => (
 						<ListRow
 							actionsDisabled={listMutationPending}
-							groupPosition={groupPosition(index, otherSummaries.length)}
 							onDelete={() => onDelete(summary)}
 							onRename={() => onRename(summary)}
 							onSelect={() => void onSelectList(summary.id)}
@@ -431,37 +439,47 @@ function CurrentListCard({
 
 function ListRow({
 	summary,
-	groupPosition,
 	actionsDisabled,
 	onSelect,
 	onRename,
 	onDelete,
 }: {
 	summary: ListSummary;
-	groupPosition: GroupPosition;
 	actionsDisabled: boolean;
 	onSelect: () => void;
 	onRename: () => void;
 	onDelete: () => void;
 }) {
 	return (
-		<SurfaceCard groupPosition={groupPosition}>
-			<SurfaceRow
+		<Item size="sm">
+			<Pressable
 				accessibilityHint="Makes this the Current List and opens it"
-				detail={listCounts(summary)}
-				divider={groupPosition === "first" || groupPosition === "middle"}
-				label={summary.name}
+				accessibilityLabel={summary.name}
+				accessibilityRole="button"
 				onPress={onSelect}
-				trailing={
-					<ActionMenuButton
-						accessibilityLabel={`List actions for ${summary.name}`}
-						actions={listMenuActions(onRename, onDelete)}
-						disabled={actionsDisabled}
-					/>
-				}
-			/>
-		</SurfaceCard>
+				style={({ pressed }) => [
+					styles.listRowAction,
+					pressed ? styles.pressed : undefined,
+				]}
+			>
+				<ItemContent>
+					<ItemTitle>{summary.name}</ItemTitle>
+					<ItemDescription>{listCounts(summary)}</ItemDescription>
+				</ItemContent>
+			</Pressable>
+			<ItemActions>
+				<ActionMenuButton
+					accessibilityLabel={`List actions for ${summary.name}`}
+					actions={listMenuActions(onRename, onDelete)}
+					disabled={actionsDisabled}
+				/>
+			</ItemActions>
+		</Item>
 	);
+}
+
+function ListItemSeparator() {
+	return <ItemSeparator />;
 }
 
 function listSummaryKey(summary: ListSummary): string {
@@ -712,6 +730,13 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.callout,
 		fontWeight: theme.fontWeights.semibold,
 		color: theme.colors.foreground,
+	},
+	listRowAction: {
+		flex: 1,
+		minWidth: 0,
+	},
+	pressed: {
+		opacity: theme.opacities.pressed,
 	},
 	statusContainer: {
 		flex: 1,

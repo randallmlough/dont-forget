@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { ScopedTheme, StyleSheet, useUnistyles } from "react-native-unistyles";
 
+import { Avatar, AvatarFallback } from "./avatar";
 import { Badge } from "./badge";
 import { Button } from "./button";
 import {
@@ -16,12 +17,12 @@ import {
 	ItemGroup,
 	ItemHeader,
 	ItemMedia,
+	ItemPressable,
 	ItemSeparator,
 	type ItemSize,
 	ItemTitle,
 	type ItemVariant,
 } from "./item";
-import { InitialsAvatar } from "./settings-surface";
 
 const variants = ["default", "outline", "muted"] satisfies ItemVariant[];
 const sizes = ["default", "sm", "xs"] satisfies ItemSize[];
@@ -85,24 +86,22 @@ function ItemGallery({ themeName }: { themeName: "light" | "dark" }) {
 						</ItemActions>
 					</Item>
 
-					<Button
+					<ItemPressable
 						accessibilityLabel="Open profile verification"
 						onPress={noop}
-						style={styles.itemLink}
-						variant="link"
+						size="sm"
+						variant="outline"
 					>
-						<Item size="sm" variant="outline">
-							<ItemMedia>
-								<ItemSymbol name="checkmark.seal.fill" />
-							</ItemMedia>
-							<ItemContent>
-								<ItemTitle>Your profile has been verified.</ItemTitle>
-							</ItemContent>
-							<ItemActions>
-								<ItemSymbol muted name="chevron.right" />
-							</ItemActions>
-						</Item>
-					</Button>
+						<ItemMedia>
+							<ItemSymbol name="checkmark.seal.fill" />
+						</ItemMedia>
+						<ItemContent>
+							<ItemTitle>Your profile has been verified.</ItemTitle>
+						</ItemContent>
+						<ItemActions>
+							<ItemSymbol muted name="chevron.right" />
+						</ItemActions>
+					</ItemPressable>
 				</StorySection>
 
 				<StorySection title="Variants">
@@ -151,7 +150,9 @@ function ItemGallery({ themeName }: { themeName: "light" | "dark" }) {
 
 					<Item variant="outline">
 						<ItemMedia>
-							<InitialsAvatar label="Avery Chen" />
+							<Avatar>
+								<AvatarFallback name="Avery Chen" />
+							</Avatar>
 						</ItemMedia>
 						<ItemContent>
 							<ItemTitle>Avery Chen</ItemTitle>
@@ -175,7 +176,7 @@ function ItemGallery({ themeName }: { themeName: "light" | "dark" }) {
 				</StorySection>
 
 				<StorySection title="Group">
-					<ItemGroup style={styles.group}>
+					<ItemGroup variant="outline">
 						<GroupItem
 							description="Items shared with your Household."
 							icon="basket"
@@ -197,11 +198,11 @@ function ItemGallery({ themeName }: { themeName: "light" | "dark" }) {
 				</StorySection>
 
 				<StorySection title="Group as links">
-					<ItemGroup style={styles.group}>
+					<ItemGroup variant="outline">
 						<GroupItemLink
 							description="Customize your appearance."
 							icon="paintbrush"
-							title="Apperance"
+							title="Appearance"
 							currentValue="Dark"
 						/>
 						<ItemSeparator />
@@ -295,26 +296,19 @@ function GroupItemLink({
 	currentValue: string;
 }) {
 	return (
-		<Button
-			accessibilityLabel="Open setting"
-			onPress={noop}
-			style={styles.itemLink}
-			variant="link"
-		>
-			<Item size="sm">
-				<ItemMedia variant="icon">
-					<ItemSymbol name={icon} />
-				</ItemMedia>
-				<ItemContent>
-					<ItemTitle>{title}</ItemTitle>
-					<ItemDescription>{description}</ItemDescription>
-				</ItemContent>
-				<ItemActions>
-					<ItemActionsLabel>{currentValue}</ItemActionsLabel>
-					<ItemSymbol muted name="chevron.right" />
-				</ItemActions>
-			</Item>
-		</Button>
+		<ItemPressable accessibilityLabel="Open setting" onPress={noop} size="sm">
+			<ItemMedia variant="icon">
+				<ItemSymbol name={icon} />
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle>{title}</ItemTitle>
+				<ItemDescription>{description}</ItemDescription>
+			</ItemContent>
+			<ItemActions>
+				<ItemActionsLabel>{currentValue}</ItemActionsLabel>
+				<ItemSymbol muted name="chevron.right" />
+			</ItemActions>
+		</ItemPressable>
 	);
 }
 
@@ -372,12 +366,6 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.headline,
 		color: theme.colors.foreground,
 	},
-	itemLink: {
-		width: "100%",
-		flexDirection: "column",
-		alignItems: "stretch",
-		paddingHorizontal: 0,
-	},
 	imagePlaceholder: {
 		width: "100%",
 		height: "100%",
@@ -388,13 +376,6 @@ const styles = StyleSheet.create((theme) => ({
 	imagePlaceholderLabel: {
 		...theme.typography.captionStrong,
 		color: theme.colors.primaryForeground,
-	},
-	group: {
-		borderWidth: theme.borders.thin,
-		borderColor: theme.colors.border,
-		borderRadius: theme.radii.md,
-		overflow: "hidden",
-		backgroundColor: theme.colors.card,
 	},
 	metadata: {
 		...theme.typography.caption,

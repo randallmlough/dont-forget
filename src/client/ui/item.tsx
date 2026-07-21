@@ -1,5 +1,8 @@
 import { type ComponentRef, forwardRef } from "react";
 import {
+	type AccessibilityState,
+	Pressable,
+	type PressableProps,
 	type StyleProp,
 	Text,
 	type TextProps,
@@ -13,6 +16,7 @@ import { StyleSheet } from "react-native-unistyles";
 export type ItemVariant = "default" | "outline" | "muted";
 export type ItemSize = "default" | "sm" | "xs";
 export type ItemMediaVariant = "default" | "icon" | "image";
+export type ItemGroupVariant = "default" | "outline";
 
 type ItemViewProps = Omit<ViewProps, "style"> & {
 	style?: StyleProp<ViewStyle>;
@@ -27,7 +31,15 @@ export type ItemProps = ItemViewProps & {
 	variant?: ItemVariant;
 };
 
-export type ItemGroupProps = ItemViewProps;
+export type ItemPressableProps = Omit<PressableProps, "style"> & {
+	size?: ItemSize;
+	style?: PressableProps["style"];
+	variant?: ItemVariant;
+};
+
+export type ItemGroupProps = ItemViewProps & {
+	variant?: ItemGroupVariant;
+};
 export type ItemSeparatorProps = ItemViewProps;
 
 export type ItemMediaProps = ItemViewProps & {
@@ -44,14 +56,22 @@ export type ItemActionsLabelProps = ItemTextProps;
 
 type ItemViewRef = ComponentRef<typeof View>;
 type ItemTextRef = ComponentRef<typeof Text>;
+type ItemPressableRef = ComponentRef<typeof Pressable>;
 
 export const ItemGroup = forwardRef<ItemViewRef, ItemGroupProps>(
-	function ItemGroup({ accessibilityRole, style, ...viewProps }, ref) {
+	function ItemGroup(
+		{ accessibilityRole, style, variant = "default", ...viewProps },
+		ref,
+	) {
+		groupStyles.useVariants({
+			variant: variant === "default" ? undefined : variant,
+		});
+
 		return (
 			<View
 				accessibilityRole={accessibilityRole ?? "list"}
 				ref={ref}
-				style={[styles.group, style]}
+				style={[groupStyles.group, style]}
 				{...viewProps}
 			/>
 		);
@@ -83,6 +103,48 @@ export const Item = forwardRef<ItemViewRef, ItemProps>(function Item(
 
 	return <View ref={ref} style={[itemStyles.item, style]} {...viewProps} />;
 });
+
+export const ItemPressable = forwardRef<ItemPressableRef, ItemPressableProps>(
+	function ItemPressable(
+		{
+			accessibilityRole,
+			accessibilityState,
+			disabled = false,
+			size = "default",
+			style,
+			variant = "default",
+			...pressableProps
+		},
+		ref,
+	) {
+		itemStyles.useVariants({
+			size: size === "default" ? undefined : size,
+			variant: variant === "default" ? undefined : variant,
+		});
+		const isDisabled = disabled === true;
+		const itemAccessibilityState: AccessibilityState = {
+			...accessibilityState,
+			disabled: isDisabled,
+		};
+
+		return (
+			<Pressable
+				accessibilityRole={accessibilityRole ?? "button"}
+				accessibilityState={itemAccessibilityState}
+				disabled={isDisabled}
+				ref={ref}
+				style={(state) => [
+					itemStyles.item,
+					styles.interactive,
+					typeof style === "function" ? style(state) : style,
+					state.pressed ? styles.pressed : undefined,
+					isDisabled ? styles.disabled : undefined,
+				]}
+				{...pressableProps}
+			/>
+		);
+	},
+);
 
 export const ItemMedia = forwardRef<ItemViewRef, ItemMediaProps>(
 	function ItemMedia({ style, variant = "default", ...viewProps }, ref) {
@@ -236,9 +298,33 @@ const mediaStyles = StyleSheet.create((theme) => ({
 	},
 }));
 
-const styles = StyleSheet.create((theme) => ({
+const groupStyles = StyleSheet.create((theme) => ({
 	group: {
 		alignSelf: "stretch",
+		variants: {
+			variant: {
+				default: {},
+				outline: {
+					overflow: "hidden",
+					borderWidth: theme.borders.thin,
+					borderColor: theme.colors.border,
+					borderRadius: theme.radii.md,
+					backgroundColor: theme.colors.card,
+				},
+			},
+		},
+	},
+}));
+
+const styles = StyleSheet.create((theme) => ({
+	interactive: {
+		minHeight: theme.spacing(11),
+	},
+	pressed: {
+		backgroundColor: theme.colors.secondary,
+	},
+	disabled: {
+		opacity: theme.opacities.disabled,
 	},
 	separator: {
 		alignSelf: "stretch",

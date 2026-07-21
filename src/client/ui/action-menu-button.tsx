@@ -40,7 +40,7 @@ export function ActionMenuButton({
 
 	return (
 		// The SwiftUI Host does not join RN's responder system, so an enclosing
-		// Pressable (e.g. SurfaceRow) would also fire on menu taps. Claiming the
+		// Pressable row would also fire on menu taps. Claiming the
 		// responder here keeps the touch from reaching that ancestor.
 		<View onStartShouldSetResponder={returnTrue} style={styles.host}>
 			<Host colorScheme={colorScheme} style={styles.hostFill}>
