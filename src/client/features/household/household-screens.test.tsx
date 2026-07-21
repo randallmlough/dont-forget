@@ -129,6 +129,7 @@ describe("MembersInvitationsView", () => {
 		const joinCodeToggle = screen.getByRole("button", {
 			name: "Household Join Code",
 		});
+		expect(joinCodeToggle).toHaveStyle({ minHeight: 56 });
 		expect(joinCodeToggle.props.accessibilityState).toMatchObject({
 			expanded: false,
 		});

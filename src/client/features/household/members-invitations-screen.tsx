@@ -330,7 +330,7 @@ function JoinCodeCard({
 
 	return (
 		<View style={styles.joinCodeSpacing}>
-			<Item variant="outline">
+			<Item style={styles.joinCodeCard} variant="outline">
 				<Pressable
 					accessibilityLabel="Household Join Code"
 					accessibilityRole="button"
@@ -359,7 +359,7 @@ function JoinCodeCard({
 					</ItemActions>
 				</Pressable>
 				{joinCode.enabled ? (
-					<ItemActions>
+					<ItemActions style={styles.joinCodeCopyAction}>
 						<CopyButton
 							accessibilityLabel="Copy Household Join Code"
 							onPress={() =>
@@ -746,12 +746,24 @@ const styles = StyleSheet.create((theme) => ({
 	joinCodeSpacing: {
 		paddingTop: theme.spacing(3),
 	},
+	joinCodeCard: {
+		gap: theme.spacing(0),
+		paddingHorizontal: theme.spacing(0),
+		paddingVertical: theme.spacing(0),
+	},
 	joinCodeToggle: {
 		flex: 1,
 		minWidth: 0,
+		minHeight: theme.spacing(14),
 		flexDirection: "row",
 		alignItems: "center",
 		gap: theme.spacing(2),
+		paddingLeft: theme.spacing(4),
+		paddingRight: theme.spacing(2.5),
+		paddingVertical: theme.spacing(2.5),
+	},
+	joinCodeCopyAction: {
+		paddingRight: theme.spacing(4),
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,
@@ -767,6 +779,7 @@ const styles = StyleSheet.create((theme) => ({
 		justifyContent: "flex-start",
 		gap: theme.spacing(2),
 		paddingHorizontal: theme.spacing(3),
+		paddingTop: theme.spacing(3),
 		paddingBottom: theme.spacing(3),
 	},
 	copyButton: {
