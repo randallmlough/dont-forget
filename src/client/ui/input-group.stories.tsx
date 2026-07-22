@@ -3,9 +3,15 @@ import {
 	Image as SwiftUIImage,
 	useNativeState,
 } from "@expo/ui/swift-ui";
-import { keyboardType } from "@expo/ui/swift-ui/modifiers";
+import {
+	background,
+	glassEffect,
+	keyboardType,
+	shapes,
+} from "@expo/ui/swift-ui/modifiers";
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { useUnistyles } from "react-native-unistyles";
+import { View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 import { Field, FieldDescription, FieldError, FieldLabel } from "./field";
 import {
@@ -61,7 +67,79 @@ function InputGroupGallery({ themeName }: { themeName: FormStoryTheme }) {
 					<DisabledInputGroup />
 				</Field>
 			</FormStorySection>
+
+			<FormStorySection
+				description="The group's modifiers escape hatch applies iOS 26 Liquid Glass to the shared surface: a clear background override removes the opaque chrome, and addons plus tap-to-focus keep working."
+				title="Glass appearance"
+			>
+				<GlassInputGroupExamples />
+			</FormStorySection>
 		</FormStoryCanvas>
+	);
+}
+
+function GlassInputGroupExamples() {
+	const { theme } = useUnistyles();
+	const text = useNativeState("Golden Pantry");
+
+	return (
+		<View style={styles.glassBackdrop}>
+			<View style={styles.glassPrimaryOrb} />
+			<View style={styles.glassDestructiveOrb} />
+			<Field>
+				<FieldLabel>Regular glass</FieldLabel>
+				<InputGroup
+					modifiers={[
+						background(
+							"clear",
+							shapes.roundedRectangle({ cornerRadius: theme.radii.md }),
+						),
+						glassEffect({
+							glass: { variant: "regular", interactive: true },
+							shape: "roundedRectangle",
+							cornerRadius: theme.radii.md,
+						}),
+					]}
+				>
+					<SwiftUIImage
+						color={theme.colors.mutedForeground}
+						size={16}
+						systemName="magnifyingglass"
+					/>
+					<Input accessibilityLabel="Glass search" placeholder="Search Items" />
+				</InputGroup>
+			</Field>
+			<Field>
+				<FieldLabel>Tinted capsule</FieldLabel>
+				<InputGroup
+					modifiers={[
+						background("clear", shapes.capsule()),
+						glassEffect({
+							glass: {
+								variant: "regular",
+								interactive: true,
+								tint: theme.colors.glassTint,
+							},
+							shape: "capsule",
+						}),
+					]}
+				>
+					<SwiftUIImage
+						color={theme.colors.mutedForeground}
+						size={16}
+						systemName="person.2"
+					/>
+					<Input accessibilityLabel="Glass household name" text={text} />
+					<SwiftUIButton onPress={() => text.set("")}>
+						<SwiftUIImage
+							color={theme.colors.mutedForeground}
+							size={16}
+							systemName="xmark.circle.fill"
+						/>
+					</SwiftUIButton>
+				</InputGroup>
+			</Field>
+		</View>
 	);
 }
 
@@ -142,3 +220,33 @@ function DisabledInputGroup() {
 		</InputGroup>
 	);
 }
+
+const styles = StyleSheet.create((theme) => ({
+	glassBackdrop: {
+		gap: theme.spacing(4),
+		padding: theme.spacing(4),
+		borderRadius: theme.radii["2xl"],
+		overflow: "hidden",
+		backgroundColor: theme.colors.secondary,
+	},
+	glassPrimaryOrb: {
+		position: "absolute",
+		top: -theme.spacing(6),
+		right: -theme.spacing(8),
+		width: theme.spacing(36),
+		height: theme.spacing(36),
+		borderRadius: theme.radii.full,
+		backgroundColor: theme.colors.primary,
+		opacity: theme.opacities.pressed,
+	},
+	glassDestructiveOrb: {
+		position: "absolute",
+		bottom: theme.spacing(12),
+		left: -theme.spacing(12),
+		width: theme.spacing(32),
+		height: theme.spacing(32),
+		borderRadius: theme.radii.full,
+		backgroundColor: theme.colors.destructive,
+		opacity: theme.opacities.disabled,
+	},
+}));

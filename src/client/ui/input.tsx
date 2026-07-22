@@ -309,9 +309,10 @@ export function createInputChromeModifiers({
  * A user modifier takes ownership of its `$type`: app styling of that type is
  * dropped so the escape hatch replaces styling instead of wrapping it. Only
  * style-derived modifiers go through this filter — modifiers backing
- * functional props (disabled, gestures) must always apply.
+ * functional props (disabled, gestures) must always apply. Shared with
+ * InputGroup, whose modifiers prop overrides the group chrome the same way.
  */
-function omitUserOverridden(
+export function omitUserOverridden(
 	derived: ViewModifier[],
 	userModifiers: ViewModifier[] | undefined,
 ): ViewModifier[] {

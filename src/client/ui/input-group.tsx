@@ -1,5 +1,9 @@
 import { Host, HStack } from "@expo/ui/swift-ui";
-import { onTapGesture, opacity } from "@expo/ui/swift-ui/modifiers";
+import {
+	onTapGesture,
+	opacity,
+	type ViewModifier,
+} from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, use, useMemo, useRef, useState } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -10,6 +14,7 @@ import {
 	type FocusableInputRef,
 	InputGroupContext,
 	type InputGroupContextValue,
+	omitUserOverridden,
 } from "./input";
 
 export type InputGroupProps = {
@@ -19,6 +24,12 @@ export type InputGroupProps = {
 	disabled?: boolean;
 	/** Defaults to the surrounding Field's invalid state. */
 	invalid?: boolean;
+	/**
+	 * Additional SwiftUI modifiers for the group surface, applied after the
+	 * chrome. A user modifier takes ownership of its `$type`, same as Input:
+	 * e.g. a custom `background` replaces the chrome instead of wrapping it.
+	 */
+	modifiers?: ViewModifier[];
 	style?: StyleProp<ViewStyle>;
 };
 
@@ -31,6 +42,7 @@ export function InputGroup({
 	children,
 	disabled,
 	invalid,
+	modifiers,
 	style,
 }: InputGroupProps) {
 	const { rt, theme } = useUnistyles();
@@ -61,12 +73,16 @@ export function InputGroup({
 			<HStack
 				alignment="center"
 				modifiers={[
-					...createInputChromeModifiers({
-						disabled: isDisabled,
-						focused: inputFocused,
-						invalid: isInvalid,
-						theme,
-					}),
+					...omitUserOverridden(
+						createInputChromeModifiers({
+							disabled: isDisabled,
+							focused: inputFocused,
+							invalid: isInvalid,
+							theme,
+						}),
+						modifiers,
+					),
+					...(modifiers ?? []),
 					// onTapGesture stores this closure as a native event listener that
 					// runs on tap, not during render, so the ref read is commit-safe.
 					// eslint-disable-next-line react-hooks/refs
