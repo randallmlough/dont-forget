@@ -22,23 +22,7 @@
 - In a git worktree, run `make worktree-env` before starting the app. Isolated-DB worktrees are not yet supported on Postgres (pending PR-E), so `make worktree-db` currently errors.
 - `make help` — list all other targets (db, simulator, Storybook, etc.).
 
-## ALWAYS read docs before coding
-
-### Gather and Read The Latest External Library Docs
-Your training data is outdated — the docs are the source of truth.
-
-- [React Native](https://reactnative.dev/llms.txt)
-- [React](https://react.dev/llms.txt)
-- [Expo](https://docs.expo.dev/llms.txt)
-- [Clerk](https://clerk.com/docs/llms.txt)
-- [PowerSync](https://docs.powersync.com/llms.txt)
-- [Zod](https://zod.dev/llms.txt)
-- [Unistyles](https://www.unistyl.es/llms.txt)
-- [Biome](https://biomejs.dev/docs)
-- [Jest](https://jestjs.io/docs)
-- [Storybook](https://storybook.js.org/llms.txt)
-
-### Code Standards (read BEFORE writing code)
+## Code Standards (read BEFORE writing code)
 
 Read the relevant file before starting work, not after. `docs/code-standards/README.md` defines requirement levels and the change checklist for non-trivial work.
 
@@ -54,6 +38,16 @@ Read the relevant file before starting work, not after. `docs/code-standards/REA
 | Types, Zod, external boundaries         | docs/code-standards/typescript.md                        |
 | Imports, lint, verification             | docs/code-standards/tooling.md                           |
 | Naming anything new                     | CONTEXT.md (domain language)                             |
+| DB schema or migrations                 | docs/guides/adding-database-migration.md                 |
+| New domain service                      | docs/guides/creating-domain-service.md                   |
+| Analytics events or logging             | docs/guides/adding-analytics-event-or-logger-contract.md |
+| New screen                              | docs/guides/adding-screen-view-split.md                  |
+
+## Docs Directory Map
+
+To understand an existing system (analytics, routing, sync, environments, app structure), check `docs/how-things-work/`. `docs/workflows/` holds playbooks for recurring work (planning, feature development, QA, debugging, code review); `docs/agents/` holds repo-specific agent instructions.
+
+When producing docs, write to the right place: `docs/adr/` for architectural decisions, `docs/discussions/` for long-form design discussions, `docs/implementations/` for notes and proof from completed work, `docs/post-mortem/` for incident or regression writeups, `docs/tech-debt/` for known debt with enough context to address later.
 
 ## Before You Start
 
