@@ -5,6 +5,7 @@ import {
 	font,
 	foregroundStyle,
 	frame,
+	glassEffect,
 	keyboardType,
 	padding,
 	shapes,
@@ -146,6 +147,13 @@ function InputGallery({ themeName }: { themeName: FormStoryTheme }) {
 			>
 				<CustomModifierExamples />
 			</FormStorySection>
+
+			<FormStorySection
+				description="glassEffect renders iOS 26 Liquid Glass. A clear background override removes the opaque chrome so the material shows; the glass edge replaces the border ring."
+				title="Glass appearance"
+			>
+				<GlassInputExamples />
+			</FormStorySection>
 		</FormStoryCanvas>
 	);
 }
@@ -211,6 +219,71 @@ function CustomModifierExamples() {
 					),
 				]}
 			/>
+		</View>
+	);
+}
+
+function GlassInputExamples() {
+	const { theme } = useUnistyles();
+
+	return (
+		<View style={styles.glassBackdrop}>
+			<View style={styles.glassPrimaryOrb} />
+			<View style={styles.glassDestructiveOrb} />
+			<Field>
+				<FieldLabel>Regular glass</FieldLabel>
+				<Input
+					accessibilityLabel="Regular glass"
+					modifiers={[
+						background(
+							"clear",
+							shapes.roundedRectangle({ cornerRadius: theme.radii.md }),
+						),
+						glassEffect({
+							glass: { variant: "regular", interactive: true },
+							shape: "roundedRectangle",
+							cornerRadius: theme.radii.md,
+						}),
+					]}
+					placeholder="Add an Item…"
+				/>
+			</Field>
+			<Field>
+				<FieldLabel>Tinted capsule</FieldLabel>
+				<Input
+					accessibilityLabel="Tinted glass"
+					defaultValue="Golden Pantry"
+					modifiers={[
+						background("clear", shapes.capsule()),
+						glassEffect({
+							glass: {
+								variant: "regular",
+								interactive: true,
+								tint: theme.colors.glassTint,
+							},
+							shape: "capsule",
+						}),
+					]}
+				/>
+			</Field>
+			<Field>
+				<FieldLabel>Clear glass</FieldLabel>
+				<Input
+					accessibilityLabel="Clear glass"
+					modifiers={[
+						background(
+							"clear",
+							shapes.roundedRectangle({ cornerRadius: theme.radii.md }),
+						),
+						glassEffect({
+							glass: { variant: "clear" },
+							shape: "roundedRectangle",
+							cornerRadius: theme.radii.md,
+						}),
+					]}
+					placeholder="Reads the backdrop through the material."
+				/>
+			</Field>
 		</View>
 	);
 }
@@ -353,6 +426,33 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	examples: {
 		gap: theme.spacing(4),
+	},
+	glassBackdrop: {
+		gap: theme.spacing(4),
+		padding: theme.spacing(4),
+		borderRadius: theme.radii["2xl"],
+		overflow: "hidden",
+		backgroundColor: theme.colors.secondary,
+	},
+	glassPrimaryOrb: {
+		position: "absolute",
+		top: -theme.spacing(6),
+		right: -theme.spacing(8),
+		width: theme.spacing(36),
+		height: theme.spacing(36),
+		borderRadius: theme.radii.full,
+		backgroundColor: theme.colors.primary,
+		opacity: theme.opacities.pressed,
+	},
+	glassDestructiveOrb: {
+		position: "absolute",
+		bottom: theme.spacing(12),
+		left: -theme.spacing(12),
+		width: theme.spacing(32),
+		height: theme.spacing(32),
+		borderRadius: theme.radii.full,
+		backgroundColor: theme.colors.destructive,
+		opacity: theme.opacities.disabled,
 	},
 	valueLabel: {
 		color: theme.colors.mutedForeground,
