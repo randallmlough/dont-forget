@@ -1,12 +1,4 @@
-import {
-	Children,
-	createContext,
-	isValidElement,
-	type ReactNode,
-	type Ref,
-	use,
-	useMemo,
-} from "react";
+import { createContext, type ReactNode, type Ref, use, useMemo } from "react";
 import {
 	type AccessibilityState,
 	type StyleProp,
@@ -90,52 +82,31 @@ export function Field({
 
 export type FieldSetProps = FieldViewProps;
 
-export function FieldSet({
-	children,
+export function FieldSet({ ref, style, ...viewProps }: FieldSetProps) {
+	return <View ref={ref} style={[styles.fieldSet, style]} {...viewProps} />;
+}
+
+export type FieldSetSummaryProps = FieldViewProps;
+
+/** Groups a FieldSet's legend and description tighter than its fields. */
+export function FieldSetSummary({
 	ref,
 	style,
 	...viewProps
-}: FieldSetProps) {
-	const items = Children.toArray(children);
-	const [legend, description, ...fields] = items;
-	const hasSummary =
-		isValidElement(legend) &&
-		legend.type === FieldLegend &&
-		isValidElement(description) &&
-		description.type === FieldDescription;
-
+}: FieldSetSummaryProps) {
 	return (
-		<View ref={ref} style={[styles.fieldSet, style]} {...viewProps}>
-			{hasSummary ? (
-				<>
-					<View style={styles.fieldSetSummary}>
-						{legend}
-						{description}
-					</View>
-					{fields}
-				</>
-			) : (
-				items
-			)}
-		</View>
+		<View ref={ref} style={[styles.fieldSetSummary, style]} {...viewProps} />
 	);
 }
 
-export type FieldLegendProps = FieldTextProps & {
-	variant?: "label" | "legend";
-};
+export type FieldLegendProps = FieldTextProps;
 
-export function FieldLegend({
-	ref,
-	style,
-	variant = "legend",
-	...textProps
-}: FieldLegendProps) {
+export function FieldLegend({ ref, style, ...textProps }: FieldLegendProps) {
 	return (
 		<Text
 			accessibilityRole="header"
 			ref={ref}
-			style={[variant === "legend" ? styles.legend : styles.label, style]}
+			style={[styles.legend, style]}
 			{...textProps}
 		/>
 	);
@@ -153,7 +124,9 @@ export function FieldContent({ ref, style, ...viewProps }: FieldContentProps) {
 	return <View ref={ref} style={[styles.content, style]} {...viewProps} />;
 }
 
-export type FieldLabelProps = LabelProps;
+// A disabled Field already dims all of its children, so FieldLabel adds no
+// disabled treatment of its own.
+export type FieldLabelProps = Omit<LabelProps, "disabled">;
 
 export function FieldLabel({
 	children,
@@ -166,11 +139,7 @@ export function FieldLabel({
 	const label = (
 		<Label
 			ref={ref}
-			style={[
-				field.invalid ? styles.invalidText : undefined,
-				field.disabled ? styles.mutedText : undefined,
-				style,
-			]}
+			style={[field.invalid ? styles.invalidText : undefined, style]}
 			{...labelProps}
 		>
 			{children}
@@ -185,31 +154,6 @@ export function FieldLabel({
 	);
 }
 
-export type FieldTitleProps = FieldTextProps;
-
-export function FieldTitle({ ref, style, ...textProps }: FieldTitleProps) {
-	const field = use(FieldContext);
-
-	const title = (
-		<Text
-			ref={ref}
-			style={[
-				styles.label,
-				field.invalid ? styles.invalidText : undefined,
-				field.disabled ? styles.mutedText : undefined,
-				style,
-			]}
-			{...textProps}
-		/>
-	);
-
-	return field.orientation === "horizontal" ? (
-		<View style={styles.horizontalLabel}>{title}</View>
-	) : (
-		title
-	);
-}
-
 export type FieldDescriptionProps = FieldTextProps;
 
 export function FieldDescription({
@@ -220,10 +164,9 @@ export function FieldDescription({
 	return <Text ref={ref} style={[styles.description, style]} {...textProps} />;
 }
 
-export type FieldErrorProps = FieldTextProps;
-
-export type FieldErrorItem = {
-	message?: string;
+export type FieldErrorProps = FieldTextProps & {
+	/** Duplicates collapse; multiple messages render as a bulleted list. */
+	errors?: string[];
 };
 
 export function FieldError({
@@ -232,15 +175,13 @@ export function FieldError({
 	ref,
 	style,
 	...textProps
-}: FieldErrorProps & { errors?: (FieldErrorItem | undefined)[] }) {
-	const messages = uniqueErrorMessages(errors);
+}: FieldErrorProps) {
+	const messages = [...new Set(errors)];
 	const content = hasContent(children)
 		? children
 		: messages.length === 1
 			? messages[0]
-			: messages.map((message, index) => (
-					<Text key={message}>{`${index === 0 ? "" : "\n"}• ${message}`}</Text>
-				));
+			: messages.map((message) => `• ${message}`).join("\n");
 
 	if (!hasContent(content)) {
 		return null;
@@ -271,20 +212,18 @@ export function FieldSeparator({
 	return (
 		<View ref={ref} style={[styles.separator, style]} {...viewProps}>
 			<View style={styles.separatorLine} />
-			{children ? <Text style={styles.separatorText}>{children}</Text> : null}
+			{children ? (
+				<>
+					<Text style={styles.separatorText}>{children}</Text>
+					<View style={styles.separatorLine} />
+				</>
+			) : null}
 		</View>
 	);
 }
 
 function hasContent(value: ReactNode): boolean {
 	return value !== undefined && value !== null && value !== "";
-}
-
-function uniqueErrorMessages(
-	errors: (FieldErrorItem | undefined)[] | undefined,
-) {
-	if (!errors) return [];
-	return [...new Set(errors.flatMap((error) => error?.message ?? []))];
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -324,11 +263,6 @@ const styles = StyleSheet.create((theme) => ({
 		flex: 1,
 		gap: theme.spacing(1.5),
 	},
-	label: {
-		color: theme.colors.foreground,
-		...theme.typography.callout,
-		fontWeight: theme.fontWeights.medium,
-	},
 	required: {
 		color: theme.colors.destructive,
 	},
@@ -340,27 +274,21 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.destructive,
 		...theme.typography.caption,
 	},
-	mutedText: {
-		color: theme.colors.mutedForeground,
-	},
 	invalidText: {
 		color: theme.colors.destructive,
 	},
 	separator: {
 		height: theme.spacing(5),
+		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "center",
 	},
 	separatorLine: {
-		position: "absolute",
-		left: 0,
-		right: 0,
+		flex: 1,
 		height: theme.borders.hairline,
 		backgroundColor: theme.colors.border,
 	},
 	separatorText: {
 		paddingHorizontal: theme.spacing(2),
-		backgroundColor: theme.colors.background,
 		color: theme.colors.mutedForeground,
 		...theme.typography.caption,
 	},

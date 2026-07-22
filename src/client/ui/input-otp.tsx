@@ -3,6 +3,7 @@ import {
 	type ReactNode,
 	type Ref,
 	use,
+	useCallback,
 	useMemo,
 	useRef,
 	useState,
@@ -21,6 +22,7 @@ import {
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { FieldContext } from "./field";
+import { forwardRefValue } from "./input";
 
 type InputOTPContextValue = {
 	activeIndex: number | null;
@@ -94,11 +96,12 @@ export function InputOTP({
 	);
 	const isDisabled = disabled ?? field.disabled;
 	const isInvalid = invalid ?? field.invalid;
-	const currentValue = normalizeValue(
-		value ?? internalValue,
-		maxLength,
-		pattern,
-	);
+	// internalValue is normalized at every write; only the controlled prop
+	// can arrive unnormalized.
+	const currentValue =
+		value === undefined
+			? internalValue
+			: normalizeValue(value, maxLength, pattern);
 	const activeIndex = focused
 		? Math.min(currentValue.length, maxLength - 1)
 		: null;
@@ -126,11 +129,13 @@ export function InputOTP({
 		if (!isDisabled) inputRef.current?.focus();
 	}
 
-	function setInputRef(node: TextInput | null) {
-		inputRef.current = node;
-		if (typeof ref === "function") ref(node);
-		else if (ref) ref.current = node;
-	}
+	const setInputRef = useCallback(
+		(node: TextInput | null) => {
+			inputRef.current = node;
+			forwardRefValue(ref, node);
+		},
+		[ref],
+	);
 
 	return (
 		<Pressable
@@ -212,8 +217,9 @@ export function InputOTPSlot({
 			style={[
 				styles.slot,
 				valueCharacter ? styles.filledSlot : undefined,
-				context.invalid ? styles.invalidSlot : undefined,
 				isActive ? styles.activeSlot : undefined,
+				// Invalid wins over focus, matching createInputChromeModifiers.
+				context.invalid ? styles.invalidSlot : undefined,
 				style,
 			]}
 			{...viewProps}
@@ -224,8 +230,8 @@ export function InputOTPSlot({
 	);
 }
 
-export type InputOTPSeparatorProps = Omit<ViewProps, "style"> & {
-	children?: ReactNode;
+export type InputOTPSeparatorProps = Omit<ViewProps, "children" | "style"> & {
+	children?: string;
 	style?: StyleProp<ViewStyle>;
 	textStyle?: StyleProp<TextStyle>;
 };
@@ -243,11 +249,7 @@ export function InputOTPSeparator({
 			style={[styles.separator, style]}
 			{...viewProps}
 		>
-			{typeof children === "string" || typeof children === "number" ? (
-				<Text style={[styles.separatorText, textStyle]}>{children}</Text>
-			) : (
-				children
-			)}
+			<Text style={[styles.separatorText, textStyle]}>{children}</Text>
 		</View>
 	);
 }
@@ -269,6 +271,9 @@ function normalizeValue(value: string, maxLength: number, pattern?: RegExp) {
 		: Array.from(value);
 	return characters.slice(0, maxLength).join("");
 }
+
+/** The theme has no focus-ring opacity token. */
+const FOCUS_GLOW_OPACITY = 0.72;
 
 const styles = StyleSheet.create((theme) => ({
 	container: {
@@ -309,12 +314,13 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	invalidSlot: {
 		borderColor: theme.colors.destructive,
+		shadowColor: theme.colors.destructive,
 	},
 	activeSlot: {
 		borderColor: theme.colors.primary,
 		shadowColor: theme.colors.primary,
 		shadowOffset: { width: 0, height: 0 },
-		shadowOpacity: theme.opacities.pressed,
+		shadowOpacity: FOCUS_GLOW_OPACITY,
 		shadowRadius: theme.spacing(1),
 	},
 	slotText: {

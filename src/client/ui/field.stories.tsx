@@ -9,7 +9,7 @@ import {
 	FieldLegend,
 	FieldSeparator,
 	FieldSet,
-	FieldTitle,
+	FieldSetSummary,
 } from "./field";
 import {
 	FormStoryCanvas,
@@ -68,10 +68,12 @@ function FieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 				title="Grouped fields"
 			>
 				<FieldSet>
-					<FieldLegend>Household details</FieldLegend>
-					<FieldDescription>
-						This information is visible to every Member.
-					</FieldDescription>
+					<FieldSetSummary>
+						<FieldLegend>Household details</FieldLegend>
+						<FieldDescription>
+							This information is visible to every Member.
+						</FieldDescription>
+					</FieldSetSummary>
 					<FieldGroup>
 						<Field>
 							<FieldLabel>Household name</FieldLabel>
@@ -94,11 +96,11 @@ function FieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 			</FormStorySection>
 
 			<FormStorySection
-				description="Horizontal fields pair a leading title with control details in FieldContent."
+				description="Horizontal fields pair a leading label with control details in FieldContent."
 				title="Horizontal composition"
 			>
 				<Field orientation="horizontal">
-					<FieldTitle>Join code</FieldTitle>
+					<FieldLabel>Join code</FieldLabel>
 					<FieldContent>
 						<Input
 							accessibilityLabel="Household join code"
@@ -112,7 +114,7 @@ function FieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 			</FormStorySection>
 
 			<FormStorySection
-				description="FieldError accepts direct content or deduplicates validator-style error objects."
+				description="FieldError accepts direct content or deduplicates a list of error messages."
 				title="Multiple errors"
 			>
 				<Field invalid>
@@ -120,9 +122,9 @@ function FieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 					<Input accessibilityLabel="Passphrase" secureTextEntry />
 					<FieldError
 						errors={[
-							{ message: "Use at least eight characters." },
-							{ message: "Add a number or symbol." },
-							{ message: "Use at least eight characters." },
+							"Use at least eight characters.",
+							"Add a number or symbol.",
+							"Use at least eight characters.",
 						]}
 					/>
 				</Field>
