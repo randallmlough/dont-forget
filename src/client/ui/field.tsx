@@ -18,7 +18,8 @@ type FieldContextValue = {
 	invalid: boolean;
 };
 
-const FieldContext = createContext<FieldContextValue>({
+/** Consumed by form controls (TextField, InputGroup) to inherit Field state. */
+export const FieldContext = createContext<FieldContextValue>({
 	disabled: false,
 	invalid: false,
 });
