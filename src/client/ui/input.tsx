@@ -1,6 +1,5 @@
 import {
 	Host,
-	HStack,
 	SecureField,
 	type SecureFieldRef,
 	Text as SwiftUIText,
@@ -16,7 +15,6 @@ import {
 	font,
 	foregroundStyle,
 	frame,
-	onTapGesture,
 	opacity,
 	padding,
 	shapes,
@@ -24,15 +22,7 @@ import {
 	tint,
 	type ViewModifier,
 } from "@expo/ui/swift-ui/modifiers";
-import {
-	createContext,
-	type ReactNode,
-	type Ref,
-	use,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { createContext, type ReactNode, type Ref, use, useState } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { nativeColorScheme } from "@/client/theme/native-color-scheme";
@@ -41,19 +31,26 @@ import { FieldContext } from "./field";
 
 const FILL_AVAILABLE_WIDTH = Infinity;
 
-type InputGroupFieldRef = Pick<TextFieldRef, "blur" | "focus">;
+/** The focusable subset shared by SwiftUI TextField and SecureField refs. */
+export type FocusableInputRef = Pick<TextFieldRef, "blur" | "focus">;
 
-type InputGroupContextValue = {
+export type InputGroupContextValue = {
 	disabled: boolean;
 	invalid: boolean;
-	/** Registers the field's native ref so the group can forward focus taps. */
-	onFieldRef: (node: InputGroupFieldRef | null) => void;
-	onFieldFocusChange: (focused: boolean) => void;
+	/** Registers the input's native ref so the group can forward focus taps. */
+	onInputRef: (node: FocusableInputRef | null) => void;
+	onInputFocusChange: (focused: boolean) => void;
 };
 
-const InputGroupContext = createContext<InputGroupContextValue | null>(null);
+/**
+ * Provided by InputGroup (input-group.tsx); consumed here so Input renders
+ * bare inside a group. Living beside Input keeps the import one-directional.
+ */
+export const InputGroupContext = createContext<InputGroupContextValue | null>(
+	null,
+);
 
-type TextFieldBaseProps = Omit<
+type InputBaseProps = Omit<
 	SwiftUITextFieldProps,
 	| "axis"
 	| "children"
@@ -64,7 +61,7 @@ type TextFieldBaseProps = Omit<
 	| "selection"
 > & {
 	accessibilityLabel?: string;
-	/** Initial text for an uncontrolled field; ignored when `text` is provided. */
+	/** Initial text for an uncontrolled input; ignored when `text` is provided. */
 	defaultValue?: string;
 	/** Defaults to the surrounding InputGroup's or Field's disabled state. */
 	disabled?: boolean;
@@ -83,7 +80,7 @@ type TextFieldBaseProps = Omit<
 	style?: StyleProp<ViewStyle>;
 };
 
-export type TextFieldProps = TextFieldBaseProps &
+export type InputProps = InputBaseProps &
 	(
 		| {
 				/** Renders a SwiftUI `SecureField`; selection and multiline do not apply. */
@@ -101,7 +98,7 @@ export type TextFieldProps = TextFieldBaseProps &
 	);
 
 /**
- * Experimental app-owned wrapper around Expo UI's SwiftUI TextField.
+ * App-owned input built on Expo UI's SwiftUI TextField.
  *
  * Controlled use passes a `text` state created with `useNativeState`;
  * uncontrolled use passes `defaultValue` and reads `onTextChange`. A plain
@@ -111,7 +108,7 @@ export type TextFieldProps = TextFieldBaseProps &
  * Standalone it wraps itself in a Host; inside an InputGroup it renders the
  * bare SwiftUI field and the group owns the Host and chrome.
  */
-export function TextField(props: TextFieldProps) {
+export function Input(props: InputProps) {
 	const {
 		accessibilityLabel,
 		defaultValue = "",
@@ -135,7 +132,7 @@ export function TextField(props: TextFieldProps) {
 
 	function handleFocusChange(nextFocused: boolean) {
 		setFocused(nextFocused);
-		group?.onFieldFocusChange(nextFocused);
+		group?.onInputFocusChange(nextFocused);
 		onFocusChange?.(nextFocused);
 	}
 
@@ -151,7 +148,7 @@ export function TextField(props: TextFieldProps) {
 		textFieldStyle("plain"),
 		...(group
 			? []
-			: createChromeModifiers({
+			: createInputChromeModifiers({
 					disabled: isDisabled,
 					focused,
 					invalid: isInvalid,
@@ -159,14 +156,14 @@ export function TextField(props: TextFieldProps) {
 				})),
 	];
 
-	const fieldModifiers: ViewModifier[] = [
+	const inputModifiers: ViewModifier[] = [
 		...(accessibilityLabel
 			? [accessibilityLabelModifier(accessibilityLabel)]
 			: []),
 		...omitUserOverridden(styleModifiers, modifiers),
 		...(modifiers ?? []),
 		disabledModifier(isDisabled),
-		// Dim only for the field's own disabled prop; a disabled Field or
+		// Dim only for the input's own disabled prop; a disabled Field or
 		// InputGroup already dims all of its children.
 		opacity(disabled ? theme.opacities.disabled : 1),
 	];
@@ -184,20 +181,20 @@ export function TextField(props: TextFieldProps) {
 			</SwiftUIText>
 		) : null;
 
-	let fieldElement: ReactNode;
+	let inputElement: ReactNode;
 	if (props.secureTextEntry) {
 		const { autoFocus, maxLength, onTextChange, ref, testID } = props;
-		fieldElement = (
+		inputElement = (
 			<SecureField
 				autoFocus={autoFocus}
 				maxLength={maxLength}
-				modifiers={fieldModifiers}
+				modifiers={inputModifiers}
 				onFocusChange={handleFocusChange}
 				onTextChange={onTextChange}
 				ref={
 					group
 						? (node) => {
-								group.onFieldRef(node);
+								group.onInputRef(node);
 								forwardRefValue(ref, node);
 							}
 						: ref
@@ -221,19 +218,19 @@ export function TextField(props: TextFieldProps) {
 			selection,
 			testID,
 		} = props;
-		fieldElement = (
+		inputElement = (
 			<SwiftUITextField
 				autoFocus={autoFocus}
 				axis={axis}
 				maxLength={maxLength}
-				modifiers={fieldModifiers}
+				modifiers={inputModifiers}
 				onFocusChange={handleFocusChange}
 				onSelectionChange={onSelectionChange}
 				onTextChange={onTextChange}
 				ref={
 					group
 						? (node) => {
-								group.onFieldRef(node);
+								group.onInputRef(node);
 								forwardRefValue(ref, node);
 							}
 						: ref
@@ -251,7 +248,7 @@ export function TextField(props: TextFieldProps) {
 		);
 	}
 
-	if (group) return fieldElement;
+	if (group) return inputElement;
 
 	return (
 		<Host
@@ -259,98 +256,23 @@ export function TextField(props: TextFieldProps) {
 			matchContents={{ vertical: true }}
 			style={[styles.host, style]}
 		>
-			{fieldElement}
-		</Host>
-	);
-}
-
-export type InputGroupProps = {
-	/** SwiftUI children: addons (Image, Button, …) and one TextField, in order. */
-	children: ReactNode;
-	/** Defaults to the surrounding Field's disabled state. */
-	disabled?: boolean;
-	/** Defaults to the surrounding Field's invalid state. */
-	invalid?: boolean;
-	style?: StyleProp<ViewStyle>;
-};
-
-/**
- * shadcn-style input group: a Host-level HStack that owns the field chrome so
- * SwiftUI addons (SF Symbol Images, Buttons) sit inside the bordered surface.
- * The TextField child detects the group via context and renders bare.
- */
-export function InputGroup({
-	children,
-	disabled,
-	invalid,
-	style,
-}: InputGroupProps) {
-	const { rt, theme } = useUnistyles();
-	const field = use(FieldContext);
-	const [fieldFocused, setFieldFocused] = useState(false);
-	const fieldRef = useRef<InputGroupFieldRef | null>(null);
-	const isDisabled = disabled ?? field.disabled;
-	const isInvalid = invalid ?? field.invalid;
-
-	const contextValue = useMemo<InputGroupContextValue>(
-		() => ({
-			disabled: isDisabled,
-			invalid: isInvalid,
-			onFieldRef: (node) => {
-				fieldRef.current = node;
-			},
-			onFieldFocusChange: setFieldFocused,
-		}),
-		[isDisabled, isInvalid],
-	);
-
-	return (
-		<Host
-			colorScheme={nativeColorScheme(rt.themeName)}
-			matchContents={{ vertical: true }}
-			style={[styles.host, style]}
-		>
-			<HStack
-				alignment="center"
-				modifiers={[
-					...createChromeModifiers({
-						disabled: isDisabled,
-						focused: fieldFocused,
-						invalid: isInvalid,
-						theme,
-					}),
-					// onTapGesture stores this closure as a native event listener that
-					// runs on tap, not during render, so the ref read is commit-safe.
-					// eslint-disable-next-line react-hooks/refs
-					onTapGesture(() => {
-						void fieldRef.current?.focus();
-					}),
-					// Dim only for the group's own disabled prop; a disabled Field
-					// already dims all of its children.
-					opacity(disabled ? theme.opacities.disabled : 1),
-				]}
-				spacing={theme.spacing(2)}
-			>
-				<InputGroupContext value={contextValue}>{children}</InputGroupContext>
-			</HStack>
+			{inputElement}
 		</Host>
 	);
 }
 
 /** Forwards a commit-time node to the consumer's callback or object ref. */
-function forwardRefValue<FieldRef>(
-	ref: Ref<FieldRef> | undefined,
-	node: FieldRef | null,
-) {
+function forwardRefValue<Node>(ref: Ref<Node> | undefined, node: Node | null) {
 	if (typeof ref === "function") ref(node);
 	else if (ref) ref.current = node;
 }
 
 /**
  * SwiftUI's border modifier is rectangular, so the chrome fakes a rounded
- * border with a border-color layer behind an inset fill layer.
+ * border with a border-color layer behind an inset fill layer. Shared with
+ * InputGroup, which applies it to the group HStack instead of the input.
  */
-function createChromeModifiers({
+export function createInputChromeModifiers({
 	disabled,
 	focused,
 	invalid,

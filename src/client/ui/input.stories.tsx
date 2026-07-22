@@ -1,9 +1,4 @@
-import {
-	Button as SwiftUIButton,
-	Image as SwiftUIImage,
-	type TextFieldSelection,
-	useNativeState,
-} from "@expo/ui/swift-ui";
+import { type TextFieldSelection, useNativeState } from "@expo/ui/swift-ui";
 import {
 	autocorrectionDisabled,
 	background,
@@ -29,11 +24,11 @@ import {
 	FormStorySection,
 	type FormStoryTheme,
 } from "./form-story-layout";
-import { InputGroup, TextField } from "./text-field";
+import { Input } from "./input";
 
 const meta = {
-	title: "UI/Text Field (SwiftUI Experiment)",
-	component: TextField,
+	title: "UI/Input",
+	component: Input,
 	args: {
 		disabled: false,
 		invalid: false,
@@ -46,7 +41,7 @@ const meta = {
 		placeholder: { control: "text" },
 		secureTextEntry: { control: "boolean" },
 	},
-} satisfies Meta<typeof TextField>;
+} satisfies Meta<typeof Input>;
 
 export default meta;
 
@@ -55,58 +50,42 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {
 	render: (args) => (
 		<View style={styles.playground}>
-			<TextField {...args} accessibilityLabel="Experimental text field" />
+			<Input {...args} accessibilityLabel="Playground input" />
 		</View>
 	),
 };
 
 export const LightTheme: Story = {
-	render: () => <TextFieldGallery themeName="light" />,
+	render: () => <InputGallery themeName="light" />,
 };
 
 export const DarkTheme: Story = {
-	render: () => <TextFieldGallery themeName="dark" />,
+	render: () => <InputGallery themeName="dark" />,
 };
 
-function TextFieldGallery({ themeName }: { themeName: FormStoryTheme }) {
+function InputGallery({ themeName }: { themeName: FormStoryTheme }) {
 	return (
 		<FormStoryCanvas themeName={themeName}>
 			<FormStorySection
-				description="Font, color, tint, padding, background, border, and radius are SwiftUI modifiers driven by app tokens. Focus the field to see the border tint."
+				description="Font, color, tint, padding, background, border, and radius are SwiftUI modifiers driven by app tokens. Focus the input to see the border tint."
 				title="App styling"
 			>
 				<Field>
 					<FieldLabel>Item name</FieldLabel>
-					<TextField accessibilityLabel="Item name" placeholder="Whole milk" />
+					<Input accessibilityLabel="Item name" placeholder="Whole milk" />
 					<FieldDescription>
-						Standalone fields wrap themselves in a Host sized by matchContents.
+						Standalone inputs wrap themselves in a Host sized by matchContents.
 					</FieldDescription>
 				</Field>
 			</FormStorySection>
 
 			<FormStorySection
-				description="The group owns the Host and chrome; SwiftUI addons sit inside the bordered surface. Tapping an addon focuses the field."
-				title="Input groups"
-			>
-				<Field>
-					<FieldLabel>Search</FieldLabel>
-					<SearchInputGroup />
-				</Field>
-				<ClearableInputGroup />
-				<Field invalid>
-					<FieldLabel>Email</FieldLabel>
-					<EmailInputGroup />
-					<FieldError>Enter a valid email address.</FieldError>
-				</Field>
-			</FormStorySection>
-
-			<FormStorySection
-				description="TextField and InputGroup inherit invalid and disabled from the surrounding Field via context — no prop duplication."
+				description="Input inherits invalid and disabled from the surrounding Field via context — no prop duplication."
 				title="States"
 			>
 				<Field invalid>
 					<FieldLabel>Email</FieldLabel>
-					<TextField
+					<Input
 						accessibilityLabel="Invalid email"
 						defaultValue="not-an-email"
 					/>
@@ -114,10 +93,7 @@ function TextFieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 				</Field>
 				<Field disabled>
 					<FieldLabel>Household</FieldLabel>
-					<TextField
-						accessibilityLabel="Household"
-						defaultValue="Golden Pantry"
-					/>
+					<Input accessibilityLabel="Household" defaultValue="Golden Pantry" />
 				</Field>
 			</FormStorySection>
 
@@ -127,7 +103,7 @@ function TextFieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 			>
 				<Field>
 					<FieldLabel>Passphrase</FieldLabel>
-					<TextField
+					<Input
 						accessibilityLabel="Passphrase"
 						modifiers={[textContentType("password")]}
 						placeholder="Required to join"
@@ -140,7 +116,7 @@ function TextFieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 				description="Controlled text passes an ObservableState created with useNativeState. JS writes are asynchronous, so a JS mirror tracks length via onTextChange."
 				title="Controlled text"
 			>
-				<ControlledTextField />
+				<ControlledInput />
 			</FormStorySection>
 
 			<FormStorySection
@@ -149,7 +125,7 @@ function TextFieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 			>
 				<Field>
 					<FieldLabel>Notes</FieldLabel>
-					<TextField
+					<Input
 						accessibilityLabel="Item notes"
 						axis="vertical"
 						placeholder="Add details for another Member."
@@ -158,10 +134,10 @@ function TextFieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 			</FormStorySection>
 
 			<FormStorySection
-				description="Type into each field to see its worklet format text synchronously on the native UI thread. Selection control requires iOS 18+."
+				description="Type into each input to see its worklet format text synchronously on the native UI thread. Selection control requires iOS 18+."
 				title="Worklet text masking"
 			>
-				<MaskedTextFieldExamples />
+				<MaskedInputExamples />
 			</FormStorySection>
 
 			<FormStorySection
@@ -174,70 +150,7 @@ function TextFieldGallery({ themeName }: { themeName: FormStoryTheme }) {
 	);
 }
 
-function SearchInputGroup() {
-	const { theme } = useUnistyles();
-
-	return (
-		<InputGroup>
-			<SwiftUIImage
-				color={theme.colors.mutedForeground}
-				size={16}
-				systemName="magnifyingglass"
-			/>
-			<TextField accessibilityLabel="Search Items" placeholder="Search Items" />
-		</InputGroup>
-	);
-}
-
-function ClearableInputGroup() {
-	const { theme } = useUnistyles();
-	const text = useNativeState("Golden Pantry");
-
-	return (
-		<Field>
-			<FieldLabel>Household name</FieldLabel>
-			<InputGroup>
-				<SwiftUIImage
-					color={theme.colors.mutedForeground}
-					size={16}
-					systemName="person.2"
-				/>
-				<TextField accessibilityLabel="Household name" text={text} />
-				<SwiftUIButton onPress={() => text.set("")}>
-					<SwiftUIImage
-						color={theme.colors.mutedForeground}
-						size={16}
-						systemName="xmark.circle.fill"
-					/>
-				</SwiftUIButton>
-			</InputGroup>
-			<FieldDescription>
-				The trailing SwiftUI Button clears the native text state.
-			</FieldDescription>
-		</Field>
-	);
-}
-
-function EmailInputGroup() {
-	const { theme } = useUnistyles();
-
-	return (
-		<InputGroup>
-			<SwiftUIImage
-				color={theme.colors.mutedForeground}
-				size={16}
-				systemName="envelope"
-			/>
-			<TextField
-				accessibilityLabel="Email"
-				defaultValue="not-an-email"
-				modifiers={[keyboardType("email-address")]}
-			/>
-		</InputGroup>
-	);
-}
-
-function ControlledTextField() {
+function ControlledInput() {
 	const text = useNativeState("");
 	const [mirror, setMirror] = useState("");
 
@@ -249,7 +162,7 @@ function ControlledTextField() {
 	return (
 		<Field>
 			<FieldLabel>List name</FieldLabel>
-			<TextField
+			<Input
 				accessibilityLabel="List name"
 				onTextChange={setMirror}
 				placeholder="Weekly groceries"
@@ -268,7 +181,7 @@ function CustomModifierExamples() {
 
 	return (
 		<View style={styles.examples}>
-			<TextField
+			<Input
 				accessibilityLabel="Capsule style"
 				defaultValue="Custom capsule"
 				modifiers={[
@@ -280,7 +193,7 @@ function CustomModifierExamples() {
 					background(theme.colors.primary, shapes.capsule()),
 				]}
 			/>
-			<TextField
+			<Input
 				accessibilityLabel="Serif style"
 				defaultValue="Custom serif field"
 				modifiers={[
@@ -302,7 +215,7 @@ function CustomModifierExamples() {
 	);
 }
 
-function MaskedTextFieldExamples() {
+function MaskedInputExamples() {
 	return (
 		<View style={styles.examples}>
 			<PhoneMaskExample />
@@ -337,7 +250,7 @@ function PhoneMaskExample() {
 	return (
 		<Field>
 			<FieldLabel>Phone number</FieldLabel>
-			<TextField
+			<Input
 				accessibilityLabel="Phone number"
 				modifiers={[
 					keyboardType("phone-pad"),
@@ -373,7 +286,7 @@ function CardMaskExample() {
 	return (
 		<Field>
 			<FieldLabel>Card number</FieldLabel>
-			<TextField
+			<Input
 				accessibilityLabel="Card number"
 				modifiers={[
 					keyboardType("numeric"),
@@ -415,7 +328,7 @@ function HouseholdJoinCodeMaskExample() {
 	return (
 		<Field>
 			<FieldLabel>Household join code</FieldLabel>
-			<TextField
+			<Input
 				accessibilityLabel="Household join code"
 				modifiers={[
 					textInputAutocapitalization("characters"),
