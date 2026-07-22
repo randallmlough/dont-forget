@@ -10,12 +10,11 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { nativeColorScheme } from "@/client/theme/native-color-scheme";
 import { FieldContext } from "./field";
 import {
-	createInputChromeModifiers,
 	type FocusableInputRef,
 	InputGroupContext,
 	type InputGroupContextValue,
-	omitUserOverridden,
 } from "./input";
+import { createInputModifiers, omitUserOverridden } from "./input-modifiers";
 
 export type InputGroupProps = {
 	/** SwiftUI children: addons (Image, Button, …) and one Input, in order. */
@@ -26,16 +25,16 @@ export type InputGroupProps = {
 	invalid?: boolean;
 	/**
 	 * Additional SwiftUI modifiers for the group surface, applied after the
-	 * chrome. A user modifier takes ownership of its `$type`, same as Input:
-	 * e.g. a custom `background` replaces the chrome instead of wrapping it.
+	 * app styling. A user modifier takes ownership of its `$type`, same as
+	 * Input: e.g. a custom `background` replaces it instead of wrapping it.
 	 */
 	modifiers?: ViewModifier[];
 	style?: StyleProp<ViewStyle>;
 };
 
 /**
- * shadcn-style input group: a Host-level HStack that owns the input chrome so
- * SwiftUI addons (SF Symbol Images, Buttons) sit inside the bordered surface.
+ * shadcn-style input group: a Host-level HStack that owns the bordered input
+ * surface so SwiftUI addons (SF Symbol Images, Buttons) sit inside it.
  * The Input child detects the group via context and renders bare.
  */
 export function InputGroup({
@@ -74,7 +73,7 @@ export function InputGroup({
 				alignment="center"
 				modifiers={[
 					...omitUserOverridden(
-						createInputChromeModifiers({
+						createInputModifiers({
 							disabled: isDisabled,
 							focused: inputFocused,
 							invalid: isInvalid,

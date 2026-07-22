@@ -44,7 +44,7 @@ function InputGroupGallery({ themeName }: { themeName: FormStoryTheme }) {
 	return (
 		<FormStoryCanvas themeName={themeName}>
 			<FormStorySection
-				description="The group owns the Host and chrome; SwiftUI addons sit inside the bordered surface. Tapping an addon focuses the input."
+				description="The group owns the Host and bordered surface; SwiftUI addons sit inside it. Tapping an addon focuses the input."
 				title="Addons"
 			>
 				<Field>
@@ -77,7 +77,7 @@ function InputGroupGallery({ themeName }: { themeName: FormStoryTheme }) {
 			</FormStorySection>
 
 			<FormStorySection
-				description="The group's modifiers escape hatch applies iOS 26 Liquid Glass to the shared surface: a clear background override removes the opaque chrome, and addons plus tap-to-focus keep working."
+				description="The group's modifiers escape hatch applies iOS 26 Liquid Glass to the shared surface: a clear background override removes the opaque surface, and addons plus tap-to-focus keep working."
 				title="Glass appearance"
 			>
 				<GlassInputGroupExamples />

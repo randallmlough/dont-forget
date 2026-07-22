@@ -11,15 +11,12 @@ import {
 import {
 	accessibilityLabel as accessibilityLabelModifier,
 	autocorrectionDisabled,
-	background,
 	disabled as disabledModifier,
 	font,
 	foregroundStyle,
 	frame,
 	keyboardType,
 	opacity,
-	padding,
-	shapes,
 	textContentType,
 	textFieldStyle,
 	textInputAutocapitalization,
@@ -30,8 +27,9 @@ import { createContext, type ReactNode, type Ref, use, useState } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { nativeColorScheme } from "@/client/theme/native-color-scheme";
-import type { AppTheme } from "@/client/theme/theme-contract";
 import { FieldContext } from "./field";
+import { createInputModifiers, omitUserOverridden } from "./input-modifiers";
+import { forwardRefValue } from "./refs";
 
 // SwiftUI fields hug their content; an effectively-unbounded maxWidth makes
 // them fill the available width instead.
@@ -61,7 +59,7 @@ export type InputKind = keyof typeof KIND_MODIFIERS;
 /**
  * Behavioral modifiers per semantic input kind: keyboard, iOS autofill
  * content type, and capitalization/autocorrect config. Applied outside the
- * user-modifier override filter so custom chrome can never drop them.
+ * user-modifier override filter so custom styling can never drop them.
  */
 const KIND_MODIFIERS = {
 	cardNumber: [keyboardType("numeric"), textContentType("creditCardNumber")],
@@ -106,7 +104,7 @@ type InputBaseProps = Omit<
 	/**
 	 * Additional SwiftUI modifiers, applied after app styling. A user modifier
 	 * takes ownership of its `$type`: app styling of the same type is dropped,
-	 * so e.g. a custom `background` replaces the chrome instead of wrapping it.
+	 * so e.g. a custom `background` replaces it instead of wrapping it.
 	 */
 	modifiers?: ViewModifier[];
 	placeholder?: string;
@@ -140,7 +138,7 @@ export type InputProps = InputBaseProps &
  * state are asynchronous, so a string round-trip can clobber fast typing.
  *
  * Standalone it wraps itself in a Host; inside an InputGroup it renders the
- * bare SwiftUI field and the group owns the Host and chrome.
+ * bare SwiftUI field and the group owns the Host and surface styling.
  */
 export function Input(props: InputProps) {
 	const {
@@ -165,7 +163,7 @@ export function Input(props: InputProps) {
 	const isInvalid = invalid ?? (group ? group.invalid : field.invalid);
 
 	function handleFocusChange(nextFocused: boolean) {
-		// Only the standalone chrome reads `focused`; inside a group the group
+		// Only the standalone surface styling reads `focused`; inside a group the group
 		// tracks focus itself, so skip the state write to avoid a no-op re-render.
 		if (!group) setFocused(nextFocused);
 		group?.onInputFocusChange(nextFocused);
@@ -184,7 +182,7 @@ export function Input(props: InputProps) {
 		textFieldStyle("plain"),
 		...(group
 			? []
-			: createInputChromeModifiers({
+			: createInputModifiers({
 					disabled: isDisabled,
 					focused,
 					invalid: isInvalid,
@@ -283,15 +281,6 @@ export function Input(props: InputProps) {
 	);
 }
 
-/** Forwards a commit-time node to the consumer's callback or object ref. */
-export function forwardRefValue<Node>(
-	ref: Ref<Node> | undefined,
-	node: Node | null,
-) {
-	if (typeof ref === "function") ref(node);
-	else if (ref) ref.current = node;
-}
-
 /**
  * Registers the commit-time node with the surrounding group (for
  * tap-to-focus) while still forwarding it to the consumer's ref.
@@ -303,60 +292,6 @@ function registerGroupInput<Node extends FocusableInputRef>(
 ) {
 	group.onInputRef(node);
 	forwardRefValue(ref, node);
-}
-
-/**
- * SwiftUI's border modifier is rectangular, so the chrome fakes a rounded
- * border with a border-color layer behind an inset fill layer. Shared with
- * InputGroup, which applies it to the group HStack instead of the input.
- */
-export function createInputChromeModifiers({
-	disabled,
-	focused,
-	invalid,
-	theme,
-}: {
-	disabled: boolean;
-	focused: boolean;
-	invalid: boolean;
-	theme: AppTheme;
-}): ViewModifier[] {
-	const borderColor = invalid
-		? theme.colors.destructive
-		: focused
-			? theme.colors.primary
-			: theme.colors.input;
-
-	return [
-		padding({ horizontal: theme.spacing(3) }),
-		background(
-			disabled ? theme.colors.muted : theme.colors.card,
-			shapes.roundedRectangle({
-				cornerRadius: theme.radii.md - theme.borders.thin,
-			}),
-		),
-		padding({ all: theme.borders.thin }),
-		background(
-			borderColor,
-			shapes.roundedRectangle({ cornerRadius: theme.radii.md }),
-		),
-	];
-}
-
-/**
- * A user modifier takes ownership of its `$type`: app styling of that type is
- * dropped so the escape hatch replaces styling instead of wrapping it. Only
- * style-derived modifiers go through this filter — modifiers backing
- * functional props (disabled, gestures) must always apply. Shared with
- * InputGroup, whose modifiers prop overrides the group chrome the same way.
- */
-export function omitUserOverridden(
-	derived: ViewModifier[],
-	userModifiers: ViewModifier[] | undefined,
-): ViewModifier[] {
-	if (!userModifiers?.length) return derived;
-	const userTypes = new Set(userModifiers.map((modifier) => modifier.$type));
-	return derived.filter((modifier) => !userTypes.has(modifier.$type));
 }
 
 const styles = StyleSheet.create({

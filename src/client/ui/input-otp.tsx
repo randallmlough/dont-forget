@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { FieldContext } from "./field";
-import { forwardRefValue } from "./input";
+import { forwardRefValue } from "./refs";
 
 type InputOTPContextValue = {
 	activeIndex: number | null;
@@ -218,7 +218,7 @@ export function InputOTPSlot({
 				styles.slot,
 				valueCharacter ? styles.filledSlot : undefined,
 				isActive ? styles.activeSlot : undefined,
-				// Invalid wins over focus, matching createInputChromeModifiers.
+				// Invalid wins over focus, matching createInputModifiers.
 				context.invalid ? styles.invalidSlot : undefined,
 				style,
 			]}
