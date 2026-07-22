@@ -3,8 +3,14 @@ import {
 	Image as SwiftUIImage,
 	useNativeState,
 } from "@expo/ui/swift-ui";
-import { background, glassEffect, shapes } from "@expo/ui/swift-ui/modifiers";
+import {
+	accessibilityLabel,
+	background,
+	glassEffect,
+	shapes,
+} from "@expo/ui/swift-ui/modifiers";
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useState } from "react";
 import { useUnistyles } from "react-native-unistyles";
 
 import { Field, FieldDescription, FieldError, FieldLabel } from "./field";
@@ -61,6 +67,13 @@ function InputGroupGallery({ themeName }: { themeName: FormStoryTheme }) {
 					<FieldLabel>Household</FieldLabel>
 					<DisabledInputGroup />
 				</Field>
+			</FormStorySection>
+
+			<FormStorySection
+				description="A trailing eye addon swaps the SecureField for a plain TextField sharing the same native text state, so the typed value survives the reveal."
+				title="Password reveal"
+			>
+				<PasswordInputGroup />
 			</FormStorySection>
 
 			<FormStorySection
@@ -196,6 +209,56 @@ function EmailInputGroup() {
 				kind="email"
 			/>
 		</InputGroup>
+	);
+}
+
+function PasswordInputGroup() {
+	const { theme } = useUnistyles();
+	const text = useNativeState("");
+	const [revealed, setRevealed] = useState(false);
+
+	return (
+		<Field>
+			<FieldLabel>Passphrase</FieldLabel>
+			<InputGroup>
+				<SwiftUIImage
+					color={theme.colors.mutedForeground}
+					size={16}
+					systemName="lock"
+				/>
+				{revealed ? (
+					<Input
+						accessibilityLabel="Passphrase"
+						placeholder="Required to join"
+						text={text}
+					/>
+				) : (
+					<Input
+						accessibilityLabel="Passphrase"
+						placeholder="Required to join"
+						secureTextEntry
+						text={text}
+					/>
+				)}
+				<SwiftUIButton
+					modifiers={[
+						accessibilityLabel(
+							revealed ? "Hide passphrase" : "Show passphrase",
+						),
+					]}
+					onPress={() => setRevealed((current) => !current)}
+				>
+					<SwiftUIImage
+						color={theme.colors.mutedForeground}
+						size={16}
+						systemName={revealed ? "eye.slash" : "eye"}
+					/>
+				</SwiftUIButton>
+			</InputGroup>
+			<FieldDescription>
+				The eye addon toggles between the secure and plain field.
+			</FieldDescription>
+		</Field>
 	);
 }
 
