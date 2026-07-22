@@ -24,6 +24,8 @@ type MockContainerProps = {
 type MockTextFieldProps = {
 	autoFocus?: boolean;
 	axis?: "horizontal" | "vertical";
+	/** Slot children: a `<TextField.Placeholder>` / `<SecureField.Placeholder>`. */
+	children?: ReactNode;
 	modifiers?: MockModifier[];
 	onFocusChange?: (focused: boolean) => void;
 	onTextChange?: (value: string) => void;
@@ -118,6 +120,7 @@ export function Text({
 export function TextField({
 	autoFocus,
 	axis,
+	children,
 	modifiers,
 	onFocusChange,
 	onTextChange,
@@ -136,10 +139,63 @@ export function TextField({
 			}}
 			onFocus={() => onFocusChange?.(true)}
 			onSubmitEditing={modifier(modifiers, "onSubmit")?.eventListener}
-			placeholder={placeholder}
+			placeholder={placeholder ?? textContent(children)}
 			value={text?.get()}
 		/>
 	);
+}
+TextField.Placeholder = PlaceholderSlot;
+
+export function SecureField({
+	autoFocus,
+	children,
+	modifiers,
+	onFocusChange,
+	onTextChange,
+	placeholder,
+	text,
+}: Omit<MockTextFieldProps, "axis">) {
+	return (
+		<TextInput
+			accessibilityLabel={modifierLabel(modifiers)}
+			autoFocus={autoFocus}
+			onBlur={() => onFocusChange?.(false)}
+			onChangeText={(value) => {
+				text?.set(value);
+				onTextChange?.(value);
+			}}
+			onFocus={() => onFocusChange?.(true)}
+			placeholder={placeholder ?? textContent(children)}
+			secureTextEntry
+			value={text?.get()}
+		/>
+	);
+}
+SecureField.Placeholder = PlaceholderSlot;
+
+/**
+ * Placeholder slot metadata: the field mock extracts its text via
+ * `textContent` instead of rendering it, matching how the native component
+ * shows placeholder text inside the field.
+ */
+function PlaceholderSlot(_props: { children?: ReactNode }) {
+	return null;
+}
+
+/** Digs the first string out of a slot-children tree. */
+function textContent(node: ReactNode): string | undefined {
+	if (typeof node === "string") return node;
+	if (Array.isArray(node)) {
+		for (const child of node) {
+			const text = textContent(child);
+			if (text !== undefined) return text;
+		}
+		return undefined;
+	}
+	if (isValidElement<{ children?: ReactNode }>(node)) {
+		return textContent(node.props.children);
+	}
+	return undefined;
 }
 
 export function Button({
