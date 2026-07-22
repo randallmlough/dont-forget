@@ -155,7 +155,7 @@ export function InputOTP({
 				caretHidden
 				editable={!isDisabled}
 				keyboardType={keyboardType}
-				maxLength={maxLength}
+				maxLength={pattern ? undefined : maxLength}
 				onBlur={(event) => {
 					setFocused(false);
 					onBlur?.(event);
