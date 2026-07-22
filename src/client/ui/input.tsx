@@ -29,7 +29,9 @@ import { nativeColorScheme } from "@/client/theme/native-color-scheme";
 import type { AppTheme } from "@/client/theme/theme-contract";
 import { FieldContext } from "./field";
 
-const FILL_AVAILABLE_WIDTH = Infinity;
+// SwiftUI fields hug their content; an effectively-unbounded maxWidth makes
+// them fill the available width instead.
+export const FILL_AVAILABLE_WIDTH = Infinity;
 
 /** The focusable subset shared by SwiftUI TextField and SecureField refs. */
 export type FocusableInputRef = Pick<TextFieldRef, "blur" | "focus">;
@@ -74,8 +76,6 @@ type InputBaseProps = Omit<
 	 */
 	modifiers?: ViewModifier[];
 	placeholder?: string;
-	/** Additional SwiftUI modifiers for the placeholder text. */
-	placeholderModifiers?: ViewModifier[];
 	/** Styles the standalone Host; unused when rendered inside an InputGroup. */
 	style?: StyleProp<ViewStyle>;
 };
@@ -117,7 +117,6 @@ export function Input(props: InputProps) {
 		modifiers,
 		onFocusChange,
 		placeholder,
-		placeholderModifiers,
 		style,
 		text,
 	} = props;
@@ -131,7 +130,9 @@ export function Input(props: InputProps) {
 	const isInvalid = invalid ?? (group ? group.invalid : field.invalid);
 
 	function handleFocusChange(nextFocused: boolean) {
-		setFocused(nextFocused);
+		// Only the standalone chrome reads `focused`; inside a group the group
+		// tracks focus itself, so skip the state write to avoid a no-op re-render.
+		if (!group) setFocused(nextFocused);
 		group?.onInputFocusChange(nextFocused);
 		onFocusChange?.(nextFocused);
 	}
@@ -174,7 +175,6 @@ export function Input(props: InputProps) {
 				modifiers={[
 					font({ textStyle: "body" }),
 					foregroundStyle(theme.colors.mutedForeground),
-					...(placeholderModifiers ?? []),
 				]}
 			>
 				{placeholder}
@@ -191,14 +191,7 @@ export function Input(props: InputProps) {
 				modifiers={inputModifiers}
 				onFocusChange={handleFocusChange}
 				onTextChange={onTextChange}
-				ref={
-					group
-						? (node) => {
-								group.onInputRef(node);
-								forwardRefValue(ref, node);
-							}
-						: ref
-				}
+				ref={group ? (node) => registerGroupInput(group, ref, node) : ref}
 				testID={testID}
 				text={textState}
 			>
@@ -227,14 +220,7 @@ export function Input(props: InputProps) {
 				onFocusChange={handleFocusChange}
 				onSelectionChange={onSelectionChange}
 				onTextChange={onTextChange}
-				ref={
-					group
-						? (node) => {
-								group.onInputRef(node);
-								forwardRefValue(ref, node);
-							}
-						: ref
-				}
+				ref={group ? (node) => registerGroupInput(group, ref, node) : ref}
 				selection={selection}
 				testID={testID}
 				text={textState}
@@ -265,6 +251,19 @@ export function Input(props: InputProps) {
 function forwardRefValue<Node>(ref: Ref<Node> | undefined, node: Node | null) {
 	if (typeof ref === "function") ref(node);
 	else if (ref) ref.current = node;
+}
+
+/**
+ * Registers the commit-time node with the surrounding group (for
+ * tap-to-focus) while still forwarding it to the consumer's ref.
+ */
+function registerGroupInput<Node extends FocusableInputRef>(
+	group: InputGroupContextValue,
+	ref: Ref<Node> | undefined,
+	node: Node | null,
+) {
+	group.onInputRef(node);
+	forwardRefValue(ref, node);
 }
 
 /**

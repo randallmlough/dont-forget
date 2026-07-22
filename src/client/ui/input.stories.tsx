@@ -12,10 +12,11 @@ import {
 	textContentType,
 	textInputAutocapitalization,
 	tint,
+	type ViewModifier,
 } from "@expo/ui/swift-ui/modifiers";
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 import { Button } from "./button";
@@ -24,6 +25,7 @@ import {
 	FormStoryCanvas,
 	FormStorySection,
 	type FormStoryTheme,
+	GlassStoryBackdrop,
 } from "./form-story-layout";
 import { Input } from "./input";
 
@@ -138,7 +140,36 @@ function InputGallery({ themeName }: { themeName: FormStoryTheme }) {
 				description="Type into each input to see its worklet format text synchronously on the native UI thread. Selection control requires iOS 18+."
 				title="Worklet text masking"
 			>
-				<MaskedInputExamples />
+				<MaskedFieldExample
+					description="Formats up to 10 digits as a US phone number."
+					format={formatPhoneNumber}
+					label="Phone number"
+					modifiers={[
+						keyboardType("phone-pad"),
+						textContentType("telephoneNumber"),
+					]}
+					placeholder="(555) 123-4567"
+				/>
+				<MaskedFieldExample
+					description="Groups up to 16 digits in blocks of four."
+					format={formatCardNumber}
+					label="Card number"
+					modifiers={[
+						keyboardType("numeric"),
+						textContentType("creditCardNumber"),
+					]}
+					placeholder="1234 5678 9012 3456"
+				/>
+				<MaskedFieldExample
+					description="Uppercases six alphanumeric characters and inserts a separator."
+					format={formatHouseholdJoinCode}
+					label="Household join code"
+					modifiers={[
+						textInputAutocapitalization("characters"),
+						autocorrectionDisabled(),
+					]}
+					placeholder="ABC-123"
+				/>
 			</FormStorySection>
 
 			<FormStorySection
@@ -176,7 +207,7 @@ function ControlledInput() {
 				placeholder="Weekly groceries"
 				text={text}
 			/>
-			<Text style={styles.valueLabel}>{mirror.length} characters</Text>
+			<FieldDescription>{mirror.length} characters</FieldDescription>
 			<Button onPress={fillSuggestion} size="sm" variant="secondary">
 				Fill suggestion
 			</Button>
@@ -188,7 +219,7 @@ function CustomModifierExamples() {
 	const { theme } = useUnistyles();
 
 	return (
-		<View style={styles.examples}>
+		<>
 			<Input
 				accessibilityLabel="Capsule style"
 				defaultValue="Custom capsule"
@@ -219,7 +250,7 @@ function CustomModifierExamples() {
 					),
 				]}
 			/>
-		</View>
+		</>
 	);
 }
 
@@ -227,9 +258,7 @@ function GlassInputExamples() {
 	const { theme } = useUnistyles();
 
 	return (
-		<View style={styles.glassBackdrop}>
-			<View style={styles.glassPrimaryOrb} />
-			<View style={styles.glassDestructiveOrb} />
+		<GlassStoryBackdrop>
 			<Field>
 				<FieldLabel>Regular glass</FieldLabel>
 				<Input
@@ -284,34 +313,30 @@ function GlassInputExamples() {
 					placeholder="Reads the backdrop through the material."
 				/>
 			</Field>
-		</View>
+		</GlassStoryBackdrop>
 	);
 }
 
-function MaskedInputExamples() {
-	return (
-		<View style={styles.examples}>
-			<PhoneMaskExample />
-			<CardMaskExample />
-			<HouseholdJoinCodeMaskExample />
-		</View>
-	);
-}
-
-function PhoneMaskExample() {
+function MaskedFieldExample({
+	description,
+	format,
+	label,
+	modifiers,
+	placeholder,
+}: {
+	description: string;
+	/** Pure formatter worklet applied on the native UI thread per keystroke. */
+	format: (value: string) => string;
+	label: string;
+	modifiers?: ViewModifier[];
+	placeholder: string;
+}) {
 	const text = useNativeState("");
 	const selection = useNativeState<TextFieldSelection>({ start: 0, end: 0 });
 
 	function handleTextChange(value: string) {
 		"worklet";
-		const digits = value.replace(/\D/g, "").slice(0, 10);
-		let formatted = digits;
-
-		if (digits.length > 6) {
-			formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-		} else if (digits.length > 3) {
-			formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-		}
+		const formatted = format(value);
 
 		// The Expo API intentionally mutates native state from the UI worklet.
 		// eslint-disable-next-line react-hooks/immutability
@@ -322,140 +347,53 @@ function PhoneMaskExample() {
 
 	return (
 		<Field>
-			<FieldLabel>Phone number</FieldLabel>
+			<FieldLabel>{label}</FieldLabel>
 			<Input
-				accessibilityLabel="Phone number"
-				modifiers={[
-					keyboardType("phone-pad"),
-					textContentType("telephoneNumber"),
-				]}
+				accessibilityLabel={label}
+				modifiers={modifiers}
 				onTextChange={handleTextChange}
-				placeholder="(555) 123-4567"
+				placeholder={placeholder}
 				selection={selection}
 				text={text}
 			/>
-			<FieldDescription>
-				Formats up to 10 digits as a US phone number.
-			</FieldDescription>
+			<FieldDescription>{description}</FieldDescription>
 		</Field>
 	);
 }
 
-function CardMaskExample() {
-	const text = useNativeState("");
-	const selection = useNativeState<TextFieldSelection>({ start: 0, end: 0 });
+function formatPhoneNumber(value: string) {
+	"worklet";
+	const digits = value.replace(/\D/g, "").slice(0, 10);
 
-	function handleTextChange(value: string) {
-		"worklet";
-		const digits = value.replace(/\D/g, "").slice(0, 16);
-		const formatted = digits.replace(/(\d{4})(?=\d)/g, "$1 ");
-
-		// eslint-disable-next-line react-hooks/immutability
-		text.value = formatted;
-		// eslint-disable-next-line react-hooks/immutability
-		selection.value = { start: formatted.length, end: formatted.length };
+	if (digits.length > 6) {
+		return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 	}
-
-	return (
-		<Field>
-			<FieldLabel>Card number</FieldLabel>
-			<Input
-				accessibilityLabel="Card number"
-				modifiers={[
-					keyboardType("numeric"),
-					textContentType("creditCardNumber"),
-				]}
-				onTextChange={handleTextChange}
-				placeholder="1234 5678 9012 3456"
-				selection={selection}
-				text={text}
-			/>
-			<FieldDescription>
-				Groups up to 16 digits in blocks of four.
-			</FieldDescription>
-		</Field>
-	);
+	if (digits.length > 3) {
+		return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+	}
+	return digits;
 }
 
-function HouseholdJoinCodeMaskExample() {
-	const text = useNativeState("");
-	const selection = useNativeState<TextFieldSelection>({ start: 0, end: 0 });
+function formatCardNumber(value: string) {
+	"worklet";
+	const digits = value.replace(/\D/g, "").slice(0, 16);
+	return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
+}
 
-	function handleTextChange(value: string) {
-		"worklet";
-		const characters = value
-			.toUpperCase()
-			.replace(/[^A-Z0-9]/g, "")
-			.slice(0, 6);
-		const formatted =
-			characters.length > 3
-				? `${characters.slice(0, 3)}-${characters.slice(3)}`
-				: characters;
-
-		// eslint-disable-next-line react-hooks/immutability
-		text.value = formatted;
-		// eslint-disable-next-line react-hooks/immutability
-		selection.value = { start: formatted.length, end: formatted.length };
-	}
-
-	return (
-		<Field>
-			<FieldLabel>Household join code</FieldLabel>
-			<Input
-				accessibilityLabel="Household join code"
-				modifiers={[
-					textInputAutocapitalization("characters"),
-					autocorrectionDisabled(),
-				]}
-				onTextChange={handleTextChange}
-				placeholder="ABC-123"
-				selection={selection}
-				text={text}
-			/>
-			<FieldDescription>
-				Uppercases six alphanumeric characters and inserts a separator.
-			</FieldDescription>
-		</Field>
-	);
+function formatHouseholdJoinCode(value: string) {
+	"worklet";
+	const characters = value
+		.toUpperCase()
+		.replace(/[^A-Z0-9]/g, "")
+		.slice(0, 6);
+	return characters.length > 3
+		? `${characters.slice(0, 3)}-${characters.slice(3)}`
+		: characters;
 }
 
 const styles = StyleSheet.create((theme) => ({
 	playground: {
 		padding: theme.spacing(6),
 		backgroundColor: theme.colors.background,
-	},
-	examples: {
-		gap: theme.spacing(4),
-	},
-	glassBackdrop: {
-		gap: theme.spacing(4),
-		padding: theme.spacing(4),
-		borderRadius: theme.radii["2xl"],
-		overflow: "hidden",
-		backgroundColor: theme.colors.secondary,
-	},
-	glassPrimaryOrb: {
-		position: "absolute",
-		top: -theme.spacing(6),
-		right: -theme.spacing(8),
-		width: theme.spacing(36),
-		height: theme.spacing(36),
-		borderRadius: theme.radii.full,
-		backgroundColor: theme.colors.primary,
-		opacity: theme.opacities.pressed,
-	},
-	glassDestructiveOrb: {
-		position: "absolute",
-		bottom: theme.spacing(12),
-		left: -theme.spacing(12),
-		width: theme.spacing(32),
-		height: theme.spacing(32),
-		borderRadius: theme.radii.full,
-		backgroundColor: theme.colors.destructive,
-		opacity: theme.opacities.disabled,
-	},
-	valueLabel: {
-		color: theme.colors.mutedForeground,
-		...theme.typography.caption,
 	},
 }));

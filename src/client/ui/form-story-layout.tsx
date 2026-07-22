@@ -42,6 +42,17 @@ export function FormStorySection({
 	);
 }
 
+/** Colorful orb backdrop that lets glass-story materials show their effect. */
+export function GlassStoryBackdrop({ children }: { children: ReactNode }) {
+	return (
+		<View style={styles.glassBackdrop}>
+			<View style={styles.glassPrimaryOrb} />
+			<View style={styles.glassDestructiveOrb} />
+			{children}
+		</View>
+	);
+}
+
 const styles = StyleSheet.create((theme) => ({
 	screen: {
 		flex: 1,
@@ -72,5 +83,32 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	examples: {
 		gap: theme.spacing(4),
+	},
+	glassBackdrop: {
+		gap: theme.spacing(4),
+		padding: theme.spacing(4),
+		borderRadius: theme.radii["2xl"],
+		overflow: "hidden",
+		backgroundColor: theme.colors.secondary,
+	},
+	glassPrimaryOrb: {
+		position: "absolute",
+		top: -theme.spacing(6),
+		right: -theme.spacing(8),
+		width: theme.spacing(36),
+		height: theme.spacing(36),
+		borderRadius: theme.radii.full,
+		backgroundColor: theme.colors.primary,
+		opacity: theme.opacities.pressed,
+	},
+	glassDestructiveOrb: {
+		position: "absolute",
+		bottom: theme.spacing(12),
+		left: -theme.spacing(12),
+		width: theme.spacing(32),
+		height: theme.spacing(32),
+		borderRadius: theme.radii.full,
+		backgroundColor: theme.colors.destructive,
+		opacity: theme.opacities.disabled,
 	},
 }));

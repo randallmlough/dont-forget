@@ -10,14 +10,14 @@ import {
 	shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useUnistyles } from "react-native-unistyles";
 
 import { Field, FieldDescription, FieldError, FieldLabel } from "./field";
 import {
 	FormStoryCanvas,
 	FormStorySection,
 	type FormStoryTheme,
+	GlassStoryBackdrop,
 } from "./form-story-layout";
 import { Input } from "./input";
 import { InputGroup } from "./input-group";
@@ -83,9 +83,7 @@ function GlassInputGroupExamples() {
 	const text = useNativeState("Golden Pantry");
 
 	return (
-		<View style={styles.glassBackdrop}>
-			<View style={styles.glassPrimaryOrb} />
-			<View style={styles.glassDestructiveOrb} />
+		<GlassStoryBackdrop>
 			<Field>
 				<FieldLabel>Regular glass</FieldLabel>
 				<InputGroup
@@ -139,7 +137,7 @@ function GlassInputGroupExamples() {
 					</SwiftUIButton>
 				</InputGroup>
 			</Field>
-		</View>
+		</GlassStoryBackdrop>
 	);
 }
 
@@ -220,33 +218,3 @@ function DisabledInputGroup() {
 		</InputGroup>
 	);
 }
-
-const styles = StyleSheet.create((theme) => ({
-	glassBackdrop: {
-		gap: theme.spacing(4),
-		padding: theme.spacing(4),
-		borderRadius: theme.radii["2xl"],
-		overflow: "hidden",
-		backgroundColor: theme.colors.secondary,
-	},
-	glassPrimaryOrb: {
-		position: "absolute",
-		top: -theme.spacing(6),
-		right: -theme.spacing(8),
-		width: theme.spacing(36),
-		height: theme.spacing(36),
-		borderRadius: theme.radii.full,
-		backgroundColor: theme.colors.primary,
-		opacity: theme.opacities.pressed,
-	},
-	glassDestructiveOrb: {
-		position: "absolute",
-		bottom: theme.spacing(12),
-		left: -theme.spacing(12),
-		width: theme.spacing(32),
-		height: theme.spacing(32),
-		borderRadius: theme.radii.full,
-		backgroundColor: theme.colors.destructive,
-		opacity: theme.opacities.disabled,
-	},
-}));
