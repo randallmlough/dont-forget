@@ -44,12 +44,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { nativeColorScheme } from "@/client/theme/native-color-scheme";
 import { Button } from "@/client/ui/button";
+import { FILL_AVAILABLE_WIDTH } from "@/client/ui/input";
 
 const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
-// SwiftUI fields hug their content; an effectively-unbounded maxWidth makes
-// them fill the available width instead.
-const FILL_AVAILABLE_WIDTH = Infinity;
 export const ADD_ITEM_COMPOSER_SCROLL_CLEARANCE = 128;
 
 export type AddItemComposerProps = {
