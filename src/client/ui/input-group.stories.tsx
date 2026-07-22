@@ -3,12 +3,7 @@ import {
 	Image as SwiftUIImage,
 	useNativeState,
 } from "@expo/ui/swift-ui";
-import {
-	background,
-	glassEffect,
-	keyboardType,
-	shapes,
-} from "@expo/ui/swift-ui/modifiers";
+import { background, glassEffect, shapes } from "@expo/ui/swift-ui/modifiers";
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { useUnistyles } from "react-native-unistyles";
 
@@ -198,7 +193,7 @@ function EmailInputGroup() {
 			<Input
 				accessibilityLabel="Email"
 				defaultValue="not-an-email"
-				modifiers={[keyboardType("email-address")]}
+				kind="email"
 			/>
 		</InputGroup>
 	);

@@ -10,15 +10,19 @@ import {
 } from "@expo/ui/swift-ui";
 import {
 	accessibilityLabel as accessibilityLabelModifier,
+	autocorrectionDisabled,
 	background,
 	disabled as disabledModifier,
 	font,
 	foregroundStyle,
 	frame,
+	keyboardType,
 	opacity,
 	padding,
 	shapes,
+	textContentType,
 	textFieldStyle,
+	textInputAutocapitalization,
 	tint,
 	type ViewModifier,
 } from "@expo/ui/swift-ui/modifiers";
@@ -52,6 +56,31 @@ export const InputGroupContext = createContext<InputGroupContextValue | null>(
 	null,
 );
 
+export type InputKind = keyof typeof KIND_MODIFIERS;
+
+/**
+ * Behavioral modifiers per semantic input kind: keyboard, iOS autofill
+ * content type, and capitalization/autocorrect config. Applied outside the
+ * user-modifier override filter so custom chrome can never drop them.
+ */
+const KIND_MODIFIERS = {
+	cardNumber: [keyboardType("numeric"), textContentType("creditCardNumber")],
+	email: [
+		keyboardType("email-address"),
+		textContentType("emailAddress"),
+		textInputAutocapitalization("never"),
+		autocorrectionDisabled(),
+	],
+	oneTimeCode: [keyboardType("numeric"), textContentType("oneTimeCode")],
+	phone: [keyboardType("phone-pad"), textContentType("telephoneNumber")],
+	url: [
+		keyboardType("url"),
+		textContentType("URL"),
+		textInputAutocapitalization("never"),
+		autocorrectionDisabled(),
+	],
+} satisfies Record<string, ViewModifier[]>;
+
 type InputBaseProps = Omit<
 	SwiftUITextFieldProps,
 	| "axis"
@@ -69,6 +98,11 @@ type InputBaseProps = Omit<
 	disabled?: boolean;
 	/** Defaults to the surrounding InputGroup's or Field's invalid state. */
 	invalid?: boolean;
+	/**
+	 * Semantic input kind: applies the matching keyboard, iOS autofill content
+	 * type, and capitalization/autocorrect configuration.
+	 */
+	kind?: InputKind;
 	/**
 	 * Additional SwiftUI modifiers, applied after app styling. A user modifier
 	 * takes ownership of its `$type`: app styling of the same type is dropped,
@@ -114,6 +148,7 @@ export function Input(props: InputProps) {
 		defaultValue = "",
 		disabled,
 		invalid,
+		kind,
 		modifiers,
 		onFocusChange,
 		placeholder,
@@ -163,6 +198,7 @@ export function Input(props: InputProps) {
 			: []),
 		...omitUserOverridden(styleModifiers, modifiers),
 		...(modifiers ?? []),
+		...(kind ? KIND_MODIFIERS[kind] : []),
 		disabledModifier(isDisabled),
 		// Dim only for the input's own disabled prop; a disabled Field or
 		// InputGroup already dims all of its children.

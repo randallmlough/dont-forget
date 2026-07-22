@@ -1,4 +1,4 @@
-import { type TextFieldSelection, useNativeState } from "@expo/ui/swift-ui";
+import { useNativeState } from "@expo/ui/swift-ui";
 import {
 	autocorrectionDisabled,
 	background,
@@ -6,7 +6,6 @@ import {
 	foregroundStyle,
 	frame,
 	glassEffect,
-	keyboardType,
 	padding,
 	shapes,
 	textContentType,
@@ -27,7 +26,12 @@ import {
 	type FormStoryTheme,
 	GlassStoryBackdrop,
 } from "./form-story-layout";
-import { Input } from "./input";
+import { Input, type InputKind } from "./input";
+import {
+	formatCardNumber,
+	formatPhoneNumberUS,
+	useInputMask,
+} from "./input-mask";
 
 const meta = {
 	title: "UI/Input",
@@ -142,22 +146,16 @@ function InputGallery({ themeName }: { themeName: FormStoryTheme }) {
 			>
 				<MaskedFieldExample
 					description="Formats up to 10 digits as a US phone number."
-					format={formatPhoneNumber}
+					format={formatPhoneNumberUS}
+					kind="phone"
 					label="Phone number"
-					modifiers={[
-						keyboardType("phone-pad"),
-						textContentType("telephoneNumber"),
-					]}
 					placeholder="(555) 123-4567"
 				/>
 				<MaskedFieldExample
 					description="Groups up to 16 digits in blocks of four."
 					format={formatCardNumber}
+					kind="cardNumber"
 					label="Card number"
-					modifiers={[
-						keyboardType("numeric"),
-						textContentType("creditCardNumber"),
-					]}
 					placeholder="1234 5678 9012 3456"
 				/>
 				<MaskedFieldExample
@@ -320,6 +318,7 @@ function GlassInputExamples() {
 function MaskedFieldExample({
 	description,
 	format,
+	kind,
 	label,
 	modifiers,
 	placeholder,
@@ -327,57 +326,26 @@ function MaskedFieldExample({
 	description: string;
 	/** Pure formatter worklet applied on the native UI thread per keystroke. */
 	format: (value: string) => string;
+	kind?: InputKind;
 	label: string;
 	modifiers?: ViewModifier[];
 	placeholder: string;
 }) {
-	const text = useNativeState("");
-	const selection = useNativeState<TextFieldSelection>({ start: 0, end: 0 });
-
-	function handleTextChange(value: string) {
-		"worklet";
-		const formatted = format(value);
-
-		// The Expo API intentionally mutates native state from the UI worklet.
-		// eslint-disable-next-line react-hooks/immutability
-		text.value = formatted;
-		// eslint-disable-next-line react-hooks/immutability
-		selection.value = { start: formatted.length, end: formatted.length };
-	}
+	const mask = useInputMask(format);
 
 	return (
 		<Field>
 			<FieldLabel>{label}</FieldLabel>
 			<Input
 				accessibilityLabel={label}
+				kind={kind}
 				modifiers={modifiers}
-				onTextChange={handleTextChange}
 				placeholder={placeholder}
-				selection={selection}
-				text={text}
+				{...mask}
 			/>
 			<FieldDescription>{description}</FieldDescription>
 		</Field>
 	);
-}
-
-function formatPhoneNumber(value: string) {
-	"worklet";
-	const digits = value.replace(/\D/g, "").slice(0, 10);
-
-	if (digits.length > 6) {
-		return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-	}
-	if (digits.length > 3) {
-		return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-	}
-	return digits;
-}
-
-function formatCardNumber(value: string) {
-	"worklet";
-	const digits = value.replace(/\D/g, "").slice(0, 16);
-	return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
 }
 
 function formatHouseholdJoinCode(value: string) {
