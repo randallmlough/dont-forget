@@ -84,53 +84,43 @@ export function ButtonGlass({
 	testID,
 }: ButtonGlassProps) {
 	const { rt, theme } = useUnistyles();
+	const sizeSpec = buttonGlassSizeSpecs[size];
 	const isDisabled = disabled || loading;
 	const isIconOnly = label === undefined;
-	const minimumSize = size === "lg" ? theme.spacing(13) : theme.spacing(11);
+	const minimumSize = theme.spacing(sizeSpec.minHeight);
 	const shape = buttonGlassShape({ isIconOnly, radius });
 	const cornerRadius =
 		shape === "roundedRectangle" ? theme.radii[radius] : undefined;
 	const glassTint = showTint ? theme.colors.glassTint : undefined;
 	const resolvedAccessibilityLabel =
 		label === undefined ? accessibilityLabel : (accessibilityLabel ?? label);
+	const shadowModifiers: ViewModifier[] = [
+		buttonBorderShape(shape, cornerRadius),
+		...(glassTint ? [tint(glassTint)] : []),
+	];
+	const clearGlassModifiers: ViewModifier[] = [
+		...(isIconOnly
+			? []
+			: [padding({ horizontal: theme.spacing(sizeSpec.paddingHorizontal) })]),
+		glassEffect({
+			glass: {
+				variant: "clear",
+				interactive: true,
+				tint: glassTint,
+			},
+			shape,
+			cornerRadius,
+		}),
+	];
 	const modifiers: ViewModifier[] = [
 		buttonStyle(showShadow ? "glass" : "plain"),
-		...(showShadow
-			? [
-					buttonBorderShape(shape, cornerRadius),
-					...(glassTint ? [tint(glassTint)] : []),
-				]
-			: []),
-		controlSize(nativeControlSize(size)),
+		...(showShadow ? shadowModifiers : []),
+		controlSize(sizeSpec.controlSize),
 		frame({
 			minHeight: minimumSize,
-			...(isIconOnly ? { minWidth: minimumSize } : {}),
+			minWidth: isIconOnly ? minimumSize : undefined,
 		}),
-		...(!showShadow
-			? [
-					...(!isIconOnly
-						? [
-								padding({
-									horizontal:
-										size === "sm"
-											? theme.spacing(3)
-											: size === "lg"
-												? theme.spacing(6)
-												: theme.spacing(4),
-								}),
-							]
-						: []),
-					glassEffect({
-						glass: {
-							variant: "clear",
-							interactive: true,
-							tint: glassTint,
-						},
-						shape,
-						cornerRadius,
-					}),
-				]
-			: []),
+		...(showShadow ? [] : clearGlassModifiers),
 		disabledModifier(isDisabled),
 		accessibilityLabelModifier(resolvedAccessibilityLabel),
 		...(accessibilityHint
@@ -139,10 +129,7 @@ export function ButtonGlass({
 		...(loading ? [accessibilityValue("Busy")] : []),
 	];
 	const labelModifiers: ViewModifier[] = [
-		font({
-			textStyle: size === "sm" ? "caption" : size === "lg" ? "body" : "callout",
-			weight: "semibold",
-		}),
+		font({ textStyle: sizeSpec.textStyle, weight: "semibold" }),
 		foregroundStyle(theme.colors.foreground),
 	];
 
@@ -171,14 +158,38 @@ export function ButtonGlass({
 	);
 }
 
-type NativeControlSize = Parameters<typeof controlSize>[0];
 type ButtonGlassShape = "circle" | "capsule" | "roundedRectangle";
 
-function nativeControlSize(size: ButtonGlassSize): NativeControlSize {
-	if (size === "sm") return "small";
-	if (size === "lg") return "large";
-	return "regular";
-}
+const buttonGlassSizeSpecs: Record<
+	ButtonGlassSize,
+	{
+		controlSize: Parameters<typeof controlSize>[0];
+		/** In theme.spacing steps. */
+		minHeight: number;
+		/** In theme.spacing steps. */
+		paddingHorizontal: number;
+		textStyle: Parameters<typeof font>[0]["textStyle"];
+	}
+> = {
+	sm: {
+		controlSize: "small",
+		minHeight: 11,
+		paddingHorizontal: 3,
+		textStyle: "caption",
+	},
+	default: {
+		controlSize: "regular",
+		minHeight: 11,
+		paddingHorizontal: 4,
+		textStyle: "callout",
+	},
+	lg: {
+		controlSize: "large",
+		minHeight: 13,
+		paddingHorizontal: 6,
+		textStyle: "body",
+	},
+};
 
 function buttonGlassShape({
 	isIconOnly,

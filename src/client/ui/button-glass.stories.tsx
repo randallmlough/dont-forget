@@ -174,7 +174,7 @@ function GlassExamples({
 			<View style={styles.row}>
 				{examples.map((example) => (
 					<ButtonGlass
-						key={`${example.label === undefined ? "icon-only" : "labeled"}:${example.label ?? example.accessibilityLabel}:${example.systemImage ?? "no-symbol"}`}
+						key={example.label ?? `icon:${example.accessibilityLabel}`}
 						{...example}
 						onPress={noop}
 					/>
