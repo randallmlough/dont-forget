@@ -171,14 +171,14 @@ function InputGallery({ themeName }: { themeName: FormStoryTheme }) {
 			</FormStorySection>
 
 			<FormStorySection
-				description="A user modifier replaces app styling of the same $type, so custom chrome swaps cleanly instead of stacking."
-				title="Custom chrome"
+				description="A user modifier replaces app styling of the same $type, so custom styling swaps cleanly instead of stacking."
+				title="Custom styling"
 			>
 				<CustomModifierExamples />
 			</FormStorySection>
 
 			<FormStorySection
-				description="glassEffect renders iOS 26 Liquid Glass. A clear background override removes the opaque chrome so the material shows; the glass edge replaces the border ring."
+				description="glassEffect renders iOS 26 Liquid Glass. A clear background override removes the opaque surface so the material shows; the glass edge replaces the border ring."
 				title="Glass appearance"
 			>
 				<GlassInputExamples />
