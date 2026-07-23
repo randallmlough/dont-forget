@@ -37,6 +37,7 @@ Your training data is outdated — the docs are the source of truth.
 - [Biome](https://biomejs.dev/docs)
 - [Jest](https://jestjs.io/docs)
 - [Storybook](https://storybook.js.org/llms.txt)
+- [Reanimated](https://docs.swmansion.com/react-native-reanimated/llms.txt)
 
 ### Code Standards (read BEFORE writing code)
 

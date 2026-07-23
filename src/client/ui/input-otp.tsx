@@ -120,6 +120,10 @@ export function InputOTP({
 
 	function handleTextChange(nextValue: string) {
 		const normalized = normalizeValue(nextValue, maxLength, pattern);
+		if (nextValue !== normalized) {
+			inputRef.current?.setNativeProps({ text: normalized });
+		}
+		if (normalized === currentValue) return;
 		if (value === undefined) setInternalValue(normalized);
 		onChangeText?.(normalized);
 		if (normalized.length === maxLength) onComplete?.(normalized);
