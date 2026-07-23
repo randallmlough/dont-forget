@@ -97,10 +97,6 @@ export function GlassEffectContainer({ children }: MockContainerProps) {
 	return <View>{children}</View>;
 }
 
-export function RNHostView({ children }: MockContainerProps) {
-	return <View>{children}</View>;
-}
-
 export function Spacer() {
 	return <View />;
 }

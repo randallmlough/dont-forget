@@ -58,22 +58,3 @@ it("preserves explicit accessibility state and custom content", async () => {
 		expanded: true,
 	});
 });
-
-it("keeps glass buttons on the existing pressable behavior", async () => {
-	const onPress = jest.fn();
-
-	await render(
-		<Button onPress={onPress} variant="glass">
-			Add Item
-		</Button>,
-	);
-	const button = screen.getByRole("button", { name: "Add Item" });
-
-	fireEvent.press(button);
-
-	expect(onPress).toHaveBeenCalledTimes(1);
-	expect(button.props.accessibilityState).toEqual({
-		busy: false,
-		disabled: false,
-	});
-});

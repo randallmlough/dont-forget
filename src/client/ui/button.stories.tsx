@@ -10,7 +10,6 @@ import {
 	type ButtonSize,
 	type ButtonVariant,
 } from "./button";
-import { GlassStoryBackdrop } from "./form-story-layout";
 
 const variants = [
 	"default",
@@ -18,7 +17,6 @@ const variants = [
 	"outline",
 	"secondary",
 	"ghost",
-	"glass",
 	"link",
 ] satisfies ButtonVariant[];
 
@@ -68,14 +66,6 @@ export const LightTheme: Story = {
 
 export const DarkTheme: Story = {
 	render: () => <ButtonGallery themeName="dark" />,
-};
-
-export const GlassLightTheme: Story = {
-	render: () => <GlassButtonGallery themeName="light" />,
-};
-
-export const GlassDarkTheme: Story = {
-	render: () => <GlassButtonGallery themeName="dark" />,
 };
 
 function IconButtons() {
@@ -151,30 +141,6 @@ function ButtonGallery({ themeName }: { themeName: "light" | "dark" }) {
 					<Button disabled onPress={noop}>
 						Disabled
 					</Button>
-				</StorySection>
-			</View>
-		</ScopedTheme>
-	);
-}
-
-function GlassButtonGallery({ themeName }: { themeName: "light" | "dark" }) {
-	return (
-		<ScopedTheme name={themeName}>
-			<View style={styles.canvas}>
-				<StorySection title="Glass">
-					<GlassStoryBackdrop>
-						<View style={styles.row}>
-							<Button onPress={noop} variant="glass">
-								Add Item
-							</Button>
-							<Button disabled onPress={noop} variant="glass">
-								Disabled
-							</Button>
-							<Button loading onPress={noop} variant="glass">
-								Saving
-							</Button>
-						</View>
-					</GlassStoryBackdrop>
 				</StorySection>
 			</View>
 		</ScopedTheme>

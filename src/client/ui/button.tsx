@@ -7,13 +7,11 @@ import {
 	type StyleProp,
 	Text,
 	type TextStyle,
-	View,
 	type ViewStyle,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 import type { AppTheme } from "@/client/theme/theme-contract";
-import { GlassSurface } from "./glass-surface";
 
 export type ButtonVariant =
 	| "default"
@@ -21,7 +19,6 @@ export type ButtonVariant =
 	| "outline"
 	| "secondary"
 	| "ghost"
-	| "glass"
 	| "link";
 
 export type ButtonSize = "default" | "sm" | "lg" | "icon";
@@ -84,7 +81,7 @@ export const Button = forwardRef<ButtonRef, ButtonProps>(function Button(
 				? theme.colors.secondaryForeground
 				: variant === "link"
 					? theme.colors.link
-					: variant === "outline" || variant === "ghost" || variant === "glass"
+					: variant === "outline" || variant === "ghost"
 						? theme.colors.foreground
 						: theme.colors.primaryForeground;
 
@@ -106,11 +103,6 @@ export const Button = forwardRef<ButtonRef, ButtonProps>(function Button(
 			]}
 			{...pressableProps}
 		>
-			{variant === "glass" ? (
-				<GlassSurface interactive style={styles.glassSurface}>
-					<View />
-				</GlassSurface>
-			) : null}
 			{loading ? (
 				<ActivityIndicator
 					accessibilityElementsHidden
@@ -180,10 +172,6 @@ const styles = StyleSheet.create((theme) => ({
 				ghost: {
 					backgroundColor: "transparent",
 				},
-				glass: {
-					borderColor: "transparent",
-					backgroundColor: "transparent",
-				},
 				link: {
 					paddingHorizontal: 0,
 					backgroundColor: "transparent",
@@ -228,9 +216,6 @@ const styles = StyleSheet.create((theme) => ({
 				ghost: {
 					color: theme.colors.foreground,
 				},
-				glass: {
-					color: theme.colors.foreground,
-				},
 				link: {
 					color: theme.colors.link,
 					textDecorationLine: "underline",
@@ -248,39 +233,6 @@ const styles = StyleSheet.create((theme) => ({
 				},
 				icon: {
 					...theme.typography.callout,
-				},
-			},
-		},
-	},
-	glassSurface: {
-		position: "absolute",
-		top: 0,
-		right: 0,
-		bottom: 0,
-		left: 0,
-		borderRadius: theme.radii.md,
-		variants: {
-			radius: {
-				none: {
-					borderRadius: theme.radii.none,
-				},
-				sm: {
-					borderRadius: theme.radii.sm,
-				},
-				md: {
-					borderRadius: theme.radii.md,
-				},
-				lg: {
-					borderRadius: theme.radii.lg,
-				},
-				xl: {
-					borderRadius: theme.radii.xl,
-				},
-				"2xl": {
-					borderRadius: theme.radii["2xl"],
-				},
-				full: {
-					borderRadius: theme.radii.full,
 				},
 			},
 		},
