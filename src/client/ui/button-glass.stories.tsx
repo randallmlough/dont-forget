@@ -72,11 +72,6 @@ function ButtonGlassGallery({ themeName }: { themeName: FormStoryTheme }) {
 						{ label: "Add Item" },
 						{ label: "Create Household", systemImage: "person.2.badge.plus" },
 						{ label: "Open Lists", systemImage: "list.bullet" },
-						{
-							accessibilityLabel: "Open Lists",
-							systemImage: "list.bullet",
-							showTint: false,
-						},
 					]}
 				/>
 			</FormStorySection>
@@ -94,17 +89,13 @@ function ButtonGlassGallery({ themeName }: { themeName: FormStoryTheme }) {
 			</FormStorySection>
 
 			<FormStorySection
-				description="Icon-only buttons resolve to circles, full-radius labeled buttons use capsules, and other radii use rounded rectangles."
+				description="Full-radius buttons use capsules; other radii use rounded rectangles."
 				title="Shapes"
 			>
 				<GlassExamples
 					examples={[
 						{ label: "Rounded" },
 						{ label: "Capsule", radius: "full" },
-						{
-							accessibilityLabel: "Open Lists",
-							systemImage: "list.bullet",
-						},
 					]}
 				/>
 			</FormStorySection>
@@ -116,18 +107,13 @@ function ButtonGlassGallery({ themeName }: { themeName: FormStoryTheme }) {
 				<GlassExamples
 					examples={[
 						{ label: "Untinted", showTint: false },
-						{
-							accessibilityLabel: "No tint icon",
-							systemImage: "list.bullet",
-							showTint: false,
-						},
 						{ label: "Tinted" },
 					]}
 				/>
 			</FormStorySection>
 
 			<FormStorySection
-				description="Control size changes native metrics while preserving the app's minimum touch target."
+				description="Small uses a tighter visible surface while every size preserves at least a 44-point touch target."
 				title="Sizes"
 			>
 				<GlassStoryBackdrop>
@@ -173,11 +159,7 @@ function GlassExamples({
 		<GlassStoryBackdrop>
 			<View style={styles.row}>
 				{examples.map((example) => (
-					<ButtonGlass
-						key={example.label ?? `icon:${example.accessibilityLabel}`}
-						{...example}
-						onPress={noop}
-					/>
+					<ButtonGlass key={example.label} {...example} onPress={noop} />
 				))}
 			</View>
 		</GlassStoryBackdrop>
