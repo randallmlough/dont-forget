@@ -1,17 +1,29 @@
 import { useSignUp } from "@clerk/clerk-expo";
+import {
+	onSubmit as onSubmitModifier,
+	submitLabel,
+	textContentType,
+} from "@expo/ui/swift-ui/modifiers";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Alert } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { AuthFooterLink } from "@/client/features/auth/auth-footer-link";
 import { AuthScreen } from "@/client/features/auth/auth-screen";
-import { AuthTextInput } from "@/client/features/auth/auth-text-input";
 import { OrDivider } from "@/client/features/auth/or-divider";
 import { authHrefWithIntent } from "@/client/features/auth/redirect-policy";
 import { SocialSignIn } from "@/client/features/auth/social-sign-in";
 import { track } from "@/client/lib/analytics";
 import { userMessage } from "@/client/lib/clerk-errors";
 import { Button } from "@/client/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/client/ui/field";
+import { Form } from "@/client/ui/form";
+import { Input } from "@/client/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/client/ui/input-otp";
+
+const VERIFICATION_CODE_LENGTH = 6;
+const VERIFICATION_CODE_INDICES = [0, 1, 2, 3, 4, 5] as const;
+const VERIFICATION_CODE_PATTERN = /\d/;
 
 export default function SignUpScreen() {
 	const [pendingEmail, setPendingEmail] = useState<string | null>(null);
@@ -92,39 +104,48 @@ function CreateAccountForm({
 	}
 
 	return (
-		<>
-			<AuthTextInput
-				placeholder="Email"
-				autoComplete="email"
-				keyboardType="email-address"
-				textContentType="emailAddress"
-				value={email}
-				onChangeText={setEmail}
-				editable={!submitting}
-			/>
-			<AuthTextInput
-				placeholder="Password (8+ characters)"
-				autoComplete="new-password"
-				secureTextEntry
-				textContentType="newPassword"
-				value={password}
-				onChangeText={setPassword}
-				editable={!submitting}
-			/>
-			<AuthTextInput
-				placeholder="Confirm password"
-				autoComplete="new-password"
-				secureTextEntry
-				textContentType="newPassword"
-				value={confirm}
-				onChangeText={setConfirm}
-				editable={!submitting}
-				onSubmitEditing={onCreate}
-			/>
+		<Form>
+			<FieldGroup>
+				<Field disabled={submitting}>
+					<FieldLabel>Email</FieldLabel>
+					<Input
+						accessibilityLabel="Email"
+						kind="email"
+						onTextChange={setEmail}
+						placeholder="Email"
+					/>
+				</Field>
+				<Field disabled={submitting}>
+					<FieldLabel>Password</FieldLabel>
+					<Input
+						accessibilityLabel="Password"
+						modifiers={[textContentType("newPassword")]}
+						onTextChange={setPassword}
+						placeholder="Password (8+ characters)"
+						secureTextEntry
+					/>
+				</Field>
+				<Field disabled={submitting}>
+					<FieldLabel>Confirm password</FieldLabel>
+					<Input
+						accessibilityLabel="Confirm password"
+						modifiers={[
+							textContentType("newPassword"),
+							submitLabel("done"),
+							onSubmitModifier(() => {
+								void onCreate();
+							}),
+						]}
+						onTextChange={setConfirm}
+						placeholder="Confirm password"
+						secureTextEntry
+					/>
+				</Field>
+			</FieldGroup>
 			<Button loading={submitting} onPress={onCreate} radius="xl" size="lg">
 				Create account
 			</Button>
-		</>
+		</Form>
 	);
 }
 
@@ -162,17 +183,23 @@ function VerifyEmailForm({ onBack }: { onBack: () => void }) {
 	}
 
 	return (
-		<>
-			<AuthTextInput
-				placeholder="Verification code"
-				keyboardType="number-pad"
-				autoComplete="one-time-code"
-				textContentType="oneTimeCode"
-				value={code}
-				onChangeText={setCode}
-				editable={!submitting}
-				onSubmitEditing={onVerify}
-			/>
+		<Form>
+			<Field disabled={submitting}>
+				<FieldLabel>Verification code</FieldLabel>
+				<InputOTP
+					accessibilityLabel="Verification code"
+					maxLength={VERIFICATION_CODE_LENGTH}
+					onChangeText={setCode}
+					pattern={VERIFICATION_CODE_PATTERN}
+					value={code}
+				>
+					<InputOTPGroup>
+						{VERIFICATION_CODE_INDICES.map((index) => (
+							<InputOTPSlot index={index} key={index} />
+						))}
+					</InputOTPGroup>
+				</InputOTP>
+			</Field>
 			<Button loading={submitting} onPress={onVerify} radius="xl" size="lg">
 				Verify email
 			</Button>
@@ -185,7 +212,7 @@ function VerifyEmailForm({ onBack }: { onBack: () => void }) {
 			>
 				Use a different email
 			</Button>
-		</>
+		</Form>
 	);
 }
 

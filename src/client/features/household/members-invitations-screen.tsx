@@ -6,7 +6,6 @@ import {
 	FlatList,
 	Pressable,
 	Text,
-	TextInput,
 	View,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -29,6 +28,9 @@ import {
 import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
 import { Card, CardContent } from "@/client/ui/card";
+import { Field, FieldLabel } from "@/client/ui/field";
+import { Form } from "@/client/ui/form";
+import { Input } from "@/client/ui/input";
 import {
 	Item,
 	ItemActions,
@@ -285,30 +287,26 @@ function InvitationForm({
 
 	return (
 		<Card>
-			<CardContent style={styles.invitationForm}>
-				<View style={styles.invitationInputGroup}>
-					<Text style={styles.inputLabel}>Email Address</Text>
-					<TextInput
-						accessibilityLabel="Invitation email"
-						autoCapitalize="none"
-						autoComplete="email"
-						editable={!creating}
-						keyboardType="email-address"
-						onChangeText={setEmail}
-						placeholder="name@example.com"
-						style={styles.input}
-						textContentType="emailAddress"
-						value={email}
-					/>
-				</View>
-				<Button
-					disabled={creating}
-					onPress={() => {
-						void actions.createInvitation(email);
-					}}
-				>
-					{creating ? "Sending" : "Send Invite"}
-				</Button>
+			<CardContent style={styles.invitationFormContent}>
+				<Form style={styles.invitationForm}>
+					<Field disabled={creating} style={styles.invitationField}>
+						<FieldLabel>Email Address</FieldLabel>
+						<Input
+							accessibilityLabel="Invitation email"
+							kind="email"
+							onTextChange={setEmail}
+							placeholder="name@example.com"
+						/>
+					</Field>
+					<Button
+						disabled={creating}
+						onPress={() => {
+							void actions.createInvitation(email);
+						}}
+					>
+						{creating ? "Sending" : "Send Invite"}
+					</Button>
+				</Form>
 			</CardContent>
 		</Card>
 	);
@@ -720,28 +718,14 @@ const styles = StyleSheet.create((theme) => ({
 		flexDirection: "row",
 		alignItems: "flex-end",
 		gap: theme.spacing(3),
+	},
+	invitationFormContent: {
 		padding: theme.spacing(3),
 		paddingTop: theme.spacing(3),
 	},
-	invitationInputGroup: {
+	invitationField: {
 		flex: 1,
 		minWidth: 0,
-		gap: theme.spacing(1),
-	},
-	inputLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.mutedForeground,
-		textTransform: "uppercase",
-	},
-	input: {
-		minHeight: theme.spacing(11),
-		paddingHorizontal: theme.spacing(3),
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.input,
-		borderRadius: theme.radii.xl,
-		backgroundColor: theme.colors.glassTint,
-		color: theme.colors.foreground,
-		...theme.typography.callout,
 	},
 	joinCodeSpacing: {
 		paddingTop: theme.spacing(3),

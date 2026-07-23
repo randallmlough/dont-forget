@@ -1,12 +1,19 @@
+import { textContentType } from "@expo/ui/swift-ui/modifiers";
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import { AuthFooterLink } from "@/client/features/auth/auth-footer-link";
 import { AuthScreen } from "@/client/features/auth/auth-screen";
-import { AuthTextInput } from "@/client/features/auth/auth-text-input";
 import { OrDivider } from "@/client/features/auth/or-divider";
 import { Button } from "@/client/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/client/ui/field";
+import { Form } from "@/client/ui/form";
+import { Input } from "@/client/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/client/ui/input-otp";
+
+const VERIFICATION_CODE_INDICES = [0, 1, 2, 3, 4, 5] as const;
+const VERIFICATION_CODE_PATTERN = /\d/;
 
 const meta = {
 	title: "Auth/AuthScreen",
@@ -34,25 +41,30 @@ export const SignIn: Story = {
 			title="Don't Forget"
 			subtitle="Shared Lists for your Household."
 		>
-			<AuthTextInput
-				placeholder="Email"
-				autoComplete="email"
-				keyboardType="email-address"
-				textContentType="emailAddress"
-				value=""
-				onChangeText={noop}
-			/>
-			<AuthTextInput
-				placeholder="Password"
-				autoComplete="current-password"
-				secureTextEntry
-				textContentType="password"
-				value=""
-				onChangeText={noop}
-			/>
-			<Button onPress={noop} radius="xl" size="lg">
-				Sign in
-			</Button>
+			<Form>
+				<FieldGroup>
+					<Field>
+						<FieldLabel>Email</FieldLabel>
+						<Input
+							accessibilityLabel="Email"
+							kind="email"
+							placeholder="Email"
+						/>
+					</Field>
+					<Field>
+						<FieldLabel>Password</FieldLabel>
+						<Input
+							accessibilityLabel="Password"
+							modifiers={[textContentType("password")]}
+							placeholder="Password"
+							secureTextEntry
+						/>
+					</Field>
+				</FieldGroup>
+				<Button onPress={noop} radius="xl" size="lg">
+					Sign in
+				</Button>
+			</Form>
 			<AuthFooterLink
 				prompt="Don't have an account?"
 				label="Sign up"
@@ -68,17 +80,25 @@ export const Verification: Story = {
 			title="Create your account"
 			subtitle="We sent a verification code to avery@example.com."
 		>
-			<AuthTextInput
-				placeholder="Verification code"
-				keyboardType="number-pad"
-				autoComplete="one-time-code"
-				textContentType="oneTimeCode"
-				value=""
-				onChangeText={noop}
-			/>
-			<Button onPress={noop} radius="xl" size="lg">
-				Verify email
-			</Button>
+			<Form>
+				<Field>
+					<FieldLabel>Verification code</FieldLabel>
+					<InputOTP
+						accessibilityLabel="Verification code"
+						maxLength={6}
+						pattern={VERIFICATION_CODE_PATTERN}
+					>
+						<InputOTPGroup>
+							{VERIFICATION_CODE_INDICES.map((index) => (
+								<InputOTPSlot index={index} key={index} />
+							))}
+						</InputOTPGroup>
+					</InputOTP>
+				</Field>
+				<Button onPress={noop} radius="xl" size="lg">
+					Verify email
+				</Button>
+			</Form>
 		</AuthScreen>
 	),
 };
@@ -93,17 +113,15 @@ export const WithDivider: Story = {
 				Continue with Apple
 			</Button>
 			<OrDivider />
-			<AuthTextInput
-				placeholder="Email"
-				autoComplete="email"
-				keyboardType="email-address"
-				textContentType="emailAddress"
-				value=""
-				onChangeText={noop}
-			/>
-			<Button onPress={noop} radius="xl" size="lg">
-				Create account
-			</Button>
+			<Form>
+				<Field>
+					<FieldLabel>Email</FieldLabel>
+					<Input accessibilityLabel="Email" kind="email" placeholder="Email" />
+				</Field>
+				<Button onPress={noop} radius="xl" size="lg">
+					Create account
+				</Button>
+			</Form>
 		</AuthScreen>
 	),
 };
