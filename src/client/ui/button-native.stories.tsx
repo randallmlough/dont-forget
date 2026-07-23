@@ -10,6 +10,7 @@ import {
 	type ButtonSize,
 	type ButtonVariant,
 } from "./button";
+import { ButtonNative } from "./button-native";
 import { GlassStoryBackdrop } from "./form-story-layout";
 
 const variants = [
@@ -35,8 +36,8 @@ const radii = [
 ] satisfies ButtonRadius[];
 
 const meta = {
-	title: "UI/Button",
-	component: Button,
+	title: "UI/ButtonNative (Spike)",
+	component: ButtonNative,
 	args: {
 		children: "Add Item",
 		disabled: false,
@@ -54,7 +55,7 @@ const meta = {
 		size: { control: "select", options: [...sizes, "icon"] },
 		variant: { control: "select", options: variants },
 	},
-} satisfies Meta<typeof Button>;
+} satisfies Meta<typeof ButtonNative>;
 
 export default meta;
 
@@ -63,39 +64,105 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {};
 
 export const LightTheme: Story = {
-	render: () => <ButtonGallery themeName="light" />,
+	render: () => <ButtonNativeGallery themeName="light" />,
 };
 
 export const DarkTheme: Story = {
-	render: () => <ButtonGallery themeName="dark" />,
+	render: () => <ButtonNativeGallery themeName="dark" />,
 };
 
-export const GlassLightTheme: Story = {
-	render: () => <GlassButtonGallery themeName="light" />,
+export const GlassComparison: Story = {
+	render: () => (
+		<ScopedTheme name="light">
+			<View style={styles.canvas}>
+				<StorySection title="Glass implementations">
+					<GlassStoryBackdrop>
+						<View style={styles.comparison}>
+							<ComparisonRow label="Pressable + GlassSurface">
+								<Button onPress={noop} variant="glass">
+									Add Item
+								</Button>
+							</ComparisonRow>
+							<ComparisonRow label="Expo UI SwiftUI Button">
+								<ButtonNative onPress={noop} variant="glass">
+									Add Item
+								</ButtonNative>
+							</ComparisonRow>
+						</View>
+					</GlassStoryBackdrop>
+				</StorySection>
+			</View>
+		</ScopedTheme>
+	),
 };
 
-export const GlassDarkTheme: Story = {
-	render: () => <GlassButtonGallery themeName="dark" />,
-};
+function ButtonNativeGallery({ themeName }: { themeName: "light" | "dark" }) {
+	return (
+		<ScopedTheme name={themeName}>
+			<View style={styles.canvas}>
+				<StorySection title="Variants">
+					{variants.map((variant) => (
+						<ButtonNative key={variant} onPress={noop} variant={variant}>
+							{variantLabel(variant)}
+						</ButtonNative>
+					))}
+				</StorySection>
 
-function IconButtons() {
+				<StorySection title="Sizes">
+					{sizes.map((size) => (
+						<ButtonNative key={size} onPress={noop} size={size}>
+							{sizeLabel(size)}
+						</ButtonNative>
+					))}
+					<ButtonNative
+						accessibilityLabel="Add Item"
+						onPress={noop}
+						size="icon"
+					>
+						+
+					</ButtonNative>
+				</StorySection>
+
+				<StorySection title="React Native content bridge">
+					<NativeIconButton />
+				</StorySection>
+
+				<StorySection title="Radii">
+					{radii.map((radius) => (
+						<ButtonNative key={radius} onPress={noop} radius={radius}>
+							{radiusLabel(radius)}
+						</ButtonNative>
+					))}
+				</StorySection>
+
+				<StorySection title="States">
+					<ButtonNative loading onPress={noop}>
+						Saving
+					</ButtonNative>
+					<ButtonNative disabled onPress={noop}>
+						Disabled
+					</ButtonNative>
+				</StorySection>
+
+				<StorySection title="Glass">
+					<GlassStoryBackdrop>
+						<ButtonNative onPress={noop} variant="glass">
+							Add Item
+						</ButtonNative>
+					</GlassStoryBackdrop>
+				</StorySection>
+			</View>
+		</ScopedTheme>
+	);
+}
+
+function NativeIconButton() {
 	const { theme } = useUnistyles();
 
 	return (
-		<>
-			<Button onPress={noop} variant="outline">
-				<SymbolView
-					accessibilityElementsHidden
-					accessible={false}
-					name="chevron.left"
-					size={theme.spacing(4)}
-					tintColor={theme.colors.foreground}
-					weight="medium"
-				/>
-				<Text style={styles.outlineLabel}>Previous</Text>
-			</Button>
-			<Button onPress={noop}>
-				<Text style={styles.defaultLabel}>Next</Text>
+		<ButtonNative accessibilityLabel="Continue" onPress={noop}>
+			<View style={styles.customContent}>
+				<Text style={styles.customLabel}>Continue</Text>
 				<SymbolView
 					accessibilityElementsHidden
 					accessible={false}
@@ -104,80 +171,8 @@ function IconButtons() {
 					tintColor={theme.colors.primaryForeground}
 					weight="medium"
 				/>
-			</Button>
-		</>
-	);
-}
-
-function ButtonGallery({ themeName }: { themeName: "light" | "dark" }) {
-	return (
-		<ScopedTheme name={themeName}>
-			<View style={styles.canvas}>
-				<StorySection title="Variants">
-					{variants.map((variant) => (
-						<Button key={variant} onPress={noop} variant={variant}>
-							{variantLabel(variant)}
-						</Button>
-					))}
-				</StorySection>
-
-				<StorySection title="Sizes">
-					{sizes.map((size) => (
-						<Button key={size} onPress={noop} size={size}>
-							{sizeLabel(size)}
-						</Button>
-					))}
-					<Button accessibilityLabel="Add Item" onPress={noop} size="icon">
-						+
-					</Button>
-				</StorySection>
-
-				<StorySection title="With icons">
-					<IconButtons />
-				</StorySection>
-
-				<StorySection title="Radii">
-					{radii.map((radius) => (
-						<Button key={radius} onPress={noop} radius={radius}>
-							{radiusLabel(radius)}
-						</Button>
-					))}
-				</StorySection>
-
-				<StorySection title="States">
-					<Button loading onPress={noop}>
-						Saving
-					</Button>
-					<Button disabled onPress={noop}>
-						Disabled
-					</Button>
-				</StorySection>
 			</View>
-		</ScopedTheme>
-	);
-}
-
-function GlassButtonGallery({ themeName }: { themeName: "light" | "dark" }) {
-	return (
-		<ScopedTheme name={themeName}>
-			<View style={styles.canvas}>
-				<StorySection title="Glass">
-					<GlassStoryBackdrop>
-						<View style={styles.row}>
-							<Button onPress={noop} variant="glass">
-								Add Item
-							</Button>
-							<Button disabled onPress={noop} variant="glass">
-								Disabled
-							</Button>
-							<Button loading onPress={noop} variant="glass">
-								Saving
-							</Button>
-						</View>
-					</GlassStoryBackdrop>
-				</StorySection>
-			</View>
-		</ScopedTheme>
+		</ButtonNative>
 	);
 }
 
@@ -192,6 +187,21 @@ function StorySection({
 		<View style={styles.section}>
 			<Text style={styles.sectionTitle}>{title}</Text>
 			<View style={styles.row}>{children}</View>
+		</View>
+	);
+}
+
+function ComparisonRow({
+	children,
+	label,
+}: {
+	children: ReactNode;
+	label: string;
+}) {
+	return (
+		<View style={styles.comparisonRow}>
+			<Text style={styles.comparisonLabel}>{label}</Text>
+			{children}
 		</View>
 	);
 }
@@ -217,16 +227,6 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(6),
 		backgroundColor: theme.colors.background,
 	},
-	defaultLabel: {
-		...theme.typography.callout,
-		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.primaryForeground,
-	},
-	outlineLabel: {
-		...theme.typography.callout,
-		fontWeight: theme.fontWeights.semibold,
-		color: theme.colors.foreground,
-	},
 	section: {
 		gap: theme.spacing(3),
 	},
@@ -239,5 +239,28 @@ const styles = StyleSheet.create((theme) => ({
 		flexWrap: "wrap",
 		alignItems: "center",
 		gap: theme.spacing(3),
+	},
+	comparison: {
+		gap: theme.spacing(4),
+	},
+	comparisonRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: theme.spacing(4),
+	},
+	comparisonLabel: {
+		...theme.typography.callout,
+		color: theme.colors.foreground,
+	},
+	customContent: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(2),
+	},
+	customLabel: {
+		...theme.typography.callout,
+		fontWeight: theme.fontWeights.semibold,
+		color: theme.colors.primaryForeground,
 	},
 }));

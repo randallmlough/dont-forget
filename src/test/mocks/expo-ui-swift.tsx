@@ -1,5 +1,6 @@
 import { Children, isValidElement, type ReactNode, useState } from "react";
 import {
+	ActivityIndicator,
 	Pressable,
 	Text as ReactNativeText,
 	TextInput,
@@ -10,8 +11,10 @@ type MockModifier = {
 	$type: string;
 	disabled?: boolean;
 	eventListener?: () => void;
+	hint?: string;
 	label?: string;
 	tag?: string | number;
+	value?: string;
 };
 
 type MockContainerProps = {
@@ -94,8 +97,16 @@ export function GlassEffectContainer({ children }: MockContainerProps) {
 	return <View>{children}</View>;
 }
 
+export function RNHostView({ children }: MockContainerProps) {
+	return <View>{children}</View>;
+}
+
 export function Spacer() {
 	return <View />;
+}
+
+export function ProgressView() {
+	return <ActivityIndicator />;
 }
 
 export function Image({ systemName }: { systemName?: string }) {
@@ -207,9 +218,11 @@ export function Button({
 	const isDisabled = modifier(modifiers, "disabled")?.disabled ?? false;
 	return (
 		<Pressable
+			accessibilityHint={modifierHint(modifiers)}
 			accessibilityLabel={modifierLabel(modifiers) ?? label}
 			accessibilityRole="button"
 			accessibilityState={{ disabled: isDisabled }}
+			accessibilityValue={modifierValue(modifiers)}
 			disabled={isDisabled}
 			onPress={onPress}
 		>
@@ -301,6 +314,19 @@ function modifierLabel(
 	modifiers: MockModifier[] | undefined,
 ): string | undefined {
 	return modifier(modifiers, "accessibilityLabel")?.label;
+}
+
+function modifierHint(
+	modifiers: MockModifier[] | undefined,
+): string | undefined {
+	return modifier(modifiers, "accessibilityHint")?.hint;
+}
+
+function modifierValue(
+	modifiers: MockModifier[] | undefined,
+): { text: string } | undefined {
+	const value = modifier(modifiers, "accessibilityValue")?.value;
+	return value ? { text: value } : undefined;
 }
 
 function modifier(
