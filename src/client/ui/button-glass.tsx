@@ -19,6 +19,8 @@ import {
 	font,
 	foregroundStyle,
 	frame,
+	glassEffect,
+	padding,
 	tint,
 	type ViewModifier,
 } from "@expo/ui/swift-ui/modifiers";
@@ -26,22 +28,39 @@ import type { StyleProp, ViewStyle } from "react-native";
 import { useUnistyles } from "react-native-unistyles";
 
 import { nativeColorScheme } from "@/client/theme/native-color-scheme";
+import type { ButtonRadius } from "./button";
 
 export type ButtonGlassSize = "default" | "sm" | "lg";
 
-export type ButtonGlassProps = {
+type ButtonGlassBaseProps = {
 	accessibilityHint?: string;
-	accessibilityLabel?: string;
 	disabled?: boolean;
-	label: string;
 	loading?: boolean;
 	onPress?: () => void;
+	radius?: ButtonRadius;
+	/** Uses the elevated native glass button style when true. @default false */
+	showShadow?: boolean;
+	/** Applies the app glass tint when true. @default true */
+	showTint?: boolean;
 	size?: ButtonGlassSize;
 	/** Styles the React Native Host around the SwiftUI button. */
 	style?: StyleProp<ViewStyle>;
-	systemImage?: SwiftUIButtonProps["systemImage"];
 	testID?: string;
 };
+
+type ButtonGlassLabelProps =
+	| {
+			accessibilityLabel?: string;
+			label: string;
+			systemImage?: SwiftUIButtonProps["systemImage"];
+	  }
+	| {
+			accessibilityLabel: string;
+			label?: never;
+			systemImage: NonNullable<SwiftUIButtonProps["systemImage"]>;
+	  };
+
+export type ButtonGlassProps = ButtonGlassBaseProps & ButtonGlassLabelProps;
 
 /**
  * App-owned native Liquid Glass button.
@@ -56,6 +75,9 @@ export function ButtonGlass({
 	label,
 	loading = false,
 	onPress,
+	radius = "md",
+	showShadow = false,
+	showTint = true,
 	size = "default",
 	style,
 	systemImage,
@@ -63,16 +85,54 @@ export function ButtonGlass({
 }: ButtonGlassProps) {
 	const { rt, theme } = useUnistyles();
 	const isDisabled = disabled || loading;
+	const isIconOnly = label === undefined;
+	const minimumSize = size === "lg" ? theme.spacing(13) : theme.spacing(11);
+	const shape = buttonGlassShape({ isIconOnly, radius });
+	const cornerRadius =
+		shape === "roundedRectangle" ? theme.radii[radius] : undefined;
+	const glassTint = showTint ? theme.colors.glassTint : undefined;
+	const resolvedAccessibilityLabel =
+		label === undefined ? accessibilityLabel : (accessibilityLabel ?? label);
 	const modifiers: ViewModifier[] = [
-		buttonStyle("glass"),
-		buttonBorderShape("roundedRectangle", theme.radii.md),
+		buttonStyle(showShadow ? "glass" : "plain"),
+		...(showShadow
+			? [
+					buttonBorderShape(shape, cornerRadius),
+					...(glassTint ? [tint(glassTint)] : []),
+				]
+			: []),
 		controlSize(nativeControlSize(size)),
-		tint(theme.colors.glassTint),
 		frame({
-			minHeight: size === "lg" ? theme.spacing(13) : theme.spacing(11),
+			minHeight: minimumSize,
+			...(isIconOnly ? { minWidth: minimumSize } : {}),
 		}),
+		...(!showShadow
+			? [
+					...(!isIconOnly
+						? [
+								padding({
+									horizontal:
+										size === "sm"
+											? theme.spacing(3)
+											: size === "lg"
+												? theme.spacing(6)
+												: theme.spacing(4),
+								}),
+							]
+						: []),
+					glassEffect({
+						glass: {
+							variant: "clear",
+							interactive: true,
+							tint: glassTint,
+						},
+						shape,
+						cornerRadius,
+					}),
+				]
+			: []),
 		disabledModifier(isDisabled),
-		accessibilityLabelModifier(accessibilityLabel ?? label),
+		accessibilityLabelModifier(resolvedAccessibilityLabel),
 		...(accessibilityHint
 			? [accessibilityHintModifier(accessibilityHint)]
 			: []),
@@ -102,7 +162,9 @@ export function ButtonGlass({
 							systemName={systemImage}
 						/>
 					) : null}
-					<SwiftUIText modifiers={labelModifiers}>{label}</SwiftUIText>
+					{label !== undefined ? (
+						<SwiftUIText modifiers={labelModifiers}>{label}</SwiftUIText>
+					) : null}
 				</HStack>
 			</SwiftUIButton>
 		</Host>
@@ -110,9 +172,22 @@ export function ButtonGlass({
 }
 
 type NativeControlSize = Parameters<typeof controlSize>[0];
+type ButtonGlassShape = "circle" | "capsule" | "roundedRectangle";
 
 function nativeControlSize(size: ButtonGlassSize): NativeControlSize {
 	if (size === "sm") return "small";
 	if (size === "lg") return "large";
 	return "regular";
+}
+
+function buttonGlassShape({
+	isIconOnly,
+	radius,
+}: {
+	isIconOnly: boolean;
+	radius: ButtonRadius;
+}): ButtonGlassShape {
+	if (isIconOnly) return "circle";
+	if (radius === "full") return "capsule";
+	return "roundedRectangle";
 }

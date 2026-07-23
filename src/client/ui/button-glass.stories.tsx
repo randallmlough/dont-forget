@@ -24,12 +24,16 @@ const meta = {
 		label: "Add Item",
 		loading: false,
 		onPress: noop,
+		showShadow: true,
+		showTint: true,
 		size: "default",
 	},
 	argTypes: {
 		disabled: { control: "boolean" },
 		label: { control: "text" },
 		loading: { control: "boolean" },
+		showShadow: { control: "boolean" },
+		showTint: { control: "boolean" },
 		size: { control: "select", options: sizes },
 		systemImage: { control: "text" },
 	},
@@ -68,6 +72,56 @@ function ButtonGlassGallery({ themeName }: { themeName: FormStoryTheme }) {
 						{ label: "Add Item" },
 						{ label: "Create Household", systemImage: "person.2.badge.plus" },
 						{ label: "Open Lists", systemImage: "list.bullet" },
+						{
+							accessibilityLabel: "Open Lists",
+							systemImage: "list.bullet",
+							showTint: false,
+						},
+					]}
+				/>
+			</FormStorySection>
+
+			<FormStorySection
+				description="The shadowless option uses SwiftUI's flatter clear-glass material instead of the elevated glass button style."
+				title="Drop shadow"
+			>
+				<GlassExamples
+					examples={[
+						{ label: "Default shadow", showShadow: true },
+						{ label: "No shadow", showShadow: false },
+					]}
+				/>
+			</FormStorySection>
+
+			<FormStorySection
+				description="Icon-only buttons resolve to circles, full-radius labeled buttons use capsules, and other radii use rounded rectangles."
+				title="Shapes"
+			>
+				<GlassExamples
+					examples={[
+						{ label: "Rounded" },
+						{ label: "Capsule", radius: "full" },
+						{
+							accessibilityLabel: "Open Lists",
+							systemImage: "list.bullet",
+						},
+					]}
+				/>
+			</FormStorySection>
+
+			<FormStorySection
+				description="Tint can be omitted to show the native glass material without the app's color treatment."
+				title="Tint"
+			>
+				<GlassExamples
+					examples={[
+						{ label: "Untinted", showTint: false },
+						{
+							accessibilityLabel: "No tint icon",
+							systemImage: "list.bullet",
+							showTint: false,
+						},
+						{ label: "Tinted" },
 					]}
 				/>
 			</FormStorySection>
@@ -113,16 +167,17 @@ function ButtonGlassGallery({ themeName }: { themeName: FormStoryTheme }) {
 function GlassExamples({
 	examples,
 }: {
-	examples: readonly Pick<
-		ButtonGlassProps,
-		"disabled" | "label" | "loading" | "systemImage"
-	>[];
+	examples: readonly ButtonGlassProps[];
 }) {
 	return (
 		<GlassStoryBackdrop>
 			<View style={styles.row}>
 				{examples.map((example) => (
-					<ButtonGlass key={example.label} {...example} onPress={noop} />
+					<ButtonGlass
+						key={`${example.label === undefined ? "icon-only" : "labeled"}:${example.label ?? example.accessibilityLabel}:${example.systemImage ?? "no-symbol"}`}
+						{...example}
+						onPress={noop}
+					/>
 				))}
 			</View>
 		</GlassStoryBackdrop>
