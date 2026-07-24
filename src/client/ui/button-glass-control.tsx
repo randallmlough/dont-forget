@@ -1,4 +1,5 @@
 import {
+	GlassEffectContainer,
 	Host,
 	HStack,
 	Image,
@@ -93,33 +94,43 @@ export function ButtonGlassControl({
 	const cornerRadius =
 		shape === "roundedRectangle" ? theme.radii[radius] : undefined;
 	const glassTint = showTint ? theme.colors.glassTint : undefined;
-	const shadowModifiers: ViewModifier[] = [
-		buttonBorderShape(shape, cornerRadius),
-		...(glassTint ? [tint(glassTint)] : []),
-	];
-	const clearGlassModifiers: ViewModifier[] = [
-		...(isIconOnly
-			? []
-			: [padding({ horizontal: theme.spacing(sizeSpec.paddingHorizontal) })]),
-		frame({
-			minHeight: visualHeight,
-			minWidth: isIconOnly ? visualHeight : undefined,
-		}),
-		glassEffect({
-			glass: {
-				variant: "clear",
-				interactive: true,
-				tint: glassTint,
-			},
-			shape,
-			cornerRadius,
-		}),
-	];
+	// The native glass button style draws a non-removable drop shadow, so the
+	// shadowless variant recreates the material with clear glassEffect on a
+	// plain button. glassEffect anchors to the bounds built up before it, so
+	// padding and the visual-height frame must precede it while the
+	// touch-target frame must follow it.
+	const styleModifiers: ViewModifier[] = showShadow
+		? [
+				buttonStyle("glass"),
+				buttonBorderShape(shape, cornerRadius),
+				...(glassTint ? [tint(glassTint)] : []),
+			]
+		: [
+				buttonStyle("plain"),
+				...(isIconOnly
+					? []
+					: [
+							padding({
+								horizontal: theme.spacing(sizeSpec.paddingHorizontal),
+							}),
+						]),
+				frame({
+					minHeight: visualHeight,
+					minWidth: isIconOnly ? visualHeight : undefined,
+				}),
+				glassEffect({
+					glass: {
+						variant: "clear",
+						interactive: true,
+						tint: glassTint,
+					},
+					shape,
+					cornerRadius,
+				}),
+			];
 	const modifiers: ViewModifier[] = [
-		buttonStyle(showShadow ? "glass" : "plain"),
-		...(showShadow ? shadowModifiers : []),
+		...styleModifiers,
 		controlSize(sizeSpec.controlSize),
-		...(showShadow ? [] : clearGlassModifiers),
 		frame({
 			minHeight: minimumTouchTarget,
 			minWidth: isIconOnly ? minimumTouchTarget : undefined,
@@ -137,29 +148,38 @@ export function ButtonGlassControl({
 		foregroundStyle(theme.colors.foreground),
 	];
 
+	const button = (
+		<SwiftUIButton modifiers={modifiers} onPress={onPress} testID={testID}>
+			<HStack alignment="center" spacing={theme.spacing(2)}>
+				{loading ? (
+					<ProgressView modifiers={[tint(theme.colors.foreground)]} />
+				) : content.systemImage ? (
+					<Image
+						modifiers={[...labelModifiers, accessibilityHidden()]}
+						systemName={content.systemImage}
+					/>
+				) : null}
+				{content.kind === "label" ? (
+					<SwiftUIText modifiers={labelModifiers}>{content.label}</SwiftUIText>
+				) : null}
+			</HStack>
+		</SwiftUIButton>
+	);
+
 	return (
 		<Host
 			colorScheme={nativeColorScheme(rt.themeName)}
 			matchContents
 			style={style}
 		>
-			<SwiftUIButton modifiers={modifiers} onPress={onPress} testID={testID}>
-				<HStack alignment="center" spacing={theme.spacing(2)}>
-					{loading ? (
-						<ProgressView modifiers={[tint(theme.colors.foreground)]} />
-					) : content.systemImage ? (
-						<Image
-							modifiers={[...labelModifiers, accessibilityHidden()]}
-							systemName={content.systemImage}
-						/>
-					) : null}
-					{content.kind === "label" ? (
-						<SwiftUIText modifiers={labelModifiers}>
-							{content.label}
-						</SwiftUIText>
-					) : null}
-				</HStack>
-			</SwiftUIButton>
+			{showShadow ? (
+				button
+			) : (
+				// glassEffect shapes are expected to render inside a
+				// GlassEffectContainer; without one the material is prone to
+				// rendering artifacts.
+				<GlassEffectContainer>{button}</GlassEffectContainer>
+			)}
 		</Host>
 	);
 }
