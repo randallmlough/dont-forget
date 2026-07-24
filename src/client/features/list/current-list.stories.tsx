@@ -13,7 +13,7 @@ import {
 import type { ActiveListState } from "./list-view-types";
 
 const meta = {
-	title: "List/CurrentList",
+	title: "Features/List/CurrentList",
 	decorators: [
 		(Story) => (
 			<View style={styles.canvas}>
