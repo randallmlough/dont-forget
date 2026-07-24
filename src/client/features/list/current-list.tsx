@@ -5,83 +5,39 @@ import type { ListSummary } from "@/client/features/list/list-service";
 import {
 	type AuthenticatedAppSession,
 	sessionMemberDisplayName,
-	useSyncState,
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { AddItemForm } from "./add-item-form";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { ItemRows } from "./item-rows";
-import { ListHeader } from "./list-header";
+import { ListOverview } from "./list-overview";
 import type { ActiveListSyncState } from "./list-view-types";
-import {
-	type HomeCurrentListData,
-	useHomeCurrentList,
-} from "./use-home-current-list";
+import type { HomeCurrentListData } from "./use-home-current-list";
 import { useListActions } from "./use-list-actions";
-import { type ListRows, useListRows } from "./use-list-rows";
+import type { ListRows } from "./use-list-rows";
 import { useSelectList } from "./use-select-list";
 
 export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
 	syncState: ActiveListSyncState;
+	listRows: ListRows;
+	allowListsEntry: boolean;
 };
 
 export type CurrentListProps = {
 	session: AuthenticatedAppSession;
-	deps?: HomeCurrentListDeps;
-	onOpenNavigation: () => void;
+	deps: HomeCurrentListDeps;
 	onOpenLists?: () => void;
 };
 
-export function CurrentList({
-	session,
-	deps,
-	onOpenNavigation,
-	onOpenLists,
-}: CurrentListProps) {
-	if (deps) {
-		return (
-			<HomeCurrentListContent
-				session={session}
-				list={deps.currentList}
-				syncState={deps.syncState}
-				allowListsEntry={false}
-				listRows={{ status: "ready", summaries: [] }}
-				onOpenNavigation={onOpenNavigation}
-				onOpenLists={onOpenLists}
-			/>
-		);
-	}
-
-	return (
-		<HomeCurrentListResource
-			key={session.activeHousehold.id}
-			session={session}
-			onOpenNavigation={onOpenNavigation}
-			onOpenLists={onOpenLists}
-		/>
-	);
-}
-
-type HomeCurrentListResourceProps = Omit<CurrentListProps, "deps">;
-
-function HomeCurrentListResource({
-	session,
-	onOpenNavigation,
-	onOpenLists,
-}: HomeCurrentListResourceProps) {
-	const list = useHomeCurrentList(session);
-	const syncState = useSyncState();
-	// The single live rows watch feeds the header quick-list chips.
-	const { rows } = useListRows(session);
+export function CurrentList({ session, deps, onOpenLists }: CurrentListProps) {
 	return (
 		<HomeCurrentListContent
 			session={session}
-			list={list}
-			syncState={syncState}
-			allowListsEntry
-			listRows={rows}
-			onOpenNavigation={onOpenNavigation}
+			list={deps.currentList}
+			syncState={deps.syncState}
+			allowListsEntry={deps.allowListsEntry}
+			listRows={deps.listRows}
 			onOpenLists={onOpenLists}
 		/>
 	);
@@ -93,7 +49,6 @@ type HomeCurrentListContentProps = {
 	syncState: ActiveListSyncState;
 	allowListsEntry: boolean;
 	listRows: ListRows;
-	onOpenNavigation: () => void;
 	onOpenLists?: () => void;
 };
 
@@ -103,7 +58,6 @@ function HomeCurrentListContent({
 	syncState,
 	allowListsEntry,
 	listRows,
-	onOpenNavigation,
 	onOpenLists,
 }: HomeCurrentListContentProps) {
 	const currentMemberName = sessionMemberDisplayName(session);
@@ -154,9 +108,7 @@ function HomeCurrentListContent({
 			currentMemberName={currentMemberName}
 			syncState={syncState}
 			listSummaries={listSummaries}
-			onOpenNavigation={onOpenNavigation}
 			onSelectList={(listId) => void switchList(listId, loadState.listId)}
-			onPressListName={allowListsEntry ? onOpenLists : undefined}
 		/>
 	);
 }
@@ -166,9 +118,7 @@ type ActiveCurrentListProps = {
 	currentMemberName: string;
 	syncState: ActiveListSyncState;
 	listSummaries: ListSummary[];
-	onOpenNavigation: () => void;
 	onSelectList: (listId: string) => void;
-	onPressListName?: () => void;
 };
 
 function ActiveCurrentList({
@@ -176,9 +126,7 @@ function ActiveCurrentList({
 	currentMemberName,
 	syncState,
 	listSummaries,
-	onOpenNavigation,
 	onSelectList,
-	onPressListName,
 }: ActiveCurrentListProps) {
 	const actions = useListActions({
 		items: loadState.list.items,
@@ -192,22 +140,22 @@ function ActiveCurrentList({
 	});
 
 	return (
-		<View style={styles.currentList}>
-			<ListHeader
-				currentListId={loadState.listId}
-				state={loadState.list}
-				meta={{
-					currentMemberName,
-					errorMessage: actions.errorMessage,
-					syncState,
-				}}
-				listSummaries={listSummaries}
-				onOpenNavigation={onOpenNavigation}
-				onSelectList={onSelectList}
-				onPressListName={onPressListName}
-			/>
+		<View collapsable={false} style={styles.currentList}>
 			<ItemRows
 				items={loadState.list.items}
+				listOverview={
+					<ListOverview
+						currentListId={loadState.listId}
+						state={loadState.list}
+						meta={{
+							currentMemberName,
+							errorMessage: actions.errorMessage,
+							syncState,
+						}}
+						listSummaries={listSummaries}
+						onSelectList={onSelectList}
+					/>
+				}
 				onToggleItem={actions.toggleItem}
 			/>
 			<AddItemForm
@@ -237,8 +185,9 @@ function addItemListOptions({
 	];
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
 	currentList: {
 		flex: 1,
+		backgroundColor: theme.colors.background,
 	},
-});
+}));

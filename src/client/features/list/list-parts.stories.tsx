@@ -5,7 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 
 import { AddItemForm } from "./add-item-form";
 import { ItemRows } from "./item-rows";
-import { ListHeader } from "./list-header";
+import { ListOverview } from "./list-overview";
 import {
 	addFixtureItem,
 	emptyActiveListState,
@@ -50,15 +50,20 @@ function ListPartsStory({ initialState }: { initialState: ActiveListState }) {
 
 	return (
 		<View style={styles.canvas}>
-			<ListHeader
-				state={state}
-				meta={{
-					currentMemberName: "Avery Chen",
-					errorMessage: actions.errorMessage,
-					syncState: "synced",
-				}}
+			<ItemRows
+				items={state.items}
+				listOverview={
+					<ListOverview
+						state={state}
+						meta={{
+							currentMemberName: "Avery Chen",
+							errorMessage: actions.errorMessage,
+							syncState: "synced",
+						}}
+					/>
+				}
+				onToggleItem={actions.toggleItem}
 			/>
-			<ItemRows items={state.items} onToggleItem={actions.toggleItem} />
 			<AddItemForm
 				currentListId="lst_story"
 				listOptions={[{ id: "lst_story", name: state.listName }]}

@@ -25,7 +25,6 @@ describe("CurrentList", () => {
 			<CurrentList
 				session={sessionFixture()}
 				deps={deps}
-				onOpenNavigation={jest.fn()}
 				onOpenLists={jest.fn()}
 			/>,
 			{ wrapper: TestSafeAreaProvider },
@@ -53,6 +52,8 @@ function activeListDeps(): HomeCurrentListDeps {
 			reload: jest.fn(),
 		},
 		syncState: "synced",
+		listRows: { status: "ready", summaries: [] },
+		allowListsEntry: false,
 	};
 }
 
@@ -64,6 +65,8 @@ function zeroActiveListDeps(): HomeCurrentListDeps {
 			reload: jest.fn(),
 		},
 		syncState: "synced",
+		listRows: { status: "ready", summaries: [] },
+		allowListsEntry: false,
 	};
 }
 

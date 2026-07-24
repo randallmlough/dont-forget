@@ -9,7 +9,7 @@ import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AddItemForm } from "./add-item-form";
 import { ItemRows } from "./item-rows";
-import { ListHeader } from "./list-header";
+import { ListOverview } from "./list-overview";
 import type { ListSummary } from "./list-service";
 import {
 	emptyActiveListState,
@@ -19,29 +19,25 @@ import {
 import type { ActiveListMeta, ActiveListState } from "./list-view-types";
 
 describe("List parts", () => {
-	it("renders header progress for an empty List", async () => {
+	it("renders overview progress for an empty List", async () => {
 		await renderWithSafeArea(
-			<ListHeader
-				state={emptyActiveListState}
-				meta={meta()}
-				onPressListName={jest.fn()}
-			/>,
+			<ListOverview state={emptyActiveListState} meta={meta()} />,
 		);
 
 		expect(await screen.findByText("No Items yet")).toBeTruthy();
 	});
 
-	it("renders header progress for a partially checked List", async () => {
+	it("renders overview progress for a partially checked List", async () => {
 		await renderWithSafeArea(
-			<ListHeader state={populatedActiveListState} meta={meta()} />,
+			<ListOverview state={populatedActiveListState} meta={meta()} />,
 		);
 
 		expect(await screen.findByText("1 of 3 Items checked")).toBeTruthy();
 	});
 
-	it("renders header progress for a fully checked List", async () => {
+	it("renders overview progress for a fully checked List", async () => {
 		await renderWithSafeArea(
-			<ListHeader
+			<ListOverview
 				state={withCheckedItems(populatedActiveListState)}
 				meta={meta()}
 			/>,
@@ -53,7 +49,7 @@ describe("List parts", () => {
 	it("switches directly from a quick List chip", async () => {
 		const onSelectList = jest.fn();
 		await renderWithSafeArea(
-			<ListHeader
+			<ListOverview
 				currentListId="lst_groceries"
 				state={populatedActiveListState}
 				meta={meta()}
@@ -80,7 +76,7 @@ describe("List parts", () => {
 		string,
 	][])("renders %s sync status", async (syncState, label) => {
 		await renderWithSafeArea(
-			<ListHeader state={populatedActiveListState} meta={meta(syncState)} />,
+			<ListOverview state={populatedActiveListState} meta={meta(syncState)} />,
 		);
 
 		expect(await screen.findByText(label)).toBeTruthy();

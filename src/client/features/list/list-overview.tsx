@@ -1,7 +1,6 @@
-import { SymbolView } from "expo-symbols";
 import { useMemo } from "react";
 import { Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { Button } from "@/client/ui/button";
 import type { ListSummary } from "./list-service";
 import type {
@@ -10,26 +9,21 @@ import type {
 	ActiveListSyncState,
 } from "./list-view-types";
 
-export type ListHeaderProps = {
+export type ListOverviewProps = {
 	currentListId?: string;
 	state: ActiveListState;
 	meta: ActiveListMeta;
 	listSummaries?: ListSummary[];
-	onOpenNavigation?: () => void;
 	onSelectList?: (listId: string) => void;
-	onPressListName?: () => void;
 };
 
-export function ListHeader({
+export function ListOverview({
 	currentListId,
 	state,
 	meta,
 	listSummaries = [],
-	onOpenNavigation,
 	onSelectList,
-	onPressListName,
-}: ListHeaderProps) {
-	const { theme } = useUnistyles();
+}: ListOverviewProps) {
 	const itemCount = state.items.length;
 	const checkedCount = state.items.filter((item) => item.checked).length;
 	const progress = itemCount === 0 ? 0 : (checkedCount / itemCount) * 100;
@@ -37,51 +31,14 @@ export function ListHeader({
 		itemCount === 0
 			? "No Items yet"
 			: `${checkedCount} of ${itemCount} Items checked`;
-	// Item toggles re-render the header; only List changes rebuild the chips.
+	// Item toggles re-render the overview; only List changes rebuild the chips.
 	const quickLists = useMemo(
 		() => quickListOptions(state.listName, currentListId, listSummaries),
 		[state.listName, currentListId, listSummaries],
 	);
 
 	return (
-		<View style={styles.header}>
-			{onOpenNavigation ? (
-				<Button
-					accessibilityLabel="Open navigation"
-					onPress={onOpenNavigation}
-					size="icon"
-					style={styles.menuButton}
-					variant="link"
-				>
-					<SymbolView
-						accessibilityElementsHidden
-						accessible={false}
-						name="line.3.horizontal"
-						size={22}
-						tintColor={theme.colors.foreground}
-						weight="medium"
-					/>
-				</Button>
-			) : null}
-			{onPressListName ? (
-				<Button
-					accessibilityLabel="Switch List"
-					accessibilityHint="Opens Lists"
-					onPress={onPressListName}
-					style={styles.listNameButton}
-					variant="link"
-				>
-					<Text style={styles.listName}>{state.listName}</Text>
-					<SymbolView
-						name="chevron.down"
-						size={16}
-						tintColor={theme.colors.foreground}
-						weight="semibold"
-					/>
-				</Button>
-			) : (
-				<Text style={styles.listName}>{state.listName}</Text>
-			)}
+		<View style={styles.overview}>
 			<View style={styles.quickLists}>
 				{quickLists.map((list) => {
 					const selected = list.id
@@ -176,36 +133,14 @@ function syncStatusStyle(syncState: ActiveListSyncState) {
 }
 
 const styles = StyleSheet.create((theme) => ({
-	header: {
+	overview: {
 		paddingHorizontal: theme.spacing(5),
-		paddingTop: theme.spacing(2),
+		paddingTop: theme.spacing(3),
 		paddingBottom: theme.spacing(4.5),
 		gap: theme.spacing(2),
 		backgroundColor: theme.colors.background,
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
-	},
-	menuButton: {
-		width: theme.spacing(11),
-		height: theme.spacing(11),
-		marginLeft: -theme.spacing(2.5),
-		alignItems: "center",
-		justifyContent: "center",
-		borderRadius: theme.radii.full,
-	},
-	householdName: {
-		...theme.typography.overline,
-		color: theme.colors.mutedForeground,
-	},
-	listNameButton: {
-		alignSelf: "flex-start",
-		flexDirection: "row",
-		alignItems: "center",
-		gap: theme.spacing(2),
-	},
-	listName: {
-		...theme.typography.largeTitle,
-		color: theme.colors.foreground,
 	},
 	quickLists: {
 		flexDirection: "row",
