@@ -14,7 +14,7 @@ import { HomeScreenView } from "@/client/screens/app/home-screen";
 import type { AuthenticatedAppSession } from "@/client/session";
 
 const meta = {
-	title: "Home/HomeScreen",
+	title: "screens/app/HomeScreen",
 	component: HomeScreenView,
 	parameters: {
 		noSafeArea: true,
