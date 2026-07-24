@@ -10,7 +10,7 @@ import {
 } from "./navigation-drawer";
 
 const meta = {
-	title: "AppShell/NavigationDrawer",
+	title: "Components/AppShell/NavigationDrawer",
 	component: NavigationDrawerView,
 	excludeStories: ["NavigationDrawerStory"],
 	argTypes: {

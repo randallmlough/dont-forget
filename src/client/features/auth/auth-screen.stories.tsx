@@ -16,7 +16,7 @@ const VERIFICATION_CODE_INDICES = [0, 1, 2, 3, 4, 5] as const;
 const VERIFICATION_CODE_PATTERN = /\d/;
 
 const meta = {
-	title: "Auth/AuthScreen",
+	title: "Features/Auth/AuthScreen",
 	component: AuthScreen,
 	args: {
 		title: "Don't Forget",
