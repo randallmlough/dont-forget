@@ -1,0 +1,108 @@
+diff --git a/build/swift-ui/modifiers/index.d.ts b/build/swift-ui/modifiers/index.d.ts
+index d31b598f58c87438fbcf1e02a832cfcbb5157a07..65abc01bf199a21611ff3cc3e3dbb6a19d80b3f1 100644
+--- a/build/swift-ui/modifiers/index.d.ts
++++ b/build/swift-ui/modifiers/index.d.ts
+@@ -423,9 +423,17 @@ export declare const grayscale: (amount: number) => ModifierConfig;
+ /**
+  * Sets the button style for button views.
+  * @param style - The button style. `'glass'` and `'glassProminent'` are available on iOS 26+ and tvOS 26+ only.
++ * @param options - Style-specific configuration. `glass` customizes the Liquid Glass material used by
++ * the `'glass'` style via `GlassButtonStyle(_:)` on iOS 26.1+; earlier versions fall back to the default glass style.
+  * @see Official [SwiftUI documentation](https://developer.apple.com/documentation/swiftui/view/buttonstyle(_:)).
+  */
+-export declare const buttonStyle: (style: "automatic" | "bordered" | "borderedProminent" | "borderless" | "glass" | "glassProminent" | "plain") => ModifierConfig;
++export declare const buttonStyle: (style: "automatic" | "bordered" | "borderedProminent" | "borderless" | "glass" | "glassProminent" | "plain", options?: {
++    glass?: {
++        variant: "regular" | "clear" | "identity";
++        interactive?: boolean;
++        tint?: Color;
++    };
++}) => ModifierConfig;
+ /**
+  * Sets the border shape used by buttons within this view.
+  * @param shape - The button border shape.
+diff --git a/ios/Modifiers/GlassEffectModifier.swift b/ios/Modifiers/GlassEffectModifier.swift
+index 3a32f89a86a36127af54b6bde47443813eb8ce45..e2154d218038edda56c85d9de622ac3a67d3658d 100644
+--- a/ios/Modifiers/GlassEffectModifier.swift
++++ b/ios/Modifiers/GlassEffectModifier.swift
+@@ -24,6 +24,24 @@ internal struct GlassEffectOptions: Record {
+   @Field var tint: Color?
+ }
+ 
++#if compiler(>=6.2) // Xcode 26
++@available(iOS 26.0, macOS 26.0, tvOS 26.0, *)
++extension GlassEffectOptions {
++  func toGlass() -> Glass {
++    let base: Glass
++    switch variant ?? .regular {
++    case .regular:
++      base = .regular
++    case .clear:
++      base = .clear
++    case .identity:
++      base = .identity
++    }
++    return base.interactive(interactive ?? false).tint(tint)
++  }
++}
++#endif
++
+ internal struct GlassEffectModifier: ViewModifier, Record {
+   @Field var glass: GlassEffectOptions?
+   @Field var shape: GlassEffectShape = .capsule
+diff --git a/ios/Modifiers/ViewModifierRegistry.swift b/ios/Modifiers/ViewModifierRegistry.swift
+index b4e026dfd6ecfaa1b8fd147bd1d8026c9071ae8d..8709a75548486050b2e7347cc89e65dc53a29b51 100644
+--- a/ios/Modifiers/ViewModifierRegistry.swift
++++ b/ios/Modifiers/ViewModifierRegistry.swift
+@@ -1353,6 +1353,7 @@ internal enum ButtonStyle: String, Enumerable {
+ 
+ internal struct ButtonStyleModifier: ViewModifier, Record {
+   @Field var style: ButtonStyle = .automatic
++  @Field var glass: GlassEffectOptions?
+ 
+   func body(content: Content) -> some View {
+     switch style {
+@@ -1369,7 +1370,11 @@ internal struct ButtonStyleModifier: ViewModifier, Record {
+     case .glass:
+       if #available(iOS 26.0, macOS 26.0, tvOS 26.0, *) {
+ #if compiler(>=6.2) // Xcode 26
+-        content.buttonStyle(.glass)
++        if #available(iOS 26.1, macOS 26.1, tvOS 26.1, *), let glass {
++          content.buttonStyle(GlassButtonStyle(glass.toGlass()))
++        } else {
++          content.buttonStyle(.glass)
++        }
+ #else
+         content.buttonStyle(.automatic)
+ #endif
+diff --git a/src/swift-ui/modifiers/index.ts b/src/swift-ui/modifiers/index.ts
+index 68339e43788d843976de18b984ce711799dc2835..e4160a1ddf68b2f28ec70f54c292d04fc026e686 100644
+--- a/src/swift-ui/modifiers/index.ts
++++ b/src/swift-ui/modifiers/index.ts
+@@ -525,6 +525,8 @@ export const grayscale = (amount: number) => createModifier('grayscale', { amoun
+ /**
+  * Sets the button style for button views.
+  * @param style - The button style. `'glass'` and `'glassProminent'` are available on iOS 26+ and tvOS 26+ only.
++ * @param options - Style-specific configuration. `glass` customizes the Liquid Glass material used by
++ * the `'glass'` style via `GlassButtonStyle(_:)` on iOS 26.1+; earlier versions fall back to the default glass style.
+  * @see Official [SwiftUI documentation](https://developer.apple.com/documentation/swiftui/view/buttonstyle(_:)).
+  */
+ export const buttonStyle = (
+@@ -535,8 +537,15 @@ export const buttonStyle = (
+     | 'borderless'
+     | 'glass'
+     | 'glassProminent'
+-    | 'plain'
+-) => createModifier('buttonStyle', { style });
++    | 'plain',
++  options?: {
++    glass?: {
++      variant: 'regular' | 'clear' | 'identity';
++      interactive?: boolean;
++      tint?: Color;
++    };
++  }
++) => createModifier('buttonStyle', { style, ...options });
+ 
+ /**
+  * Sets the border shape used by buttons within this view.
