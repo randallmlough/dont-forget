@@ -10,7 +10,7 @@ import { SettingsScreenView } from "../settings-screen";
 import { AppearanceScreenView } from "./appearance-screen";
 
 const meta = {
-	title: "Settings/Pages",
+	title: "screens/app/settings/SettingsPages",
 	decorators: [
 		(Story) => (
 			<SafeAreaProvider

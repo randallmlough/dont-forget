@@ -17,7 +17,7 @@ import type { ActiveListState } from "./list-view-types";
 import { useListActions } from "./use-list-actions";
 
 const meta = {
-	title: "List/List Parts",
+	title: "Features/List/List Parts",
 } satisfies Meta;
 
 export default meta;
