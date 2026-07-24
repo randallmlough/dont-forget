@@ -31,7 +31,7 @@ For non-trivial changes:
 
 - Read the relevant standards in this directory before editing.
 - Use the domain language from `CONTEXT.md` in code, tests, events, logs, and copy.
-- Keep route files thin and put screen-owned behavior in `src/client/features/<feature>/`.
+- Keep route files thin and put route-owned screens in `src/client/screens/`; keep feature UI, hooks, and services in `src/client/features/<feature>`.
 - Put product data access in client feature services or server domain modules.
 - Use Unistyles and theme tokens for app-owned styling.
 - Validate external boundaries with Zod.

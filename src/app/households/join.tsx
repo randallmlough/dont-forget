@@ -1,1 +1,1 @@
-export { HouseholdJoinScreen as default } from "@/client/features/household/public-household-entry-screen";
+export { default } from "@/client/screens/households/join-screen";

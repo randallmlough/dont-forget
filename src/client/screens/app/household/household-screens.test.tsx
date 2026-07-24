@@ -2,14 +2,14 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
+import type {
+	HouseholdSettingsActions,
+	HouseholdSettingsState,
+} from "@/client/features/household/use-household-settings";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { HouseholdSettingsView } from "./household-settings-screen";
 import { HouseholdSwitchView } from "./household-switch-screen";
 import { MembersInvitationsView } from "./members-invitations-screen";
-import type {
-	HouseholdSettingsActions,
-	HouseholdSettingsState,
-} from "./use-household-settings";
 
 const mockPush = jest.fn();
 

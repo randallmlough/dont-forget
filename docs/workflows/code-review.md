@@ -41,7 +41,7 @@ Check each applicable lane.
 ### Architecture and Boundaries
 
 - Are route files thin?
-- Does screen-owned behavior live under `src/client/features/<feature>/`?
+- Do route-owned screens live under `src/client/screens/`, with feature UI, hooks, and services under `src/client/features/<feature>/`?
 - Does reusable UI belong under `src/client/ui/`?
 - Is product data access behind client feature services or server domain modules?
 - Are server-only imports kept out of app-safe entrypoints?

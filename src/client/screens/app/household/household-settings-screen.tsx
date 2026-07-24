@@ -7,6 +7,12 @@ import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
+	type HouseholdSettingsActions,
+	type HouseholdSettingsOperation,
+	type HouseholdSettingsState,
+	useHouseholdSettings,
+} from "@/client/features/household/use-household-settings";
+import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
@@ -31,12 +37,6 @@ import {
 	ItemTitle,
 } from "@/client/ui/item";
 import { ScreenSection } from "@/client/ui/screen-section";
-import {
-	type HouseholdSettingsActions,
-	type HouseholdSettingsOperation,
-	type HouseholdSettingsState,
-	useHouseholdSettings,
-} from "./use-household-settings";
 
 export default function HouseholdSettingsScreen() {
 	const { state, session, retry, reloadSession } = useAuthenticatedAppSession();

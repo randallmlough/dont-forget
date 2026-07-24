@@ -3,7 +3,6 @@ import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
-import { HomeScreenView } from "@/client/features/list/home-screen";
 import {
 	addFixtureItem,
 	emptyActiveListState,
@@ -11,6 +10,7 @@ import {
 	setFixtureItemChecked,
 } from "@/client/features/list/list-test-support";
 import type { ActiveListState } from "@/client/features/list/list-view-types";
+import { HomeScreenView } from "@/client/screens/app/home-screen";
 import type { AuthenticatedAppSession } from "@/client/session";
 
 const meta = {

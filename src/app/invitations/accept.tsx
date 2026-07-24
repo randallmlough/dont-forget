@@ -1,1 +1,1 @@
-export { InvitationAcceptScreen as default } from "@/client/features/household/public-household-entry-screen";
+export { default } from "@/client/screens/invitations/accept-screen";

@@ -1,10 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
+import type {
+	SettingsActions,
+	SettingsState,
+} from "@/client/features/settings/use-settings";
+import { ProfileScreenView } from "../profile-screen";
+import { SettingsScreenView } from "../settings-screen";
 import { AppearanceScreenView } from "./appearance-screen";
-import { ProfileScreenView } from "./profile-screen";
-import { SettingsScreenView } from "./settings-screen";
-import type { SettingsActions, SettingsState } from "./use-settings";
 
 const meta = {
 	title: "Settings/Pages",

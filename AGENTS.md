@@ -10,7 +10,7 @@
 
 - **pnpm** (not npm or yarn), Expo SDK 56, TypeScript, Jest, Biome + ESLint, Clerk auth, PowerSync + Postgres sync.
 - `src/app/` — expo-router routes (incl. `src/app/api/**/+api.ts`); keep route files thin.
-- `src/client/` — the iOS app: `src/client/features/<feature>/` (screens, hooks, feature services), `src/client/session/` (Authenticated App Session + PowerSync), `src/client/lib/`, `src/client/theme/` (Unistyles theme tokens), `src/client/ui/`.
+- `src/client/` — the iOS app: `src/client/screens/` (route-owned screens), `src/client/features/<feature>/` (feature UI, hooks, feature services), `src/client/session/` (Authenticated App Session + PowerSync), `src/client/lib/`, `src/client/theme/` (Unistyles theme tokens), `src/client/ui/`.
 - `src/server/` — server domain modules (`src/server/bootstrap/`, `src/server/data/`, `src/server/db/`, `src/server/households/`, `src/server/invitations/`, `src/server/sync/`, `src/server/users/`); all server SQL and Drizzle schema/migrations live under `src/server/db/`.
 - `src/shared/` — wire contracts and cross-boundary helpers (Zod contracts, env, analytics events).
 - `tooling/` — repo tooling: ESLint plugin, Expo config plugins, scripts.

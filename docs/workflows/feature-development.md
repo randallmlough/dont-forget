@@ -13,7 +13,7 @@ Ship the smallest vertical slice that satisfies the requested behavior, with tes
 3. Search `docs/adr/` and `docs/how-things-work/` for the owning system, and `docs/guides/` for artifact-specific recipes.
 4. Identify the owner boundary:
    - route wiring in `src/app/`;
-   - screen-owned behavior in `src/client/features/<feature>/`;
+   - route-owned screens in `src/client/screens/` and feature UI, hooks, and services in `src/client/features/<feature>/`;
    - reusable UI primitives in `src/client/ui/`;
    - product data access in client feature services or server domain modules;
    - migrations and database helpers in `src/server/db/`.

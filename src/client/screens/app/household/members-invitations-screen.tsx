@@ -16,6 +16,12 @@ import type {
 	PendingInvitation,
 } from "@/client/features/household/api";
 import {
+	type HouseholdSettingsActions,
+	type HouseholdSettingsOperation,
+	type HouseholdSettingsState,
+	useHouseholdSettings,
+} from "@/client/features/household/use-household-settings";
+import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
@@ -42,12 +48,6 @@ import {
 	ItemTitle,
 } from "@/client/ui/item";
 import { themedAlert } from "@/client/ui/native-dialogs";
-import {
-	type HouseholdSettingsActions,
-	type HouseholdSettingsOperation,
-	type HouseholdSettingsState,
-	useHouseholdSettings,
-} from "./use-household-settings";
 
 type CollaborationRow =
 	| { type: "section"; id: string; title: string }

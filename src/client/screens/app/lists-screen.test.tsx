@@ -18,17 +18,17 @@ import type {
 	List,
 	ListSummary,
 } from "@/client/features/list/list-service";
+import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
+import { useListRows } from "@/client/features/list/use-list-rows";
+import {
+	type ProductServices,
+	useProductServices,
+} from "@/client/features/list/use-product-services";
 import { track } from "@/client/lib/analytics";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useAuthenticatedAppSession } from "@/client/session";
 import { deferred } from "@/test/async";
 import ListsScreen from "./lists-screen";
-import { useHomeCurrentList } from "./use-home-current-list";
-import { useListRows } from "./use-list-rows";
-import {
-	type ProductServices,
-	useProductServices,
-} from "./use-product-services";
 
 const mockReplace = jest.fn();
 const mockAlert = jest.spyOn(Alert, "alert");
@@ -42,12 +42,16 @@ jest.mock("@/client/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
 }));
 
-jest.mock("./use-home-current-list", () => ({
+jest.mock("@/client/features/list/use-home-current-list", () => ({
 	useHomeCurrentList: jest.fn(),
 }));
 
-jest.mock("./use-list-rows", () => ({ useListRows: jest.fn() }));
-jest.mock("./use-product-services", () => ({ useProductServices: jest.fn() }));
+jest.mock("@/client/features/list/use-list-rows", () => ({
+	useListRows: jest.fn(),
+}));
+jest.mock("@/client/features/list/use-product-services", () => ({
+	useProductServices: jest.fn(),
+}));
 jest.mock("@/client/features/list/current-selection", () => ({
 	clearCurrentListSelection: jest.fn(),
 	setCurrentListSelection: jest.fn(),

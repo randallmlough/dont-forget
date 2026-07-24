@@ -9,6 +9,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
+	type HouseholdSwitchOperation,
+	type HouseholdSwitchState,
+	useHouseholdSwitch,
+} from "@/client/features/household/use-household-switch";
+import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
@@ -32,11 +37,6 @@ import {
 	ItemTitle,
 } from "@/client/ui/item";
 import { ScreenSection } from "@/client/ui/screen-section";
-import {
-	type HouseholdSwitchOperation,
-	type HouseholdSwitchState,
-	useHouseholdSwitch,
-} from "./use-household-switch";
 
 type HouseholdRow = AuthenticatedAppSession["households"][number];
 type HouseholdFormMode = "none" | "create" | "join";

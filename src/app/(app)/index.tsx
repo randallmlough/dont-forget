@@ -1,1 +1,1 @@
-export { default } from "@/client/features/list/home-screen";
+export { default } from "@/client/screens/app/home-screen";
