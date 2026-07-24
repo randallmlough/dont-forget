@@ -1,12 +1,10 @@
+import {
+	autocorrectionDisabled,
+	textInputAutocapitalization,
+} from "@expo/ui/swift-ui/modifiers";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useState } from "react";
-import {
-	ActivityIndicator,
-	FlatList,
-	Text,
-	TextInput,
-	View,
-} from "react-native";
+import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
@@ -20,6 +18,9 @@ import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Badge } from "@/client/ui/badge";
 import { Button } from "@/client/ui/button";
 import { Card, CardContent } from "@/client/ui/card";
+import { Field, FieldLabel } from "@/client/ui/field";
+import { Form } from "@/client/ui/form";
+import { Input } from "@/client/ui/input";
 import {
 	ItemActions,
 	ItemContent,
@@ -287,20 +288,22 @@ function CreateHouseholdForm({
 	const creating = state.operation.status === "creatingHousehold";
 	return (
 		<Card>
-			<CardContent style={styles.form}>
-				<Text style={styles.fieldLabel}>Household Name</Text>
-				<TextInput
-					accessibilityLabel="New Household name"
-					autoCapitalize="words"
-					editable={!busy}
-					onChangeText={onHouseholdNameChange}
-					placeholder="Optional name"
-					style={styles.input}
-					value={state.householdName}
-				/>
-				<Button disabled={busy} onPress={onCreateHousehold}>
-					{creating ? "Creating" : "Create Household"}
-				</Button>
+			<CardContent style={styles.formCardContent}>
+				<Form>
+					<Field disabled={busy}>
+						<FieldLabel>Household Name</FieldLabel>
+						<Input
+							accessibilityLabel="New Household name"
+							defaultValue={state.householdName}
+							modifiers={[textInputAutocapitalization("words")]}
+							onTextChange={onHouseholdNameChange}
+							placeholder="Optional name"
+						/>
+					</Field>
+					<Button disabled={busy} onPress={onCreateHousehold}>
+						{creating ? "Creating" : "Create Household"}
+					</Button>
+				</Form>
 			</CardContent>
 		</Card>
 	);
@@ -319,20 +322,25 @@ function JoinByCodeForm({
 	const joining = state.operation.status === "joiningByCode";
 	return (
 		<Card>
-			<CardContent style={styles.form}>
-				<Text style={styles.fieldLabel}>Household Join Code</Text>
-				<TextInput
-					accessibilityLabel="Household Join Code"
-					autoCapitalize="characters"
-					editable={!busy}
-					onChangeText={onCodeChange}
-					placeholder="ABCDEFGH"
-					style={styles.input}
-					value={state.code}
-				/>
-				<Button disabled={busy} onPress={onJoinByCode}>
-					{joining ? "Joining" : "Join Household"}
-				</Button>
+			<CardContent style={styles.formCardContent}>
+				<Form>
+					<Field disabled={busy}>
+						<FieldLabel>Household Join Code</FieldLabel>
+						<Input
+							accessibilityLabel="Household Join Code"
+							defaultValue={state.code}
+							modifiers={[
+								textInputAutocapitalization("characters"),
+								autocorrectionDisabled(),
+							]}
+							onTextChange={onCodeChange}
+							placeholder="ABCDEFGH"
+						/>
+					</Field>
+					<Button disabled={busy} onPress={onJoinByCode}>
+						{joining ? "Joining" : "Join Household"}
+					</Button>
+				</Form>
 			</CardContent>
 		</Card>
 	);
@@ -463,25 +471,9 @@ const styles = StyleSheet.create((theme) => ({
 		gap: theme.spacing(4),
 		paddingTop: theme.spacing(6),
 	},
-	form: {
-		gap: theme.spacing(3),
+	formCardContent: {
 		padding: theme.spacing(4),
 		paddingTop: theme.spacing(4),
-	},
-	fieldLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.mutedForeground,
-		textTransform: "uppercase",
-	},
-	input: {
-		minHeight: theme.spacing(12),
-		paddingHorizontal: theme.spacing(3),
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.input,
-		borderRadius: theme.radii.xl,
-		backgroundColor: theme.colors.glassTint,
-		color: theme.colors.foreground,
-		...theme.typography.body,
 	},
 	footer: {
 		...theme.typography.caption,

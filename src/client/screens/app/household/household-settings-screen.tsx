@@ -1,15 +1,9 @@
+import { textInputAutocapitalization } from "@expo/ui/swift-ui/modifiers";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import {
-	ActivityIndicator,
-	Alert,
-	ScrollView,
-	Text,
-	TextInput,
-	View,
-} from "react-native";
+import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
@@ -21,6 +15,9 @@ import {
 import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
 import { Card, CardContent } from "@/client/ui/card";
+import { Field, FieldLabel } from "@/client/ui/field";
+import { Form } from "@/client/ui/form";
+import { Input } from "@/client/ui/input";
 import {
 	Item,
 	ItemActions,
@@ -246,17 +243,17 @@ function HouseholdNameRow({
 	}
 
 	return (
-		<View style={styles.renameForm}>
-			<Text style={styles.inputLabel}>Household Name</Text>
-			<TextInput
-				accessibilityLabel="Household name"
-				autoCapitalize="words"
-				editable={!renaming}
-				onChangeText={setDraftName}
-				placeholder="Household name"
-				style={styles.input}
-				value={draftName}
-			/>
+		<Form style={styles.renameForm}>
+			<Field disabled={renaming}>
+				<FieldLabel>Household Name</FieldLabel>
+				<Input
+					accessibilityLabel="Household name"
+					defaultValue={draftName}
+					modifiers={[textInputAutocapitalization("words")]}
+					onTextChange={setDraftName}
+					placeholder="Household name"
+				/>
+			</Field>
 			<View style={styles.formActions}>
 				<Button
 					disabled={renaming}
@@ -276,7 +273,7 @@ function HouseholdNameRow({
 					Cancel
 				</Button>
 			</View>
-		</View>
+		</Form>
 	);
 }
 
@@ -472,25 +469,9 @@ const styles = StyleSheet.create((theme) => ({
 		paddingTop: theme.spacing(4),
 	},
 	renameForm: {
-		gap: theme.spacing(3),
 		padding: theme.spacing(4),
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
-	},
-	inputLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.mutedForeground,
-		textTransform: "uppercase",
-	},
-	input: {
-		minHeight: theme.spacing(12),
-		paddingHorizontal: theme.spacing(3),
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.input,
-		borderRadius: theme.radii.xl,
-		backgroundColor: theme.colors.glassTint,
-		color: theme.colors.foreground,
-		...theme.typography.body,
 	},
 	formActions: {
 		flexDirection: "row",

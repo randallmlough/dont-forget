@@ -108,7 +108,7 @@ describe("SignUpScreen", () => {
 		expect(
 			screen.getByText("We sent a verification code to member@example.com."),
 		).toBeTruthy();
-		expect(screen.getByPlaceholderText("Verification code")).toBeTruthy();
+		expect(screen.getByLabelText("Verification code")).toBeTruthy();
 		expect(Alert.alert).not.toHaveBeenCalled();
 	});
 
@@ -160,7 +160,7 @@ describe("SignUpScreen", () => {
 		});
 
 		await fireEvent.changeText(
-			screen.getByPlaceholderText("Verification code"),
+			screen.getByLabelText("Verification code"),
 			" 123456 ",
 		);
 		await fireEvent.press(screen.getByText("Verify email"));
@@ -198,7 +198,7 @@ describe("SignUpScreen", () => {
 		});
 
 		await fireEvent.changeText(
-			screen.getByPlaceholderText("Verification code"),
+			screen.getByLabelText("Verification code"),
 			"123456",
 		);
 		await fireEvent.press(screen.getByText("Verify email"));
@@ -218,7 +218,7 @@ describe("SignUpScreen", () => {
 		);
 
 		await fireEvent.changeText(
-			screen.getByPlaceholderText("Verification code"),
+			screen.getByLabelText("Verification code"),
 			"123456",
 		);
 		await fireEvent.press(screen.getByText("Verify email"));

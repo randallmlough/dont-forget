@@ -1,12 +1,20 @@
+import {
+	submitLabel,
+	textContentType,
+	textInputAutocapitalization,
+} from "@expo/ui/swift-ui/modifiers";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
 import { Card, CardContent } from "@/client/ui/card";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/client/ui/field";
+import { Form } from "@/client/ui/form";
+import { Input } from "@/client/ui/input";
 import {
 	Item,
 	ItemActions,
@@ -197,61 +205,65 @@ function UserNameForm({
 
 	return (
 		<Card>
-			<CardContent style={styles.form}>
-				<View style={styles.field}>
-					<Text style={styles.fieldLabel}>First Name</Text>
-					<TextInput
-						accessibilityLabel="First name"
-						autoCapitalize="words"
-						autoComplete="given-name"
-						editable={!state.userUpdateInFlight}
-						onChangeText={setFirstNameDraft}
-						placeholder="First name"
-						returnKeyType="next"
-						style={styles.input}
-						value={firstName}
+			<CardContent style={styles.formCardContent}>
+				<Form>
+					<FieldGroup>
+						<Field disabled={state.userUpdateInFlight}>
+							<FieldLabel>First Name</FieldLabel>
+							<Input
+								accessibilityLabel="First name"
+								defaultValue={firstName}
+								modifiers={[
+									textContentType("givenName"),
+									textInputAutocapitalization("words"),
+									submitLabel("next"),
+								]}
+								onTextChange={setFirstNameDraft}
+								placeholder="First name"
+							/>
+						</Field>
+						<Field disabled={state.userUpdateInFlight}>
+							<FieldLabel>Last Name</FieldLabel>
+							<Input
+								accessibilityLabel="Last name"
+								defaultValue={lastName}
+								modifiers={[
+									textContentType("familyName"),
+									textInputAutocapitalization("words"),
+									submitLabel("done"),
+								]}
+								onTextChange={setLastNameDraft}
+								placeholder="Last name"
+							/>
+						</Field>
+					</FieldGroup>
+					<FieldError
+						errors={[
+							...(validationMessage ? [validationMessage] : []),
+							...(state.userError ? [state.userError] : []),
+						]}
 					/>
-				</View>
-				<View style={styles.field}>
-					<Text style={styles.fieldLabel}>Last Name</Text>
-					<TextInput
-						accessibilityLabel="Last name"
-						autoCapitalize="words"
-						autoComplete="family-name"
-						editable={!state.userUpdateInFlight}
-						onChangeText={setLastNameDraft}
-						placeholder="Last name"
-						returnKeyType="done"
-						style={styles.input}
-						value={lastName}
-					/>
-				</View>
-				{validationMessage ? (
-					<Text style={styles.formError}>{validationMessage}</Text>
-				) : null}
-				{state.userError ? (
-					<Text style={styles.formError}>{state.userError}</Text>
-				) : null}
-				{state.userNotice ? (
-					<Text style={styles.formNotice}>{state.userNotice}</Text>
-				) : null}
-				<View style={styles.formActions}>
-					<Button
-						disabled={state.userUpdateInFlight}
-						onPress={() => {
-							void saveUserName();
-						}}
-					>
-						{state.userUpdateInFlight ? "Saving" : "Save"}
-					</Button>
-					<Button
-						disabled={state.userUpdateInFlight}
-						onPress={onCancel}
-						variant="outline"
-					>
-						Cancel
-					</Button>
-				</View>
+					{state.userNotice ? (
+						<Text style={styles.formNotice}>{state.userNotice}</Text>
+					) : null}
+					<View style={styles.formActions}>
+						<Button
+							disabled={state.userUpdateInFlight}
+							onPress={() => {
+								void saveUserName();
+							}}
+						>
+							{state.userUpdateInFlight ? "Saving" : "Save"}
+						</Button>
+						<Button
+							disabled={state.userUpdateInFlight}
+							onPress={onCancel}
+							variant="outline"
+						>
+							Cancel
+						</Button>
+					</View>
+				</Form>
 			</CardContent>
 		</Card>
 	);
@@ -322,36 +334,13 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.mutedForeground,
 		textAlign: "center",
 	},
-	form: {
-		gap: theme.spacing(3),
+	formCardContent: {
 		padding: theme.spacing(4),
 		paddingTop: theme.spacing(4),
-	},
-	field: {
-		gap: theme.spacing(1),
-	},
-	fieldLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.mutedForeground,
-		textTransform: "uppercase",
-	},
-	input: {
-		minHeight: theme.spacing(12),
-		paddingHorizontal: theme.spacing(3),
-		borderWidth: theme.borders.hairline,
-		borderColor: theme.colors.input,
-		borderRadius: theme.radii.xl,
-		backgroundColor: theme.colors.glassTint,
-		color: theme.colors.foreground,
-		...theme.typography.body,
 	},
 	formActions: {
 		flexDirection: "row",
 		gap: theme.spacing(2),
-	},
-	formError: {
-		...theme.typography.callout,
-		color: theme.colors.destructive,
 	},
 	formNotice: {
 		...theme.typography.callout,
