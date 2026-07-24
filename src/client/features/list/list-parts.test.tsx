@@ -10,7 +10,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AddItemForm } from "./add-item-form";
 import { ItemRows } from "./item-rows";
 import { ListOverview } from "./list-overview";
-import type { ListSummary } from "./list-service";
 import {
 	emptyActiveListState,
 	largeActiveListState,
@@ -44,26 +43,6 @@ describe("List parts", () => {
 		);
 
 		expect(await screen.findByText("3 of 3 Items checked")).toBeTruthy();
-	});
-
-	it("switches directly from a quick List chip", async () => {
-		const onSelectList = jest.fn();
-		await renderWithSafeArea(
-			<ListOverview
-				currentListId="lst_groceries"
-				state={populatedActiveListState}
-				meta={meta()}
-				listSummaries={[
-					listSummary("lst_groceries", "Groceries"),
-					listSummary("lst_costco", "Costco"),
-				]}
-				onSelectList={onSelectList}
-			/>,
-		);
-
-		await fireEvent.press(await screen.findByText("Costco"));
-
-		expect(onSelectList).toHaveBeenCalledWith("lst_costco");
 	});
 
 	it.each([
@@ -229,21 +208,5 @@ function withCheckedItems(state: ActiveListState): ActiveListState {
 			...item,
 			checked: true,
 		})),
-	};
-}
-
-function listSummary(id: string, name: string): ListSummary {
-	return {
-		id,
-		householdId: "hh_avery",
-		name,
-		createdByUserId: "usr_avery",
-		createdAt: 1,
-		updatedAt: 1,
-		archived: false,
-		archivedAt: null,
-		lastActivityAt: 1,
-		uncheckedItemCount: 0,
-		checkedItemCount: 0,
 	};
 }

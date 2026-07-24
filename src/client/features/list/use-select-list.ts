@@ -4,11 +4,10 @@ import { track } from "@/client/lib/analytics";
 import type { AuthenticatedAppSession } from "@/client/session";
 
 /**
- * Shared Current List switch flow for the quick-list chips and the Home List
- * switcher: persists the explicit local selection, then emits `list_switched`
- * only after persistence succeeds. Resolves false — emitting nothing and
- * changing nothing — for a current-List tap, a still-running switch, or a
- * persistence failure.
+ * Current List switch flow for the Lists screen: persists the explicit local
+ * selection, then emits `list_switched` only after persistence succeeds.
+ * Resolves false — emitting nothing and changing nothing — for a current-List
+ * tap, a still-running switch, or a persistence failure.
  */
 export function useSelectList(session: AuthenticatedAppSession) {
 	const switchingRef = useRef(false);

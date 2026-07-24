@@ -14,7 +14,6 @@ import type { ActiveListSyncState } from "./list-view-types";
 import type { HomeCurrentListData } from "./use-home-current-list";
 import { useListActions } from "./use-list-actions";
 import type { ListRows } from "./use-list-rows";
-import { useSelectList } from "./use-select-list";
 
 export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
@@ -32,12 +31,7 @@ export function CurrentList({ session, deps, onOpenLists }: CurrentListProps) {
 	const { currentList, syncState, listRows } = deps;
 	const currentMemberName = sessionMemberDisplayName(session);
 	const loadState = currentList.state;
-	const selectList = useSelectList(session);
 	const listSummaries = listRows.status === "ready" ? listRows.summaries : [];
-
-	async function switchList(listId: string, currentListId: string) {
-		if (await selectList(listId, currentListId)) currentList.reload();
-	}
 
 	if (loadState.status === "loading") {
 		return (
@@ -76,7 +70,6 @@ export function CurrentList({ session, deps, onOpenLists }: CurrentListProps) {
 			currentMemberName={currentMemberName}
 			syncState={syncState}
 			listSummaries={listSummaries}
-			onSelectList={(listId) => void switchList(listId, loadState.listId)}
 		/>
 	);
 }
@@ -86,7 +79,6 @@ type ActiveCurrentListProps = {
 	currentMemberName: string;
 	syncState: ActiveListSyncState;
 	listSummaries: ListSummary[];
-	onSelectList: (listId: string) => void;
 };
 
 function ActiveCurrentList({
@@ -94,7 +86,6 @@ function ActiveCurrentList({
 	currentMemberName,
 	syncState,
 	listSummaries,
-	onSelectList,
 }: ActiveCurrentListProps) {
 	const actions = useListActions({
 		items: loadState.list.items,
@@ -116,15 +107,12 @@ function ActiveCurrentList({
 				items={loadState.list.items}
 				listOverview={
 					<ListOverview
-						currentListId={loadState.listId}
 						state={loadState.list}
 						meta={{
 							currentMemberName,
 							errorMessage: actions.errorMessage,
 							syncState,
 						}}
-						listSummaries={listSummaries}
-						onSelectList={onSelectList}
 					/>
 				}
 				onToggleItem={actions.toggleItem}
