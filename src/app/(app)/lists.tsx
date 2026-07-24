@@ -1,1 +1,1 @@
-export { default } from "@/client/features/list/lists-screen";
+export { default } from "@/client/screens/app/lists-screen";

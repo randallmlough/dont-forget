@@ -1,1 +1,1 @@
-export { default } from "@/client/features/settings/appearance-screen";
+export { default } from "@/client/screens/app/settings/appearance-screen";

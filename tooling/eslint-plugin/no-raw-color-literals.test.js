@@ -37,7 +37,7 @@ ruleTester.run("no-raw-color-literals", rule, {
 			errors: [{ messageId: "rawColor" }],
 		},
 		{
-			filename: "/repo/src/client/features/list/home-screen.tsx",
+			filename: "/repo/src/client/screens/app/home-screen.tsx",
 			code: `const styles = { backgroundColor: "rgba(255, 255, 255, 0.8)" };`,
 			errors: [{ messageId: "rawColor" }],
 		},

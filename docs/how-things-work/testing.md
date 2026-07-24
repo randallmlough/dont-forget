@@ -115,7 +115,7 @@ make db-reseed EMAIL=email@email.com
 - `src/test/mocks/` contains reusable mock modules and fixtures, including observability helpers such as analytics module mocks and logger injection fixtures.
 - `src/server/db/test.ts` owns local temp DB helpers.
 - Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `src/server/db/test.ts` for test suites.
-- Screen flow tests live next to the screen they exercise, e.g. `src/client/features/auth/sign-in-screen.test.tsx`.
+- Screen flow tests live next to the screen they exercise, e.g. `src/client/screens/auth/sign-in-screen.test.tsx`.
 - Non-route modules colocate tests next to source, e.g. `src/shared/redact.test.ts`.
 
 Do not put test files in `src/app/`; Expo Router treats files there as routes or layouts.
@@ -155,4 +155,4 @@ Coverage is visible through `pnpm test:coverage`, but there is no global thresho
 
 - `src/shared/redact.test.ts` shows a focused pure-helper unit test.
 - `src/server/db/migrations.test.ts` shows a local Postgres migration integration test.
-- `src/client/features/auth/sign-in-screen.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.
+- `src/client/screens/auth/sign-in-screen.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.

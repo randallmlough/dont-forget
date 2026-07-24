@@ -9,8 +9,8 @@
 ## App Structure And Routing
 
 - **Must** keep Expo Router route files in `src/app/` thin when practical.
-- **Must** put route-owned UI and screen-local side effects in `src/client/features/<feature>/`.
-- **Must** colocate route-owned hooks, reducers, state-machine helpers, and helper types under the owning `src/client/features/<feature>/` directory.
+- **Must** put route-owned screens and screen-local side effects in `src/client/screens/`.
+- **Must** colocate screen-local hooks, reducers, state-machine helpers, and helper types with their owning screen under `src/client/screens/`; keep feature-shared hooks under `src/client/features/<feature>/`.
 - **Must** put reusable app UI primitives in `src/client/ui/`.
 - **Must** keep reusable component-owned hooks inside that component's directory when they are not app-wide APIs.
 - **Must** use route groups consistently: `src/app/(app)` for authenticated app routes and `src/app/(auth)` for signed-out auth routes.

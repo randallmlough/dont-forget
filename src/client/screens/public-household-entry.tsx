@@ -1,50 +1,9 @@
-import { useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
-import { useAuthenticatedAppSession } from "@/client/session";
+import type { PublicHouseholdEntryState } from "@/client/features/household/use-public-household-entry";
 import { Button } from "@/client/ui/button";
 import { Card, CardDescription, CardTitle } from "@/client/ui/card";
-import {
-	type PublicHouseholdEntryState,
-	usePublicHouseholdEntry,
-} from "./use-public-household-entry";
-
-export function InvitationAcceptScreen() {
-	const params = useLocalSearchParams<{ token?: string }>();
-	const { reloadSession } = useAuthenticatedAppSession();
-	const entry = usePublicHouseholdEntry({
-		kind: "invitation",
-		secret: firstParam(params.token),
-		reloadSession,
-	});
-
-	return (
-		<PublicHouseholdEntryView
-			state={entry.state}
-			primaryLabel="Accept Invitation"
-			onSubmit={entry.submit}
-		/>
-	);
-}
-
-export function HouseholdJoinScreen() {
-	const params = useLocalSearchParams<{ code?: string }>();
-	const { reloadSession } = useAuthenticatedAppSession();
-	const entry = usePublicHouseholdEntry({
-		kind: "joinCode",
-		secret: firstParam(params.code),
-		reloadSession,
-	});
-
-	return (
-		<PublicHouseholdEntryView
-			state={entry.state}
-			primaryLabel="Join Household"
-			onSubmit={entry.submit}
-		/>
-	);
-}
 
 export function PublicHouseholdEntryView({
 	state,
@@ -98,7 +57,7 @@ export function PublicHouseholdEntryView({
 	);
 }
 
-function firstParam(value: string | string[] | undefined): string | null {
+export function firstParam(value: string | string[] | undefined): string | null {
 	if (typeof value === "string") return value;
 	return value?.[0] ?? null;
 }

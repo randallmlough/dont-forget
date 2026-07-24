@@ -1,1 +1,1 @@
-export { default } from "@/client/features/household/household-switch-screen";
+export { default } from "@/client/screens/app/household/household-switch-screen";

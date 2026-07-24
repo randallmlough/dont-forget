@@ -1,1 +1,1 @@
-export { default } from "@/client/features/household/members-invitations-screen";
+export { default } from "@/client/screens/app/household/members-invitations-screen";

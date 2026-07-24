@@ -8,8 +8,8 @@ import {
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { CurrentList, type HomeCurrentListDeps } from "./current-list";
-import { HomeRetryButton, HomeStatus } from "./home-status";
+import { CurrentList, type HomeCurrentListDeps } from "@/client/features/list/current-list";
+import { HomeRetryButton, HomeStatus } from "@/client/features/list/home-status";
 
 export type HomeScreenViewProps = {
 	state: AuthenticatedAppSessionState;

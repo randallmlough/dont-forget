@@ -60,17 +60,17 @@ Current screen routes:
 
 | URL | Route File | Screen |
 | --- | --- | --- |
-| `/` | `src/app/(app)/index.tsx` | `src/client/features/list/home-screen.tsx` |
-| `/settings` | `src/app/(app)/settings.tsx` | `src/client/features/settings/settings-screen.tsx` |
-| `/settings/appearance` | `src/app/(app)/settings/appearance.tsx` | `src/client/features/settings/appearance-screen.tsx` |
-| `/profile` | `src/app/(app)/profile.tsx` | `src/client/features/settings/profile-screen.tsx` |
-| `/household/settings` | `src/app/(app)/household/settings.tsx` | `src/client/features/household/household-settings-screen.tsx` |
-| `/household/members` | `src/app/(app)/household/members.tsx` | `src/client/features/household/members-invitations-screen.tsx` |
-| `/household/switch` | `src/app/(app)/household/switch.tsx` | `src/client/features/household/household-switch-screen.tsx` |
-| `/sign-in` | `src/app/(auth)/sign-in.tsx` | `src/client/features/auth/sign-in-screen.tsx` |
-| `/sign-up` | `src/app/(auth)/sign-up.tsx` | `src/client/features/auth/sign-up-screen.tsx` |
-| `/households/join` | `src/app/households/join.tsx` | `HouseholdJoinScreen` from `src/client/features/household/public-household-entry-screen.tsx` |
-| `/invitations/accept` | `src/app/invitations/accept.tsx` | `InvitationAcceptScreen` from `src/client/features/household/public-household-entry-screen.tsx` |
+| `/` | `src/app/(app)/index.tsx` | `src/client/screens/app/home-screen.tsx` |
+| `/settings` | `src/app/(app)/settings.tsx` | `src/client/screens/app/settings-screen.tsx` |
+| `/settings/appearance` | `src/app/(app)/settings/appearance.tsx` | `src/client/screens/app/settings/appearance-screen.tsx` |
+| `/profile` | `src/app/(app)/profile.tsx` | `src/client/screens/app/profile-screen.tsx` |
+| `/household/settings` | `src/app/(app)/household/settings.tsx` | `src/client/screens/app/household/household-settings-screen.tsx` |
+| `/household/members` | `src/app/(app)/household/members.tsx` | `src/client/screens/app/household/members-invitations-screen.tsx` |
+| `/household/switch` | `src/app/(app)/household/switch.tsx` | `src/client/screens/app/household/household-switch-screen.tsx` |
+| `/sign-in` | `src/app/(auth)/sign-in.tsx` | `src/client/screens/auth/sign-in-screen.tsx` |
+| `/sign-up` | `src/app/(auth)/sign-up.tsx` | `src/client/screens/auth/sign-up-screen.tsx` |
+| `/households/join` | `src/app/households/join.tsx` | `src/client/screens/households/join-screen.tsx` |
+| `/invitations/accept` | `src/app/invitations/accept.tsx` | `src/client/screens/invitations/accept-screen.tsx` |
 
 ## Root Layout
 
@@ -119,10 +119,10 @@ Add authenticated app routes under `src/app/(app)`. Add signed-out auth routes u
 Keep route files thin. Prefer this shape:
 
 ```tsx
-export { default } from "@/client/features/example/example-screen";
+export { default } from "@/client/screens/app/example-screen";
 ```
 
-Put screen-owned code in `src/client/features/<feature>/`. Put reusable UI primitives in `src/client/ui/`.
+Put screen-owned code in `src/client/screens/`. Keep feature UI, hooks, and services in `src/client/features/<feature>/`; put reusable UI primitives in `src/client/ui/`.
 
 ## Tests
 

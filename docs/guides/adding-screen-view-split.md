@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use this guide to add or change an Expo Router route that delegates to screen-owned code under `src/client/features/<feature>/`.
+Use this guide to add or change an Expo Router route that delegates to screen-owned code under `src/client/screens/`.
 
 A screen/view split keeps route files thin while making UI states testable and Storybook-friendly.
 
@@ -22,9 +22,9 @@ Inspect existing examples:
 - `src/app/(app)/index.tsx`
 - `src/app/(auth)/sign-in.tsx`
 - `src/app/(auth)/sign-up.tsx`
-- `src/client/features/list/home-screen.tsx`
-- `src/client/features/list/home-screen.test.tsx`
-- `src/client/features/list/home-screen.stories.tsx`
+- `src/client/screens/app/home-screen.tsx`
+- `src/client/screens/app/home-screen.test.tsx`
+- `src/client/screens/app/home-screen.stories.tsx`
 
 ## Files and naming
 
@@ -32,13 +32,13 @@ Authenticated routes go under `src/app/(app)/`.
 
 Signed-out auth routes go under `src/app/(auth)/`.
 
-Screen-owned code goes under `src/client/features/<feature>/`:
+Screen-owned code goes under `src/client/screens/`:
 
 ```text
 src/app/(app)/example.tsx
-src/client/features/example/example-screen.tsx
-src/client/features/example/example-screen.test.tsx
-src/client/features/example/example-screen.stories.tsx
+src/client/screens/app/example-screen.tsx
+src/client/screens/app/example-screen.test.tsx
+src/client/screens/app/example-screen.stories.tsx
 ```
 
 Prefer kebab-case filenames. Keep route files thin.
@@ -48,7 +48,7 @@ Prefer kebab-case filenames. Keep route files thin.
 Most route files should be a one-line export:
 
 ```tsx
-export { default } from "@/client/features/example/example-screen";
+export { default } from "@/client/screens/app/example-screen";
 ```
 
 Do not put tests, stories, SQL, data loading, or feature lifecycle code in `src/app/` route files.
@@ -87,7 +87,7 @@ Use the container for screen-owned side effects and app dependencies. Use the vi
    - Do not add duplicate Clerk or PostHog providers.
 
 3. **Create the screen file.**
-   - Place UI and screen-local behavior in `src/client/features/<feature>/`.
+   - Place UI and screen-local behavior in `src/client/screens/`. Keep feature UI, hooks, and services in `src/client/features/<feature>`.
    - Put reusable UI primitives in `src/client/ui/` instead.
 
 4. **Separate container and view when useful.**
@@ -113,7 +113,7 @@ Use the container for screen-owned side effects and app dependencies. Use the vi
 Focused screen test:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath src/client/features/<feature>/<surface>-screen.test.tsx
+pnpm exec jest --runInBand --runTestsByPath src/client/screens/<route-group>/<surface>-screen.test.tsx
 ```
 
 If stories changed:
@@ -134,7 +134,7 @@ Use RocketSim/iOS Simulator validation when the change affects navigation, keybo
 ## Review checklist
 
 - Route file is thin and under the correct route group.
-- Screen-owned code lives under `src/client/features/<feature>/`.
+- Screen-owned code lives under `src/client/screens/`.
 - Reusable UI lives under `src/client/ui/`.
 - Container/view split is justified by tests, stories, or dependency boundaries.
 - Screen does not own the PowerSync connection or sync lifecycle.

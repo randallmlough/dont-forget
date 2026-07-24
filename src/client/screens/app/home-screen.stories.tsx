@@ -3,7 +3,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
-import { HomeScreenView } from "@/client/features/list/home-screen";
+import { HomeScreenView } from "@/client/screens/app/home-screen";
 import {
 	addFixtureItem,
 	emptyActiveListState,

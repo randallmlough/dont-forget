@@ -15,6 +15,7 @@ Keep application code under `src/`:
 ```text
 src/app/
 src/client/features/
+src/client/screens/
 src/client/lib/
 src/client/session/
 src/client/theme/
@@ -59,10 +60,10 @@ Use `(app)` for authenticated app routes and `(auth)` for signed-out auth routes
 Keep `src/app/` files thin. A route file should usually export the screen it owns:
 
 ```tsx
-export { default } from "@/client/features/list/home-screen";
+export { default } from "@/client/screens/app/home-screen";
 ```
 
-Put route-owned UI and screen-local side effects in `src/client/features/<feature>/`. This includes hooks that are specific to that screen, such as Clerk session hooks or screen-only analytics handlers.
+Put route-owned screens and screen-local side effects in `src/client/screens/`, organized by route ownership. Keep feature UI, data hooks, and services in `src/client/features/<feature>/`. This includes keeping List and Item services with the List feature even when a screen consumes them.
 
 Put reusable primitives in `src/client/ui/`. Feature-owned UI stays with the owning feature folder, for example `src/client/features/list/current-list.tsx`, `list-header.tsx`, `item-rows.tsx`, and `add-item-form.tsx`.
 

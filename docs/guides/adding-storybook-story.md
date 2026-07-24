@@ -18,7 +18,7 @@ Read:
 
 Inspect nearby examples:
 
-- `src/client/features/list/home-screen.stories.tsx`
+- `src/client/screens/app/home-screen.stories.tsx`
 - `src/client/features/auth/auth-screen.stories.tsx`
 - `src/client/features/list/list-parts.stories.tsx`
 
@@ -27,7 +27,7 @@ Inspect nearby examples:
 Put stories next to the component or screen they exercise, outside `src/app/`:
 
 ```text
-src/client/features/<feature>/<surface>.stories.tsx
+src/client/screens/<route-group>/<surface>.stories.tsx
 src/client/ui/<component>.stories.tsx
 ```
 
@@ -55,7 +55,7 @@ Use `args` for simple presentational states. Use `render` when the story needs l
 ## Recipe
 
 1. **Choose the right story target.**
-   - Feature component stories belong beside the owning feature under `src/client/features/<feature>/`.
+   - Feature component stories belong beside the owning feature under `src/client/features/<feature>/`; route screen stories belong beside the screen under `src/client/screens/`.
    - Shared UI primitive stories belong beside the primitive under `src/client/ui/`.
    - Route screen stories should target extracted view components when possible, not route files.
    - Keep auth, analytics, navigation, and database side effects out of Storybook stories.
@@ -99,7 +99,7 @@ make format
 Run focused tests when the story accompanies component or screen behavior changes:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath src/client/features/list/home-screen.test.tsx
+pnpm exec jest --runInBand --runTestsByPath src/client/screens/app/home-screen.test.tsx
 pnpm exec jest --runInBand --runTestsByPath src/client/features/list/list-parts.test.tsx
 ```
 
