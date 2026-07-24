@@ -31,7 +31,6 @@ export function ListOverview({
 		itemCount === 0
 			? "No Items yet"
 			: `${checkedCount} of ${itemCount} Items checked`;
-	// Item toggles re-render the overview; only List changes rebuild the chips.
 	const quickLists = useMemo(
 		() => quickListOptions(state.listName, currentListId, listSummaries),
 		[state.listName, currentListId, listSummaries],

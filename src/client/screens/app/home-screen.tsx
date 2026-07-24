@@ -18,10 +18,6 @@ import {
 
 const FALLBACK_TITLE = "Home";
 
-// Stack.Screen re-registers options whenever this object's identity changes, so
-// it is hoisted out of render rather than written inline.
-const HEADER_SHOWN_OPTIONS = { headerShown: true };
-
 export type HomeScreenViewProps = {
 	state: AuthenticatedAppSessionState;
 	onRetry?: () => void;
@@ -73,7 +69,6 @@ function HomeScreenResource({
 	// those states and drop the title with it.
 	const currentList = useHomeCurrentList(session);
 	const syncState = useSyncState();
-	// The single live rows watch feeds the quick-list chips.
 	const { rows } = useListRows(session);
 	const title =
 		currentList.state.status === "active"
@@ -107,13 +102,8 @@ function HomeStackHeader({
 }) {
 	return (
 		<>
-			{/*
-			 * The enclosing Stack sets headerShown: false, so this route opts back
-			 * in explicitly. Without it the header would exist only as a side
-			 * effect of Stack.Toolbar placement="left", which sets headerShown for
-			 * its own sake.
-			 */}
-			<Stack.Screen options={HEADER_SHOWN_OPTIONS} />
+			{/* The enclosing Stack sets headerShown: false, so this route opts back in. */}
+			<Stack.Screen options={{ headerShown: true }} />
 			<Stack.Title large>{title}</Stack.Title>
 			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button

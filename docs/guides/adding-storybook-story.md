@@ -75,7 +75,7 @@ Use `args` for simple presentational states. Use `render` when the story needs l
    - Add safe-area or provider wrappers only when the component normally receives that context from `src/app/_layout.tsx` or a route shell.
 
 5. **Use `parameters.noSafeArea` for route shells that already own safe areas.**
-   - `HomeScreenView` uses this because the route shell already applies safe-area handling.
+   - `ListsScreenView` uses this because `ScreenScaffold` already applies safe-area handling.
 
 6. **Keep story interactions deterministic.**
    - Local state is fine for adding/checking Items in stories.

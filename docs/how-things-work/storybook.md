@@ -14,7 +14,7 @@ Stories should render presentational components with typed fixture data and call
 
 For route screens, extract composed view components for Storybook and keep hooks, analytics, auth, database reads, and navigation side effects in the route container. Prefer the [React composition pattern](../code-standards/react-composition.md) for surfaces with shared state and actions, instead of passing a long list of callbacks through the top-level screen.
 
-If a Story renders an app route shell that already owns safe-area handling, set `parameters.noSafeArea = true` on that Story or meta. React Native Storybook's mobile UI adds safe-area padding by default, and route shells such as `HomeScreen` already apply their own safe area.
+If a Story renders an app route shell that already owns safe-area handling, set `parameters.noSafeArea = true` on that Story or meta. React Native Storybook's mobile UI adds safe-area padding by default, and route shells such as `ListsScreenView` already apply their own safe area through `ScreenScaffold`.
 
 For Current List UI, pass loaded List view state and explicit callback props. Stories can use local state; production signed-in routes consume Authenticated App Session provider dependencies and route-owned List loading backed by feature services. Do not inject raw PowerSync or database clients, Drizzle row types, or generic storage repositories into presentational components.
 

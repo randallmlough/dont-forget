@@ -1,7 +1,41 @@
+import type { AuthenticatedAppSession } from "@/client/session";
 import type {
 	ActiveListState,
 	AddActiveListItemInput,
 } from "./list-view-types";
+
+export const authenticatedAppSession: AuthenticatedAppSession = {
+	user: {
+		id: "usr_avery",
+		email: "avery@example.com",
+		displayName: "Avery Chen",
+		firstName: "Avery",
+		lastName: "Chen",
+	},
+	activeHousehold: { id: "hh_avery", name: "Avery" },
+	households: [
+		{
+			id: "hh_avery",
+			name: "Avery",
+			role: "owner",
+			isActive: true,
+		},
+	],
+	activeMember: {
+		id: "mbr_avery",
+		userId: "usr_avery",
+		role: "owner",
+		displayName: "Avery Chen",
+	},
+	members: [
+		{
+			membershipId: "mbr_avery",
+			userId: "usr_avery",
+			role: "owner",
+			displayName: "Avery Chen",
+		},
+	],
+};
 
 export const emptyActiveListState: ActiveListState = {
 	householdName: "Avery",

@@ -29,14 +29,14 @@ export type CurrentListProps = {
 };
 
 export function CurrentList({ session, deps, onOpenLists }: CurrentListProps) {
-	const { currentList: list, syncState, listRows } = deps;
+	const { currentList, syncState, listRows } = deps;
 	const currentMemberName = sessionMemberDisplayName(session);
-	const loadState = list.state;
+	const loadState = currentList.state;
 	const selectList = useSelectList(session);
 	const listSummaries = listRows.status === "ready" ? listRows.summaries : [];
 
 	async function switchList(listId: string, currentListId: string) {
-		if (await selectList(listId, currentListId)) list.reload();
+		if (await selectList(listId, currentListId)) currentList.reload();
 	}
 
 	if (loadState.status === "loading") {
@@ -53,7 +53,7 @@ export function CurrentList({ session, deps, onOpenLists }: CurrentListProps) {
 	if (loadState.status === "error") {
 		return (
 			<HomeStatus title="List unavailable" body={loadState.message}>
-				<HomeRetryButton onPress={list.retry} />
+				<HomeRetryButton onPress={currentList.retry} />
 			</HomeStatus>
 		);
 	}

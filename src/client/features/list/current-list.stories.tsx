@@ -2,18 +2,16 @@ import type { Meta, StoryObj } from "@storybook/react-native";
 import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type { AuthenticatedAppSession } from "@/client/session";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
 import {
 	addFixtureItem,
+	authenticatedAppSession,
 	emptyActiveListState,
 	populatedActiveListState,
 	setFixtureItemChecked,
 } from "./list-test-support";
 import type { ActiveListState } from "./list-view-types";
 
-// Render-only stories, matching list-parts.stories.tsx: CurrentList's required
-// props are supplied per story rather than through args.
 const meta = {
 	title: "List/CurrentList",
 	decorators: [
@@ -40,7 +38,7 @@ export const WithItems: Story = {
 export const ZeroActive: Story = {
 	render: () => (
 		<CurrentList
-			session={readySession(emptyActiveListState)}
+			session={authenticatedAppSession}
 			deps={{
 				currentList: {
 					state: { status: "zeroActive" },
@@ -85,46 +83,11 @@ function CurrentListStory({ initialList }: { initialList: ActiveListState }) {
 
 	return (
 		<CurrentList
-			session={readySession(list)}
+			session={authenticatedAppSession}
 			deps={currentListDeps}
 			onOpenLists={noop}
 		/>
 	);
-}
-
-function readySession(initialList: ActiveListState): AuthenticatedAppSession {
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-			firstName: "Avery",
-			lastName: "Chen",
-		},
-		activeHousehold: { id: "hh_story", name: initialList.householdName },
-		households: [
-			{
-				id: "hh_story",
-				name: initialList.householdName,
-				role: "owner",
-				isActive: true,
-			},
-		],
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner",
-			displayName: "Avery Chen",
-		},
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner" as const,
-				displayName: "Avery Chen",
-			},
-		],
-	};
 }
 
 const styles = StyleSheet.create((theme) => ({
