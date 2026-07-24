@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import type { AuthenticatedAppSession } from "@/client/session";
 import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { HomeScreenView } from "./home-screen";
 
 jest.mock("expo-router", () => ({

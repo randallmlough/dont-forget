@@ -18,17 +18,17 @@ import type {
 	List,
 	ListSummary,
 } from "@/client/features/list/list-service";
-import { track } from "@/client/lib/analytics";
-import type { AuthenticatedAppSession } from "@/client/session";
-import { useAuthenticatedAppSession } from "@/client/session";
-import { deferred } from "@/test/async";
-import ListsScreen from "./lists-screen";
 import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
 import { useListRows } from "@/client/features/list/use-list-rows";
 import {
 	type ProductServices,
 	useProductServices,
 } from "@/client/features/list/use-product-services";
+import { track } from "@/client/lib/analytics";
+import type { AuthenticatedAppSession } from "@/client/session";
+import { useAuthenticatedAppSession } from "@/client/session";
+import { deferred } from "@/test/async";
+import ListsScreen from "./lists-screen";
 
 const mockReplace = jest.fn();
 const mockAlert = jest.spyOn(Alert, "alert");

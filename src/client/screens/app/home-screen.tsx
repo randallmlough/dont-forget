@@ -4,12 +4,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
 import {
+	CurrentList,
+	type HomeCurrentListDeps,
+} from "@/client/features/list/current-list";
+import {
+	HomeRetryButton,
+	HomeStatus,
+} from "@/client/features/list/home-status";
+import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
 	useAuthenticatedAppSession,
 } from "@/client/session";
-import { CurrentList, type HomeCurrentListDeps } from "@/client/features/list/current-list";
-import { HomeRetryButton, HomeStatus } from "@/client/features/list/home-status";
 
 export type HomeScreenViewProps = {
 	state: AuthenticatedAppSessionState;

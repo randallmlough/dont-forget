@@ -3,15 +3,15 @@ import { type SFSymbol, SymbolView } from "expo-symbols";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
-import type { AppearancePreference } from "@/client/theme/appearance-preference";
-import { Card, CardContent } from "@/client/ui/card";
-import { GlassSurface } from "@/client/ui/glass-surface";
-import { ScreenSection } from "@/client/ui/screen-section";
 import {
 	type SettingsActions,
 	type SettingsState,
 	useSettings,
-} from "./use-settings";
+} from "@/client/features/settings/use-settings";
+import type { AppearancePreference } from "@/client/theme/appearance-preference";
+import { Card, CardContent } from "@/client/ui/card";
+import { GlassSurface } from "@/client/ui/glass-surface";
+import { ScreenSection } from "@/client/ui/screen-section";
 
 const appearanceOptions = ["system", "light", "dark"] as const;
 

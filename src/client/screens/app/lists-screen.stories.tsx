@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
-import type { ListSummary } from "./list-service";
+import type { ListSummary } from "@/client/features/list/list-service";
 import { ListsScreenView } from "./lists-screen";
 
 const meta = {

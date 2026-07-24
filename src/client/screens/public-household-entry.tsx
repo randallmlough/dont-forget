@@ -57,7 +57,9 @@ export function PublicHouseholdEntryView({
 	);
 }
 
-export function firstParam(value: string | string[] | undefined): string | null {
+export function firstParam(
+	value: string | string[] | undefined,
+): string | null {
 	if (typeof value === "string") return value;
 	return value?.[0] ?? null;
 }

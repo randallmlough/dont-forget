@@ -3,6 +3,11 @@ import { type SFSymbol, SymbolView } from "expo-symbols";
 import { ScrollView, Text } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
+import {
+	type SettingsActions,
+	type SettingsState,
+	useSettings,
+} from "@/client/features/settings/use-settings";
 import { Card, CardContent } from "@/client/ui/card";
 import {
 	Item,
@@ -16,11 +21,6 @@ import {
 	ItemTitle,
 } from "@/client/ui/item";
 import { ScreenSection } from "@/client/ui/screen-section";
-import {
-	type SettingsActions,
-	type SettingsState,
-	useSettings,
-} from "./use-settings";
 
 export default function SettingsScreen() {
 	const { state, actions } = useSettings();

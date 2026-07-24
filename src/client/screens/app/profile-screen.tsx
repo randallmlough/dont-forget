@@ -9,6 +9,11 @@ import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
+import {
+	type SettingsActions,
+	type SettingsState,
+	useSettings,
+} from "@/client/features/settings/use-settings";
 import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
 import { Card, CardContent } from "@/client/ui/card";
@@ -28,11 +33,6 @@ import {
 	ItemTitle,
 } from "@/client/ui/item";
 import { ScreenSection } from "@/client/ui/screen-section";
-import {
-	type SettingsActions,
-	type SettingsState,
-	useSettings,
-} from "./use-settings";
 
 export default function ProfileScreen() {
 	const router = useRouter();
