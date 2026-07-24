@@ -65,7 +65,7 @@ export { default } from "@/client/screens/app/home-screen";
 
 Put route-owned screens and screen-local side effects in `src/client/screens/`, organized by route ownership. Keep feature UI, data hooks, and services in `src/client/features/<feature>/`. This includes keeping List and Item services with the List feature even when a screen consumes them.
 
-Put reusable primitives in `src/client/ui/`. Feature-owned UI stays with the owning feature folder, for example `src/client/features/list/current-list.tsx`, `list-header.tsx`, `item-rows.tsx`, and `add-item-form.tsx`.
+Put reusable primitives in `src/client/ui/`. Feature-owned UI stays with the owning feature folder, for example `src/client/features/list/current-list.tsx`, `list-overview.tsx`, `item-rows.tsx`, and `add-item-form.tsx`.
 
 ## Components
 

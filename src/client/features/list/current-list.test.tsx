@@ -1,43 +1,75 @@
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import type { AuthenticatedAppSession } from "@/client/session";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
-import { emptyActiveListState } from "./list-test-support";
+import {
+	authenticatedAppSession,
+	emptyActiveListState,
+} from "./list-test-support";
 
 describe("CurrentList", () => {
-	it.each([
-		{
-			name: "active",
-			deps: activeListDeps(),
-			visibleText: "No Items yet",
-		},
-		{
-			name: "zero-active",
-			deps: zeroActiveListDeps(),
-			visibleText: "No active Lists",
-		},
-	])("does not wire Lists entry points for injected $name state", async ({
-		deps,
-		visibleText,
-	}) => {
+	it("renders the active List surface", async () => {
 		await render(
 			<CurrentList
-				session={sessionFixture()}
-				deps={deps}
-				onOpenNavigation={jest.fn()}
+				session={authenticatedAppSession}
+				deps={activeListDeps()}
 				onOpenLists={jest.fn()}
 			/>,
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		expect(await screen.findByText(visibleText)).toBeTruthy();
-		expect(screen.queryByRole("button", { name: "Switch List" })).toBeNull();
-		expect(screen.queryByLabelText("List name")).toBeNull();
+		expect(await screen.findByText("No Items yet")).toBeTruthy();
+	});
+
+	it("opens Lists from the zero-active Create List action", async () => {
+		const onOpenLists = jest.fn();
+		await render(
+			<CurrentList
+				session={authenticatedAppSession}
+				deps={zeroActiveListDeps()}
+				onOpenLists={onOpenLists}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		expect(await screen.findByText("No active Lists")).toBeTruthy();
+		await fireEvent.press(screen.getByRole("button", { name: "Create List" }));
+
+		expect(onOpenLists).toHaveBeenCalledTimes(1);
+	});
+
+	it("adds Items through the Current List action with normalized optional fields", async () => {
+		const addItem = jest.fn(async () => undefined);
+		await render(
+			<CurrentList
+				session={authenticatedAppSession}
+				deps={activeListDeps(addItem)}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent(await screen.findByLabelText("Add Item"), "focus");
+		await fireEvent.changeText(
+			await screen.findByLabelText("Item name"),
+			" Milk ",
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Add Item" }),
+		);
+
+		expect(addItem).toHaveBeenCalledWith({
+			listId: "lst_groceries",
+			name: "Milk",
+			quantity: null,
+			notes: null,
+		});
 	});
 });
 
-function activeListDeps(): HomeCurrentListDeps {
+function activeListDeps(
+	addItem = jest.fn(async () => undefined),
+): HomeCurrentListDeps {
 	return {
 		currentList: {
 			state: {
@@ -45,7 +77,7 @@ function activeListDeps(): HomeCurrentListDeps {
 				listId: "lst_groceries",
 				list: emptyActiveListState,
 				actions: {
-					addItem: jest.fn(async () => undefined),
+					addItem,
 					setItemChecked: jest.fn(async () => undefined),
 				},
 			},
@@ -53,6 +85,7 @@ function activeListDeps(): HomeCurrentListDeps {
 			reload: jest.fn(),
 		},
 		syncState: "synced",
+		listRows: { status: "ready", summaries: [] },
 	};
 }
 
@@ -64,41 +97,7 @@ function zeroActiveListDeps(): HomeCurrentListDeps {
 			reload: jest.fn(),
 		},
 		syncState: "synced",
-	};
-}
-
-function sessionFixture(): AuthenticatedAppSession {
-	return {
-		user: {
-			id: "usr_avery",
-			email: "avery@example.com",
-			displayName: "Avery Chen",
-			firstName: "Avery",
-			lastName: "Chen",
-		},
-		activeHousehold: { id: "hh_avery", name: "Avery" },
-		households: [
-			{
-				id: "hh_avery",
-				name: "Avery",
-				role: "owner",
-				isActive: true,
-			},
-		],
-		activeMember: {
-			id: "mbr_avery",
-			userId: "usr_avery",
-			role: "owner",
-			displayName: "Avery Chen",
-		},
-		members: [
-			{
-				membershipId: "mbr_avery",
-				userId: "usr_avery",
-				role: "owner",
-				displayName: "Avery Chen",
-			},
-		],
+		listRows: { status: "ready", summaries: [] },
 	};
 }
 

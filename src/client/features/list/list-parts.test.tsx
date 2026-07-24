@@ -9,8 +9,7 @@ import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AddItemForm } from "./add-item-form";
 import { ItemRows } from "./item-rows";
-import { ListHeader } from "./list-header";
-import type { ListSummary } from "./list-service";
+import { ListOverview } from "./list-overview";
 import {
 	emptyActiveListState,
 	largeActiveListState,
@@ -19,55 +18,31 @@ import {
 import type { ActiveListMeta, ActiveListState } from "./list-view-types";
 
 describe("List parts", () => {
-	it("renders header progress for an empty List", async () => {
+	it("renders overview progress for an empty List", async () => {
 		await renderWithSafeArea(
-			<ListHeader
-				state={emptyActiveListState}
-				meta={meta()}
-				onPressListName={jest.fn()}
-			/>,
+			<ListOverview state={emptyActiveListState} meta={meta()} />,
 		);
 
 		expect(await screen.findByText("No Items yet")).toBeTruthy();
 	});
 
-	it("renders header progress for a partially checked List", async () => {
+	it("renders overview progress for a partially checked List", async () => {
 		await renderWithSafeArea(
-			<ListHeader state={populatedActiveListState} meta={meta()} />,
+			<ListOverview state={populatedActiveListState} meta={meta()} />,
 		);
 
 		expect(await screen.findByText("1 of 3 Items checked")).toBeTruthy();
 	});
 
-	it("renders header progress for a fully checked List", async () => {
+	it("renders overview progress for a fully checked List", async () => {
 		await renderWithSafeArea(
-			<ListHeader
+			<ListOverview
 				state={withCheckedItems(populatedActiveListState)}
 				meta={meta()}
 			/>,
 		);
 
 		expect(await screen.findByText("3 of 3 Items checked")).toBeTruthy();
-	});
-
-	it("switches directly from a quick List chip", async () => {
-		const onSelectList = jest.fn();
-		await renderWithSafeArea(
-			<ListHeader
-				currentListId="lst_groceries"
-				state={populatedActiveListState}
-				meta={meta()}
-				listSummaries={[
-					listSummary("lst_groceries", "Groceries"),
-					listSummary("lst_costco", "Costco"),
-				]}
-				onSelectList={onSelectList}
-			/>,
-		);
-
-		await fireEvent.press(await screen.findByText("Costco"));
-
-		expect(onSelectList).toHaveBeenCalledWith("lst_costco");
 	});
 
 	it.each([
@@ -80,7 +55,7 @@ describe("List parts", () => {
 		string,
 	][])("renders %s sync status", async (syncState, label) => {
 		await renderWithSafeArea(
-			<ListHeader state={populatedActiveListState} meta={meta(syncState)} />,
+			<ListOverview state={populatedActiveListState} meta={meta(syncState)} />,
 		);
 
 		expect(await screen.findByText(label)).toBeTruthy();
@@ -233,21 +208,5 @@ function withCheckedItems(state: ActiveListState): ActiveListState {
 			...item,
 			checked: true,
 		})),
-	};
-}
-
-function listSummary(id: string, name: string): ListSummary {
-	return {
-		id,
-		householdId: "hh_avery",
-		name,
-		createdByUserId: "usr_avery",
-		createdAt: 1,
-		updatedAt: 1,
-		archived: false,
-		archivedAt: null,
-		lastActivityAt: 1,
-		uncheckedItemCount: 0,
-		checkedItemCount: 0,
 	};
 }

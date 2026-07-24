@@ -1,5 +1,5 @@
 import { SymbolView } from "expo-symbols";
-import { memo, useCallback } from "react";
+import { memo, type ReactElement, useCallback } from "react";
 import {
 	FlatList,
 	type ListRenderItemInfo,
@@ -13,10 +13,11 @@ import type { ActiveListItem } from "./list-view-types";
 
 export type ItemRowsProps = {
 	items: ActiveListItem[];
+	listOverview?: ReactElement;
 	onToggleItem: (itemId: string) => void;
 };
 
-export function ItemRows({ items, onToggleItem }: ItemRowsProps) {
+export function ItemRows({ items, listOverview, onToggleItem }: ItemRowsProps) {
 	const bottomScrollInset = useAddItemComposerScrollInset();
 	const renderItem = useCallback(
 		({ item }: ListRenderItemInfo<ActiveListItem>) => (
@@ -32,7 +33,12 @@ export function ItemRows({ items, onToggleItem }: ItemRowsProps) {
 			renderItem={renderItem}
 			ItemSeparatorComponent={ItemSeparator}
 			ListEmptyComponent={EmptyList}
+			ListHeaderComponent={listOverview}
 			keyboardShouldPersistTaps="handled"
+			// Assumes a native stack header above the list, so stories that render
+			// ItemRows in a plain canvas get scene safe-area insets they did not ask for.
+			contentInsetAdjustmentBehavior="automatic"
+			style={styles.list}
 			contentContainerStyle={[
 				styles.itemsContent,
 				{ paddingBottom: bottomScrollInset },
@@ -128,12 +134,14 @@ function itemDetailText(item: ActiveListItem): string | null {
 }
 
 const styles = StyleSheet.create((theme) => ({
+	list: {
+		backgroundColor: theme.colors.background,
+	},
 	itemsContent: {
-		paddingHorizontal: theme.spacing(5),
+		paddingBottom: theme.spacing(2),
 	},
 	emptyItemsContent: {
 		flexGrow: 1,
-		justifyContent: "center",
 	},
 	emptyState: {
 		alignItems: "center",
@@ -156,6 +164,7 @@ const styles = StyleSheet.create((theme) => ({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: theme.spacing(3),
+		paddingHorizontal: theme.spacing(5),
 		paddingVertical: theme.spacing(2.5),
 	},
 	itemRowPressed: {
@@ -194,7 +203,8 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	itemSeparator: {
 		height: theme.borders.hairline,
-		marginLeft: theme.spacing(9),
+		marginLeft: theme.spacing(14),
+		marginRight: theme.spacing(5),
 		backgroundColor: theme.colors.border,
 	},
 }));

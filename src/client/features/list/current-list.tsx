@@ -1,119 +1,37 @@
-import { ActivityIndicator, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { ActivityIndicator } from "react-native";
 import type { AddItemListOption } from "@/client/features/list/add-item-composer";
 import type { ListSummary } from "@/client/features/list/list-service";
 import {
 	type AuthenticatedAppSession,
 	sessionMemberDisplayName,
-	useSyncState,
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { AddItemForm } from "./add-item-form";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { ItemRows } from "./item-rows";
-import { ListHeader } from "./list-header";
+import { ListOverview } from "./list-overview";
 import type { ActiveListSyncState } from "./list-view-types";
-import {
-	type HomeCurrentListData,
-	useHomeCurrentList,
-} from "./use-home-current-list";
+import type { HomeCurrentListData } from "./use-home-current-list";
 import { useListActions } from "./use-list-actions";
-import { type ListRows, useListRows } from "./use-list-rows";
-import { useSelectList } from "./use-select-list";
+import type { ListRows } from "./use-list-rows";
 
 export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
 	syncState: ActiveListSyncState;
+	listRows: ListRows;
 };
 
 export type CurrentListProps = {
 	session: AuthenticatedAppSession;
-	deps?: HomeCurrentListDeps;
-	onOpenNavigation: () => void;
-	onOpenLists?: () => void;
+	deps: HomeCurrentListDeps;
+	onOpenLists: () => void;
 };
 
-export function CurrentList({
-	session,
-	deps,
-	onOpenNavigation,
-	onOpenLists,
-}: CurrentListProps) {
-	if (deps) {
-		return (
-			<HomeCurrentListContent
-				session={session}
-				list={deps.currentList}
-				syncState={deps.syncState}
-				allowListsEntry={false}
-				listRows={{ status: "ready", summaries: [] }}
-				onOpenNavigation={onOpenNavigation}
-				onOpenLists={onOpenLists}
-			/>
-		);
-	}
-
-	return (
-		<HomeCurrentListResource
-			key={session.activeHousehold.id}
-			session={session}
-			onOpenNavigation={onOpenNavigation}
-			onOpenLists={onOpenLists}
-		/>
-	);
-}
-
-type HomeCurrentListResourceProps = Omit<CurrentListProps, "deps">;
-
-function HomeCurrentListResource({
-	session,
-	onOpenNavigation,
-	onOpenLists,
-}: HomeCurrentListResourceProps) {
-	const list = useHomeCurrentList(session);
-	const syncState = useSyncState();
-	// The single live rows watch feeds the header quick-list chips.
-	const { rows } = useListRows(session);
-	return (
-		<HomeCurrentListContent
-			session={session}
-			list={list}
-			syncState={syncState}
-			allowListsEntry
-			listRows={rows}
-			onOpenNavigation={onOpenNavigation}
-			onOpenLists={onOpenLists}
-		/>
-	);
-}
-
-type HomeCurrentListContentProps = {
-	session: AuthenticatedAppSession;
-	list: HomeCurrentListData;
-	syncState: ActiveListSyncState;
-	allowListsEntry: boolean;
-	listRows: ListRows;
-	onOpenNavigation: () => void;
-	onOpenLists?: () => void;
-};
-
-function HomeCurrentListContent({
-	session,
-	list,
-	syncState,
-	allowListsEntry,
-	listRows,
-	onOpenNavigation,
-	onOpenLists,
-}: HomeCurrentListContentProps) {
+export function CurrentList({ session, deps, onOpenLists }: CurrentListProps) {
+	const { currentList, syncState, listRows } = deps;
 	const currentMemberName = sessionMemberDisplayName(session);
-	const loadState = list.state;
-	const selectList = useSelectList(session);
+	const loadState = currentList.state;
 	const listSummaries = listRows.status === "ready" ? listRows.summaries : [];
-
-	async function switchList(listId: string, currentListId: string) {
-		if (await selectList(listId, currentListId)) list.reload();
-	}
 
 	if (loadState.status === "loading") {
 		return (
@@ -129,7 +47,7 @@ function HomeCurrentListContent({
 	if (loadState.status === "error") {
 		return (
 			<HomeStatus title="List unavailable" body={loadState.message}>
-				<HomeRetryButton onPress={list.retry} />
+				<HomeRetryButton onPress={currentList.retry} />
 			</HomeStatus>
 		);
 	}
@@ -140,9 +58,7 @@ function HomeCurrentListContent({
 				title="No active Lists"
 				body="Create a List to start adding Items."
 			>
-				<Button onPress={allowListsEntry ? onOpenLists : undefined}>
-					Create List
-				</Button>
+				<Button onPress={onOpenLists}>Create List</Button>
 			</HomeStatus>
 		);
 	}
@@ -154,9 +70,6 @@ function HomeCurrentListContent({
 			currentMemberName={currentMemberName}
 			syncState={syncState}
 			listSummaries={listSummaries}
-			onOpenNavigation={onOpenNavigation}
-			onSelectList={(listId) => void switchList(listId, loadState.listId)}
-			onPressListName={allowListsEntry ? onOpenLists : undefined}
 		/>
 	);
 }
@@ -166,9 +79,6 @@ type ActiveCurrentListProps = {
 	currentMemberName: string;
 	syncState: ActiveListSyncState;
 	listSummaries: ListSummary[];
-	onOpenNavigation: () => void;
-	onSelectList: (listId: string) => void;
-	onPressListName?: () => void;
 };
 
 function ActiveCurrentList({
@@ -176,9 +86,6 @@ function ActiveCurrentList({
 	currentMemberName,
 	syncState,
 	listSummaries,
-	onOpenNavigation,
-	onSelectList,
-	onPressListName,
 }: ActiveCurrentListProps) {
 	const actions = useListActions({
 		items: loadState.list.items,
@@ -191,23 +98,23 @@ function ActiveCurrentList({
 		summaries: listSummaries,
 	});
 
+	// No wrapper View around ItemRows: iOS collapses the native large title by
+	// tracking the first scroll view it finds down the screen's first-subview
+	// chain, so the FlatList has to stay a direct child of the screen content.
 	return (
-		<View style={styles.currentList}>
-			<ListHeader
-				currentListId={loadState.listId}
-				state={loadState.list}
-				meta={{
-					currentMemberName,
-					errorMessage: actions.errorMessage,
-					syncState,
-				}}
-				listSummaries={listSummaries}
-				onOpenNavigation={onOpenNavigation}
-				onSelectList={onSelectList}
-				onPressListName={onPressListName}
-			/>
+		<>
 			<ItemRows
 				items={loadState.list.items}
+				listOverview={
+					<ListOverview
+						state={loadState.list}
+						meta={{
+							currentMemberName,
+							errorMessage: actions.errorMessage,
+							syncState,
+						}}
+					/>
+				}
 				onToggleItem={actions.toggleItem}
 			/>
 			<AddItemForm
@@ -216,7 +123,7 @@ function ActiveCurrentList({
 				errorMessage={actions.errorMessage}
 				onAddItem={actions.addItem}
 			/>
-		</View>
+		</>
 	);
 }
 
@@ -236,9 +143,3 @@ function addItemListOptions({
 			.map((summary) => ({ id: summary.id, name: summary.name })),
 	];
 }
-
-const styles = StyleSheet.create({
-	currentList: {
-		flex: 1,
-	},
-});

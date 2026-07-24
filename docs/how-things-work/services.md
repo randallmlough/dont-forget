@@ -202,7 +202,7 @@ const items = usePowerSyncQuery(
 
 PowerSync watched queries re-run when their dependent local rows change. UI consumes them through `usePowerSyncQuery`, which wraps `@powersync/react`'s `useQuery` and returns `{ data, isLoading, isFetching, error }`. Sync status comes from `useSyncState()` and is read-only connection state, not a data-reload trigger.
 
-Current List is selection state only. Production Home renders `<CurrentList session={session} />`; `CurrentList` props are `{ session, deps? }` and it resolves the Current List itself with `useHomeCurrentList(session)`. List switching changes the selected `listId`, not a Household-owned Current List service or data source. `onAddItem` / `onSetItemChecked`-style callback props live on internal children such as `ListHeader`, `ItemRows`, and `AddItemForm`, not on `CurrentList`.
+Current List is selection state only. The Home screen resolves it with `useHomeCurrentList(session)` and passes the resulting state into `CurrentList`, allowing the route-owned native navigation surface to use the Current List name. List switching changes the selected `listId`, not a Household-owned Current List service or data source. `onAddItem` / `onSetItemChecked`-style callback props live on internal children such as `ListOverview`, `ItemRows`, and `AddItemForm`, not on `CurrentList`.
 
 There is one local PowerSync database rather than a per-Household resource set, so there is no cached-to-fresh resource swap or stale-resource lease to manage: switching the active Household re-points watched queries' `household_id` filters. Membership revocation is server-authoritative — PowerSync stops streaming and purges the rows for a Household the User is no longer an active Member of.
 
