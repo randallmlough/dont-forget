@@ -35,7 +35,11 @@ export function ItemRows({ items, listOverview, onToggleItem }: ItemRowsProps) {
 			ListEmptyComponent={EmptyList}
 			ListHeaderComponent={listOverview}
 			keyboardShouldPersistTaps="handled"
+			// Required for native large-title collapse: it assumes this list sits
+			// directly under a native stack header. Stories that render ItemRows in
+			// a plain canvas get scene safe-area insets they did not ask for.
 			contentInsetAdjustmentBehavior="automatic"
+			style={styles.list}
 			contentContainerStyle={[
 				styles.itemsContent,
 				{ paddingBottom: bottomScrollInset },
@@ -131,6 +135,10 @@ function itemDetailText(item: ActiveListItem): string | null {
 }
 
 const styles = StyleSheet.create((theme) => ({
+	// The list is the screen's backdrop now that no wrapper View sits above it.
+	list: {
+		backgroundColor: theme.colors.background,
+	},
 	itemsContent: {
 		paddingBottom: theme.spacing(2),
 	},

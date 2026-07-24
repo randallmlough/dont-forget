@@ -2,7 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
-import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
+import {
+	CurrentList,
+	type HomeCurrentListDeps,
+} from "@/client/features/list/current-list";
 import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
 import { useListRows } from "@/client/features/list/use-list-rows";
 import type { AuthenticatedAppSession } from "@/client/session";
@@ -45,12 +48,22 @@ jest.mock("expo-router", () => {
 		});
 	};
 
+	function Screen() {
+		return null;
+	}
+
 	return {
-		Stack: { Title, Toolbar },
+		Stack: { Screen, Title, Toolbar },
 		useRouter: () => ({ replace: mockReplace }),
 	};
 });
 
+// useAuthenticatedAppSession, useSyncState, useHomeCurrentList, and
+// useListRows all sit on the PowerSync watched-query and native-session
+// boundary, which has no deterministic local harness. The seam under test in
+// this file is the screen's stack title and toolbar wiring, not List loading;
+// List behavior runs against the real components in current-list.test.tsx.
+// Justification per docs/code-standards/testing.md:9.
 jest.mock("@/client/session", () => ({
 	...jest.requireActual("@/client/session"),
 	useAuthenticatedAppSession: jest.fn(),
@@ -89,9 +102,7 @@ beforeEach(() => {
 
 describe("HomeScreenView", () => {
 	it("renders the loading Authenticated App Session state", async () => {
-		await render(
-			<HomeScreenView state={{ status: "loading" }} session={null} />,
-		);
+		await render(<HomeScreenView state={{ status: "loading" }} />);
 
 		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
 	});
@@ -101,7 +112,6 @@ describe("HomeScreenView", () => {
 		await render(
 			<HomeScreenView
 				state={{ status: "error", message: "Unable to prepare." }}
-				session={null}
 				onRetry={onRetry}
 			/>,
 		);
@@ -133,14 +143,13 @@ describe("HomeScreenView", () => {
 			},
 			syncState: "synced",
 			listRows: { status: "ready", summaries: [] },
-			allowListsEntry: false,
 		};
 
 		await render(
-			<HomeScreenView
-				state={{ status: "ready", refreshing: false }}
+			<CurrentList
 				session={sessionFixture()}
-				currentListDeps={currentListDeps}
+				deps={currentListDeps}
+				onOpenLists={jest.fn()}
 			/>,
 			{ wrapper: TestSafeAreaProvider },
 		);
@@ -164,7 +173,7 @@ describe("HomeScreenView", () => {
 });
 
 describe("HomeScreen", () => {
-	it("uses the Current List title and opens the drawer from the stack toolbar", async () => {
+	it("passes the Current List name to the stack title and wires the drawer button", async () => {
 		const open = jest.fn();
 
 		await render(
@@ -183,6 +192,59 @@ describe("HomeScreen", () => {
 		);
 
 		expect(open).toHaveBeenCalledTimes(1);
+	});
+
+	it("opens Lists from the stack toolbar", async () => {
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Open Lists" }),
+		);
+
+		expect(mockReplace).toHaveBeenCalledWith("/lists");
+	});
+
+	it("falls back to the Home title while the Current List is unresolved", async () => {
+		jest.mocked(useHomeCurrentList).mockReturnValue({
+			state: { status: "zeroActive" },
+			retry: jest.fn(),
+			reload: jest.fn(),
+		});
+
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		expect(await screen.findByRole("header", { name: "Home" })).toBeTruthy();
+		expect(await screen.findByText("No active Lists")).toBeTruthy();
+	});
+
+	it("renders the Home header and status view without a session", async () => {
+		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+			state: { status: "loading" },
+			session: null,
+			retry: jest.fn(),
+			reloadSession: jest.fn(),
+			signOut: jest.fn(),
+		});
+
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		expect(await screen.findByRole("header", { name: "Home" })).toBeTruthy();
+		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
 	});
 });
 

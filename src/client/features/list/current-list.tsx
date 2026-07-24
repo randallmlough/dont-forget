@@ -1,5 +1,4 @@
-import { ActivityIndicator, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { ActivityIndicator } from "react-native";
 import type { AddItemListOption } from "@/client/features/list/add-item-composer";
 import type { ListSummary } from "@/client/features/list/list-service";
 import {
@@ -21,45 +20,16 @@ export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
 	syncState: ActiveListSyncState;
 	listRows: ListRows;
-	allowListsEntry: boolean;
 };
 
 export type CurrentListProps = {
 	session: AuthenticatedAppSession;
 	deps: HomeCurrentListDeps;
-	onOpenLists?: () => void;
+	onOpenLists: () => void;
 };
 
 export function CurrentList({ session, deps, onOpenLists }: CurrentListProps) {
-	return (
-		<HomeCurrentListContent
-			session={session}
-			list={deps.currentList}
-			syncState={deps.syncState}
-			allowListsEntry={deps.allowListsEntry}
-			listRows={deps.listRows}
-			onOpenLists={onOpenLists}
-		/>
-	);
-}
-
-type HomeCurrentListContentProps = {
-	session: AuthenticatedAppSession;
-	list: HomeCurrentListData;
-	syncState: ActiveListSyncState;
-	allowListsEntry: boolean;
-	listRows: ListRows;
-	onOpenLists?: () => void;
-};
-
-function HomeCurrentListContent({
-	session,
-	list,
-	syncState,
-	allowListsEntry,
-	listRows,
-	onOpenLists,
-}: HomeCurrentListContentProps) {
+	const { currentList: list, syncState, listRows } = deps;
 	const currentMemberName = sessionMemberDisplayName(session);
 	const loadState = list.state;
 	const selectList = useSelectList(session);
@@ -94,9 +64,7 @@ function HomeCurrentListContent({
 				title="No active Lists"
 				body="Create a List to start adding Items."
 			>
-				<Button onPress={allowListsEntry ? onOpenLists : undefined}>
-					Create List
-				</Button>
+				<Button onPress={onOpenLists}>Create List</Button>
 			</HomeStatus>
 		);
 	}
@@ -139,8 +107,11 @@ function ActiveCurrentList({
 		summaries: listSummaries,
 	});
 
+	// No wrapper View around ItemRows: iOS collapses the native large title by
+	// tracking the first scroll view it finds down the screen's first-subview
+	// chain, so the FlatList has to stay a direct child of the screen content.
 	return (
-		<View collapsable={false} style={styles.currentList}>
+		<>
 			<ItemRows
 				items={loadState.list.items}
 				listOverview={
@@ -164,7 +135,7 @@ function ActiveCurrentList({
 				errorMessage={actions.errorMessage}
 				onAddItem={actions.addItem}
 			/>
-		</View>
+		</>
 	);
 }
 
@@ -184,10 +155,3 @@ function addItemListOptions({
 			.map((summary) => ({ id: summary.id, name: summary.name })),
 	];
 }
-
-const styles = StyleSheet.create((theme) => ({
-	currentList: {
-		flex: 1,
-		backgroundColor: theme.colors.background,
-	},
-}));

@@ -2,10 +2,7 @@ import { Stack, useRouter } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
-import {
-	CurrentList,
-	type HomeCurrentListDeps,
-} from "@/client/features/list/current-list";
+import { CurrentList } from "@/client/features/list/current-list";
 import {
 	HomeRetryButton,
 	HomeStatus,
@@ -19,73 +16,81 @@ import {
 	useSyncState,
 } from "@/client/session";
 
+const FALLBACK_TITLE = "Home";
+
+// Stack.Screen re-registers options whenever this object's identity changes, so
+// it is hoisted out of render rather than written inline.
+const HEADER_SHOWN_OPTIONS = { headerShown: true };
+
 export type HomeScreenViewProps = {
 	state: AuthenticatedAppSessionState;
-	session: AuthenticatedAppSession | null;
 	onRetry?: () => void;
-	onOpenLists?: () => void;
-	currentListDeps?: HomeCurrentListDeps;
 };
 
 export default function HomeScreen() {
 	const { state, session, retry } = useAuthenticatedAppSession();
 	const { open } = useNavigationDrawer();
 	const router = useRouter();
+	const openLists = () => router.replace("/lists");
 
 	if (session) {
 		return (
 			<HomeScreenResource
 				key={session.activeHousehold.id}
-				state={state}
 				session={session}
 				onOpenNavigation={open}
-				onOpenLists={() => router.replace("/lists")}
+				onOpenLists={openLists}
 			/>
 		);
 	}
 
 	return (
 		<>
-			<HomeStackHeader title="Home" onOpenNavigation={open} />
-			<HomeScreenView state={state} session={null} onRetry={retry} />
+			<HomeStackHeader
+				title={FALLBACK_TITLE}
+				onOpenNavigation={open}
+				onOpenLists={openLists}
+			/>
+			<HomeScreenView state={state} onRetry={retry} />
 		</>
 	);
 }
 
 type HomeScreenResourceProps = {
-	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession;
 	onOpenNavigation: () => void;
 	onOpenLists: () => void;
 };
 
 function HomeScreenResource({
-	state,
 	session,
 	onOpenNavigation,
 	onOpenLists,
 }: HomeScreenResourceProps) {
+	// The Current List resolves here, not inside CurrentList, so the native
+	// stack title survives the loading, error, and zeroActive states. A
+	// Stack.Title rendered inside the active List surface would unmount in
+	// those states and drop the title with it.
 	const currentList = useHomeCurrentList(session);
 	const syncState = useSyncState();
+	// The single live rows watch feeds the quick-list chips.
 	const { rows } = useListRows(session);
 	const title =
 		currentList.state.status === "active"
 			? currentList.state.list.listName
-			: "Home";
+			: FALLBACK_TITLE;
 
 	return (
 		<>
-			<HomeStackHeader title={title} onOpenNavigation={onOpenNavigation} />
-			<HomeScreenView
-				state={state}
-				session={session}
+			<HomeStackHeader
+				title={title}
+				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
-				currentListDeps={{
-					currentList,
-					syncState,
-					listRows: rows,
-					allowListsEntry: true,
-				}}
+			/>
+			<CurrentList
+				session={session}
+				deps={{ currentList, syncState, listRows: rows }}
+				onOpenLists={onOpenLists}
 			/>
 		</>
 	);
@@ -94,12 +99,21 @@ function HomeScreenResource({
 function HomeStackHeader({
 	title,
 	onOpenNavigation,
+	onOpenLists,
 }: {
 	title: string;
 	onOpenNavigation: () => void;
+	onOpenLists: () => void;
 }) {
 	return (
 		<>
+			{/*
+			 * The enclosing Stack sets headerShown: false, so this route opts back
+			 * in explicitly. Without it the header would exist only as a side
+			 * effect of Stack.Toolbar placement="left", which sets headerShown for
+			 * its own sake.
+			 */}
+			<Stack.Screen options={HEADER_SHOWN_OPTIONS} />
 			<Stack.Title large>{title}</Stack.Title>
 			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button
@@ -109,29 +123,21 @@ function HomeStackHeader({
 					onPress={onOpenNavigation}
 				/>
 			</Stack.Toolbar>
+			<Stack.Toolbar placement="right">
+				<Stack.Toolbar.Button
+					accessibilityHint="Opens Lists"
+					accessibilityLabel="Open Lists"
+					icon="list.bullet"
+					onPress={onOpenLists}
+				/>
+			</Stack.Toolbar>
 		</>
 	);
 }
 
-export function HomeScreenView({
-	state,
-	session,
-	onRetry,
-	onOpenLists,
-	currentListDeps,
-}: HomeScreenViewProps) {
-	if (session && currentListDeps) {
-		return (
-			<CurrentList
-				session={session}
-				deps={currentListDeps}
-				onOpenLists={onOpenLists ?? noop}
-			/>
-		);
-	}
-
+export function HomeScreenView({ state, onRetry }: HomeScreenViewProps) {
 	return (
-		<View collapsable={false} style={styles.root}>
+		<View style={styles.root}>
 			{state.status === "error" ? (
 				<HomeStatus title="Household unavailable" body={state.message}>
 					{onRetry ? <HomeRetryButton onPress={onRetry} /> : null}
@@ -147,8 +153,6 @@ export function HomeScreenView({
 		</View>
 	);
 }
-
-function noop() {}
 
 const styles = StyleSheet.create((theme) => ({
 	root: {
