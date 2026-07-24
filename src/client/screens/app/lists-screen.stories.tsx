@@ -5,7 +5,7 @@ import type { ListSummary } from "@/client/features/list/list-service";
 import { ListsScreenView } from "./lists-screen";
 
 const meta = {
-	title: "Lists/ListsScreen",
+	title: "screens/app/ListsScreen",
 	component: ListsScreenView,
 	parameters: { noSafeArea: true },
 	decorators: [

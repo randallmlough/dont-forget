@@ -4,7 +4,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { HomeScreenView } from "@/client/screens/app/home-screen";
 
 const meta = {
-	title: "Home/HomeScreen",
+	title: "screens/app/HomeScreen",
 	component: HomeScreenView,
 	decorators: [
 		(Story) => (

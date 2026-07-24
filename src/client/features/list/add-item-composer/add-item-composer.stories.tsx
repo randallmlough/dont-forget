@@ -7,7 +7,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { AddItemComposer } from "@/client/features/list/add-item-composer";
 
 const meta = {
-	title: "Components/Add Item Composer",
+	title: "Features/List/Components/Add Item Composer",
 } satisfies Meta;
 
 export default meta;

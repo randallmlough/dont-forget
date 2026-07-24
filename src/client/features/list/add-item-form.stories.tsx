@@ -13,7 +13,7 @@ import {
 import { useListActions } from "./use-list-actions";
 
 const meta = {
-	title: "List/Add Item Form",
+	title: "Features/List/Add Item Form",
 } satisfies Meta;
 
 export default meta;

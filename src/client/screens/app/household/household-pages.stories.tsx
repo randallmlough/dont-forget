@@ -11,7 +11,7 @@ import { HouseholdSwitchView } from "./household-switch-screen";
 import { MembersInvitationsView } from "./members-invitations-screen";
 
 const meta = {
-	title: "Household/Pages",
+	title: "screens/app/household/HouseholdPages",
 	decorators: [
 		(Story) => (
 			<SafeAreaProvider
