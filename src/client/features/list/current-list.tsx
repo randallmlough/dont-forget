@@ -30,6 +30,11 @@ import { useListActions } from "./use-list-actions";
 import { type ListPageState, useListPage } from "./use-list-page";
 import type { ListRows } from "./use-list-rows";
 
+// Separate thresholds prevent the native toolbar title from flickering while
+// iOS bounces the List near its expanded position.
+const TOOLBAR_TITLE_COLLAPSE_OFFSET = 24;
+const TOOLBAR_TITLE_EXPAND_OFFSET = 8;
+
 export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
 	syncState: ActiveListSyncState;
@@ -42,6 +47,7 @@ export type CurrentListProps = {
 	focusedListId: string | null;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
+	onToolbarTitleChange?: (collapsedListId: string | null) => void;
 };
 
 export function CurrentList({
@@ -50,6 +56,7 @@ export function CurrentList({
 	focusedListId,
 	onFocusList,
 	onOpenLists,
+	onToolbarTitleChange,
 }: CurrentListProps) {
 	const { currentList, syncState, listRows } = deps;
 	const loadState = currentList.state;
@@ -105,6 +112,7 @@ export function CurrentList({
 			session={session}
 			syncState={syncState}
 			onFocusList={onFocusList}
+			onToolbarTitleChange={onToolbarTitleChange}
 		/>
 	);
 }
@@ -115,6 +123,7 @@ type HomeListPagerProps = {
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
 	onFocusList: (listId: string) => Promise<boolean>;
+	onToolbarTitleChange?: (collapsedListId: string | null) => void;
 };
 
 function HomeListPager({
@@ -123,9 +132,11 @@ function HomeListPager({
 	session,
 	syncState,
 	onFocusList,
+	onToolbarTitleChange,
 }: HomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
+	const collapsedListIdsRef = useRef(new Set<string>());
 	const summaries = listSummaries;
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [composerListId, setComposerListId] = useState<string | null>(null);
@@ -151,6 +162,19 @@ function HomeListPager({
 	useEffect(() => {
 		pagerRef.current?.scrollToIndex({ animated: false, index: focusedIndex });
 	}, [focusedIndex]);
+
+	useEffect(() => {
+		onToolbarTitleChange?.(
+			collapsedListIdsRef.current.has(focusedListId) ? focusedListId : null,
+		);
+	}, [focusedListId, onToolbarTitleChange]);
+
+	useEffect(
+		() => () => {
+			onToolbarTitleChange?.(null);
+		},
+		[onToolbarTitleChange],
+	);
 
 	async function selectFromPicker(summary: ListSummary): Promise<void> {
 		const selectedIndex = summaries.findIndex(
@@ -198,6 +222,28 @@ function HomeListPager({
 		});
 	}
 
+	function pageScrolled(
+		summary: ListSummary,
+		event: NativeSyntheticEvent<NativeScrollEvent>,
+	) {
+		const wasCollapsed = collapsedListIdsRef.current.has(summary.id);
+		const offsetY = event.nativeEvent.contentOffset.y;
+		const collapsed = wasCollapsed
+			? offsetY > TOOLBAR_TITLE_EXPAND_OFFSET
+			: offsetY >= TOOLBAR_TITLE_COLLAPSE_OFFSET;
+		if (collapsed === wasCollapsed) return;
+
+		if (collapsed) {
+			collapsedListIdsRef.current.add(summary.id);
+		} else {
+			collapsedListIdsRef.current.delete(summary.id);
+		}
+
+		if (summary.id === focusedListId) {
+			onToolbarTitleChange?.(collapsed ? summary.id : null);
+		}
+	}
+
 	return (
 		<>
 			<FlatList
@@ -238,6 +284,7 @@ function HomeListPager({
 								syncState={syncState}
 								onDismissComposer={() => setComposerListId(null)}
 								onOpenComposer={() => setComposerListId(summary.id)}
+								onScroll={(event) => pageScrolled(summary, event)}
 							/>
 						</View>
 					);
@@ -286,6 +333,7 @@ function HomeListPage({
 	composerOpen,
 	onOpenComposer,
 	onDismissComposer,
+	onScroll,
 }: {
 	summary: ListSummary;
 	session: AuthenticatedAppSession;
@@ -295,6 +343,7 @@ function HomeListPage({
 	composerOpen: boolean;
 	onOpenComposer: () => void;
 	onDismissComposer: () => void;
+	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
 	const state = useListPage(session, summary);
 
@@ -309,6 +358,7 @@ function HomeListPage({
 			syncState={syncState}
 			onDismissComposer={onDismissComposer}
 			onOpenComposer={onOpenComposer}
+			onScroll={onScroll}
 		/>
 	);
 }
@@ -323,6 +373,7 @@ function HomeListPageState({
 	composerOpen,
 	onOpenComposer,
 	onDismissComposer,
+	onScroll,
 }: {
 	state: ListPageState;
 	summary: ListSummary;
@@ -333,6 +384,7 @@ function HomeListPageState({
 	composerOpen: boolean;
 	onOpenComposer: () => void;
 	onDismissComposer: () => void;
+	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
 	if (state.status === "loading") {
 		return (
@@ -368,6 +420,7 @@ function HomeListPageState({
 			syncState={syncState}
 			onDismissComposer={onDismissComposer}
 			onOpenComposer={onOpenComposer}
+			onScroll={onScroll}
 		/>
 	);
 }
@@ -382,6 +435,7 @@ function ActiveHomeListPage({
 	composerOpen,
 	onOpenComposer,
 	onDismissComposer,
+	onScroll,
 }: {
 	loadState: Extract<ListPageState, { status: "active" }>;
 	session: AuthenticatedAppSession;
@@ -392,6 +446,7 @@ function ActiveHomeListPage({
 	composerOpen: boolean;
 	onOpenComposer: () => void;
 	onDismissComposer: () => void;
+	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
@@ -423,6 +478,7 @@ function ActiveHomeListPage({
 					/>
 				}
 				onPressBlankSpace={focused ? onOpenComposer : undefined}
+				onScroll={onScroll}
 				onToggleItem={actions.toggleItem}
 				testID={`home-list-items-${summary.id}`}
 			/>

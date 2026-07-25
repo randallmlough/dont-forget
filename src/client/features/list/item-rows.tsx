@@ -3,6 +3,8 @@ import { memo, type ReactElement, useCallback } from "react";
 import {
 	FlatList,
 	type ListRenderItemInfo,
+	type NativeScrollEvent,
+	type NativeSyntheticEvent,
 	Pressable,
 	Text,
 	View,
@@ -15,6 +17,7 @@ export type ItemRowsProps = {
 	listOverview?: ReactElement;
 	bottomContentInset?: number;
 	onPressBlankSpace?: () => void;
+	onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 	onToggleItem: (itemId: string) => void;
 	testID?: string;
 };
@@ -24,6 +27,7 @@ export function ItemRows({
 	listOverview,
 	bottomContentInset = 0,
 	onPressBlankSpace,
+	onScroll,
 	onToggleItem,
 	testID,
 }: ItemRowsProps) {
@@ -64,8 +68,10 @@ export function ItemRows({
 			// Assumes a native stack header above the list, so stories that render
 			// ItemRows in a plain canvas get scene safe-area insets they did not ask for.
 			contentInsetAdjustmentBehavior="automatic"
+			scrollEventThrottle={onScroll ? 16 : undefined}
 			style={styles.list}
 			testID={testID}
+			onScroll={onScroll}
 			contentContainerStyle={[
 				styles.itemsContent,
 				{ paddingBottom: bottomContentInset },

@@ -25,6 +25,7 @@ import HomeScreen, { HomeScreenView } from "./home-screen";
 
 const mockReplace = jest.fn();
 const mockSelectList = jest.fn(async () => true);
+const mockStackScreenOptions = jest.fn();
 const hardwareListSummary = {
 	...pantryListSummary,
 	id: "lst_hardware",
@@ -66,6 +67,7 @@ jest.mock("expo-router", () => {
 	};
 
 	function Screen({ options }: { options?: { title?: string } }) {
+		mockStackScreenOptions(options);
 		return options?.title
 			? mockReact.createElement(
 					mockReactNative.Text,
@@ -117,6 +119,7 @@ jest.mock("@/client/session/powersync", () => ({
 
 beforeEach(() => {
 	mockReplace.mockReset();
+	mockStackScreenOptions.mockClear();
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: authenticatedAppSession,
@@ -199,6 +202,60 @@ describe("HomeScreen", () => {
 		);
 
 		expect(mockReplace).toHaveBeenCalledWith("/lists");
+	});
+
+	it("keeps the active toolbar transparent and reveals its title on vertical collapse", async () => {
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				headerTransparent: true,
+				title: "",
+			}),
+		);
+
+		await act(async () => {
+			fireEvent(screen.getByTestId("home-list-items-lst_groceries"), "scroll", {
+				nativeEvent: {
+					contentOffset: { x: 0, y: 96 },
+					contentSize: { width: 390, height: 1200 },
+					layoutMeasurement: { width: 390, height: 844 },
+				},
+			});
+		});
+
+		await waitFor(() => {
+			expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					headerTransparent: true,
+					title: "Groceries",
+				}),
+			);
+		});
+
+		await act(async () => {
+			fireEvent(screen.getByTestId("home-list-items-lst_groceries"), "scroll", {
+				nativeEvent: {
+					contentOffset: { x: 0, y: 0 },
+					contentSize: { width: 390, height: 1200 },
+					layoutMeasurement: { width: 390, height: 844 },
+				},
+			});
+		});
+
+		await waitFor(() => {
+			expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					headerTransparent: true,
+					title: "",
+				}),
+			);
+		});
 	});
 
 	it("updates the page title and persists selection when paging settles", async () => {

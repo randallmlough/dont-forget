@@ -74,6 +74,7 @@ function HomeScreenResource({
 	const { rows } = useListRows(session);
 	const selectList = useSelectList(session);
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
+	const [collapsedListId, setCollapsedListId] = useState<string | null>(null);
 	const persistedListIdRef = useRef<string | null>(null);
 	const currentListId =
 		currentList.state.status === "active" ? currentList.state.listId : null;
@@ -88,6 +89,13 @@ function HomeScreenResource({
 			: currentListIsActive
 				? currentListId
 				: (listSummaries[0]?.id ?? null);
+	const focusedSummary = listSummaries.find(
+		(summary) => summary.id === resolvedFocusedListId,
+	);
+	const toolbarTitle =
+		collapsedListId === resolvedFocusedListId
+			? focusedSummary?.name
+			: undefined;
 
 	useEffect(() => {
 		if (persistedListIdRef.current === null && currentListId !== null) {
@@ -116,7 +124,8 @@ function HomeScreenResource({
 	return (
 		<>
 			<HomeStackHeader
-				title={resolvedFocusedListId === null ? FALLBACK_TITLE : undefined}
+				title={resolvedFocusedListId === null ? FALLBACK_TITLE : toolbarTitle}
+				transparent={resolvedFocusedListId !== null}
 				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
 			/>
@@ -126,6 +135,7 @@ function HomeScreenResource({
 				focusedListId={resolvedFocusedListId}
 				onFocusList={focusList}
 				onOpenLists={onOpenLists}
+				onToolbarTitleChange={setCollapsedListId}
 			/>
 		</>
 	);
@@ -133,10 +143,12 @@ function HomeScreenResource({
 
 function HomeStackHeader({
 	title,
+	transparent = false,
 	onOpenNavigation,
 	onOpenLists,
 }: {
 	title?: string;
+	transparent?: boolean;
 	onOpenNavigation: () => void;
 	onOpenLists: () => void;
 }) {
@@ -145,8 +157,9 @@ function HomeStackHeader({
 			{/* The enclosing Stack sets headerShown: false, so this route opts back in. */}
 			<Stack.Screen
 				options={{
-					headerLargeTitle: title !== undefined,
+					headerLargeTitle: !transparent && title !== undefined,
 					headerShown: true,
+					headerTransparent: transparent,
 					title: title ?? "",
 				}}
 			/>
