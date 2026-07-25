@@ -6,8 +6,9 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react-native";
+import { selectionAsync } from "expo-haptics";
 import type { PropsWithChildren } from "react";
-import { Dimensions } from "react-native";
+import { Dimensions, FlatList } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
@@ -22,6 +23,8 @@ import { useListPage } from "@/client/features/list/use-list-page";
 import { useListRows } from "@/client/features/list/use-list-rows";
 import { useSelectList } from "@/client/features/list/use-select-list";
 import { useAuthenticatedAppSession, useSyncState } from "@/client/session";
+import { panBegin, panEnd, panMove } from "@/test/mocks/gesture-handler";
+import { settleAnimations } from "@/test/mocks/reanimated";
 import HomeScreen, { HomeScreenView } from "./home-screen";
 
 const mockReplace = jest.fn();
@@ -48,25 +51,41 @@ jest.mock("expo-router", () => {
 		return children;
 	}
 
-	function Toolbar({ children }: PropsWithChildren) {
+	// The real bottom `Stack.Toolbar` hands its items to the native toolbar,
+	// outside this tree. The double renders them in place so the toolbar is
+	// queryable, which is the closest a JS harness gets to a subview of the
+	// native toolbar.
+	function Toolbar({ children }: PropsWithChildren<{ placement?: string }>) {
 		return children;
 	}
 
 	Toolbar.Button = function ToolbarButton({
 		accessibilityHint,
 		accessibilityLabel,
+		disabled,
 		onPress,
 	}: {
 		accessibilityHint?: string;
 		accessibilityLabel?: string;
+		disabled?: boolean;
 		onPress?: () => void;
 	}) {
 		return mockReact.createElement(mockReactNative.Pressable, {
 			accessibilityHint,
 			accessibilityLabel,
 			accessibilityRole: "button",
+			accessibilityState: { disabled: disabled === true },
+			disabled,
 			onPress,
 		});
+	};
+
+	Toolbar.Spacer = function ToolbarSpacer() {
+		return null;
+	};
+
+	Toolbar.View = function ToolbarView({ children }: PropsWithChildren) {
+		return children;
 	};
 
 	function Screen({ options }: { options?: { title?: string } }) {
@@ -89,6 +108,16 @@ jest.mock("expo-router", () => {
 jest.mock("expo-router/build/react-navigation/elements", () => ({
 	useHeaderHeight: () => mockUseHeaderHeight(),
 }));
+
+// Native haptics and native gesture recognition have no deterministic JS
+// harness. Justification per docs/code-standards/testing.md:7.
+jest.mock("expo-haptics", () => ({
+	selectionAsync: jest.fn(async () => undefined),
+}));
+
+jest.mock("react-native-gesture-handler", () =>
+	jest.requireActual("@/test/mocks/gesture-handler"),
+);
 
 // useAuthenticatedAppSession, useSyncState, useHomeCurrentList, and
 // useListRows all sit on the PowerSync watched-query and native-session
@@ -477,6 +506,185 @@ describe("HomeScreen", () => {
 		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
 	});
 });
+
+describe("Home bottom toolbar", () => {
+	beforeEach(() => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [
+					groceriesListSummary,
+					pantryListSummary,
+					hardwareListSummary,
+				],
+			},
+		});
+	});
+
+	it("reserves the Search placement without offering a search yet", async () => {
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(screen.getByRole("button", { name: "Search" })).toHaveProp(
+			"accessibilityState",
+			{ disabled: true },
+		);
+	});
+
+	it("names the focused List on the page control for assistive technology", async () => {
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(pageControl()).toHaveProp("accessibilityRole", "adjustable");
+		expect(pageControl()).toHaveProp("accessibilityValue", {
+			text: "Groceries, List 1 of 3",
+		});
+		expect(pageControl()).toHaveProp("accessibilityActions", [
+			{ name: "increment" },
+			{ name: "decrement" },
+		]);
+	});
+
+	it("moves the pager onto each List the drag crosses and persists only the last", async () => {
+		const scrollToIndex = jest
+			.spyOn(FlatList.prototype, "scrollToIndex")
+			.mockImplementation();
+
+		try {
+			await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+			scrollToIndex.mockClear();
+
+			await dragPageControlAcross([
+				DOT_TOUCH_X[0],
+				DOT_TOUCH_X[1],
+				DOT_TOUCH_X[2],
+			]);
+
+			// Each List the drag crossed was parked on without animating.
+			expect(scrollToIndex).toHaveBeenCalledWith({ animated: false, index: 1 });
+			expect(scrollToIndex).toHaveBeenCalledWith({ animated: false, index: 2 });
+			expect(selectionAsync).toHaveBeenCalledTimes(2);
+			expect(mockSelectList).toHaveBeenCalledTimes(1);
+			expect(mockSelectList).toHaveBeenCalledWith(
+				"lst_hardware",
+				"lst_groceries",
+			);
+			expect(pageControl()).toHaveProp("accessibilityValue", {
+				text: "Hardware, List 3 of 3",
+			});
+		} finally {
+			scrollToIndex.mockRestore();
+		}
+	});
+
+	it("returns the page control to the focused List when persisting the drag fails", async () => {
+		mockSelectList.mockResolvedValue(false);
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await dragPageControlAcross([DOT_TOUCH_X[0], DOT_TOUCH_X[1]]);
+
+		await waitFor(() => {
+			expect(screen.getByTestId("home-list-page-lst_groceries")).toBeTruthy();
+		});
+		expect(pageControl()).toHaveProp("accessibilityValue", {
+			text: "Groceries, List 1 of 3",
+		});
+	});
+
+	it("steps the page control one List at a time for assistive technology", async () => {
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await act(async () => {
+			fireEvent(pageControl(), "accessibilityAction", {
+				nativeEvent: { actionName: "increment" },
+			});
+		});
+		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
+
+		await act(async () => {
+			fireEvent(pageControl(), "accessibilityAction", {
+				nativeEvent: { actionName: "decrement" },
+			});
+		});
+		expect(mockSelectList).toHaveBeenLastCalledWith(
+			"lst_groceries",
+			"lst_pantry",
+		);
+	});
+
+	it("becomes the List picker's close button while the picker is open", async () => {
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(screen.getByRole("button", { name: "Choose List" }));
+
+		expect(await findToolbarButton("Close List picker")).toBeTruthy();
+		expect(
+			screen.queryByRole("button", {
+				name: "Choose List",
+				includeHiddenElements: true,
+			}),
+		).toBeNull();
+
+		await fireEvent.press(await findToolbarButton("Close List picker"));
+		// The bar keeps the picker's action while the picker is still receding,
+		// and swaps back once the zoom lands.
+		expect(await findToolbarButton("Close List picker")).toBeTruthy();
+		await act(async () => {
+			settleAnimations();
+		});
+
+		expect(await findToolbarButton("Choose List")).toBeTruthy();
+		expect(
+			screen.queryByRole("button", {
+				name: "Close List picker",
+				includeHiddenElements: true,
+			}),
+		).toBeNull();
+	});
+});
+
+/**
+ * Drags a finger across the page control, one touch position per entry, each
+ * its own render pass so the pager settles onto every List the drag crosses
+ * rather than only the one it lands on.
+ */
+async function dragPageControlAcross(
+	touchPositionsX: readonly number[],
+): Promise<void> {
+	const [start, ...moves] = touchPositionsX;
+	if (start === undefined) throw new Error("A drag needs a starting position");
+
+	await act(async () => {
+		panBegin(start);
+	});
+	for (const touchPositionX of moves) {
+		await act(async () => {
+			panMove(touchPositionX);
+		});
+	}
+	await act(async () => {
+		panEnd();
+	});
+}
+
+/**
+ * Horizontal touch positions inside the page control that land on each dot,
+ * measured from the control's left edge the way the pan gesture reports them.
+ */
+const DOT_TOUCH_X = [10, 30, 46];
+
+function pageControl() {
+	return screen.getByTestId("home-list-page-control", {
+		includeHiddenElements: true,
+	});
+}
+
+/**
+ * Hidden elements count: an open List picker is `accessibilityViewIsModal`,
+ * which masks its siblings, while the real toolbar renders outside the screen's
+ * view tree and stays reachable.
+ */
+function findToolbarButton(name: string) {
+	return screen.findByRole("button", { name, includeHiddenElements: true });
+}
 
 /**
  * Collapsed-title assertions re-render before reading the animated style: the

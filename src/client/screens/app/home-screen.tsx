@@ -13,6 +13,7 @@ import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-contex
 import {
 	type CollapsedTitleScroll,
 	CurrentList,
+	type HomeListPickerPhase,
 } from "@/client/features/list/current-list";
 import {
 	HomeRetryButton,
@@ -28,6 +29,7 @@ import {
 	useAuthenticatedAppSession,
 	useSyncState,
 } from "@/client/session";
+import { HomeListToolbar } from "./home-list-toolbar";
 
 const FALLBACK_TITLE = "Home";
 
@@ -95,6 +97,11 @@ function HomeScreenResource({
 	const { rows } = useListRows(session);
 	const selectList = useSelectList(session);
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
+	// Home's interaction state lives here because the native bottom toolbar
+	// renders from the page component, outside the List surface it drives.
+	const [composerOpen, setComposerOpen] = useState(false);
+	const [pickerPhase, setPickerPhase] = useState<HomeListPickerPhase>("closed");
+	const [selectionPending, setSelectionPending] = useState(false);
 	// The List whose selection is persisted. It trails `focusedListId`, which
 	// moves with the pager before the switch is written.
 	const persistedListIdRef = useRef<string | null>(null);
@@ -106,23 +113,48 @@ function HomeScreenResource({
 		currentListId,
 		listSummaries,
 	});
+	const focusedIndex = Math.max(
+		0,
+		listSummaries.findIndex((summary) => summary.id === resolvedFocusedListId),
+	);
 	const focusedListName = listSummaries.find(
 		(summary) => summary.id === resolvedFocusedListId,
 	)?.name;
 
 	async function focusList(listId: string): Promise<boolean> {
+		if (selectionPending) return false;
 		const persistedListId = persistedListIdRef.current ?? currentListId;
 		setFocusedListId(listId);
 		if (listId === persistedListId) return true;
 
-		const didSelect = await selectList(listId, persistedListId);
-		if (!didSelect) {
-			setFocusedListId(persistedListId);
-			return false;
-		}
+		setSelectionPending(true);
+		try {
+			const didSelect = await selectList(listId, persistedListId);
+			if (!didSelect) {
+				setFocusedListId(persistedListId);
+				return false;
+			}
 
-		persistedListIdRef.current = listId;
-		return true;
+			persistedListIdRef.current = listId;
+			return true;
+		} finally {
+			setSelectionPending(false);
+		}
+	}
+
+	/**
+	 * Moves the pager onto a List while the page control is still under the
+	 * finger. The pager parks on the focused List without animating, so this
+	 * alone is the instant page switch; the write waits for the finger to lift.
+	 */
+	function scrubToPage(index: number) {
+		const summary = listSummaries[index];
+		if (summary) setFocusedListId(summary.id);
+	}
+
+	function commitPage(index: number) {
+		const summary = listSummaries[index];
+		if (summary) void focusList(summary.id);
 	}
 
 	return (
@@ -137,13 +169,30 @@ function HomeScreenResource({
 				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
 			/>
+			{/* The composer owns the bottom of the screen while it is open. */}
+			{listSummaries.length > 0 && !composerOpen ? (
+				<HomeListToolbar
+					focusedIndex={focusedIndex}
+					lists={listSummaries}
+					pickerOpen={pickerPhase !== "closed"}
+					onClosePicker={() => setPickerPhase("closing")}
+					onCommitPage={commitPage}
+					onOpenPicker={() => setPickerPhase("open")}
+					onScrubToPage={scrubToPage}
+				/>
+			) : null}
 			<CurrentList
 				session={session}
+				composerOpen={composerOpen}
 				deps={{ currentList, syncState, listRows: rows }}
 				focusedListId={resolvedFocusedListId}
 				collapsedTitleScroll={collapsedTitleScroll}
+				pickerPhase={pickerPhase}
+				selectionPending={selectionPending}
+				onComposerOpenChange={setComposerOpen}
 				onFocusList={focusList}
 				onOpenLists={onOpenLists}
+				onPickerPhaseChange={setPickerPhase}
 				topContentInset={headerHeight}
 			/>
 		</>

@@ -1,11 +1,5 @@
 import { SymbolView } from "expo-symbols";
-import {
-	type ReactNode,
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-} from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
@@ -38,7 +32,6 @@ import {
 	sessionMemberDisplayName,
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
-import { GlassSurface } from "@/client/ui/glass-surface";
 import { AddItemForm } from "./add-item-form";
 import { HomeRetryButton, HomeStatus } from "./home-status";
 import { ItemRows } from "./item-rows";
@@ -69,13 +62,29 @@ export type CollapsedTitleScroll = {
 	pagerDrift: SharedValue<number>;
 };
 
+/**
+ * Whether the List picker is showing, and whether it is only still mounted to
+ * finish receding. Home owns this because the toolbar that opens and closes the
+ * picker renders outside this tree; the pager owns the zoom and reports back
+ * when it lands.
+ */
+export type HomeListPickerPhase = "closed" | "open" | "closing";
+
 export type CurrentListProps = {
 	session: AuthenticatedAppSession;
 	deps: HomeCurrentListDeps;
 	focusedListId: string | null;
 	collapsedTitleScroll: CollapsedTitleScroll;
+	/** Whether the add Item composer is open over the focused List page. */
+	composerOpen: boolean;
+	/** Whether the List picker should be showing instead of the focused List. */
+	pickerPhase: HomeListPickerPhase;
+	/** Whether a List selection is still being written. */
+	selectionPending: boolean;
+	onComposerOpenChange: (open: boolean) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
+	onPickerPhaseChange: (phase: HomeListPickerPhase) => void;
 	/**
 	 * Height of the transparent stack header each List page scrolls under. It
 	 * insets the page content so the List scrolls under Apple's scroll edge
@@ -89,8 +98,13 @@ export function CurrentList({
 	deps,
 	focusedListId,
 	collapsedTitleScroll,
+	composerOpen,
+	pickerPhase,
+	selectionPending,
+	onComposerOpenChange,
 	onFocusList,
 	onOpenLists,
+	onPickerPhaseChange,
 	topContentInset = 0,
 }: CurrentListProps) {
 	const { currentList, syncState, listRows } = deps;
@@ -144,10 +158,15 @@ export function CurrentList({
 			key={session.activeHousehold.id}
 			focusedListId={resolvedFocusedListId}
 			collapsedTitleScroll={collapsedTitleScroll}
+			composerOpen={composerOpen}
 			listSummaries={listRows.summaries}
+			pickerPhase={pickerPhase}
+			selectionPending={selectionPending}
 			session={session}
 			syncState={syncState}
+			onComposerOpenChange={onComposerOpenChange}
 			onFocusList={onFocusList}
+			onPickerPhaseChange={onPickerPhaseChange}
 			topContentInset={topContentInset}
 		/>
 	);
@@ -156,27 +175,34 @@ export function CurrentList({
 type HomeListPagerProps = {
 	focusedListId: string;
 	collapsedTitleScroll: CollapsedTitleScroll;
+	composerOpen: boolean;
 	listSummaries: ListSummary[];
+	pickerPhase: HomeListPickerPhase;
+	selectionPending: boolean;
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
+	onComposerOpenChange: (open: boolean) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
+	onPickerPhaseChange: (phase: HomeListPickerPhase) => void;
 	topContentInset: number;
 };
 
 function HomeListPager({
 	focusedListId,
 	collapsedTitleScroll,
+	composerOpen,
 	listSummaries,
+	pickerPhase,
+	selectionPending,
 	session,
 	syncState,
+	onComposerOpenChange,
 	onFocusList,
+	onPickerPhaseChange,
 	topContentInset,
 }: HomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
-	const [pickerPhase, setPickerPhase] = useState<PickerPhase>("closed");
-	const [composerListId, setComposerListId] = useState<string | null>(null);
-	const [selectionPending, setSelectionPending] = useState(false);
 	const focusedIndex = Math.max(
 		0,
 		listSummaries.findIndex((summary) => summary.id === focusedListId),
@@ -203,47 +229,33 @@ function HomeListPager({
 	const pickerProgress = useSharedValue(0);
 	const reducedMotion = useReducedMotion();
 
-	function animatePicker(
-		toValue: 0 | 1,
-		onSettled?: (finished?: boolean) => void,
-	) {
+	// Home owns the picker phase because the toolbar that opens and closes the
+	// picker renders outside this tree, so the zoom follows that prop and
+	// reports back once it lands, which is what releases the receding picker to
+	// unmount.
+	useEffect(() => {
+		if (pickerPhase === "closed") return;
+		if (pickerPhase === "open") {
+			pickerProgress.set(
+				reducedMotion
+					? withTiming(1, PICKER_CROSSFADE)
+					: withSpring(1, PICKER_ZOOM_SPRING),
+			);
+			return;
+		}
+
+		// `finished` is false when a new transition retargets this one, which
+		// must not close the picker it is reopening.
+		const settled = (finished?: boolean) => {
+			"worklet";
+			if (finished) runOnJS(onPickerPhaseChange)("closed");
+		};
 		pickerProgress.set(
 			reducedMotion
-				? withTiming(toValue, PICKER_CROSSFADE, onSettled)
-				: withSpring(toValue, PICKER_ZOOM_SPRING, onSettled),
+				? withTiming(0, PICKER_CROSSFADE, settled)
+				: withSpring(0, PICKER_ZOOM_SPRING, settled),
 		);
-	}
-
-	function openPicker() {
-		setPickerPhase("open");
-		animatePicker(1);
-	}
-
-	/**
-	 * Holds the picker mounted until the zoom lands, so the receding surface is
-	 * still there to animate. `finished` is false when a new transition
-	 * retargets this one, which must not unmount the picker it is reopening.
-	 */
-	function closePicker() {
-		setPickerPhase("closing");
-		animatePicker(0, (finished) => {
-			"worklet";
-			if (finished) runOnJS(setPickerPhase)("closed");
-		});
-	}
-
-	const focusList = useCallback(
-		async (listId: string): Promise<boolean> => {
-			if (selectionPending) return false;
-			setSelectionPending(true);
-			try {
-				return await onFocusList(listId);
-			} finally {
-				setSelectionPending(false);
-			}
-		},
-		[onFocusList, selectionPending],
-	);
+	}, [onPickerPhaseChange, pickerPhase, pickerProgress, reducedMotion]);
 
 	useEffect(() => {
 		pagerRef.current?.scrollToIndex({ animated: false, index: focusedIndex });
@@ -260,7 +272,7 @@ function HomeListPager({
 	 */
 	async function selectFromPicker(summary: ListSummary): Promise<void> {
 		if (!listSummaries.some((candidate) => candidate.id === summary.id)) return;
-		if (await focusList(summary.id)) closePicker();
+		if (await onFocusList(summary.id)) onPickerPhaseChange("closing");
 	}
 
 	function pageLayout(
@@ -280,7 +292,7 @@ function HomeListPager({
 		);
 		const summary = listSummaries[settledIndex];
 		if (!summary || summary.id === focusedListId) return;
-		void focusList(summary.id).then((didFocus) => {
+		void onFocusList(summary.id).then((didFocus) => {
 			if (didFocus) return;
 			pagerRef.current?.scrollToIndex({
 				animated: true,
@@ -313,9 +325,7 @@ function HomeListPager({
 					interactive={pickerPhase === "open"}
 					listSummaries={listSummaries}
 					progress={pickerProgress}
-					selectedIndex={focusedIndex}
 					selectionPending={selectionPending}
-					onClose={closePicker}
 					onSelect={(summary) => void selectFromPicker(summary)}
 				/>
 			)}
@@ -352,7 +362,7 @@ function HomeListPager({
 								width={width}
 							>
 								<HomeListPage
-									composerOpen={composerListId === summary.id}
+									composerOpen={composerOpen && focused}
 									focused={focused}
 									collapsedTitleScroll={collapsedTitleScroll}
 									listSummaries={listSummaries}
@@ -360,8 +370,8 @@ function HomeListPager({
 									summary={summary}
 									syncState={syncState}
 									topContentInset={topContentInset}
-									onDismissComposer={() => setComposerListId(null)}
-									onOpenComposer={() => setComposerListId(summary.id)}
+									onDismissComposer={() => onComposerOpenChange(false)}
+									onOpenComposer={() => onComposerOpenChange(true)}
 								/>
 							</CarouselPage>
 						);
@@ -369,7 +379,7 @@ function HomeListPager({
 					scrollEnabled={
 						listSummaries.length > 1 &&
 						pickerPhase === "closed" &&
-						composerListId === null &&
+						!composerOpen &&
 						!selectionPending
 					}
 					scrollEventThrottle={16}
@@ -380,24 +390,10 @@ function HomeListPager({
 					onMomentumScrollEnd={pageSettled}
 					onScroll={pagerScrollHandler}
 				/>
-				{composerListId === null ? (
-					<HomePickerControl
-						listCount={listSummaries.length}
-						pickerOpen={false}
-						selectedIndex={focusedIndex}
-						onPress={openPicker}
-					/>
-				) : null}
 			</Animated.View>
 		</>
 	);
 }
-
-/**
- * Whether the List picker is showing, and whether it is only still mounted to
- * finish receding.
- */
-type PickerPhase = "closed" | "open" | "closing";
 
 /**
  * Physical geometry of the picker zoom, not design tokens.
@@ -690,18 +686,14 @@ function HomeListPicker({
 	focusedListId,
 	interactive,
 	progress,
-	selectedIndex,
 	selectionPending,
-	onClose,
 	onSelect,
 }: {
 	listSummaries: readonly ListSummary[];
 	focusedListId: string;
 	interactive: boolean;
 	progress: SharedValue<number>;
-	selectedIndex: number;
 	selectionPending: boolean;
-	onClose: () => void;
 	onSelect: (summary: ListSummary) => void;
 }) {
 	const insets = useSafeAreaInsets();
@@ -782,65 +774,7 @@ function HomeListPicker({
 					);
 				}}
 			/>
-			<HomePickerControl
-				listCount={listSummaries.length}
-				pickerOpen
-				selectedIndex={selectedIndex}
-				onPress={onClose}
-			/>
 		</Animated.View>
-	);
-}
-
-function HomePickerControl({
-	listCount,
-	selectedIndex,
-	pickerOpen,
-	onPress,
-}: {
-	listCount: number;
-	selectedIndex: number;
-	pickerOpen: boolean;
-	onPress: () => void;
-}) {
-	const insets = useSafeAreaInsets();
-	const { theme } = useUnistyles();
-
-	return (
-		<View
-			pointerEvents="box-none"
-			style={[
-				styles.pickerControlPosition,
-				{ bottom: insets.bottom + theme.spacing(2) },
-			]}
-		>
-			<GlassSurface interactive style={styles.pickerControlSurface}>
-				<Button
-					accessibilityHint={
-						pickerOpen
-							? "Returns to the focused List"
-							: "Opens the Home List picker"
-					}
-					accessibilityLabel={pickerOpen ? "Close List picker" : "Choose List"}
-					onPress={onPress}
-					size="sm"
-					style={styles.pickerControl}
-					variant="link"
-				>
-					<SymbolView
-						accessibilityElementsHidden
-						accessible={false}
-						name={pickerOpen ? "xmark" : "square.grid.2x2"}
-						size={17}
-						tintColor={theme.colors.foreground}
-						weight="semibold"
-					/>
-					<Text style={styles.pickerControlLabel}>
-						{pickerOpen ? "Done" : `${selectedIndex + 1} of ${listCount}`}
-					</Text>
-				</Button>
-			</GlassSurface>
-		</View>
 	);
 }
 
@@ -942,24 +876,5 @@ const styles = StyleSheet.create((theme) => ({
 	pickerRowDetail: {
 		...theme.typography.caption,
 		color: theme.colors.mutedForeground,
-	},
-	pickerControlPosition: {
-		position: "absolute",
-		right: 0,
-		left: 0,
-		zIndex: 40,
-		alignItems: "center",
-	},
-	pickerControlSurface: {
-		borderRadius: theme.radii.full,
-	},
-	pickerControl: {
-		minHeight: theme.spacing(11),
-		gap: theme.spacing(2),
-		paddingHorizontal: theme.spacing(4),
-	},
-	pickerControlLabel: {
-		...theme.typography.captionStrong,
-		color: theme.colors.foreground,
 	},
 }));

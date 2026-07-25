@@ -90,11 +90,16 @@ function CurrentListStory({ deps }: { deps: HomeCurrentListDeps }) {
 	return (
 		<CurrentList
 			session={authenticatedAppSession}
+			composerOpen={false}
 			deps={deps}
 			focusedListId={null}
 			collapsedTitleScroll={collapsedTitleScroll}
+			pickerPhase="closed"
+			selectionPending={false}
+			onComposerOpenChange={noop}
 			onFocusList={focusList}
 			onOpenLists={noop}
+			onPickerPhaseChange={noop}
 		/>
 	);
 }

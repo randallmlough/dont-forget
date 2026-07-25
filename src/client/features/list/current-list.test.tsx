@@ -6,8 +6,14 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react-native";
-import { type PropsWithChildren, useMemo } from "react";
-import { Dimensions, FlatList, StyleSheet, type ViewStyle } from "react-native";
+import { type PropsWithChildren, useMemo, useState } from "react";
+import {
+	Dimensions,
+	FlatList,
+	Pressable,
+	StyleSheet,
+	type ViewStyle,
+} from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { settleAnimations } from "@/test/mocks/reanimated";
@@ -15,6 +21,7 @@ import {
 	CurrentList,
 	type CurrentListProps,
 	type HomeCurrentListDeps,
+	type HomeListPickerPhase,
 } from "./current-list";
 import {
 	authenticatedAppSession,
@@ -242,9 +249,7 @@ describe("CurrentList", () => {
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Choose List" }),
-		);
+		await openListPicker();
 		expect(await screen.findByTestId("home-list-picker")).toBeTruthy();
 
 		await fireEvent.press(
@@ -273,12 +278,8 @@ describe("CurrentList", () => {
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Choose List" }),
-		);
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Close List picker" }),
-		);
+		await openListPicker();
+		await closeListPicker();
 
 		expect(screen.getByTestId("home-list-picker")).toHaveProp(
 			"pointerEvents",
@@ -304,39 +305,35 @@ describe("CurrentList", () => {
 		);
 		const listSurface = screen.getByTestId("home-list-surface");
 
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Choose List" }),
-		);
+		await openListPicker();
 		expect(listSurface).toHaveProp("pointerEvents", "none");
-		expect(screen.queryByRole("button", { name: "Choose List" })).toBeNull();
 
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Close List picker" }),
-		);
+		await closeListPicker();
 		expect(listSurface).toHaveProp("pointerEvents", "none");
 
 		await settleListPickerZoom();
 		expect(listSurface).toHaveProp("pointerEvents", "auto");
-		expect(screen.getByRole("button", { name: "Choose List" })).toBeTruthy();
 	});
 
 	it("zooms the focused List away as the picker arrives", async () => {
-		await render(pagedListSurface(), { wrapper: TestSafeAreaProvider });
+		const view = await render(pagedListSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
 
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Choose List" }),
-		);
+		await openListPicker();
+		await view.rerender(pagedListSurface());
 
 		expect(surfaceScale("home-list-surface")).toBeLessThan(1);
 	});
 
 	it("crossfades to the picker without zooming under reduced motion", async () => {
 		mockDevice.reducedMotion = true;
-		await render(pagedListSurface(), { wrapper: TestSafeAreaProvider });
+		const view = await render(pagedListSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
 
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Choose List" }),
-		);
+		await openListPicker();
+		await view.rerender(pagedListSurface());
 
 		expect(surfaceScale("home-list-surface")).toBe(1);
 		expect(
@@ -360,9 +357,7 @@ describe("CurrentList", () => {
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Choose List" }),
-		);
+		await openListPicker();
 		await fireEvent.press(
 			await screen.findByRole("button", { name: "Pantry" }),
 		);
@@ -575,14 +570,15 @@ describe("CurrentList", () => {
 });
 
 /**
- * Renders `CurrentList` the way the Home screen does, owning the shared values
- * the focused List page publishes its scroll state through. What the native
- * header does with that state is asserted against the real screen in
+ * Renders `CurrentList` the way the Home screen does: owning the shared values
+ * the focused List page publishes its scroll state through, the picker and
+ * composer open state, and the in-flight selection those two produce. The
+ * stand-in picker buttons play the part of the native bottom toolbar, which
+ * renders outside this tree; what the real toolbar and native header do with
+ * this state is asserted against the real screen in
  * `src/client/screens/app/home-screen.test.tsx`.
  */
-function HomeCurrentList(
-	props: Omit<CurrentListProps, "collapsedTitleScroll">,
-) {
+function HomeCurrentList({ onFocusList, ...props }: HomeCurrentListProps) {
 	const offsetY = useSharedValue(0);
 	const largeTitleHeight = useSharedValue(0);
 	const pagerDrift = useSharedValue(0);
@@ -590,9 +586,55 @@ function HomeCurrentList(
 		() => ({ offsetY, largeTitleHeight, pagerDrift }),
 		[offsetY, largeTitleHeight, pagerDrift],
 	);
+	const [composerOpen, setComposerOpen] = useState(false);
+	const [pickerPhase, setPickerPhase] = useState<HomeListPickerPhase>("closed");
+	const [selectionPending, setSelectionPending] = useState(false);
 
-	return <CurrentList {...props} collapsedTitleScroll={collapsedTitleScroll} />;
+	async function focusList(listId: string): Promise<boolean> {
+		if (selectionPending) return false;
+		setSelectionPending(true);
+		try {
+			return await onFocusList(listId);
+		} finally {
+			setSelectionPending(false);
+		}
+	}
+
+	return (
+		<>
+			<Pressable
+				accessibilityLabel="Choose List"
+				accessibilityRole="button"
+				onPress={() => setPickerPhase("open")}
+			/>
+			<Pressable
+				accessibilityLabel="Close List picker"
+				accessibilityRole="button"
+				onPress={() => setPickerPhase("closing")}
+			/>
+			<CurrentList
+				{...props}
+				collapsedTitleScroll={collapsedTitleScroll}
+				composerOpen={composerOpen}
+				pickerPhase={pickerPhase}
+				selectionPending={selectionPending}
+				onComposerOpenChange={setComposerOpen}
+				onFocusList={focusList}
+				onPickerPhaseChange={setPickerPhase}
+			/>
+		</>
+	);
 }
+
+type HomeCurrentListProps = Omit<
+	CurrentListProps,
+	| "collapsedTitleScroll"
+	| "composerOpen"
+	| "pickerPhase"
+	| "selectionPending"
+	| "onComposerOpenChange"
+	| "onPickerPhaseChange"
+>;
 
 /**
  * Carousel assertions re-render before reading the animated style: the
@@ -636,6 +678,30 @@ function pageTiltDegrees(testID: string): number {
 		}
 	}
 	throw new Error(`${testID} is not carrying a carousel rotation`);
+}
+
+/**
+ * Drives the picker from the harness stand-in for the native bottom toolbar.
+ * Hidden elements count: an open picker is `accessibilityViewIsModal`, which
+ * masks its siblings, while the real toolbar renders outside this tree
+ * entirely and stays reachable.
+ */
+async function openListPicker(): Promise<void> {
+	await fireEvent.press(
+		screen.getByRole("button", {
+			name: "Choose List",
+			includeHiddenElements: true,
+		}),
+	);
+}
+
+async function closeListPicker(): Promise<void> {
+	await fireEvent.press(
+		screen.getByRole("button", {
+			name: "Close List picker",
+			includeHiddenElements: true,
+		}),
+	);
 }
 
 /**
