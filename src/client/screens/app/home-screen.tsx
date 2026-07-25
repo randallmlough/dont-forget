@@ -169,12 +169,15 @@ function HomeScreenResource({
 				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
 			/>
-			{/* The composer owns the bottom of the screen while it is open. */}
+			{/* The composer owns the bottom of the screen while it is open. The
+			    page control returns as soon as the picker starts receding:
+			    "closing" is not interactive, so waiting for the zoom to settle
+			    would only delay the scrub coming back. */}
 			{listSummaries.length > 0 && !composerOpen ? (
 				<HomeListToolbar
 					focusedIndex={focusedIndex}
 					lists={listSummaries}
-					pickerOpen={pickerPhase !== "closed"}
+					pickerOpen={pickerPhase === "open"}
 					onClosePicker={() => setPickerPhase("closing")}
 					onCommitPage={commitPage}
 					onOpenPicker={() => setPickerPhase("open")}

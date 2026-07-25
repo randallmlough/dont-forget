@@ -266,13 +266,16 @@ function HomeListPager({
 
 	/**
 	 * The pager is parked on the selected page before the picker starts
-	 * receding, because focusing the List rerenders the pager onto it while the
-	 * pager is still hidden behind the picker. A failed focus keeps the picker
-	 * open on the List that is still focused.
+	 * receding, because focusing the List rerenders the pager onto it in the
+	 * same commit that starts the recede, while the pager is still hidden
+	 * behind the picker. The write happens behind the recede rather than before
+	 * it, so the tap responds instantly; a failed write reverts focus the same
+	 * way a failed swipe does.
 	 */
-	async function selectFromPicker(summary: ListSummary): Promise<void> {
+	function selectFromPicker(summary: ListSummary): void {
 		if (!listSummaries.some((candidate) => candidate.id === summary.id)) return;
-		if (await onFocusList(summary.id)) onPickerPhaseChange("closing");
+		onPickerPhaseChange("closing");
+		void onFocusList(summary.id);
 	}
 
 	function pageLayout(
@@ -326,7 +329,7 @@ function HomeListPager({
 					listSummaries={listSummaries}
 					progress={pickerProgress}
 					selectionPending={selectionPending}
-					onSelect={(summary) => void selectFromPicker(summary)}
+					onSelect={selectFromPicker}
 				/>
 			)}
 			<Animated.View

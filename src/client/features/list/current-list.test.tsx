@@ -341,7 +341,10 @@ describe("CurrentList", () => {
 		).toHaveStyle({ opacity: 0 });
 	});
 
-	it("leaves the List picker open when focusing a chosen List fails", async () => {
+	it("closes the List picker on the tap even when focusing the chosen List fails", async () => {
+		// Focus reverting to the persisted List on failure is the screen's
+		// contract; the picker's is that the tap closes it without waiting on
+		// the write.
 		const onFocusList = jest.fn(async () => false);
 		await render(
 			<HomeCurrentList
@@ -362,14 +365,15 @@ describe("CurrentList", () => {
 			await screen.findByRole("button", { name: "Pantry" }),
 		);
 
+		expect(screen.getByTestId("home-list-picker")).toHaveProp(
+			"pointerEvents",
+			"none",
+		);
 		await waitFor(() => {
 			expect(onFocusList).toHaveBeenCalledWith("lst_pantry");
 		});
 		await settleListPickerZoom();
-		expect(screen.getByTestId("home-list-picker")).toHaveProp(
-			"pointerEvents",
-			"auto",
-		);
+		expect(screen.queryByTestId("home-list-picker")).toBeNull();
 	});
 
 	it("persists the focused List when horizontal paging settles", async () => {

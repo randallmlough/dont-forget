@@ -624,13 +624,8 @@ describe("Home bottom toolbar", () => {
 		).toBeNull();
 
 		await fireEvent.press(await findToolbarButton("Close List picker"));
-		// The bar keeps the picker's action while the picker is still receding,
-		// and swaps back once the zoom lands.
-		expect(await findToolbarButton("Close List picker")).toBeTruthy();
-		await act(async () => {
-			settleAnimations();
-		});
-
+		// The page control is back the moment the picker starts receding, so the
+		// bar feels snappy instead of waiting out the zoom.
 		expect(await findToolbarButton("Choose List")).toBeTruthy();
 		expect(
 			screen.queryByRole("button", {
@@ -638,6 +633,12 @@ describe("Home bottom toolbar", () => {
 				includeHiddenElements: true,
 			}),
 		).toBeNull();
+		// The receding picker itself stays mounted until the zoom lands.
+		expect(screen.getByTestId("home-list-picker")).toBeTruthy();
+		await act(async () => {
+			settleAnimations();
+		});
+		expect(screen.queryByTestId("home-list-picker")).toBeNull();
 	});
 });
 
