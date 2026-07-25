@@ -1,11 +1,35 @@
 import { act, render, screen } from "@testing-library/react-native";
+import type { ReactNode } from "react";
 
-import { type Toast, Toaster, toast, toastsReducer } from "./toast";
+import {
+	shouldDismissOnSwipe,
+	type Toast,
+	Toaster,
+	toast,
+	toastsReducer,
+} from "./toast";
 
 // The safe-area insets come from a native module that is unavailable in Jest.
 jest.mock("react-native-safe-area-context", () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+
+// Gesture Handler is a native-backed boundary, and its GestureDetector drives
+// the real Reanimated runtime that this suite replaces with a mock. Stubbing
+// the module's public surface keeps the card renderable; the swipe decision
+// itself is proven directly through `shouldDismissOnSwipe`.
+jest.mock("react-native-gesture-handler", () => {
+	const panGesture = {
+		activeOffsetY: () => panGesture,
+		onUpdate: () => panGesture,
+		onEnd: () => panGesture,
+	};
+
+	return {
+		Gesture: { Pan: () => panGesture },
+		GestureDetector: ({ children }: { children: ReactNode }) => children,
+	};
+});
 
 function createToast(id: string, overrides?: Partial<Toast>): Toast {
 	return { id, title: `Toast ${id}`, open: true, ...overrides };
@@ -55,6 +79,25 @@ describe("toastsReducer", () => {
 		);
 
 		expect(state.toasts.map((item) => item.id)).toEqual(["2"]);
+	});
+});
+
+describe("shouldDismissOnSwipe", () => {
+	it("dismisses a card dragged far enough toward the top edge", () => {
+		expect(shouldDismissOnSwipe(-60, 0)).toBe(true);
+	});
+
+	it("dismisses a short but fast upward flick", () => {
+		expect(shouldDismissOnSwipe(-10, -900)).toBe(true);
+	});
+
+	it("keeps a card that was dragged up slowly and not far enough", () => {
+		expect(shouldDismissOnSwipe(-40, -100)).toBe(false);
+	});
+
+	it("keeps a card dragged or flung downward, however far or fast", () => {
+		expect(shouldDismissOnSwipe(200, 0)).toBe(false);
+		expect(shouldDismissOnSwipe(200, 2000)).toBe(false);
 	});
 });
 

@@ -1,7 +1,9 @@
 import { SymbolView, type SymbolViewProps } from "expo-symbols";
 import { useEffect, useSyncExternalStore } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+	runOnJS,
 	useAnimatedStyle,
 	useSharedValue,
 	withSpring,
@@ -12,12 +14,16 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 /**
  * App-owned toast primitive: a module-level store plus a `Toaster` viewport
- * that renders the newest toasts as a stack of cards above the bottom safe
- * area.
+ * that renders the newest toasts as a stack of cards below the top safe area.
+ * Cards drop in from the top edge, older ones recede back toward it, and an
+ * upward swipe flicks a card away.
  *
  * Consumers mount `<Toaster />` exactly once, as the last child of the app
  * root so it paints above screen content, and then raise toasts imperatively
  * from anywhere: `toast.success("Item added")`.
+ *
+ * The swipe gesture needs a `GestureHandlerRootView` ancestor above the
+ * mounted `<Toaster />`.
  *
  * The store lives at module scope on purpose — raising a toast must not
  * require a provider, a ref, or prop drilling from the code that just did the
@@ -34,8 +40,31 @@ const EXIT_DURATION_MS = 150;
 const STACK_GAP = 14;
 /** How much smaller each card behind the front one is drawn. */
 const STACK_SCALE_STEP = 0.05;
-/** Distance, in points, a card rises through while it fades in. */
-const ENTER_RISE = 20;
+/** Distance, in points, a card drops through while it fades in. */
+const ENTER_DROP = 20;
+/** Finger travel, in points, before the swipe takes over, so taps still land. */
+const PAN_ACTIVATION_OFFSET = 8;
+/** Upward drag past this distance, in points, dismisses the card. */
+const SWIPE_DISMISS_DISTANCE = 48;
+/** Upward fling faster than this, in points per second, also dismisses it. */
+const SWIPE_DISMISS_VELOCITY = 600;
+/** How far, in points, a flicked card keeps travelling past the top edge. */
+const SWIPE_EXIT_TRAVEL = 160;
+/** Toasts only leave through the top; downward drags just rubber-band. */
+const DOWNWARD_DRAG_RESISTANCE = 0.2;
+
+/** Decides a swipe's outcome from where and how fast the finger left the card. */
+export function shouldDismissOnSwipe(
+	translationY: number,
+	velocityY: number,
+): boolean {
+	"worklet";
+
+	return (
+		translationY < -SWIPE_DISMISS_DISTANCE ||
+		velocityY < -SWIPE_DISMISS_VELOCITY
+	);
+}
 
 export type ToastType =
 	| "normal"
@@ -210,10 +239,10 @@ export function Toaster() {
 		<View pointerEvents="box-none" style={styles.viewport}>
 			{stacked.map(({ item, stackIndex }) => (
 				<ToastCard
-					bottomOffset={insets.bottom + theme.spacing(5)}
 					key={item.id}
 					stackIndex={stackIndex}
 					toast={item}
+					topOffset={insets.top + theme.spacing(5)}
 				/>
 			))}
 		</View>
@@ -221,16 +250,17 @@ export function Toaster() {
 }
 
 function ToastCard({
-	bottomOffset,
 	stackIndex,
 	toast: item,
+	topOffset,
 }: {
-	bottomOffset: number;
 	stackIndex: number;
 	toast: Toast;
+	topOffset: number;
 }) {
 	const visibility = useSharedValue(0);
 	const depth = useSharedValue(stackIndex);
+	const drag = useSharedValue(0);
 	const { action, duration, id, onAutoClose, open } = item;
 
 	useEffect(() => {
@@ -267,43 +297,81 @@ function ToastCard({
 			transform: [
 				{
 					translateY:
-						currentDepth * -STACK_GAP + (1 - currentVisibility) * ENTER_RISE,
+						currentDepth * -STACK_GAP -
+						(1 - currentVisibility) * ENTER_DROP +
+						drag.get(),
 				},
 				{ scale: 1 - currentDepth * STACK_SCALE_STEP },
 			],
 		};
 	});
 
+	// Gesture callbacks are worklets: the drag maths stays on the UI thread and
+	// only the dismissal itself hops back to JS.
+	const swipe = Gesture.Pan()
+		.activeOffsetY([-PAN_ACTIVATION_OFFSET, PAN_ACTIVATION_OFFSET])
+		.onUpdate((event) => {
+			drag.set(
+				event.translationY < 0
+					? event.translationY
+					: event.translationY * DOWNWARD_DRAG_RESISTANCE,
+			);
+		})
+		.onEnd((event) => {
+			if (shouldDismissOnSwipe(event.translationY, event.velocityY)) {
+				// Keep travelling off the top edge instead of snapping back, so the
+				// store's fade-out plays where the card already is.
+				drag.set(
+					withTiming(-SWIPE_EXIT_TRAVEL, { duration: EXIT_DURATION_MS }),
+				);
+				runOnJS(dismissToast)(id);
+				return;
+			}
+
+			drag.set(withSpring(0));
+		});
+
 	return (
-		<Animated.View
-			accessibilityRole="alert"
-			style={[styles.card, { bottom: bottomOffset }, animatedStyle]}
-		>
-			<ToastIcon type={item.type ?? "normal"} />
-			<View style={styles.content}>
-				<Text style={styles.title}>{item.title}</Text>
-				{item.description ? (
-					<Text style={styles.description}>{item.description}</Text>
-				) : null}
-			</View>
-			{action ? (
-				<Pressable
-					accessibilityRole="button"
-					onPress={() => {
-						action.onPress();
+		<GestureDetector gesture={swipe}>
+			<Animated.View
+				accessibilityActions={dismissAccessibilityActions}
+				accessibilityRole="alert"
+				onAccessibilityAction={(event) => {
+					if (event.nativeEvent.actionName === "escape") {
 						dismissToast(id);
-					}}
-					style={({ pressed }) => [
-						styles.actionButton,
-						pressed ? styles.actionButtonPressed : undefined,
-					]}
-				>
-					<Text style={styles.actionLabel}>{action.label}</Text>
-				</Pressable>
-			) : null}
-		</Animated.View>
+					}
+				}}
+				style={[styles.card, { top: topOffset }, animatedStyle]}
+			>
+				<ToastIcon type={item.type ?? "normal"} />
+				<View style={styles.content}>
+					<Text style={styles.title}>{item.title}</Text>
+					{item.description ? (
+						<Text style={styles.description}>{item.description}</Text>
+					) : null}
+				</View>
+				{action ? (
+					<Pressable
+						accessibilityRole="button"
+						onPress={() => {
+							action.onPress();
+							dismissToast(id);
+						}}
+						style={({ pressed }) => [
+							styles.actionButton,
+							pressed ? styles.actionButtonPressed : undefined,
+						]}
+					>
+						<Text style={styles.actionLabel}>{action.label}</Text>
+					</Pressable>
+				) : null}
+			</Animated.View>
+		</GestureDetector>
 	);
 }
+
+/** VoiceOver's two-finger scrub reaches the same dismissal as the swipe. */
+const dismissAccessibilityActions = [{ name: "escape", label: "Dismiss" }];
 
 type IconToastType = Exclude<ToastType, "normal" | "loading">;
 

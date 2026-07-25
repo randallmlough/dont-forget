@@ -109,7 +109,7 @@ function ToastGallery({ themeName }: { themeName: "light" | "dark" }) {
 					</Button>
 				</StorySection>
 
-				<StorySection title="Stack">
+				<StorySection title="Stack — swipe a card up to dismiss it">
 					<Button onPress={showStack} size="sm" variant="outline">
 						Raise 4 (3 stay)
 					</Button>
@@ -153,8 +153,11 @@ function StorySection({
 function noop() {}
 
 const styles = StyleSheet.create((theme) => ({
+	// Bottom-aligned so the toast stack, which lands at the top, never covers
+	// the controls that raise it.
 	canvas: {
 		flex: 1,
+		justifyContent: "flex-end",
 		gap: theme.spacing(6),
 		padding: theme.spacing(6),
 		backgroundColor: theme.colors.background,
