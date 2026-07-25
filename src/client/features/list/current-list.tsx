@@ -10,6 +10,14 @@ import {
 	useWindowDimensions,
 	View,
 } from "react-native";
+import Animated, {
+	Extrapolation,
+	interpolate,
+	type SharedValue,
+	useAnimatedScrollHandler,
+	useAnimatedStyle,
+	useSharedValue,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { AddItemListOption } from "@/client/features/list/add-item-composer";
@@ -30,11 +38,6 @@ import { useListActions } from "./use-list-actions";
 import { type ListPageState, useListPage } from "./use-list-page";
 import type { ListRows } from "./use-list-rows";
 
-// Separate thresholds prevent the native toolbar title from flickering while
-// iOS bounces the List near its expanded position.
-const TOOLBAR_TITLE_COLLAPSE_OFFSET = 24;
-const TOOLBAR_TITLE_EXPAND_OFFSET = 8;
-
 export type HomeCurrentListDeps = {
 	currentList: HomeCurrentListData;
 	syncState: ActiveListSyncState;
@@ -47,7 +50,10 @@ export type CurrentListProps = {
 	focusedListId: string | null;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
-	onToolbarTitleChange?: (collapsedListId: string | null) => void;
+	/**
+	 * Height of the transparent stack header each List page scrolls under. It
+	 * insets the page content and sizes the page's sticky List title.
+	 */
 	topContentInset?: number;
 };
 
@@ -57,8 +63,7 @@ export function CurrentList({
 	focusedListId,
 	onFocusList,
 	onOpenLists,
-	onToolbarTitleChange,
-	topContentInset,
+	topContentInset = 0,
 }: CurrentListProps) {
 	const { currentList, syncState, listRows } = deps;
 	const loadState = currentList.state;
@@ -114,7 +119,6 @@ export function CurrentList({
 			session={session}
 			syncState={syncState}
 			onFocusList={onFocusList}
-			onToolbarTitleChange={onToolbarTitleChange}
 			topContentInset={topContentInset}
 		/>
 	);
@@ -126,8 +130,7 @@ type HomeListPagerProps = {
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
 	onFocusList: (listId: string) => Promise<boolean>;
-	onToolbarTitleChange?: (collapsedListId: string | null) => void;
-	topContentInset?: number;
+	topContentInset: number;
 };
 
 function HomeListPager({
@@ -136,22 +139,23 @@ function HomeListPager({
 	session,
 	syncState,
 	onFocusList,
-	onToolbarTitleChange,
 	topContentInset,
 }: HomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
-	const toolbarStateRef = useRef({
-		listId: focusedListId,
-		collapsed: false,
+	// Horizontal pager offset in points, written on the UI thread so page
+	// transforms never route scroll frames through React state. No page reads
+	// it yet; the carousel transform that consumes it lands next.
+	const pagerOffsetX = useSharedValue(0);
+	const pagerScrollHandler = useAnimatedScrollHandler((event) => {
+		pagerOffsetX.set(event.contentOffset.x);
 	});
-	const summaries = listSummaries;
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [composerListId, setComposerListId] = useState<string | null>(null);
 	const [selectionPending, setSelectionPending] = useState(false);
 	const focusedIndex = Math.max(
 		0,
-		summaries.findIndex((summary) => summary.id === focusedListId),
+		listSummaries.findIndex((summary) => summary.id === focusedListId),
 	);
 
 	const focusList = useCallback(
@@ -171,20 +175,8 @@ function HomeListPager({
 		pagerRef.current?.scrollToIndex({ animated: false, index: focusedIndex });
 	}, [focusedIndex]);
 
-	useEffect(() => {
-		toolbarStateRef.current = { listId: focusedListId, collapsed: false };
-		onToolbarTitleChange?.(null);
-	}, [focusedListId, onToolbarTitleChange]);
-
-	useEffect(
-		() => () => {
-			onToolbarTitleChange?.(null);
-		},
-		[onToolbarTitleChange],
-	);
-
 	async function selectFromPicker(summary: ListSummary): Promise<void> {
-		if (!summaries.some((candidate) => candidate.id === summary.id)) return;
+		if (!listSummaries.some((candidate) => candidate.id === summary.id)) return;
 		const didFocus = await focusList(summary.id);
 		if (!didFocus) {
 			pagerRef.current?.scrollToIndex({
@@ -207,11 +199,11 @@ function HomeListPager({
 		const settledIndex = Math.max(
 			0,
 			Math.min(
-				summaries.length - 1,
+				listSummaries.length - 1,
 				Math.round(event.nativeEvent.contentOffset.x / width),
 			),
 		);
-		const summary = summaries[settledIndex];
+		const summary = listSummaries[settledIndex];
 		if (!summary || summary.id === focusedListId) return;
 		void focusList(summary.id).then((didFocus) => {
 			if (didFocus) return;
@@ -222,35 +214,14 @@ function HomeListPager({
 		});
 	}
 
-	function pageScrolled(
-		summary: ListSummary,
-		event: NativeSyntheticEvent<NativeScrollEvent>,
-	) {
-		if (summary.id !== focusedListId) return;
-
-		const wasCollapsed =
-			toolbarStateRef.current.listId === summary.id &&
-			toolbarStateRef.current.collapsed;
-		const offsetY =
-			event.nativeEvent.contentOffset.y +
-			(event.nativeEvent.contentInset?.top ?? 0);
-		const collapsed = wasCollapsed
-			? offsetY > TOOLBAR_TITLE_EXPAND_OFFSET
-			: offsetY >= TOOLBAR_TITLE_COLLAPSE_OFFSET;
-		if (collapsed === wasCollapsed) return;
-
-		toolbarStateRef.current = { listId: summary.id, collapsed };
-		onToolbarTitleChange?.(collapsed ? summary.id : null);
-	}
-
 	return (
 		<>
-			<FlatList
-				data={summaries}
+			<Animated.FlatList
+				data={listSummaries}
 				decelerationRate="fast"
 				getItemLayout={pageLayout}
 				horizontal
-				initialNumToRender={Math.min(3, summaries.length)}
+				initialNumToRender={Math.min(3, listSummaries.length)}
 				initialScrollIndex={focusedIndex}
 				keyExtractor={listSummaryKey}
 				keyboardDismissMode="on-drag"
@@ -277,35 +248,36 @@ function HomeListPager({
 							<HomeListPage
 								composerOpen={composerListId === summary.id}
 								focused={focused}
-								listSummaries={summaries}
+								listSummaries={listSummaries}
 								session={session}
 								summary={summary}
 								syncState={syncState}
 								topContentInset={topContentInset}
 								onDismissComposer={() => setComposerListId(null)}
 								onOpenComposer={() => setComposerListId(summary.id)}
-								onScroll={(event) => pageScrolled(summary, event)}
 							/>
 						</View>
 					);
 				}}
 				scrollEnabled={
-					summaries.length > 1 &&
+					listSummaries.length > 1 &&
 					!pickerOpen &&
 					composerListId === null &&
 					!selectionPending
 				}
+				scrollEventThrottle={16}
 				showsHorizontalScrollIndicator={false}
 				style={styles.pager}
 				testID="home-list-pager"
 				windowSize={3}
 				onMomentumScrollEnd={pageSettled}
+				onScroll={pagerScrollHandler}
 			/>
 			{composerListId === null ? (
 				pickerOpen ? (
 					<HomeListPicker
 						focusedListId={focusedListId}
-						listSummaries={summaries}
+						listSummaries={listSummaries}
 						selectedIndex={focusedIndex}
 						selectionPending={selectionPending}
 						onClose={() => setPickerOpen(false)}
@@ -313,7 +285,7 @@ function HomeListPager({
 					/>
 				) : (
 					<HomePickerControl
-						listCount={summaries.length}
+						listCount={listSummaries.length}
 						pickerOpen={false}
 						selectedIndex={focusedIndex}
 						onPress={() => setPickerOpen(true)}
@@ -324,6 +296,18 @@ function HomeListPager({
 	);
 }
 
+type HomeListPageProps = {
+	summary: ListSummary;
+	session: AuthenticatedAppSession;
+	syncState: ActiveListSyncState;
+	listSummaries: readonly ListSummary[];
+	focused: boolean;
+	composerOpen: boolean;
+	topContentInset: number;
+	onOpenComposer: () => void;
+	onDismissComposer: () => void;
+};
+
 function HomeListPage({
 	summary,
 	session,
@@ -331,69 +315,15 @@ function HomeListPage({
 	listSummaries,
 	focused,
 	composerOpen,
+	topContentInset,
 	onOpenComposer,
 	onDismissComposer,
-	onScroll,
-	topContentInset,
-}: {
-	summary: ListSummary;
-	session: AuthenticatedAppSession;
-	syncState: ActiveListSyncState;
-	listSummaries: readonly ListSummary[];
-	focused: boolean;
-	composerOpen: boolean;
-	onOpenComposer: () => void;
-	onDismissComposer: () => void;
-	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-	topContentInset?: number;
-}) {
+}: HomeListPageProps) {
 	const state = useListPage(session, summary);
 
-	return (
-		<HomeListPageState
-			composerOpen={composerOpen}
-			focused={focused}
-			listSummaries={listSummaries}
-			session={session}
-			state={state}
-			summary={summary}
-			syncState={syncState}
-			topContentInset={topContentInset}
-			onDismissComposer={onDismissComposer}
-			onOpenComposer={onOpenComposer}
-			onScroll={onScroll}
-		/>
-	);
-}
-
-function HomeListPageState({
-	state,
-	summary,
-	session,
-	syncState,
-	listSummaries,
-	focused,
-	composerOpen,
-	onOpenComposer,
-	onDismissComposer,
-	onScroll,
-	topContentInset,
-}: {
-	state: ListPageState;
-	summary: ListSummary;
-	session: AuthenticatedAppSession;
-	syncState: ActiveListSyncState;
-	listSummaries: readonly ListSummary[];
-	focused: boolean;
-	composerOpen: boolean;
-	onOpenComposer: () => void;
-	onDismissComposer: () => void;
-	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-	topContentInset?: number;
-}) {
 	if (state.status === "loading") {
 		return (
-			<View style={styles.page}>
+			<View style={[styles.page, { paddingTop: topContentInset }]}>
 				<HomeListPageTitle title={summary.name} />
 				<HomeStatus
 					title="Preparing your Household"
@@ -407,7 +337,7 @@ function HomeListPageState({
 
 	if (state.status === "error") {
 		return (
-			<View style={styles.page}>
+			<View style={[styles.page, { paddingTop: topContentInset }]}>
 				<HomeListPageTitle title={summary.name} />
 				<HomeStatus title="List unavailable" body={state.message} />
 			</View>
@@ -426,7 +356,6 @@ function HomeListPageState({
 			topContentInset={topContentInset}
 			onDismissComposer={onDismissComposer}
 			onOpenComposer={onOpenComposer}
-			onScroll={onScroll}
 		/>
 	);
 }
@@ -441,23 +370,14 @@ function ActiveHomeListPage({
 	composerOpen,
 	onOpenComposer,
 	onDismissComposer,
-	onScroll,
 	topContentInset,
-}: {
+}: HomeListPageProps & {
 	loadState: Extract<ListPageState, { status: "active" }>;
-	session: AuthenticatedAppSession;
-	syncState: ActiveListSyncState;
-	listSummaries: readonly ListSummary[];
-	summary: ListSummary;
-	focused: boolean;
-	composerOpen: boolean;
-	onOpenComposer: () => void;
-	onDismissComposer: () => void;
-	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-	topContentInset?: number;
 }) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
+	const scrollOffsetY = useSharedValue(0);
+	const largeTitleHeight = useSharedValue(0);
 	const actions = useListActions({
 		items: loadState.list.items,
 		onAddItem: loadState.actions.addItem,
@@ -476,21 +396,33 @@ function ActiveHomeListPage({
 				focused={focused}
 				items={loadState.list.items}
 				listOverview={
-					<HomeListPageHeader
-						list={loadState.list}
-						summary={summary}
-						meta={{
-							currentMemberName: sessionMemberDisplayName(session),
-							errorMessage: actions.errorMessage,
-							syncState,
-						}}
-					/>
+					<View>
+						<HomeListPageTitle
+							title={summary.name}
+							onMeasureHeight={(height) => largeTitleHeight.set(height)}
+						/>
+						<ListOverview
+							state={loadState.list}
+							meta={{
+								currentMemberName: sessionMemberDisplayName(session),
+								errorMessage: actions.errorMessage,
+								syncState,
+							}}
+						/>
+					</View>
 				}
 				onPressBlankSpace={focused ? onOpenComposer : undefined}
-				onScroll={onScroll}
+				scrollOffsetY={scrollOffsetY}
 				topContentInset={topContentInset}
 				onToggleItem={actions.toggleItem}
 				testID={`home-list-items-${summary.id}`}
+			/>
+			<StickyListTitle
+				collapseOffset={largeTitleHeight}
+				height={topContentInset}
+				listId={summary.id}
+				scrollOffsetY={scrollOffsetY}
+				title={summary.name}
 			/>
 			<AddItemForm
 				currentListId={loadState.listId}
@@ -507,28 +439,71 @@ function ActiveHomeListPage({
 	);
 }
 
-function HomeListPageHeader({
-	summary,
-	list,
-	meta,
+function HomeListPageTitle({
+	title,
+	onMeasureHeight,
 }: {
-	summary: ListSummary;
-	list: Parameters<typeof ListOverview>[0]["state"];
-	meta: Parameters<typeof ListOverview>[0]["meta"];
+	title: string;
+	onMeasureHeight?: (height: number) => void;
 }) {
 	return (
-		<View>
-			<HomeListPageTitle title={summary.name} />
-			<ListOverview state={list} meta={meta} />
-		</View>
+		<Text
+			accessibilityRole="header"
+			style={styles.pageTitle}
+			onLayout={(event) => onMeasureHeight?.(event.nativeEvent.layout.height)}
+		>
+			{title}
+		</Text>
 	);
 }
 
-function HomeListPageTitle({ title }: { title: string }) {
+/**
+ * Compact List title that fills the transparent header band once this page's
+ * own large title has scrolled under it. It lives inside the page, so it slides
+ * away with the page during a horizontal swipe and each page keeps its own
+ * collapsed state. It repeats the large title, which stays the page's heading
+ * for assistive technology, so it is hidden from assistive technology.
+ */
+function StickyListTitle({
+	collapseOffset,
+	height,
+	listId,
+	scrollOffsetY,
+	title,
+}: {
+	collapseOffset: SharedValue<number>;
+	height: number;
+	listId: string;
+	scrollOffsetY: SharedValue<number>;
+	title: string;
+}) {
+	const { theme } = useUnistyles();
+	const fadeDistance = theme.spacing(6);
+	const titleBarStyle = useAnimatedStyle(() => {
+		const collapsedAt = collapseOffset.get();
+		if (collapsedAt <= 0) return { opacity: 0 };
+		return {
+			opacity: interpolate(
+				scrollOffsetY.get(),
+				[collapsedAt - fadeDistance, collapsedAt],
+				[0, 1],
+				Extrapolation.CLAMP,
+			),
+		};
+	});
+
 	return (
-		<Text accessibilityRole="header" style={styles.pageTitle}>
-			{title}
-		</Text>
+		<Animated.View
+			accessibilityElementsHidden
+			importantForAccessibility="no-hide-descendants"
+			pointerEvents="none"
+			style={[styles.stickyTitleBar, { height }, titleBarStyle]}
+			testID={`home-list-sticky-title-${listId}`}
+		>
+			<Text numberOfLines={1} style={styles.stickyTitle}>
+				{title}
+			</Text>
+		</Animated.View>
 	);
 }
 
@@ -713,6 +688,25 @@ const styles = StyleSheet.create((theme) => ({
 		paddingTop: theme.spacing(2),
 		paddingBottom: theme.spacing(2),
 		backgroundColor: theme.colors.background,
+	},
+	stickyTitleBar: {
+		position: "absolute",
+		top: 0,
+		right: 0,
+		left: 0,
+		zIndex: 20,
+		alignItems: "center",
+		justifyContent: "flex-end",
+		// Clears the leading and trailing stack toolbar buttons.
+		paddingHorizontal: theme.spacing(14),
+		paddingBottom: theme.spacing(2),
+		backgroundColor: theme.colors.background,
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.border,
+	},
+	stickyTitle: {
+		...theme.typography.headline,
+		color: theme.colors.foreground,
 	},
 	pickerOverlay: {
 		position: "absolute",

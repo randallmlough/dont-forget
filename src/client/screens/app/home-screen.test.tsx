@@ -147,7 +147,8 @@ beforeEach(() => {
 			setItemChecked: jest.fn(async () => undefined),
 		},
 	}));
-	mockSelectList.mockClear();
+	mockSelectList.mockReset();
+	mockSelectList.mockResolvedValue(true);
 	jest.mocked(useSelectList).mockReturnValue(mockSelectList);
 });
 
@@ -210,7 +211,7 @@ describe("HomeScreen", () => {
 		expect(mockReplace).toHaveBeenCalledWith("/lists");
 	});
 
-	it("keeps the active toolbar transparent and reveals its title on vertical collapse", async () => {
+	it("keeps the transparent stack header title empty while Lists are paged", async () => {
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
 				<HomeScreen />
@@ -220,6 +221,7 @@ describe("HomeScreen", () => {
 
 		expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
 			expect.objectContaining({
+				headerLargeTitle: false,
 				headerTransparent: true,
 				title: "",
 			}),
@@ -235,33 +237,12 @@ describe("HomeScreen", () => {
 			});
 		});
 
-		await waitFor(() => {
-			expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
-				expect.objectContaining({
-					headerTransparent: true,
-					title: "Groceries",
-				}),
-			);
-		});
-
-		await act(async () => {
-			fireEvent(screen.getByTestId("home-list-items-lst_groceries"), "scroll", {
-				nativeEvent: {
-					contentOffset: { x: 0, y: 0 },
-					contentSize: { width: 390, height: 1200 },
-					layoutMeasurement: { width: 390, height: 844 },
-				},
-			});
-		});
-
-		await waitFor(() => {
-			expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
-				expect.objectContaining({
-					headerTransparent: true,
-					title: "",
-				}),
-			);
-		});
+		expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				headerTransparent: true,
+				title: "",
+			}),
+		);
 	});
 
 	it("updates the page title and persists selection when paging settles", async () => {
@@ -283,7 +264,7 @@ describe("HomeScreen", () => {
 		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
 	});
 
-	it("starts a newly focused List in its expanded position", async () => {
+	it("insets every List page below the transparent stack header", async () => {
 		jest.mocked(useListRows).mockReturnValue({
 			rows: {
 				status: "ready",
@@ -301,6 +282,8 @@ describe("HomeScreen", () => {
 			const itemRows = screen.getByTestId(`home-list-items-${listId}`, {
 				includeHiddenElements: true,
 			});
+			// iOS only auto-adjusts one of the nested pager Lists, so Home insets
+			// each page itself and lets content scroll under the transparent header.
 			expect(itemRows).toHaveProp("contentInsetAdjustmentBehavior", "never");
 			expect(itemRows).toHaveProp(
 				"contentContainerStyle",
@@ -310,76 +293,40 @@ describe("HomeScreen", () => {
 					}),
 				]),
 			);
-		}
-
-		await act(async () => {
-			fireEvent(
-				screen.getByTestId("home-list-items-lst_pantry", {
+			expect(
+				screen.getByTestId(`home-list-sticky-title-${listId}`, {
 					includeHiddenElements: true,
 				}),
-				"scroll",
-				{
-					nativeEvent: {
-						contentOffset: { x: 0, y: 96 },
-						contentSize: { width: 390, height: 1200 },
-						layoutMeasurement: { width: 390, height: 844 },
-					},
-				},
-			);
-		});
-		await settlePagerAt(1);
-
-		expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
-			expect.objectContaining({
-				headerTransparent: true,
-				title: "",
-			}),
-		);
+			).toHaveStyle({ height: 116 });
+		}
 	});
 
-	it("keeps the expanded List inset when the native toolbar collapses", async () => {
+	it("reverts the focused List when persisting the selection fails", async () => {
 		jest.mocked(useListRows).mockReturnValue({
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
 			},
 		});
-		const view = await render(
+		mockSelectList.mockResolvedValue(false);
+		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
 				<HomeScreen />
 			</NavigationDrawerProvider>,
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await act(async () => {
-			fireEvent(screen.getByTestId("home-list-items-lst_groceries"), "scroll", {
-				nativeEvent: {
-					contentOffset: { x: 0, y: 96 },
-					contentSize: { width: 390, height: 1200 },
-					layoutMeasurement: { width: 390, height: 844 },
-				},
-			});
-		});
-		mockUseHeaderHeight.mockReturnValue(66);
-		await view.rerender(
-			<NavigationDrawerProvider open={jest.fn()}>
-				<HomeScreen />
-			</NavigationDrawerProvider>,
-		);
+		await settlePagerAt(1);
 
-		for (const listId of ["lst_groceries", "lst_pantry"]) {
-			const itemRows = screen.getByTestId(`home-list-items-${listId}`, {
+		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
+		await waitFor(() => {
+			expect(screen.getByTestId("home-list-page-lst_groceries")).toBeTruthy();
+		});
+		expect(
+			screen.getByTestId("home-adjacent-list-page-lst_pantry", {
 				includeHiddenElements: true,
-			});
-			expect(itemRows).toHaveProp(
-				"contentContainerStyle",
-				expect.arrayContaining([
-					expect.objectContaining({
-						paddingTop: 116,
-					}),
-				]),
-			);
-		}
+			}),
+		).toBeTruthy();
 	});
 
 	it("updates the page title across consecutive horizontal swipes", async () => {

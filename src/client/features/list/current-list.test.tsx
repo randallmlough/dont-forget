@@ -25,6 +25,9 @@ jest.mock("./use-list-page", () => ({
 	useListPage: jest.fn(),
 }));
 
+/** Measured height a List page reports for its large in-page title. */
+const LARGE_TITLE_HEIGHT = 66;
+
 beforeEach(() => {
 	jest.mocked(useListPage).mockImplementation((_session, summary) => ({
 		status: "active",
@@ -267,6 +270,75 @@ describe("CurrentList", () => {
 		});
 	});
 
+	it("keeps the sticky List title hidden while the large title is on screen", async () => {
+		const view = await render(groceriesListSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+		await measureLargeTitle("Groceries");
+		await view.rerender(groceriesListSurface());
+
+		expect(stickyListTitle("lst_groceries")).toHaveStyle({ opacity: 0 });
+	});
+
+	it("reveals the sticky List title once the page scrolls past its large title", async () => {
+		const view = await render(groceriesListSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+		await measureLargeTitle("Groceries");
+		await act(async () => {
+			fireEvent(
+				screen.getByTestId("home-list-items-lst_groceries"),
+				"scroll",
+				verticalScrollEvent(LARGE_TITLE_HEIGHT),
+			);
+		});
+		await view.rerender(groceriesListSurface());
+
+		expect(stickyListTitle("lst_groceries")).toHaveStyle({ opacity: 1 });
+	});
+
+	it("returns to the focused List when persisting a paged selection fails", async () => {
+		const scrollToIndex = jest
+			.spyOn(FlatList.prototype, "scrollToIndex")
+			.mockImplementation();
+		const onFocusList = jest.fn(async () => false);
+
+		try {
+			await render(
+				<CurrentList
+					session={authenticatedAppSession}
+					deps={activeListDeps(undefined, [
+						groceriesListSummary,
+						pantryListSummary,
+					])}
+					focusedListId="lst_groceries"
+					onFocusList={onFocusList}
+					onOpenLists={jest.fn()}
+				/>,
+				{ wrapper: TestSafeAreaProvider },
+			);
+			await act(async () => {
+				fireEvent(screen.getByTestId("home-list-pager"), "momentumScrollEnd", {
+					nativeEvent: {
+						contentOffset: { x: Dimensions.get("window").width, y: 0 },
+					},
+				});
+			});
+
+			await waitFor(() => {
+				expect(onFocusList).toHaveBeenCalledWith("lst_pantry");
+			});
+			await waitFor(() => {
+				expect(scrollToIndex).toHaveBeenCalledWith({
+					animated: true,
+					index: 0,
+				});
+			});
+		} finally {
+			scrollToIndex.mockRestore();
+		}
+	});
+
 	it("keeps adjacent pager pages from intercepting the focused page", async () => {
 		await render(
 			<CurrentList
@@ -358,6 +430,51 @@ describe("CurrentList", () => {
 		).toBeTruthy();
 	});
 });
+
+/**
+ * Sticky-title assertions re-render before reading the animated style: the
+ * Reanimated double evaluates animated styles during render instead of on the
+ * UI thread (see `src/test/mocks/reanimated.ts`). Each call returns a fresh
+ * element so React cannot bail out of the re-render.
+ */
+function groceriesListSurface() {
+	return (
+		<CurrentList
+			session={authenticatedAppSession}
+			deps={activeListDeps()}
+			focusedListId="lst_groceries"
+			onFocusList={jest.fn(async () => true)}
+			onOpenLists={jest.fn()}
+			topContentInset={116}
+		/>
+	);
+}
+
+async function measureLargeTitle(name: string): Promise<void> {
+	await act(async () => {
+		fireEvent(screen.getByRole("header", { name }), "layout", {
+			nativeEvent: {
+				layout: { x: 0, y: 0, width: 390, height: LARGE_TITLE_HEIGHT },
+			},
+		});
+	});
+}
+
+function verticalScrollEvent(offsetY: number) {
+	return {
+		nativeEvent: {
+			contentOffset: { x: 0, y: offsetY },
+			contentSize: { width: 390, height: 1200 },
+			layoutMeasurement: { width: 390, height: 844 },
+		},
+	};
+}
+
+function stickyListTitle(listId: string) {
+	return screen.getByTestId(`home-list-sticky-title-${listId}`, {
+		includeHiddenElements: true,
+	});
+}
 
 function activeListDeps(
 	addItem = jest.fn(async () => undefined),

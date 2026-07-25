@@ -8,14 +8,16 @@ import {
 	useRef,
 } from "react";
 import {
-	FlatList,
+	type FlatList,
 	type ListRenderItemInfo,
-	type NativeScrollEvent,
-	type NativeSyntheticEvent,
 	Pressable,
 	Text,
 	View,
 } from "react-native";
+import Animated, {
+	type SharedValue,
+	useAnimatedScrollHandler,
+} from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { ActiveListItem } from "./list-view-types";
 
@@ -25,7 +27,8 @@ export type ItemRowsProps = {
 	bottomContentInset?: number;
 	focused?: boolean;
 	onPressBlankSpace?: () => void;
-	onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+	/** Receives the vertical scroll offset so callers can animate on the UI thread. */
+	scrollOffsetY?: SharedValue<number>;
 	topContentInset?: number;
 	onToggleItem: (itemId: string) => void;
 	testID?: string;
@@ -37,7 +40,7 @@ export function ItemRows({
 	bottomContentInset = 0,
 	focused,
 	onPressBlankSpace,
-	onScroll,
+	scrollOffsetY,
 	topContentInset,
 	onToggleItem,
 	testID,
@@ -59,12 +62,18 @@ export function ItemRows({
 		() => <EmptyList onPress={onPressBlankSpace} />,
 		[onPressBlankSpace],
 	);
+	const scrollHandler = useAnimatedScrollHandler((event) => {
+		scrollOffsetY?.set(event.contentOffset.y);
+	});
 	const resetScrollPosition = useCallback(() => {
 		listRef.current?.scrollToOffset({
 			animated: false,
 			offset: 0,
 		});
-	}, []);
+		// Scrolling to an offset the List already sits at emits no scroll event,
+		// so publish the reset position directly.
+		scrollOffsetY?.set(0);
+	}, [scrollOffsetY]);
 
 	useEffect(() => {
 		if (focused === undefined) return;
@@ -78,7 +87,7 @@ export function ItemRows({
 	}
 
 	return (
-		<FlatList
+		<Animated.FlatList
 			data={items}
 			keyExtractor={keyExtractor}
 			renderItem={renderItem}
@@ -106,12 +115,12 @@ export function ItemRows({
 				topContentInset === undefined ? "automatic" : "never"
 			}
 			ref={listRef}
-			scrollEventThrottle={onScroll ? 16 : undefined}
+			scrollEventThrottle={16}
 			scrollIndicatorInsets={scrollIndicatorInsets}
 			style={styles.list}
 			testID={testID}
 			onContentSizeChange={contentSizeChanged}
-			onScroll={onScroll}
+			onScroll={scrollHandler}
 			contentContainerStyle={[
 				styles.itemsContent,
 				{

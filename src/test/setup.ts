@@ -7,35 +7,9 @@ process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ??= "pk_test_jest";
 
 jest.mock("@clerk/clerk-expo", () => jest.requireActual("./mocks/clerk"));
 
-jest.mock("react-native-reanimated", () => {
-	const { View } =
-		jest.requireActual<typeof import("react-native")>("react-native");
-
-	return {
-		__esModule: true,
-		default: { View },
-		Easing: {
-			cubic: (value: number) => value,
-			out: (easing: (value: number) => number) => easing,
-		},
-		useAnimatedStyle: (updater: () => unknown) => updater(),
-		useSharedValue: (value: unknown) => {
-			let current = value;
-
-			return {
-				get: () => current,
-				set: (next: unknown) => {
-					current =
-						typeof next === "function"
-							? (next as (value: unknown) => unknown)(current)
-							: next;
-				},
-			};
-		},
-		withSpring: (value: unknown) => value,
-		withTiming: (value: unknown) => value,
-	};
-});
+jest.mock("react-native-reanimated", () =>
+	jest.requireActual("./mocks/reanimated"),
+);
 
 jest.mock("@expo/ui/swift-ui", () =>
 	jest.requireActual("./mocks/expo-ui-swift"),

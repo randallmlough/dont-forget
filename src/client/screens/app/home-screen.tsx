@@ -1,12 +1,6 @@
 import { Stack, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
-import {
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
@@ -15,6 +9,7 @@ import {
 	HomeRetryButton,
 	HomeStatus,
 } from "@/client/features/list/home-status";
+import type { ListSummary } from "@/client/features/list/list-service";
 import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
 import { useListRows } from "@/client/features/list/use-list-rows";
 import { useSelectList } from "@/client/features/list/use-select-list";
@@ -74,60 +69,30 @@ function HomeScreenResource({
 }: HomeScreenResourceProps) {
 	const headerHeight = useHeaderHeight();
 	// The Current List resolves here, not inside CurrentList, so the native
-	// stack title survives the loading, error, and zeroActive states. A
-	// Stack.Title rendered inside the active List surface would unmount in
-	// those states and drop the title with it.
+	// stack header keeps its fallback title through the loading, error, and
+	// zeroActive states, where no List page is mounted to own a title.
 	const currentList = useHomeCurrentList(session);
 	const syncState = useSyncState();
 	const { rows } = useListRows(session);
 	const selectList = useSelectList(session);
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
-	const [collapsedListId, setCollapsedListId] = useState<string | null>(null);
-	const [lockedExpandedHeaderHeight, setLockedExpandedHeaderHeight] = useState<
-		number | null
-	>(null);
-	const headerHeightRef = useRef(headerHeight);
+	// The List whose selection is persisted. It trails `focusedListId`, which
+	// moves with the pager before the switch is written.
 	const persistedListIdRef = useRef<string | null>(null);
 	const currentListId =
 		currentList.state.status === "active" ? currentList.state.listId : null;
 	const listSummaries = rows.status === "ready" ? rows.summaries : [];
-	const currentListIsActive = listSummaries.some(
-		(summary) => summary.id === currentListId,
-	);
-	const resolvedFocusedListId =
-		focusedListId &&
-		listSummaries.some((summary) => summary.id === focusedListId)
-			? focusedListId
-			: currentListIsActive
-				? currentListId
-				: (listSummaries[0]?.id ?? null);
-	const focusedSummary = listSummaries.find(
-		(summary) => summary.id === resolvedFocusedListId,
-	);
-	const toolbarTitle =
-		collapsedListId === resolvedFocusedListId
-			? focusedSummary?.name
-			: undefined;
-	const expandedHeaderHeight = lockedExpandedHeaderHeight ?? headerHeight;
-
-	useLayoutEffect(() => {
-		headerHeightRef.current = headerHeight;
-	}, [headerHeight]);
-
-	useEffect(() => {
-		if (persistedListIdRef.current === null && currentListId !== null) {
-			persistedListIdRef.current = currentListId;
-		}
-	}, [currentListId]);
+	const resolvedFocusedListId = resolveFocusedListId({
+		focusedListId,
+		currentListId,
+		listSummaries,
+	});
 
 	async function focusList(listId: string): Promise<boolean> {
 		const persistedListId = persistedListIdRef.current ?? currentListId;
-		if (listId === persistedListId) {
-			setFocusedListId(listId);
-			return true;
-		}
-
 		setFocusedListId(listId);
+		if (listId === persistedListId) return true;
+
 		const didSelect = await selectList(listId, persistedListId);
 		if (!didSelect) {
 			setFocusedListId(persistedListId);
@@ -138,22 +103,10 @@ function HomeScreenResource({
 		return true;
 	}
 
-	const updateToolbarTitle = useCallback((listId: string | null) => {
-		if (listId !== null) {
-			// Updating the toolbar title causes the native stack to report its
-			// smaller collapsed height next. Keep the last expanded measurement.
-			setLockedExpandedHeaderHeight(
-				(currentHeight) => currentHeight ?? headerHeightRef.current,
-			);
-		}
-		setCollapsedListId(listId);
-	}, []);
-
 	return (
 		<>
 			<HomeStackHeader
-				title={resolvedFocusedListId === null ? FALLBACK_TITLE : toolbarTitle}
-				transparent={resolvedFocusedListId !== null}
+				title={resolvedFocusedListId === null ? FALLBACK_TITLE : undefined}
 				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
 			/>
@@ -163,21 +116,41 @@ function HomeScreenResource({
 				focusedListId={resolvedFocusedListId}
 				onFocusList={focusList}
 				onOpenLists={onOpenLists}
-				onToolbarTitleChange={updateToolbarTitle}
-				topContentInset={expandedHeaderHeight}
+				topContentInset={headerHeight}
 			/>
 		</>
 	);
 }
 
+function resolveFocusedListId({
+	focusedListId,
+	currentListId,
+	listSummaries,
+}: {
+	focusedListId: string | null;
+	currentListId: string | null;
+	listSummaries: readonly ListSummary[];
+}): string | null {
+	const isActive = (listId: string | null) =>
+		listId !== null && listSummaries.some((summary) => summary.id === listId);
+
+	if (isActive(focusedListId)) return focusedListId;
+	if (isActive(currentListId)) return currentListId;
+	return listSummaries[0]?.id ?? null;
+}
+
+/**
+ * Home's native stack header. It always owns the toolbar buttons. It owns a
+ * title only outside the List pager; with a pager on screen the header goes
+ * transparent and empty so each List page can scroll under it and show its own
+ * large and sticky titles.
+ */
 function HomeStackHeader({
 	title,
-	transparent = false,
 	onOpenNavigation,
 	onOpenLists,
 }: {
 	title?: string;
-	transparent?: boolean;
 	onOpenNavigation: () => void;
 	onOpenLists: () => void;
 }) {
@@ -186,9 +159,9 @@ function HomeStackHeader({
 			{/* The enclosing Stack sets headerShown: false, so this route opts back in. */}
 			<Stack.Screen
 				options={{
-					headerLargeTitle: !transparent && title !== undefined,
+					headerLargeTitle: title !== undefined,
 					headerShown: true,
-					headerTransparent: transparent,
+					headerTransparent: title === undefined,
 					title: title ?? "",
 				}}
 			/>
