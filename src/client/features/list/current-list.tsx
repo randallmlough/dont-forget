@@ -1,5 +1,11 @@
 import { SymbolView } from "expo-symbols";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import {
 	ActivityIndicator,
 	FlatList,
@@ -143,13 +149,6 @@ function HomeListPager({
 }: HomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
-	// Horizontal pager offset in points, written on the UI thread so page
-	// transforms never route scroll frames through React state. No page reads
-	// it yet; the carousel transform that consumes it lands next.
-	const pagerOffsetX = useSharedValue(0);
-	const pagerScrollHandler = useAnimatedScrollHandler((event) => {
-		pagerOffsetX.set(event.contentOffset.x);
-	});
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [composerListId, setComposerListId] = useState<string | null>(null);
 	const [selectionPending, setSelectionPending] = useState(false);
@@ -157,6 +156,14 @@ function HomeListPager({
 		0,
 		listSummaries.findIndex((summary) => summary.id === focusedListId),
 	);
+	// Horizontal pager offset in points, written on the UI thread so the
+	// carousel transform on each page never routes scroll frames through React
+	// state. It starts where `initialScrollIndex` puts the pager so the first
+	// frame is not tilted.
+	const pagerOffsetX = useSharedValue(focusedIndex * width);
+	const pagerScrollHandler = useAnimatedScrollHandler((event) => {
+		pagerOffsetX.set(event.contentOffset.x);
+	});
 
 	const focusList = useCallback(
 		async (listId: string): Promise<boolean> => {
@@ -229,21 +236,19 @@ function HomeListPager({
 				pagingEnabled
 				ref={pagerRef}
 				removeClippedSubviews={false}
-				renderItem={({ item: summary }) => {
+				renderItem={({ item: summary, index }) => {
 					const focused = summary.id === focusedListId;
 					return (
-						<View
-							accessibilityElementsHidden={!focused}
-							importantForAccessibility={
-								focused ? "auto" : "no-hide-descendants"
-							}
-							pointerEvents={focused ? "auto" : "none"}
-							style={[styles.page, { width }]}
+						<CarouselPage
+							focused={focused}
+							index={index}
+							pagerOffsetX={pagerOffsetX}
 							testID={
 								focused
 									? `home-list-page-${summary.id}`
 									: `home-adjacent-list-page-${summary.id}`
 							}
+							width={width}
 						>
 							<HomeListPage
 								composerOpen={composerListId === summary.id}
@@ -256,7 +261,7 @@ function HomeListPager({
 								onDismissComposer={() => setComposerListId(null)}
 								onOpenComposer={() => setComposerListId(summary.id)}
 							/>
-						</View>
+						</CarouselPage>
 					);
 				}}
 				scrollEnabled={
@@ -293,6 +298,89 @@ function HomeListPager({
 				)
 			) : null}
 		</>
+	);
+}
+
+/**
+ * Physical geometry of the pager carousel, not design tokens.
+ *
+ * Pages sit on the outside of a very wide cylinder: a long focal length keeps
+ * the tilt gentle, and a page one swipe away is turned by
+ * `PAGE_TILT_DEGREES`, its far edge pushed back and dimmed to
+ * `PAGE_TILT_OPACITY`.
+ */
+const PAGE_FOCAL_LENGTH_RATIO = 2.5;
+const PAGE_TILT_DEGREES = 18;
+const PAGE_TILT_OPACITY = 0.85;
+
+/**
+ * One List page, rotated around the edge it shares with the page beside it so
+ * the pages read as panels of a cylinder rather than flat sliding cards. The
+ * whole page turns, large title and sticky title included.
+ *
+ * React Native's `transformOrigin` cannot express this: the anchor has to flip
+ * to the opposite edge once a page crosses the viewport, so the anchor is
+ * animated the classic way instead, by translating the rotation axis into
+ * place and back inside the transform list. That keeps every frame on the UI
+ * thread, and paging geometry untouched, since only the transform moves.
+ */
+function CarouselPage({
+	children,
+	focused,
+	index,
+	pagerOffsetX,
+	testID,
+	width,
+}: {
+	children: ReactNode;
+	focused: boolean;
+	index: number;
+	pagerOffsetX: SharedValue<number>;
+	testID: string;
+	width: number;
+}) {
+	const pageStyle = useAnimatedStyle(() => {
+		// 0 while this page fills the viewport; -1 and 1 park it one page to the
+		// right and one page to the left.
+		const progress = (pagerOffsetX.get() - index * width) / width;
+		// A positive `rotateY` pushes a page's right edge away from the viewer,
+		// so the page waiting on the right turns positive and the page leaving
+		// to the left turns negative.
+		const tilt = interpolate(
+			progress,
+			[-1, 0, 1],
+			[PAGE_TILT_DEGREES, 0, -PAGE_TILT_DEGREES],
+			Extrapolation.CLAMP,
+		);
+		// The shared edge: the page on the right hinges on its left edge, the
+		// page on the left hinges on its right edge, so the seam stays closed.
+		const hingeX = progress < 0 ? -width / 2 : width / 2;
+		return {
+			opacity: interpolate(
+				progress,
+				[-1, 0, 1],
+				[PAGE_TILT_OPACITY, 1, PAGE_TILT_OPACITY],
+				Extrapolation.CLAMP,
+			),
+			transform: [
+				{ perspective: width * PAGE_FOCAL_LENGTH_RATIO },
+				{ translateX: hingeX },
+				{ rotateY: `${tilt}deg` },
+				{ translateX: -hingeX },
+			],
+		};
+	});
+
+	return (
+		<Animated.View
+			accessibilityElementsHidden={!focused}
+			importantForAccessibility={focused ? "auto" : "no-hide-descendants"}
+			pointerEvents={focused ? "auto" : "none"}
+			style={[styles.page, { width }, pageStyle]}
+			testID={testID}
+		>
+			{children}
+		</Animated.View>
 	);
 }
 

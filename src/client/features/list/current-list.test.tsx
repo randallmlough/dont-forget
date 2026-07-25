@@ -7,7 +7,7 @@ import {
 	within,
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
-import { Dimensions, FlatList } from "react-native";
+import { Dimensions, FlatList, StyleSheet, type ViewStyle } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
 import {
@@ -27,6 +27,9 @@ jest.mock("./use-list-page", () => ({
 
 /** Measured height a List page reports for its large in-page title. */
 const LARGE_TITLE_HEIGHT = 66;
+
+/** Width one List page occupies in the horizontal pager. */
+const PAGE_WIDTH = Dimensions.get("window").width;
 
 beforeEach(() => {
 	jest.mocked(useListPage).mockImplementation((_session, summary) => ({
@@ -388,6 +391,35 @@ describe("CurrentList", () => {
 		).toBeTruthy();
 	});
 
+	it("keeps the page filling the viewport flat and turns its neighbour away", async () => {
+		await render(pagedListSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(pageTiltDegrees("home-list-page-lst_groceries")).toBe(0);
+		expect(
+			pageTiltDegrees("home-adjacent-list-page-lst_pantry"),
+		).toBeGreaterThan(0);
+	});
+
+	it("turns both pages toward the swipe as the pager scrolls between them", async () => {
+		const view = await render(pagedListSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+		const restingTilt = pageTiltDegrees("home-adjacent-list-page-lst_pantry");
+		await act(async () => {
+			fireEvent(
+				screen.getByTestId("home-list-pager"),
+				"scroll",
+				horizontalScrollEvent(PAGE_WIDTH / 2),
+			);
+		});
+		await view.rerender(pagedListSurface());
+
+		expect(pageTiltDegrees("home-list-page-lst_groceries")).toBeLessThan(0);
+		const arrivingTilt = pageTiltDegrees("home-adjacent-list-page-lst_pantry");
+		expect(arrivingTilt).toBeGreaterThan(0);
+		expect(arrivingTilt).toBeLessThan(restingTilt);
+	});
+
 	it("keeps the focused List on its watched Item data", async () => {
 		jest.mocked(useListPage).mockReturnValue({
 			status: "active",
@@ -450,6 +482,44 @@ function groceriesListSurface() {
 	);
 }
 
+function pagedListSurface() {
+	return (
+		<CurrentList
+			session={authenticatedAppSession}
+			deps={activeListDeps(undefined, [
+				groceriesListSummary,
+				pantryListSummary,
+			])}
+			focusedListId="lst_groceries"
+			onFocusList={jest.fn(async () => true)}
+			onOpenLists={jest.fn()}
+			topContentInset={116}
+		/>
+	);
+}
+
+/**
+ * Degrees the carousel has turned this page around its vertical axis. A
+ * positive angle pushes the page's right edge away from the viewer, so the page
+ * waiting on the right reads positive and the page leaving to the left reads
+ * negative.
+ */
+function pageTiltDegrees(testID: string): number {
+	const style = StyleSheet.flatten<ViewStyle>(
+		screen.getByTestId(testID, { includeHiddenElements: true }).props.style,
+	);
+	const transforms = style.transform;
+	if (!Array.isArray(transforms)) {
+		throw new Error(`${testID} is not carrying a carousel transform`);
+	}
+	for (const entry of transforms) {
+		if (typeof entry.rotateY === "string") {
+			return Number.parseFloat(entry.rotateY);
+		}
+	}
+	throw new Error(`${testID} is not carrying a carousel rotation`);
+}
+
 async function measureLargeTitle(name: string): Promise<void> {
 	await act(async () => {
 		fireEvent(screen.getByRole("header", { name }), "layout", {
@@ -466,6 +536,16 @@ function verticalScrollEvent(offsetY: number) {
 			contentOffset: { x: 0, y: offsetY },
 			contentSize: { width: 390, height: 1200 },
 			layoutMeasurement: { width: 390, height: 844 },
+		},
+	};
+}
+
+function horizontalScrollEvent(offsetX: number) {
+	return {
+		nativeEvent: {
+			contentOffset: { x: offsetX, y: 0 },
+			contentSize: { width: PAGE_WIDTH * 2, height: 844 },
+			layoutMeasurement: { width: PAGE_WIDTH, height: 844 },
 		},
 	};
 }
