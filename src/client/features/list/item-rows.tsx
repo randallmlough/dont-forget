@@ -2,7 +2,6 @@ import { SymbolView } from "expo-symbols";
 import { memo, type ReactElement, useCallback } from "react";
 import {
 	FlatList,
-	type GestureResponderHandlers,
 	type ListRenderItemInfo,
 	Pressable,
 	Text,
@@ -15,7 +14,6 @@ export type ItemRowsProps = {
 	items: ActiveListItem[];
 	listOverview?: ReactElement;
 	bottomContentInset?: number;
-	gestureHandlers?: GestureResponderHandlers;
 	onPressBlankSpace?: () => void;
 	onToggleItem: (itemId: string) => void;
 	testID?: string;
@@ -25,34 +23,23 @@ export function ItemRows({
 	items,
 	listOverview,
 	bottomContentInset = 0,
-	gestureHandlers,
 	onPressBlankSpace,
 	onToggleItem,
 	testID,
 }: ItemRowsProps) {
 	const renderItem = useCallback(
 		({ item }: ListRenderItemInfo<ActiveListItem>) => (
-			<ItemRow
-				gestureHandlers={gestureHandlers}
-				item={item}
-				onToggle={onToggleItem}
-			/>
+			<ItemRow item={item} onToggle={onToggleItem} />
 		),
-		[gestureHandlers, onToggleItem],
+		[onToggleItem],
 	);
 	const renderEmpty = useCallback(
-		() => (
-			<EmptyList
-				gestureHandlers={gestureHandlers}
-				onPress={onPressBlankSpace}
-			/>
-		),
-		[gestureHandlers, onPressBlankSpace],
+		() => <EmptyList onPress={onPressBlankSpace} />,
+		[onPressBlankSpace],
 	);
 
 	return (
 		<FlatList
-			{...gestureHandlers}
 			data={items}
 			keyExtractor={keyExtractor}
 			renderItem={renderItem}
@@ -61,7 +48,6 @@ export function ItemRows({
 			ListFooterComponent={
 				onPressBlankSpace ? (
 					<Pressable
-						{...gestureHandlers}
 						accessibilityHint="Opens the add Item composer"
 						accessibilityLabel="Add Item"
 						accessibilityRole="button"
@@ -90,11 +76,9 @@ export function ItemRows({
 
 function ItemRowComponent({
 	item,
-	gestureHandlers,
 	onToggle,
 }: {
 	item: ActiveListItem;
-	gestureHandlers?: GestureResponderHandlers;
 	onToggle: (id: string) => void;
 }) {
 	const { theme } = useUnistyles();
@@ -106,7 +90,6 @@ function ItemRowComponent({
 
 	return (
 		<Pressable
-			{...gestureHandlers}
 			accessibilityRole="checkbox"
 			accessibilityState={{ checked: item.checked }}
 			onPress={toggle}
@@ -152,17 +135,10 @@ function ItemRowComponent({
 
 const ItemRow = memo(ItemRowComponent);
 
-function EmptyList({
-	gestureHandlers,
-	onPress,
-}: {
-	gestureHandlers?: GestureResponderHandlers;
-	onPress?: () => void;
-}) {
+function EmptyList({ onPress }: { onPress?: () => void }) {
 	if (onPress) {
 		return (
 			<Pressable
-				{...gestureHandlers}
 				accessibilityHint="Opens the add Item composer"
 				accessibilityLabel="Add the first Item"
 				accessibilityRole="button"

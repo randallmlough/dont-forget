@@ -4,13 +4,10 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
-import {
-	PanResponder,
-	type PanResponderCallbacks,
-	type PanResponderGestureState,
-} from "react-native";
+import { Dimensions } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
 import {
@@ -28,30 +25,16 @@ jest.mock("./use-list-page", () => ({
 	useListPage: jest.fn(),
 }));
 
-let pagerResponder: PanResponderCallbacks;
-const createPanResponder = PanResponder.create;
-
-beforeAll(() => {
-	jest.spyOn(PanResponder, "create").mockImplementation((callbacks) => {
-		pagerResponder = callbacks;
-		return createPanResponder(callbacks);
-	});
-});
-
-afterAll(() => {
-	jest.restoreAllMocks();
-});
-
 beforeEach(() => {
-	jest.mocked(useListPage).mockReturnValue({
+	jest.mocked(useListPage).mockImplementation((_session, summary) => ({
 		status: "active",
-		listId: "lst_pantry",
-		list: { ...emptyActiveListState, listName: "Pantry" },
+		listId: summary.id,
+		list: { ...emptyActiveListState, listName: summary.name },
 		actions: {
 			addItem: jest.fn(async () => undefined),
 			setItemChecked: jest.fn(async () => undefined),
 		},
-	});
+	}));
 });
 
 describe("CurrentList", () => {
@@ -91,10 +74,19 @@ describe("CurrentList", () => {
 
 	it("adds Items through the Current List action with normalized optional fields", async () => {
 		const addItem = jest.fn(async () => undefined);
+		jest.mocked(useListPage).mockReturnValue({
+			status: "active",
+			listId: "lst_groceries",
+			list: emptyActiveListState,
+			actions: {
+				addItem,
+				setItemChecked: jest.fn(async () => undefined),
+			},
+		});
 		await render(
 			<CurrentList
 				session={authenticatedAppSession}
-				deps={activeListDeps(addItem)}
+				deps={activeListDeps()}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -169,13 +161,21 @@ describe("CurrentList", () => {
 			{ wrapper: TestSafeAreaProvider },
 		);
 		await act(async () => {
-			const release = pagerResponder.onPanResponderRelease;
-			if (!release) throw new Error("Pager release responder was not created");
-			Reflect.apply(release, undefined, [undefined, swipeLeftGesture()]);
+			fireEvent(screen.getByTestId("home-list-pager"), "momentumScrollEnd", {
+				nativeEvent: {
+					contentOffset: { x: Dimensions.get("window").width, y: 0 },
+				},
+			});
 		});
 
 		await waitFor(() => {
 			expect(onFocusList).toHaveBeenCalledWith("lst_pantry");
+		});
+		await waitFor(() => {
+			expect(screen.getByTestId("home-list-pager")).toHaveProp(
+				"scrollEnabled",
+				true,
+			);
 		});
 	});
 
@@ -200,23 +200,76 @@ describe("CurrentList", () => {
 			}),
 		).toHaveProp("pointerEvents", "none");
 	});
-});
 
-function swipeLeftGesture(): PanResponderGestureState {
-	return {
-		stateID: 1,
-		moveX: 0,
-		moveY: 0,
-		x0: 300,
-		y0: 0,
-		dx: -300,
-		dy: 0,
-		vx: -1,
-		vy: 0,
-		numberActiveTouches: 0,
-		_accountsForMovesUpTo: 1,
-	};
-}
+	it("renders each List title inside its sliding page", async () => {
+		await render(
+			<CurrentList
+				session={authenticatedAppSession}
+				deps={activeListDeps(undefined, [
+					groceriesListSummary,
+					pantryListSummary,
+				])}
+				focusedListId="lst_groceries"
+				onFocusList={jest.fn(async () => true)}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		const adjacentPage = screen.getByTestId(
+			"home-adjacent-list-page-lst_pantry",
+			{ includeHiddenElements: true },
+		);
+		expect(
+			within(adjacentPage).getByRole("header", {
+				name: "Pantry",
+				includeHiddenElements: true,
+			}),
+		).toBeTruthy();
+	});
+
+	it("keeps the focused List on its watched Item data", async () => {
+		jest.mocked(useListPage).mockReturnValue({
+			status: "active",
+			listId: "lst_pantry",
+			list: {
+				...emptyActiveListState,
+				listName: "Pantry",
+				items: [
+					{
+						id: "itm_shelf_stable",
+						name: "Shelf stable",
+						quantity: null,
+						notes: null,
+						checked: false,
+						checkedByMemberName: null,
+					},
+				],
+			},
+			actions: {
+				addItem: jest.fn(async () => undefined),
+				setItemChecked: jest.fn(async () => undefined),
+			},
+		});
+
+		await render(
+			<CurrentList
+				session={authenticatedAppSession}
+				deps={pantryCurrentListDeps()}
+				focusedListId="lst_pantry"
+				onFocusList={jest.fn(async () => true)}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		expect(
+			within(screen.getByTestId("home-list-items-lst_pantry")).getByText(
+				"Shelf stable",
+			),
+		).toBeTruthy();
+	});
+});
 
 function activeListDeps(
 	addItem = jest.fn(async () => undefined),
@@ -250,6 +303,29 @@ function zeroActiveListDeps(): HomeCurrentListDeps {
 		},
 		syncState: "synced",
 		listRows: { status: "ready", summaries: [] },
+	};
+}
+
+function pantryCurrentListDeps(): HomeCurrentListDeps {
+	return {
+		currentList: {
+			state: {
+				status: "active",
+				listId: "lst_pantry",
+				list: { ...emptyActiveListState, listName: "Pantry" },
+				actions: {
+					addItem: jest.fn(async () => undefined),
+					setItemChecked: jest.fn(async () => undefined),
+				},
+			},
+			retry: jest.fn(),
+			reload: jest.fn(),
+		},
+		syncState: "synced",
+		listRows: {
+			status: "ready",
+			summaries: [groceriesListSummary, pantryListSummary],
+		},
 	};
 }
 

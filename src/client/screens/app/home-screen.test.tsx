@@ -6,11 +6,7 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
-import {
-	PanResponder,
-	type PanResponderCallbacks,
-	type PanResponderGestureState,
-} from "react-native";
+import { Dimensions } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
@@ -34,8 +30,6 @@ const hardwareListSummary = {
 	id: "lst_hardware",
 	name: "Hardware",
 };
-let pagerResponder: PanResponderCallbacks;
-const createPanResponder = PanResponder.create;
 
 jest.mock("expo-router", () => {
 	const mockReact = jest.requireActual<typeof import("react")>("react");
@@ -71,8 +65,14 @@ jest.mock("expo-router", () => {
 		});
 	};
 
-	function Screen() {
-		return null;
+	function Screen({ options }: { options?: { title?: string } }) {
+		return options?.title
+			? mockReact.createElement(
+					mockReactNative.Text,
+					{ accessibilityRole: "header" },
+					options.title,
+				)
+			: null;
 	}
 
 	return {
@@ -115,17 +115,6 @@ jest.mock("@/client/session/powersync", () => ({
 	readPowerSyncUrl: jest.fn(() => "https://sync.test"),
 }));
 
-beforeAll(() => {
-	jest.spyOn(PanResponder, "create").mockImplementation((callbacks) => {
-		pagerResponder = callbacks;
-		return createPanResponder(callbacks);
-	});
-});
-
-afterAll(() => {
-	jest.restoreAllMocks();
-});
-
 beforeEach(() => {
 	mockReplace.mockReset();
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
@@ -140,15 +129,15 @@ beforeEach(() => {
 	jest.mocked(useListRows).mockReturnValue({
 		rows: { status: "ready", summaries: [groceriesListSummary] },
 	});
-	jest.mocked(useListPage).mockReturnValue({
+	jest.mocked(useListPage).mockImplementation((_session, summary) => ({
 		status: "active",
-		listId: "lst_pantry",
-		list: { ...emptyActiveListState, listName: "Pantry" },
+		listId: summary.id,
+		list: { ...emptyActiveListState, listName: summary.name },
 		actions: {
 			addItem: jest.fn(async () => undefined),
 			setItemChecked: jest.fn(async () => undefined),
 		},
-	});
+	}));
 	mockSelectList.mockClear();
 	jest.mocked(useSelectList).mockReturnValue(mockSelectList);
 });
@@ -176,7 +165,7 @@ describe("HomeScreenView", () => {
 });
 
 describe("HomeScreen", () => {
-	it("passes the Current List name to the stack title and wires the drawer button", async () => {
+	it("renders the Current List page title and wires the drawer button", async () => {
 		const open = jest.fn();
 
 		await render(
@@ -212,7 +201,7 @@ describe("HomeScreen", () => {
 		expect(mockReplace).toHaveBeenCalledWith("/lists");
 	});
 
-	it("updates the native title and persists selection when paging settles", async () => {
+	it("updates the page title and persists selection when paging settles", async () => {
 		jest.mocked(useListRows).mockReturnValue({
 			rows: {
 				status: "ready",
@@ -225,17 +214,13 @@ describe("HomeScreen", () => {
 			</NavigationDrawerProvider>,
 			{ wrapper: TestSafeAreaProvider },
 		);
-		await act(async () => {
-			const release = pagerResponder.onPanResponderRelease;
-			if (!release) throw new Error("Pager release responder was not created");
-			Reflect.apply(release, undefined, [undefined, swipeLeftGesture()]);
-		});
+		await settlePagerAt(1);
 
 		expect(await screen.findByRole("header", { name: "Pantry" })).toBeTruthy();
 		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
 	});
 
-	it("updates the native title across consecutive horizontal swipes", async () => {
+	it("updates the page title across consecutive horizontal swipes", async () => {
 		jest.mocked(useListRows).mockReturnValue({
 			rows: {
 				status: "ready",
@@ -253,11 +238,11 @@ describe("HomeScreen", () => {
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await releaseSwipeLeft();
+		await settlePagerAt(1);
 		expect(await screen.findByRole("header", { name: "Pantry" })).toBeTruthy();
 		await waitForSelectionCount(1);
 
-		await releaseSwipeLeft();
+		await settlePagerAt(2);
 		expect(
 			await screen.findByRole("header", { name: "Hardware" }),
 		).toBeTruthy();
@@ -310,27 +295,19 @@ describe("HomeScreen", () => {
 	});
 });
 
-function swipeLeftGesture(): PanResponderGestureState {
-	return {
-		stateID: 1,
-		moveX: 0,
-		moveY: 0,
-		x0: 300,
-		y0: 0,
-		dx: -300,
-		dy: 0,
-		vx: -1,
-		vy: 0,
-		numberActiveTouches: 0,
-		_accountsForMovesUpTo: 1,
-	};
-}
-
-async function releaseSwipeLeft(): Promise<void> {
+async function settlePagerAt(index: number): Promise<void> {
 	await act(async () => {
-		const release = pagerResponder.onPanResponderRelease;
-		if (!release) throw new Error("Pager release responder was not created");
-		Reflect.apply(release, undefined, [undefined, swipeLeftGesture()]);
+		fireEvent(screen.getByTestId("home-list-pager"), "momentumScrollEnd", {
+			nativeEvent: {
+				contentOffset: { x: index * Dimensions.get("window").width, y: 0 },
+			},
+		});
+	});
+	await waitFor(() => {
+		expect(screen.getByTestId("home-list-pager")).toHaveProp(
+			"scrollEnabled",
+			true,
+		);
 	});
 }
 
@@ -338,7 +315,6 @@ async function waitForSelectionCount(count: number): Promise<void> {
 	await waitFor(() => {
 		expect(mockSelectList).toHaveBeenCalledTimes(count);
 	});
-	await act(async () => undefined);
 }
 
 function activeCurrentList(): HomeCurrentListDeps["currentList"] {

@@ -88,14 +88,6 @@ function HomeScreenResource({
 			: currentListIsActive
 				? currentListId
 				: (listSummaries[0]?.id ?? null);
-	const focusedSummary = listSummaries.find(
-		(summary) => summary.id === resolvedFocusedListId,
-	);
-	const title =
-		focusedSummary?.name ??
-		(currentList.state.status === "active"
-			? currentList.state.list.listName
-			: FALLBACK_TITLE);
 
 	useEffect(() => {
 		if (persistedListIdRef.current === null && currentListId !== null) {
@@ -124,8 +116,7 @@ function HomeScreenResource({
 	return (
 		<>
 			<HomeStackHeader
-				titleKey={resolvedFocusedListId ?? FALLBACK_TITLE}
-				title={title}
+				title={resolvedFocusedListId === null ? FALLBACK_TITLE : undefined}
 				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
 			/>
@@ -142,22 +133,23 @@ function HomeScreenResource({
 
 function HomeStackHeader({
 	title,
-	titleKey,
 	onOpenNavigation,
 	onOpenLists,
 }: {
-	title: string;
-	titleKey?: string;
+	title?: string;
 	onOpenNavigation: () => void;
 	onOpenLists: () => void;
 }) {
 	return (
 		<>
 			{/* The enclosing Stack sets headerShown: false, so this route opts back in. */}
-			<Stack.Screen options={{ headerShown: true }} />
-			<Stack.Title key={titleKey} large>
-				{title}
-			</Stack.Title>
+			<Stack.Screen
+				options={{
+					headerLargeTitle: title !== undefined,
+					headerShown: true,
+					title: title ?? "",
+				}}
+			/>
 			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button
 					accessibilityHint="Opens the navigation drawer"

@@ -1,11 +1,10 @@
 import { SymbolView } from "expo-symbols";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
-	Animated,
 	FlatList,
-	type GestureResponderHandlers,
-	PanResponder,
+	type NativeScrollEvent,
+	type NativeSyntheticEvent,
 	Pressable,
 	Text,
 	useWindowDimensions,
@@ -101,7 +100,6 @@ export function CurrentList({
 	return (
 		<HomeListPager
 			key={session.activeHousehold.id}
-			currentList={loadState}
 			focusedListId={resolvedFocusedListId}
 			listSummaries={listRows.summaries}
 			session={session}
@@ -111,13 +109,7 @@ export function CurrentList({
 	);
 }
 
-type ActiveCurrentListState = Extract<
-	HomeCurrentListData["state"],
-	{ status: "active" }
->;
-
 type HomeListPagerProps = {
-	currentList: ActiveCurrentListState;
 	focusedListId: string;
 	listSummaries: ListSummary[];
 	session: AuthenticatedAppSession;
@@ -125,12 +117,7 @@ type HomeListPagerProps = {
 	onFocusList: (listId: string) => Promise<boolean>;
 };
 
-type HomePagerRoot = {
-	gestureHandlers: GestureResponderHandlers;
-};
-
 function HomeListPager({
-	currentList,
 	focusedListId,
 	listSummaries,
 	session,
@@ -138,7 +125,7 @@ function HomeListPager({
 	onFocusList,
 }: HomeListPagerProps) {
 	const { width } = useWindowDimensions();
-	const [dragX] = useState(() => new Animated.Value(0));
+	const pagerRef = useRef<FlatList<ListSummary>>(null);
 	const summaries = listSummaries;
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [composerListId, setComposerListId] = useState<string | null>(null);
@@ -147,9 +134,6 @@ function HomeListPager({
 		0,
 		summaries.findIndex((summary) => summary.id === focusedListId),
 	);
-	const previousSummary = summaries[focusedIndex - 1];
-	const focusedSummary = summaries[focusedIndex];
-	const nextSummary = summaries[focusedIndex + 1];
 
 	const focusList = useCallback(
 		async (listId: string): Promise<boolean> => {
@@ -164,150 +148,112 @@ function HomeListPager({
 		[onFocusList, selectionPending],
 	);
 
+	useEffect(() => {
+		pagerRef.current?.scrollToIndex({ animated: false, index: focusedIndex });
+	}, [focusedIndex]);
+
 	async function selectFromPicker(summary: ListSummary): Promise<void> {
+		const selectedIndex = summaries.findIndex(
+			(candidate) => candidate.id === summary.id,
+		);
+		if (selectedIndex < 0) return;
+		pagerRef.current?.scrollToIndex({
+			animated: false,
+			index: selectedIndex,
+		});
 		const didFocus = await focusList(summary.id);
-		if (!didFocus) return;
+		if (!didFocus) {
+			pagerRef.current?.scrollToIndex({
+				animated: true,
+				index: focusedIndex,
+			});
+			return;
+		}
 		setPickerOpen(false);
 	}
 
-	const resetDrag = useCallback(() => {
-		Animated.spring(dragX, {
-			toValue: 0,
-			useNativeDriver: true,
-		}).start();
-	}, [dragX]);
-
-	const settleSwipe = useCallback(
-		(summary: ListSummary, destination: number) => {
-			Animated.timing(dragX, {
-				toValue: destination,
-				duration: 180,
-				useNativeDriver: true,
-			}).start(({ finished }) => {
-				dragX.stopAnimation();
-				dragX.setValue(0);
-				if (!finished) return;
-				void focusList(summary.id).then((didFocus) => {
-					if (!didFocus) resetDrag();
-				});
-			});
-		},
-		[dragX, focusList, resetDrag],
-	);
-
-	const gesturesEnabled =
-		summaries.length > 1 &&
-		!pickerOpen &&
-		composerListId === null &&
-		!selectionPending;
-	const panResponder = useMemo(
-		() =>
-			PanResponder.create({
-				onMoveShouldSetPanResponderCapture: (_event, gesture) =>
-					gesturesEnabled &&
-					Math.abs(gesture.dx) > 12 &&
-					Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.25,
-				onPanResponderMove: (_event, gesture) => {
-					if (gesture.dx < 0 && !nextSummary) {
-						dragX.setValue(gesture.dx * 0.15);
-						return;
-					}
-					if (gesture.dx > 0 && !previousSummary) {
-						dragX.setValue(gesture.dx * 0.15);
-						return;
-					}
-					dragX.setValue(gesture.dx);
-				},
-				onPanResponderRelease: (_event, gesture) => {
-					const crossedDistance = Math.abs(gesture.dx) > width * 0.2;
-					const crossedVelocity = Math.abs(gesture.vx) > 0.5;
-					if (
-						(crossedDistance || crossedVelocity) &&
-						gesture.dx < 0 &&
-						nextSummary
-					) {
-						settleSwipe(nextSummary, -width);
-						return;
-					}
-					if (
-						(crossedDistance || crossedVelocity) &&
-						gesture.dx > 0 &&
-						previousSummary
-					) {
-						settleSwipe(previousSummary, width);
-						return;
-					}
-					resetDrag();
-				},
-				onPanResponderTerminate: resetDrag,
-			}),
-		[
-			dragX,
-			gesturesEnabled,
-			nextSummary,
-			previousSummary,
-			resetDrag,
-			settleSwipe,
-			width,
-		],
-	);
-
-	function renderAdjacentPage(summary: ListSummary, left: number) {
-		const initialState =
-			summary.id === currentList.listId ? currentList : undefined;
-
-		return (
-			<Animated.View
-				accessibilityElementsHidden
-				key={summary.id}
-				pointerEvents="none"
-				style={[
-					styles.positionedPage,
-					{ left, width, transform: [{ translateX: dragX }] },
-				]}
-				testID={`home-adjacent-list-page-${summary.id}`}
-			>
-				<HomeListPage
-					composerOpen={composerListId === summary.id}
-					focused={false}
-					initialState={initialState}
-					listSummaries={summaries}
-					pageWidth={width}
-					session={session}
-					summary={summary}
-					syncState={syncState}
-					onDismissComposer={() => setComposerListId(null)}
-					onOpenComposer={() => setComposerListId(summary.id)}
-				/>
-			</Animated.View>
-		);
+	function pageLayout(
+		_data: ArrayLike<ListSummary> | null | undefined,
+		index: number,
+	) {
+		return { index, length: width, offset: width * index };
 	}
 
-	const focusedInitialState =
-		focusedSummary?.id === currentList.listId ? currentList : undefined;
-	const pagerRoot: HomePagerRoot = {
-		gestureHandlers: panResponder.panHandlers,
-	};
+	function pageSettled(event: NativeSyntheticEvent<NativeScrollEvent>) {
+		const settledIndex = Math.max(
+			0,
+			Math.min(
+				summaries.length - 1,
+				Math.round(event.nativeEvent.contentOffset.x / width),
+			),
+		);
+		const summary = summaries[settledIndex];
+		if (!summary || summary.id === focusedListId) return;
+		void focusList(summary.id).then((didFocus) => {
+			if (didFocus) return;
+			pagerRef.current?.scrollToIndex({
+				animated: true,
+				index: focusedIndex,
+			});
+		});
+	}
 
 	return (
 		<>
-			{focusedSummary ? (
-				<HomeListPage
-					composerOpen={composerListId === focusedSummary.id}
-					focused
-					initialState={focusedInitialState}
-					listSummaries={summaries}
-					pageWidth={width}
-					pagerRoot={pagerRoot}
-					session={session}
-					summary={focusedSummary}
-					syncState={syncState}
-					onDismissComposer={() => setComposerListId(null)}
-					onOpenComposer={() => setComposerListId(focusedSummary.id)}
-				/>
-			) : null}
-			{previousSummary ? renderAdjacentPage(previousSummary, -width) : null}
-			{nextSummary ? renderAdjacentPage(nextSummary, width) : null}
+			<FlatList
+				data={summaries}
+				decelerationRate="fast"
+				getItemLayout={pageLayout}
+				horizontal
+				initialNumToRender={Math.min(3, summaries.length)}
+				initialScrollIndex={focusedIndex}
+				keyExtractor={listSummaryKey}
+				keyboardDismissMode="on-drag"
+				maxToRenderPerBatch={3}
+				pagingEnabled
+				ref={pagerRef}
+				removeClippedSubviews={false}
+				renderItem={({ item: summary }) => {
+					const focused = summary.id === focusedListId;
+					return (
+						<View
+							accessibilityElementsHidden={!focused}
+							importantForAccessibility={
+								focused ? "auto" : "no-hide-descendants"
+							}
+							pointerEvents={focused ? "auto" : "none"}
+							style={[styles.page, { width }]}
+							testID={
+								focused
+									? `home-list-page-${summary.id}`
+									: `home-adjacent-list-page-${summary.id}`
+							}
+						>
+							<HomeListPage
+								composerOpen={composerListId === summary.id}
+								focused={focused}
+								listSummaries={summaries}
+								session={session}
+								summary={summary}
+								syncState={syncState}
+								onDismissComposer={() => setComposerListId(null)}
+								onOpenComposer={() => setComposerListId(summary.id)}
+							/>
+						</View>
+					);
+				}}
+				scrollEnabled={
+					summaries.length > 1 &&
+					!pickerOpen &&
+					composerListId === null &&
+					!selectionPending
+				}
+				showsHorizontalScrollIndicator={false}
+				style={styles.pager}
+				testID="home-list-pager"
+				windowSize={3}
+				onMomentumScrollEnd={pageSettled}
+			/>
 			{composerListId === null ? (
 				pickerOpen ? (
 					<HomeListPicker
@@ -336,11 +282,8 @@ function HomeListPage({
 	session,
 	syncState,
 	listSummaries,
-	pageWidth,
-	pagerRoot,
 	focused,
 	composerOpen,
-	initialState,
 	onOpenComposer,
 	onDismissComposer,
 }: {
@@ -348,39 +291,20 @@ function HomeListPage({
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
 	listSummaries: readonly ListSummary[];
-	pageWidth: number;
-	pagerRoot?: HomePagerRoot;
 	focused: boolean;
 	composerOpen: boolean;
-	initialState?: ActiveCurrentListState;
 	onOpenComposer: () => void;
 	onDismissComposer: () => void;
 }) {
-	if (initialState) {
-		return (
-			<HomeListPageState
-				composerOpen={composerOpen}
-				focused={focused}
-				listSummaries={listSummaries}
-				pageWidth={pageWidth}
-				pagerRoot={pagerRoot}
-				session={session}
-				state={initialState}
-				syncState={syncState}
-				onDismissComposer={onDismissComposer}
-				onOpenComposer={onOpenComposer}
-			/>
-		);
-	}
+	const state = useListPage(session, summary);
 
 	return (
-		<WatchedHomeListPage
+		<HomeListPageState
 			composerOpen={composerOpen}
 			focused={focused}
 			listSummaries={listSummaries}
-			pageWidth={pageWidth}
-			pagerRoot={pagerRoot}
 			session={session}
+			state={state}
 			summary={summary}
 			syncState={syncState}
 			onDismissComposer={onDismissComposer}
@@ -389,34 +313,22 @@ function HomeListPage({
 	);
 }
 
-function WatchedHomeListPage({
-	summary,
-	session,
-	...props
-}: Omit<Parameters<typeof HomeListPage>[0], "initialState">) {
-	const state = useListPage(session, summary);
-
-	return <HomeListPageState {...props} session={session} state={state} />;
-}
-
 function HomeListPageState({
 	state,
+	summary,
 	session,
 	syncState,
 	listSummaries,
-	pageWidth,
-	pagerRoot,
 	focused,
 	composerOpen,
 	onOpenComposer,
 	onDismissComposer,
 }: {
-	state: ListPageState | ActiveCurrentListState;
+	state: ListPageState;
+	summary: ListSummary;
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
 	listSummaries: readonly ListSummary[];
-	pageWidth: number;
-	pagerRoot?: HomePagerRoot;
 	focused: boolean;
 	composerOpen: boolean;
 	onOpenComposer: () => void;
@@ -424,11 +336,8 @@ function HomeListPageState({
 }) {
 	if (state.status === "loading") {
 		return (
-			<View
-				{...pagerRoot?.gestureHandlers}
-				style={[styles.page, { width: pageWidth }]}
-				testID={pagerRoot ? "home-list-pager" : undefined}
-			>
+			<View style={styles.page}>
+				<HomeListPageTitle title={summary.name} />
 				<HomeStatus
 					title="Preparing your Household"
 					body="Loading your Household List."
@@ -441,11 +350,8 @@ function HomeListPageState({
 
 	if (state.status === "error") {
 		return (
-			<View
-				{...pagerRoot?.gestureHandlers}
-				style={[styles.page, { width: pageWidth }]}
-				testID={pagerRoot ? "home-list-pager" : undefined}
-			>
+			<View style={styles.page}>
+				<HomeListPageTitle title={summary.name} />
 				<HomeStatus title="List unavailable" body={state.message} />
 			</View>
 		);
@@ -457,9 +363,8 @@ function HomeListPageState({
 			focused={focused}
 			listSummaries={listSummaries}
 			loadState={state}
-			pageWidth={pageWidth}
-			pagerRoot={pagerRoot}
 			session={session}
+			summary={summary}
 			syncState={syncState}
 			onDismissComposer={onDismissComposer}
 			onOpenComposer={onOpenComposer}
@@ -472,8 +377,7 @@ function ActiveHomeListPage({
 	session,
 	syncState,
 	listSummaries,
-	pageWidth,
-	pagerRoot,
+	summary,
 	focused,
 	composerOpen,
 	onOpenComposer,
@@ -483,8 +387,7 @@ function ActiveHomeListPage({
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
 	listSummaries: readonly ListSummary[];
-	pageWidth: number;
-	pagerRoot?: HomePagerRoot;
+	summary: ListSummary;
 	focused: boolean;
 	composerOpen: boolean;
 	onOpenComposer: () => void;
@@ -503,15 +406,15 @@ function ActiveHomeListPage({
 		summaries: listSummaries,
 	});
 
-	const pageContents = (
+	return (
 		<>
 			<ItemRows
 				bottomContentInset={insets.bottom + theme.spacing(20)}
-				gestureHandlers={pagerRoot?.gestureHandlers}
 				items={loadState.list.items}
 				listOverview={
-					<ListOverview
-						state={loadState.list}
+					<HomeListPageHeader
+						list={loadState.list}
+						summary={summary}
 						meta={{
 							currentMemberName: sessionMemberDisplayName(session),
 							errorMessage: actions.errorMessage,
@@ -521,7 +424,7 @@ function ActiveHomeListPage({
 				}
 				onPressBlankSpace={focused ? onOpenComposer : undefined}
 				onToggleItem={actions.toggleItem}
-				testID={pagerRoot ? "home-list-pager" : undefined}
+				testID={`home-list-items-${summary.id}`}
 			/>
 			<AddItemForm
 				currentListId={loadState.listId}
@@ -536,11 +439,30 @@ function ActiveHomeListPage({
 			/>
 		</>
 	);
+}
 
-	if (pagerRoot) return pageContents;
-
+function HomeListPageHeader({
+	summary,
+	list,
+	meta,
+}: {
+	summary: ListSummary;
+	list: Parameters<typeof ListOverview>[0]["state"];
+	meta: Parameters<typeof ListOverview>[0]["meta"];
+}) {
 	return (
-		<View style={[styles.page, { width: pageWidth }]}>{pageContents}</View>
+		<View>
+			<HomeListPageTitle title={summary.name} />
+			<ListOverview state={list} meta={meta} />
+		</View>
+	);
+}
+
+function HomeListPageTitle({ title }: { title: string }) {
+	return (
+		<Text accessibilityRole="header" style={styles.pageTitle}>
+			{title}
+		</Text>
 	);
 }
 
@@ -708,13 +630,22 @@ function listCounts(summary: ListSummary): string {
 }
 
 const styles = StyleSheet.create((theme) => ({
-	positionedPage: {
-		position: "absolute",
-		top: 0,
-		bottom: 0,
+	pager: {
+		flex: 1,
+		backgroundColor: theme.colors.background,
 	},
 	page: {
 		flex: 1,
+		backgroundColor: theme.colors.background,
+	},
+	pageTitle: {
+		fontSize: theme.fontSizes["5xl"],
+		fontWeight: theme.fontWeights.bold,
+		lineHeight: theme.lineHeights["5xl"],
+		color: theme.colors.foreground,
+		paddingHorizontal: theme.spacing(5),
+		paddingTop: theme.spacing(2),
+		paddingBottom: theme.spacing(2),
 		backgroundColor: theme.colors.background,
 	},
 	pickerOverlay: {
