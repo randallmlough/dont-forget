@@ -7,6 +7,7 @@ import {
 	addFixtureItem,
 	authenticatedAppSession,
 	emptyActiveListState,
+	groceriesListSummary,
 	populatedActiveListState,
 	setFixtureItemChecked,
 } from "./list-test-support";
@@ -48,12 +49,17 @@ export const ZeroActive: Story = {
 				syncState: "synced",
 				listRows: { status: "ready", summaries: [] },
 			}}
+			focusedListId={null}
+			onFocusList={focusList}
 			onOpenLists={noop}
 		/>
 	),
 };
 
 function noop() {}
+async function focusList() {
+	return true;
+}
 
 function CurrentListStory({ initialList }: { initialList: ActiveListState }) {
 	const [list, setList] = useState(initialList);
@@ -78,13 +84,20 @@ function CurrentListStory({ initialList }: { initialList: ActiveListState }) {
 			reload: noop,
 		},
 		syncState: "synced",
-		listRows: { status: "ready", summaries: [] },
+		listRows: {
+			status: "ready",
+			summaries: [
+				{ ...groceriesListSummary, id: "lst_story", name: list.listName },
+			],
+		},
 	};
 
 	return (
 		<CurrentList
 			session={authenticatedAppSession}
 			deps={currentListDeps}
+			focusedListId="lst_story"
+			onFocusList={focusList}
 			onOpenLists={noop}
 		/>
 	);

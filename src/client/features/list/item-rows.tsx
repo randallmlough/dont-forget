@@ -2,47 +2,87 @@ import { SymbolView } from "expo-symbols";
 import { memo, type ReactElement, useCallback } from "react";
 import {
 	FlatList,
+	type GestureResponderHandlers,
 	type ListRenderItemInfo,
 	Pressable,
 	Text,
 	View,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { useAddItemComposerScrollInset } from "@/client/features/list/add-item-composer";
 import type { ActiveListItem } from "./list-view-types";
 
 export type ItemRowsProps = {
 	items: ActiveListItem[];
 	listOverview?: ReactElement;
+	bottomContentInset?: number;
+	gestureHandlers?: GestureResponderHandlers;
+	onPressBlankSpace?: () => void;
 	onToggleItem: (itemId: string) => void;
+	testID?: string;
 };
 
-export function ItemRows({ items, listOverview, onToggleItem }: ItemRowsProps) {
-	const bottomScrollInset = useAddItemComposerScrollInset();
+export function ItemRows({
+	items,
+	listOverview,
+	bottomContentInset = 0,
+	gestureHandlers,
+	onPressBlankSpace,
+	onToggleItem,
+	testID,
+}: ItemRowsProps) {
 	const renderItem = useCallback(
 		({ item }: ListRenderItemInfo<ActiveListItem>) => (
-			<ItemRow item={item} onToggle={onToggleItem} />
+			<ItemRow
+				gestureHandlers={gestureHandlers}
+				item={item}
+				onToggle={onToggleItem}
+			/>
 		),
-		[onToggleItem],
+		[gestureHandlers, onToggleItem],
+	);
+	const renderEmpty = useCallback(
+		() => (
+			<EmptyList
+				gestureHandlers={gestureHandlers}
+				onPress={onPressBlankSpace}
+			/>
+		),
+		[gestureHandlers, onPressBlankSpace],
 	);
 
 	return (
 		<FlatList
+			{...gestureHandlers}
 			data={items}
 			keyExtractor={keyExtractor}
 			renderItem={renderItem}
 			ItemSeparatorComponent={ItemSeparator}
-			ListEmptyComponent={EmptyList}
+			ListEmptyComponent={renderEmpty}
+			ListFooterComponent={
+				onPressBlankSpace ? (
+					<Pressable
+						{...gestureHandlers}
+						accessibilityHint="Opens the add Item composer"
+						accessibilityLabel="Add Item"
+						accessibilityRole="button"
+						onPress={onPressBlankSpace}
+						style={styles.blankSpace}
+					/>
+				) : null
+			}
+			ListFooterComponentStyle={
+				onPressBlankSpace ? styles.blankSpaceContainer : undefined
+			}
 			ListHeaderComponent={listOverview}
 			keyboardShouldPersistTaps="handled"
 			// Assumes a native stack header above the list, so stories that render
 			// ItemRows in a plain canvas get scene safe-area insets they did not ask for.
 			contentInsetAdjustmentBehavior="automatic"
 			style={styles.list}
+			testID={testID}
 			contentContainerStyle={[
 				styles.itemsContent,
-				{ paddingBottom: bottomScrollInset },
-				items.length === 0 ? styles.emptyItemsContent : undefined,
+				{ paddingBottom: bottomContentInset },
 			]}
 		/>
 	);
@@ -50,9 +90,11 @@ export function ItemRows({ items, listOverview, onToggleItem }: ItemRowsProps) {
 
 function ItemRowComponent({
 	item,
+	gestureHandlers,
 	onToggle,
 }: {
 	item: ActiveListItem;
+	gestureHandlers?: GestureResponderHandlers;
 	onToggle: (id: string) => void;
 }) {
 	const { theme } = useUnistyles();
@@ -64,6 +106,7 @@ function ItemRowComponent({
 
 	return (
 		<Pressable
+			{...gestureHandlers}
 			accessibilityRole="checkbox"
 			accessibilityState={{ checked: item.checked }}
 			onPress={toggle}
@@ -109,14 +152,43 @@ function ItemRowComponent({
 
 const ItemRow = memo(ItemRowComponent);
 
-function EmptyList() {
+function EmptyList({
+	gestureHandlers,
+	onPress,
+}: {
+	gestureHandlers?: GestureResponderHandlers;
+	onPress?: () => void;
+}) {
+	if (onPress) {
+		return (
+			<Pressable
+				{...gestureHandlers}
+				accessibilityHint="Opens the add Item composer"
+				accessibilityLabel="Add the first Item"
+				accessibilityRole="button"
+				onPress={onPress}
+				style={styles.emptyState}
+			>
+				<EmptyListContent />
+			</Pressable>
+		);
+	}
+
 	return (
 		<View style={styles.emptyState}>
+			<EmptyListContent />
+		</View>
+	);
+}
+
+function EmptyListContent() {
+	return (
+		<>
 			<Text style={styles.emptyTitle}>This List is empty.</Text>
 			<Text style={styles.emptyBody}>
 				Add the first Item for your Household.
 			</Text>
-		</View>
+		</>
 	);
 }
 
@@ -135,13 +207,20 @@ function itemDetailText(item: ActiveListItem): string | null {
 
 const styles = StyleSheet.create((theme) => ({
 	list: {
+		flex: 1,
 		backgroundColor: theme.colors.background,
 	},
 	itemsContent: {
+		flexGrow: 1,
 		paddingBottom: theme.spacing(2),
 	},
-	emptyItemsContent: {
+	blankSpace: {
+		flex: 1,
+		minHeight: theme.spacing(16),
+	},
+	blankSpaceContainer: {
 		flexGrow: 1,
+		minHeight: theme.spacing(16),
 	},
 	emptyState: {
 		alignItems: "center",

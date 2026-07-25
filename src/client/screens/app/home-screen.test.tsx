@@ -1,18 +1,41 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
+import {
+	PanResponder,
+	type PanResponderCallbacks,
+	type PanResponderGestureState,
+} from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
 import {
 	authenticatedAppSession,
 	emptyActiveListState,
+	groceriesListSummary,
+	pantryListSummary,
 } from "@/client/features/list/list-test-support";
 import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
+import { useListPage } from "@/client/features/list/use-list-page";
 import { useListRows } from "@/client/features/list/use-list-rows";
+import { useSelectList } from "@/client/features/list/use-select-list";
 import { useAuthenticatedAppSession, useSyncState } from "@/client/session";
 import HomeScreen, { HomeScreenView } from "./home-screen";
 
 const mockReplace = jest.fn();
+const mockSelectList = jest.fn(async () => true);
+const hardwareListSummary = {
+	...pantryListSummary,
+	id: "lst_hardware",
+	name: "Hardware",
+};
+let pagerResponder: PanResponderCallbacks;
+const createPanResponder = PanResponder.create;
 
 jest.mock("expo-router", () => {
 	const mockReact = jest.requireActual<typeof import("react")>("react");
@@ -78,11 +101,30 @@ jest.mock("@/client/features/list/use-list-rows", () => ({
 	useListRows: jest.fn(),
 }));
 
+jest.mock("@/client/features/list/use-list-page", () => ({
+	useListPage: jest.fn(),
+}));
+
+jest.mock("@/client/features/list/use-select-list", () => ({
+	useSelectList: jest.fn(),
+}));
+
 jest.mock("@/client/session/powersync", () => ({
 	PowerSyncConnector: jest.fn(),
 	powerSyncAppDatabase: {},
 	readPowerSyncUrl: jest.fn(() => "https://sync.test"),
 }));
+
+beforeAll(() => {
+	jest.spyOn(PanResponder, "create").mockImplementation((callbacks) => {
+		pagerResponder = callbacks;
+		return createPanResponder(callbacks);
+	});
+});
+
+afterAll(() => {
+	jest.restoreAllMocks();
+});
 
 beforeEach(() => {
 	mockReplace.mockReset();
@@ -96,8 +138,19 @@ beforeEach(() => {
 	jest.mocked(useSyncState).mockReturnValue("synced");
 	jest.mocked(useHomeCurrentList).mockReturnValue(activeCurrentList());
 	jest.mocked(useListRows).mockReturnValue({
-		rows: { status: "ready", summaries: [] },
+		rows: { status: "ready", summaries: [groceriesListSummary] },
 	});
+	jest.mocked(useListPage).mockReturnValue({
+		status: "active",
+		listId: "lst_pantry",
+		list: { ...emptyActiveListState, listName: "Pantry" },
+		actions: {
+			addItem: jest.fn(async () => undefined),
+			setItemChecked: jest.fn(async () => undefined),
+		},
+	});
+	mockSelectList.mockClear();
+	jest.mocked(useSelectList).mockReturnValue(mockSelectList);
 });
 
 describe("HomeScreenView", () => {
@@ -159,11 +212,70 @@ describe("HomeScreen", () => {
 		expect(mockReplace).toHaveBeenCalledWith("/lists");
 	});
 
+	it("updates the native title and persists selection when paging settles", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [groceriesListSummary, pantryListSummary],
+			},
+		});
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+		await act(async () => {
+			const release = pagerResponder.onPanResponderRelease;
+			if (!release) throw new Error("Pager release responder was not created");
+			Reflect.apply(release, undefined, [undefined, swipeLeftGesture()]);
+		});
+
+		expect(await screen.findByRole("header", { name: "Pantry" })).toBeTruthy();
+		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
+	});
+
+	it("updates the native title across consecutive horizontal swipes", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [
+					groceriesListSummary,
+					pantryListSummary,
+					hardwareListSummary,
+				],
+			},
+		});
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await releaseSwipeLeft();
+		expect(await screen.findByRole("header", { name: "Pantry" })).toBeTruthy();
+		await waitForSelectionCount(1);
+
+		await releaseSwipeLeft();
+		expect(
+			await screen.findByRole("header", { name: "Hardware" }),
+		).toBeTruthy();
+		expect(mockSelectList).toHaveBeenNthCalledWith(
+			2,
+			"lst_hardware",
+			"lst_pantry",
+		);
+	});
+
 	it("falls back to the Home title while the Current List is unresolved", async () => {
 		jest.mocked(useHomeCurrentList).mockReturnValue({
 			state: { status: "zeroActive" },
 			retry: jest.fn(),
 			reload: jest.fn(),
+		});
+		jest.mocked(useListRows).mockReturnValue({
+			rows: { status: "ready", summaries: [] },
 		});
 
 		await render(
@@ -197,6 +309,37 @@ describe("HomeScreen", () => {
 		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
 	});
 });
+
+function swipeLeftGesture(): PanResponderGestureState {
+	return {
+		stateID: 1,
+		moveX: 0,
+		moveY: 0,
+		x0: 300,
+		y0: 0,
+		dx: -300,
+		dy: 0,
+		vx: -1,
+		vy: 0,
+		numberActiveTouches: 0,
+		_accountsForMovesUpTo: 1,
+	};
+}
+
+async function releaseSwipeLeft(): Promise<void> {
+	await act(async () => {
+		const release = pagerResponder.onPanResponderRelease;
+		if (!release) throw new Error("Pager release responder was not created");
+		Reflect.apply(release, undefined, [undefined, swipeLeftGesture()]);
+	});
+}
+
+async function waitForSelectionCount(count: number): Promise<void> {
+	await waitFor(() => {
+		expect(mockSelectList).toHaveBeenCalledTimes(count);
+	});
+	await act(async () => undefined);
+}
 
 function activeCurrentList(): HomeCurrentListDeps["currentList"] {
 	return {

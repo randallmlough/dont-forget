@@ -1,4 +1,5 @@
 import { Stack, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
@@ -9,6 +10,7 @@ import {
 } from "@/client/features/list/home-status";
 import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
 import { useListRows } from "@/client/features/list/use-list-rows";
+import { useSelectList } from "@/client/features/list/use-select-list";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
@@ -70,14 +72,59 @@ function HomeScreenResource({
 	const currentList = useHomeCurrentList(session);
 	const syncState = useSyncState();
 	const { rows } = useListRows(session);
+	const selectList = useSelectList(session);
+	const [focusedListId, setFocusedListId] = useState<string | null>(null);
+	const persistedListIdRef = useRef<string | null>(null);
+	const currentListId =
+		currentList.state.status === "active" ? currentList.state.listId : null;
+	const listSummaries = rows.status === "ready" ? rows.summaries : [];
+	const currentListIsActive = listSummaries.some(
+		(summary) => summary.id === currentListId,
+	);
+	const resolvedFocusedListId =
+		focusedListId &&
+		listSummaries.some((summary) => summary.id === focusedListId)
+			? focusedListId
+			: currentListIsActive
+				? currentListId
+				: (listSummaries[0]?.id ?? null);
+	const focusedSummary = listSummaries.find(
+		(summary) => summary.id === resolvedFocusedListId,
+	);
 	const title =
-		currentList.state.status === "active"
+		focusedSummary?.name ??
+		(currentList.state.status === "active"
 			? currentList.state.list.listName
-			: FALLBACK_TITLE;
+			: FALLBACK_TITLE);
+
+	useEffect(() => {
+		if (persistedListIdRef.current === null && currentListId !== null) {
+			persistedListIdRef.current = currentListId;
+		}
+	}, [currentListId]);
+
+	async function focusList(listId: string): Promise<boolean> {
+		const persistedListId = persistedListIdRef.current ?? currentListId;
+		if (listId === persistedListId) {
+			setFocusedListId(listId);
+			return true;
+		}
+
+		setFocusedListId(listId);
+		const didSelect = await selectList(listId, persistedListId);
+		if (!didSelect) {
+			setFocusedListId(persistedListId);
+			return false;
+		}
+
+		persistedListIdRef.current = listId;
+		return true;
+	}
 
 	return (
 		<>
 			<HomeStackHeader
+				titleKey={resolvedFocusedListId ?? FALLBACK_TITLE}
 				title={title}
 				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
@@ -85,6 +132,8 @@ function HomeScreenResource({
 			<CurrentList
 				session={session}
 				deps={{ currentList, syncState, listRows: rows }}
+				focusedListId={resolvedFocusedListId}
+				onFocusList={focusList}
 				onOpenLists={onOpenLists}
 			/>
 		</>
@@ -93,10 +142,12 @@ function HomeScreenResource({
 
 function HomeStackHeader({
 	title,
+	titleKey,
 	onOpenNavigation,
 	onOpenLists,
 }: {
 	title: string;
+	titleKey?: string;
 	onOpenNavigation: () => void;
 	onOpenLists: () => void;
 }) {
@@ -104,7 +155,9 @@ function HomeStackHeader({
 		<>
 			{/* The enclosing Stack sets headerShown: false, so this route opts back in. */}
 			<Stack.Screen options={{ headerShown: true }} />
-			<Stack.Title large>{title}</Stack.Title>
+			<Stack.Title key={titleKey} large>
+				{title}
+			</Stack.Title>
 			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button
 					accessibilityHint="Opens the navigation drawer"

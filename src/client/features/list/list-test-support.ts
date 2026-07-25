@@ -1,4 +1,5 @@
 import type { AuthenticatedAppSession } from "@/client/session";
+import type { ListSummary } from "./list-service";
 import type {
 	ActiveListState,
 	AddActiveListItemInput,
@@ -41,6 +42,29 @@ export const emptyActiveListState: ActiveListState = {
 	householdName: "Avery",
 	listName: "Groceries",
 	items: [],
+};
+
+export const groceriesListSummary: ListSummary = {
+	id: "lst_groceries",
+	householdId: "hh_avery",
+	name: "Groceries",
+	createdByUserId: "usr_avery",
+	createdAt: 1,
+	updatedAt: 1,
+	archived: false,
+	archivedAt: null,
+	lastActivityAt: 1,
+	uncheckedItemCount: 0,
+	checkedItemCount: 0,
+};
+
+export const pantryListSummary: ListSummary = {
+	...groceriesListSummary,
+	id: "lst_pantry",
+	name: "Pantry",
+	createdAt: 2,
+	updatedAt: 2,
+	lastActivityAt: 2,
 };
 
 export const populatedActiveListState: ActiveListState = {

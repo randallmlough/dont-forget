@@ -54,6 +54,7 @@ export type AddItemComposerProps = {
 	draft: AddItemComposerDraft;
 	ui: AddItemComposerUiState;
 	actions: AddItemComposerActions;
+	showRestingEntry?: boolean;
 };
 
 export type AddItemComposerDraft = {
@@ -85,7 +86,12 @@ export type AddItemComposerActions = {
 	changeNotes: (value: string) => void;
 };
 
-export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
+export function AddItemComposer({
+	draft,
+	ui,
+	actions,
+	showRestingEntry = true,
+}: AddItemComposerProps) {
 	const insets = useSafeAreaInsets();
 	const { rt } = useUnistyles();
 	const colorScheme = nativeColorScheme(rt.themeName);
@@ -115,6 +121,8 @@ export function AddItemComposer({ draft, ui, actions }: AddItemComposerProps) {
 	}
 
 	if (!ui.isOpen) {
+		if (!showRestingEntry) return null;
+
 		return (
 			<View
 				collapsable={false}

@@ -63,9 +63,11 @@ describe("List parts", () => {
 
 	it("calls the toggle callback when an Item row is pressed", async () => {
 		const onToggleItem = jest.fn();
+		const onPressBlankSpace = jest.fn();
 		await renderWithSafeArea(
 			<ItemRows
 				items={populatedActiveListState.items}
+				onPressBlankSpace={onPressBlankSpace}
 				onToggleItem={onToggleItem}
 			/>,
 		);
@@ -73,6 +75,7 @@ describe("List parts", () => {
 		await fireEvent.press(await screen.findByText("Milk"));
 
 		expect(onToggleItem).toHaveBeenCalledWith("item-1");
+		expect(onPressBlankSpace).not.toHaveBeenCalled();
 	});
 
 	it("renders the empty List state", async () => {

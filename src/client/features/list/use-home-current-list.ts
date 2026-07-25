@@ -8,21 +8,19 @@ import type { ListSummary } from "@/client/features/list/list-service";
 import { useLogger } from "@/client/lib/logger";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { asError } from "@/shared/errors";
-import type {
-	ActiveListItem,
-	ActiveListState,
-	AddListItemInput,
-} from "./list-view-types";
+import {
+	activeListStateFromItems,
+	type ListPageActions,
+	listPageActions,
+} from "./list-page-data";
+import type { ActiveListState } from "./list-view-types";
 import { usePowerSyncQuery } from "./use-powersync-query";
 import {
 	type ProductServices,
 	useProductServices,
 } from "./use-product-services";
 
-export type HomeCurrentListActions = {
-	addItem: (input: AddListItemInput) => Promise<void>;
-	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
-};
+export type HomeCurrentListActions = ListPageActions;
 
 export type HomeCurrentListState =
 	| { status: "loading" }
@@ -300,85 +298,22 @@ function homeCurrentListState(input: {
 		// Type narrowing only: currentListId is derived from this same array.
 		return { status: "loading" };
 	}
-	const memberNames = memberNamesFromSession(input.session);
 	// Right after a switch the watched Items query may briefly still hold the
 	// previous List's rows (the SDK keeps data while re-running on a
 	// parameter change); rows are List-scoped, so filter (Decision 7).
-	const itemRows = input.items.data.filter(
-		(item) => item.listId === input.currentListId,
-	);
 	return {
 		status: "active",
 		listId: input.currentListId,
-		list: {
-			householdName: input.session.activeHousehold.name,
+		list: activeListStateFromItems({
+			session: input.session,
 			listName: summary.name,
-			items: itemRows.map((item) => activeListItemFromItem(item, memberNames)),
-		},
-		actions: homeCurrentListActions(
-			input.session,
-			input.services,
-			input.currentListId,
-		),
-	};
-}
-
-function homeCurrentListActions(
-	session: AuthenticatedAppSession,
-	services: ProductServices,
-	listId: string,
-): HomeCurrentListActions {
-	return {
-		async addItem(input: AddListItemInput) {
-			await services.items.addItem({
-				listId: input.listId,
-				userId: session.activeMember.userId,
-				name: input.name,
-				quantity: input.quantity,
-				notes: input.notes,
-			});
-		},
-		async setItemChecked(itemId: string, checked: boolean) {
-			await services.items.setItemChecked({
-				listId,
-				itemId,
-				userId: session.activeMember.userId,
-				checked,
-			});
-		},
-	};
-}
-
-function memberNamesFromSession(
-	session: AuthenticatedAppSession,
-): Map<string, string | null> {
-	const names = new Map<string, string | null>();
-	for (const member of session.members) {
-		names.set(member.userId, member.displayName);
-	}
-	names.set(
-		session.activeMember.userId,
-		session.activeMember.displayName ??
-			session.user.displayName ??
-			session.user.email ??
-			"Member",
-	);
-	return names;
-}
-
-function activeListItemFromItem(
-	item: Item,
-	memberNames: Map<string, string | null>,
-): ActiveListItem {
-	return {
-		id: item.id,
-		name: item.name,
-		quantity: item.quantity,
-		notes: item.notes,
-		checked: item.checked,
-		checkedByMemberName:
-			item.checked && item.checkedByUserId
-				? (memberNames.get(item.checkedByUserId) ?? null)
-				: null,
+			listId: input.currentListId,
+			items: input.items.data,
+		}),
+		actions: listPageActions({
+			session: input.session,
+			services: input.services,
+			listId: input.currentListId,
+		}),
 	};
 }
