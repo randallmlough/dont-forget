@@ -1,6 +1,12 @@
 import { Stack, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
-import { useEffect, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { ActivityIndicator, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
@@ -77,6 +83,10 @@ function HomeScreenResource({
 	const selectList = useSelectList(session);
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
 	const [collapsedListId, setCollapsedListId] = useState<string | null>(null);
+	const [lockedExpandedHeaderHeight, setLockedExpandedHeaderHeight] = useState<
+		number | null
+	>(null);
+	const headerHeightRef = useRef(headerHeight);
 	const persistedListIdRef = useRef<string | null>(null);
 	const currentListId =
 		currentList.state.status === "active" ? currentList.state.listId : null;
@@ -98,6 +108,11 @@ function HomeScreenResource({
 		collapsedListId === resolvedFocusedListId
 			? focusedSummary?.name
 			: undefined;
+	const expandedHeaderHeight = lockedExpandedHeaderHeight ?? headerHeight;
+
+	useLayoutEffect(() => {
+		headerHeightRef.current = headerHeight;
+	}, [headerHeight]);
 
 	useEffect(() => {
 		if (persistedListIdRef.current === null && currentListId !== null) {
@@ -123,6 +138,17 @@ function HomeScreenResource({
 		return true;
 	}
 
+	const updateToolbarTitle = useCallback((listId: string | null) => {
+		if (listId !== null) {
+			// Updating the toolbar title causes the native stack to report its
+			// smaller collapsed height next. Keep the last expanded measurement.
+			setLockedExpandedHeaderHeight(
+				(currentHeight) => currentHeight ?? headerHeightRef.current,
+			);
+		}
+		setCollapsedListId(listId);
+	}, []);
+
 	return (
 		<>
 			<HomeStackHeader
@@ -137,8 +163,8 @@ function HomeScreenResource({
 				focusedListId={resolvedFocusedListId}
 				onFocusList={focusList}
 				onOpenLists={onOpenLists}
-				onToolbarTitleChange={setCollapsedListId}
-				topContentInset={headerHeight}
+				onToolbarTitleChange={updateToolbarTitle}
+				topContentInset={expandedHeaderHeight}
 			/>
 		</>
 	);

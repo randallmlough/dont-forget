@@ -26,6 +26,7 @@ import HomeScreen, { HomeScreenView } from "./home-screen";
 const mockReplace = jest.fn();
 const mockSelectList = jest.fn(async () => true);
 const mockStackScreenOptions = jest.fn();
+const mockUseHeaderHeight = jest.fn(() => 116);
 const hardwareListSummary = {
 	...pantryListSummary,
 	id: "lst_hardware",
@@ -84,7 +85,7 @@ jest.mock("expo-router", () => {
 });
 
 jest.mock("expo-router/build/react-navigation/elements", () => ({
-	useHeaderHeight: () => 116,
+	useHeaderHeight: () => mockUseHeaderHeight(),
 }));
 
 // useAuthenticatedAppSession, useSyncState, useHomeCurrentList, and
@@ -124,6 +125,7 @@ jest.mock("@/client/session/powersync", () => ({
 beforeEach(() => {
 	mockReplace.mockReset();
 	mockStackScreenOptions.mockClear();
+	mockUseHeaderHeight.mockReturnValue(116);
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: authenticatedAppSession,
@@ -299,9 +301,15 @@ describe("HomeScreen", () => {
 			const itemRows = screen.getByTestId(`home-list-items-${listId}`, {
 				includeHiddenElements: true,
 			});
-			expect(itemRows).toHaveProp("contentInset", { top: 116 });
-			expect(itemRows).toHaveProp("contentOffset", { x: 0, y: -116 });
 			expect(itemRows).toHaveProp("contentInsetAdjustmentBehavior", "never");
+			expect(itemRows).toHaveProp(
+				"contentContainerStyle",
+				expect.arrayContaining([
+					expect.objectContaining({
+						paddingTop: 116,
+					}),
+				]),
+			);
 		}
 
 		await act(async () => {
@@ -327,6 +335,51 @@ describe("HomeScreen", () => {
 				title: "",
 			}),
 		);
+	});
+
+	it("keeps the expanded List inset when the native toolbar collapses", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [groceriesListSummary, pantryListSummary],
+			},
+		});
+		const view = await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await act(async () => {
+			fireEvent(screen.getByTestId("home-list-items-lst_groceries"), "scroll", {
+				nativeEvent: {
+					contentOffset: { x: 0, y: 96 },
+					contentSize: { width: 390, height: 1200 },
+					layoutMeasurement: { width: 390, height: 844 },
+				},
+			});
+		});
+		mockUseHeaderHeight.mockReturnValue(66);
+		await view.rerender(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+		);
+
+		for (const listId of ["lst_groceries", "lst_pantry"]) {
+			const itemRows = screen.getByTestId(`home-list-items-${listId}`, {
+				includeHiddenElements: true,
+			});
+			expect(itemRows).toHaveProp(
+				"contentContainerStyle",
+				expect.arrayContaining([
+					expect.objectContaining({
+						paddingTop: 116,
+					}),
+				]),
+			);
+		}
 	});
 
 	it("updates the page title across consecutive horizontal swipes", async () => {

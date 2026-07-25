@@ -53,7 +53,7 @@ describe("CurrentList", () => {
 		expect(await screen.findByText("No Items yet")).toBeTruthy();
 	});
 
-	it("resets a List to the toolbar inset when it leaves focus", async () => {
+	it("resets both List pages to the toolbar inset when focus changes", async () => {
 		const scrollToOffset = jest
 			.spyOn(FlatList.prototype, "scrollToOffset")
 			.mockImplementation();
@@ -77,9 +77,10 @@ describe("CurrentList", () => {
 			await waitFor(() => {
 				expect(scrollToOffset).toHaveBeenCalledWith({
 					animated: false,
-					offset: -116,
+					offset: 0,
 				});
 			});
+			expect(scrollToOffset).toHaveBeenCalledTimes(2);
 			scrollToOffset.mockClear();
 
 			await view.rerender(
@@ -96,8 +97,44 @@ describe("CurrentList", () => {
 			await waitFor(() => {
 				expect(scrollToOffset).toHaveBeenCalledWith({
 					animated: false,
-					offset: -116,
+					offset: 0,
 				});
+			});
+			expect(scrollToOffset).toHaveBeenCalledTimes(2);
+		} finally {
+			scrollToOffset.mockRestore();
+		}
+	});
+
+	it("restores the initial List position when native content becomes scrollable", async () => {
+		const scrollToOffset = jest
+			.spyOn(FlatList.prototype, "scrollToOffset")
+			.mockImplementation();
+
+		try {
+			await render(
+				<CurrentList
+					session={authenticatedAppSession}
+					deps={activeListDeps()}
+					focusedListId="lst_groceries"
+					onFocusList={jest.fn(async () => true)}
+					onOpenLists={jest.fn()}
+					topContentInset={116}
+				/>,
+				{ wrapper: TestSafeAreaProvider },
+			);
+			scrollToOffset.mockClear();
+
+			fireEvent(
+				screen.getByTestId("home-list-items-lst_groceries"),
+				"contentSizeChange",
+				390,
+				1200,
+			);
+
+			expect(scrollToOffset).toHaveBeenCalledWith({
+				animated: false,
+				offset: 0,
 			});
 		} finally {
 			scrollToOffset.mockRestore();

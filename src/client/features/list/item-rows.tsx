@@ -23,9 +23,9 @@ export type ItemRowsProps = {
 	items: ActiveListItem[];
 	listOverview?: ReactElement;
 	bottomContentInset?: number;
+	focused?: boolean;
 	onPressBlankSpace?: () => void;
 	onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-	resetScrollPosition?: boolean;
 	topContentInset?: number;
 	onToggleItem: (itemId: string) => void;
 	testID?: string;
@@ -35,22 +35,18 @@ export function ItemRows({
 	items,
 	listOverview,
 	bottomContentInset = 0,
+	focused,
 	onPressBlankSpace,
 	onScroll,
-	resetScrollPosition = false,
 	topContentInset,
 	onToggleItem,
 	testID,
 }: ItemRowsProps) {
 	const listRef = useRef<FlatList<ActiveListItem>>(null);
-	const contentInset = useMemo(
+	const initialResetPendingRef = useRef(focused !== undefined);
+	const scrollIndicatorInsets = useMemo(
 		() =>
 			topContentInset === undefined ? undefined : { top: topContentInset },
-		[topContentInset],
-	);
-	const initialContentOffset = useMemo(
-		() =>
-			topContentInset === undefined ? undefined : { x: 0, y: -topContentInset },
 		[topContentInset],
 	);
 	const renderItem = useCallback(
@@ -63,19 +59,26 @@ export function ItemRows({
 		() => <EmptyList onPress={onPressBlankSpace} />,
 		[onPressBlankSpace],
 	);
-
-	useEffect(() => {
-		if (!resetScrollPosition) return;
+	const resetScrollPosition = useCallback(() => {
 		listRef.current?.scrollToOffset({
 			animated: false,
-			offset: -(topContentInset ?? 0),
+			offset: 0,
 		});
-	}, [resetScrollPosition, topContentInset]);
+	}, []);
+
+	useEffect(() => {
+		if (focused === undefined) return;
+		resetScrollPosition();
+	}, [focused, resetScrollPosition]);
+
+	function contentSizeChanged() {
+		if (!initialResetPendingRef.current) return;
+		initialResetPendingRef.current = false;
+		resetScrollPosition();
+	}
 
 	return (
 		<FlatList
-			contentInset={contentInset}
-			contentOffset={initialContentOffset}
 			data={items}
 			keyExtractor={keyExtractor}
 			renderItem={renderItem}
@@ -104,13 +107,17 @@ export function ItemRows({
 			}
 			ref={listRef}
 			scrollEventThrottle={onScroll ? 16 : undefined}
-			scrollIndicatorInsets={contentInset}
+			scrollIndicatorInsets={scrollIndicatorInsets}
 			style={styles.list}
 			testID={testID}
+			onContentSizeChange={contentSizeChanged}
 			onScroll={onScroll}
 			contentContainerStyle={[
 				styles.itemsContent,
-				{ paddingBottom: bottomContentInset },
+				{
+					paddingTop: topContentInset,
+					paddingBottom: bottomContentInset,
+				},
 			]}
 		/>
 	);

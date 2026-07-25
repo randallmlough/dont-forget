@@ -184,14 +184,7 @@ function HomeListPager({
 	);
 
 	async function selectFromPicker(summary: ListSummary): Promise<void> {
-		const selectedIndex = summaries.findIndex(
-			(candidate) => candidate.id === summary.id,
-		);
-		if (selectedIndex < 0) return;
-		pagerRef.current?.scrollToIndex({
-			animated: false,
-			index: selectedIndex,
-		});
+		if (!summaries.some((candidate) => candidate.id === summary.id)) return;
 		const didFocus = await focusList(summary.id);
 		if (!didFocus) {
 			pagerRef.current?.scrollToIndex({
@@ -480,6 +473,7 @@ function ActiveHomeListPage({
 		<>
 			<ItemRows
 				bottomContentInset={insets.bottom + theme.spacing(20)}
+				focused={focused}
 				items={loadState.list.items}
 				listOverview={
 					<HomeListPageHeader
@@ -494,7 +488,6 @@ function ActiveHomeListPage({
 				}
 				onPressBlankSpace={focused ? onOpenComposer : undefined}
 				onScroll={onScroll}
-				resetScrollPosition={!focused}
 				topContentInset={topContentInset}
 				onToggleItem={actions.toggleItem}
 				testID={`home-list-items-${summary.id}`}
