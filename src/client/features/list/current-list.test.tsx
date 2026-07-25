@@ -9,6 +9,7 @@ import {
 import type { PropsWithChildren } from "react";
 import { Dimensions, FlatList, StyleSheet, type ViewStyle } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { settleAnimations } from "@/test/mocks/reanimated";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
 import {
 	authenticatedAppSession,
@@ -25,11 +26,26 @@ jest.mock("./use-list-page", () => ({
 	useListPage: jest.fn(),
 }));
 
+// The shared Reanimated double reports the reduced-motion setting as off; this
+// suite covers both sides of that system setting.
+const mockDevice = { reducedMotion: false };
+jest.mock("react-native-reanimated", () => ({
+	// Spreading the double drops the non-enumerable ES module marker its default
+	// export needs.
+	__esModule: true,
+	...jest.requireActual("@/test/mocks/reanimated"),
+	useReducedMotion: () => mockDevice.reducedMotion,
+}));
+
 /** Measured height a List page reports for its large in-page title. */
 const LARGE_TITLE_HEIGHT = 66;
 
 /** Width one List page occupies in the horizontal pager. */
 const PAGE_WIDTH = Dimensions.get("window").width;
+
+afterEach(() => {
+	mockDevice.reducedMotion = false;
+});
 
 beforeEach(() => {
 	jest.mocked(useListPage).mockImplementation((_session, summary) => ({
@@ -236,7 +252,127 @@ describe("CurrentList", () => {
 		await waitFor(() => {
 			expect(onFocusList).toHaveBeenCalledWith("lst_pantry");
 		});
+		await settleListPickerZoom();
 		expect(screen.queryByTestId("home-list-picker")).toBeNull();
+	});
+
+	it("keeps the List picker mounted and untappable until it finishes receding", async () => {
+		await render(
+			<CurrentList
+				session={authenticatedAppSession}
+				deps={activeListDeps(undefined, [
+					groceriesListSummary,
+					pantryListSummary,
+				])}
+				focusedListId="lst_groceries"
+				onFocusList={jest.fn(async () => true)}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Choose List" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Close List picker" }),
+		);
+
+		expect(screen.getByTestId("home-list-picker")).toHaveProp(
+			"pointerEvents",
+			"none",
+		);
+		await settleListPickerZoom();
+		expect(screen.queryByTestId("home-list-picker")).toBeNull();
+	});
+
+	it("keeps the focused List unreachable while the picker zoom runs", async () => {
+		await render(
+			<CurrentList
+				session={authenticatedAppSession}
+				deps={activeListDeps(undefined, [
+					groceriesListSummary,
+					pantryListSummary,
+				])}
+				focusedListId="lst_groceries"
+				onFocusList={jest.fn(async () => true)}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+		const listSurface = screen.getByTestId("home-list-surface");
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Choose List" }),
+		);
+		expect(listSurface).toHaveProp("pointerEvents", "none");
+		expect(screen.queryByRole("button", { name: "Choose List" })).toBeNull();
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Close List picker" }),
+		);
+		expect(listSurface).toHaveProp("pointerEvents", "none");
+
+		await settleListPickerZoom();
+		expect(listSurface).toHaveProp("pointerEvents", "auto");
+		expect(screen.getByRole("button", { name: "Choose List" })).toBeTruthy();
+	});
+
+	it("zooms the focused List away as the picker arrives", async () => {
+		await render(pagedListSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Choose List" }),
+		);
+
+		expect(surfaceScale("home-list-surface")).toBeLessThan(1);
+	});
+
+	it("crossfades to the picker without zooming under reduced motion", async () => {
+		mockDevice.reducedMotion = true;
+		await render(pagedListSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Choose List" }),
+		);
+
+		expect(surfaceScale("home-list-surface")).toBe(1);
+		expect(
+			screen.getByTestId("home-list-surface", { includeHiddenElements: true }),
+		).toHaveStyle({ opacity: 0 });
+	});
+
+	it("leaves the List picker open when focusing a chosen List fails", async () => {
+		const onFocusList = jest.fn(async () => false);
+		await render(
+			<CurrentList
+				session={authenticatedAppSession}
+				deps={activeListDeps(undefined, [
+					groceriesListSummary,
+					pantryListSummary,
+				])}
+				focusedListId="lst_groceries"
+				onFocusList={onFocusList}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Choose List" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Pantry" }),
+		);
+
+		await waitFor(() => {
+			expect(onFocusList).toHaveBeenCalledWith("lst_pantry");
+		});
+		await settleListPickerZoom();
+		expect(screen.getByTestId("home-list-picker")).toHaveProp(
+			"pointerEvents",
+			"auto",
+		);
 	});
 
 	it("persists the focused List when horizontal paging settles", async () => {
@@ -518,6 +654,36 @@ function pageTiltDegrees(testID: string): number {
 		}
 	}
 	throw new Error(`${testID} is not carrying a carousel rotation`);
+}
+
+/**
+ * Lands the picker zoom the way the springs land it on the UI thread, which is
+ * what releases the receding surface to unmount (see
+ * `src/test/mocks/reanimated.ts`).
+ */
+async function settleListPickerZoom(): Promise<void> {
+	await act(async () => {
+		settleAnimations();
+	});
+}
+
+/**
+ * How far the picker zoom has scaled this surface toward or away from full
+ * size. Hidden elements count: the picker's `accessibilityViewIsModal` masks
+ * the receding List surface from assistive technology and from queries.
+ */
+function surfaceScale(testID: string): number {
+	const style = StyleSheet.flatten<ViewStyle>(
+		screen.getByTestId(testID, { includeHiddenElements: true }).props.style,
+	);
+	const transforms = style.transform;
+	if (!Array.isArray(transforms)) {
+		throw new Error(`${testID} is not carrying a picker zoom transform`);
+	}
+	for (const entry of transforms) {
+		if (typeof entry.scale === "number") return entry.scale;
+	}
+	throw new Error(`${testID} is not carrying a picker zoom scale`);
 }
 
 async function measureLargeTitle(name: string): Promise<void> {

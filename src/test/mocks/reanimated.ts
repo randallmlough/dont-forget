@@ -15,7 +15,10 @@ import {
  * - `useAnimatedStyle` evaluates its updater on every render, so a test reads
  *   the current animated style by re-rendering after moving a shared value,
  * - animated scroll handlers run from the JS `scroll` event that React Native
- *   Testing Library fires.
+ *   Testing Library fires,
+ * - `withSpring` and `withTiming` land on their target value immediately but
+ *   hold their completion callback until a test calls `settleAnimations`, so a
+ *   test can assert what a surface does mid-transition and then finish it.
  */
 
 export type MockSharedValue<Value> = {
@@ -31,6 +34,12 @@ export const Easing = {
 	cubic: (value: number) => value,
 	out: (easing: (value: number) => number) => easing,
 };
+
+export const ReduceMotion = {
+	System: "system",
+	Always: "always",
+	Never: "never",
+} as const;
 
 export const Extrapolation = {
 	CLAMP: "clamp",
@@ -99,12 +108,45 @@ export function interpolate(
 	);
 }
 
-export function withSpring<Value>(value: Value): Value {
+type MockAnimationCallback = (finished?: boolean) => void;
+
+const runningAnimations: MockAnimationCallback[] = [];
+
+/** Finishes every animation that is still holding its completion callback. */
+export function settleAnimations(): void {
+	for (const settled of runningAnimations.splice(0)) settled(true);
+}
+
+export function withSpring<Value>(
+	value: Value,
+	_config?: unknown,
+	onSettled?: MockAnimationCallback,
+): Value {
+	if (onSettled) runningAnimations.push(onSettled);
 	return value;
 }
 
-export function withTiming<Value>(value: Value): Value {
+export function withTiming<Value>(
+	value: Value,
+	_config?: unknown,
+	onSettled?: MockAnimationCallback,
+): Value {
+	if (onSettled) runningAnimations.push(onSettled);
 	return value;
+}
+
+export function runOnJS<Args extends unknown[]>(
+	target: (...args: Args) => void,
+): (...args: Args) => void {
+	return target;
+}
+
+/**
+ * The system setting is off in tests. Suites covering the reduced-motion
+ * branch replace this export with their own module mock.
+ */
+export function useReducedMotion(): boolean {
+	return false;
 }
 
 export default { FlatList, View };

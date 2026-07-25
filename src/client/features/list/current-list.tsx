@@ -19,10 +19,15 @@ import {
 import Animated, {
 	Extrapolation,
 	interpolate,
+	ReduceMotion,
+	runOnJS,
 	type SharedValue,
 	useAnimatedScrollHandler,
 	useAnimatedStyle,
+	useReducedMotion,
 	useSharedValue,
+	withSpring,
+	withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -149,7 +154,7 @@ function HomeListPager({
 }: HomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
-	const [pickerOpen, setPickerOpen] = useState(false);
+	const [pickerPhase, setPickerPhase] = useState<PickerPhase>("closed");
 	const [composerListId, setComposerListId] = useState<string | null>(null);
 	const [selectionPending, setSelectionPending] = useState(false);
 	const focusedIndex = Math.max(
@@ -164,6 +169,40 @@ function HomeListPager({
 	const pagerScrollHandler = useAnimatedScrollHandler((event) => {
 		pagerOffsetX.set(event.contentOffset.x);
 	});
+	// 0 parks the focused List page full screen, 1 parks the List picker. Both
+	// surfaces read this one value, so they always meet in the middle of the
+	// zoom no matter where an interruption retargets the spring.
+	const pickerProgress = useSharedValue(0);
+	const reducedMotion = useReducedMotion();
+
+	function animatePicker(
+		toValue: 0 | 1,
+		onSettled?: (finished?: boolean) => void,
+	) {
+		pickerProgress.set(
+			reducedMotion
+				? withTiming(toValue, PICKER_CROSSFADE, onSettled)
+				: withSpring(toValue, PICKER_ZOOM_SPRING, onSettled),
+		);
+	}
+
+	function openPicker() {
+		setPickerPhase("open");
+		animatePicker(1);
+	}
+
+	/**
+	 * Holds the picker mounted until the zoom lands, so the receding surface is
+	 * still there to animate. `finished` is false when a new transition
+	 * retargets this one, which must not unmount the picker it is reopening.
+	 */
+	function closePicker() {
+		setPickerPhase("closing");
+		animatePicker(0, (finished) => {
+			"worklet";
+			if (finished) runOnJS(setPickerPhase)("closed");
+		});
+	}
 
 	const focusList = useCallback(
 		async (listId: string): Promise<boolean> => {
@@ -182,17 +221,15 @@ function HomeListPager({
 		pagerRef.current?.scrollToIndex({ animated: false, index: focusedIndex });
 	}, [focusedIndex]);
 
+	/**
+	 * The pager is parked on the selected page before the picker starts
+	 * receding, because focusing the List rerenders the pager onto it while the
+	 * pager is still hidden behind the picker. A failed focus keeps the picker
+	 * open on the List that is still focused.
+	 */
 	async function selectFromPicker(summary: ListSummary): Promise<void> {
 		if (!listSummaries.some((candidate) => candidate.id === summary.id)) return;
-		const didFocus = await focusList(summary.id);
-		if (!didFocus) {
-			pagerRef.current?.scrollToIndex({
-				animated: true,
-				index: focusedIndex,
-			});
-			return;
-		}
-		setPickerOpen(false);
+		if (await focusList(summary.id)) closePicker();
 	}
 
 	function pageLayout(
@@ -221,85 +258,139 @@ function HomeListPager({
 		});
 	}
 
+	const pagerSurfaceStyle = useAnimatedStyle(() => {
+		const progress = pickerProgress.get();
+		return {
+			opacity: 1 - progress,
+			transform: [
+				{
+					scale: interpolate(
+						progress,
+						[0, 1],
+						[1, reducedMotion ? 1 : PAGER_RECEDE_SCALE],
+					),
+				},
+			],
+		};
+	});
+
 	return (
 		<>
-			<Animated.FlatList
-				data={listSummaries}
-				decelerationRate="fast"
-				getItemLayout={pageLayout}
-				horizontal
-				initialNumToRender={Math.min(3, listSummaries.length)}
-				initialScrollIndex={focusedIndex}
-				keyExtractor={listSummaryKey}
-				keyboardDismissMode="on-drag"
-				maxToRenderPerBatch={3}
-				pagingEnabled
-				ref={pagerRef}
-				removeClippedSubviews={false}
-				renderItem={({ item: summary, index }) => {
-					const focused = summary.id === focusedListId;
-					return (
-						<CarouselPage
-							focused={focused}
-							index={index}
-							pagerOffsetX={pagerOffsetX}
-							testID={
-								focused
-									? `home-list-page-${summary.id}`
-									: `home-adjacent-list-page-${summary.id}`
-							}
-							width={width}
-						>
-							<HomeListPage
-								composerOpen={composerListId === summary.id}
+			{pickerPhase === "closed" ? null : (
+				<HomeListPicker
+					focusedListId={focusedListId}
+					interactive={pickerPhase === "open"}
+					listSummaries={listSummaries}
+					progress={pickerProgress}
+					selectedIndex={focusedIndex}
+					selectionPending={selectionPending}
+					onClose={closePicker}
+					onSelect={(summary) => void selectFromPicker(summary)}
+				/>
+			)}
+			<Animated.View
+				pointerEvents={pickerPhase === "closed" ? "auto" : "none"}
+				style={[styles.pagerSurface, pagerSurfaceStyle]}
+				testID="home-list-surface"
+			>
+				<Animated.FlatList
+					data={listSummaries}
+					decelerationRate="fast"
+					getItemLayout={pageLayout}
+					horizontal
+					initialNumToRender={Math.min(3, listSummaries.length)}
+					initialScrollIndex={focusedIndex}
+					keyExtractor={listSummaryKey}
+					keyboardDismissMode="on-drag"
+					maxToRenderPerBatch={3}
+					pagingEnabled
+					ref={pagerRef}
+					removeClippedSubviews={false}
+					renderItem={({ item: summary, index }) => {
+						const focused = summary.id === focusedListId;
+						return (
+							<CarouselPage
 								focused={focused}
-								listSummaries={listSummaries}
-								session={session}
-								summary={summary}
-								syncState={syncState}
-								topContentInset={topContentInset}
-								onDismissComposer={() => setComposerListId(null)}
-								onOpenComposer={() => setComposerListId(summary.id)}
-							/>
-						</CarouselPage>
-					);
-				}}
-				scrollEnabled={
-					listSummaries.length > 1 &&
-					!pickerOpen &&
-					composerListId === null &&
-					!selectionPending
-				}
-				scrollEventThrottle={16}
-				showsHorizontalScrollIndicator={false}
-				style={styles.pager}
-				testID="home-list-pager"
-				windowSize={3}
-				onMomentumScrollEnd={pageSettled}
-				onScroll={pagerScrollHandler}
-			/>
-			{composerListId === null ? (
-				pickerOpen ? (
-					<HomeListPicker
-						focusedListId={focusedListId}
-						listSummaries={listSummaries}
-						selectedIndex={focusedIndex}
-						selectionPending={selectionPending}
-						onClose={() => setPickerOpen(false)}
-						onSelect={(summary) => void selectFromPicker(summary)}
-					/>
-				) : (
+								index={index}
+								pagerOffsetX={pagerOffsetX}
+								testID={
+									focused
+										? `home-list-page-${summary.id}`
+										: `home-adjacent-list-page-${summary.id}`
+								}
+								width={width}
+							>
+								<HomeListPage
+									composerOpen={composerListId === summary.id}
+									focused={focused}
+									listSummaries={listSummaries}
+									session={session}
+									summary={summary}
+									syncState={syncState}
+									topContentInset={topContentInset}
+									onDismissComposer={() => setComposerListId(null)}
+									onOpenComposer={() => setComposerListId(summary.id)}
+								/>
+							</CarouselPage>
+						);
+					}}
+					scrollEnabled={
+						listSummaries.length > 1 &&
+						pickerPhase === "closed" &&
+						composerListId === null &&
+						!selectionPending
+					}
+					scrollEventThrottle={16}
+					showsHorizontalScrollIndicator={false}
+					style={styles.pager}
+					testID="home-list-pager"
+					windowSize={3}
+					onMomentumScrollEnd={pageSettled}
+					onScroll={pagerScrollHandler}
+				/>
+				{composerListId === null ? (
 					<HomePickerControl
 						listCount={listSummaries.length}
 						pickerOpen={false}
 						selectedIndex={focusedIndex}
-						onPress={() => setPickerOpen(true)}
+						onPress={openPicker}
 					/>
-				)
-			) : null}
+				) : null}
+			</Animated.View>
 		</>
 	);
 }
+
+/**
+ * Whether the List picker is showing, and whether it is only still mounted to
+ * finish receding.
+ */
+type PickerPhase = "closed" | "open" | "closing";
+
+/**
+ * Physical geometry of the picker zoom, not design tokens.
+ *
+ * The picker sits behind the pager: opening pushes the focused List page back
+ * to `PAGER_RECEDE_SCALE` as it fades out, while the picker rises from
+ * `PICKER_ARRIVE_SCALE` to full size. Scale carries the transition and the
+ * content swap is a crossfade, so both surfaces animate transform and opacity
+ * only.
+ *
+ * The spring is critically damped: full-screen content that overshoots past
+ * its own size reads as a glitch, not as a bounce.
+ */
+const PAGER_RECEDE_SCALE = 0.9;
+const PICKER_ARRIVE_SCALE = 0.94;
+const PICKER_ZOOM_SPRING = { duration: 420, dampingRatio: 1 } as const;
+/**
+ * Reduced motion drops the zoom and keeps only the crossfade, which is the
+ * substitution the setting asks for rather than something it should skip, so
+ * the fade opts out of being cut to an instant swap.
+ */
+const PICKER_CROSSFADE = {
+	duration: 160,
+	reduceMotion: ReduceMotion.Never,
+} as const;
 
 /**
  * Physical geometry of the pager carousel, not design tokens.
@@ -595,9 +686,17 @@ function StickyListTitle({
 	);
 }
 
+/**
+ * The List picker, mounted behind the pager for the whole zoom: the focused
+ * List page shrinks away to reveal it, and a selected row grows back into a
+ * full-screen page. It stops taking touches as soon as it starts receding, so
+ * a row cannot be tapped through the transition.
+ */
 function HomeListPicker({
 	listSummaries,
 	focusedListId,
+	interactive,
+	progress,
 	selectedIndex,
 	selectionPending,
 	onClose,
@@ -605,6 +704,8 @@ function HomeListPicker({
 }: {
 	listSummaries: readonly ListSummary[];
 	focusedListId: string;
+	interactive: boolean;
+	progress: SharedValue<number>;
 	selectedIndex: number;
 	selectionPending: boolean;
 	onClose: () => void;
@@ -612,12 +713,29 @@ function HomeListPicker({
 }) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
+	const reducedMotion = useReducedMotion();
+	const surfaceStyle = useAnimatedStyle(() => {
+		const zoom = progress.get();
+		return {
+			opacity: zoom,
+			transform: [
+				{
+					scale: interpolate(
+						zoom,
+						[0, 1],
+						[reducedMotion ? 1 : PICKER_ARRIVE_SCALE, 1],
+					),
+				},
+			],
+		};
+	});
 
 	return (
-		<View
+		<Animated.View
 			accessibilityLabel="List picker"
 			accessibilityViewIsModal
-			style={styles.pickerOverlay}
+			pointerEvents={interactive ? "auto" : "none"}
+			style={[styles.pickerOverlay, surfaceStyle]}
 			testID="home-list-picker"
 		>
 			<FlatList
@@ -677,7 +795,7 @@ function HomeListPicker({
 				selectedIndex={selectedIndex}
 				onPress={onClose}
 			/>
-		</View>
+		</Animated.View>
 	);
 }
 
@@ -759,6 +877,12 @@ function listCounts(summary: ListSummary): string {
 }
 
 const styles = StyleSheet.create((theme) => ({
+	pagerSurface: {
+		flex: 1,
+		// Above the picker overlay: the focused List page shrinks down onto the
+		// picker rather than the picker sliding over the page.
+		zIndex: 50,
+	},
 	pager: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
