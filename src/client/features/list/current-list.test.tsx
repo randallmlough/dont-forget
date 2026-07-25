@@ -6,11 +6,16 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react-native";
-import type { PropsWithChildren } from "react";
+import { type PropsWithChildren, useMemo } from "react";
 import { Dimensions, FlatList, StyleSheet, type ViewStyle } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { settleAnimations } from "@/test/mocks/reanimated";
-import { CurrentList, type HomeCurrentListDeps } from "./current-list";
+import {
+	CurrentList,
+	type CurrentListProps,
+	type HomeCurrentListDeps,
+} from "./current-list";
 import {
 	authenticatedAppSession,
 	emptyActiveListState,
@@ -37,9 +42,6 @@ jest.mock("react-native-reanimated", () => ({
 	useReducedMotion: () => mockDevice.reducedMotion,
 }));
 
-/** Measured height a List page reports for its large in-page title. */
-const LARGE_TITLE_HEIGHT = 66;
-
 /** Width one List page occupies in the horizontal pager. */
 const PAGE_WIDTH = Dimensions.get("window").width;
 
@@ -62,7 +64,7 @@ beforeEach(() => {
 describe("CurrentList", () => {
 	it("renders the active List surface", async () => {
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps()}
 				focusedListId="lst_groceries"
@@ -86,7 +88,7 @@ describe("CurrentList", () => {
 
 		try {
 			const view = await render(
-				<CurrentList
+				<HomeCurrentList
 					session={authenticatedAppSession}
 					deps={deps}
 					focusedListId="lst_groceries"
@@ -106,7 +108,7 @@ describe("CurrentList", () => {
 			scrollToOffset.mockClear();
 
 			await view.rerender(
-				<CurrentList
+				<HomeCurrentList
 					session={authenticatedAppSession}
 					deps={deps}
 					focusedListId="lst_pantry"
@@ -135,7 +137,7 @@ describe("CurrentList", () => {
 
 		try {
 			await render(
-				<CurrentList
+				<HomeCurrentList
 					session={authenticatedAppSession}
 					deps={activeListDeps()}
 					focusedListId="lst_groceries"
@@ -166,7 +168,7 @@ describe("CurrentList", () => {
 	it("opens Lists from the zero-active Create List action", async () => {
 		const onOpenLists = jest.fn();
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={zeroActiveListDeps()}
 				focusedListId={null}
@@ -194,7 +196,7 @@ describe("CurrentList", () => {
 			},
 		});
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps()}
 				focusedListId="lst_groceries"
@@ -227,7 +229,7 @@ describe("CurrentList", () => {
 	it("opens the opaque List picker and focuses the selected List", async () => {
 		const onFocusList = jest.fn(async () => true);
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps(undefined, [
 					groceriesListSummary,
@@ -258,7 +260,7 @@ describe("CurrentList", () => {
 
 	it("keeps the List picker mounted and untappable until it finishes receding", async () => {
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps(undefined, [
 					groceriesListSummary,
@@ -288,7 +290,7 @@ describe("CurrentList", () => {
 
 	it("keeps the focused List unreachable while the picker zoom runs", async () => {
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps(undefined, [
 					groceriesListSummary,
@@ -345,7 +347,7 @@ describe("CurrentList", () => {
 	it("leaves the List picker open when focusing a chosen List fails", async () => {
 		const onFocusList = jest.fn(async () => false);
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps(undefined, [
 					groceriesListSummary,
@@ -378,7 +380,7 @@ describe("CurrentList", () => {
 	it("persists the focused List when horizontal paging settles", async () => {
 		const onFocusList = jest.fn(async () => true);
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps(undefined, [
 					groceriesListSummary,
@@ -409,33 +411,6 @@ describe("CurrentList", () => {
 		});
 	});
 
-	it("keeps the sticky List title hidden while the large title is on screen", async () => {
-		const view = await render(groceriesListSurface(), {
-			wrapper: TestSafeAreaProvider,
-		});
-		await measureLargeTitle("Groceries");
-		await view.rerender(groceriesListSurface());
-
-		expect(stickyListTitle("lst_groceries")).toHaveStyle({ opacity: 0 });
-	});
-
-	it("reveals the sticky List title once the page scrolls past its large title", async () => {
-		const view = await render(groceriesListSurface(), {
-			wrapper: TestSafeAreaProvider,
-		});
-		await measureLargeTitle("Groceries");
-		await act(async () => {
-			fireEvent(
-				screen.getByTestId("home-list-items-lst_groceries"),
-				"scroll",
-				verticalScrollEvent(LARGE_TITLE_HEIGHT),
-			);
-		});
-		await view.rerender(groceriesListSurface());
-
-		expect(stickyListTitle("lst_groceries")).toHaveStyle({ opacity: 1 });
-	});
-
 	it("returns to the focused List when persisting a paged selection fails", async () => {
 		const scrollToIndex = jest
 			.spyOn(FlatList.prototype, "scrollToIndex")
@@ -444,7 +419,7 @@ describe("CurrentList", () => {
 
 		try {
 			await render(
-				<CurrentList
+				<HomeCurrentList
 					session={authenticatedAppSession}
 					deps={activeListDeps(undefined, [
 						groceriesListSummary,
@@ -480,7 +455,7 @@ describe("CurrentList", () => {
 
 	it("keeps adjacent pager pages from intercepting the focused page", async () => {
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps(undefined, [
 					groceriesListSummary,
@@ -502,7 +477,7 @@ describe("CurrentList", () => {
 
 	it("renders each List title inside its sliding page", async () => {
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={activeListDeps(undefined, [
 					groceriesListSummary,
@@ -581,7 +556,7 @@ describe("CurrentList", () => {
 		});
 
 		await render(
-			<CurrentList
+			<HomeCurrentList
 				session={authenticatedAppSession}
 				deps={pantryCurrentListDeps()}
 				focusedListId="lst_pantry"
@@ -600,27 +575,34 @@ describe("CurrentList", () => {
 });
 
 /**
- * Sticky-title assertions re-render before reading the animated style: the
+ * Renders `CurrentList` the way the Home screen does, owning the shared values
+ * the focused List page publishes its scroll state through. What the native
+ * header does with that state is asserted against the real screen in
+ * `src/client/screens/app/home-screen.test.tsx`.
+ */
+function HomeCurrentList(
+	props: Omit<CurrentListProps, "collapsedTitleScroll">,
+) {
+	const offsetY = useSharedValue(0);
+	const largeTitleHeight = useSharedValue(0);
+	const pagerDrift = useSharedValue(0);
+	const collapsedTitleScroll = useMemo(
+		() => ({ offsetY, largeTitleHeight, pagerDrift }),
+		[offsetY, largeTitleHeight, pagerDrift],
+	);
+
+	return <CurrentList {...props} collapsedTitleScroll={collapsedTitleScroll} />;
+}
+
+/**
+ * Carousel assertions re-render before reading the animated style: the
  * Reanimated double evaluates animated styles during render instead of on the
  * UI thread (see `src/test/mocks/reanimated.ts`). Each call returns a fresh
  * element so React cannot bail out of the re-render.
  */
-function groceriesListSurface() {
-	return (
-		<CurrentList
-			session={authenticatedAppSession}
-			deps={activeListDeps()}
-			focusedListId="lst_groceries"
-			onFocusList={jest.fn(async () => true)}
-			onOpenLists={jest.fn()}
-			topContentInset={116}
-		/>
-	);
-}
-
 function pagedListSurface() {
 	return (
-		<CurrentList
+		<HomeCurrentList
 			session={authenticatedAppSession}
 			deps={activeListDeps(undefined, [
 				groceriesListSummary,
@@ -686,26 +668,6 @@ function surfaceScale(testID: string): number {
 	throw new Error(`${testID} is not carrying a picker zoom scale`);
 }
 
-async function measureLargeTitle(name: string): Promise<void> {
-	await act(async () => {
-		fireEvent(screen.getByRole("header", { name }), "layout", {
-			nativeEvent: {
-				layout: { x: 0, y: 0, width: 390, height: LARGE_TITLE_HEIGHT },
-			},
-		});
-	});
-}
-
-function verticalScrollEvent(offsetY: number) {
-	return {
-		nativeEvent: {
-			contentOffset: { x: 0, y: offsetY },
-			contentSize: { width: 390, height: 1200 },
-			layoutMeasurement: { width: 390, height: 844 },
-		},
-	};
-}
-
 function horizontalScrollEvent(offsetX: number) {
 	return {
 		nativeEvent: {
@@ -714,12 +676,6 @@ function horizontalScrollEvent(offsetX: number) {
 			layoutMeasurement: { width: PAGE_WIDTH, height: 844 },
 		},
 	};
-}
-
-function stickyListTitle(listId: string) {
-	return screen.getByTestId(`home-list-sticky-title-${listId}`, {
-		includeHiddenElements: true,
-	});
 }
 
 function activeListDeps(

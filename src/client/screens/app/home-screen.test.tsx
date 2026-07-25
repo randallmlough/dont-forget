@@ -4,6 +4,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { Dimensions } from "react-native";
@@ -27,6 +28,8 @@ const mockReplace = jest.fn();
 const mockSelectList = jest.fn(async () => true);
 const mockStackScreenOptions = jest.fn();
 const mockUseHeaderHeight = jest.fn(() => 116);
+/** Measured height a List page reports for its large in-page title. */
+const LARGE_TITLE_HEIGHT = 66;
 const hardwareListSummary = {
 	...pantryListSummary,
 	id: "lst_hardware",
@@ -38,12 +41,11 @@ jest.mock("expo-router", () => {
 	const mockReactNative =
 		jest.requireActual<typeof import("react-native")>("react-native");
 
-	function Title({ children }: PropsWithChildren) {
-		return mockReact.createElement(
-			mockReactNative.Text,
-			{ accessibilityRole: "header" },
-			children,
-		);
+	// The real `Stack.Title` hands its child to the native header. The double
+	// renders it in place so the collapsed title is queryable, which is the
+	// closest a JS harness gets to a subview of the native navigation bar.
+	function Title({ children }: PropsWithChildren<{ asChild?: boolean }>) {
+		return children;
 	}
 
 	function Toolbar({ children }: PropsWithChildren) {
@@ -245,6 +247,83 @@ describe("HomeScreen", () => {
 		);
 	});
 
+	it("keeps the collapsed List title hidden while the large title is on screen", async () => {
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+		await measureLargeTitle("Groceries");
+		await view.rerender(homeScreenSurface());
+
+		expect(collapsedListTitle()).toHaveStyle({ opacity: 0 });
+	});
+
+	it("reveals the collapsed List title once the focused List scrolls past its large title", async () => {
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+		await measureLargeTitle("Groceries");
+		await scrollFocusedList("lst_groceries", LARGE_TITLE_HEIGHT);
+		await view.rerender(homeScreenSurface());
+
+		expect(collapsedListTitle()).toHaveStyle({ opacity: 1 });
+		expect(
+			within(collapsedListTitle()).getByText("Groceries", {
+				includeHiddenElements: true,
+			}),
+		).toBeTruthy();
+	});
+
+	it("fades the collapsed List title out while the pager drifts off its List", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [groceriesListSummary, pantryListSummary],
+			},
+		});
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+		await measureLargeTitle("Groceries");
+		await scrollFocusedList("lst_groceries", LARGE_TITLE_HEIGHT);
+		await view.rerender(homeScreenSurface());
+		expect(collapsedListTitle()).toHaveStyle({ opacity: 1 });
+
+		await dragPagerTo(Dimensions.get("window").width * 0.2);
+		await view.rerender(homeScreenSurface());
+
+		expect(collapsedListTitle()).toHaveStyle({ opacity: 0 });
+	});
+
+	it("hands the collapsed List title to the List the pager settles on", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [groceriesListSummary, pantryListSummary],
+			},
+		});
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+		await measureLargeTitle("Groceries");
+		await measureLargeTitle("Pantry");
+		await scrollFocusedList("lst_groceries", LARGE_TITLE_HEIGHT);
+		await view.rerender(homeScreenSurface());
+		expect(collapsedListTitle()).toHaveStyle({ opacity: 1 });
+
+		await settlePagerAt(1);
+		await view.rerender(homeScreenSurface());
+
+		expect(
+			within(collapsedListTitle()).getByText("Pantry", {
+				includeHiddenElements: true,
+			}),
+		).toBeTruthy();
+		// Paging returns every List page to the top, so the header must collapse
+		// against the settled page rather than keep the offset it was handed by
+		// the page the pager just left.
+		expect(collapsedListTitle()).toHaveStyle({ opacity: 0 });
+	});
+
 	it("updates the page title and persists selection when paging settles", async () => {
 		jest.mocked(useListRows).mockReturnValue({
 			rows: {
@@ -293,11 +372,6 @@ describe("HomeScreen", () => {
 					}),
 				]),
 			);
-			expect(
-				screen.getByTestId(`home-list-sticky-title-${listId}`, {
-					includeHiddenElements: true,
-				}),
-			).toHaveStyle({ height: 116 });
 		}
 	});
 
@@ -403,6 +477,71 @@ describe("HomeScreen", () => {
 		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
 	});
 });
+
+/**
+ * Collapsed-title assertions re-render before reading the animated style: the
+ * Reanimated double evaluates animated styles during render instead of on the
+ * UI thread (see `src/test/mocks/reanimated.ts`). Each call returns a fresh
+ * element so React cannot bail out of the re-render.
+ */
+function homeScreenSurface() {
+	return (
+		<NavigationDrawerProvider open={jest.fn()}>
+			<HomeScreen />
+		</NavigationDrawerProvider>
+	);
+}
+
+/** The List title in the native header, hidden from assistive technology. */
+function collapsedListTitle() {
+	return screen.getByTestId("home-collapsed-list-title", {
+		includeHiddenElements: true,
+	});
+}
+
+async function measureLargeTitle(name: string): Promise<void> {
+	await act(async () => {
+		// Adjacent pager pages are masked from assistive technology, so an
+		// unfocused page's large title only resolves as a hidden element.
+		const largeTitle = screen.getByRole("header", {
+			name,
+			includeHiddenElements: true,
+		});
+		fireEvent(largeTitle, "layout", {
+			nativeEvent: {
+				layout: { x: 0, y: 0, width: 390, height: LARGE_TITLE_HEIGHT },
+			},
+		});
+	});
+}
+
+async function scrollFocusedList(
+	listId: string,
+	offsetY: number,
+): Promise<void> {
+	await act(async () => {
+		fireEvent(screen.getByTestId(`home-list-items-${listId}`), "scroll", {
+			nativeEvent: {
+				contentOffset: { x: 0, y: offsetY },
+				contentSize: { width: 390, height: 1200 },
+				layoutMeasurement: { width: 390, height: 844 },
+			},
+		});
+	});
+}
+
+async function dragPagerTo(offsetX: number): Promise<void> {
+	const { width } = Dimensions.get("window");
+	await act(async () => {
+		fireEvent(screen.getByTestId("home-list-pager"), "scroll", {
+			nativeEvent: {
+				contentOffset: { x: offsetX, y: 0 },
+				contentSize: { width: width * 2, height: 844 },
+				layoutMeasurement: { width, height: 844 },
+			},
+		});
+	});
+}
 
 async function settlePagerAt(index: number): Promise<void> {
 	await act(async () => {

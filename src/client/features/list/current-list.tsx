@@ -55,15 +55,31 @@ export type HomeCurrentListDeps = {
 	listRows: ListRows;
 };
 
+/**
+ * Scroll state the native stack header fades its collapsed List title against,
+ * published on the UI thread by the pager and by whichever page is focused. The
+ * header renders outside this tree, so the screen owns the values.
+ */
+export type CollapsedTitleScroll = {
+	/** Vertical scroll offset of the focused List page. */
+	offsetY: SharedValue<number>;
+	/** Measured height of the focused List page's large title. */
+	largeTitleHeight: SharedValue<number>;
+	/** How far the pager has drifted off the focused page: 0 parked, 1 gone. */
+	pagerDrift: SharedValue<number>;
+};
+
 export type CurrentListProps = {
 	session: AuthenticatedAppSession;
 	deps: HomeCurrentListDeps;
 	focusedListId: string | null;
+	collapsedTitleScroll: CollapsedTitleScroll;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
 	/**
 	 * Height of the transparent stack header each List page scrolls under. It
-	 * insets the page content and sizes the page's sticky List title.
+	 * insets the page content so the List scrolls under Apple's scroll edge
+	 * effect.
 	 */
 	topContentInset?: number;
 };
@@ -72,6 +88,7 @@ export function CurrentList({
 	session,
 	deps,
 	focusedListId,
+	collapsedTitleScroll,
 	onFocusList,
 	onOpenLists,
 	topContentInset = 0,
@@ -126,6 +143,7 @@ export function CurrentList({
 		<HomeListPager
 			key={session.activeHousehold.id}
 			focusedListId={resolvedFocusedListId}
+			collapsedTitleScroll={collapsedTitleScroll}
 			listSummaries={listRows.summaries}
 			session={session}
 			syncState={syncState}
@@ -137,6 +155,7 @@ export function CurrentList({
 
 type HomeListPagerProps = {
 	focusedListId: string;
+	collapsedTitleScroll: CollapsedTitleScroll;
 	listSummaries: ListSummary[];
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
@@ -146,6 +165,7 @@ type HomeListPagerProps = {
 
 function HomeListPager({
 	focusedListId,
+	collapsedTitleScroll,
 	listSummaries,
 	session,
 	syncState,
@@ -167,7 +187,15 @@ function HomeListPager({
 	// frame is not tilted.
 	const pagerOffsetX = useSharedValue(focusedIndex * width);
 	const pagerScrollHandler = useAnimatedScrollHandler((event) => {
-		pagerOffsetX.set(event.contentOffset.x);
+		const offsetX = event.contentOffset.x;
+		pagerOffsetX.set(offsetX);
+		collapsedTitleScroll.pagerDrift.set(
+			Math.min(
+				1,
+				Math.abs(offsetX - focusedIndex * width) /
+					(width * TITLE_DRIFT_FADE_FRACTION),
+			),
+		);
 	});
 	// 0 parks the focused List page full screen, 1 parks the List picker. Both
 	// surfaces read this one value, so they always meet in the middle of the
@@ -219,7 +247,10 @@ function HomeListPager({
 
 	useEffect(() => {
 		pagerRef.current?.scrollToIndex({ animated: false, index: focusedIndex });
-	}, [focusedIndex]);
+		// Parking the pager where it already sits emits no scroll event, so the
+		// drift the settling swipe left behind is published directly.
+		collapsedTitleScroll.pagerDrift.set(0);
+	}, [collapsedTitleScroll, focusedIndex]);
 
 	/**
 	 * The pager is parked on the selected page before the picker starts
@@ -323,6 +354,7 @@ function HomeListPager({
 								<HomeListPage
 									composerOpen={composerListId === summary.id}
 									focused={focused}
+									collapsedTitleScroll={collapsedTitleScroll}
 									listSummaries={listSummaries}
 									session={session}
 									summary={summary}
@@ -393,6 +425,13 @@ const PICKER_CROSSFADE = {
 } as const;
 
 /**
+ * Fraction of a page the pager drifts before the collapsed header title has
+ * faded out completely. The title names the focused List, so it leaves as soon
+ * as a swipe commits rather than hanging over the page arriving beside it.
+ */
+const TITLE_DRIFT_FADE_FRACTION = 0.15;
+
+/**
  * Physical geometry of the pager carousel, not design tokens.
  *
  * Pages sit on the outside of a very wide cylinder: a long focal length keeps
@@ -407,7 +446,7 @@ const PAGE_TILT_OPACITY = 0.85;
 /**
  * One List page, rotated around the edge it shares with the page beside it so
  * the pages read as panels of a cylinder rather than flat sliding cards. The
- * whole page turns, large title and sticky title included.
+ * whole page turns, large title included.
  *
  * React Native's `transformOrigin` cannot express this: the anchor has to flip
  * to the opposite edge once a page crosses the viewport, so the anchor is
@@ -481,6 +520,7 @@ type HomeListPageProps = {
 	syncState: ActiveListSyncState;
 	listSummaries: readonly ListSummary[];
 	focused: boolean;
+	collapsedTitleScroll: CollapsedTitleScroll;
 	composerOpen: boolean;
 	topContentInset: number;
 	onOpenComposer: () => void;
@@ -493,6 +533,7 @@ function HomeListPage({
 	syncState,
 	listSummaries,
 	focused,
+	collapsedTitleScroll,
 	composerOpen,
 	topContentInset,
 	onOpenComposer,
@@ -527,6 +568,7 @@ function HomeListPage({
 		<ActiveHomeListPage
 			composerOpen={composerOpen}
 			focused={focused}
+			collapsedTitleScroll={collapsedTitleScroll}
 			listSummaries={listSummaries}
 			loadState={state}
 			session={session}
@@ -546,6 +588,7 @@ function ActiveHomeListPage({
 	listSummaries,
 	summary,
 	focused,
+	collapsedTitleScroll,
 	composerOpen,
 	onOpenComposer,
 	onDismissComposer,
@@ -555,8 +598,7 @@ function ActiveHomeListPage({
 }) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
-	const scrollOffsetY = useSharedValue(0);
-	const largeTitleHeight = useSharedValue(0);
+	const [largeTitleHeight, setLargeTitleHeight] = useState(0);
 	const actions = useListActions({
 		items: loadState.list.items,
 		onAddItem: loadState.actions.addItem,
@@ -568,6 +610,14 @@ function ActiveHomeListPage({
 		summaries: listSummaries,
 	});
 
+	// Only the focused page publishes to the header, and it republishes on focus
+	// so the header collapses against this page's large title rather than the
+	// one measured by the page the pager just left.
+	useEffect(() => {
+		if (!focused) return;
+		collapsedTitleScroll.largeTitleHeight.set(largeTitleHeight);
+	}, [focused, collapsedTitleScroll, largeTitleHeight]);
+
 	return (
 		<>
 			<ItemRows
@@ -578,7 +628,7 @@ function ActiveHomeListPage({
 					<View>
 						<HomeListPageTitle
 							title={summary.name}
-							onMeasureHeight={(height) => largeTitleHeight.set(height)}
+							onMeasureHeight={setLargeTitleHeight}
 						/>
 						<ListOverview
 							state={loadState.list}
@@ -591,17 +641,10 @@ function ActiveHomeListPage({
 					</View>
 				}
 				onPressBlankSpace={focused ? onOpenComposer : undefined}
-				scrollOffsetY={scrollOffsetY}
+				scrollOffsetY={focused ? collapsedTitleScroll.offsetY : undefined}
 				topContentInset={topContentInset}
 				onToggleItem={actions.toggleItem}
 				testID={`home-list-items-${summary.id}`}
-			/>
-			<StickyListTitle
-				collapseOffset={largeTitleHeight}
-				height={topContentInset}
-				listId={summary.id}
-				scrollOffsetY={scrollOffsetY}
-				title={summary.name}
 			/>
 			<AddItemForm
 				currentListId={loadState.listId}
@@ -633,56 +676,6 @@ function HomeListPageTitle({
 		>
 			{title}
 		</Text>
-	);
-}
-
-/**
- * Compact List title that fills the transparent header band once this page's
- * own large title has scrolled under it. It lives inside the page, so it slides
- * away with the page during a horizontal swipe and each page keeps its own
- * collapsed state. It repeats the large title, which stays the page's heading
- * for assistive technology, so it is hidden from assistive technology.
- */
-function StickyListTitle({
-	collapseOffset,
-	height,
-	listId,
-	scrollOffsetY,
-	title,
-}: {
-	collapseOffset: SharedValue<number>;
-	height: number;
-	listId: string;
-	scrollOffsetY: SharedValue<number>;
-	title: string;
-}) {
-	const { theme } = useUnistyles();
-	const fadeDistance = theme.spacing(6);
-	const titleBarStyle = useAnimatedStyle(() => {
-		const collapsedAt = collapseOffset.get();
-		if (collapsedAt <= 0) return { opacity: 0 };
-		return {
-			opacity: interpolate(
-				scrollOffsetY.get(),
-				[collapsedAt - fadeDistance, collapsedAt],
-				[0, 1],
-				Extrapolation.CLAMP,
-			),
-		};
-	});
-
-	return (
-		<Animated.View
-			accessibilityElementsHidden
-			importantForAccessibility="no-hide-descendants"
-			pointerEvents="none"
-			style={[styles.stickyTitleBar, { height }, titleBarStyle]}
-			testID={`home-list-sticky-title-${listId}`}
-		>
-			<Text numberOfLines={1} style={styles.stickyTitle}>
-				{title}
-			</Text>
-		</Animated.View>
 	);
 }
 
@@ -900,25 +893,6 @@ const styles = StyleSheet.create((theme) => ({
 		paddingTop: theme.spacing(2),
 		paddingBottom: theme.spacing(2),
 		backgroundColor: theme.colors.background,
-	},
-	stickyTitleBar: {
-		position: "absolute",
-		top: 0,
-		right: 0,
-		left: 0,
-		zIndex: 20,
-		alignItems: "center",
-		justifyContent: "flex-end",
-		// Clears the leading and trailing stack toolbar buttons.
-		paddingHorizontal: theme.spacing(14),
-		paddingBottom: theme.spacing(2),
-		backgroundColor: theme.colors.background,
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.border,
-	},
-	stickyTitle: {
-		...theme.typography.headline,
-		color: theme.colors.foreground,
 	},
 	pickerOverlay: {
 		position: "absolute",

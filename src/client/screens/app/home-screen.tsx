@@ -1,10 +1,19 @@
 import { Stack, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
-import { useRef, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Text, View } from "react-native";
+import Animated, {
+	Extrapolation,
+	interpolate,
+	useAnimatedStyle,
+	useSharedValue,
+} from "react-native-reanimated";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
-import { CurrentList } from "@/client/features/list/current-list";
+import {
+	type CollapsedTitleScroll,
+	CurrentList,
+} from "@/client/features/list/current-list";
 import {
 	HomeRetryButton,
 	HomeStatus,
@@ -68,6 +77,16 @@ function HomeScreenResource({
 	onOpenLists,
 }: HomeScreenResourceProps) {
 	const headerHeight = useHeaderHeight();
+	// The collapsed title renders inside the native header, above the scroll
+	// edge effect, so the focused List page publishes its scroll state up here
+	// instead of drawing a title bar of its own underneath that effect.
+	const offsetY = useSharedValue(0);
+	const largeTitleHeight = useSharedValue(0);
+	const pagerDrift = useSharedValue(0);
+	const collapsedTitleScroll = useMemo<CollapsedTitleScroll>(
+		() => ({ offsetY, largeTitleHeight, pagerDrift }),
+		[offsetY, largeTitleHeight, pagerDrift],
+	);
 	// The Current List resolves here, not inside CurrentList, so the native
 	// stack header keeps its fallback title through the loading, error, and
 	// zeroActive states, where no List page is mounted to own a title.
@@ -87,6 +106,9 @@ function HomeScreenResource({
 		currentListId,
 		listSummaries,
 	});
+	const focusedListName = listSummaries.find(
+		(summary) => summary.id === resolvedFocusedListId,
+	)?.name;
 
 	async function focusList(listId: string): Promise<boolean> {
 		const persistedListId = persistedListIdRef.current ?? currentListId;
@@ -106,7 +128,12 @@ function HomeScreenResource({
 	return (
 		<>
 			<HomeStackHeader
-				title={resolvedFocusedListId === null ? FALLBACK_TITLE : undefined}
+				collapsedListTitle={
+					focusedListName === undefined
+						? undefined
+						: { name: focusedListName, scroll: collapsedTitleScroll }
+				}
+				title={focusedListName === undefined ? FALLBACK_TITLE : undefined}
 				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
 			/>
@@ -114,6 +141,7 @@ function HomeScreenResource({
 				session={session}
 				deps={{ currentList, syncState, listRows: rows }}
 				focusedListId={resolvedFocusedListId}
+				collapsedTitleScroll={collapsedTitleScroll}
 				onFocusList={focusList}
 				onOpenLists={onOpenLists}
 				topContentInset={headerHeight}
@@ -140,16 +168,18 @@ function resolveFocusedListId({
 }
 
 /**
- * Home's native stack header. It always owns the toolbar buttons. It owns a
- * title only outside the List pager; with a pager on screen the header goes
- * transparent and empty so each List page can scroll under it and show its own
- * large and sticky titles.
+ * Home's native stack header. It always owns the toolbar buttons. Outside the
+ * List pager it owns a plain large title; with a pager on screen it goes
+ * transparent so each List page scrolls under Apple's scroll edge effect, and
+ * the focused List's name collapses into the native title slot instead.
  */
 function HomeStackHeader({
+	collapsedListTitle,
 	title,
 	onOpenNavigation,
 	onOpenLists,
 }: {
+	collapsedListTitle?: { name: string; scroll: CollapsedTitleScroll };
 	title?: string;
 	onOpenNavigation: () => void;
 	onOpenLists: () => void;
@@ -165,6 +195,14 @@ function HomeStackHeader({
 					title: title ?? "",
 				}}
 			/>
+			{collapsedListTitle ? (
+				<Stack.Title asChild>
+					<CollapsedListTitle
+						scroll={collapsedListTitle.scroll}
+						title={collapsedListTitle.name}
+					/>
+				</Stack.Title>
+			) : null}
 			<Stack.Toolbar placement="left">
 				<Stack.Toolbar.Button
 					accessibilityHint="Opens the navigation drawer"
@@ -182,6 +220,49 @@ function HomeStackHeader({
 				/>
 			</Stack.Toolbar>
 		</>
+	);
+}
+
+/**
+ * The focused List's name, sitting in the native header's title slot so it
+ * keeps the system title position and paints above the scroll edge effect
+ * rather than under it. It fades in over the last stretch of the focused page's
+ * large title, and back out as the pager carries that page away. It repeats the
+ * large title, which stays the page's heading for assistive technology, so it
+ * is hidden from assistive technology.
+ */
+function CollapsedListTitle({
+	scroll,
+	title,
+}: {
+	scroll: CollapsedTitleScroll;
+	title: string;
+}) {
+	const { theme } = useUnistyles();
+	const fadeDistance = theme.spacing(6);
+	const titleStyle = useAnimatedStyle(() => {
+		const collapsedAt = scroll.largeTitleHeight.get();
+		if (collapsedAt <= 0) return { opacity: 0 };
+		const collapsed = interpolate(
+			scroll.offsetY.get(),
+			[collapsedAt - fadeDistance, collapsedAt],
+			[0, 1],
+			Extrapolation.CLAMP,
+		);
+		return { opacity: collapsed * (1 - scroll.pagerDrift.get()) };
+	});
+
+	return (
+		<Animated.View
+			accessibilityElementsHidden
+			importantForAccessibility="no-hide-descendants"
+			style={titleStyle}
+			testID="home-collapsed-list-title"
+		>
+			<Text numberOfLines={1} style={styles.collapsedListTitle}>
+				{title}
+			</Text>
+		</Animated.View>
 	);
 }
 
@@ -208,5 +289,10 @@ const styles = StyleSheet.create((theme) => ({
 	root: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
+	},
+	collapsedListTitle: {
+		...theme.typography.headline,
+		color: theme.colors.foreground,
+		textAlign: "center",
 	},
 }));

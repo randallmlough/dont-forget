@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
+import { useMemo } from "react";
 import { View } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
 import { authenticatedAppSession } from "./list-test-support";
@@ -77,11 +79,20 @@ export const ZeroActive: Story = {
 };
 
 function CurrentListStory({ deps }: { deps: HomeCurrentListDeps }) {
+	const offsetY = useSharedValue(0);
+	const largeTitleHeight = useSharedValue(0);
+	const pagerDrift = useSharedValue(0);
+	const collapsedTitleScroll = useMemo(
+		() => ({ offsetY, largeTitleHeight, pagerDrift }),
+		[offsetY, largeTitleHeight, pagerDrift],
+	);
+
 	return (
 		<CurrentList
 			session={authenticatedAppSession}
 			deps={deps}
 			focusedListId={null}
+			collapsedTitleScroll={collapsedTitleScroll}
 			onFocusList={focusList}
 			onOpenLists={noop}
 		/>
