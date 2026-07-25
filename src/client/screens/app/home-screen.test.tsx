@@ -83,6 +83,10 @@ jest.mock("expo-router", () => {
 	};
 });
 
+jest.mock("expo-router/build/react-navigation/elements", () => ({
+	useHeaderHeight: () => 116,
+}));
+
 // useAuthenticatedAppSession, useSyncState, useHomeCurrentList, and
 // useListRows all sit on the PowerSync watched-query and native-session
 // boundary, which has no deterministic local harness. The seam under test in
@@ -275,6 +279,54 @@ describe("HomeScreen", () => {
 
 		expect(await screen.findByRole("header", { name: "Pantry" })).toBeTruthy();
 		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
+	});
+
+	it("starts a newly focused List in its expanded position", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [groceriesListSummary, pantryListSummary],
+			},
+		});
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		for (const listId of ["lst_groceries", "lst_pantry"]) {
+			const itemRows = screen.getByTestId(`home-list-items-${listId}`, {
+				includeHiddenElements: true,
+			});
+			expect(itemRows).toHaveProp("contentInset", { top: 116 });
+			expect(itemRows).toHaveProp("contentOffset", { x: 0, y: -116 });
+			expect(itemRows).toHaveProp("contentInsetAdjustmentBehavior", "never");
+		}
+
+		await act(async () => {
+			fireEvent(
+				screen.getByTestId("home-list-items-lst_pantry", {
+					includeHiddenElements: true,
+				}),
+				"scroll",
+				{
+					nativeEvent: {
+						contentOffset: { x: 0, y: 96 },
+						contentSize: { width: 390, height: 1200 },
+						layoutMeasurement: { width: 390, height: 844 },
+					},
+				},
+			);
+		});
+		await settlePagerAt(1);
+
+		expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				headerTransparent: true,
+				title: "",
+			}),
+		);
 	});
 
 	it("updates the page title across consecutive horizontal swipes", async () => {

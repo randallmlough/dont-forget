@@ -1,4 +1,5 @@
 import { Stack, useRouter } from "expo-router";
+import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -65,6 +66,7 @@ function HomeScreenResource({
 	onOpenNavigation,
 	onOpenLists,
 }: HomeScreenResourceProps) {
+	const headerHeight = useHeaderHeight();
 	// The Current List resolves here, not inside CurrentList, so the native
 	// stack title survives the loading, error, and zeroActive states. A
 	// Stack.Title rendered inside the active List surface would unmount in
@@ -136,6 +138,7 @@ function HomeScreenResource({
 				onFocusList={focusList}
 				onOpenLists={onOpenLists}
 				onToolbarTitleChange={setCollapsedListId}
+				topContentInset={headerHeight}
 			/>
 		</>
 	);

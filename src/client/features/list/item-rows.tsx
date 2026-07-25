@@ -1,5 +1,12 @@
 import { SymbolView } from "expo-symbols";
-import { memo, type ReactElement, useCallback } from "react";
+import {
+	memo,
+	type ReactElement,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+} from "react";
 import {
 	FlatList,
 	type ListRenderItemInfo,
@@ -18,6 +25,8 @@ export type ItemRowsProps = {
 	bottomContentInset?: number;
 	onPressBlankSpace?: () => void;
 	onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+	resetScrollPosition?: boolean;
+	topContentInset?: number;
 	onToggleItem: (itemId: string) => void;
 	testID?: string;
 };
@@ -28,9 +37,22 @@ export function ItemRows({
 	bottomContentInset = 0,
 	onPressBlankSpace,
 	onScroll,
+	resetScrollPosition = false,
+	topContentInset,
 	onToggleItem,
 	testID,
 }: ItemRowsProps) {
+	const listRef = useRef<FlatList<ActiveListItem>>(null);
+	const contentInset = useMemo(
+		() =>
+			topContentInset === undefined ? undefined : { top: topContentInset },
+		[topContentInset],
+	);
+	const initialContentOffset = useMemo(
+		() =>
+			topContentInset === undefined ? undefined : { x: 0, y: -topContentInset },
+		[topContentInset],
+	);
 	const renderItem = useCallback(
 		({ item }: ListRenderItemInfo<ActiveListItem>) => (
 			<ItemRow item={item} onToggle={onToggleItem} />
@@ -42,8 +64,18 @@ export function ItemRows({
 		[onPressBlankSpace],
 	);
 
+	useEffect(() => {
+		if (!resetScrollPosition) return;
+		listRef.current?.scrollToOffset({
+			animated: false,
+			offset: -(topContentInset ?? 0),
+		});
+	}, [resetScrollPosition, topContentInset]);
+
 	return (
 		<FlatList
+			contentInset={contentInset}
+			contentOffset={initialContentOffset}
 			data={items}
 			keyExtractor={keyExtractor}
 			renderItem={renderItem}
@@ -65,10 +97,14 @@ export function ItemRows({
 			}
 			ListHeaderComponent={listOverview}
 			keyboardShouldPersistTaps="handled"
-			// Assumes a native stack header above the list, so stories that render
-			// ItemRows in a plain canvas get scene safe-area insets they did not ask for.
-			contentInsetAdjustmentBehavior="automatic"
+			// Home supplies an explicit inset because iOS only automatically adjusts
+			// one of the nested pager Lists. Other surfaces keep native adjustment.
+			contentInsetAdjustmentBehavior={
+				topContentInset === undefined ? "automatic" : "never"
+			}
+			ref={listRef}
 			scrollEventThrottle={onScroll ? 16 : undefined}
+			scrollIndicatorInsets={contentInset}
 			style={styles.list}
 			testID={testID}
 			onScroll={onScroll}

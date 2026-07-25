@@ -7,7 +7,7 @@ import {
 	within,
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
-import { Dimensions } from "react-native";
+import { Dimensions, FlatList } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
 import {
@@ -51,6 +51,57 @@ describe("CurrentList", () => {
 		);
 
 		expect(await screen.findByText("No Items yet")).toBeTruthy();
+	});
+
+	it("resets a List to the toolbar inset when it leaves focus", async () => {
+		const scrollToOffset = jest
+			.spyOn(FlatList.prototype, "scrollToOffset")
+			.mockImplementation();
+		const deps = activeListDeps(
+			jest.fn(async () => undefined),
+			[groceriesListSummary, pantryListSummary],
+		);
+
+		try {
+			const view = await render(
+				<CurrentList
+					session={authenticatedAppSession}
+					deps={deps}
+					focusedListId="lst_groceries"
+					onFocusList={jest.fn(async () => true)}
+					onOpenLists={jest.fn()}
+					topContentInset={116}
+				/>,
+				{ wrapper: TestSafeAreaProvider },
+			);
+			await waitFor(() => {
+				expect(scrollToOffset).toHaveBeenCalledWith({
+					animated: false,
+					offset: -116,
+				});
+			});
+			scrollToOffset.mockClear();
+
+			await view.rerender(
+				<CurrentList
+					session={authenticatedAppSession}
+					deps={deps}
+					focusedListId="lst_pantry"
+					onFocusList={jest.fn(async () => true)}
+					onOpenLists={jest.fn()}
+					topContentInset={116}
+				/>,
+			);
+
+			await waitFor(() => {
+				expect(scrollToOffset).toHaveBeenCalledWith({
+					animated: false,
+					offset: -116,
+				});
+			});
+		} finally {
+			scrollToOffset.mockRestore();
+		}
 	});
 
 	it("opens Lists from the zero-active Create List action", async () => {

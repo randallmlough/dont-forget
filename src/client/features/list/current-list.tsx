@@ -48,6 +48,7 @@ export type CurrentListProps = {
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
 	onToolbarTitleChange?: (collapsedListId: string | null) => void;
+	topContentInset?: number;
 };
 
 export function CurrentList({
@@ -57,6 +58,7 @@ export function CurrentList({
 	onFocusList,
 	onOpenLists,
 	onToolbarTitleChange,
+	topContentInset,
 }: CurrentListProps) {
 	const { currentList, syncState, listRows } = deps;
 	const loadState = currentList.state;
@@ -113,6 +115,7 @@ export function CurrentList({
 			syncState={syncState}
 			onFocusList={onFocusList}
 			onToolbarTitleChange={onToolbarTitleChange}
+			topContentInset={topContentInset}
 		/>
 	);
 }
@@ -124,6 +127,7 @@ type HomeListPagerProps = {
 	syncState: ActiveListSyncState;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onToolbarTitleChange?: (collapsedListId: string | null) => void;
+	topContentInset?: number;
 };
 
 function HomeListPager({
@@ -133,10 +137,14 @@ function HomeListPager({
 	syncState,
 	onFocusList,
 	onToolbarTitleChange,
+	topContentInset,
 }: HomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
-	const collapsedListIdsRef = useRef(new Set<string>());
+	const toolbarStateRef = useRef({
+		listId: focusedListId,
+		collapsed: false,
+	});
 	const summaries = listSummaries;
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [composerListId, setComposerListId] = useState<string | null>(null);
@@ -164,9 +172,8 @@ function HomeListPager({
 	}, [focusedIndex]);
 
 	useEffect(() => {
-		onToolbarTitleChange?.(
-			collapsedListIdsRef.current.has(focusedListId) ? focusedListId : null,
-		);
+		toolbarStateRef.current = { listId: focusedListId, collapsed: false };
+		onToolbarTitleChange?.(null);
 	}, [focusedListId, onToolbarTitleChange]);
 
 	useEffect(
@@ -226,22 +233,21 @@ function HomeListPager({
 		summary: ListSummary,
 		event: NativeSyntheticEvent<NativeScrollEvent>,
 	) {
-		const wasCollapsed = collapsedListIdsRef.current.has(summary.id);
-		const offsetY = event.nativeEvent.contentOffset.y;
+		if (summary.id !== focusedListId) return;
+
+		const wasCollapsed =
+			toolbarStateRef.current.listId === summary.id &&
+			toolbarStateRef.current.collapsed;
+		const offsetY =
+			event.nativeEvent.contentOffset.y +
+			(event.nativeEvent.contentInset?.top ?? 0);
 		const collapsed = wasCollapsed
 			? offsetY > TOOLBAR_TITLE_EXPAND_OFFSET
 			: offsetY >= TOOLBAR_TITLE_COLLAPSE_OFFSET;
 		if (collapsed === wasCollapsed) return;
 
-		if (collapsed) {
-			collapsedListIdsRef.current.add(summary.id);
-		} else {
-			collapsedListIdsRef.current.delete(summary.id);
-		}
-
-		if (summary.id === focusedListId) {
-			onToolbarTitleChange?.(collapsed ? summary.id : null);
-		}
+		toolbarStateRef.current = { listId: summary.id, collapsed };
+		onToolbarTitleChange?.(collapsed ? summary.id : null);
 	}
 
 	return (
@@ -282,6 +288,7 @@ function HomeListPager({
 								session={session}
 								summary={summary}
 								syncState={syncState}
+								topContentInset={topContentInset}
 								onDismissComposer={() => setComposerListId(null)}
 								onOpenComposer={() => setComposerListId(summary.id)}
 								onScroll={(event) => pageScrolled(summary, event)}
@@ -334,6 +341,7 @@ function HomeListPage({
 	onOpenComposer,
 	onDismissComposer,
 	onScroll,
+	topContentInset,
 }: {
 	summary: ListSummary;
 	session: AuthenticatedAppSession;
@@ -344,6 +352,7 @@ function HomeListPage({
 	onOpenComposer: () => void;
 	onDismissComposer: () => void;
 	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+	topContentInset?: number;
 }) {
 	const state = useListPage(session, summary);
 
@@ -356,6 +365,7 @@ function HomeListPage({
 			state={state}
 			summary={summary}
 			syncState={syncState}
+			topContentInset={topContentInset}
 			onDismissComposer={onDismissComposer}
 			onOpenComposer={onOpenComposer}
 			onScroll={onScroll}
@@ -374,6 +384,7 @@ function HomeListPageState({
 	onOpenComposer,
 	onDismissComposer,
 	onScroll,
+	topContentInset,
 }: {
 	state: ListPageState;
 	summary: ListSummary;
@@ -385,6 +396,7 @@ function HomeListPageState({
 	onOpenComposer: () => void;
 	onDismissComposer: () => void;
 	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+	topContentInset?: number;
 }) {
 	if (state.status === "loading") {
 		return (
@@ -418,6 +430,7 @@ function HomeListPageState({
 			session={session}
 			summary={summary}
 			syncState={syncState}
+			topContentInset={topContentInset}
 			onDismissComposer={onDismissComposer}
 			onOpenComposer={onOpenComposer}
 			onScroll={onScroll}
@@ -436,6 +449,7 @@ function ActiveHomeListPage({
 	onOpenComposer,
 	onDismissComposer,
 	onScroll,
+	topContentInset,
 }: {
 	loadState: Extract<ListPageState, { status: "active" }>;
 	session: AuthenticatedAppSession;
@@ -447,6 +461,7 @@ function ActiveHomeListPage({
 	onOpenComposer: () => void;
 	onDismissComposer: () => void;
 	onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+	topContentInset?: number;
 }) {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
@@ -479,6 +494,8 @@ function ActiveHomeListPage({
 				}
 				onPressBlankSpace={focused ? onOpenComposer : undefined}
 				onScroll={onScroll}
+				resetScrollPosition={!focused}
+				topContentInset={topContentInset}
 				onToggleItem={actions.toggleItem}
 				testID={`home-list-items-${summary.id}`}
 			/>
