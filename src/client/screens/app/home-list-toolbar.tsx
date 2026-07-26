@@ -91,7 +91,7 @@ export function HomeListToolbar({
 			<Stack.Toolbar.Button
 				accessibilityHint="Opens the Home List picker"
 				accessibilityLabel="Choose List"
-				icon="square.grid.2x2"
+				icon="list.bullet"
 				onPress={onOpenPicker}
 			/>
 		</Stack.Toolbar>
