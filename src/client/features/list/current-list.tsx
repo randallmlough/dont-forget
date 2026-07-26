@@ -14,7 +14,6 @@ import Animated, {
 	Extrapolation,
 	interpolate,
 	ReduceMotion,
-	runOnJS,
 	type SharedValue,
 	useAnimatedScrollHandler,
 	useAnimatedStyle,
@@ -25,6 +24,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { scheduleOnRN } from "react-native-worklets";
 import type { AddItemListOption } from "@/client/features/list/add-item-composer";
 import type { ListSummary } from "@/client/features/list/list-service";
 import {
@@ -248,7 +248,7 @@ function HomeListPager({
 		// must not close the picker it is reopening.
 		const settled = (finished?: boolean) => {
 			"worklet";
-			if (finished) runOnJS(onPickerPhaseChange)("closed");
+			if (finished) scheduleOnRN(onPickerPhaseChange, "closed");
 		};
 		pickerProgress.set(
 			reducedMotion

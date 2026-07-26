@@ -135,12 +135,6 @@ export function withTiming<Value>(
 	return value;
 }
 
-export function runOnJS<Args extends unknown[]>(
-	target: (...args: Args) => void,
-): (...args: Args) => void {
-	return target;
-}
-
 /**
  * The system setting is off in tests. Suites covering the reduced-motion
  * branch replace this export with their own module mock.

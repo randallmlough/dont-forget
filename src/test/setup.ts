@@ -11,6 +11,10 @@ jest.mock("react-native-reanimated", () =>
 	jest.requireActual("./mocks/reanimated"),
 );
 
+jest.mock("react-native-worklets", () =>
+	jest.requireActual("./mocks/worklets"),
+);
+
 jest.mock("@expo/ui/swift-ui", () =>
 	jest.requireActual("./mocks/expo-ui-swift"),
 );

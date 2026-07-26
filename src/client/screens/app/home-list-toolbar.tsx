@@ -6,8 +6,9 @@ import {
 	GestureDetector,
 	GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { runOnJS, useSharedValue } from "react-native-reanimated";
+import { useSharedValue } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
+import { scheduleOnRN } from "react-native-worklets";
 import type { ListSummary } from "@/client/features/list/list-service";
 
 /**
@@ -130,7 +131,7 @@ function HomeListPageControl({
 		"worklet";
 		if (index === scrubbedIndex.get()) return;
 		scrubbedIndex.set(index);
-		runOnJS(scrubbedToPage)(index);
+		scheduleOnRN(scrubbedToPage, index);
 	}
 
 	function adjustPage(event: AccessibilityActionEvent) {
@@ -154,7 +155,7 @@ function HomeListPageControl({
 		})
 		.onFinalize(() => {
 			"worklet";
-			runOnJS(onCommitPage)(scrubbedIndex.get());
+			scheduleOnRN(onCommitPage, scrubbedIndex.get());
 		});
 
 	// The toolbar hosts this view outside the app's view tree, so the gesture
