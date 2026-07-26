@@ -1,4 +1,3 @@
-import { useQuery } from "@powersync/react";
 import {
 	act,
 	render,
@@ -11,18 +10,11 @@ import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 } from "@/client/features/list/current-selection";
-import type { Item, ListItemsInput } from "@/client/features/list/item-service";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { logger } from "@/client/lib/logger";
-import type { ProductQuery } from "@/client/lib/product-database";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useHomeCurrentList } from "./use-home-current-list";
-import {
-	type ProductServices,
-	useProductServices,
-} from "./use-product-services";
-
-jest.mock("@powersync/react", () => ({ useQuery: jest.fn() }));
+import type { ListRows } from "./use-list-rows";
 
 jest.mock("@/client/lib/logger", () =>
 	jest
@@ -35,52 +27,17 @@ jest.mock("@/client/features/list/current-selection", () => ({
 	clearCurrentListSelectionIfMatches: jest.fn(async () => false),
 }));
 
-jest.mock("./use-product-services", () => ({
-	useProductServices: jest.fn(),
-}));
-
-type WatchedQueryResult<T> = {
-	data: T[];
-	isLoading: boolean;
-	isFetching: boolean;
-	error: Error | undefined;
-};
-
-type ItemQuery = ProductQuery<Item> & { readonly listId: string };
-
-const mockUseQuery = jest.mocked(useQuery);
 const mockGetSelection = jest.mocked(getCurrentListSelection);
 const mockClearSelection = jest.mocked(clearCurrentListSelectionIfMatches);
-const mockUseProductServices = jest.mocked(useProductServices);
 const mockLogger = jest.mocked(logger);
 
-const listSummariesQuery: ProductQuery<ListSummary> = {
-	compile: () => ({ sql: "SELECT lists", parameters: [] }),
-	execute: async () => [],
-};
-
-let summariesResult: WatchedQueryResult<ListSummary>;
-let itemResults: Map<string, WatchedQueryResult<Item>>;
-let itemQueryListIds: Map<object, string>;
+/** The active List rows Home hands the resolver, as of the current render. */
+let listRows: ListRows;
 
 beforeEach(() => {
-	summariesResult = watchedQuery({ data: [] });
-	itemResults = new Map();
-	itemQueryListIds = new Map();
+	listRows = readyListRows([]);
 	mockGetSelection.mockResolvedValue(null);
 	mockClearSelection.mockResolvedValue(false);
-	mockUseProductServices.mockReturnValue(productServices());
-	mockUseQuery.mockImplementation((query) => {
-		if (query === listSummariesQuery) {
-			return summariesResult;
-		}
-		const key = queryObject(query);
-		const listId = key ? itemQueryListIds.get(key) : undefined;
-		if (listId !== undefined) {
-			return itemResults.get(listId) ?? watchedQuery({ data: [] });
-		}
-		throw new Error("unexpected watched query");
-	});
 });
 
 afterEach(() => {
@@ -88,19 +45,6 @@ afterEach(() => {
 });
 
 describe("useHomeCurrentList", () => {
-	it("creates product services for the active Household and User", async () => {
-		await renderHomeCurrentList({
-			summaries: [summary("lst_recent")],
-			itemsByListId: { lst_recent: [] },
-		});
-
-		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
-		expect(mockUseProductServices).toHaveBeenCalledWith({
-			householdId: "hh_1",
-			userId: "usr_avery",
-		});
-	});
-
 	it("renders loading while the stored Current List selection is pending", async () => {
 		let resolveSelection: (value: string | null) => void = () => {};
 		const pendingSelection = new Promise<string | null>((resolve) => {
@@ -109,7 +53,6 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection.mockReturnValue(pendingSelection);
 		const view = await renderHomeCurrentList({
 			summaries: [summary("lst_recent")],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(screen.getByText("loading")).toBeTruthy();
@@ -137,12 +80,9 @@ describe("useHomeCurrentList", () => {
 				summary("lst_groceries", "Groceries"),
 				summary("lst_pantry", "Pantry"),
 			],
-			itemsByListId: { lst_pantry: [item("itm_flour", "lst_pantry")] },
 		});
 
 		expect(await screen.findByText("active:lst_pantry")).toBeTruthy();
-		expect(screen.getByText("listName:Pantry")).toBeTruthy();
-		expect(screen.getByText("item:itm_flour")).toBeTruthy();
 		expect(mockClearSelection).not.toHaveBeenCalled();
 	});
 
@@ -154,11 +94,9 @@ describe("useHomeCurrentList", () => {
 				summary("lst_recent", "Recent"),
 				summary("lst_older", "Older"),
 			],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
-		expect(screen.getByText("listName:Recent")).toBeTruthy();
 		expect(mockClearSelection).not.toHaveBeenCalled();
 	});
 
@@ -167,15 +105,12 @@ describe("useHomeCurrentList", () => {
 		const view = await renderHomeCurrentList({
 			summaries: [],
 			summariesIsLoading: true,
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(await screen.findByText("loading")).toBeTruthy();
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
-		summariesResult = watchedQuery({
-			data: [summary("lst_recent", "Recent")],
-		});
+		listRows = readyListRows([summary("lst_recent", "Recent")]);
 		view.rerender(<HomeCurrentListHarness session={sessionFixture()} />);
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
@@ -196,7 +131,6 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection.mockReturnValue(pendingSelection);
 		await renderHomeCurrentList({
 			summaries: [summary("lst_recent", "Recent")],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(screen.getByText("loading")).toBeTruthy();
@@ -206,7 +140,6 @@ describe("useHomeCurrentList", () => {
 		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
-		expect(screen.getByText("listName:Recent")).toBeTruthy();
 		await waitFor(() =>
 			expect(mockClearSelection).toHaveBeenCalledWith(
 				"usr_avery",
@@ -235,35 +168,17 @@ describe("useHomeCurrentList", () => {
 		).toBeTruthy();
 	});
 
-	it("maps an Items query error to the List error state", async () => {
-		await renderHomeCurrentList({
-			summaries: [summary("lst_recent")],
-			itemErrorsByListId: {
-				lst_recent: new Error("items failed"),
-			},
-		});
-
-		expect(
-			await screen.findByText(
-				"error:Unable to load this List. Please try again.",
-			),
-		).toBeTruthy();
-	});
-
 	it("logs a clear failure and keeps rendering the active fallback", async () => {
 		mockGetSelection.mockResolvedValue("lst_gone");
 		mockClearSelection.mockRejectedValue(new Error("storage offline"));
 		const view = await renderHomeCurrentList({
 			summaries: [],
 			summariesIsLoading: true,
-			itemsByListId: { lst_recent: [] },
 		});
 
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
-		summariesResult = watchedQuery({
-			data: [summary("lst_recent")],
-		});
+		listRows = readyListRows([summary("lst_recent")]);
 		view.rerender(<HomeCurrentListHarness session={sessionFixture()} />);
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
@@ -279,7 +194,6 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection.mockRejectedValue(new Error("storage offline"));
 		await renderHomeCurrentList({
 			summaries: [summary("lst_recent")],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
@@ -300,10 +214,6 @@ describe("useHomeCurrentList", () => {
 				summary("lst_recent", "Recent"),
 				summary("lst_pantry", "Pantry"),
 			],
-			itemsByListId: {
-				lst_recent: [],
-				lst_pantry: [],
-			},
 		});
 
 		await waitFor(() =>
@@ -326,16 +236,101 @@ describe("useHomeCurrentList", () => {
 		expect(mockGetSelection).toHaveBeenCalledTimes(2);
 	});
 
+	it("keeps serving the resolved Current List while a refresh read is in flight", async () => {
+		let resolveRefresh: (value: string | null) => void = () => {};
+		mockGetSelection.mockResolvedValueOnce("lst_recent").mockReturnValueOnce(
+			new Promise<string | null>((resolve) => {
+				resolveRefresh = resolve;
+			}),
+		);
+		const { result } = await renderUseHomeCurrentList({
+			summaries: [
+				summary("lst_recent", "Recent"),
+				summary("lst_pantry", "Pantry"),
+			],
+		});
+
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_recent",
+			}),
+		);
+
+		await act(async () => {
+			result.current.reload();
+		});
+
+		// Reporting loading here would unmount Home's List pager and flash a
+		// full-screen spinner over a page switch that already landed.
+		expect(result.current.state).toMatchObject({
+			status: "active",
+			listId: "lst_recent",
+		});
+
+		await act(async () => {
+			resolveRefresh("lst_pantry");
+		});
+
+		expect(result.current.state).toMatchObject({
+			status: "active",
+			listId: "lst_pantry",
+		});
+	});
+
+	it("clears a refreshed stored selection once that List stops being active", async () => {
+		mockGetSelection
+			.mockResolvedValueOnce("lst_recent")
+			.mockResolvedValueOnce("lst_pantry");
+		const { result, rerender } = await renderUseHomeCurrentList({
+			summaries: [
+				summary("lst_recent", "Recent"),
+				summary("lst_pantry", "Pantry"),
+			],
+		});
+
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_recent",
+			}),
+		);
+
+		await act(async () => {
+			result.current.reload();
+		});
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_pantry",
+			}),
+		);
+
+		// Another Member archives the switched-to List while Home stays mounted.
+		await act(async () => {
+			listRows = readyListRows([summary("lst_recent")]);
+			rerender(undefined);
+		});
+
+		await waitFor(() =>
+			expect(mockClearSelection).toHaveBeenCalledWith(
+				"usr_avery",
+				"hh_1",
+				"lst_pantry",
+			),
+		);
+		expect(result.current.state).toMatchObject({
+			status: "active",
+			listId: "lst_recent",
+		});
+	});
+
 	it("does not clear a refreshed stored selection before List summaries emit after the refresh", async () => {
 		mockGetSelection
 			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce("lst_pantry");
 		const { result } = await renderUseHomeCurrentList({
 			summaries: [summary("lst_recent", "Recent")],
-			itemsByListId: {
-				lst_recent: [],
-				lst_pantry: [],
-			},
 		});
 
 		await waitFor(() =>
@@ -365,36 +360,16 @@ describe("useHomeCurrentList", () => {
 		const { rerender } = await renderUseHomeCurrentList({
 			summaries: [],
 			summariesIsLoading: true,
-			itemsByListId: { lst_recent: [] },
 		});
 
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
 		await act(async () => {
-			summariesResult = watchedQuery({
-				data: [summary("lst_recent", "Recent")],
-				isFetching: true,
-			});
+			listRows = readyListRows([summary("lst_recent", "Recent")], true);
 			rerender(undefined);
 		});
 
 		expect(mockClearSelection).not.toHaveBeenCalled();
-	});
-
-	it("filters Item rows that belong to a different List id", async () => {
-		await renderHomeCurrentList({
-			summaries: [summary("lst_current")],
-			itemsByListId: {
-				lst_current: [
-					item("itm_current", "lst_current"),
-					item("itm_previous", "lst_previous"),
-				],
-			},
-		});
-
-		expect(await screen.findByText("active:lst_current")).toBeTruthy();
-		expect(screen.getByText("item:itm_current")).toBeTruthy();
-		expect(screen.queryByText("item:itm_previous")).toBeNull();
 	});
 });
 
@@ -403,17 +378,9 @@ function HomeCurrentListHarness({
 }: {
 	session: AuthenticatedAppSession;
 }) {
-	const { state } = useHomeCurrentList(session);
+	const { state } = useHomeCurrentList(session, listRows);
 	if (state.status === "active") {
-		return (
-			<>
-				<Text>{`active:${state.listId}`}</Text>
-				<Text>{`listName:${state.list.listName}`}</Text>
-				{state.list.items.map((row) => (
-					<Text key={row.id}>{`item:${row.id}`}</Text>
-				))}
-			</>
-		);
+		return <Text>{`active:${state.listId}`}</Text>;
 	}
 	if (state.status === "error") {
 		return <Text>{`error:${state.message}`}</Text>;
@@ -421,92 +388,37 @@ function HomeCurrentListHarness({
 	return <Text>{state.status}</Text>;
 }
 
-async function renderHomeCurrentList(input: WatchedQueryFixture) {
-	arrangeWatchedQueries(input);
+async function renderHomeCurrentList(input: ListRowsFixture) {
+	arrangeListRows(input);
 	return render(<HomeCurrentListHarness session={sessionFixture()} />);
 }
 
-async function renderUseHomeCurrentList(input: WatchedQueryFixture) {
-	arrangeWatchedQueries(input);
-	return renderHook(() => useHomeCurrentList(sessionFixture()));
+async function renderUseHomeCurrentList(input: ListRowsFixture) {
+	arrangeListRows(input);
+	return renderHook(() => useHomeCurrentList(sessionFixture(), listRows));
 }
 
-type WatchedQueryFixture = {
+type ListRowsFixture = {
 	summaries: ListSummary[];
 	summariesIsLoading?: boolean;
 	summariesIsFetching?: boolean;
 	summariesError?: Error;
-	itemsByListId?: Record<string, Item[]>;
-	itemErrorsByListId?: Record<string, Error>;
 };
 
-function arrangeWatchedQueries(input: WatchedQueryFixture) {
-	summariesResult = watchedQuery({
-		data: input.summaries,
-		isLoading: input.summariesIsLoading,
-		isFetching: input.summariesIsFetching,
-		error: input.summariesError,
-	});
-	itemResults = new Map();
-	for (const [listId, items] of Object.entries(input.itemsByListId ?? {})) {
-		itemResults.set(listId, watchedQuery({ data: items }));
+function arrangeListRows(input: ListRowsFixture) {
+	if (input.summariesError) {
+		listRows = { status: "error" };
+		return;
 	}
-	for (const [listId, error] of Object.entries(
-		input.itemErrorsByListId ?? {},
-	)) {
-		itemResults.set(listId, watchedQuery({ data: [], error }));
+	if (input.summariesIsLoading) {
+		listRows = { status: "loading" };
+		return;
 	}
+	listRows = readyListRows(input.summaries, input.summariesIsFetching);
 }
 
-function watchedQuery<T>(input: {
-	data: T[];
-	isLoading?: boolean;
-	isFetching?: boolean;
-	error?: Error;
-}): WatchedQueryResult<T> {
-	return {
-		data: input.data,
-		isLoading: input.isLoading ?? false,
-		isFetching: input.isFetching ?? false,
-		error: input.error,
-	};
-}
-
-function productServices(): ProductServices {
-	const unused = jest.fn(async () => {
-		throw new Error("unexpected service call");
-	});
-	return {
-		lists: {
-			listLists: unused,
-			listListsQuery: jest.fn(() => listSummariesQuery),
-			createList: unused,
-			renameList: unused,
-			deleteList: unused,
-		},
-		items: {
-			listItems: unused,
-			listItemsQuery: jest.fn((input: ListItemsInput) =>
-				itemQuery(input.listId),
-			),
-			addItem: unused,
-			setItemChecked: unused,
-		},
-	};
-}
-
-function itemQuery(listId: string): ItemQuery {
-	const query = {
-		listId,
-		compile: () => ({ sql: "SELECT items", parameters: [listId] }),
-		execute: async () => itemResults.get(listId)?.data ?? [],
-	};
-	itemQueryListIds.set(query, listId);
-	return query;
-}
-
-function queryObject(query: unknown): object | null {
-	return typeof query === "object" && query !== null ? query : null;
+function readyListRows(summaries: ListSummary[], isFetching = false): ListRows {
+	return { status: "ready", summaries, isFetching };
 }
 
 function sessionFixture(): AuthenticatedAppSession {
@@ -550,22 +462,5 @@ function summary(id: string, name = id): ListSummary {
 		lastActivityAt: 1,
 		uncheckedItemCount: 0,
 		checkedItemCount: 0,
-	};
-}
-
-function item(id: string, listId: string): Item {
-	return {
-		id,
-		householdId: "hh_1",
-		listId,
-		name: id,
-		quantity: null,
-		notes: null,
-		checked: false,
-		checkedByUserId: null,
-		position: 0,
-		createdByUserId: "usr_avery",
-		createdAt: 1,
-		updatedAt: 1,
 	};
 }

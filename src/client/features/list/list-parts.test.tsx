@@ -4,9 +4,9 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react-native";
-import type { PropsWithChildren, ReactElement } from "react";
+import type { ReactElement } from "react";
 import { View } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { TestSafeAreaProvider } from "@/test/safe-area";
 import { AddItemForm } from "./add-item-form";
 import { ItemRows } from "./item-rows";
 import { ListOverview } from "./list-overview";
@@ -63,9 +63,11 @@ describe("List parts", () => {
 
 	it("calls the toggle callback when an Item row is pressed", async () => {
 		const onToggleItem = jest.fn();
+		const onPressBlankSpace = jest.fn();
 		await renderWithSafeArea(
 			<ItemRows
 				items={populatedActiveListState.items}
+				onPressBlankSpace={onPressBlankSpace}
 				onToggleItem={onToggleItem}
 			/>,
 		);
@@ -73,6 +75,7 @@ describe("List parts", () => {
 		await fireEvent.press(await screen.findByText("Milk"));
 
 		expect(onToggleItem).toHaveBeenCalledWith("item-1");
+		expect(onPressBlankSpace).not.toHaveBeenCalled();
 	});
 
 	it("renders the empty List state", async () => {
@@ -176,19 +179,6 @@ function renderWithSafeArea(element: ReactElement) {
 	return render(<View style={{ flex: 1 }}>{element}</View>, {
 		wrapper: TestSafeAreaProvider,
 	});
-}
-
-function TestSafeAreaProvider({ children }: PropsWithChildren) {
-	return (
-		<SafeAreaProvider
-			initialMetrics={{
-				frame: { x: 0, y: 0, width: 390, height: 844 },
-				insets: { top: 0, left: 0, right: 0, bottom: 24 },
-			}}
-		>
-			{children}
-		</SafeAreaProvider>
-	);
 }
 
 function meta(
