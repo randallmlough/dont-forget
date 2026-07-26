@@ -7,35 +7,13 @@ process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ??= "pk_test_jest";
 
 jest.mock("@clerk/clerk-expo", () => jest.requireActual("./mocks/clerk"));
 
-jest.mock("react-native-reanimated", () => {
-	const { View } =
-		jest.requireActual<typeof import("react-native")>("react-native");
+jest.mock("react-native-reanimated", () =>
+	jest.requireActual("./mocks/reanimated"),
+);
 
-	return {
-		__esModule: true,
-		default: { View },
-		Easing: {
-			cubic: (value: number) => value,
-			out: (easing: (value: number) => number) => easing,
-		},
-		useAnimatedStyle: (updater: () => unknown) => updater(),
-		useSharedValue: (value: unknown) => {
-			let current = value;
-
-			return {
-				get: () => current,
-				set: (next: unknown) => {
-					current =
-						typeof next === "function"
-							? (next as (value: unknown) => unknown)(current)
-							: next;
-				},
-			};
-		},
-		withSpring: (value: unknown) => value,
-		withTiming: (value: unknown) => value,
-	};
-});
+jest.mock("react-native-worklets", () =>
+	jest.requireActual("./mocks/worklets"),
+);
 
 // Gesture Handler is a native-backed boundary, and its GestureDetector builds on
 // the real Reanimated runtime that this file replaces with a mock. Stubbing the

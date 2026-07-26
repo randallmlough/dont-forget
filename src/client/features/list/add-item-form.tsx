@@ -9,7 +9,16 @@ export type AddItemFormProps = {
 	currentListId: string;
 	listOptions: readonly AddItemListOption[];
 	onAddItem: (input: AddListItemDraft) => Promise<void>;
+	presentation?: AddItemFormPresentation;
 };
+
+export type AddItemFormPresentation =
+	| { kind: "inline" }
+	| {
+			kind: "controlledOverlay";
+			isOpen: boolean;
+			onDismiss: () => void;
+	  };
 
 type ComposerState = {
 	isOpen: boolean;
@@ -31,10 +40,15 @@ type ComposerAction =
 	| { type: "submitSucceeded" }
 	| { type: "submitFailed" };
 
+const INLINE_PRESENTATION = {
+	kind: "inline",
+} satisfies AddItemFormPresentation;
+
 export function AddItemForm({
 	currentListId,
 	listOptions,
 	onAddItem,
+	presentation = INLINE_PRESENTATION,
 }: AddItemFormProps) {
 	const [composer, dispatchComposer] = useReducer(
 		composerReducer,
@@ -43,13 +57,19 @@ export function AddItemForm({
 	);
 	const trimmedName = composer.name.trim();
 	const canSubmit = trimmedName.length > 0 && !composer.isSubmitting;
+	const isOpen =
+		presentation.kind === "controlledOverlay"
+			? presentation.isOpen
+			: composer.isOpen;
 
 	function openComposer() {
+		if (presentation.kind === "controlledOverlay") return;
 		dispatchComposer({ type: "opened" });
 	}
 
 	function dismissComposer() {
 		dispatchComposer({ type: "dismissed" });
+		if (presentation.kind === "controlledOverlay") presentation.onDismiss();
 	}
 
 	async function submit() {
@@ -78,7 +98,7 @@ export function AddItemForm({
 				notes: composer.notes,
 			}}
 			ui={{
-				isOpen: composer.isOpen,
+				isOpen,
 				canSubmit,
 				selectedListId: composer.selectedListId,
 				listOptions,
@@ -95,6 +115,7 @@ export function AddItemForm({
 				changeNotes: (value) =>
 					dispatchComposer({ type: "notesChanged", value }),
 			}}
+			showRestingEntry={presentation.kind === "inline"}
 		/>
 	);
 }

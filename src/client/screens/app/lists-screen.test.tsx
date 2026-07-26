@@ -86,22 +86,10 @@ beforeEach(() => {
 		signOut: jest.fn(),
 	});
 	jest.mocked(useListRows).mockReturnValue({
-		rows: { status: "ready", summaries: summariesFixture() },
+		rows: { status: "ready", summaries: summariesFixture(), isFetching: false },
 	});
 	jest.mocked(useHomeCurrentList).mockReturnValue({
-		state: {
-			status: "active",
-			listId: "lst_groceries",
-			list: {
-				householdName: "Juniper House",
-				listName: "Groceries",
-				items: [],
-			},
-			actions: {
-				addItem: jest.fn(async () => undefined),
-				setItemChecked: jest.fn(async () => undefined),
-			},
-		},
+		state: { status: "active", listId: "lst_groceries" },
 		retry: jest.fn(),
 		reload: jest.fn(),
 	});
@@ -209,7 +197,7 @@ describe("ListsScreen", () => {
 
 	it("returns an empty Household to retryable rows when created List selection persistence fails", async () => {
 		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: [] },
+			rows: { status: "ready", summaries: [], isFetching: false },
 		});
 		mockCreateList.mockResolvedValue({
 			status: "available",
@@ -440,7 +428,11 @@ describe("ListsScreen", () => {
 
 	it("clears selection after deleting the only current List", async () => {
 		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: [summariesFixture()[0]] },
+			rows: {
+				status: "ready",
+				summaries: [summariesFixture()[0]],
+				isFetching: false,
+			},
 		});
 		mockDeleteList.mockResolvedValue({
 			status: "deleted",
@@ -525,7 +517,7 @@ describe("ListsScreen", () => {
 
 	it("keeps empty Lists visible until New List is selected", async () => {
 		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: [] },
+			rows: { status: "ready", summaries: [], isFetching: false },
 		});
 
 		await renderScreen();

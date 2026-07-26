@@ -47,7 +47,11 @@ describe("useListRows", () => {
 
 		const { result } = await renderUseListRows();
 
-		expect(result.current.rows).toEqual({ status: "ready", summaries });
+		expect(result.current.rows).toEqual({
+			status: "ready",
+			summaries,
+			isFetching: false,
+		});
 	});
 
 	it("maps a watched query error to the error state", async () => {
@@ -68,6 +72,18 @@ describe("useListRows", () => {
 			sort: "recentActivity",
 		});
 		expect(mockUseQuery).toHaveBeenCalledWith(listListsQuery);
+	});
+
+	it("creates product services for the active Household and User", async () => {
+		// The summaries these rows watch are scoped to the Household and User the
+		// services are built for, and Home's Current List resolver now reads them
+		// from here rather than opening a query of its own.
+		await renderUseListRows();
+
+		expect(mockUseProductServices).toHaveBeenCalledWith({
+			householdId: "hh_1",
+			userId: "usr_avery",
+		});
 	});
 });
 

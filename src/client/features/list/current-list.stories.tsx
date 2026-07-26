@@ -1,17 +1,17 @@
 import type { Meta, StoryObj } from "@storybook/react-native";
-import { useState } from "react";
+import { useMemo } from "react";
 import { View } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { CurrentList, type HomeCurrentListDeps } from "./current-list";
-import {
-	addFixtureItem,
-	authenticatedAppSession,
-	emptyActiveListState,
-	populatedActiveListState,
-	setFixtureItemChecked,
-} from "./list-test-support";
-import type { ActiveListState } from "./list-view-types";
+import { authenticatedAppSession } from "./list-test-support";
 
+/**
+ * These stories cover the Home states CurrentList resolves before it mounts the
+ * List pager. The pager itself is not story-driven: every List page watches its
+ * own Items through PowerSync, so page content needs the app runtime. `List
+ * Parts` covers Item rendering with fixtures.
+ */
 const meta = {
 	title: "Features/List/CurrentList",
 	decorators: [
@@ -27,18 +27,44 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const EmptyList: Story = {
-	render: () => <CurrentListStory initialList={emptyActiveListState} />,
+export const Loading: Story = {
+	render: () => (
+		<CurrentListStory
+			deps={{
+				currentList: {
+					state: { status: "loading" },
+					retry: noop,
+					reload: noop,
+				},
+				syncState: "synced",
+				listRows: { status: "loading" },
+			}}
+		/>
+	),
 };
 
-export const WithItems: Story = {
-	render: () => <CurrentListStory initialList={populatedActiveListState} />,
+export const Unavailable: Story = {
+	render: () => (
+		<CurrentListStory
+			deps={{
+				currentList: {
+					state: {
+						status: "error",
+						message: "Unable to load this List. Please try again.",
+					},
+					retry: noop,
+					reload: noop,
+				},
+				syncState: "failed",
+				listRows: { status: "error" },
+			}}
+		/>
+	),
 };
 
 export const ZeroActive: Story = {
 	render: () => (
-		<CurrentList
-			session={authenticatedAppSession}
+		<CurrentListStory
 			deps={{
 				currentList: {
 					state: { status: "zeroActive" },
@@ -46,48 +72,41 @@ export const ZeroActive: Story = {
 					reload: noop,
 				},
 				syncState: "synced",
-				listRows: { status: "ready", summaries: [] },
+				listRows: { status: "ready", summaries: [], isFetching: false },
 			}}
-			onOpenLists={noop}
 		/>
 	),
 };
 
-function noop() {}
-
-function CurrentListStory({ initialList }: { initialList: ActiveListState }) {
-	const [list, setList] = useState(initialList);
-	const currentListDeps: HomeCurrentListDeps = {
-		currentList: {
-			state: {
-				status: "active",
-				listId: "lst_story",
-				list,
-				actions: {
-					addItem: async (input) => {
-						setList((current) => addFixtureItem(current, input));
-					},
-					setItemChecked: async (itemId, checked) => {
-						setList((current) =>
-							setFixtureItemChecked(current, itemId, checked),
-						);
-					},
-				},
-			},
-			retry: noop,
-			reload: noop,
-		},
-		syncState: "synced",
-		listRows: { status: "ready", summaries: [] },
-	};
+function CurrentListStory({ deps }: { deps: HomeCurrentListDeps }) {
+	const offsetY = useSharedValue(0);
+	const largeTitleHeight = useSharedValue(0);
+	const pagerDrift = useSharedValue(0);
+	const collapsedTitleScroll = useMemo(
+		() => ({ offsetY, largeTitleHeight, pagerDrift }),
+		[offsetY, largeTitleHeight, pagerDrift],
+	);
 
 	return (
 		<CurrentList
 			session={authenticatedAppSession}
-			deps={currentListDeps}
+			composerOpen={false}
+			deps={deps}
+			focusedListId={null}
+			collapsedTitleScroll={collapsedTitleScroll}
+			pickerPhase="closed"
+			selectionPending={false}
+			onComposerOpenChange={noop}
+			onFocusList={focusList}
 			onOpenLists={noop}
+			onPickerPhaseChange={noop}
 		/>
 	);
+}
+
+function noop() {}
+async function focusList() {
+	return true;
 }
 
 const styles = StyleSheet.create((theme) => ({
