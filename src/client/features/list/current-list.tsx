@@ -147,16 +147,9 @@ export function CurrentList({
 		);
 	}
 
-	const resolvedFocusedListId =
-		focusedListId &&
-		listRows.summaries.some((summary) => summary.id === focusedListId)
-			? focusedListId
-			: loadState.listId;
-
 	return (
 		<HomeListPager
-			key={session.activeHousehold.id}
-			focusedListId={resolvedFocusedListId}
+			focusedListId={focusedListId ?? loadState.listId}
 			collapsedTitleScroll={collapsedTitleScroll}
 			composerOpen={composerOpen}
 			listSummaries={listRows.summaries}
@@ -620,7 +613,7 @@ function ActiveHomeListPage({
 	});
 	const composerListOptions = addItemListOptions({
 		currentListId: loadState.listId,
-		currentListName: loadState.list.listName,
+		currentListName: summary.name,
 		summaries: listSummaries,
 	});
 

@@ -6,7 +6,7 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react-native";
-import { type PropsWithChildren, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
 	Dimensions,
 	FlatList,
@@ -15,8 +15,8 @@ import {
 	type ViewStyle,
 } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 import { settleAnimations } from "@/test/mocks/reanimated";
+import { TestSafeAreaProvider } from "@/test/safe-area";
 import {
 	CurrentList,
 	type CurrentListProps,
@@ -24,8 +24,8 @@ import {
 	type HomeListPickerPhase,
 } from "./current-list";
 import {
+	activeListPage,
 	authenticatedAppSession,
-	emptyActiveListState,
 	groceriesListSummary,
 	pantryListSummary,
 } from "./list-test-support";
@@ -57,15 +57,9 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-	jest.mocked(useListPage).mockImplementation((_session, summary) => ({
-		status: "active",
-		listId: summary.id,
-		list: { ...emptyActiveListState, listName: summary.name },
-		actions: {
-			addItem: jest.fn(async () => undefined),
-			setItemChecked: jest.fn(async () => undefined),
-		},
-	}));
+	jest
+		.mocked(useListPage)
+		.mockImplementation((_session, summary) => activeListPage(summary));
 });
 
 describe("CurrentList", () => {
@@ -190,15 +184,11 @@ describe("CurrentList", () => {
 
 	it("adds Items through the Current List action with normalized optional fields", async () => {
 		const addItem = jest.fn(async () => undefined);
-		jest.mocked(useListPage).mockReturnValue({
-			status: "active",
-			listId: "lst_groceries",
-			list: emptyActiveListState,
-			actions: {
-				addItem,
-				setItemChecked: jest.fn(async () => undefined),
-			},
-		});
+		jest
+			.mocked(useListPage)
+			.mockReturnValue(
+				activeListPage(groceriesListSummary, { actions: { addItem } }),
+			);
 		await render(
 			<HomeCurrentList
 				session={authenticatedAppSession}
@@ -529,28 +519,22 @@ describe("CurrentList", () => {
 	});
 
 	it("keeps the focused List on its watched Item data", async () => {
-		jest.mocked(useListPage).mockReturnValue({
-			status: "active",
-			listId: "lst_pantry",
-			list: {
-				...emptyActiveListState,
-				listName: "Pantry",
-				items: [
-					{
-						id: "itm_shelf_stable",
-						name: "Shelf stable",
-						quantity: null,
-						notes: null,
-						checked: false,
-						checkedByMemberName: null,
-					},
-				],
-			},
-			actions: {
-				addItem: jest.fn(async () => undefined),
-				setItemChecked: jest.fn(async () => undefined),
-			},
-		});
+		jest.mocked(useListPage).mockReturnValue(
+			activeListPage(pantryListSummary, {
+				list: {
+					items: [
+						{
+							id: "itm_shelf_stable",
+							name: "Shelf stable",
+							quantity: null,
+							notes: null,
+							checked: false,
+							checkedByMemberName: null,
+						},
+					],
+				},
+			}),
+		);
 
 		await render(
 			<HomeCurrentList
@@ -604,15 +588,7 @@ describe("CurrentList", () => {
 						message: "Unable to load this List. Please try again.",
 						retry: jest.fn(),
 					}
-				: {
-						status: "active",
-						listId: summary.id,
-						list: { ...emptyActiveListState, listName: summary.name },
-						actions: {
-							addItem: jest.fn(async () => undefined),
-							setItemChecked: jest.fn(async () => undefined),
-						},
-					},
+				: activeListPage(summary),
 		);
 
 		await render(
@@ -857,17 +833,4 @@ function pantryCurrentListDeps(): HomeCurrentListDeps {
 			summaries: [groceriesListSummary, pantryListSummary],
 		},
 	};
-}
-
-function TestSafeAreaProvider({ children }: PropsWithChildren) {
-	return (
-		<SafeAreaProvider
-			initialMetrics={{
-				frame: { x: 0, y: 0, width: 390, height: 844 },
-				insets: { top: 0, left: 0, right: 0, bottom: 24 },
-			}}
-		>
-			{children}
-		</SafeAreaProvider>
-	);
 }

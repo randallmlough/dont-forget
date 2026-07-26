@@ -117,9 +117,7 @@ function HomeScreenResource({
 		0,
 		listSummaries.findIndex((summary) => summary.id === resolvedFocusedListId),
 	);
-	const focusedListName = listSummaries.find(
-		(summary) => summary.id === resolvedFocusedListId,
-	)?.name;
+	const focusedListName = listSummaries[focusedIndex]?.name;
 
 	async function focusList(listId: string): Promise<boolean> {
 		if (selectionPending) return false;

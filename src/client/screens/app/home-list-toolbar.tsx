@@ -142,7 +142,7 @@ export function HomeListPageControl({
 	// without that the dots would remap themselves under the finger mid-drag.
 	const [anchoredIndex, setAnchoredIndex] = useState<number | null>(null);
 	const pageWindow = pageControlWindow(
-		pageWindowStart(anchoredIndex ?? focusedIndex, pageCount),
+		anchoredIndex ?? focusedIndex,
 		pageCount,
 	);
 	// Where the drag sits, tracked on the gesture's own runtime: a scrub tick
@@ -309,29 +309,19 @@ export type PageControlWindow = {
 };
 
 /**
- * Where the window sits for a focused List: centred on it, and pushed back
- * inside the Lists at either end so the strip always shows a full window.
- */
-export function pageWindowStart(
-	focusedIndex: number,
-	pageCount: number,
-): number {
-	const size = Math.min(pageCount, PAGE_CONTROL_MAX_DOTS);
-	const centred = focusedIndex - Math.floor((size - 1) / 2);
-	return Math.min(pageCount - size, Math.max(0, centred));
-}
-
-/**
- * The strip drawn for a window starting at `start`. Up to the dots the strip can
- * hold it is the whole run of Lists at Weather's proportions; past that it is a
- * window of them, still at those proportions, with a gutter on each side holding
- * the chevron for the Lists that side of the window.
+ * The strip drawn around a focused List. Up to the dots the strip can hold it is
+ * the whole run of Lists at Weather's proportions; past that it is a window of
+ * them, still at those proportions, centred on the focused List and pushed back
+ * inside the Lists at either end so the strip always shows a full window, with a
+ * gutter on each side holding the chevron for the Lists that side of the window.
  */
 export function pageControlWindow(
-	start: number,
+	focusedIndex: number,
 	pageCount: number,
 ): PageControlWindow {
 	const size = Math.min(pageCount, PAGE_CONTROL_MAX_DOTS);
+	const centred = focusedIndex - Math.floor((size - 1) / 2);
+	const start = Math.min(pageCount - size, Math.max(0, centred));
 	const leadingInset =
 		PAGE_CONTROL_EDGE_SLOP +
 		(size < pageCount ? PAGE_OVERFLOW_GUTTER_WIDTH : 0);

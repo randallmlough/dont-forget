@@ -48,7 +48,6 @@ import { FILL_AVAILABLE_WIDTH } from "@/client/ui/input";
 
 const ENTRY_BOTTOM_GAP = 12;
 const TRAY_KEYBOARD_GAP = 6;
-export const ADD_ITEM_COMPOSER_SCROLL_CLEARANCE = 128;
 
 export type AddItemComposerProps = {
 	draft: AddItemComposerDraft;
@@ -533,15 +532,6 @@ function CurrentListPicker({
 				</Text>
 			))}
 		</Picker>
-	);
-}
-
-export function useAddItemComposerScrollInset(): number {
-	const insets = useSafeAreaInsets();
-	const keyboardHeight = useKeyboardHeight();
-
-	return (
-		Math.max(keyboardHeight, insets.bottom) + ADD_ITEM_COMPOSER_SCROLL_CLEARANCE
 	);
 }
 

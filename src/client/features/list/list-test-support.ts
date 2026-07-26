@@ -1,9 +1,11 @@
 import type { AuthenticatedAppSession } from "@/client/session";
+import type { ListPageActions } from "./list-page-data";
 import type { ListSummary } from "./list-service";
 import type {
 	ActiveListState,
 	AddActiveListItemInput,
 } from "./list-view-types";
+import type { ListPageState } from "./use-list-page";
 
 export const authenticatedAppSession: AuthenticatedAppSession = {
 	user: {
@@ -97,6 +99,35 @@ export const populatedActiveListState: ActiveListState = {
 		},
 	],
 };
+
+/**
+ * The `useListPage` state a List page renders from once its Items have loaded:
+ * an empty List named after the summary, with stubbed Item actions. Overrides
+ * carry the facts a test is actually asserting on, such as the Items on the
+ * page or the action it expects to be called.
+ */
+export function activeListPage(
+	summary: ListSummary,
+	overrides: {
+		list?: Partial<ActiveListState>;
+		actions?: Partial<ListPageActions>;
+	} = {},
+): Extract<ListPageState, { status: "active" }> {
+	return {
+		status: "active",
+		listId: summary.id,
+		list: {
+			...emptyActiveListState,
+			listName: summary.name,
+			...overrides.list,
+		},
+		actions: {
+			addItem: jest.fn(async () => undefined),
+			setItemChecked: jest.fn(async () => undefined),
+			...overrides.actions,
+		},
+	};
+}
 
 export const largeActiveListState: ActiveListState = {
 	householdName: "Avery",

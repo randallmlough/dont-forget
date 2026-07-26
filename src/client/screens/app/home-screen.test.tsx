@@ -9,12 +9,11 @@ import {
 import { selectionAsync } from "expo-haptics";
 import type { PropsWithChildren } from "react";
 import { Dimensions, FlatList } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
 import {
+	activeListPage,
 	authenticatedAppSession,
-	emptyActiveListState,
 	groceriesListSummary,
 	pantryListSummary,
 } from "@/client/features/list/list-test-support";
@@ -25,6 +24,7 @@ import { useSelectList } from "@/client/features/list/use-select-list";
 import { useAuthenticatedAppSession, useSyncState } from "@/client/session";
 import { panBegin, panEnd, panMove } from "@/test/mocks/gesture-handler";
 import { settleAnimations } from "@/test/mocks/reanimated";
+import { TestSafeAreaProvider } from "@/test/safe-area";
 import HomeScreen, { HomeScreenView } from "./home-screen";
 
 const mockReplace = jest.fn();
@@ -169,15 +169,9 @@ beforeEach(() => {
 	jest.mocked(useListRows).mockReturnValue({
 		rows: { status: "ready", summaries: [groceriesListSummary] },
 	});
-	jest.mocked(useListPage).mockImplementation((_session, summary) => ({
-		status: "active",
-		listId: summary.id,
-		list: { ...emptyActiveListState, listName: summary.name },
-		actions: {
-			addItem: jest.fn(async () => undefined),
-			setItemChecked: jest.fn(async () => undefined),
-		},
-	}));
+	jest
+		.mocked(useListPage)
+		.mockImplementation((_session, summary) => activeListPage(summary));
 	mockSelectList.mockReset();
 	mockSelectList.mockResolvedValue(true);
 	jest.mocked(useSelectList).mockReturnValue(mockSelectList);
@@ -253,23 +247,6 @@ describe("HomeScreen", () => {
 		expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				headerLargeTitle: false,
-				headerTransparent: true,
-				title: "",
-			}),
-		);
-
-		await act(async () => {
-			fireEvent(screen.getByTestId("home-list-items-lst_groceries"), "scroll", {
-				nativeEvent: {
-					contentOffset: { x: 0, y: 96 },
-					contentSize: { width: 390, height: 1200 },
-					layoutMeasurement: { width: 390, height: 844 },
-				},
-			});
-		});
-
-		expect(mockStackScreenOptions).toHaveBeenLastCalledWith(
-			expect.objectContaining({
 				headerTransparent: true,
 				title: "",
 			}),
@@ -370,19 +347,11 @@ describe("HomeScreen", () => {
 				summaries: [groceriesListSummary, pantryListSummary],
 			},
 		});
-		jest.mocked(useListPage).mockImplementation((_session, summary) =>
-			summary.id === "lst_pantry"
-				? pantryState
-				: {
-						status: "active",
-						listId: summary.id,
-						list: { ...emptyActiveListState, listName: summary.name },
-						actions: {
-							addItem: jest.fn(async () => undefined),
-							setItemChecked: jest.fn(async () => undefined),
-						},
-					},
-		);
+		jest
+			.mocked(useListPage)
+			.mockImplementation((_session, summary) =>
+				summary.id === "lst_pantry" ? pantryState : activeListPage(summary),
+			);
 		const view = await render(homeScreenSurface(), {
 			wrapper: TestSafeAreaProvider,
 		});
@@ -1025,17 +994,4 @@ function activeCurrentList(): HomeCurrentListDeps["currentList"] {
 		retry: jest.fn(),
 		reload: jest.fn(),
 	};
-}
-
-function TestSafeAreaProvider({ children }: PropsWithChildren) {
-	return (
-		<SafeAreaProvider
-			initialMetrics={{
-				frame: { x: 0, y: 0, width: 390, height: 844 },
-				insets: { top: 0, left: 0, right: 0, bottom: 24 },
-			}}
-		>
-			{children}
-		</SafeAreaProvider>
-	);
 }

@@ -26,10 +26,6 @@ class PanGestureDouble {
 		return this;
 	}
 
-	runOnJS(): this {
-		return this;
-	}
-
 	onBegin(callback: (event: PanEvent) => void): this {
 		this.callbacks.onBegin = callback;
 		return this;
