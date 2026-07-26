@@ -80,7 +80,7 @@ function ListsScreenResource({
 	session: AuthenticatedAppSession;
 }) {
 	const { rows } = useListRows(session);
-	const currentList = useHomeCurrentList(session);
+	const currentList = useHomeCurrentList(session, rows);
 	const selectList = useSelectList(session);
 	const services = useProductServices({
 		householdId: session.activeHousehold.id,

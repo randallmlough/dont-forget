@@ -24,7 +24,7 @@ const meta = {
 	],
 	args: {
 		session: sessionFixture(),
-		rows: { status: "ready", summaries: listSummaries() },
+		rows: { status: "ready", summaries: listSummaries(), isFetching: false },
 		currentListId: "lst_story_1",
 		onSelectList: async () => undefined,
 		onCreateList: handled,
@@ -44,7 +44,10 @@ export const NoCurrentList: Story = {
 };
 
 export const Empty: Story = {
-	args: { rows: { status: "ready", summaries: [] }, currentListId: null },
+	args: {
+		rows: { status: "ready", summaries: [], isFetching: false },
+		currentListId: null,
+	},
 };
 
 export const Loading: Story = {

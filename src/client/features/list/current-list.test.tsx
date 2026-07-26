@@ -804,7 +804,7 @@ function activeListDeps(
 			reload: jest.fn(),
 		},
 		syncState: "synced",
-		listRows: { status: "ready", summaries },
+		listRows: { status: "ready", summaries, isFetching: false },
 	};
 }
 
@@ -816,7 +816,7 @@ function zeroActiveListDeps(): HomeCurrentListDeps {
 			reload: jest.fn(),
 		},
 		syncState: "synced",
-		listRows: { status: "ready", summaries: [] },
+		listRows: { status: "ready", summaries: [], isFetching: false },
 	};
 }
 
@@ -831,6 +831,7 @@ function pantryCurrentListDeps(): HomeCurrentListDeps {
 		listRows: {
 			status: "ready",
 			summaries: [groceriesListSummary, pantryListSummary],
+			isFetching: false,
 		},
 	};
 }

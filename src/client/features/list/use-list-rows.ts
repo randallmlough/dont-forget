@@ -6,7 +6,12 @@ import { useProductServices } from "./use-product-services";
 export type ListRows =
 	| { status: "loading" }
 	| { status: "error" }
-	| { status: "ready"; summaries: ListSummary[] };
+	| {
+			status: "ready";
+			summaries: ListSummary[];
+			/** Whether a re-read is in flight behind the summaries on screen. */
+			isFetching: boolean;
+	  };
 
 /**
  * Watches the active List summaries for List-management surfaces: exactly
@@ -36,5 +41,11 @@ export function useListRows(session: AuthenticatedAppSession): {
 	if (query.isLoading) {
 		return { rows: { status: "loading" } };
 	}
-	return { rows: { status: "ready", summaries: query.data } };
+	return {
+		rows: {
+			status: "ready",
+			summaries: query.data,
+			isFetching: query.isFetching,
+		},
+	};
 }

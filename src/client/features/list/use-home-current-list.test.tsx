@@ -1,4 +1,3 @@
-import { useQuery } from "@powersync/react";
 import {
 	act,
 	render,
@@ -13,15 +12,9 @@ import {
 } from "@/client/features/list/current-selection";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { logger } from "@/client/lib/logger";
-import type { ProductQuery } from "@/client/lib/product-database";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useHomeCurrentList } from "./use-home-current-list";
-import {
-	type ProductServices,
-	useProductServices,
-} from "./use-product-services";
-
-jest.mock("@powersync/react", () => ({ useQuery: jest.fn() }));
+import type { ListRows } from "./use-list-rows";
 
 jest.mock("@/client/lib/logger", () =>
 	jest
@@ -34,43 +27,17 @@ jest.mock("@/client/features/list/current-selection", () => ({
 	clearCurrentListSelectionIfMatches: jest.fn(async () => false),
 }));
 
-jest.mock("./use-product-services", () => ({
-	useProductServices: jest.fn(),
-}));
-
-type WatchedQueryResult<T> = {
-	data: T[];
-	isLoading: boolean;
-	isFetching: boolean;
-	error: Error | undefined;
-};
-
-const mockUseQuery = jest.mocked(useQuery);
 const mockGetSelection = jest.mocked(getCurrentListSelection);
 const mockClearSelection = jest.mocked(clearCurrentListSelectionIfMatches);
-const mockUseProductServices = jest.mocked(useProductServices);
 const mockLogger = jest.mocked(logger);
 
-const listSummariesQuery: ProductQuery<ListSummary> = {
-	compile: () => ({ sql: "SELECT lists", parameters: [] }),
-	execute: async () => [],
-};
-
-let summariesResult: WatchedQueryResult<ListSummary>;
+/** The active List rows Home hands the resolver, as of the current render. */
+let listRows: ListRows;
 
 beforeEach(() => {
-	summariesResult = watchedQuery({ data: [] });
+	listRows = readyListRows([]);
 	mockGetSelection.mockResolvedValue(null);
 	mockClearSelection.mockResolvedValue(false);
-	mockUseProductServices.mockReturnValue(productServices());
-	// The resolver owns the selected List id only; Items belong to the List
-	// pages. Anything else it watches would gate Home on a single List's rows.
-	mockUseQuery.mockImplementation((query) => {
-		if (query === listSummariesQuery) {
-			return summariesResult;
-		}
-		throw new Error("unexpected watched query");
-	});
 });
 
 afterEach(() => {
@@ -78,18 +45,6 @@ afterEach(() => {
 });
 
 describe("useHomeCurrentList", () => {
-	it("creates product services for the active Household and User", async () => {
-		await renderHomeCurrentList({
-			summaries: [summary("lst_recent")],
-		});
-
-		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
-		expect(mockUseProductServices).toHaveBeenCalledWith({
-			householdId: "hh_1",
-			userId: "usr_avery",
-		});
-	});
-
 	it("renders loading while the stored Current List selection is pending", async () => {
 		let resolveSelection: (value: string | null) => void = () => {};
 		const pendingSelection = new Promise<string | null>((resolve) => {
@@ -155,9 +110,7 @@ describe("useHomeCurrentList", () => {
 		expect(await screen.findByText("loading")).toBeTruthy();
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
-		summariesResult = watchedQuery({
-			data: [summary("lst_recent", "Recent")],
-		});
+		listRows = readyListRows([summary("lst_recent", "Recent")]);
 		view.rerender(<HomeCurrentListHarness session={sessionFixture()} />);
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
@@ -215,19 +168,6 @@ describe("useHomeCurrentList", () => {
 		).toBeTruthy();
 	});
 
-	it("resolves the selected List without watching its Items", async () => {
-		// Folding a List's Items query into this state is what used to unmount
-		// Home's whole List pager, and its picker with it, when one List's rows
-		// failed to read. Each List page watches its own Items instead.
-		await renderHomeCurrentList({ summaries: [summary("lst_recent")] });
-
-		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
-		expect(mockUseQuery).toHaveBeenCalledWith(listSummariesQuery);
-		for (const [query] of mockUseQuery.mock.calls) {
-			expect(query).toBe(listSummariesQuery);
-		}
-	});
-
 	it("logs a clear failure and keeps rendering the active fallback", async () => {
 		mockGetSelection.mockResolvedValue("lst_gone");
 		mockClearSelection.mockRejectedValue(new Error("storage offline"));
@@ -238,9 +178,7 @@ describe("useHomeCurrentList", () => {
 
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
-		summariesResult = watchedQuery({
-			data: [summary("lst_recent")],
-		});
+		listRows = readyListRows([summary("lst_recent")]);
 		view.rerender(<HomeCurrentListHarness session={sessionFixture()} />);
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
@@ -370,7 +308,7 @@ describe("useHomeCurrentList", () => {
 
 		// Another Member archives the switched-to List while Home stays mounted.
 		await act(async () => {
-			summariesResult = watchedQuery({ data: [summary("lst_recent")] });
+			listRows = readyListRows([summary("lst_recent")]);
 			rerender(undefined);
 		});
 
@@ -427,10 +365,7 @@ describe("useHomeCurrentList", () => {
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
 		await act(async () => {
-			summariesResult = watchedQuery({
-				data: [summary("lst_recent", "Recent")],
-				isFetching: true,
-			});
+			listRows = readyListRows([summary("lst_recent", "Recent")], true);
 			rerender(undefined);
 		});
 
@@ -443,7 +378,7 @@ function HomeCurrentListHarness({
 }: {
 	session: AuthenticatedAppSession;
 }) {
-	const { state } = useHomeCurrentList(session);
+	const { state } = useHomeCurrentList(session, listRows);
 	if (state.status === "active") {
 		return <Text>{`active:${state.listId}`}</Text>;
 	}
@@ -453,67 +388,37 @@ function HomeCurrentListHarness({
 	return <Text>{state.status}</Text>;
 }
 
-async function renderHomeCurrentList(input: WatchedQueryFixture) {
-	arrangeWatchedQueries(input);
+async function renderHomeCurrentList(input: ListRowsFixture) {
+	arrangeListRows(input);
 	return render(<HomeCurrentListHarness session={sessionFixture()} />);
 }
 
-async function renderUseHomeCurrentList(input: WatchedQueryFixture) {
-	arrangeWatchedQueries(input);
-	return renderHook(() => useHomeCurrentList(sessionFixture()));
+async function renderUseHomeCurrentList(input: ListRowsFixture) {
+	arrangeListRows(input);
+	return renderHook(() => useHomeCurrentList(sessionFixture(), listRows));
 }
 
-type WatchedQueryFixture = {
+type ListRowsFixture = {
 	summaries: ListSummary[];
 	summariesIsLoading?: boolean;
 	summariesIsFetching?: boolean;
 	summariesError?: Error;
 };
 
-function arrangeWatchedQueries(input: WatchedQueryFixture) {
-	summariesResult = watchedQuery({
-		data: input.summaries,
-		isLoading: input.summariesIsLoading,
-		isFetching: input.summariesIsFetching,
-		error: input.summariesError,
-	});
+function arrangeListRows(input: ListRowsFixture) {
+	if (input.summariesError) {
+		listRows = { status: "error" };
+		return;
+	}
+	if (input.summariesIsLoading) {
+		listRows = { status: "loading" };
+		return;
+	}
+	listRows = readyListRows(input.summaries, input.summariesIsFetching);
 }
 
-function watchedQuery<T>(input: {
-	data: T[];
-	isLoading?: boolean;
-	isFetching?: boolean;
-	error?: Error;
-}): WatchedQueryResult<T> {
-	return {
-		data: input.data,
-		isLoading: input.isLoading ?? false,
-		isFetching: input.isFetching ?? false,
-		error: input.error,
-	};
-}
-
-function productServices(): ProductServices {
-	const unused = jest.fn(async () => {
-		throw new Error("unexpected service call");
-	});
-	return {
-		lists: {
-			listLists: unused,
-			listListsQuery: jest.fn(() => listSummariesQuery),
-			createList: unused,
-			renameList: unused,
-			deleteList: unused,
-		},
-		items: {
-			listItems: unused,
-			listItemsQuery: jest.fn(() => {
-				throw new Error("the Current List resolver must not watch Items");
-			}),
-			addItem: unused,
-			setItemChecked: unused,
-		},
-	};
+function readyListRows(summaries: ListSummary[], isFetching = false): ListRows {
+	return { status: "ready", summaries, isFetching };
 }
 
 function sessionFixture(): AuthenticatedAppSession {

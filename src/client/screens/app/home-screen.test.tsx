@@ -167,7 +167,11 @@ beforeEach(() => {
 	jest.mocked(useSyncState).mockReturnValue("synced");
 	jest.mocked(useHomeCurrentList).mockReturnValue(activeCurrentList());
 	jest.mocked(useListRows).mockReturnValue({
-		rows: { status: "ready", summaries: [groceriesListSummary] },
+		rows: {
+			status: "ready",
+			summaries: [groceriesListSummary],
+			isFetching: false,
+		},
 	});
 	jest
 		.mocked(useListPage)
@@ -284,6 +288,7 @@ describe("HomeScreen", () => {
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
+				isFetching: false,
 			},
 		});
 		const view = await render(homeScreenSurface(), {
@@ -305,6 +310,7 @@ describe("HomeScreen", () => {
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
+				isFetching: false,
 			},
 		});
 		const view = await render(homeScreenSurface(), {
@@ -345,6 +351,7 @@ describe("HomeScreen", () => {
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
+				isFetching: false,
 			},
 		});
 		jest
@@ -374,6 +381,7 @@ describe("HomeScreen", () => {
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
+				isFetching: false,
 			},
 		});
 		await render(
@@ -397,6 +405,7 @@ describe("HomeScreen", () => {
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
+				isFetching: false,
 			},
 		});
 		await render(
@@ -422,6 +431,7 @@ describe("HomeScreen", () => {
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
+				isFetching: false,
 			},
 		});
 		mockSelectList.mockResolvedValue(false);
@@ -443,6 +453,7 @@ describe("HomeScreen", () => {
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
+				isFetching: false,
 			},
 		});
 		await render(
@@ -475,6 +486,7 @@ describe("HomeScreen", () => {
 			rows: {
 				status: "ready",
 				summaries: [groceriesListSummary, pantryListSummary],
+				isFetching: false,
 			},
 		});
 		mockSelectList.mockResolvedValue(false);
@@ -507,6 +519,7 @@ describe("HomeScreen", () => {
 					pantryListSummary,
 					hardwareListSummary,
 				],
+				isFetching: false,
 			},
 		});
 		await render(
@@ -538,7 +551,7 @@ describe("HomeScreen", () => {
 			reload: jest.fn(),
 		});
 		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: [] },
+			rows: { status: "ready", summaries: [], isFetching: false },
 		});
 
 		await render(
@@ -583,6 +596,7 @@ describe("Home bottom toolbar", () => {
 					pantryListSummary,
 					hardwareListSummary,
 				],
+				isFetching: false,
 			},
 		});
 	});
@@ -646,7 +660,11 @@ describe("Home bottom toolbar", () => {
 			.spyOn(FlatList.prototype, "scrollToIndex")
 			.mockImplementation();
 		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: manyListSummaries(30) },
+			rows: {
+				status: "ready",
+				summaries: manyListSummaries(30),
+				isFetching: false,
+			},
 		});
 
 		try {
@@ -693,7 +711,11 @@ describe("Home bottom toolbar", () => {
 			.spyOn(FlatList.prototype, "scrollToIndex")
 			.mockImplementation();
 		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: manyListSummaries(30) },
+			rows: {
+				status: "ready",
+				summaries: manyListSummaries(30),
+				isFetching: false,
+			},
 		});
 
 		try {
@@ -728,7 +750,11 @@ describe("Home bottom toolbar", () => {
 
 	it("steps through every List for assistive technology, window or not", async () => {
 		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: manyListSummaries(30) },
+			rows: {
+				status: "ready",
+				summaries: manyListSummaries(30),
+				isFetching: false,
+			},
 		});
 		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
 

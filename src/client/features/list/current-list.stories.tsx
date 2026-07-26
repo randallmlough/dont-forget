@@ -72,7 +72,7 @@ export const ZeroActive: Story = {
 					reload: noop,
 				},
 				syncState: "synced",
-				listRows: { status: "ready", summaries: [] },
+				listRows: { status: "ready", summaries: [], isFetching: false },
 			}}
 		/>
 	),

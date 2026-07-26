@@ -7,8 +7,7 @@ import type { ListSummary } from "@/client/features/list/list-service";
 import { useLogger } from "@/client/lib/logger";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { asError } from "@/shared/errors";
-import { usePowerSyncQuery } from "./use-powersync-query";
-import { useProductServices } from "./use-product-services";
+import type { ListRows } from "./use-list-rows";
 
 export type HomeCurrentListState =
 	| { status: "loading" }
@@ -25,28 +24,30 @@ export type HomeCurrentListData = {
 const LIST_ERROR_MESSAGE = "Unable to load this List. Please try again.";
 
 /**
- * Resolves which List is the Current List for Home from the live active List
- * summaries snapshot plus the AsyncStorage-backed explicit selection:
+ * Resolves which List is the Current List for Home from the active List rows
+ * the caller already watches plus the AsyncStorage-backed explicit selection:
  *
  * 1. Read the stored Current List selection for the active User + Household.
- * 2. Validate it against the live active List summaries snapshot.
+ * 2. Validate it against the caller's active List rows.
  * 3. If the stored selection is inactive, clear it and fall back IN MEMORY to
  *    the most recently active List. Fallback is never persisted.
  *
  * The resolver owns the selected List id only. Item rows belong to whichever
  * List page renders them (`useListPage`), so one List's failed Items query
- * surfaces on that page instead of gating Home's List pager and picker.
+ * surfaces on that page instead of gating Home's List pager and picker. It
+ * takes the List rows rather than watching the same summaries query a second
+ * time, so the screen holds exactly one active-summaries subscription.
  *
- * Summaries SQL errors map to the retryable List error state. Selection-storage
- * failures log and degrade to the in-memory fallback.
+ * A failed List rows read maps to the retryable List error state.
+ * Selection-storage failures log and degrade to the in-memory fallback.
  */
 export function useHomeCurrentList(
 	session: AuthenticatedAppSession,
+	listRows: ListRows,
 ): HomeCurrentListData {
 	const userId = session.activeMember.userId;
 	const householdId = session.activeHousehold.id;
 	const logger = useLogger();
-	const services = useProductServices({ householdId, userId });
 	const { selection, refreshSelection } = useStoredCurrentListSelection(
 		userId,
 		householdId,
@@ -60,48 +61,40 @@ export function useHomeCurrentList(
 		summariesData: null,
 		observedSummariesAfterSelection: false,
 	});
-	// Fresh query objects per render are fine: useQuery re-keys on compiled
-	// SQL + parameters, not object identity.
-	const summaries = usePowerSyncQuery<ListSummary>(
-		services.lists.listListsQuery({
-			archive: "active",
-			sort: "recentActivity",
-		}),
-	);
+	// The List rows snapshot while it is on screen, and null while it is loading
+	// or failed. Its identity is what marks a fresh summaries emission.
+	const summaries = listRows.status === "ready" ? listRows.summaries : null;
+	const summariesFetching = listRows.status === "ready" && listRows.isFetching;
 	const storedListId =
 		selection.status === "ready" ? selection.storedListId : null;
-	const summariesReady = !summaries.isLoading && !summaries.error;
 	const currentListId =
-		selection.status === "ready" && summariesReady
-			? deriveCurrentListId(storedListId, summaries.data)
+		selection.status === "ready" && summaries !== null
+			? deriveCurrentListId(storedListId, summaries)
 			: null;
 	const readySelectionKey = selection.status === "ready" ? selection.key : null;
 	const readySelectionInitialRead =
 		selection.status === "ready" && selection.initialRead;
-	const summariesSettled =
-		!summaries.isLoading &&
-		!summaries.isFetching &&
-		summaries.error === undefined;
+	const summariesSettled = summaries !== null && !summariesFetching;
 
 	useEffect(() => {
 		const guard = selectionClearGuard.current;
 		if (guard.selectionKey !== readySelectionKey) {
 			guard.selectionKey = readySelectionKey;
-			guard.summariesData = summaries.data;
+			guard.summariesData = summaries;
 			guard.observedSummariesAfterSelection =
 				readySelectionKey !== null &&
 				readySelectionInitialRead &&
 				summariesSettled;
 			return;
 		}
-		if (guard.summariesData !== summaries.data) {
-			guard.summariesData = summaries.data;
+		if (guard.summariesData !== summaries) {
+			guard.summariesData = summaries;
 			guard.observedSummariesAfterSelection = readySelectionKey !== null;
 		}
 	}, [
 		readySelectionKey,
 		readySelectionInitialRead,
-		summaries.data,
+		summaries,
 		summariesSettled,
 	]);
 
@@ -119,9 +112,9 @@ export function useHomeCurrentList(
 		const canClearAgainstSummaries =
 			selectionClearGuard.current.selectionKey === readySelectionKey &&
 			selectionClearGuard.current.observedSummariesAfterSelection;
-		if (!summariesReady || storedListId === null) return;
-		if (summaries.isFetching || !canClearAgainstSummaries) return;
-		if (summaries.data.some((summary) => summary.id === storedListId)) return;
+		if (summaries === null || storedListId === null) return;
+		if (summariesFetching || !canClearAgainstSummaries) return;
+		if (summaries.some((summary) => summary.id === storedListId)) return;
 		void clearCurrentListSelectionIfMatches(
 			userId,
 			householdId,
@@ -132,9 +125,8 @@ export function useHomeCurrentList(
 			});
 		});
 	}, [
-		summariesReady,
-		summaries.isFetching,
-		summaries.data,
+		summaries,
+		summariesFetching,
 		readySelectionKey,
 		storedListId,
 		userId,
@@ -143,7 +135,7 @@ export function useHomeCurrentList(
 	]);
 
 	return {
-		state: homeCurrentListState({ selection, summaries, currentListId }),
+		state: homeCurrentListState({ selection, listRows, currentListId }),
 		retry: refreshSelection,
 		// Current List selection lives in AsyncStorage (not watched by
 		// PowerSync), so switch/create/delete flows re-read it explicitly
@@ -247,13 +239,16 @@ function deriveCurrentListId(
 
 function homeCurrentListState(input: {
 	selection: StoredSelectionState;
-	summaries: { isLoading: boolean; error: Error | undefined };
+	listRows: ListRows;
 	currentListId: string | null;
 }): HomeCurrentListState {
-	if (input.summaries.error) {
+	if (input.listRows.status === "error") {
 		return { status: "error", message: LIST_ERROR_MESSAGE };
 	}
-	if (input.selection.status === "loading" || input.summaries.isLoading) {
+	if (
+		input.selection.status === "loading" ||
+		input.listRows.status === "loading"
+	) {
 		return { status: "loading" };
 	}
 	if (input.currentListId === null) {

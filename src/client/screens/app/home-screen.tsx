@@ -89,12 +89,12 @@ function HomeScreenResource({
 		() => ({ offsetY, largeTitleHeight, pagerDrift }),
 		[offsetY, largeTitleHeight, pagerDrift],
 	);
+	const syncState = useSyncState();
+	const { rows } = useListRows(session);
 	// The Current List resolves here, not inside CurrentList, so the native
 	// stack header keeps its fallback title through the loading, error, and
 	// zeroActive states, where no List page is mounted to own a title.
-	const currentList = useHomeCurrentList(session);
-	const syncState = useSyncState();
-	const { rows } = useListRows(session);
+	const currentList = useHomeCurrentList(session, rows);
 	const selectList = useSelectList(session);
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
 	// Home's interaction state lives here because the native bottom toolbar
