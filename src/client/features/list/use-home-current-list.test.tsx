@@ -298,6 +298,95 @@ describe("useHomeCurrentList", () => {
 		expect(mockGetSelection).toHaveBeenCalledTimes(2);
 	});
 
+	it("keeps serving the resolved Current List while a refresh read is in flight", async () => {
+		let resolveRefresh: (value: string | null) => void = () => {};
+		mockGetSelection.mockResolvedValueOnce("lst_recent").mockReturnValueOnce(
+			new Promise<string | null>((resolve) => {
+				resolveRefresh = resolve;
+			}),
+		);
+		const { result } = await renderUseHomeCurrentList({
+			summaries: [
+				summary("lst_recent", "Recent"),
+				summary("lst_pantry", "Pantry"),
+			],
+		});
+
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_recent",
+			}),
+		);
+
+		await act(async () => {
+			result.current.reload();
+		});
+
+		// Reporting loading here would unmount Home's List pager and flash a
+		// full-screen spinner over a page switch that already landed.
+		expect(result.current.state).toMatchObject({
+			status: "active",
+			listId: "lst_recent",
+		});
+
+		await act(async () => {
+			resolveRefresh("lst_pantry");
+		});
+
+		expect(result.current.state).toMatchObject({
+			status: "active",
+			listId: "lst_pantry",
+		});
+	});
+
+	it("clears a refreshed stored selection once that List stops being active", async () => {
+		mockGetSelection
+			.mockResolvedValueOnce("lst_recent")
+			.mockResolvedValueOnce("lst_pantry");
+		const { result, rerender } = await renderUseHomeCurrentList({
+			summaries: [
+				summary("lst_recent", "Recent"),
+				summary("lst_pantry", "Pantry"),
+			],
+		});
+
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_recent",
+			}),
+		);
+
+		await act(async () => {
+			result.current.reload();
+		});
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				listId: "lst_pantry",
+			}),
+		);
+
+		// Another Member archives the switched-to List while Home stays mounted.
+		await act(async () => {
+			summariesResult = watchedQuery({ data: [summary("lst_recent")] });
+			rerender(undefined);
+		});
+
+		await waitFor(() =>
+			expect(mockClearSelection).toHaveBeenCalledWith(
+				"usr_avery",
+				"hh_1",
+				"lst_pantry",
+			),
+		);
+		expect(result.current.state).toMatchObject({
+			status: "active",
+			listId: "lst_recent",
+		});
+	});
+
 	it("does not clear a refreshed stored selection before List summaries emit after the refresh", async () => {
 		mockGetSelection
 			.mockResolvedValueOnce(null)

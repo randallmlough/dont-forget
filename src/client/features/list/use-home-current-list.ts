@@ -110,11 +110,11 @@ export function useHomeCurrentList(
 	// is never persisted. The clear usually waits for a List summaries emission
 	// after the current selection read so a just-persisted selection is not
 	// cleared against a stale trailing-throttled watched-query snapshot. The
-	// initial mount read has no just-persisted selection to protect, so it may
-	// clear against an already-settled, non-fetching summaries snapshot.
-	// `clearCurrentListSelectionIfMatches` is idempotent, so re-runs on later
-	// summary emissions are no-ops. Failures log and degrade: the fallback List
-	// still renders (Decision 5).
+	// first read for a User + Household has no just-persisted selection to
+	// protect, so it may clear against an already-settled, non-fetching
+	// summaries snapshot. `clearCurrentListSelectionIfMatches` is idempotent, so
+	// re-runs on later summary emissions are no-ops. Failures log and degrade:
+	// the fallback List still renders (Decision 5).
 	useEffect(() => {
 		const canClearAgainstSummaries =
 			selectionClearGuard.current.selectionKey === readySelectionKey &&
@@ -162,9 +162,12 @@ type StoredSelectionState =
 			storedListId: string | null;
 	  };
 
-type StoredSelectionSnapshot =
-	| { status: "loading"; key: string }
-	| { status: "ready"; key: string; storedListId: string | null };
+type StoredSelectionSnapshot = {
+	identity: string;
+	epoch: number;
+	initialRead: boolean;
+	storedListId: string | null;
+};
 
 function useStoredCurrentListSelection(
 	userId: string,
@@ -173,28 +176,25 @@ function useStoredCurrentListSelection(
 	const logger = useLogger();
 	// `epoch` is a trigger token: `refreshSelection` bumps it to re-read the
 	// AsyncStorage-backed selection after a switch/create/delete persisted a
-	// new one. `selectionKey` makes loading derivable while the next read is in
-	// flight. The cleanup flag guards against publishing after unmount or a
-	// Household change.
+	// new one. A refresh read keeps serving the snapshot it is revalidating, so
+	// re-reading after a List switch never drops Home back to loading and
+	// unmounts the List pager mid-switch. Only a User or Household change has
+	// no snapshot left to serve and reports loading. The cleanup flag guards
+	// against publishing after unmount or after that change.
+	const identity = `${userId}:${householdId}`;
 	const [epoch, setEpoch] = useState(0);
-	const selectionKey = `${userId}:${householdId}:${epoch}`;
-	const [selectionSnapshot, setSelectionSnapshot] =
-		useState<StoredSelectionSnapshot>({
-			status: "loading",
-			key: selectionKey,
-		});
+	const [snapshot, setSnapshot] = useState<StoredSelectionSnapshot | null>(
+		null,
+	);
 	const selection: StoredSelectionState =
-		selectionSnapshot.key === selectionKey &&
-		selectionSnapshot.status === "ready"
+		snapshot !== null && snapshot.identity === identity
 			? {
 					status: "ready",
-					key: selectionSnapshot.key,
-					initialRead: epoch === 0,
-					storedListId: selectionSnapshot.storedListId,
+					key: `${snapshot.identity}:${snapshot.epoch}`,
+					initialRead: snapshot.initialRead,
+					storedListId: snapshot.storedListId,
 				}
-			: {
-					status: "loading",
-				};
+			: { status: "loading" };
 
 	useEffect(() => {
 		let cancelled = false;
@@ -209,16 +209,20 @@ function useStoredCurrentListSelection(
 			})
 			.then((storedListId) => {
 				if (cancelled) return;
-				setSelectionSnapshot({
-					status: "ready",
-					key: selectionKey,
+				setSnapshot((previous) => ({
+					identity,
+					epoch,
+					// Only the first read for a User + Household has no
+					// just-persisted selection to protect from a stale summaries
+					// snapshot; a refresh read always follows one.
+					initialRead: previous?.identity !== identity,
 					storedListId,
-				});
+				}));
 			});
 		return () => {
 			cancelled = true;
 		};
-	}, [userId, householdId, selectionKey, logger]);
+	}, [userId, householdId, identity, epoch, logger]);
 
 	return {
 		selection,

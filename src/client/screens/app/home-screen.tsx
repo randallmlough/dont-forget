@@ -136,6 +136,12 @@ function HomeScreenResource({
 			}
 
 			persistedListIdRef.current = listId;
+			// The Current List selection lives in AsyncStorage, which no watched
+			// query re-emits, so the resolver has to be told to re-read what was
+			// just persisted; otherwise it keeps validating the selection this
+			// switch replaced. The re-read keeps serving the selection it is
+			// revalidating, so the pager stays put through it.
+			currentList.reload();
 			return true;
 		} finally {
 			setSelectionPending(false);

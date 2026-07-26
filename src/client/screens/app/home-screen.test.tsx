@@ -372,6 +372,56 @@ describe("HomeScreen", () => {
 		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
 	});
 
+	it("re-reads the Current List selection once a page switch persists it", async () => {
+		const reload = jest.fn();
+		jest
+			.mocked(useHomeCurrentList)
+			.mockReturnValue({ ...activeCurrentList(), reload });
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [groceriesListSummary, pantryListSummary],
+			},
+		});
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await settlePagerAt(1);
+
+		// The selection lives in AsyncStorage, so without this the resolver keeps
+		// validating the List the switch replaced.
+		await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+	});
+
+	it("does not re-read the Current List selection when persisting the switch fails", async () => {
+		const reload = jest.fn();
+		jest
+			.mocked(useHomeCurrentList)
+			.mockReturnValue({ ...activeCurrentList(), reload });
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [groceriesListSummary, pantryListSummary],
+			},
+		});
+		mockSelectList.mockResolvedValue(false);
+		await render(
+			<NavigationDrawerProvider open={jest.fn()}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await settlePagerAt(1);
+
+		await waitFor(() => expect(mockSelectList).toHaveBeenCalledTimes(1));
+		expect(reload).not.toHaveBeenCalled();
+	});
+
 	it("insets every List page below the transparent stack header", async () => {
 		jest.mocked(useListRows).mockReturnValue({
 			rows: {
