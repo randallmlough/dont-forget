@@ -1,5 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { Stack } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import { useState } from "react";
 import { type AccessibilityActionEvent, View } from "react-native";
 import {
 	Gesture,
@@ -7,7 +9,7 @@ import {
 	GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
 import type { ListSummary } from "@/client/features/list/list-service";
 
@@ -20,22 +22,23 @@ import type { ListSummary } from "@/client/features/list/list-service";
  * themselves are tiny, and it keeps a slot's worth of slop past the end dots so
  * the first and last List stay reachable at the edges of the drag.
  *
- * Nothing caps how many Lists a Household keeps, so the strip also needs a
- * ceiling. The toolbar hands this view to UIKit as a bar item sized from its own
- * frame: a strip wider than the space between the Search and Choose List buttons
- * clips itself or its neighbours instead of wrapping. On the narrowest supported
- * iPhone (375pt) those two buttons plus the bar's own margins leave roughly
- * 255pt, and holding ~24pt of breathing room on each side leaves 208pt, which is
- * exactly twelve slots at Weather's proportions. Past twelve Lists the slots
- * compress inside that width, and the dots shrink with them down to a floor that
- * keeps a dot visible.
+ * Nothing caps how many Lists a Household keeps, and the toolbar hands this view
+ * to UIKit as a bar item sized from its own frame, so a dot per List would grow
+ * the strip until it clipped itself or the Search and Choose List buttons beside
+ * it. The strip instead shows at most `PAGE_CONTROL_MAX_DOTS` dots, always at
+ * full size, and windows the Lists past that: ten slots plus a chevron gutter on
+ * each side is 200pt, inside the roughly 208pt those two buttons and the bar's
+ * own margins leave free on the narrowest supported iPhone (375pt). The gutters
+ * are reserved for as long as the Lists overflow so the dots keep their place
+ * when a chevron comes and goes.
  */
 const PAGE_DOT_SIZE = 7;
-const PAGE_DOT_MIN_SIZE = 4;
 const PAGE_DOT_SLOT_WIDTH = 16;
 const PAGE_CONTROL_HEIGHT = 44;
 const PAGE_CONTROL_EDGE_SLOP = 8;
-const PAGE_CONTROL_MAX_WIDTH = 208;
+const PAGE_CONTROL_MAX_DOTS = 10;
+const PAGE_OVERFLOW_CHEVRON_SIZE = 9;
+const PAGE_OVERFLOW_GUTTER_WIDTH = 12;
 
 const PAGE_CONTROL_ACTIONS = [{ name: "increment" }, { name: "decrement" }];
 
@@ -112,11 +115,16 @@ export function HomeListToolbar({
 }
 
 /**
- * One dot per List, with Weather's scrub: dragging across the dots switches
- * Lists under the finger with a tick per List, and the switch is instant
- * because only the landing List is written back when the finger lifts.
+ * A dot per List, with Weather's scrub: dragging across the dots switches Lists
+ * under the finger with a tick per List, and the switch is instant because only
+ * the landing List is written back when the finger lifts.
+ *
+ * Past the dots the strip can hold, it shows a window of Lists around the
+ * focused one and a chevron on whichever side still has Lists behind it. A drag
+ * reaches the window it started on; lifting recentres the window on the List it
+ * landed on, so dragging again carries on through the Lists.
  */
-function HomeListPageControl({
+export function HomeListPageControl({
 	focusedIndex,
 	lists,
 	onCommitPage,
@@ -127,13 +135,24 @@ function HomeListPageControl({
 	onCommitPage: (index: number) => void;
 	onScrubToPage: (index: number) => void;
 }) {
+	const { theme } = useUnistyles();
 	const pageCount = lists.length;
-	const { width, slotWidth, dotSize } = pageControlGeometry(pageCount);
+	// The List the window is centred on. A drag moves the focused List under the
+	// finger, so the window anchors to where the drag started until it ends:
+	// without that the dots would remap themselves under the finger mid-drag.
+	const [anchoredIndex, setAnchoredIndex] = useState<number | null>(null);
+	const pageWindow = pageControlWindow(
+		pageWindowStart(anchoredIndex ?? focusedIndex, pageCount),
+		pageCount,
+	);
 	// Where the drag sits, tracked on the gesture's own runtime: a scrub tick
 	// can tell a new List from a repeat without waiting for React to rerender,
 	// and a press with no travel still commits the List it landed on rather
-	// than the one this control was last rendered with.
+	// than the one this control was last rendered with. The window the drag
+	// started on rides along, so the mapping cannot move under the finger even
+	// before React has caught up with the anchor.
 	const scrubbedIndex = useSharedValue(focusedIndex);
+	const scrubbedWindowStart = useSharedValue(pageWindow.start);
 
 	function scrubbedToPage(index: number) {
 		void Haptics.selectionAsync();
@@ -145,6 +164,11 @@ function HomeListPageControl({
 		if (index === scrubbedIndex.get()) return;
 		scrubbedIndex.set(index);
 		scheduleOnRN(scrubbedToPage, index);
+	}
+
+	function commitScrub(index: number) {
+		setAnchoredIndex(null);
+		onCommitPage(index);
 	}
 
 	function adjustPage(event: AccessibilityActionEvent) {
@@ -160,21 +184,37 @@ function HomeListPageControl({
 		.onBegin((event) => {
 			"worklet";
 			scrubbedIndex.set(focusedIndex);
-			scrubTo(pageIndexAtX(event.x, slotWidth, pageCount));
+			scrubbedWindowStart.set(pageWindow.start);
+			scheduleOnRN(setAnchoredIndex, focusedIndex);
+			scrubTo(
+				pageIndexAtX(
+					event.x,
+					pageWindow.start,
+					pageWindow.size,
+					pageWindow.leadingInset,
+				),
+			);
 		})
 		.onUpdate((event) => {
 			"worklet";
-			scrubTo(pageIndexAtX(event.x, slotWidth, pageCount));
+			scrubTo(
+				pageIndexAtX(
+					event.x,
+					scrubbedWindowStart.get(),
+					pageWindow.size,
+					pageWindow.leadingInset,
+				),
+			);
 		})
 		.onFinalize(() => {
 			"worklet";
-			scheduleOnRN(onCommitPage, scrubbedIndex.get());
+			scheduleOnRN(commitScrub, scrubbedIndex.get());
 		});
 
 	// The toolbar hosts this view outside the app's view tree, so the gesture
 	// needs its own gesture-handler root here.
 	return (
-		<GestureHandlerRootView style={styles.pageControlRoot(width)}>
+		<GestureHandlerRootView style={styles.pageControlRoot(pageWindow.width)}>
 			<GestureDetector gesture={scrub}>
 				<View
 					accessible
@@ -188,16 +228,48 @@ function HomeListPageControl({
 					style={styles.pageControl}
 					testID="home-list-page-control"
 				>
-					{lists.map((summary, index) => (
-						<View key={summary.id} style={styles.pageDotSlot(slotWidth)}>
-							<View
-								style={[
-									styles.pageDot(dotSize),
-									index === focusedIndex ? styles.pageDotFocused : undefined,
-								]}
-							/>
+					{pageWindow.size < pageCount ? (
+						<View style={styles.overflowGutter}>
+							{pageWindow.overflowsBefore ? (
+								<SymbolView
+									name="chevron.left"
+									size={PAGE_OVERFLOW_CHEVRON_SIZE}
+									testID="home-list-page-overflow-before"
+									tintColor={theme.colors.subtleForeground}
+								/>
+							) : null}
 						</View>
-					))}
+					) : null}
+					{lists
+						.slice(pageWindow.start, pageWindow.start + pageWindow.size)
+						.map((summary, slot) => (
+							<View
+								key={summary.id}
+								style={styles.pageDotSlot}
+								testID={`home-list-page-dot-${pageWindow.start + slot}`}
+							>
+								<View
+									style={[
+										styles.pageDot,
+										pageWindow.start + slot === focusedIndex
+											? styles.pageDotFocused
+											: undefined,
+									]}
+								/>
+							</View>
+						))}
+					{pageWindow.size < pageCount ? (
+						<View style={styles.overflowGutter}>
+							{pageWindow.overflowsAfter ? (
+								<SymbolView
+									name="chevron.right"
+									size={PAGE_OVERFLOW_CHEVRON_SIZE}
+									testID="home-list-page-overflow-after"
+									tintColor={theme.colors.subtleForeground}
+								/>
+							) : null}
+						</View>
+					) : null}
 				</View>
 			</GestureDetector>
 		</GestureHandlerRootView>
@@ -206,63 +278,71 @@ function HomeListPageControl({
 
 /**
  * The List whose dot sits under `x`, measured from the left edge of the page
- * control. Anything past either end clamps to the end dot, so a drag that runs
- * off the strip parks on the first or last List instead of stopping short.
- *
- * `slotWidth` comes from `pageControlGeometry`, so a compressed strip still
- * reads one List per slot and its last Lists stay under the finger.
+ * control. Anything past either end clamps to the window's end dot, so a drag
+ * that runs off the strip parks on the window's first or last List instead of
+ * stopping short. The Lists behind the window are reached by dragging again,
+ * once lifting the finger has recentred the window.
  */
 export function pageIndexAtX(
 	x: number,
-	slotWidth: number,
-	pageCount: number,
+	windowStart: number,
+	windowSize: number,
+	leadingInset: number,
 ): number {
 	// The scrub runs on the gesture's runtime, so the geometry it reads has to
 	// run there too, without reaching for another module-scope function.
 	"worklet";
-	const slot = Math.floor((x - PAGE_CONTROL_EDGE_SLOP) / slotWidth);
-	return Math.min(pageCount - 1, Math.max(0, slot));
+	const slot = Math.floor((x - leadingInset) / PAGE_DOT_SLOT_WIDTH);
+	return windowStart + Math.min(windowSize - 1, Math.max(0, slot));
 }
 
-export type PageControlGeometry = {
+export type PageControlWindow = {
+	/** The List the window's first dot stands for. */
+	start: number;
+	/** How many Lists the window shows, one dot each. */
+	size: number;
 	width: number;
-	slotWidth: number;
-	dotSize: number;
+	/** Distance from the control's left edge to its first dot slot. */
+	leadingInset: number;
+	overflowsBefore: boolean;
+	overflowsAfter: boolean;
 };
 
 /**
- * How wide the strip is and how it splits between the Lists. Up to the width the
- * toolbar can host, every List gets Weather's slot and Weather's dot. Past it
- * the width stops growing and the same slots divide the strip instead, so every
- * List keeps a slot of its own to be scrubbed onto however many there are.
+ * Where the window sits for a focused List: centred on it, and pushed back
+ * inside the Lists at either end so the strip always shows a full window.
  */
-export function pageControlGeometry(pageCount: number): PageControlGeometry {
-	const naturalWidth =
-		pageCount * PAGE_DOT_SLOT_WIDTH + PAGE_CONTROL_EDGE_SLOP * 2;
-	if (naturalWidth <= PAGE_CONTROL_MAX_WIDTH) {
-		return {
-			width: naturalWidth,
-			slotWidth: PAGE_DOT_SLOT_WIDTH,
-			dotSize: PAGE_DOT_SIZE,
-		};
-	}
+export function pageWindowStart(
+	focusedIndex: number,
+	pageCount: number,
+): number {
+	const size = Math.min(pageCount, PAGE_CONTROL_MAX_DOTS);
+	const centred = focusedIndex - Math.floor((size - 1) / 2);
+	return Math.min(pageCount - size, Math.max(0, centred));
+}
 
-	const slotWidth =
-		(PAGE_CONTROL_MAX_WIDTH - PAGE_CONTROL_EDGE_SLOP * 2) / pageCount;
+/**
+ * The strip drawn for a window starting at `start`. Up to the dots the strip can
+ * hold it is the whole run of Lists at Weather's proportions; past that it is a
+ * window of them, still at those proportions, with a gutter on each side holding
+ * the chevron for the Lists that side of the window.
+ */
+export function pageControlWindow(
+	start: number,
+	pageCount: number,
+): PageControlWindow {
+	const size = Math.min(pageCount, PAGE_CONTROL_MAX_DOTS);
+	const leadingInset =
+		PAGE_CONTROL_EDGE_SLOP +
+		(size < pageCount ? PAGE_OVERFLOW_GUTTER_WIDTH : 0);
+
 	return {
-		width: PAGE_CONTROL_MAX_WIDTH,
-		slotWidth,
-		// The dot keeps Weather's share of its slot until that share stops being
-		// visible, then holds the floor. A dot never outgrows its slot, so at the
-		// counts where even the floor no longer fits the strip closes into a bar
-		// rather than overlapping itself.
-		dotSize: Math.min(
-			slotWidth,
-			Math.max(
-				PAGE_DOT_MIN_SIZE,
-				(slotWidth * PAGE_DOT_SIZE) / PAGE_DOT_SLOT_WIDTH,
-			),
-		),
+		start,
+		size,
+		width: size * PAGE_DOT_SLOT_WIDTH + leadingInset * 2,
+		leadingInset,
+		overflowsBefore: start > 0,
+		overflowsAfter: start + size < pageCount,
 	};
 }
 
@@ -280,16 +360,20 @@ const styles = StyleSheet.create((theme) => ({
 		alignItems: "center",
 		paddingHorizontal: PAGE_CONTROL_EDGE_SLOP,
 	},
-	pageDotSlot: (width: number) => ({
-		width,
+	overflowGutter: {
+		width: PAGE_OVERFLOW_GUTTER_WIDTH,
 		alignItems: "center",
-	}),
-	pageDot: (size: number) => ({
-		width: size,
-		height: size,
+	},
+	pageDotSlot: {
+		width: PAGE_DOT_SLOT_WIDTH,
+		alignItems: "center",
+	},
+	pageDot: {
+		width: PAGE_DOT_SIZE,
+		height: PAGE_DOT_SIZE,
 		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.subtleForeground,
-	}),
+	},
 	pageDotFocused: {
 		backgroundColor: theme.colors.foreground,
 	},

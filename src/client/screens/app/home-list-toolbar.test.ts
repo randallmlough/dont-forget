@@ -1,4 +1,8 @@
-import { pageControlGeometry, pageIndexAtX } from "./home-list-toolbar";
+import {
+	pageControlWindow,
+	pageIndexAtX,
+	pageWindowStart,
+} from "./home-list-toolbar";
 
 // The toolbar module reaches native navigation and native gesture recognition
 // through `expo-router` and `react-native-gesture-handler`, neither of which
@@ -11,98 +15,133 @@ jest.mock("react-native-gesture-handler", () =>
 	jest.requireActual("@/test/mocks/gesture-handler"),
 );
 
-/** Weather's slot, which every List gets while the strip still fits. */
-const WEATHER_SLOT_WIDTH = 16;
-/** The widest strip the toolbar can host between its two buttons. */
-const MAX_WIDTH = 208;
-/** The most Lists that fit at Weather's proportions. */
-const UNCOMPRESSED_COUNT = 12;
+/** The most dots the strip shows before it starts windowing the Lists. */
+const MAX_DOTS = 10;
+/** Distance to the first dot slot without chevron gutters, and with them. */
+const EDGE_SLOP = 8;
+const WINDOWED_INSET = 20;
 
 describe("pageIndexAtX", () => {
 	it("reads one List per dot slot across the control", () => {
-		expect(pageIndexAtX(10, WEATHER_SLOT_WIDTH, 3)).toBe(0);
-		expect(pageIndexAtX(30, WEATHER_SLOT_WIDTH, 3)).toBe(1);
-		expect(pageIndexAtX(46, WEATHER_SLOT_WIDTH, 3)).toBe(2);
+		expect(pageIndexAtX(10, 0, 3, EDGE_SLOP)).toBe(0);
+		expect(pageIndexAtX(30, 0, 3, EDGE_SLOP)).toBe(1);
+		expect(pageIndexAtX(46, 0, 3, EDGE_SLOP)).toBe(2);
 	});
 
 	it("switches Lists at the boundary between two dot slots", () => {
-		expect(pageIndexAtX(23, WEATHER_SLOT_WIDTH, 3)).toBe(0);
-		expect(pageIndexAtX(24, WEATHER_SLOT_WIDTH, 3)).toBe(1);
+		expect(pageIndexAtX(23, 0, 3, EDGE_SLOP)).toBe(0);
+		expect(pageIndexAtX(24, 0, 3, EDGE_SLOP)).toBe(1);
 	});
 
 	it("parks a drag that runs off either end on the end List", () => {
-		expect(pageIndexAtX(-120, WEATHER_SLOT_WIDTH, 3)).toBe(0);
-		expect(pageIndexAtX(0, WEATHER_SLOT_WIDTH, 3)).toBe(0);
-		expect(pageIndexAtX(120, WEATHER_SLOT_WIDTH, 3)).toBe(2);
+		expect(pageIndexAtX(-120, 0, 3, EDGE_SLOP)).toBe(0);
+		expect(pageIndexAtX(0, 0, 3, EDGE_SLOP)).toBe(0);
+		expect(pageIndexAtX(120, 0, 3, EDGE_SLOP)).toBe(2);
 	});
 
 	it("keeps a single List in range", () => {
-		expect(pageIndexAtX(40, WEATHER_SLOT_WIDTH, 1)).toBe(0);
+		expect(pageIndexAtX(40, 0, 1, EDGE_SLOP)).toBe(0);
 	});
 
-	it("reaches every List of a compressed strip, including the last", () => {
-		const { slotWidth } = pageControlGeometry(32);
-
-		// The last List owns the slot that starts 31 slots in, so it is reachable
-		// without running off the end. Reading the strip at Weather's slot width
-		// instead would strand it: that same touch would land on List 12.
-		expect(pageIndexAtX(8 + slotWidth * 31, slotWidth, 32)).toBe(31);
-		expect(pageIndexAtX(8 + slotWidth * 31, WEATHER_SLOT_WIDTH, 32)).toBe(11);
-		expect(pageIndexAtX(8, slotWidth, 32)).toBe(0);
-		expect(pageIndexAtX(MAX_WIDTH, slotWidth, 32)).toBe(31);
+	it("reads the window's own Lists, not the Lists the strip starts with", () => {
+		// A window over Lists 6 through 15 of a longer run: the first dot past the
+		// left chevron gutter is List 6, and each slot after it is the next List.
+		expect(pageIndexAtX(WINDOWED_INSET + 4, 5, MAX_DOTS, WINDOWED_INSET)).toBe(
+			5,
+		);
+		expect(pageIndexAtX(WINDOWED_INSET + 20, 5, MAX_DOTS, WINDOWED_INSET)).toBe(
+			6,
+		);
+		expect(
+			pageIndexAtX(WINDOWED_INSET + 16 * 9, 5, MAX_DOTS, WINDOWED_INSET),
+		).toBe(14);
 	});
 
-	it("still switches one List per slot once the slots compress", () => {
-		const { slotWidth } = pageControlGeometry(32);
-
-		expect(pageIndexAtX(8 + slotWidth * 31 - 1, slotWidth, 32)).toBe(30);
-		expect(pageIndexAtX(8 + slotWidth * 31, slotWidth, 32)).toBe(31);
+	it("clamps a windowed drag to the window it started on", () => {
+		expect(pageIndexAtX(0, 5, MAX_DOTS, WINDOWED_INSET)).toBe(5);
+		expect(pageIndexAtX(400, 5, MAX_DOTS, WINDOWED_INSET)).toBe(14);
 	});
 });
 
-describe("pageControlGeometry", () => {
-	it("keeps Weather's proportions while the Lists fit the toolbar", () => {
-		expect(pageControlGeometry(3)).toEqual({
-			width: 64,
-			slotWidth: WEATHER_SLOT_WIDTH,
-			dotSize: 7,
-		});
-		expect(pageControlGeometry(UNCOMPRESSED_COUNT)).toEqual({
-			width: MAX_WIDTH,
-			slotWidth: WEATHER_SLOT_WIDTH,
-			dotSize: 7,
-		});
-	});
-
-	it("holds the strip at the width the toolbar can host at any List count", () => {
-		for (const pageCount of [UNCOMPRESSED_COUNT + 1, 30, 100, 500]) {
-			expect(pageControlGeometry(pageCount).width).toBe(MAX_WIDTH);
+describe("pageWindowStart", () => {
+	it("shows every List at once while they fit the strip", () => {
+		for (const focusedIndex of [0, 4, MAX_DOTS - 1]) {
+			expect(pageWindowStart(focusedIndex, MAX_DOTS)).toBe(0);
 		}
 	});
 
-	it("divides the bounded strip evenly between the Lists", () => {
-		const { slotWidth } = pageControlGeometry(32);
-
-		expect(slotWidth).toBe(6);
-		expect(slotWidth * 32 + 16).toBe(MAX_WIDTH);
+	it("centres the window on the focused List", () => {
+		expect(pageWindowStart(5, 30)).toBe(1);
+		expect(pageWindowStart(14, 30)).toBe(10);
 	});
 
-	it("shrinks the dots with their slots so they never touch", () => {
-		const compressed = pageControlGeometry(20);
-		const floored = pageControlGeometry(32);
+	it("holds the window inside the Lists at either end", () => {
+		expect(pageWindowStart(0, 30)).toBe(0);
+		expect(pageWindowStart(3, 30)).toBe(0);
+		expect(pageWindowStart(26, 30)).toBe(20);
+		expect(pageWindowStart(29, 30)).toBe(20);
+	});
+});
 
-		expect(compressed.dotSize).toBeCloseTo(4.2);
-		expect(compressed.dotSize).toBeLessThan(compressed.slotWidth);
-		// Past the point where Weather's share stops being visible the dot holds
-		// its floor, which still leaves a gap between neighbours.
-		expect(floored.dotSize).toBe(4);
-		expect(floored.dotSize).toBeLessThan(floored.slotWidth);
+describe("pageControlWindow", () => {
+	it("keeps Weather's proportions while every List has a dot", () => {
+		expect(pageControlWindow(0, 3)).toEqual({
+			start: 0,
+			size: 3,
+			width: 64,
+			leadingInset: EDGE_SLOP,
+			overflowsBefore: false,
+			overflowsAfter: false,
+		});
+		expect(pageControlWindow(0, MAX_DOTS)).toEqual({
+			start: 0,
+			size: MAX_DOTS,
+			width: 176,
+			leadingInset: EDGE_SLOP,
+			overflowsBefore: false,
+			overflowsAfter: false,
+		});
 	});
 
-	it("keeps the dots inside their slots at extreme List counts", () => {
-		const geometry = pageControlGeometry(500);
+	it("windows the Lists past the dots the strip can hold", () => {
+		const pageWindow = pageControlWindow(pageWindowStart(14, 30), 30);
 
-		expect(geometry.dotSize).toBeGreaterThan(0);
-		expect(geometry.dotSize).toBeLessThanOrEqual(geometry.slotWidth);
+		expect(pageWindow.start).toBe(10);
+		expect(pageWindow.size).toBe(MAX_DOTS);
+		// The gutters hold the chevrons, so the dots start further in than they do
+		// on a strip that shows every List.
+		expect(pageWindow.leadingInset).toBe(WINDOWED_INSET);
+	});
+
+	it("holds the strip inside the width the toolbar can host", () => {
+		for (const pageCount of [1, MAX_DOTS, MAX_DOTS + 1, 30, 500]) {
+			expect(
+				pageControlWindow(pageWindowStart(0, pageCount), pageCount).width,
+			).toBeLessThanOrEqual(200);
+		}
+	});
+
+	it("points a chevron at the Lists on whichever side the window leaves out", () => {
+		const atStart = pageControlWindow(pageWindowStart(0, 30), 30);
+		const inMiddle = pageControlWindow(pageWindowStart(14, 30), 30);
+		const atEnd = pageControlWindow(pageWindowStart(29, 30), 30);
+		const allVisible = pageControlWindow(pageWindowStart(2, 6), 6);
+
+		expect([atStart.overflowsBefore, atStart.overflowsAfter]).toEqual([
+			false,
+			true,
+		]);
+		expect([inMiddle.overflowsBefore, inMiddle.overflowsAfter]).toEqual([
+			true,
+			true,
+		]);
+		expect([atEnd.overflowsBefore, atEnd.overflowsAfter]).toEqual([
+			true,
+			false,
+		]);
+		expect([allVisible.overflowsBefore, allVisible.overflowsAfter]).toEqual([
+			false,
+			false,
+		]);
 	});
 });

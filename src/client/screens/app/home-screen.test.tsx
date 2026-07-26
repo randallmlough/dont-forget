@@ -575,32 +575,108 @@ describe("Home bottom toolbar", () => {
 		}
 	});
 
-	it("reaches the last List once the page control compresses its dot slots", async () => {
+	it("walks the window through more Lists than the strip can show", async () => {
 		const scrollToIndex = jest
 			.spyOn(FlatList.prototype, "scrollToIndex")
 			.mockImplementation();
 		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: manyListSummaries(32) },
+			rows: { status: "ready", summaries: manyListSummaries(30) },
 		});
 
 		try {
 			await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
 
-			// The strip cannot grow past the space between the toolbar buttons, so
-			// 32 Lists share it at 6pt a slot and the last List sits under a touch
-			// 194 points in rather than off the end of the control.
-			await dragPageControlAcross([DOT_TOUCH_X[0], 194]);
+			// The window opens on the first Lists, so only the Lists after it are
+			// behind a chevron.
+			expect(overflowChevron("before")).toBeNull();
+			expect(overflowChevron("after")).toBeTruthy();
 
-			expect(pageControl()).toHaveProp("accessibilityValue", {
-				text: "List 32, List 32 of 32",
-			});
-			expect(mockSelectList).toHaveBeenCalledWith(
-				"lst_list_32",
-				"lst_groceries",
+			// Each drag runs the width of the window and lands on its last List,
+			// which recentres the window on that List. Five drags carry the focus
+			// from the first List to the thirtieth.
+			const reached: string[] = [];
+			for (let drag = 0; drag < 5; drag += 1) {
+				await dragPageControlAcross([
+					WINDOW_TOUCH_X.first,
+					WINDOW_TOUCH_X.last,
+				]);
+				reached.push(focusedListValue());
+			}
+
+			expect(reached).toEqual([
+				"List 10, List 10 of 30",
+				"List 15, List 15 of 30",
+				"List 20, List 20 of 30",
+				"List 25, List 25 of 30",
+				"List 30, List 30 of 30",
+			]);
+			expect(mockSelectList).toHaveBeenLastCalledWith(
+				"lst_list_30",
+				"lst_list_25",
 			);
+			// The window has run out of Lists to show on the far side.
+			expect(overflowChevron("before")).toBeTruthy();
+			expect(overflowChevron("after")).toBeNull();
 		} finally {
 			scrollToIndex.mockRestore();
 		}
+	});
+
+	it("holds the window still under a finger that is already scrubbing", async () => {
+		const scrollToIndex = jest
+			.spyOn(FlatList.prototype, "scrollToIndex")
+			.mockImplementation();
+		jest.mocked(useListRows).mockReturnValue({
+			rows: { status: "ready", summaries: manyListSummaries(30) },
+		});
+
+		try {
+			await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+			// Park the focus mid-run so the window has Lists on both sides of it.
+			await dragPageControlAcross([WINDOW_TOUCH_X.first, WINDOW_TOUCH_X.last]);
+			expect(windowedListIndexes()).toEqual([
+				5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+			]);
+
+			// A finger landing on the window's first dot moves the focused List
+			// there, which would recentre the window if the window followed the
+			// focus, remapping the dots out from under the finger mid-drag.
+			await act(async () => {
+				panBegin(WINDOW_TOUCH_X.first);
+			});
+
+			expect(focusedListValue()).toBe("List 6, List 6 of 30");
+			expect(windowedListIndexes()).toEqual([
+				5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+			]);
+
+			// Lifting hands the window back to the List the drag landed on.
+			await act(async () => {
+				panEnd();
+			});
+			expect(windowedListIndexes()).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+		} finally {
+			scrollToIndex.mockRestore();
+		}
+	});
+
+	it("steps through every List for assistive technology, window or not", async () => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: { status: "ready", summaries: manyListSummaries(30) },
+		});
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		// The window shows ten Lists; stepping past its edge moves the Lists on,
+		// it does not stop at the last dot.
+		for (let step = 0; step < 12; step += 1) {
+			await act(async () => {
+				fireEvent(pageControl(), "accessibilityAction", {
+					nativeEvent: { actionName: "increment" },
+				});
+			});
+		}
+
+		expect(focusedListValue()).toBe("List 13, List 13 of 30");
 	});
 
 	it("returns the page control to the focused List when persisting the drag fails", async () => {
@@ -700,7 +776,14 @@ async function dragPageControlAcross(
  */
 const DOT_TOUCH_X = [10, 30, 46];
 
-/** More Lists than the page control can host at Weather's proportions. */
+/**
+ * Touch positions on the first and last dot of a windowed strip, measured from
+ * the control's left edge: the chevron gutter and the edge slop put the first
+ * slot 20 points in, and nine slots of 16 points follow it.
+ */
+const WINDOW_TOUCH_X = { first: 24, last: 164 };
+
+/** More Lists than the page control can show dots for. */
 function manyListSummaries(count: number) {
 	return Array.from({ length: count }, (_, index) =>
 		index === 0
@@ -715,6 +798,30 @@ function manyListSummaries(count: number) {
 
 function pageControl() {
 	return screen.getByTestId("home-list-page-control", {
+		includeHiddenElements: true,
+	});
+}
+
+/** What the page control tells assistive technology it is focused on. */
+function focusedListValue(): string {
+	const { accessibilityValue } = pageControl().props as {
+		accessibilityValue: { text: string };
+	};
+	return accessibilityValue.text;
+}
+
+/** The Lists the page control is currently showing a dot for, in order. */
+function windowedListIndexes(): number[] {
+	return screen
+		.getAllByTestId(/^home-list-page-dot-/, { includeHiddenElements: true })
+		.map((dot) =>
+			Number((dot.props as { testID: string }).testID.replace(/\D+/, "")),
+		);
+}
+
+/** The chevron standing for the Lists on one side of the window, if any. */
+function overflowChevron(side: "before" | "after") {
+	return screen.queryByTestId(`home-list-page-overflow-${side}`, {
 		includeHiddenElements: true,
 	});
 }
