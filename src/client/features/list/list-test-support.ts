@@ -2,6 +2,7 @@ import type { AuthenticatedAppSession } from "@/client/session";
 import type { ListPageActions } from "./list-page-data";
 import type { ListSummary } from "./list-service";
 import type {
+	ActiveListItem,
 	ActiveListState,
 	AddActiveListItemInput,
 } from "./list-view-types";
@@ -72,7 +73,7 @@ export const pantryListSummary: ListSummary = {
 export const populatedActiveListState: ActiveListState = {
 	householdName: "Avery",
 	listName: "Groceries",
-	items: [
+	items: uncheckedItemsFirst([
 		{
 			id: "item-1",
 			name: "Milk",
@@ -97,7 +98,7 @@ export const populatedActiveListState: ActiveListState = {
 			checked: false,
 			checkedByMemberName: null,
 		},
-	],
+	]),
 };
 
 /**
@@ -132,17 +133,22 @@ export function activeListPage(
 export const largeActiveListState: ActiveListState = {
 	householdName: "Avery",
 	listName: "Groceries",
-	items: Array.from({ length: 24 }, (_, index) => ({
-		id: `large-item-${index + 1}`,
-		name:
-			index === 0
-				? "Extra long Item name that should stay readable in the List row"
-				: `Pantry staple ${index + 1}`,
-		quantity: index % 3 === 0 ? `${index + 1} ct` : null,
-		notes: index % 4 === 0 ? "Check the bottom shelf before buying" : null,
-		checked: index % 2 === 0,
-		checkedByMemberName: index % 2 === 0 ? "Avery Chen" : null,
-	})),
+	items: uncheckedItemsFirst(
+		Array.from({ length: 24 }, (_, index) => {
+			const checked = index < 6 || index % 2 === 0;
+			return {
+				id: `large-item-${index + 1}`,
+				name:
+					index === 0
+						? "Extra long Item name that should stay readable in the List row"
+						: `Pantry staple ${index + 1}`,
+				quantity: index % 3 === 0 ? `${index + 1} ct` : null,
+				notes: index % 4 === 0 ? "Check the bottom shelf before buying" : null,
+				checked,
+				checkedByMemberName: checked ? "Avery Chen" : null,
+			};
+		}),
+	),
 };
 
 export function addFixtureItem(
@@ -151,7 +157,7 @@ export function addFixtureItem(
 ): ActiveListState {
 	return {
 		...list,
-		items: [
+		items: uncheckedItemsFirst([
 			...list.items,
 			{
 				id: `story-item-${list.items.length + 1}`,
@@ -161,7 +167,7 @@ export function addFixtureItem(
 				checked: false,
 				checkedByMemberName: null,
 			},
-		],
+		]),
 	};
 }
 
@@ -172,14 +178,25 @@ export function setFixtureItemChecked(
 ): ActiveListState {
 	return {
 		...list,
-		items: list.items.map((item) =>
-			item.id === itemId
-				? {
-						...item,
-						checked,
-						checkedByMemberName: checked ? "Avery Chen" : null,
-					}
-				: item,
+		items: uncheckedItemsFirst(
+			list.items.map((item) =>
+				item.id === itemId
+					? {
+							...item,
+							checked,
+							checkedByMemberName: checked ? "Avery Chen" : null,
+						}
+					: item,
+			),
 		),
 	};
+}
+
+function uncheckedItemsFirst(
+	items: readonly ActiveListItem[],
+): ActiveListItem[] {
+	return [
+		...items.filter((item) => !item.checked),
+		...items.filter((item) => item.checked),
+	];
 }
