@@ -78,8 +78,10 @@ export function useAnimatedScrollHandler(
 }
 
 /**
- * Piecewise-linear interpolation. `"clamp"` holds the value at the edges of the
- * output range, which is the only extrapolation mode the app relies on.
+ * Piecewise-linear interpolation. `"clamp"`, the only extrapolation mode the
+ * app relies on, holds the ends of the output range for values outside the
+ * input range; inside it the piecewise result stands, so a range that turns
+ * back on itself, such as `[0.85, 1, 0.85]`, still reaches its interior peak.
  */
 export function interpolate(
 	value: number,
@@ -88,6 +90,10 @@ export function interpolate(
 	extrapolation: MockExtrapolation = "extend",
 ): number {
 	const lastIndex = input.length - 1;
+	if (extrapolation === "clamp") {
+		if (value <= input[0]) return output[0];
+		if (value >= input[lastIndex]) return output[lastIndex];
+	}
 	let segment = 0;
 	while (segment < lastIndex - 1 && value > input[segment + 1]) {
 		segment += 1;
@@ -100,12 +106,7 @@ export function interpolate(
 		inputEnd === inputStart
 			? 0
 			: (value - inputStart) / (inputEnd - inputStart);
-	const interpolated = outputStart + progress * (outputEnd - outputStart);
-	if (extrapolation !== "clamp") return interpolated;
-	return Math.min(
-		Math.max(interpolated, Math.min(output[0], output[lastIndex])),
-		Math.max(output[0], output[lastIndex]),
-	);
+	return outputStart + progress * (outputEnd - outputStart);
 }
 
 type MockAnimationCallback = (finished?: boolean) => void;
