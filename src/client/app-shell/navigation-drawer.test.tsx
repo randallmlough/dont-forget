@@ -35,6 +35,20 @@ jest.mock("react-native", () => {
 	});
 });
 
+jest.mock("expo-status-bar", () => {
+	const React = jest.requireActual<typeof import("react")>("react");
+	const { View } =
+		jest.requireActual<typeof import("react-native")>("react-native");
+
+	return {
+		StatusBar: (props: { hidden?: boolean }) =>
+			React.createElement(View, {
+				...props,
+				testID: "drawer-status-bar-override",
+			}),
+	};
+});
+
 jest.mock("expo-router", () => {
 	const React = jest.requireActual<typeof import("react")>("react");
 	const { Pressable, Text } =
@@ -86,6 +100,40 @@ beforeEach(() => {
 });
 
 describe("NavigationDrawer", () => {
+	it("hides the status bar until the native drawer finishes dismissing", async () => {
+		await render(<AppShellLayout />, {
+			wrapper: TestSafeAreaProvider,
+		});
+
+		expect(screen.queryByTestId("drawer-status-bar-override")).toBeNull();
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Open test navigation" }),
+		);
+
+		expect(screen.getByTestId("drawer-status-bar-override").props.hidden).toBe(
+			true,
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Close navigation" }),
+		);
+
+		expect(screen.getByTestId("navigation-drawer-modal").props.visible).toBe(
+			false,
+		);
+		expect(screen.getByTestId("drawer-status-bar-override").props.hidden).toBe(
+			true,
+		);
+
+		await fireEvent(screen.getByTestId("navigation-drawer-modal"), "dismiss");
+
+		await waitFor(() => {
+			expect(screen.queryByTestId("navigation-drawer-modal")).toBeNull();
+			expect(screen.queryByTestId("drawer-status-bar-override")).toBeNull();
+		});
+	});
+
 	it("waits for native dismissal before replacing the destination", async () => {
 		await render(<AppShellLayout />, {
 			wrapper: TestSafeAreaProvider,
