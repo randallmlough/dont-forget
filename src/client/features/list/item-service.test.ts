@@ -117,19 +117,100 @@ describe("createItemService", () => {
 			]);
 		});
 
-		it("excludes soft-deleted Items and orders by position", async () => {
-			store.seedItem({ id: "itm_2", listId: "lst_groceries", position: 2 });
-			store.seedItem({ id: "itm_0", listId: "lst_groceries", position: 0 });
+		it("orders unchecked Items before checked Items while preserving position order", async () => {
+			store.seedItem({
+				id: "itm_checked_first",
+				listId: "lst_groceries",
+				position: 0,
+			});
+			store.seedItem({
+				id: "itm_unchecked_no_row",
+				listId: "lst_groceries",
+				position: 1,
+			});
 			store.seedItem({
 				id: "itm_gone",
 				listId: "lst_groceries",
-				position: 1,
+				position: 2,
 				deletedAtMillis: 1_780_000_000_000,
+			});
+			store.seedItem({
+				id: "itm_unchecked_null_row",
+				listId: "lst_groceries",
+				position: 3,
+			});
+			store.seedItem({
+				id: "itm_checked_last",
+				listId: "lst_groceries",
+				position: 4,
+			});
+			store.seedItemCheck({
+				id: "chk_checked_first",
+				itemId: "itm_checked_first",
+				checkedAtMillis: 1_780_000_000_000,
+				checkedByUserId: "usr_avery",
+			});
+			store.seedItemCheck({
+				id: "chk_unchecked_null_row",
+				itemId: "itm_unchecked_null_row",
+				checkedAtMillis: null,
+				checkedByUserId: "usr_avery",
+			});
+			store.seedItemCheck({
+				id: "chk_checked_last",
+				itemId: "itm_checked_last",
+				checkedAtMillis: 1_780_000_001_000,
+				checkedByUserId: "usr_avery",
 			});
 
 			const items = await service.listItems({ listId: "lst_groceries" });
 
-			expect(items.map((item) => item.id)).toEqual(["itm_0", "itm_2"]);
+			expect(items.map((item) => item.id)).toEqual([
+				"itm_unchecked_no_row",
+				"itm_unchecked_null_row",
+				"itm_checked_first",
+				"itm_checked_last",
+			]);
+		});
+
+		it("moves a checked Item to the bottom group and restores its durable position when unchecked", async () => {
+			store.seedItem({
+				id: "itm_position_zero",
+				listId: "lst_groceries",
+				position: 0,
+			});
+			store.seedItem({
+				id: "itm_position_one",
+				listId: "lst_groceries",
+				position: 1,
+			});
+
+			await expect(itemIds()).resolves.toEqual([
+				"itm_position_zero",
+				"itm_position_one",
+			]);
+
+			await service.setItemChecked({
+				listId: "lst_groceries",
+				itemId: "itm_position_zero",
+				userId: "usr_avery",
+				checked: true,
+			});
+			await expect(itemIds()).resolves.toEqual([
+				"itm_position_one",
+				"itm_position_zero",
+			]);
+
+			await service.setItemChecked({
+				listId: "lst_groceries",
+				itemId: "itm_position_zero",
+				userId: "usr_avery",
+				checked: false,
+			});
+			await expect(itemIds()).resolves.toEqual([
+				"itm_position_zero",
+				"itm_position_one",
+			]);
 		});
 
 		it("scopes to the Household — an Item under another Household's List is not returned", async () => {
@@ -308,6 +389,11 @@ describe("createItemService", () => {
 	}> {
 		const [item] = await service.listItems({ listId: "lst_groceries" });
 		return { checked: item.checked, by: item.checkedByUserId };
+	}
+
+	async function itemIds(): Promise<string[]> {
+		const items = await service.listItems({ listId: "lst_groceries" });
+		return items.map((item) => item.id);
 	}
 
 	function checkRow(): {

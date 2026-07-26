@@ -98,6 +98,8 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		// join to `lists` scopes the read to the active Household. item_checks
 		// is one shared row per Item (Decision 9, `item_id` unique), so a plain
 		// LEFT JOIN reads the attributed check directly — no latest-row subquery.
+		// Checked state partitions display order; durable Item order stays the
+		// tie-breaker within each partition.
 		return {
 			sql: `
             SELECT
@@ -116,7 +118,11 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
             JOIN lists l ON l.id = i.list_id
             LEFT JOIN item_checks c ON c.item_id = i.id
             WHERE l.household_id = ? AND i.list_id = ? AND i.deleted_at IS NULL
-            ORDER BY i.position ASC, i.created_at ASC, i.id ASC
+            ORDER BY
+              CASE WHEN c.checked_at IS NULL THEN 0 ELSE 1 END ASC,
+              i.position ASC,
+              i.created_at ASC,
+              i.id ASC
           `,
 			parameters: [deps.householdId, input.listId],
 		};
