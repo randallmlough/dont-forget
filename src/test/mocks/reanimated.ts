@@ -18,7 +18,10 @@ import {
  *   Testing Library fires,
  * - `withSpring` and `withTiming` land on their target value immediately but
  *   hold their completion callback until a test calls `settleAnimations`, so a
- *   test can assert what a surface does mid-transition and then finish it.
+ *   test can assert what a surface does mid-transition and then finish it,
+ * - assigning anything to a shared value that is still holding a completion
+ *   callback cancels it with `finished: false`, the way the real library
+ *   cancels an animation that a new one retargets.
  */
 
 export type MockSharedValue<Value> = {
@@ -50,9 +53,20 @@ export const Extrapolation = {
 export function useSharedValue<Value>(initial: Value): MockSharedValue<Value> {
 	const [sharedValue] = useState<MockSharedValue<Value>>(() => {
 		let current = initial;
+		let pending: RunningAnimation | null = null;
 		return {
 			get: () => current,
 			set: (next) => {
+				pending?.settle(false);
+				if (isMockAnimation<Value>(next)) {
+					current = next.toValue;
+					if (next.onSettled) {
+						pending = startAnimation(next.onSettled, () => {
+							pending = null;
+						});
+					}
+					return;
+				}
 				current =
 					typeof next === "function"
 						? (next as (value: Value) => Value)(current)
@@ -111,11 +125,59 @@ export function interpolate(
 
 type MockAnimationCallback = (finished?: boolean) => void;
 
-const runningAnimations: MockAnimationCallback[] = [];
+/**
+ * What `withSpring` and `withTiming` hand to `set`, so a shared value knows it
+ * was given an animation rather than a plain value and can cancel the one it is
+ * already running. It stands in for the animation object the real library
+ * builds, which is equally opaque to the code assigning it.
+ */
+const MOCK_ANIMATION = Symbol("mockAnimation");
+
+type MockAnimation<Value> = {
+	[MOCK_ANIMATION]: true;
+	toValue: Value;
+	onSettled: MockAnimationCallback | undefined;
+};
+
+function isMockAnimation<Value>(next: unknown): next is MockAnimation<Value> {
+	return typeof next === "object" && next !== null && MOCK_ANIMATION in next;
+}
+
+/** An animation still holding its completion callback. */
+type RunningAnimation = { settle: (finished: boolean) => void };
+
+const runningAnimations = new Set<RunningAnimation>();
+
+function startAnimation(
+	onSettled: MockAnimationCallback,
+	onRelease: () => void,
+): RunningAnimation {
+	const animation: RunningAnimation = {
+		settle: (finished) => {
+			runningAnimations.delete(animation);
+			onRelease();
+			onSettled(finished);
+		},
+	};
+	runningAnimations.add(animation);
+	return animation;
+}
 
 /** Finishes every animation that is still holding its completion callback. */
 export function settleAnimations(): void {
-	for (const settled of runningAnimations.splice(0)) settled(true);
+	for (const animation of [...runningAnimations]) animation.settle(true);
+}
+
+function animate<Value>(
+	toValue: Value,
+	onSettled: MockAnimationCallback | undefined,
+): Value {
+	const animation: MockAnimation<Value> = {
+		[MOCK_ANIMATION]: true,
+		toValue,
+		onSettled,
+	};
+	return animation as unknown as Value;
 }
 
 export function withSpring<Value>(
@@ -123,8 +185,7 @@ export function withSpring<Value>(
 	_config?: unknown,
 	onSettled?: MockAnimationCallback,
 ): Value {
-	if (onSettled) runningAnimations.push(onSettled);
-	return value;
+	return animate(value, onSettled);
 }
 
 export function withTiming<Value>(
@@ -132,8 +193,7 @@ export function withTiming<Value>(
 	_config?: unknown,
 	onSettled?: MockAnimationCallback,
 ): Value {
-	if (onSettled) runningAnimations.push(onSettled);
-	return value;
+	return animate(value, onSettled);
 }
 
 /**

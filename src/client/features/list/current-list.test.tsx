@@ -280,6 +280,31 @@ describe("CurrentList", () => {
 		expect(screen.queryByTestId("home-list-picker")).toBeNull();
 	});
 
+	it("keeps a List picker reopened while it was receding open once the zoom lands", async () => {
+		await render(
+			<HomeCurrentList
+				session={authenticatedAppSession}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				focusedListId="lst_groceries"
+				onFocusList={jest.fn(async () => true)}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await openListPicker();
+		await closeListPicker();
+		await openListPicker();
+		// The recede this reopen retargeted must not report itself as landed and
+		// close the picker it is reopening.
+		await settleListPickerZoom();
+
+		expect(screen.getByTestId("home-list-picker")).toHaveProp(
+			"pointerEvents",
+			"auto",
+		);
+	});
+
 	it("keeps the focused List unreachable while the picker zoom runs", async () => {
 		await render(
 			<HomeCurrentList
