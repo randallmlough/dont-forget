@@ -16,7 +16,7 @@ import {
 	type HomeListPickerPhase,
 } from "@/client/features/list/current-list";
 import type { ListSummary } from "@/client/features/list/list-service";
-import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
+import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
 import { useListRows } from "@/client/features/list/use-list-rows";
 import { useSelectList } from "@/client/features/list/use-select-list";
 import {
@@ -92,7 +92,7 @@ function HomeScreenResource({
 	// The Current List resolves here, not inside CurrentList, so the native
 	// stack header keeps its fallback title through the loading, error, and
 	// zeroActive states, where no List page is mounted to own a title.
-	const currentList = useHomeCurrentList(session, rows);
+	const currentList = useCurrentListSelection(session, rows);
 	const selectList = useSelectList(session);
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
 	// Home's interaction state lives here because the native bottom toolbar

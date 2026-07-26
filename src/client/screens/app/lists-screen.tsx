@@ -21,7 +21,7 @@ import type {
 	ListSummary,
 	RenameListResult,
 } from "@/client/features/list/list-service";
-import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
+import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
 import {
 	type ListRows,
 	useListRows,
@@ -78,7 +78,7 @@ function ListsScreenResource({
 	session: AuthenticatedAppSession;
 }) {
 	const { rows } = useListRows(session);
-	const currentList = useHomeCurrentList(session, rows);
+	const currentList = useCurrentListSelection(session, rows);
 	const selectList = useSelectList(session);
 	const services = useProductServices({
 		householdId: session.activeHousehold.id,

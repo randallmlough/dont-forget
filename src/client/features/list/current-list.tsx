@@ -37,13 +37,13 @@ import { AddItemForm } from "./add-item-form";
 import { ItemRows } from "./item-rows";
 import { ListOverview } from "./list-overview";
 import type { ActiveListSyncState } from "./list-view-types";
-import type { HomeCurrentListData } from "./use-home-current-list";
+import type { CurrentListSelection } from "./use-current-list-selection";
 import { useListActions } from "./use-list-actions";
 import { type ListPageState, useListPage } from "./use-list-page";
 import type { ListRows } from "./use-list-rows";
 
 export type HomeCurrentListDeps = {
-	currentList: HomeCurrentListData;
+	currentList: CurrentListSelection;
 	syncState: ActiveListSyncState;
 	listRows: ListRows;
 };

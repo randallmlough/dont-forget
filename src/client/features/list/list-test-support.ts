@@ -1,12 +1,11 @@
 import type { AuthenticatedAppSession } from "@/client/session";
-import type { ListPageActions } from "./list-page-data";
 import type { ListSummary } from "./list-service";
 import type {
 	ActiveListItem,
 	ActiveListState,
 	AddActiveListItemInput,
 } from "./list-view-types";
-import type { ListPageState } from "./use-list-page";
+import type { ListPageActions, ListPageState } from "./use-list-page";
 
 export const authenticatedAppSession: AuthenticatedAppSession = {
 	user: {

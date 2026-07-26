@@ -9,14 +9,14 @@ import type { AuthenticatedAppSession } from "@/client/session";
 import { asError } from "@/shared/errors";
 import type { ListRows } from "./use-list-rows";
 
-export type HomeCurrentListState =
+export type CurrentListSelectionState =
 	| { status: "loading" }
 	| { status: "error"; message: string }
 	| { status: "zeroActive" }
 	| { status: "active"; listId: string };
 
-export type HomeCurrentListData = {
-	state: HomeCurrentListState;
+export type CurrentListSelection = {
+	state: CurrentListSelectionState;
 	retry: () => void;
 	reload: () => void;
 };
@@ -41,10 +41,10 @@ const LIST_ERROR_MESSAGE = "Unable to load this List. Please try again.";
  * A failed List rows read maps to the retryable List error state.
  * Selection-storage failures log and degrade to the in-memory fallback.
  */
-export function useHomeCurrentList(
+export function useCurrentListSelection(
 	session: AuthenticatedAppSession,
 	listRows: ListRows,
-): HomeCurrentListData {
+): CurrentListSelection {
 	const userId = session.activeMember.userId;
 	const householdId = session.activeHousehold.id;
 	const logger = useLogger();
@@ -135,7 +135,7 @@ export function useHomeCurrentList(
 	]);
 
 	return {
-		state: homeCurrentListState({ selection, listRows, currentListId }),
+		state: currentListSelectionState({ selection, listRows, currentListId }),
 		retry: refreshSelection,
 		// Current List selection lives in AsyncStorage (not watched by
 		// PowerSync), so switch/create/delete flows re-read it explicitly
@@ -237,11 +237,11 @@ function deriveCurrentListId(
 	return activeSummaries[0]?.id ?? null;
 }
 
-function homeCurrentListState(input: {
+function currentListSelectionState(input: {
 	selection: StoredSelectionState;
 	listRows: ListRows;
 	currentListId: string | null;
-}): HomeCurrentListState {
+}): CurrentListSelectionState {
 	if (input.listRows.status === "error") {
 		return { status: "error", message: LIST_ERROR_MESSAGE };
 	}
