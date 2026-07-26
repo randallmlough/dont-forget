@@ -360,6 +360,7 @@ describe("HomeScreen", () => {
 			{
 				status: "error",
 				message: "Unable to load this List. Please try again.",
+				retry: () => {},
 			} as const,
 		],
 	])("clears the collapsed List title when the pager settles on a page that is %s", async (_label, pantryState) => {

@@ -571,7 +571,9 @@ function HomeListPage({
 		return (
 			<View style={[styles.page, { paddingTop: topContentInset }]}>
 				<HomeListPageTitle title={summary.name} />
-				<HomeStatus title="List unavailable" body={state.message} />
+				<HomeStatus title="List unavailable" body={state.message}>
+					<HomeRetryButton onPress={state.retry} />
+				</HomeStatus>
 			</View>
 		);
 	}

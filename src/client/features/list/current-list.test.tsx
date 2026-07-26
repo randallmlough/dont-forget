@@ -545,12 +545,39 @@ describe("CurrentList", () => {
 		).toBeTruthy();
 	});
 
+	it("retries the failed page's Items query from its own error surface", async () => {
+		const retry = jest.fn();
+		jest.mocked(useListPage).mockReturnValue({
+			status: "error",
+			message: "Unable to load this List. Please try again.",
+			retry,
+		});
+
+		await render(
+			<HomeCurrentList
+				session={authenticatedAppSession}
+				deps={activeListDeps()}
+				focusedListId="lst_groceries"
+				onFocusList={jest.fn(async () => true)}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Try again" }),
+		);
+
+		expect(retry).toHaveBeenCalledTimes(1);
+	});
+
 	it("keeps every other List reachable when one page's Items fail to load", async () => {
 		jest.mocked(useListPage).mockImplementation((_session, summary) =>
 			summary.id === "lst_groceries"
 				? {
 						status: "error",
 						message: "Unable to load this List. Please try again.",
+						retry: jest.fn(),
 					}
 				: {
 						status: "active",

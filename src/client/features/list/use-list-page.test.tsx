@@ -109,12 +109,52 @@ describe("useListPage", () => {
 		const failed = await renderHook(() =>
 			useListPage(authenticatedAppSession, groceriesListSummary),
 		);
-		expect(failed.result.current).toEqual({
+		expect(failed.result.current).toMatchObject({
 			status: "error",
 			message: "Unable to load this List. Please try again.",
 		});
 	});
+
+	it("re-runs a failed Items query when the page retries", async () => {
+		mockUseQuery.mockReturnValue(
+			queryResult({ data: [], error: new Error("db unavailable") }),
+		);
+		const { result } = await renderHook(() =>
+			useListPage(authenticatedAppSession, groceriesListSummary),
+		);
+		const failed = result.current;
+		if (failed.status !== "error") {
+			throw new Error("Expected a failed List page");
+		}
+		// The watched query is keyed by compiled SQL plus parameters, so a retry
+		// that hands back the same key leaves the page stuck on its error.
+		const failedKey = watchedQueryKey();
+
+		mockUseQuery.mockReturnValue(
+			queryResult({ data: [item("itm_milk", "lst_groceries")] }),
+		);
+		await act(async () => {
+			failed.retry();
+		});
+
+		expect(watchedQueryKey()).not.toEqual(failedKey);
+		expect(result.current).toMatchObject({
+			status: "active",
+			listId: "lst_groceries",
+			list: { items: [{ id: "itm_milk" }] },
+		});
+	});
 });
+
+/** Compiled SQL and parameters the SDK re-keys the watched query on. */
+function watchedQueryKey() {
+	const lastCall = mockUseQuery.mock.calls.at(-1);
+	const query = lastCall?.[0];
+	if (typeof query !== "object" || query === null) {
+		throw new Error("Expected a compilable watched query");
+	}
+	return query.compile();
+}
 
 function queryResult(input: {
 	data: Item[];
