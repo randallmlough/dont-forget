@@ -10,11 +10,11 @@ import type {
 	AuthenticatedAppSession,
 	AuthenticatedAppSessionReloadOptions,
 } from "@/client/session";
+import { toast } from "@/client/ui/toast";
 
 export type HouseholdSwitchState = {
 	code: string;
 	householdName: string;
-	notice: string | null;
 	operation: HouseholdSwitchOperation;
 };
 
@@ -28,7 +28,7 @@ type Action =
 	| { type: "codeChanged"; code: string }
 	| { type: "householdNameChanged"; householdName: string }
 	| { type: "operationStarted"; operation: HouseholdSwitchOperation }
-	| { type: "notice"; notice: string | null };
+	| { type: "operationFailed" };
 
 export function useHouseholdSwitch(
 	session: AuthenticatedAppSession,
@@ -51,7 +51,6 @@ export function useHouseholdSwitch(
 	const [state, dispatch] = useReducer(reducer, {
 		code: "",
 		householdName: "",
-		notice: null,
 		operation: { status: "idle" },
 	});
 
@@ -71,7 +70,8 @@ export function useHouseholdSwitch(
 			await client.switchHousehold(householdId);
 			finishHouseholdChange(reloadSession, router);
 		} catch (error) {
-			dispatch({ type: "notice", notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFailed" });
 		}
 	}
 
@@ -93,17 +93,16 @@ export function useHouseholdSwitch(
 			});
 			finishHouseholdChange(reloadSession, router);
 		} catch (error) {
-			dispatch({ type: "notice", notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFailed" });
 		}
 	}
 
 	async function joinByCode() {
 		if (operationInProgress(state.operation)) return;
+		// The form validates before calling, so an empty code cannot reach here.
 		const code = state.code.trim();
-		if (!code) {
-			dispatch({ type: "notice", notice: "Enter a Household Join Code." });
-			return;
-		}
+		if (!code) return;
 		dispatch({
 			type: "operationStarted",
 			operation: { status: "joiningByCode" },
@@ -113,7 +112,8 @@ export function useHouseholdSwitch(
 			await client.joinByCode(code);
 			finishHouseholdChange(reloadSession, router);
 		} catch (error) {
-			dispatch({ type: "notice", notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFailed" });
 		}
 	}
 
@@ -137,9 +137,9 @@ function reducer(
 		return { ...state, householdName: action.householdName };
 	}
 	if (action.type === "operationStarted") {
-		return { ...state, operation: action.operation, notice: null };
+		return { ...state, operation: action.operation };
 	}
-	return { ...state, operation: { status: "idle" }, notice: action.notice };
+	return { ...state, operation: { status: "idle" } };
 }
 
 function operationInProgress(operation: HouseholdSwitchOperation): boolean {

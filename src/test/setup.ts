@@ -37,6 +37,24 @@ jest.mock("react-native-reanimated", () => {
 	};
 });
 
+// Gesture Handler is a native-backed boundary, and its GestureDetector builds on
+// the real Reanimated runtime that this file replaces with a mock. Stubbing the
+// module's public surface keeps gesture-driven components renderable; gesture
+// decisions themselves are proven through the worklets they delegate to.
+jest.mock("react-native-gesture-handler", () => {
+	const panGesture = {
+		activeOffsetY: () => panGesture,
+		onUpdate: () => panGesture,
+		onEnd: () => panGesture,
+	};
+
+	return {
+		Gesture: { Pan: () => panGesture },
+		GestureDetector: ({ children }: { children: unknown }) => children,
+		GestureHandlerRootView: ({ children }: { children: unknown }) => children,
+	};
+});
+
 jest.mock("@expo/ui/swift-ui", () =>
 	jest.requireActual("./mocks/expo-ui-swift"),
 );

@@ -8,7 +8,6 @@ import type { AddListItemDraft } from "./list-view-types";
 export type AddItemFormProps = {
 	currentListId: string;
 	listOptions: readonly AddItemListOption[];
-	errorMessage: string | null;
 	onAddItem: (input: AddListItemDraft) => Promise<void>;
 };
 
@@ -35,7 +34,6 @@ type ComposerAction =
 export function AddItemForm({
 	currentListId,
 	listOptions,
-	errorMessage,
 	onAddItem,
 }: AddItemFormProps) {
 	const [composer, dispatchComposer] = useReducer(
@@ -84,7 +82,6 @@ export function AddItemForm({
 				canSubmit,
 				selectedListId: composer.selectedListId,
 				listOptions,
-				errorMessage,
 			}}
 			actions={{
 				open: openComposer,

@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
+import { toast } from "@/client/ui/toast";
 import type {
 	ActiveListItem,
 	AddListItemDraft,
@@ -14,14 +15,12 @@ export type UseListActionsInput = {
 export type UseListActionsResult = {
 	addItem: (draft: AddListItemDraft) => Promise<void>;
 	toggleItem: (itemId: string) => Promise<void>;
-	errorMessage: string | null;
 };
 
 export function useListActions(
 	input: UseListActionsInput,
 ): UseListActionsResult {
 	const { items, onAddItem, onSetItemChecked } = input;
-	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
 	const addItem = useCallback(
 		async (draft: AddListItemDraft) => {
@@ -32,9 +31,8 @@ export function useListActions(
 
 			try {
 				await onAddItem({ listId: draft.listId, name, quantity, notes });
-				setErrorMessage(null);
 			} catch (error) {
-				setErrorMessage("Unable to save that Item. Please try again.");
+				toast.error("Unable to save that Item. Please try again.");
 				throw error;
 			}
 		},
@@ -48,15 +46,14 @@ export function useListActions(
 
 			try {
 				await onSetItemChecked(itemId, !target.checked);
-				setErrorMessage(null);
 			} catch {
-				setErrorMessage("Unable to save that change. Please try again.");
+				toast.error("Unable to save that change. Please try again.");
 			}
 		},
 		[items, onSetItemChecked],
 	);
 
-	return { addItem, toggleItem, errorMessage };
+	return { addItem, toggleItem };
 }
 
 function nullableTrimmed(value: string): string | null {

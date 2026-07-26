@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
@@ -54,6 +54,7 @@ import {
 } from "@/client/ui/item";
 import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
 import { ScreenSection } from "@/client/ui/screen-section";
+import { toast } from "@/client/ui/toast";
 
 type ListMutationOutcome =
 	| { status: "handled" }
@@ -292,6 +293,7 @@ function ListRowsView({
 	onDelete: (summary: ListSummary) => void;
 }) {
 	const { theme } = useUnistyles();
+	const loadFailed = rows.status === "error";
 	const { currentSummary, otherSummaries } = useMemo(() => {
 		if (rows.status !== "ready") {
 			return { currentSummary: undefined, otherSummaries: [] };
@@ -306,21 +308,19 @@ function ListRowsView({
 		};
 	}, [rows, currentListId]);
 
+	useEffect(() => {
+		if (loadFailed) toast.error("Unable to load your Lists.");
+	}, [loadFailed]);
+
 	return (
 		<View style={styles.listLayout}>
-			{rows.status !== "ready" ? (
+			{rows.status === "loading" ? (
 				<View style={styles.statusContainer}>
 					<GlassSurface style={styles.statusSurface}>
-						{rows.status === "loading" ? (
-							<ActivityIndicator />
-						) : (
-							<Text style={styles.errorMessage}>
-								Unable to load your Lists.
-							</Text>
-						)}
+						<ActivityIndicator />
 					</GlassSurface>
 				</View>
-			) : (
+			) : rows.status === "error" ? null : (
 				<FlatList
 					alwaysBounceVertical={false}
 					contentContainerStyle={styles.rowsContent}
@@ -768,10 +768,5 @@ const styles = StyleSheet.create((theme) => ({
 		justifyContent: "center",
 		padding: theme.spacing(5),
 		borderRadius: theme.radii["2xl"],
-	},
-	errorMessage: {
-		...theme.typography.callout,
-		color: theme.colors.destructive,
-		textAlign: "center",
 	},
 }));

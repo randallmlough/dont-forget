@@ -15,18 +15,16 @@ import {
 	readAppearancePreference,
 	writeAppearancePreference,
 } from "@/client/theme/appearance-preference";
+import { toast } from "@/client/ui/toast";
 import { type AppEnv, readAppEnvFromExpoExtra } from "@/shared/env";
 
 export type SettingsState = {
 	appearancePreference: AppearancePreference;
 	appEnv: AppEnv;
 	appVersion: string;
-	notice: string | null;
 	privacyPolicyUrl: string | null;
 	termsUrl: string | null;
 	user: SettingsUser;
-	userError: string | null;
-	userNotice: string | null;
 	userUpdateInFlight: boolean;
 };
 
@@ -59,10 +57,7 @@ export function useSettings(clientProp?: UsersApiClient): {
 	const extra = Constants.expoConfig?.extra;
 	const [appearancePreference, setAppearancePreferenceState] =
 		useState<AppearancePreference>("system");
-	const [notice, setNotice] = useState<string | null>(null);
 	const [updatedUser, setUpdatedUser] = useState<SettingsUser | null>(null);
-	const [userError, setUserError] = useState<string | null>(null);
-	const [userNotice, setUserNotice] = useState<string | null>(null);
 	const [userUpdateInFlight, setUserUpdateInFlight] = useState(false);
 	const privacyPolicyUrl = publicExtraString(extra, "privacyPolicyUrl");
 	const termsUrl = publicExtraString(extra, "termsUrl");
@@ -102,11 +97,10 @@ export function useSettings(clientProp?: UsersApiClient): {
 			await writeAppearancePreference(preference);
 			applyAppearancePreference(preference);
 			setAppearancePreferenceState(preference);
-			setNotice(null);
 			track("appearance_preference_changed", { preference });
 		} catch (error) {
 			logger.error("settings appearance preference write failed", { error });
-			setNotice("Unable to update appearance. Try again.");
+			toast.error("Unable to update appearance. Try again.");
 		}
 	}
 
@@ -114,10 +108,9 @@ export function useSettings(clientProp?: UsersApiClient): {
 		if (!url) return;
 		try {
 			await WebBrowser.openBrowserAsync(url);
-			setNotice(null);
 		} catch (error) {
 			logger.error("settings legal link failed", { error });
-			setNotice("Unable to open link. Try again.");
+			toast.error("Unable to open link. Try again.");
 		}
 	}
 
@@ -127,17 +120,15 @@ export function useSettings(clientProp?: UsersApiClient): {
 	}): Promise<boolean> {
 		if (userUpdateInFlight) return false;
 		setUserUpdateInFlight(true);
-		setUserNotice(null);
-		setUserError(null);
 		try {
 			const updatedUser = await resolveClient().updateUserName(input);
 			setUpdatedUser(updatedUser);
-			setUserNotice("User name updated.");
+			toast.success("User name updated.");
 			reloadSession();
 			track("user_name_updated", { user_id: updatedUser.id });
 			return true;
 		} catch (error) {
-			setUserError(
+			toast.error(
 				error instanceof Error
 					? error.message
 					: "Unable to update User name. Please try again.",
@@ -153,12 +144,9 @@ export function useSettings(clientProp?: UsersApiClient): {
 			appearancePreference,
 			appEnv: readAppEnvFromExpoExtra(extra),
 			appVersion: Constants.expoConfig?.version ?? "Unknown",
-			notice,
 			privacyPolicyUrl,
 			termsUrl,
 			user,
-			userError,
-			userNotice,
 			userUpdateInFlight,
 		},
 		actions: {

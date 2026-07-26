@@ -437,7 +437,6 @@ const styles = StyleSheet.create((theme) => ({
 		borderRadius: theme.radii.lg,
 		borderCurve: "continuous",
 		backgroundColor: theme.colors.card,
-		boxShadow: `0 2px 8px ${theme.colors.scrim}`,
 	},
 	content: {
 		flex: 1,

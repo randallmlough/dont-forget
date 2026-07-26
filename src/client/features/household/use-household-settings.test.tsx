@@ -1,5 +1,10 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { act, renderHook, waitFor } from "@testing-library/react-native";
+import {
+	act,
+	renderHook,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
 import type {
 	HouseholdApiClient,
 	HouseholdJoinCode,
@@ -12,6 +17,7 @@ import type {
 	UploadQueueStats,
 } from "@/client/session/upload-queue";
 import { deferred } from "@/test/async";
+import { drainToasts, ToastHarness } from "@/test/toast";
 import { useHouseholdSettings } from "./use-household-settings";
 
 jest.mock("@clerk/clerk-expo", () => ({
@@ -21,6 +27,46 @@ jest.mock("@clerk/clerk-expo", () => ({
 jest.mock("expo-clipboard", () => ({
 	setStringAsync: jest.fn(async () => undefined),
 }));
+
+describe("useHouseholdSettings operation reporting", () => {
+	beforeEach(() => {
+		jest.mocked(useAuth).mockReturnValue({
+			getToken: jest.fn(async () => "session-token"),
+		} as unknown as ReturnType<typeof useAuth>);
+	});
+
+	afterEach(drainToasts);
+
+	it("reports a failed rename and frees the Household for another attempt", async () => {
+		const client = householdClientFixture();
+		client.renameHousehold = jest.fn(async () => {
+			throw new Error("Household name already taken.");
+		});
+		const { result } = await renderUseHouseholdSettings({ client });
+
+		await act(async () => {
+			await result.current.actions.renameHousehold("Wilson House");
+		});
+
+		expect(
+			await screen.findByText("Household name already taken."),
+		).toBeTruthy();
+		expect(result.current.state).toMatchObject({
+			status: "ready",
+			operation: { status: "idle" },
+		});
+	});
+
+	it("reports a renamed Household", async () => {
+		const { result } = await renderUseHouseholdSettings();
+
+		await act(async () => {
+			await result.current.actions.renameHousehold("Wilson House");
+		});
+
+		expect(await screen.findByText("Household renamed.")).toBeTruthy();
+	});
+});
 
 describe("useHouseholdSettings leaveHousehold", () => {
 	beforeEach(() => {
@@ -142,7 +188,6 @@ describe("useHouseholdSettings leaveHousehold", () => {
 		expect(uploadQueue.listenerCount()).toBe(0);
 		expect(result.current.state).toMatchObject({
 			status: "ready",
-			notice: null,
 			operation: { status: "idle" },
 		});
 	});
@@ -377,8 +422,15 @@ async function renderUseHouseholdSettings({
 	uploadQueue?: TestUploadQueueMonitor;
 	reloadSession?: jest.Mock;
 } = {}) {
-	const rendered = await renderHook(() =>
-		useHouseholdSettings(sessionFixture(), client, reloadSession, uploadQueue),
+	const rendered = await renderHook(
+		() =>
+			useHouseholdSettings(
+				sessionFixture(),
+				client,
+				reloadSession,
+				uploadQueue,
+			),
+		{ wrapper: ToastHarness },
 	);
 
 	await waitFor(() =>

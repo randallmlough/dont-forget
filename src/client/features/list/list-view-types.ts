@@ -39,6 +39,5 @@ export type ActiveListSyncState = ProductSyncStatus;
 
 export type ActiveListMeta = {
 	currentMemberName: string;
-	errorMessage: string | null;
 	syncState: ActiveListSyncState;
 };

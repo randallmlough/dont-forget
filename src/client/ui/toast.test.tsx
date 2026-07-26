@@ -1,5 +1,4 @@
 import { act, render, screen } from "@testing-library/react-native";
-import type { ReactNode } from "react";
 
 import {
 	shouldDismissOnSwipe,
@@ -13,23 +12,6 @@ import {
 jest.mock("react-native-safe-area-context", () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
-
-// Gesture Handler is a native-backed boundary, and its GestureDetector drives
-// the real Reanimated runtime that this suite replaces with a mock. Stubbing
-// the module's public surface keeps the card renderable; the swipe decision
-// itself is proven directly through `shouldDismissOnSwipe`.
-jest.mock("react-native-gesture-handler", () => {
-	const panGesture = {
-		activeOffsetY: () => panGesture,
-		onUpdate: () => panGesture,
-		onEnd: () => panGesture,
-	};
-
-	return {
-		Gesture: { Pan: () => panGesture },
-		GestureDetector: ({ children }: { children: ReactNode }) => children,
-	};
-});
 
 function createToast(id: string, overrides?: Partial<Toast>): Toast {
 	return { id, title: `Toast ${id}`, open: true, ...overrides };

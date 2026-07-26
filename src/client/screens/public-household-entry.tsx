@@ -1,4 +1,4 @@
-import { ActivityIndicator, Text } from "react-native";
+import { ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import type { PublicHouseholdEntryState } from "@/client/features/household/use-public-household-entry";
@@ -44,9 +44,6 @@ export function PublicHouseholdEntryView({
 								? `${state.inviterDisplayName ?? "A Member"} invited you to join this Household.`
 								: "Join this Household with the shared Household Join Code link."}
 						</CardDescription>
-						{state.error ? (
-							<Text style={styles.errorText}>{state.error}</Text>
-						) : null}
 						<Button onPress={onSubmit} disabled={state.working}>
 							{state.working ? "Joining" : primaryLabel}
 						</Button>
@@ -83,9 +80,5 @@ const styles = StyleSheet.create((theme) => ({
 	body: {
 		...theme.typography.body,
 		color: theme.colors.mutedForeground,
-	},
-	errorText: {
-		...theme.typography.callout,
-		color: theme.colors.destructive,
 	},
 }));

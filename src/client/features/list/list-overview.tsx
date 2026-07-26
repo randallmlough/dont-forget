@@ -31,9 +31,6 @@ export function ListOverview({ state, meta }: ListOverviewProps) {
 			<View style={styles.progressTrack}>
 				<View style={[styles.progressFill, { width: `${progress}%` }]} />
 			</View>
-			{meta.errorMessage ? (
-				<Text style={styles.errorMessage}>{meta.errorMessage}</Text>
-			) : null}
 		</View>
 	);
 }
@@ -107,12 +104,6 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.link,
 	},
 	syncStatusFailed: {
-		color: theme.colors.destructive,
-	},
-	errorMessage: {
-		fontSize: theme.fontSizes.sm,
-		fontWeight: theme.fontWeights.semibold,
-		marginTop: theme.spacing(2),
 		color: theme.colors.destructive,
 	},
 }));

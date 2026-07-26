@@ -19,6 +19,7 @@ import {
 	type HouseholdSettingsActions,
 	type HouseholdSettingsOperation,
 	type HouseholdSettingsState,
+	normalizeInvitationEmail,
 	useHouseholdSettings,
 } from "@/client/features/household/use-household-settings";
 import {
@@ -34,7 +35,7 @@ import {
 import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
 import { Card, CardContent } from "@/client/ui/card";
-import { Field, FieldLabel } from "@/client/ui/field";
+import { Field, FieldError, FieldLabel } from "@/client/ui/field";
 import { Form } from "@/client/ui/form";
 import { Input } from "@/client/ui/input";
 import {
@@ -150,15 +151,6 @@ function MembersInvitationsList({
 			data={rows}
 			keyboardShouldPersistTaps="handled"
 			keyExtractor={collaborationRowKey}
-			ListHeaderComponent={
-				state.notice ? (
-					<Card>
-						<CardContent style={styles.noticeContent}>
-							<Text style={styles.notice}>{state.notice}</Text>
-						</CardContent>
-					</Card>
-				) : null
-			}
 			renderItem={({ item }) => (
 				<CollaborationRowView
 					actions={actions}
@@ -283,7 +275,19 @@ function InvitationForm({
 	operation: HouseholdSettingsOperation;
 }) {
 	const [email, setEmail] = useState("");
+	const [validationMessage, setValidationMessage] = useState<string | null>(
+		null,
+	);
 	const creating = operation.status === "creatingInvitation";
+
+	function sendInvite() {
+		if (!normalizeInvitationEmail(email)) {
+			setValidationMessage("Enter a valid email address.");
+			return;
+		}
+		setValidationMessage(null);
+		void actions.createInvitation(email);
+	}
 
 	return (
 		<Card>
@@ -297,13 +301,9 @@ function InvitationForm({
 							onTextChange={setEmail}
 							placeholder="name@example.com"
 						/>
+						<FieldError errors={validationMessage ? [validationMessage] : []} />
 					</Field>
-					<Button
-						disabled={creating}
-						onPress={() => {
-							void actions.createInvitation(email);
-						}}
-					>
+					<Button disabled={creating} onPress={sendInvite}>
 						{creating ? "Sending" : "Send Invite"}
 					</Button>
 				</Form>
@@ -705,14 +705,6 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(1),
 		paddingTop: theme.spacing(6),
 		paddingBottom: theme.spacing(2),
-	},
-	notice: {
-		...theme.typography.callout,
-		color: theme.colors.foreground,
-	},
-	noticeContent: {
-		padding: theme.spacing(4),
-		paddingTop: theme.spacing(4),
 	},
 	invitationForm: {
 		flexDirection: "row",

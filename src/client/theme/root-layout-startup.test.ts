@@ -46,6 +46,9 @@ function mockRootLayoutDependencies() {
 	}));
 	jest.doMock("react-native-unistyles", () => ({
 		useUnistyles: jest.fn(),
+		// The root layout pulls in the `Toaster`, whose stylesheet is built at
+		// module load.
+		StyleSheet: { create: jest.fn(() => ({})) },
 	}));
 	jest.doMock("@/client/features/auth/auth-gate", () => ({
 		AuthGate: () => null,

@@ -89,7 +89,6 @@ export const SwitchHousehold: Story = {
 			state={{
 				code: "",
 				householdName: "",
-				notice: null,
 				operation: { status: "idle" },
 			}}
 		/>
@@ -173,7 +172,6 @@ const readyStateFixture: Extract<HouseholdSettingsState, { status: "ready" }> =
 			createdAt: Date.UTC(2026, 6, 16),
 		},
 		renamedHouseholdName: null,
-		notice: null,
 		operation: { status: "idle" },
 	};
 
@@ -188,7 +186,6 @@ const actionsFixture: HouseholdSettingsActions = {
 	regenerateJoinCode: async () => undefined,
 	setJoinCodeEnabled: async () => undefined,
 	copyText: async () => undefined,
-	clearNotice: noop,
 };
 
 function noop() {}

@@ -32,7 +32,6 @@ describe("HouseholdSwitchView", () => {
 				state={{
 					code: "",
 					householdName: "",
-					notice: null,
 					operation: { status: "idle" },
 				}}
 				onCodeChange={jest.fn()}
@@ -53,6 +52,36 @@ describe("HouseholdSwitchView", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "River" }));
 
 		expect(onSwitchHousehold).toHaveBeenCalledWith("hh_river");
+	});
+
+	it("keeps an empty Household Join Code on the field instead of joining", async () => {
+		const onJoinByCode = jest.fn();
+		await render(
+			<HouseholdSwitchView
+				session={sessionFixture()}
+				state={{
+					code: "",
+					householdName: "",
+					operation: { status: "idle" },
+				}}
+				onCodeChange={jest.fn()}
+				onHouseholdNameChange={jest.fn()}
+				onCreateHousehold={jest.fn()}
+				onJoinByCode={onJoinByCode}
+				onSwitchHousehold={jest.fn()}
+			/>,
+			{ wrapper: TestAppShellProvider },
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Join with Code" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Join Household" }),
+		);
+
+		expect(screen.getByText("Enter a Household Join Code.")).toBeTruthy();
+		expect(onJoinByCode).not.toHaveBeenCalled();
 	});
 });
 
@@ -144,6 +173,38 @@ describe("MembersInvitationsView", () => {
 		expect(screen.getByRole("button", { name: "Copy Link" })).toBeTruthy();
 	});
 
+	it("keeps an invalid Invitation email on the field instead of sending it", async () => {
+		const actions = settingsActionsFixture();
+		await render(
+			<MembersInvitationsView
+				session={sessionFixture()}
+				state={settingsReadyFixture()}
+				actions={actions}
+			/>,
+			{ wrapper: TestAppShellProvider },
+		);
+
+		await fireEvent(
+			screen.getByLabelText("Invitation email"),
+			"textChange",
+			"not-an-email",
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Send Invite" }));
+
+		expect(screen.getByText("Enter a valid email address.")).toBeTruthy();
+		expect(actions.createInvitation).not.toHaveBeenCalled();
+
+		await fireEvent(
+			screen.getByLabelText("Invitation email"),
+			"textChange",
+			"jordan@example.com",
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Send Invite" }));
+
+		expect(actions.createInvitation).toHaveBeenCalledWith("jordan@example.com");
+		expect(screen.queryByText("Enter a valid email address.")).toBeNull();
+	});
+
 	it("uses native action menus for manageable Members and Invitations", async () => {
 		const actions = settingsActionsFixture();
 		const state = settingsReadyFixture();
@@ -215,7 +276,6 @@ function settingsActionsFixture(): HouseholdSettingsActions {
 		regenerateJoinCode: jest.fn(async () => undefined),
 		setJoinCodeEnabled: jest.fn(async () => undefined),
 		copyText: jest.fn(async () => undefined),
-		clearNotice: jest.fn(),
 	};
 }
 
@@ -254,7 +314,6 @@ function settingsReadyFixture(): Extract<
 			createdAt: 1,
 		},
 		renamedHouseholdName: null,
-		notice: null,
 		operation: { status: "idle" },
 	};
 }

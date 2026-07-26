@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { type SFSymbol, SymbolView } from "expo-symbols";
-import { ScrollView, Text } from "react-native";
+import { ScrollView } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
 import {
@@ -8,7 +8,6 @@ import {
 	type SettingsState,
 	useSettings,
 } from "@/client/features/settings/use-settings";
-import { Card, CardContent } from "@/client/ui/card";
 import {
 	Item,
 	ItemActions,
@@ -43,14 +42,6 @@ export function SettingsScreenView({
 				contentContainerStyle={styles.content}
 				contentInsetAdjustmentBehavior="automatic"
 			>
-				{state.notice ? (
-					<Card>
-						<CardContent style={styles.noticeContent}>
-							<Text style={styles.notice}>{state.notice}</Text>
-						</CardContent>
-					</Card>
-				) : null}
-
 				<ScreenSection title="Your App">
 					<ItemGroup variant="outline">
 						<SettingsItem
@@ -202,13 +193,5 @@ const styles = StyleSheet.create((theme) => ({
 		paddingHorizontal: theme.spacing(5),
 		paddingBottom: theme.spacing(12),
 		gap: theme.spacing(6),
-	},
-	notice: {
-		...theme.typography.callout,
-		color: theme.colors.foreground,
-	},
-	noticeContent: {
-		padding: theme.spacing(4),
-		paddingTop: theme.spacing(4),
 	},
 }));

@@ -14,7 +14,9 @@ import { track } from "@/client/lib/analytics";
 import { useLogger } from "@/client/lib/logger";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useAuthenticatedAppSession } from "@/client/session";
+import { Toaster } from "@/client/ui/toast";
 import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
+import { drainToasts } from "@/test/toast";
 import AppearanceScreen from "./appearance-screen";
 
 const mockBack = jest.fn();
@@ -72,6 +74,8 @@ beforeEach(() => {
 	jest.mocked(AsyncStorage.setItem).mockResolvedValue(undefined);
 });
 
+afterEach(drainToasts);
+
 describe("AppearanceScreen", () => {
 	it("renders the dedicated visual choices with System selected", async () => {
 		await renderAppearance();
@@ -113,7 +117,7 @@ describe("AppearanceScreen", () => {
 		);
 	});
 
-	it("shows a notice when appearance persistence fails", async () => {
+	it("reports a toast when appearance persistence fails", async () => {
 		const error = new Error("storage unavailable");
 		jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(error);
 		await renderAppearance();
@@ -154,6 +158,7 @@ function TestProvider({ children }: PropsWithChildren) {
 			<NavigationDrawerProvider open={jest.fn()}>
 				{children}
 			</NavigationDrawerProvider>
+			<Toaster />
 		</SafeAreaProvider>
 	);
 }

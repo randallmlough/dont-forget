@@ -23,7 +23,7 @@ import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Badge } from "@/client/ui/badge";
 import { Button } from "@/client/ui/button";
 import { Card, CardContent } from "@/client/ui/card";
-import { Field, FieldLabel } from "@/client/ui/field";
+import { Field, FieldError, FieldLabel } from "@/client/ui/field";
 import { Form } from "@/client/ui/form";
 import { Input } from "@/client/ui/input";
 import {
@@ -104,13 +104,6 @@ export function HouseholdSwitchView({
 						<Text style={styles.intro}>
 							Choose the Household you want to use.
 						</Text>
-						{state.notice ? (
-							<Card>
-								<CardContent style={styles.noticeContent}>
-									<Text style={styles.notice}>{state.notice}</Text>
-								</CardContent>
-							</Card>
-						) : null}
 						<Text style={styles.sectionTitle}>Your Households</Text>
 					</View>
 				}
@@ -318,8 +311,21 @@ function JoinByCodeForm({
 	onCodeChange: (code: string) => void;
 	onJoinByCode: () => void;
 }) {
+	const [validationMessage, setValidationMessage] = useState<string | null>(
+		null,
+	);
 	const busy = state.operation.status !== "idle";
 	const joining = state.operation.status === "joiningByCode";
+
+	function joinByCode() {
+		if (!state.code.trim()) {
+			setValidationMessage("Enter a Household Join Code.");
+			return;
+		}
+		setValidationMessage(null);
+		onJoinByCode();
+	}
+
 	return (
 		<Card>
 			<CardContent style={styles.formCardContent}>
@@ -336,8 +342,9 @@ function JoinByCodeForm({
 							onTextChange={onCodeChange}
 							placeholder="ABCDEFGH"
 						/>
+						<FieldError errors={validationMessage ? [validationMessage] : []} />
 					</Field>
-					<Button disabled={busy} onPress={onJoinByCode}>
+					<Button disabled={busy} onPress={joinByCode}>
 						{joining ? "Joining" : "Join Household"}
 					</Button>
 				</Form>
@@ -442,14 +449,6 @@ const styles = StyleSheet.create((theme) => ({
 	intro: {
 		...theme.typography.body,
 		color: theme.colors.mutedForeground,
-	},
-	notice: {
-		...theme.typography.callout,
-		color: theme.colors.foreground,
-	},
-	noticeContent: {
-		padding: theme.spacing(4),
-		paddingTop: theme.spacing(4),
 	},
 	sectionTitle: {
 		...theme.typography.overline,

@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useRef } from "react";
 import "react-native-reanimated";
 import { PostHogProvider } from "posthog-react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
 	initialWindowMetrics,
 	SafeAreaProvider,
@@ -23,6 +24,7 @@ import { posthog } from "@/client/lib/posthog";
 import { tokenCache } from "@/client/lib/token-cache";
 import { AuthenticatedAppSessionProvider } from "@/client/session";
 import { PowerSyncProvider } from "@/client/session/powersync";
+import { Toaster } from "@/client/ui/toast";
 import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@/shared/env";
 import "@/client/theme/unistyles";
 import { loadAndApplyAppearancePreference } from "@/client/theme/appearance-preference";
@@ -78,31 +80,40 @@ export default function RootLayout() {
 	}, []);
 
 	return (
-		<PostHogProvider
-			client={posthog}
-			autocapture={{
-				captureScreens: false,
-				captureTouches: true,
-				propsToCapture: ["testID"],
-			}}
-		>
-			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
-				<ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-					<ThemeProvider value={navigationTheme}>
-						<PowerSyncProvider>
-							<AuthenticatedAppSessionProvider
-								activationEnabled={shouldActivateAuthenticatedAppSession(
-									pathname,
-								)}
-							>
-								<AuthGate pathname={pathname} params={params} />
-							</AuthenticatedAppSessionProvider>
-						</PowerSyncProvider>
-						<StatusBar style={isDarkTheme ? "light" : "dark"} />
-					</ThemeProvider>
-				</ClerkProvider>
-			</SafeAreaProvider>
-		</PostHogProvider>
+		// Gesture Handler owns the touch entry point, so it wraps everything that
+		// recognises gestures — including the `Toaster`'s swipe-to-dismiss.
+		<GestureHandlerRootView>
+			<PostHogProvider
+				client={posthog}
+				autocapture={{
+					captureScreens: false,
+					captureTouches: true,
+					propsToCapture: ["testID"],
+				}}
+			>
+				<SafeAreaProvider initialMetrics={initialWindowMetrics}>
+					<ClerkProvider
+						tokenCache={tokenCache}
+						publishableKey={publishableKey}
+					>
+						<ThemeProvider value={navigationTheme}>
+							<PowerSyncProvider>
+								<AuthenticatedAppSessionProvider
+									activationEnabled={shouldActivateAuthenticatedAppSession(
+										pathname,
+									)}
+								>
+									<AuthGate pathname={pathname} params={params} />
+								</AuthenticatedAppSessionProvider>
+							</PowerSyncProvider>
+							<StatusBar style={isDarkTheme ? "light" : "dark"} />
+						</ThemeProvider>
+					</ClerkProvider>
+					{/* Last child of the safe-area root: cards paint above every screen. */}
+					<Toaster />
+				</SafeAreaProvider>
+			</PostHogProvider>
+		</GestureHandlerRootView>
 	);
 }
 

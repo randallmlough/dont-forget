@@ -57,7 +57,6 @@ function ListPartsStory({ initialState }: { initialState: ActiveListState }) {
 						state={state}
 						meta={{
 							currentMemberName: "Avery Chen",
-							errorMessage: actions.errorMessage,
 							syncState: "synced",
 						}}
 					/>
@@ -67,7 +66,6 @@ function ListPartsStory({ initialState }: { initialState: ActiveListState }) {
 			<AddItemForm
 				currentListId="lst_story"
 				listOptions={[{ id: "lst_story", name: state.listName }]}
-				errorMessage={actions.errorMessage}
 				onAddItem={actions.addItem}
 			/>
 		</View>

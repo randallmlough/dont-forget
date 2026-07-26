@@ -108,11 +108,7 @@ function ActiveCurrentList({
 				listOverview={
 					<ListOverview
 						state={loadState.list}
-						meta={{
-							currentMemberName,
-							errorMessage: actions.errorMessage,
-							syncState,
-						}}
+						meta={{ currentMemberName, syncState }}
 					/>
 				}
 				onToggleItem={actions.toggleItem}
@@ -120,7 +116,6 @@ function ActiveCurrentList({
 			<AddItemForm
 				currentListId={loadState.listId}
 				listOptions={composerListOptions}
-				errorMessage={actions.errorMessage}
 				onAddItem={actions.addItem}
 			/>
 		</>

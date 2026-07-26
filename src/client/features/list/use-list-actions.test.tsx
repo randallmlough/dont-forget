@@ -1,8 +1,17 @@
-import { act, renderHook, waitFor } from "@testing-library/react-native";
+import {
+	act,
+	renderHook,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
+import { toast } from "@/client/ui/toast";
+import { drainToasts, ToastHarness } from "@/test/toast";
 import { populatedActiveListState } from "./list-test-support";
 import { useListActions } from "./use-list-actions";
 
 describe("useListActions", () => {
+	afterEach(drainToasts);
+
 	it("ignores empty Item names", async () => {
 		const onAddItem = jest.fn(async () => undefined);
 		const { result } = await renderUseListActions({ onAddItem });
@@ -61,7 +70,7 @@ describe("useListActions", () => {
 		});
 	});
 
-	it("sets the add failure message and rethrows", async () => {
+	it("reports the add failure and rethrows", async () => {
 		const failure = new Error("write failed");
 		const onAddItem = jest.fn(async () => {
 			throw failure;
@@ -83,14 +92,12 @@ describe("useListActions", () => {
 		});
 
 		expect(caught).toBe(failure);
-		await waitFor(() => {
-			expect(result.current.errorMessage).toBe(
-				"Unable to save that Item. Please try again.",
-			);
-		});
+		expect(
+			await screen.findByText("Unable to save that Item. Please try again."),
+		).toBeTruthy();
 	});
 
-	it("sets the toggle failure message without throwing", async () => {
+	it("reports the toggle failure without throwing", async () => {
 		const onSetItemChecked = jest.fn(async () => {
 			throw new Error("write failed");
 		});
@@ -101,14 +108,12 @@ describe("useListActions", () => {
 		});
 
 		expect(onSetItemChecked).toHaveBeenCalledWith("item-1", true);
-		await waitFor(() => {
-			expect(result.current.errorMessage).toBe(
-				"Unable to save that change. Please try again.",
-			);
-		});
+		expect(
+			await screen.findByText("Unable to save that change. Please try again."),
+		).toBeTruthy();
 	});
 
-	it("clears the error message after a successful action", async () => {
+	it("reports nothing when a retry succeeds", async () => {
 		const onAddItem = jest
 			.fn()
 			.mockRejectedValueOnce(new Error("write failed"))
@@ -130,10 +135,15 @@ describe("useListActions", () => {
 		});
 
 		expect(caught).toEqual(new Error("write failed"));
+		expect(
+			await screen.findByText("Unable to save that Item. Please try again."),
+		).toBeTruthy();
+
+		await act(() => toast.dismiss());
 		await waitFor(() => {
-			expect(result.current.errorMessage).toBe(
-				"Unable to save that Item. Please try again.",
-			);
+			expect(
+				screen.queryByText("Unable to save that Item. Please try again."),
+			).toBeNull();
 		});
 
 		await act(async () => {
@@ -145,7 +155,9 @@ describe("useListActions", () => {
 			});
 		});
 
-		expect(result.current.errorMessage).toBeNull();
+		expect(
+			screen.queryByText("Unable to save that Item. Please try again."),
+		).toBeNull();
 	});
 
 	it("ignores unknown Item IDs when toggling", async () => {
@@ -166,12 +178,14 @@ function renderUseListActions(
 		onSetItemChecked?: Parameters<typeof useListActions>[0]["onSetItemChecked"];
 	} = {},
 ) {
-	return renderHook(() =>
-		useListActions({
-			items: populatedActiveListState.items,
-			onAddItem: options.onAddItem ?? jest.fn(async () => undefined),
-			onSetItemChecked:
-				options.onSetItemChecked ?? jest.fn(async () => undefined),
-		}),
+	return renderHook(
+		() =>
+			useListActions({
+				items: populatedActiveListState.items,
+				onAddItem: options.onAddItem ?? jest.fn(async () => undefined),
+				onSetItemChecked:
+					options.onSetItemChecked ?? jest.fn(async () => undefined),
+			}),
+		{ wrapper: ToastHarness },
 	);
 }
