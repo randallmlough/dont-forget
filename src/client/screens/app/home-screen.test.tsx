@@ -10,14 +10,16 @@ import { selectionAsync } from "expo-haptics";
 import type { PropsWithChildren } from "react";
 import { Dimensions, FlatList } from "react-native";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
-import type { HomeCurrentListDeps } from "@/client/features/list/current-list";
 import {
 	activeListPage,
 	authenticatedAppSession,
 	groceriesListSummary,
 	pantryListSummary,
 } from "@/client/features/list/list-test-support";
-import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
+import {
+	type CurrentListSelection,
+	useCurrentListSelection,
+} from "@/client/features/list/use-current-list-selection";
 import { useListPage } from "@/client/features/list/use-list-page";
 import { useListRows } from "@/client/features/list/use-list-rows";
 import { useSelectList } from "@/client/features/list/use-select-list";
@@ -123,7 +125,7 @@ jest.mock("react-native-gesture-handler", () =>
 // useListRows all sit on the PowerSync watched-query and native-session
 // boundary, which has no deterministic local harness. The seam under test in
 // this file is the screen's stack title and toolbar wiring, not List loading;
-// List behavior runs against the real components in current-list.test.tsx.
+// List behavior runs against the real pager and List-page components.
 // Justification per docs/code-standards/testing.md:9.
 jest.mock("@/client/session", () => ({
 	...jest.requireActual("@/client/session"),
@@ -1014,7 +1016,7 @@ async function waitForSelectionCount(count: number): Promise<void> {
 	});
 }
 
-function activeCurrentList(): HomeCurrentListDeps["currentList"] {
+function activeCurrentList(): CurrentListSelection {
 	return {
 		state: { status: "active", listId: "lst_groceries" },
 		retry: jest.fn(),

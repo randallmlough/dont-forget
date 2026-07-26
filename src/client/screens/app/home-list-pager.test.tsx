@@ -15,26 +15,25 @@ import {
 	type ViewStyle,
 } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
-import { settleAnimations } from "@/test/mocks/reanimated";
-import { TestSafeAreaProvider } from "@/test/safe-area";
-import {
-	CurrentList,
-	type CurrentListProps,
-	type HomeCurrentListDeps,
-	type HomeListPickerPhase,
-} from "./current-list";
 import {
 	activeListPage,
 	authenticatedAppSession,
 	groceriesListSummary,
 	pantryListSummary,
-} from "./list-test-support";
-import { useListPage } from "./use-list-page";
+} from "@/client/features/list/list-test-support";
+import { useListPage } from "@/client/features/list/use-list-page";
+import { settleAnimations } from "@/test/mocks/reanimated";
+import { TestSafeAreaProvider } from "@/test/safe-area";
+import {
+	HomeListPager,
+	type HomeListPagerProps,
+	type HomeListPickerPhase,
+} from "./home-list-pager";
 
 // Adjacent pager pages own live PowerSync queries. These tests exercise the
 // app-owned pager/picker composition while this narrow double replaces only
 // that watched-query boundary.
-jest.mock("./use-list-page", () => ({
+jest.mock("@/client/features/list/use-list-page", () => ({
 	useListPage: jest.fn(),
 }));
 
@@ -62,113 +61,13 @@ beforeEach(() => {
 		.mockImplementation((_session, summary) => activeListPage(summary));
 });
 
-describe("CurrentList", () => {
-	it("renders the active List surface", async () => {
-		await render(
-			<HomeCurrentList
-				session={authenticatedAppSession}
-				deps={activeListDeps()}
-				focusedListId="lst_groceries"
-				onFocusList={jest.fn(async () => true)}
-				onOpenLists={jest.fn()}
-			/>,
-			{ wrapper: TestSafeAreaProvider },
-		);
-
-		expect(await screen.findByText("No Items yet")).toBeTruthy();
-	});
-
-	it("resets both List pages to the toolbar inset when focus changes", async () => {
-		const scrollToOffset = jest
-			.spyOn(FlatList.prototype, "scrollToOffset")
-			.mockImplementation();
-		const deps = activeListDeps([groceriesListSummary, pantryListSummary]);
-
-		try {
-			const view = await render(
-				<HomeCurrentList
-					session={authenticatedAppSession}
-					deps={deps}
-					focusedListId="lst_groceries"
-					onFocusList={jest.fn(async () => true)}
-					onOpenLists={jest.fn()}
-					topContentInset={116}
-				/>,
-				{ wrapper: TestSafeAreaProvider },
-			);
-			await waitFor(() => {
-				expect(scrollToOffset).toHaveBeenCalledWith({
-					animated: false,
-					offset: 0,
-				});
-			});
-			expect(scrollToOffset).toHaveBeenCalledTimes(2);
-			scrollToOffset.mockClear();
-
-			await view.rerender(
-				<HomeCurrentList
-					session={authenticatedAppSession}
-					deps={deps}
-					focusedListId="lst_pantry"
-					onFocusList={jest.fn(async () => true)}
-					onOpenLists={jest.fn()}
-					topContentInset={116}
-				/>,
-			);
-
-			await waitFor(() => {
-				expect(scrollToOffset).toHaveBeenCalledWith({
-					animated: false,
-					offset: 0,
-				});
-			});
-			expect(scrollToOffset).toHaveBeenCalledTimes(2);
-		} finally {
-			scrollToOffset.mockRestore();
-		}
-	});
-
-	it("restores the initial List position when native content becomes scrollable", async () => {
-		const scrollToOffset = jest
-			.spyOn(FlatList.prototype, "scrollToOffset")
-			.mockImplementation();
-
-		try {
-			await render(
-				<HomeCurrentList
-					session={authenticatedAppSession}
-					deps={activeListDeps()}
-					focusedListId="lst_groceries"
-					onFocusList={jest.fn(async () => true)}
-					onOpenLists={jest.fn()}
-					topContentInset={116}
-				/>,
-				{ wrapper: TestSafeAreaProvider },
-			);
-			scrollToOffset.mockClear();
-
-			fireEvent(
-				screen.getByTestId("home-list-items-lst_groceries"),
-				"contentSizeChange",
-				390,
-				1200,
-			);
-
-			expect(scrollToOffset).toHaveBeenCalledWith({
-				animated: false,
-				offset: 0,
-			});
-		} finally {
-			scrollToOffset.mockRestore();
-		}
-	});
-
+describe("HomeListPager", () => {
 	it("opens Lists from the zero-active Create List action", async () => {
 		const onOpenLists = jest.fn();
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={zeroActiveListDeps()}
+				{...zeroActiveListProps()}
 				focusedListId={null}
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={onOpenLists}
@@ -182,50 +81,12 @@ describe("CurrentList", () => {
 		expect(onOpenLists).toHaveBeenCalledTimes(1);
 	});
 
-	it("adds Items through the Current List action with normalized optional fields", async () => {
-		const addItem = jest.fn(async () => undefined);
-		jest
-			.mocked(useListPage)
-			.mockReturnValue(
-				activeListPage(groceriesListSummary, { actions: { addItem } }),
-			);
-		await render(
-			<HomeCurrentList
-				session={authenticatedAppSession}
-				deps={activeListDeps()}
-				focusedListId="lst_groceries"
-				onFocusList={jest.fn(async () => true)}
-				onOpenLists={jest.fn()}
-			/>,
-			{ wrapper: TestSafeAreaProvider },
-		);
-
-		expect(screen.queryByText("Add an Item…")).toBeNull();
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Add the first Item" }),
-		);
-		await fireEvent.changeText(
-			await screen.findByLabelText("Item name"),
-			" Milk ",
-		);
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Add Item" }),
-		);
-
-		expect(addItem).toHaveBeenCalledWith({
-			listId: "lst_groceries",
-			name: "Milk",
-			quantity: null,
-			notes: null,
-		});
-	});
-
 	it("opens the opaque List picker and focuses the selected List", async () => {
 		const onFocusList = jest.fn(async () => true);
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={onFocusList}
 				onOpenLists={jest.fn()}
@@ -249,9 +110,9 @@ describe("CurrentList", () => {
 
 	it("keeps the List picker mounted and untappable until it finishes receding", async () => {
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -272,9 +133,9 @@ describe("CurrentList", () => {
 
 	it("keeps a List picker reopened while it was receding open once the zoom lands", async () => {
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -297,9 +158,9 @@ describe("CurrentList", () => {
 
 	it("keeps the focused List unreachable while the picker zoom runs", async () => {
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -350,9 +211,9 @@ describe("CurrentList", () => {
 		// the write.
 		const onFocusList = jest.fn(async () => false);
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={onFocusList}
 				onOpenLists={jest.fn()}
@@ -379,9 +240,9 @@ describe("CurrentList", () => {
 	it("persists the focused List when horizontal paging settles", async () => {
 		const onFocusList = jest.fn(async () => true);
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={onFocusList}
 				onOpenLists={jest.fn()}
@@ -415,9 +276,9 @@ describe("CurrentList", () => {
 
 		try {
 			await render(
-				<HomeCurrentList
+				<TestHomeListPager
 					session={authenticatedAppSession}
-					deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+					{...activeListProps([groceriesListSummary, pantryListSummary])}
 					focusedListId="lst_groceries"
 					onFocusList={onFocusList}
 					onOpenLists={jest.fn()}
@@ -448,9 +309,9 @@ describe("CurrentList", () => {
 
 	it("keeps adjacent pager pages from intercepting the focused page", async () => {
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -467,9 +328,9 @@ describe("CurrentList", () => {
 
 	it("renders each List title inside its sliding page", async () => {
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -518,68 +379,6 @@ describe("CurrentList", () => {
 		expect(arrivingTilt).toBeLessThan(restingTilt);
 	});
 
-	it("keeps the focused List on its watched Item data", async () => {
-		jest.mocked(useListPage).mockReturnValue(
-			activeListPage(pantryListSummary, {
-				list: {
-					items: [
-						{
-							id: "itm_shelf_stable",
-							name: "Shelf stable",
-							quantity: null,
-							notes: null,
-							checked: false,
-							checkedByMemberName: null,
-						},
-					],
-				},
-			}),
-		);
-
-		await render(
-			<HomeCurrentList
-				session={authenticatedAppSession}
-				deps={pantryCurrentListDeps()}
-				focusedListId="lst_pantry"
-				onFocusList={jest.fn(async () => true)}
-				onOpenLists={jest.fn()}
-			/>,
-			{ wrapper: TestSafeAreaProvider },
-		);
-
-		expect(
-			within(screen.getByTestId("home-list-items-lst_pantry")).getByText(
-				"Shelf stable",
-			),
-		).toBeTruthy();
-	});
-
-	it("retries the failed page's Items query from its own error surface", async () => {
-		const retry = jest.fn();
-		jest.mocked(useListPage).mockReturnValue({
-			status: "error",
-			message: "Unable to load this List. Please try again.",
-			retry,
-		});
-
-		await render(
-			<HomeCurrentList
-				session={authenticatedAppSession}
-				deps={activeListDeps()}
-				focusedListId="lst_groceries"
-				onFocusList={jest.fn(async () => true)}
-				onOpenLists={jest.fn()}
-			/>,
-			{ wrapper: TestSafeAreaProvider },
-		);
-
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Try again" }),
-		);
-
-		expect(retry).toHaveBeenCalledTimes(1);
-	});
-
 	it("keeps every other List reachable when one page's Items fail to load", async () => {
 		jest.mocked(useListPage).mockImplementation((_session, summary) =>
 			summary.id === "lst_groceries"
@@ -592,9 +391,9 @@ describe("CurrentList", () => {
 		);
 
 		await render(
-			<HomeCurrentList
+			<TestHomeListPager
 				session={authenticatedAppSession}
-				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				{...activeListProps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -623,7 +422,7 @@ describe("CurrentList", () => {
 });
 
 /**
- * Renders `CurrentList` the way the Home screen does: owning the shared values
+ * Renders `HomeListPager` the way the Home screen does: owning the shared values
  * the focused List page publishes its scroll state through, the picker and
  * composer open state, and the in-flight selection those two produce. The
  * stand-in picker buttons play the part of the native bottom toolbar, which
@@ -631,7 +430,7 @@ describe("CurrentList", () => {
  * this state is asserted against the real screen in
  * `src/client/screens/app/home-screen.test.tsx`.
  */
-function HomeCurrentList({ onFocusList, ...props }: HomeCurrentListProps) {
+function TestHomeListPager({ onFocusList, ...props }: TestHomeListPagerProps) {
 	const offsetY = useSharedValue(0);
 	const largeTitleHeight = useSharedValue(0);
 	const pagerDrift = useSharedValue(0);
@@ -665,7 +464,7 @@ function HomeCurrentList({ onFocusList, ...props }: HomeCurrentListProps) {
 				accessibilityRole="button"
 				onPress={() => setPickerPhase("closing")}
 			/>
-			<CurrentList
+			<HomeListPager
 				{...props}
 				collapsedTitleScroll={collapsedTitleScroll}
 				composerOpen={composerOpen}
@@ -679,8 +478,8 @@ function HomeCurrentList({ onFocusList, ...props }: HomeCurrentListProps) {
 	);
 }
 
-type HomeCurrentListProps = Omit<
-	CurrentListProps,
+type TestHomeListPagerProps = Omit<
+	HomeListPagerProps,
 	| "collapsedTitleScroll"
 	| "composerOpen"
 	| "pickerPhase"
@@ -697,9 +496,9 @@ type HomeCurrentListProps = Omit<
  */
 function pagedListSurface() {
 	return (
-		<HomeCurrentList
+		<TestHomeListPager
 			session={authenticatedAppSession}
-			deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+			{...activeListProps([groceriesListSummary, pantryListSummary])}
 			focusedListId="lst_groceries"
 			onFocusList={jest.fn(async () => true)}
 			onOpenLists={jest.fn()}
@@ -794,11 +593,11 @@ function horizontalScrollEvent(offsetX: number) {
 	};
 }
 
-function activeListDeps(
+function activeListProps(
 	summaries = [groceriesListSummary],
-): HomeCurrentListDeps {
+): HomeListPagerDataProps {
 	return {
-		currentList: {
+		currentListSelection: {
 			state: { status: "active", listId: "lst_groceries" },
 			retry: jest.fn(),
 			reload: jest.fn(),
@@ -808,9 +607,9 @@ function activeListDeps(
 	};
 }
 
-function zeroActiveListDeps(): HomeCurrentListDeps {
+function zeroActiveListProps(): HomeListPagerDataProps {
 	return {
-		currentList: {
+		currentListSelection: {
 			state: { status: "zeroActive" },
 			retry: jest.fn(),
 			reload: jest.fn(),
@@ -820,18 +619,7 @@ function zeroActiveListDeps(): HomeCurrentListDeps {
 	};
 }
 
-function pantryCurrentListDeps(): HomeCurrentListDeps {
-	return {
-		currentList: {
-			state: { status: "active", listId: "lst_pantry" },
-			retry: jest.fn(),
-			reload: jest.fn(),
-		},
-		syncState: "synced",
-		listRows: {
-			status: "ready",
-			summaries: [groceriesListSummary, pantryListSummary],
-			isFetching: false,
-		},
-	};
-}
+type HomeListPagerDataProps = Pick<
+	HomeListPagerProps,
+	"currentListSelection" | "listRows" | "syncState"
+>;

@@ -1,5 +1,5 @@
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
@@ -25,39 +25,24 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
-import type { AddItemListOption } from "@/client/features/list/add-item-composer";
-import type { ListSummary } from "@/client/features/list/list-service";
 import {
-	type AuthenticatedAppSession,
-	sessionMemberDisplayName,
-} from "@/client/session";
+	ListPage,
+	type ListPageScrollState,
+} from "@/client/features/list/list-page";
+import type { ListSummary } from "@/client/features/list/list-service";
+import type { ActiveListSyncState } from "@/client/features/list/list-view-types";
+import type { CurrentListSelection } from "@/client/features/list/use-current-list-selection";
+import type { ListRows } from "@/client/features/list/use-list-rows";
+import type { AuthenticatedAppSession } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { StatusCard } from "@/client/ui/status-card";
-import { AddItemForm } from "./add-item-form";
-import { ItemRows } from "./item-rows";
-import { ListOverview } from "./list-overview";
-import type { ActiveListSyncState } from "./list-view-types";
-import type { CurrentListSelection } from "./use-current-list-selection";
-import { useListActions } from "./use-list-actions";
-import { type ListPageState, useListPage } from "./use-list-page";
-import type { ListRows } from "./use-list-rows";
-
-export type HomeCurrentListDeps = {
-	currentList: CurrentListSelection;
-	syncState: ActiveListSyncState;
-	listRows: ListRows;
-};
 
 /**
  * Scroll state the native stack header fades its collapsed List title against,
  * published on the UI thread by the pager and by whichever page is focused. The
  * header renders outside this tree, so the screen owns the values.
  */
-export type CollapsedTitleScroll = {
-	/** Vertical scroll offset of the focused List page. */
-	offsetY: SharedValue<number>;
-	/** Measured height of the focused List page's large title. */
-	largeTitleHeight: SharedValue<number>;
+export type CollapsedTitleScroll = ListPageScrollState & {
 	/** How far the pager has drifted off the focused page: 0 parked, 1 gone. */
 	pagerDrift: SharedValue<number>;
 };
@@ -70,9 +55,11 @@ export type CollapsedTitleScroll = {
  */
 export type HomeListPickerPhase = "closed" | "open" | "closing";
 
-export type CurrentListProps = {
+export type HomeListPagerProps = {
 	session: AuthenticatedAppSession;
-	deps: HomeCurrentListDeps;
+	currentListSelection: CurrentListSelection;
+	listRows: ListRows;
+	syncState: ActiveListSyncState;
 	focusedListId: string | null;
 	collapsedTitleScroll: CollapsedTitleScroll;
 	/** Whether the add Item composer is open over the focused List page. */
@@ -93,9 +80,11 @@ export type CurrentListProps = {
 	topContentInset?: number;
 };
 
-export function CurrentList({
+export function HomeListPager({
 	session,
-	deps,
+	currentListSelection,
+	listRows,
+	syncState,
 	focusedListId,
 	collapsedTitleScroll,
 	composerOpen,
@@ -106,9 +95,8 @@ export function CurrentList({
 	onOpenLists,
 	onPickerPhaseChange,
 	topContentInset = 0,
-}: CurrentListProps) {
-	const { currentList, syncState, listRows } = deps;
-	const loadState = currentList.state;
+}: HomeListPagerProps) {
+	const loadState = currentListSelection.state;
 
 	if (listRows.status === "loading" || loadState.status === "loading") {
 		return (
@@ -131,7 +119,7 @@ export function CurrentList({
 						: "Unable to load your Lists. Please try again."
 				}
 			>
-				<Button onPress={currentList.retry}>Try again</Button>
+				<Button onPress={currentListSelection.retry}>Try again</Button>
 			</StatusCard>
 		);
 	}
@@ -148,7 +136,7 @@ export function CurrentList({
 	}
 
 	return (
-		<HomeListPager
+		<ActiveHomeListPager
 			focusedListId={focusedListId ?? loadState.listId}
 			collapsedTitleScroll={collapsedTitleScroll}
 			composerOpen={composerOpen}
@@ -165,7 +153,7 @@ export function CurrentList({
 	);
 }
 
-type HomeListPagerProps = {
+type ActiveHomeListPagerProps = {
 	focusedListId: string;
 	collapsedTitleScroll: CollapsedTitleScroll;
 	composerOpen: boolean;
@@ -180,7 +168,7 @@ type HomeListPagerProps = {
 	topContentInset: number;
 };
 
-function HomeListPager({
+function ActiveHomeListPager({
 	focusedListId,
 	collapsedTitleScroll,
 	composerOpen,
@@ -193,7 +181,7 @@ function HomeListPager({
 	onFocusList,
 	onPickerPhaseChange,
 	topContentInset,
-}: HomeListPagerProps) {
+}: ActiveHomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
 	const focusedIndex = Math.max(
@@ -357,11 +345,11 @@ function HomeListPager({
 								}
 								width={width}
 							>
-								<HomeListPage
+								<ListPage
 									composerOpen={composerOpen && focused}
 									focused={focused}
-									collapsedTitleScroll={collapsedTitleScroll}
 									listSummaries={listSummaries}
+									scrollState={collapsedTitleScroll}
 									session={session}
 									summary={summary}
 									syncState={syncState}
@@ -506,184 +494,6 @@ function CarouselPage({
 	);
 }
 
-type HomeListPageProps = {
-	summary: ListSummary;
-	session: AuthenticatedAppSession;
-	syncState: ActiveListSyncState;
-	listSummaries: readonly ListSummary[];
-	focused: boolean;
-	collapsedTitleScroll: CollapsedTitleScroll;
-	composerOpen: boolean;
-	topContentInset: number;
-	onOpenComposer: () => void;
-	onDismissComposer: () => void;
-};
-
-function HomeListPage({
-	summary,
-	session,
-	syncState,
-	listSummaries,
-	focused,
-	collapsedTitleScroll,
-	composerOpen,
-	topContentInset,
-	onOpenComposer,
-	onDismissComposer,
-}: HomeListPageProps) {
-	const state = useListPage(session, summary);
-	const active = state.status === "active";
-
-	// Only a page rendering its List publishes to the header: `ItemRows` returns
-	// the offset to the top on focus and `ActiveHomeListPage` republishes its
-	// large title height. A focused page that is loading or failed has neither,
-	// so it zeroes both itself; otherwise the values the page the pager just
-	// left measured keep the header's collapsed title showing over this page's
-	// own large title.
-	useEffect(() => {
-		if (!focused || active) return;
-		collapsedTitleScroll.offsetY.set(0);
-		collapsedTitleScroll.largeTitleHeight.set(0);
-	}, [active, collapsedTitleScroll, focused]);
-
-	if (state.status === "loading") {
-		return (
-			<View style={[styles.page, { paddingTop: topContentInset }]}>
-				<HomeListPageTitle title={summary.name} />
-				<StatusCard
-					title="Preparing your Household"
-					body="Loading your Household List."
-				>
-					<ActivityIndicator />
-				</StatusCard>
-			</View>
-		);
-	}
-
-	if (state.status === "error") {
-		return (
-			<View style={[styles.page, { paddingTop: topContentInset }]}>
-				<HomeListPageTitle title={summary.name} />
-				<StatusCard title="List unavailable" body={state.message}>
-					<Button onPress={state.retry}>Try again</Button>
-				</StatusCard>
-			</View>
-		);
-	}
-
-	return (
-		<ActiveHomeListPage
-			composerOpen={composerOpen}
-			focused={focused}
-			collapsedTitleScroll={collapsedTitleScroll}
-			listSummaries={listSummaries}
-			loadState={state}
-			session={session}
-			summary={summary}
-			syncState={syncState}
-			topContentInset={topContentInset}
-			onDismissComposer={onDismissComposer}
-			onOpenComposer={onOpenComposer}
-		/>
-	);
-}
-
-function ActiveHomeListPage({
-	loadState,
-	session,
-	syncState,
-	listSummaries,
-	summary,
-	focused,
-	collapsedTitleScroll,
-	composerOpen,
-	onOpenComposer,
-	onDismissComposer,
-	topContentInset,
-}: HomeListPageProps & {
-	loadState: Extract<ListPageState, { status: "active" }>;
-}) {
-	const insets = useSafeAreaInsets();
-	const { theme } = useUnistyles();
-	const [largeTitleHeight, setLargeTitleHeight] = useState(0);
-	const actions = useListActions({
-		items: loadState.list.items,
-		onAddItem: loadState.actions.addItem,
-		onSetItemChecked: loadState.actions.setItemChecked,
-	});
-	const composerListOptions = addItemListOptions({
-		currentListId: loadState.listId,
-		currentListName: summary.name,
-		summaries: listSummaries,
-	});
-
-	// Only the focused page publishes to the header, and it republishes on focus
-	// so the header collapses against this page's large title rather than the
-	// one measured by the page the pager just left.
-	useEffect(() => {
-		if (!focused) return;
-		collapsedTitleScroll.largeTitleHeight.set(largeTitleHeight);
-	}, [focused, collapsedTitleScroll, largeTitleHeight]);
-
-	return (
-		<>
-			<ItemRows
-				bottomContentInset={insets.bottom + theme.spacing(20)}
-				focused={focused}
-				items={loadState.list.items}
-				listOverview={
-					<View>
-						<HomeListPageTitle
-							title={summary.name}
-							onMeasureHeight={setLargeTitleHeight}
-						/>
-						<ListOverview
-							state={loadState.list}
-							meta={{
-								currentMemberName: sessionMemberDisplayName(session),
-								syncState,
-							}}
-						/>
-					</View>
-				}
-				onPressBlankSpace={focused ? onOpenComposer : undefined}
-				scrollOffsetY={focused ? collapsedTitleScroll.offsetY : undefined}
-				topContentInset={topContentInset}
-				onToggleItem={actions.toggleItem}
-				testID={`home-list-items-${summary.id}`}
-			/>
-			<AddItemForm
-				currentListId={loadState.listId}
-				listOptions={composerListOptions}
-				onAddItem={actions.addItem}
-				presentation={{
-					kind: "controlledOverlay",
-					isOpen: composerOpen,
-					onDismiss: onDismissComposer,
-				}}
-			/>
-		</>
-	);
-}
-
-function HomeListPageTitle({
-	title,
-	onMeasureHeight,
-}: {
-	title: string;
-	onMeasureHeight?: (height: number) => void;
-}) {
-	return (
-		<Text
-			accessibilityRole="header"
-			style={styles.pageTitle}
-			onLayout={(event) => onMeasureHeight?.(event.nativeEvent.layout.height)}
-		>
-			{title}
-		</Text>
-	);
-}
-
 /**
  * The List picker, mounted behind the pager for the whole zoom: the focused
  * List page shrinks away to reveal it, and a selected row grows back into a
@@ -787,23 +597,6 @@ function HomeListPicker({
 	);
 }
 
-function addItemListOptions({
-	currentListId,
-	currentListName,
-	summaries,
-}: {
-	currentListId: string;
-	currentListName: string;
-	summaries: readonly ListSummary[];
-}): AddItemListOption[] {
-	return [
-		{ id: currentListId, name: currentListName },
-		...summaries
-			.filter((summary) => summary.id !== currentListId)
-			.map((summary) => ({ id: summary.id, name: summary.name })),
-	];
-}
-
 function listSummaryKey(summary: ListSummary): string {
 	return summary.id;
 }
@@ -825,16 +618,6 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	page: {
 		flex: 1,
-		backgroundColor: theme.colors.background,
-	},
-	pageTitle: {
-		fontSize: theme.fontSizes["5xl"],
-		fontWeight: theme.fontWeights.bold,
-		lineHeight: theme.lineHeights["5xl"],
-		color: theme.colors.foreground,
-		paddingHorizontal: theme.spacing(5),
-		paddingTop: theme.spacing(2),
-		paddingBottom: theme.spacing(2),
 		backgroundColor: theme.colors.background,
 	},
 	pickerOverlay: {

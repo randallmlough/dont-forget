@@ -10,11 +10,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
-import {
-	type CollapsedTitleScroll,
-	CurrentList,
-	type HomeListPickerPhase,
-} from "@/client/features/list/current-list";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
 import { useListRows } from "@/client/features/list/use-list-rows";
@@ -27,6 +22,11 @@ import {
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { StatusCard } from "@/client/ui/status-card";
+import {
+	type CollapsedTitleScroll,
+	HomeListPager,
+	type HomeListPickerPhase,
+} from "./home-list-pager";
 import { HomeListToolbar } from "./home-list-toolbar";
 
 const FALLBACK_TITLE = "Home";
@@ -89,10 +89,10 @@ function HomeScreenResource({
 	);
 	const syncState = useSyncState();
 	const { rows } = useListRows(session);
-	// The Current List resolves here, not inside CurrentList, so the native
+	// The Current List resolves here, not inside HomeListPager, so the native
 	// stack header keeps its fallback title through the loading, error, and
 	// zeroActive states, where no List page is mounted to own a title.
-	const currentList = useCurrentListSelection(session, rows);
+	const currentListSelection = useCurrentListSelection(session, rows);
 	const selectList = useSelectList(session);
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
 	// Home's interaction state lives here because the native bottom toolbar
@@ -104,7 +104,9 @@ function HomeScreenResource({
 	// moves with the pager before the switch is written.
 	const persistedListIdRef = useRef<string | null>(null);
 	const currentListId =
-		currentList.state.status === "active" ? currentList.state.listId : null;
+		currentListSelection.state.status === "active"
+			? currentListSelection.state.listId
+			: null;
 	const listSummaries = rows.status === "ready" ? rows.summaries : [];
 	const resolvedFocusedListId = resolveFocusedListId({
 		focusedListId,
@@ -137,7 +139,7 @@ function HomeScreenResource({
 			// just persisted; otherwise it keeps validating the selection this
 			// switch replaced. The re-read keeps serving the selection it is
 			// revalidating, so the pager stays put through it.
-			currentList.reload();
+			currentListSelection.reload();
 			return true;
 		} finally {
 			setSelectionPending(false);
@@ -186,10 +188,12 @@ function HomeScreenResource({
 					onScrubToPage={scrubToPage}
 				/>
 			) : null}
-			<CurrentList
+			<HomeListPager
 				session={session}
 				composerOpen={composerOpen}
-				deps={{ currentList, syncState, listRows: rows }}
+				currentListSelection={currentListSelection}
+				listRows={rows}
+				syncState={syncState}
 				focusedListId={resolvedFocusedListId}
 				collapsedTitleScroll={collapsedTitleScroll}
 				pickerPhase={pickerPhase}
