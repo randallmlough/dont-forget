@@ -539,6 +539,19 @@ function HomeListPage({
 	onDismissComposer,
 }: HomeListPageProps) {
 	const state = useListPage(session, summary);
+	const active = state.status === "active";
+
+	// Only a page rendering its List publishes to the header: `ItemRows` returns
+	// the offset to the top on focus and `ActiveHomeListPage` republishes its
+	// large title height. A focused page that is loading or failed has neither,
+	// so it zeroes both itself; otherwise the values the page the pager just
+	// left measured keep the header's collapsed title showing over this page's
+	// own large title.
+	useEffect(() => {
+		if (!focused || active) return;
+		collapsedTitleScroll.offsetY.set(0);
+		collapsedTitleScroll.largeTitleHeight.set(0);
+	}, [active, collapsedTitleScroll, focused]);
 
 	if (state.status === "loading") {
 		return (

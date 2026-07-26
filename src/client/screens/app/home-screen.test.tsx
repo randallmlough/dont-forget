@@ -353,6 +353,52 @@ describe("HomeScreen", () => {
 		expect(collapsedListTitle()).toHaveStyle({ opacity: 0 });
 	});
 
+	it.each([
+		["still loading", { status: "loading" } as const],
+		[
+			"failed",
+			{
+				status: "error",
+				message: "Unable to load this List. Please try again.",
+			} as const,
+		],
+	])("clears the collapsed List title when the pager settles on a page that is %s", async (_label, pantryState) => {
+		jest.mocked(useListRows).mockReturnValue({
+			rows: {
+				status: "ready",
+				summaries: [groceriesListSummary, pantryListSummary],
+			},
+		});
+		jest.mocked(useListPage).mockImplementation((_session, summary) =>
+			summary.id === "lst_pantry"
+				? pantryState
+				: {
+						status: "active",
+						listId: summary.id,
+						list: { ...emptyActiveListState, listName: summary.name },
+						actions: {
+							addItem: jest.fn(async () => undefined),
+							setItemChecked: jest.fn(async () => undefined),
+						},
+					},
+		);
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+		await measureLargeTitle("Groceries");
+		await scrollFocusedList("lst_groceries", LARGE_TITLE_HEIGHT);
+		await view.rerender(homeScreenSurface());
+		expect(collapsedListTitle()).toHaveStyle({ opacity: 1 });
+
+		await settlePagerAt(1);
+		await view.rerender(homeScreenSurface());
+
+		// A page that is not rendering its List has no large title of its own
+		// behind the header, so the collapsed title must not carry over from
+		// the page the pager just left.
+		expect(collapsedListTitle()).toHaveStyle({ opacity: 0 });
+	});
+
 	it("updates the page title and persists selection when paging settles", async () => {
 		jest.mocked(useListRows).mockReturnValue({
 			rows: {
