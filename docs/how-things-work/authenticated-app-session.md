@@ -34,7 +34,7 @@ const services = useProductServices({
 const syncStatus = useSyncState();
 ```
 
-`useProductServices` lives in `src/client/features/list/use-product-services.ts` and constructs List and Item services over `appProductDatabase`, the plain `ProductDatabase` singleton in `src/client/session/powersync-app-database.ts`. Reactive reads use `ProductQuery<T>` values from those services with `usePowerSyncQuery` in `src/client/features/list/use-powersync-query.ts`, a thin wrapper over PowerSync watched queries.
+`useProductServices` lives in `src/client/features/list/use-product-services.ts` and constructs List and Item services over `appProductDatabase`, the plain `ProductDatabase` singleton in `src/client/session/powersync-app-database.ts`. Reactive reads use `ProductQuery<T>` values from those services with `useProductQuery` in `src/client/lib/use-product-query.ts`, a thin wrapper over PowerSync watched queries.
 
 There is no public `view` property and no nested `state.session`.
 
@@ -54,7 +54,7 @@ The machine uses an attempt counter as its cancellation token. A stale activatio
 
 The provider owns Authenticated App Session loading and composes the signed-in lifecycle in one place: bootstrap, PowerSync connection, session hinting, and sign-out. Activation publishes directory identity without loading the Current List, Lists, or Items. Consumers never manage the PowerSync connection or delete local data directly.
 
-The Home screen resolves the Current List with `useHomeCurrentList(session)` from `src/client/features/list/use-home-current-list.ts`, then passes that state to `CurrentList`. This lets the route-owned screen configure its native stack title from the Current List while `CurrentList` remains responsible for the List surface. The hook composes `useProductServices` with the active List summaries watched query through `usePowerSyncQuery` and derives the selected Current List id for the active Household. It resolves that id only; each List page watches its own Items through `useListPage`, so one List's failed Items query cannot gate Home's List pager. `onAddItem` / `onSetItemChecked`-style callback props live on internal children such as `ListOverview`, `ItemRows`, and `AddItemForm`, not on `CurrentList`.
+The Home screen calls `useListRows(session)` once, then passes that active-List snapshot to `useCurrentListSelection(session, rows)`. This lets the route-owned screen configure its native stack title from the Current List and pass the selection, rows, and sync state into the screen-owned `HomeListPager`. Each feature-owned `ListPage` watches its explicit List's Items through `useListPage`, so one List's failed Items query cannot gate the pager. Item actions and watched-query results remain behind `ListPage`; callback props such as `onAddItem` and `onSetItemChecked` live on its internal `ListOverview`, `ItemRows`, and `AddItemForm` children.
 
 After accept, join, or switch mutations update directory state, screens call the provider-owned `reloadSession()` action. Screens do not call bootstrap directly and do not manage the PowerSync connection or session resources.
 
@@ -70,7 +70,7 @@ PowerSync streams continuously; there is no sync coordinator to start, stop, or 
 
 - `PowerSyncProvider` in `src/client/session/powersync/provider.tsx` exposes the raw PowerSync `db` singleton through `PowerSyncContext.Provider`.
 - Local List and Item writes land in the local database immediately; PowerSync's connector uploads them to `/api/data` in the background and streams remote changes back.
-- Reactive reads use `usePowerSyncQuery(query)`, where `query` is a service-owned `ProductQuery<T>`.
+- Reactive reads use `useProductQuery(query)`, where `query` is a service-owned `ProductQuery<T>`.
 - Sync status comes from `useSyncState()`, which maps PowerSync connection state to `"synced" | "pending" | "offline" | "failed"`.
 
 Screens and route-owned hooks can read sync status, but they cannot manage the connection.

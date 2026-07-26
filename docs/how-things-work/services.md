@@ -9,12 +9,17 @@ Use the domain noun from `CONTEXT.md`, but place it on the correct side of the c
 ```txt
 src/client/features/list/
   item-service.ts
+  list-page.tsx
   list-service.ts
+  use-current-list-selection.ts
+  use-list-page.ts
+  use-list-rows.ts
   use-product-services.ts
-  use-powersync-query.ts
 
 src/client/lib/
   product-database.ts
+  sql-timestamp.ts
+  use-product-query.ts
 
 src/client/session/
   bootstrap.ts
@@ -195,14 +200,14 @@ const services = useProductServices({
   householdId: session.activeHousehold.id,
   userId: session.activeMember.userId,
 });
-const items = usePowerSyncQuery(
+const items = useProductQuery(
   services.items.listItemsQuery({ listId }),
 );
 ```
 
-PowerSync watched queries re-run when their dependent local rows change. UI consumes them through `usePowerSyncQuery`, which wraps `@powersync/react`'s `useQuery` and returns `{ data, isLoading, isFetching, error }`. Sync status comes from `useSyncState()` and is read-only connection state, not a data-reload trigger.
+PowerSync watched queries re-run when their dependent local rows change. UI consumes them through `useProductQuery`, which wraps `@powersync/react`'s `useQuery` and returns `{ data, isLoading, isFetching, error }`. Sync status comes from `useSyncState()` and is read-only connection state, not a data-reload trigger.
 
-Current List is selection state only. The Home screen resolves it with `useHomeCurrentList(session)` and passes the resulting state into `CurrentList`, allowing the route-owned native navigation surface to use the Current List name. List switching changes the selected `listId`, not a Household-owned Current List service or data source. `onAddItem` / `onSetItemChecked`-style callback props live on internal children such as `ListOverview`, `ItemRows`, and `AddItemForm`, not on `CurrentList`.
+Current List is selection state only. Home passes its single `useListRows(session)` snapshot to `useCurrentListSelection(session, rows)`, allowing the route-owned native navigation surface to use the Current List name. The screen-owned `HomeListPager` coordinates switching and composes one feature-owned `ListPage` per mounted List; each `ListPage` watches its explicit List's Items through `useListPage`. List switching changes the selected `listId`, not a Household-owned Current List service or data source. Item mutation callbacks remain internal to `ListPage` children such as `ListOverview`, `ItemRows`, and `AddItemForm`.
 
 There is one local PowerSync database rather than a per-Household resource set, so there is no cached-to-fresh resource swap or stale-resource lease to manage: switching the active Household re-points watched queries' `household_id` filters. Membership revocation is server-authoritative — PowerSync stops streaming and purges the rows for a Household the User is no longer an active Member of.
 
