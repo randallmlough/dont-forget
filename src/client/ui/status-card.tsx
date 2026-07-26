@@ -7,17 +7,15 @@ import {
 	CardDescription,
 	CardHeader,
 	CardTitle,
-} from "@/client/ui/card";
+} from "./card";
 
-export function StatusCard({
-	title,
-	body,
-	children,
-}: {
+export type StatusCardProps = {
 	title: string;
 	body: string;
 	children?: ReactNode;
-}) {
+};
+
+export function StatusCard({ title, body, children }: StatusCardProps) {
 	return (
 		<View style={styles.statusRoot}>
 			<Card style={styles.statusCard}>
