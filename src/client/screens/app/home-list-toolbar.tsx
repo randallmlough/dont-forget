@@ -19,11 +19,23 @@ import type { ListSummary } from "@/client/features/list/list-service";
  * per slot. The strip fills a full touch-target height even though the dots
  * themselves are tiny, and it keeps a slot's worth of slop past the end dots so
  * the first and last List stay reachable at the edges of the drag.
+ *
+ * Nothing caps how many Lists a Household keeps, so the strip also needs a
+ * ceiling. The toolbar hands this view to UIKit as a bar item sized from its own
+ * frame: a strip wider than the space between the Search and Choose List buttons
+ * clips itself or its neighbours instead of wrapping. On the narrowest supported
+ * iPhone (375pt) those two buttons plus the bar's own margins leave roughly
+ * 255pt, and holding ~24pt of breathing room on each side leaves 208pt, which is
+ * exactly twelve slots at Weather's proportions. Past twelve Lists the slots
+ * compress inside that width, and the dots shrink with them down to a floor that
+ * keeps a dot visible.
  */
 const PAGE_DOT_SIZE = 7;
+const PAGE_DOT_MIN_SIZE = 4;
 const PAGE_DOT_SLOT_WIDTH = 16;
 const PAGE_CONTROL_HEIGHT = 44;
 const PAGE_CONTROL_EDGE_SLOP = 8;
+const PAGE_CONTROL_MAX_WIDTH = 208;
 
 const PAGE_CONTROL_ACTIONS = [{ name: "increment" }, { name: "decrement" }];
 
@@ -116,6 +128,7 @@ function HomeListPageControl({
 	onScrubToPage: (index: number) => void;
 }) {
 	const pageCount = lists.length;
+	const { width, slotWidth, dotSize } = pageControlGeometry(pageCount);
 	// Where the drag sits, tracked on the gesture's own runtime: a scrub tick
 	// can tell a new List from a repeat without waiting for React to rerender,
 	// and a press with no travel still commits the List it landed on rather
@@ -147,11 +160,11 @@ function HomeListPageControl({
 		.onBegin((event) => {
 			"worklet";
 			scrubbedIndex.set(focusedIndex);
-			scrubTo(pageIndexAtX(event.x, pageCount));
+			scrubTo(pageIndexAtX(event.x, slotWidth, pageCount));
 		})
 		.onUpdate((event) => {
 			"worklet";
-			scrubTo(pageIndexAtX(event.x, pageCount));
+			scrubTo(pageIndexAtX(event.x, slotWidth, pageCount));
 		})
 		.onFinalize(() => {
 			"worklet";
@@ -161,9 +174,7 @@ function HomeListPageControl({
 	// The toolbar hosts this view outside the app's view tree, so the gesture
 	// needs its own gesture-handler root here.
 	return (
-		<GestureHandlerRootView
-			style={[styles.pageControlRoot, { width: pageControlWidth(pageCount) }]}
-		>
+		<GestureHandlerRootView style={styles.pageControlRoot(width)}>
 			<GestureDetector gesture={scrub}>
 				<View
 					accessible
@@ -178,10 +189,10 @@ function HomeListPageControl({
 					testID="home-list-page-control"
 				>
 					{lists.map((summary, index) => (
-						<View key={summary.id} style={styles.pageDotSlot}>
+						<View key={summary.id} style={styles.pageDotSlot(slotWidth)}>
 							<View
 								style={[
-									styles.pageDot,
+									styles.pageDot(dotSize),
 									index === focusedIndex ? styles.pageDotFocused : undefined,
 								]}
 							/>
@@ -197,42 +208,88 @@ function HomeListPageControl({
  * The List whose dot sits under `x`, measured from the left edge of the page
  * control. Anything past either end clamps to the end dot, so a drag that runs
  * off the strip parks on the first or last List instead of stopping short.
+ *
+ * `slotWidth` comes from `pageControlGeometry`, so a compressed strip still
+ * reads one List per slot and its last Lists stay under the finger.
  */
-export function pageIndexAtX(x: number, pageCount: number): number {
+export function pageIndexAtX(
+	x: number,
+	slotWidth: number,
+	pageCount: number,
+): number {
 	// The scrub runs on the gesture's runtime, so the geometry it reads has to
 	// run there too, without reaching for another module-scope function.
 	"worklet";
-	const slot = Math.floor((x - PAGE_CONTROL_EDGE_SLOP) / PAGE_DOT_SLOT_WIDTH);
+	const slot = Math.floor((x - PAGE_CONTROL_EDGE_SLOP) / slotWidth);
 	return Math.min(pageCount - 1, Math.max(0, slot));
 }
 
-function pageControlWidth(pageCount: number): number {
-	return pageCount * PAGE_DOT_SLOT_WIDTH + PAGE_CONTROL_EDGE_SLOP * 2;
+export type PageControlGeometry = {
+	width: number;
+	slotWidth: number;
+	dotSize: number;
+};
+
+/**
+ * How wide the strip is and how it splits between the Lists. Up to the width the
+ * toolbar can host, every List gets Weather's slot and Weather's dot. Past it
+ * the width stops growing and the same slots divide the strip instead, so every
+ * List keeps a slot of its own to be scrubbed onto however many there are.
+ */
+export function pageControlGeometry(pageCount: number): PageControlGeometry {
+	const naturalWidth =
+		pageCount * PAGE_DOT_SLOT_WIDTH + PAGE_CONTROL_EDGE_SLOP * 2;
+	if (naturalWidth <= PAGE_CONTROL_MAX_WIDTH) {
+		return {
+			width: naturalWidth,
+			slotWidth: PAGE_DOT_SLOT_WIDTH,
+			dotSize: PAGE_DOT_SIZE,
+		};
+	}
+
+	const slotWidth =
+		(PAGE_CONTROL_MAX_WIDTH - PAGE_CONTROL_EDGE_SLOP * 2) / pageCount;
+	return {
+		width: PAGE_CONTROL_MAX_WIDTH,
+		slotWidth,
+		// The dot keeps Weather's share of its slot until that share stops being
+		// visible, then holds the floor. A dot never outgrows its slot, so at the
+		// counts where even the floor no longer fits the strip closes into a bar
+		// rather than overlapping itself.
+		dotSize: Math.min(
+			slotWidth,
+			Math.max(
+				PAGE_DOT_MIN_SIZE,
+				(slotWidth * PAGE_DOT_SIZE) / PAGE_DOT_SLOT_WIDTH,
+			),
+		),
+	};
 }
 
 const styles = StyleSheet.create((theme) => ({
 	// The toolbar hands this view straight to UIKit as a bar item, which sizes
 	// the item from the view's own frame, so the root carries the size rather
 	// than sizing to its content.
-	pageControlRoot: {
+	pageControlRoot: (width: number) => ({
+		width,
 		height: PAGE_CONTROL_HEIGHT,
-	},
+	}),
 	pageControl: {
 		flex: 1,
 		flexDirection: "row",
 		alignItems: "center",
 		paddingHorizontal: PAGE_CONTROL_EDGE_SLOP,
 	},
-	pageDotSlot: {
-		width: PAGE_DOT_SLOT_WIDTH,
+	pageDotSlot: (width: number) => ({
+		width,
 		alignItems: "center",
-	},
-	pageDot: {
-		width: PAGE_DOT_SIZE,
-		height: PAGE_DOT_SIZE,
+	}),
+	pageDot: (size: number) => ({
+		width: size,
+		height: size,
 		borderRadius: theme.radii.full,
 		backgroundColor: theme.colors.subtleForeground,
-	},
+	}),
 	pageDotFocused: {
 		backgroundColor: theme.colors.foreground,
 	},

@@ -575,6 +575,34 @@ describe("Home bottom toolbar", () => {
 		}
 	});
 
+	it("reaches the last List once the page control compresses its dot slots", async () => {
+		const scrollToIndex = jest
+			.spyOn(FlatList.prototype, "scrollToIndex")
+			.mockImplementation();
+		jest.mocked(useListRows).mockReturnValue({
+			rows: { status: "ready", summaries: manyListSummaries(32) },
+		});
+
+		try {
+			await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+			// The strip cannot grow past the space between the toolbar buttons, so
+			// 32 Lists share it at 6pt a slot and the last List sits under a touch
+			// 194 points in rather than off the end of the control.
+			await dragPageControlAcross([DOT_TOUCH_X[0], 194]);
+
+			expect(pageControl()).toHaveProp("accessibilityValue", {
+				text: "List 32, List 32 of 32",
+			});
+			expect(mockSelectList).toHaveBeenCalledWith(
+				"lst_list_32",
+				"lst_groceries",
+			);
+		} finally {
+			scrollToIndex.mockRestore();
+		}
+	});
+
 	it("returns the page control to the focused List when persisting the drag fails", async () => {
 		mockSelectList.mockResolvedValue(false);
 		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
@@ -671,6 +699,19 @@ async function dragPageControlAcross(
  * measured from the control's left edge the way the pan gesture reports them.
  */
 const DOT_TOUCH_X = [10, 30, 46];
+
+/** More Lists than the page control can host at Weather's proportions. */
+function manyListSummaries(count: number) {
+	return Array.from({ length: count }, (_, index) =>
+		index === 0
+			? groceriesListSummary
+			: {
+					...pantryListSummary,
+					id: `lst_list_${index + 1}`,
+					name: `List ${index + 1}`,
+				},
+	);
+}
 
 function pageControl() {
 	return screen.getByTestId("home-list-page-control", {
