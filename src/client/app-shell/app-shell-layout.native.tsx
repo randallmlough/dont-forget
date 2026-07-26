@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useCallback, useState } from "react";
 import { NavigationDrawer } from "./navigation-drawer";
 import { NavigationDrawerProvider } from "./navigation-drawer-context";
@@ -13,11 +14,14 @@ export function AppShellLayout() {
 		<NavigationDrawerProvider open={open}>
 			<Stack screenOptions={{ headerShown: false }} />
 			{drawerState === "closed" ? null : (
-				<NavigationDrawer
-					isOpen={drawerState === "open"}
-					onClose={() => setDrawerState("dismissing")}
-					onDismissed={() => setDrawerState("closed")}
-				/>
+				<>
+					<StatusBar hidden />
+					<NavigationDrawer
+						isOpen={drawerState === "open"}
+						onClose={() => setDrawerState("dismissing")}
+						onDismissed={() => setDrawerState("closed")}
+					/>
+				</>
 			)}
 		</NavigationDrawerProvider>
 	);

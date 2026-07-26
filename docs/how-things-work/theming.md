@@ -39,6 +39,12 @@ navigation theme through `navigationThemeFor(theme, isDark)` and sets the
 StatusBar style from the active theme. Settings uses the same runtime helper, so
 Appearance changes apply immediately after they are persisted.
 
+The authenticated app shell temporarily mounts a later `StatusBar` override
+while its navigation drawer is open or dismissing. The override hides the iOS
+system status bar until the drawer modal reports that native dismissal has
+finished, then unmounts so the root layout's theme-owned style becomes active
+again.
+
 ## Rebrand Checklist
 
 1. Replace or rename primitives in `src/client/theme/palette.ts`.
