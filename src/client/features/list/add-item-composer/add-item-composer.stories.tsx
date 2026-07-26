@@ -68,7 +68,6 @@ function InteractiveAddItemComposerStory({
 							{ id: "lst_costco", name: "Costco" },
 							{ id: "lst_hardware", name: "Hardware" },
 						],
-						errorMessage: null,
 					}}
 					actions={{
 						open: () => setIsOpen(true),

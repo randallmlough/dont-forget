@@ -27,7 +27,9 @@ import {
 import { track } from "@/client/lib/analytics";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useAuthenticatedAppSession } from "@/client/session";
+import { Toaster } from "@/client/ui/toast";
 import { deferred } from "@/test/async";
+import { drainToasts } from "@/test/toast";
 import ListsScreen from "./lists-screen";
 
 const mockReplace = jest.fn();
@@ -94,6 +96,8 @@ beforeEach(() => {
 	jest.mocked(useProductServices).mockReturnValue(productServicesFixture());
 });
 
+afterEach(drainToasts);
+
 describe("ListsScreen", () => {
 	it("renders the loading rows state", async () => {
 		jest.mocked(useListRows).mockReturnValueOnce({
@@ -104,11 +108,11 @@ describe("ListsScreen", () => {
 		expect(screen.getByText("New List")).toBeTruthy();
 	});
 
-	it("renders the error rows state", async () => {
+	it("reports a toast when the rows cannot load", async () => {
 		jest.mocked(useListRows).mockReturnValue({ rows: { status: "error" } });
 		await renderScreen();
 
-		expect(screen.getByText("Unable to load your Lists.")).toBeTruthy();
+		expect(await screen.findByText("Unable to load your Lists.")).toBeTruthy();
 	});
 
 	it("renders List counts and the Current badge", async () => {
@@ -626,6 +630,7 @@ function TestAppShellProvider({ children }: PropsWithChildren) {
 			<NavigationDrawerProvider open={jest.fn()}>
 				{children}
 			</NavigationDrawerProvider>
+			<Toaster />
 		</SafeAreaProvider>
 	);
 }

@@ -20,7 +20,6 @@ import {
 } from "@/client/session";
 import { Avatar, AvatarFallback } from "@/client/ui/avatar";
 import { Button } from "@/client/ui/button";
-import { Card, CardContent } from "@/client/ui/card";
 import { Field, FieldLabel } from "@/client/ui/field";
 import { Form } from "@/client/ui/form";
 import { Input } from "@/client/ui/input";
@@ -131,14 +130,6 @@ function HouseholdReadyView({
 			contentInsetAdjustmentBehavior="automatic"
 			keyboardShouldPersistTaps="handled"
 		>
-			{state.notice ? (
-				<Card>
-					<CardContent style={styles.noticeContent}>
-						<Text style={styles.notice}>{state.notice}</Text>
-					</CardContent>
-				</Card>
-			) : null}
-
 			<Item variant="outline">
 				<Avatar accessibilityLabel={householdName} size="xl">
 					<AvatarFallback name={householdName} />
@@ -459,14 +450,6 @@ const styles = StyleSheet.create((theme) => ({
 	identityDetail: {
 		...theme.typography.callout,
 		color: theme.colors.mutedForeground,
-	},
-	notice: {
-		...theme.typography.callout,
-		color: theme.colors.foreground,
-	},
-	noticeContent: {
-		padding: theme.spacing(4),
-		paddingTop: theme.spacing(4),
 	},
 	renameForm: {
 		padding: theme.spacing(4),

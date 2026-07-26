@@ -62,7 +62,6 @@ const stateFixture: SettingsState = {
 	appearancePreference: "system",
 	appEnv: "production",
 	appVersion: "1.0.0",
-	notice: null,
 	privacyPolicyUrl: "https://example.com/privacy",
 	termsUrl: "https://example.com/terms",
 	user: {
@@ -72,8 +71,6 @@ const stateFixture: SettingsState = {
 		firstName: "Avery",
 		lastName: "Chen",
 	},
-	userError: null,
-	userNotice: null,
 	userUpdateInFlight: false,
 };
 

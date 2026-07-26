@@ -9,7 +9,7 @@ import {
 	useSettings,
 } from "@/client/features/settings/use-settings";
 import type { AppearancePreference } from "@/client/theme/appearance-preference";
-import { Card, CardContent } from "@/client/ui/card";
+import { Card } from "@/client/ui/card";
 import { GlassSurface } from "@/client/ui/glass-surface";
 import { ScreenSection } from "@/client/ui/screen-section";
 
@@ -70,14 +70,6 @@ export function AppearanceScreenView({
 						/>
 					))}
 				</View>
-
-				{state.notice ? (
-					<Card>
-						<CardContent style={styles.noticeContent}>
-							<Text style={styles.notice}>{state.notice}</Text>
-						</CardContent>
-					</Card>
-				) : null}
 
 				<ScreenSection title="Preview">
 					<AppearancePreview />
@@ -368,14 +360,6 @@ const styles = StyleSheet.create((theme) => ({
 	previewComposerLabel: {
 		...theme.typography.callout,
 		color: theme.colors.mutedForeground,
-	},
-	notice: {
-		...theme.typography.callout,
-		color: theme.colors.foreground,
-	},
-	noticeContent: {
-		padding: theme.spacing(4),
-		paddingTop: theme.spacing(4),
 	},
 	footer: {
 		...theme.typography.caption,

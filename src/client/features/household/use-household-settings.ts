@@ -17,6 +17,7 @@ import {
 	type UploadQueueMonitor,
 	uploadQueueMonitor,
 } from "@/client/session/upload-queue";
+import { toast } from "@/client/ui/toast";
 
 const UPLOAD_QUEUE_DRAIN_TIMEOUT_MS = 10_000;
 
@@ -29,7 +30,6 @@ export type HouseholdSettingsState =
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
 			renamedHouseholdName: string | null;
-			notice: string | null;
 			operation: HouseholdSettingsOperation;
 	  };
 
@@ -58,8 +58,7 @@ export type HouseholdSettingsActions = {
 	leaveHousehold: (options: LeaveHouseholdOptions) => Promise<void>;
 	regenerateJoinCode: () => Promise<void>;
 	setJoinCodeEnabled: (enabled: boolean) => Promise<void>;
-	copyText: (text: string, notice: string) => Promise<void>;
-	clearNotice: () => void;
+	copyText: (text: string, confirmation: string) => Promise<void>;
 };
 
 export type LeaveHouseholdOptions = {
@@ -67,12 +66,7 @@ export type LeaveHouseholdOptions = {
 };
 
 type Resource =
-	| {
-			status: "loading";
-			loadKey: string;
-			attempt: number;
-			preservedNotice: HouseholdSettingsNotice | null;
-	  }
+	| { status: "loading"; loadKey: string; attempt: number }
 	| { status: "error"; loadKey: string; attempt: number; message: string }
 	| {
 			status: "ready";
@@ -82,14 +76,8 @@ type Resource =
 			invitations: PendingInvitation[];
 			joinCode: HouseholdJoinCode;
 			renamedHouseholdName: string | null;
-			notice: HouseholdSettingsNotice | null;
 			operation: HouseholdSettingsOperation;
 	  };
-
-type HouseholdSettingsNotice = {
-	message: string;
-	preserveAcrossLoad: boolean;
-};
 
 type Action =
 	| { type: "loadStarted"; loadKey: string; attempt: number }
@@ -108,7 +96,7 @@ type Action =
 			loadKey: string;
 			operation: HouseholdSettingsOperation;
 	  }
-	| { type: "notice"; loadKey: string; notice: string | null }
+	| { type: "operationFinished"; loadKey: string }
 	| {
 			type: "invitationCreated";
 			loadKey: string;
@@ -202,10 +190,12 @@ export function useHouseholdSettings(
 				name,
 			});
 			dispatch({ type: "householdRenamed", loadKey, household });
+			toast.success("Household renamed.");
 			reloadSession({ mode: "freshOnly" });
 			return true;
 		} catch (error) {
-			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFinished", loadKey });
 			return false;
 		} finally {
 			operationInFlightRef.current = false;
@@ -213,15 +203,10 @@ export function useHouseholdSettings(
 	}
 
 	async function createInvitation(email: string) {
-		const normalizedEmail = normalizeInvitationEmailInput(email);
-		if (!normalizedEmail) {
-			dispatch({
-				type: "notice",
-				loadKey,
-				notice: "Enter a valid email address.",
-			});
-			return;
-		}
+		const normalizedEmail = normalizeInvitationEmail(email);
+		// The form validates before calling, so an invalid address here is a
+		// programming error, not something to report to the person inviting.
+		if (!normalizedEmail) return;
 		if (!startOperation({ status: "creatingInvitation" })) return;
 		try {
 			const client = resolveClient();
@@ -231,8 +216,10 @@ export function useHouseholdSettings(
 			});
 			const invitations = await client.listInvitations(householdId);
 			dispatch({ type: "invitationCreated", loadKey, response, invitations });
+			reportInvitationCreated(response);
 		} catch (error) {
-			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFinished", loadKey });
 		} finally {
 			operationInFlightRef.current = false;
 		}
@@ -242,9 +229,11 @@ export function useHouseholdSettings(
 		if (!startOperation({ status: "revokingInvitation", invitationId })) return;
 		try {
 			await resolveClient().revokeInvitation(invitationId);
+			toast.success("Invitation revoked.");
 			dispatch({ type: "invitationRevoked", loadKey, invitationId });
 		} catch (error) {
-			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFinished", loadKey });
 		} finally {
 			operationInFlightRef.current = false;
 		}
@@ -257,10 +246,11 @@ export function useHouseholdSettings(
 			await client.removeMember({ householdId, membershipId });
 			const members = await client.listMembers(householdId);
 			dispatch({ type: "membersChanged", loadKey, members });
-			dispatch({ type: "notice", loadKey, notice: "Member removed." });
+			toast.success("Member removed.");
 			reloadSession();
 		} catch (error) {
-			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFinished", loadKey });
 		} finally {
 			operationInFlightRef.current = false;
 		}
@@ -273,10 +263,11 @@ export function useHouseholdSettings(
 			await client.setMemberRole({ householdId, membershipId, role });
 			const members = await client.listMembers(householdId);
 			dispatch({ type: "membersChanged", loadKey, members });
-			dispatch({ type: "notice", loadKey, notice: "Member role changed." });
+			toast.success("Member role changed.");
 			reloadSession();
 		} catch (error) {
-			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFinished", loadKey });
 		} finally {
 			operationInFlightRef.current = false;
 		}
@@ -289,14 +280,15 @@ export function useHouseholdSettings(
 			if (drainResult === "blocked") {
 				const confirmed = await options.confirmDiscardUnsyncedChanges();
 				if (!confirmed) {
-					dispatch({ type: "notice", loadKey, notice: null });
+					dispatch({ type: "operationFinished", loadKey });
 					return;
 				}
 			}
 			await resolveClient().leaveHousehold(householdId);
 			reloadSession({ mode: "retireCurrent" });
 		} catch (error) {
-			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFinished", loadKey });
 		} finally {
 			operationInFlightRef.current = false;
 		}
@@ -307,13 +299,10 @@ export function useHouseholdSettings(
 		try {
 			const joinCode = await resolveClient().regenerateJoinCode(householdId);
 			dispatch({ type: "joinCodeChanged", loadKey, joinCode });
-			dispatch({
-				type: "notice",
-				loadKey,
-				notice: "Household Join Code regenerated.",
-			});
+			toast.success("Household Join Code regenerated.");
 		} catch (error) {
-			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFinished", loadKey });
 		} finally {
 			operationInFlightRef.current = false;
 		}
@@ -327,32 +316,28 @@ export function useHouseholdSettings(
 				enabled,
 			});
 			dispatch({ type: "joinCodeChanged", loadKey, joinCode });
-			dispatch({
-				type: "notice",
-				loadKey,
-				notice: enabled
+			toast.success(
+				enabled
 					? "Household Join Code enabled."
 					: "Household Join Code disabled.",
-			});
+			);
 		} catch (error) {
-			dispatch({ type: "notice", loadKey, notice: messageFromError(error) });
+			toast.error(messageFromError(error));
+			dispatch({ type: "operationFinished", loadKey });
 		} finally {
 			operationInFlightRef.current = false;
 		}
 	}
 
-	async function copyText(text: string, notice: string) {
+	async function copyText(text: string, confirmation: string) {
 		if (!startOperation({ status: "copyingText" })) return;
 		try {
 			await Clipboard.setStringAsync(text);
-			dispatch({ type: "notice", loadKey, notice });
+			toast.success(confirmation);
 		} catch {
-			dispatch({
-				type: "notice",
-				loadKey,
-				notice: "Unable to copy. Please try again.",
-			});
+			toast.error("Unable to copy. Please try again.");
 		} finally {
+			dispatch({ type: "operationFinished", loadKey });
 			operationInFlightRef.current = false;
 		}
 	}
@@ -384,13 +369,12 @@ export function useHouseholdSettings(
 			regenerateJoinCode,
 			setJoinCodeEnabled,
 			copyText,
-			clearNotice: () => dispatch({ type: "notice", loadKey, notice: null }),
 		},
 	};
 }
 
 function initialResource(loadKey: string): Resource {
-	return { status: "loading", loadKey, attempt: 0, preservedNotice: null };
+	return { status: "loading", loadKey, attempt: 0 };
 }
 
 function reducer(state: Resource, action: Action): Resource {
@@ -399,7 +383,6 @@ function reducer(state: Resource, action: Action): Resource {
 			status: "loading",
 			loadKey: action.loadKey,
 			attempt: action.attempt,
-			preservedNotice: noticePreservedAcrossLoad(state),
 		};
 	}
 
@@ -408,7 +391,6 @@ function reducer(state: Resource, action: Action): Resource {
 			status: "loading",
 			loadKey: action.loadKey,
 			attempt: state.loadKey === action.loadKey ? state.attempt + 1 : 0,
-			preservedNotice: noticePreservedAcrossLoad(state),
 		};
 	}
 
@@ -428,7 +410,6 @@ function reducer(state: Resource, action: Action): Resource {
 			invitations: action.invitations,
 			joinCode: action.joinCode,
 			renamedHouseholdName: null,
-			notice: state.status === "loading" ? state.preservedNotice : null,
 			operation: { status: "idle" },
 		};
 	}
@@ -445,21 +426,13 @@ function reducer(state: Resource, action: Action): Resource {
 	if (action.type === "operationStarted") {
 		return { ...state, operation: action.operation };
 	}
-	if (action.type === "notice") {
-		return {
-			...state,
-			notice: noticeFromMessage(action.notice, false),
-			operation: { status: "idle" },
-		};
+	if (action.type === "operationFinished") {
+		return { ...state, operation: { status: "idle" } };
 	}
 	if (action.type === "invitationCreated") {
 		return {
 			...state,
 			invitations: action.invitations,
-			notice: noticeFromMessage(
-				invitationCreatedNotice(action.response),
-				false,
-			),
 			operation: { status: "idle" },
 		};
 	}
@@ -467,7 +440,6 @@ function reducer(state: Resource, action: Action): Resource {
 		return {
 			...state,
 			renamedHouseholdName: action.household.name,
-			notice: noticeFromMessage("Household renamed.", true),
 			operation: { status: "idle" },
 		};
 	}
@@ -477,7 +449,6 @@ function reducer(state: Resource, action: Action): Resource {
 			invitations: state.invitations.filter(
 				(invitation) => invitation.id !== action.invitationId,
 			),
-			notice: noticeFromMessage("Invitation revoked.", false),
 			operation: { status: "idle" },
 		};
 	}
@@ -485,23 +456,6 @@ function reducer(state: Resource, action: Action): Resource {
 		return { ...state, members: action.members, operation: { status: "idle" } };
 	}
 	return { ...state, joinCode: action.joinCode, operation: { status: "idle" } };
-}
-
-function noticeFromMessage(
-	message: string | null,
-	preserveAcrossLoad: boolean,
-): HouseholdSettingsNotice | null {
-	return message ? { message, preserveAcrossLoad } : null;
-}
-
-function noticePreservedAcrossLoad(
-	state: Resource,
-): HouseholdSettingsNotice | null {
-	if (state.status === "ready" && state.notice?.preserveAcrossLoad) {
-		return state.notice;
-	}
-	if (state.status === "loading") return state.preservedNotice;
-	return null;
 }
 
 function stateFromResource(
@@ -520,18 +474,27 @@ function stateFromResource(
 		invitations: resource.invitations,
 		joinCode: resource.joinCode,
 		renamedHouseholdName: resource.renamedHouseholdName,
-		notice: resource.notice?.message ?? null,
 		operation: resource.operation,
 	};
 }
 
-function invitationCreatedNotice(response: CreateInvitationResponse): string {
-	if (response.reusedExisting) return "Existing pending Invitation found.";
-	if (response.emailDelivery.status === "failed") {
-		return "Invitation created, but email delivery failed. Copy the link to share it.";
+/** Invitations can succeed in several shapes, one of which is worth a warning. */
+function reportInvitationCreated(response: CreateInvitationResponse): void {
+	if (response.reusedExisting) {
+		toast.success("Existing pending Invitation found.");
+		return;
 	}
-	if (response.emailDelivery.status === "sent") return "Invitation emailed.";
-	return "Invitation link created.";
+	if (response.emailDelivery.status === "failed") {
+		toast.warning("Invitation created, but email delivery failed.", {
+			description: "Copy the link to share it.",
+		});
+		return;
+	}
+	toast.success(
+		response.emailDelivery.status === "sent"
+			? "Invitation emailed."
+			: "Invitation link created.",
+	);
 }
 
 type UploadQueueDrainResult = "drained" | "blocked";
@@ -597,7 +560,7 @@ function messageFromError(error: unknown): string {
 	return error instanceof Error ? error.message : "Something went wrong.";
 }
 
-function normalizeInvitationEmailInput(email: string): string | null {
+export function normalizeInvitationEmail(email: string): string | null {
 	const normalized = email.trim().toLowerCase();
 	return isInvitationEmail(normalized) ? normalized : null;
 }

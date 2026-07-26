@@ -72,7 +72,6 @@ export type AddItemComposerUiState = {
 	canSubmit: boolean;
 	selectedListId: string;
 	listOptions: readonly AddItemListOption[];
-	errorMessage: string | null;
 };
 
 export type AddItemComposerActions = {
@@ -386,18 +385,6 @@ function ExpandedGlassComposer({
 							]}
 						/>
 					</VStack>
-
-					{ui.errorMessage ? (
-						<Text
-							modifiers={[
-								accessibilityLabel(ui.errorMessage),
-								font({ textStyle: "caption", weight: "semibold" }),
-								foregroundStyle(theme.colors.destructive),
-							]}
-						>
-							{ui.errorMessage}
-						</Text>
-					) : null}
 
 					<HStack alignment="center" spacing={theme.spacing(3)}>
 						<Text

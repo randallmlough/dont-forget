@@ -99,7 +99,6 @@ function renderOpenComposer({
 					{ id: "lst_groceries", name: "Groceries" },
 					{ id: "lst_costco", name: "Costco" },
 				],
-				errorMessage: null,
 			}}
 			actions={{
 				open() {},

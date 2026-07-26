@@ -3,6 +3,7 @@ import "../src/client/theme/unistyles";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { registerRootComponent } from "expo";
 import { createElement } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
 	initialWindowMetrics,
 	SafeAreaProvider,
@@ -16,11 +17,17 @@ const StorybookUI = view.getStorybookUI({
 	},
 });
 
+// Stories with gestures, such as the toast swipe, throw in development without
+// a GestureHandlerRootView ancestor.
 function StorybookUIRoot() {
 	return createElement(
-		SafeAreaProvider,
-		{ initialMetrics: initialWindowMetrics },
-		createElement(StorybookUI),
+		GestureHandlerRootView,
+		null,
+		createElement(
+			SafeAreaProvider,
+			{ initialMetrics: initialWindowMetrics },
+			createElement(StorybookUI),
+		),
 	);
 }
 

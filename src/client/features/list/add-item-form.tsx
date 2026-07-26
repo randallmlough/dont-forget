@@ -8,7 +8,6 @@ import type { AddListItemDraft } from "./list-view-types";
 export type AddItemFormProps = {
 	currentListId: string;
 	listOptions: readonly AddItemListOption[];
-	errorMessage: string | null;
 	onAddItem: (input: AddListItemDraft) => Promise<void>;
 	presentation?: AddItemFormPresentation;
 };
@@ -48,7 +47,6 @@ const INLINE_PRESENTATION = {
 export function AddItemForm({
 	currentListId,
 	listOptions,
-	errorMessage,
 	onAddItem,
 	presentation = INLINE_PRESENTATION,
 }: AddItemFormProps) {
@@ -104,7 +102,6 @@ export function AddItemForm({
 				canSubmit,
 				selectedListId: composer.selectedListId,
 				listOptions,
-				errorMessage,
 			}}
 			actions={{
 				open: openComposer,

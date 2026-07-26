@@ -10,7 +10,9 @@ import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-c
 import { useLogger } from "@/client/lib/logger";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useAuthenticatedAppSession } from "@/client/session";
+import { Toaster } from "@/client/ui/toast";
 import { createMockLogger, type MockLogger } from "@/test/mocks/logger";
+import { drainToasts } from "@/test/toast";
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();
@@ -73,6 +75,8 @@ beforeEach(() => {
 	});
 });
 
+afterEach(drainToasts);
+
 describe("SettingsScreen", () => {
 	it("renders the dedicated destination hub and configured legal rows", async () => {
 		await renderWithSafeArea(<SettingsScreen />);
@@ -132,7 +136,7 @@ describe("SettingsScreen", () => {
 		);
 	});
 
-	it("shows a notice and logs when a legal URL cannot open", async () => {
+	it("reports a toast and logs when a legal URL cannot open", async () => {
 		const error = new Error("browser unavailable");
 		jest.mocked(WebBrowser.openBrowserAsync).mockRejectedValueOnce(error);
 		await renderWithSafeArea(<SettingsScreen />);
@@ -164,6 +168,7 @@ function TestSafeAreaProvider({ children }: PropsWithChildren) {
 			<NavigationDrawerProvider open={jest.fn()}>
 				{children}
 			</NavigationDrawerProvider>
+			<Toaster />
 		</SafeAreaProvider>
 	);
 }

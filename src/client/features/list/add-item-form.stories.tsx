@@ -50,7 +50,6 @@ function AddItemFormStory() {
 						{ id: "lst_groceries", name: state.listName },
 						{ id: "lst_costco", name: "Costco" },
 					]}
-					errorMessage={actions.errorMessage}
 					onAddItem={actions.addItem}
 				/>
 			</View>

@@ -641,7 +641,6 @@ function ActiveHomeListPage({
 							state={loadState.list}
 							meta={{
 								currentMemberName: sessionMemberDisplayName(session),
-								errorMessage: actions.errorMessage,
 								syncState,
 							}}
 						/>
@@ -655,7 +654,6 @@ function ActiveHomeListPage({
 			/>
 			<AddItemForm
 				currentListId={loadState.listId}
-				errorMessage={actions.errorMessage}
 				listOptions={composerListOptions}
 				onAddItem={actions.addItem}
 				presentation={{

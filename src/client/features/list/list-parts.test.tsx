@@ -111,7 +111,6 @@ describe("List parts", () => {
 					{ id: "lst_groceries", name: "Groceries" },
 					{ id: "lst_costco", name: "Costco" },
 				]}
-				errorMessage={null}
 				onAddItem={onAddItem}
 			/>,
 		);
@@ -144,7 +143,6 @@ describe("List parts", () => {
 					{ id: "lst_groceries", name: "Groceries" },
 					{ id: "lst_costco", name: "Costco" },
 				]}
-				errorMessage={null}
 				onAddItem={onAddItem}
 			/>,
 		);
@@ -186,7 +184,6 @@ function meta(
 ): ActiveListMeta {
 	return {
 		currentMemberName: "Avery",
-		errorMessage: null,
 		syncState,
 	};
 }

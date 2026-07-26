@@ -237,15 +237,7 @@ function UserNameForm({
 							/>
 						</Field>
 					</FieldGroup>
-					<FieldError
-						errors={[
-							...(validationMessage ? [validationMessage] : []),
-							...(state.userError ? [state.userError] : []),
-						]}
-					/>
-					{state.userNotice ? (
-						<Text style={styles.formNotice}>{state.userNotice}</Text>
-					) : null}
+					<FieldError errors={validationMessage ? [validationMessage] : []} />
 					<View style={styles.formActions}>
 						<Button
 							disabled={state.userUpdateInFlight}
@@ -341,10 +333,6 @@ const styles = StyleSheet.create((theme) => ({
 	formActions: {
 		flexDirection: "row",
 		gap: theme.spacing(2),
-	},
-	formNotice: {
-		...theme.typography.callout,
-		color: theme.colors.primary,
 	},
 	sectionAction: {
 		minHeight: theme.spacing(11),

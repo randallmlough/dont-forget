@@ -11,6 +11,7 @@ import {
 	type HouseholdJoinCodePreview,
 	type InvitationPreview,
 } from "@/client/features/household/api";
+import { toast } from "@/client/ui/toast";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@/shared/household-join-code-source";
 
 type PublicEntryKind = "invitation" | "joinCode";
@@ -24,7 +25,6 @@ export type PublicHouseholdEntryState =
 			householdName: string;
 			inviterDisplayName?: string;
 			working: boolean;
-			error: string | null;
 	  }
 	| { status: "complete"; message: string };
 
@@ -38,7 +38,6 @@ type PublicHouseholdEntryResource =
 			householdName: string;
 			inviterDisplayName?: string;
 			working: boolean;
-			error: string | null;
 	  }
 	| { status: "complete"; entryKey: string; message: string };
 
@@ -51,7 +50,7 @@ type Action =
 	  }
 	| { type: "unavailable"; entryKey: string; message: string }
 	| { type: "working"; entryKey: string }
-	| { type: "failed"; entryKey: string; message: string }
+	| { type: "failed"; entryKey: string }
 	| { type: "complete"; entryKey: string; message: string };
 
 export function usePublicHouseholdEntry({
@@ -160,11 +159,8 @@ export function usePublicHouseholdEntry({
 			dispatch({ type: "complete", entryKey, message: "Household joined." });
 			router.replace("/");
 		} catch (error) {
-			dispatch({
-				type: "failed",
-				entryKey,
-				message: messageFromError(error),
-			});
+			toast.error(messageFromError(error));
+			dispatch({ type: "failed", entryKey });
 		}
 	}
 
@@ -209,8 +205,7 @@ function reducer(
 			state.kind === action.kind &&
 			state.householdName === action.preview.householdName &&
 			state.inviterDisplayName === inviterDisplayName &&
-			state.working === false &&
-			state.error === null
+			state.working === false
 		) {
 			return state;
 		}
@@ -221,15 +216,14 @@ function reducer(
 			householdName: action.preview.householdName,
 			inviterDisplayName,
 			working: false,
-			error: null,
 		};
 	}
 	if (state.entryKey !== action.entryKey) return state;
 	if (action.type === "working" && state.status === "ready") {
-		return { ...state, working: true, error: null };
+		return { ...state, working: true };
 	}
 	if (action.type === "failed" && state.status === "ready") {
-		return { ...state, working: false, error: action.message };
+		return { ...state, working: false };
 	}
 	if (action.type === "complete") {
 		return {
@@ -259,7 +253,6 @@ function stateFromResource(
 		householdName: resource.householdName,
 		inviterDisplayName: resource.inviterDisplayName,
 		working: resource.working,
-		error: resource.error,
 	};
 }
 
