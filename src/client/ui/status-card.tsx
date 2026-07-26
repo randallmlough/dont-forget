@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { Button } from "@/client/ui/button";
 import {
 	Card,
 	CardContent,
@@ -10,7 +9,7 @@ import {
 	CardTitle,
 } from "@/client/ui/card";
 
-export function HomeStatus({
+export function StatusCard({
 	title,
 	body,
 	children,
@@ -32,10 +31,6 @@ export function HomeStatus({
 			</Card>
 		</View>
 	);
-}
-
-export function HomeRetryButton({ onPress }: { onPress: () => void }) {
-	return <Button onPress={onPress}>Try again</Button>;
 }
 
 const styles = StyleSheet.create((theme) => ({

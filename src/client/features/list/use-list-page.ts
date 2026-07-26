@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Item } from "@/client/features/list/item-service";
 import type { ListSummary } from "@/client/features/list/list-service";
 import type { ProductQuery } from "@/client/lib/product-database";
+import { useProductQuery } from "@/client/lib/use-product-query";
 import type { AuthenticatedAppSession } from "@/client/session";
 import {
 	activeListStateFromItems,
@@ -9,7 +10,6 @@ import {
 	listPageActions,
 } from "./list-page-data";
 import type { ActiveListState } from "./list-view-types";
-import { usePowerSyncQuery } from "./use-powersync-query";
 import { useProductServices } from "./use-product-services";
 
 export type ListPageState =
@@ -33,7 +33,7 @@ export function useListPage(
 		userId: session.activeMember.userId,
 	});
 	const [retryEpoch, setRetryEpoch] = useState(0);
-	const items = usePowerSyncQuery<Item>(
+	const items = useProductQuery<Item>(
 		retryKeyedQuery(
 			services.items.listItemsQuery({ listId: summary.id }),
 			retryEpoch,

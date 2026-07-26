@@ -15,10 +15,6 @@ import {
 	CurrentList,
 	type HomeListPickerPhase,
 } from "@/client/features/list/current-list";
-import {
-	HomeRetryButton,
-	HomeStatus,
-} from "@/client/features/list/home-status";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
 import { useListRows } from "@/client/features/list/use-list-rows";
@@ -29,6 +25,8 @@ import {
 	useAuthenticatedAppSession,
 	useSyncState,
 } from "@/client/session";
+import { Button } from "@/client/ui/button";
+import { StatusCard } from "@/client/ui/status-card";
 import { HomeListToolbar } from "./home-list-toolbar";
 
 const FALLBACK_TITLE = "Home";
@@ -326,16 +324,16 @@ export function HomeScreenView({ state, onRetry }: HomeScreenViewProps) {
 	return (
 		<View style={styles.root}>
 			{state.status === "error" ? (
-				<HomeStatus title="Household unavailable" body={state.message}>
-					{onRetry ? <HomeRetryButton onPress={onRetry} /> : null}
-				</HomeStatus>
+				<StatusCard title="Household unavailable" body={state.message}>
+					{onRetry ? <Button onPress={onRetry}>Try again</Button> : null}
+				</StatusCard>
 			) : (
-				<HomeStatus
+				<StatusCard
 					title="Preparing your Household"
 					body="Loading your Household List."
 				>
 					<ActivityIndicator />
-				</HomeStatus>
+				</StatusCard>
 			)}
 		</View>
 	);

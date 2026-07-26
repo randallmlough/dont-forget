@@ -14,10 +14,6 @@ import {
 	clearCurrentListSelection,
 	setCurrentListSelection,
 } from "@/client/features/list/current-selection";
-import {
-	HomeRetryButton,
-	HomeStatus,
-} from "@/client/features/list/home-status";
 import type {
 	CreateListResult,
 	DeleteListResult,
@@ -54,6 +50,7 @@ import {
 } from "@/client/ui/item";
 import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
 import { ScreenSection } from "@/client/ui/screen-section";
+import { StatusCard } from "@/client/ui/status-card";
 import { toast } from "@/client/ui/toast";
 
 type ListMutationOutcome =
@@ -630,18 +627,18 @@ function ListsSessionState({
 }) {
 	if (state.status === "error") {
 		return (
-			<HomeStatus title="Household unavailable" body={state.message}>
-				<HomeRetryButton onPress={onRetry} />
-			</HomeStatus>
+			<StatusCard title="Household unavailable" body={state.message}>
+				<Button onPress={onRetry}>Try again</Button>
+			</StatusCard>
 		);
 	}
 	return (
-		<HomeStatus
+		<StatusCard
 			title="Preparing your Household"
 			body="Loading your Household Lists."
 		>
 			<ActivityIndicator />
-		</HomeStatus>
+		</StatusCard>
 	);
 }
 

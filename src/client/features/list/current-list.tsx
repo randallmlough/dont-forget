@@ -32,8 +32,8 @@ import {
 	sessionMemberDisplayName,
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
+import { StatusCard } from "@/client/ui/status-card";
 import { AddItemForm } from "./add-item-form";
-import { HomeRetryButton, HomeStatus } from "./home-status";
 import { ItemRows } from "./item-rows";
 import { ListOverview } from "./list-overview";
 import type { ActiveListSyncState } from "./list-view-types";
@@ -112,18 +112,18 @@ export function CurrentList({
 
 	if (listRows.status === "loading" || loadState.status === "loading") {
 		return (
-			<HomeStatus
+			<StatusCard
 				title="Preparing your Household"
 				body="Loading your Household List."
 			>
 				<ActivityIndicator />
-			</HomeStatus>
+			</StatusCard>
 		);
 	}
 
 	if (listRows.status === "error" || loadState.status === "error") {
 		return (
-			<HomeStatus
+			<StatusCard
 				title="List unavailable"
 				body={
 					loadState.status === "error"
@@ -131,19 +131,19 @@ export function CurrentList({
 						: "Unable to load your Lists. Please try again."
 				}
 			>
-				<HomeRetryButton onPress={currentList.retry} />
-			</HomeStatus>
+				<Button onPress={currentList.retry}>Try again</Button>
+			</StatusCard>
 		);
 	}
 
 	if (loadState.status === "zeroActive" || listRows.summaries.length === 0) {
 		return (
-			<HomeStatus
+			<StatusCard
 				title="No active Lists"
 				body="Create a List to start adding Items."
 			>
 				<Button onPress={onOpenLists}>Create List</Button>
-			</HomeStatus>
+			</StatusCard>
 		);
 	}
 
@@ -550,12 +550,12 @@ function HomeListPage({
 		return (
 			<View style={[styles.page, { paddingTop: topContentInset }]}>
 				<HomeListPageTitle title={summary.name} />
-				<HomeStatus
+				<StatusCard
 					title="Preparing your Household"
 					body="Loading your Household List."
 				>
 					<ActivityIndicator />
-				</HomeStatus>
+				</StatusCard>
 			</View>
 		);
 	}
@@ -564,9 +564,9 @@ function HomeListPage({
 		return (
 			<View style={[styles.page, { paddingTop: topContentInset }]}>
 				<HomeListPageTitle title={summary.name} />
-				<HomeStatus title="List unavailable" body={state.message}>
-					<HomeRetryButton onPress={state.retry} />
-				</HomeStatus>
+				<StatusCard title="List unavailable" body={state.message}>
+					<Button onPress={state.retry}>Try again</Button>
+				</StatusCard>
 			</View>
 		);
 	}

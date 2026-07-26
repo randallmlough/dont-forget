@@ -1,6 +1,6 @@
 import type { ListSummary } from "@/client/features/list/list-service";
+import { useProductQuery } from "@/client/lib/use-product-query";
 import type { AuthenticatedAppSession } from "@/client/session";
-import { usePowerSyncQuery } from "./use-powersync-query";
 import { useProductServices } from "./use-product-services";
 
 export type ListRows =
@@ -28,7 +28,7 @@ export function useListRows(session: AuthenticatedAppSession): {
 	});
 	// A fresh query object per render is fine: useQuery re-keys on the
 	// compiled SQL + parameters, not object identity.
-	const query = usePowerSyncQuery<ListSummary>(
+	const query = useProductQuery<ListSummary>(
 		services.lists.listListsQuery({
 			archive: "active",
 			sort: "recentActivity",
