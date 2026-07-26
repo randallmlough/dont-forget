@@ -11,7 +11,6 @@ import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 } from "@/client/features/list/current-selection";
-import type { Item, ListItemsInput } from "@/client/features/list/item-service";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { logger } from "@/client/lib/logger";
 import type { ProductQuery } from "@/client/lib/product-database";
@@ -46,8 +45,6 @@ type WatchedQueryResult<T> = {
 	error: Error | undefined;
 };
 
-type ItemQuery = ProductQuery<Item> & { readonly listId: string };
-
 const mockUseQuery = jest.mocked(useQuery);
 const mockGetSelection = jest.mocked(getCurrentListSelection);
 const mockClearSelection = jest.mocked(clearCurrentListSelectionIfMatches);
@@ -60,24 +57,17 @@ const listSummariesQuery: ProductQuery<ListSummary> = {
 };
 
 let summariesResult: WatchedQueryResult<ListSummary>;
-let itemResults: Map<string, WatchedQueryResult<Item>>;
-let itemQueryListIds: Map<object, string>;
 
 beforeEach(() => {
 	summariesResult = watchedQuery({ data: [] });
-	itemResults = new Map();
-	itemQueryListIds = new Map();
 	mockGetSelection.mockResolvedValue(null);
 	mockClearSelection.mockResolvedValue(false);
 	mockUseProductServices.mockReturnValue(productServices());
+	// The resolver owns the selected List id only; Items belong to the List
+	// pages. Anything else it watches would gate Home on a single List's rows.
 	mockUseQuery.mockImplementation((query) => {
 		if (query === listSummariesQuery) {
 			return summariesResult;
-		}
-		const key = queryObject(query);
-		const listId = key ? itemQueryListIds.get(key) : undefined;
-		if (listId !== undefined) {
-			return itemResults.get(listId) ?? watchedQuery({ data: [] });
 		}
 		throw new Error("unexpected watched query");
 	});
@@ -91,7 +81,6 @@ describe("useHomeCurrentList", () => {
 	it("creates product services for the active Household and User", async () => {
 		await renderHomeCurrentList({
 			summaries: [summary("lst_recent")],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
@@ -109,7 +98,6 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection.mockReturnValue(pendingSelection);
 		const view = await renderHomeCurrentList({
 			summaries: [summary("lst_recent")],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(screen.getByText("loading")).toBeTruthy();
@@ -137,12 +125,9 @@ describe("useHomeCurrentList", () => {
 				summary("lst_groceries", "Groceries"),
 				summary("lst_pantry", "Pantry"),
 			],
-			itemsByListId: { lst_pantry: [item("itm_flour", "lst_pantry")] },
 		});
 
 		expect(await screen.findByText("active:lst_pantry")).toBeTruthy();
-		expect(screen.getByText("listName:Pantry")).toBeTruthy();
-		expect(screen.getByText("item:itm_flour")).toBeTruthy();
 		expect(mockClearSelection).not.toHaveBeenCalled();
 	});
 
@@ -154,11 +139,9 @@ describe("useHomeCurrentList", () => {
 				summary("lst_recent", "Recent"),
 				summary("lst_older", "Older"),
 			],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
-		expect(screen.getByText("listName:Recent")).toBeTruthy();
 		expect(mockClearSelection).not.toHaveBeenCalled();
 	});
 
@@ -167,7 +150,6 @@ describe("useHomeCurrentList", () => {
 		const view = await renderHomeCurrentList({
 			summaries: [],
 			summariesIsLoading: true,
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(await screen.findByText("loading")).toBeTruthy();
@@ -196,7 +178,6 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection.mockReturnValue(pendingSelection);
 		await renderHomeCurrentList({
 			summaries: [summary("lst_recent", "Recent")],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(screen.getByText("loading")).toBeTruthy();
@@ -206,7 +187,6 @@ describe("useHomeCurrentList", () => {
 		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
-		expect(screen.getByText("listName:Recent")).toBeTruthy();
 		await waitFor(() =>
 			expect(mockClearSelection).toHaveBeenCalledWith(
 				"usr_avery",
@@ -235,19 +215,17 @@ describe("useHomeCurrentList", () => {
 		).toBeTruthy();
 	});
 
-	it("maps an Items query error to the List error state", async () => {
-		await renderHomeCurrentList({
-			summaries: [summary("lst_recent")],
-			itemErrorsByListId: {
-				lst_recent: new Error("items failed"),
-			},
-		});
+	it("resolves the selected List without watching its Items", async () => {
+		// Folding a List's Items query into this state is what used to unmount
+		// Home's whole List pager, and its picker with it, when one List's rows
+		// failed to read. Each List page watches its own Items instead.
+		await renderHomeCurrentList({ summaries: [summary("lst_recent")] });
 
-		expect(
-			await screen.findByText(
-				"error:Unable to load this List. Please try again.",
-			),
-		).toBeTruthy();
+		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
+		expect(mockUseQuery).toHaveBeenCalledWith(listSummariesQuery);
+		for (const [query] of mockUseQuery.mock.calls) {
+			expect(query).toBe(listSummariesQuery);
+		}
 	});
 
 	it("logs a clear failure and keeps rendering the active fallback", async () => {
@@ -256,7 +234,6 @@ describe("useHomeCurrentList", () => {
 		const view = await renderHomeCurrentList({
 			summaries: [],
 			summariesIsLoading: true,
-			itemsByListId: { lst_recent: [] },
 		});
 
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
@@ -279,7 +256,6 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection.mockRejectedValue(new Error("storage offline"));
 		await renderHomeCurrentList({
 			summaries: [summary("lst_recent")],
-			itemsByListId: { lst_recent: [] },
 		});
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
@@ -300,10 +276,6 @@ describe("useHomeCurrentList", () => {
 				summary("lst_recent", "Recent"),
 				summary("lst_pantry", "Pantry"),
 			],
-			itemsByListId: {
-				lst_recent: [],
-				lst_pantry: [],
-			},
 		});
 
 		await waitFor(() =>
@@ -332,10 +304,6 @@ describe("useHomeCurrentList", () => {
 			.mockResolvedValueOnce("lst_pantry");
 		const { result } = await renderUseHomeCurrentList({
 			summaries: [summary("lst_recent", "Recent")],
-			itemsByListId: {
-				lst_recent: [],
-				lst_pantry: [],
-			},
 		});
 
 		await waitFor(() =>
@@ -365,7 +333,6 @@ describe("useHomeCurrentList", () => {
 		const { rerender } = await renderUseHomeCurrentList({
 			summaries: [],
 			summariesIsLoading: true,
-			itemsByListId: { lst_recent: [] },
 		});
 
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
@@ -380,22 +347,6 @@ describe("useHomeCurrentList", () => {
 
 		expect(mockClearSelection).not.toHaveBeenCalled();
 	});
-
-	it("filters Item rows that belong to a different List id", async () => {
-		await renderHomeCurrentList({
-			summaries: [summary("lst_current")],
-			itemsByListId: {
-				lst_current: [
-					item("itm_current", "lst_current"),
-					item("itm_previous", "lst_previous"),
-				],
-			},
-		});
-
-		expect(await screen.findByText("active:lst_current")).toBeTruthy();
-		expect(screen.getByText("item:itm_current")).toBeTruthy();
-		expect(screen.queryByText("item:itm_previous")).toBeNull();
-	});
 });
 
 function HomeCurrentListHarness({
@@ -405,15 +356,7 @@ function HomeCurrentListHarness({
 }) {
 	const { state } = useHomeCurrentList(session);
 	if (state.status === "active") {
-		return (
-			<>
-				<Text>{`active:${state.listId}`}</Text>
-				<Text>{`listName:${state.list.listName}`}</Text>
-				{state.list.items.map((row) => (
-					<Text key={row.id}>{`item:${row.id}`}</Text>
-				))}
-			</>
-		);
+		return <Text>{`active:${state.listId}`}</Text>;
 	}
 	if (state.status === "error") {
 		return <Text>{`error:${state.message}`}</Text>;
@@ -436,8 +379,6 @@ type WatchedQueryFixture = {
 	summariesIsLoading?: boolean;
 	summariesIsFetching?: boolean;
 	summariesError?: Error;
-	itemsByListId?: Record<string, Item[]>;
-	itemErrorsByListId?: Record<string, Error>;
 };
 
 function arrangeWatchedQueries(input: WatchedQueryFixture) {
@@ -447,15 +388,6 @@ function arrangeWatchedQueries(input: WatchedQueryFixture) {
 		isFetching: input.summariesIsFetching,
 		error: input.summariesError,
 	});
-	itemResults = new Map();
-	for (const [listId, items] of Object.entries(input.itemsByListId ?? {})) {
-		itemResults.set(listId, watchedQuery({ data: items }));
-	}
-	for (const [listId, error] of Object.entries(
-		input.itemErrorsByListId ?? {},
-	)) {
-		itemResults.set(listId, watchedQuery({ data: [], error }));
-	}
 }
 
 function watchedQuery<T>(input: {
@@ -486,27 +418,13 @@ function productServices(): ProductServices {
 		},
 		items: {
 			listItems: unused,
-			listItemsQuery: jest.fn((input: ListItemsInput) =>
-				itemQuery(input.listId),
-			),
+			listItemsQuery: jest.fn(() => {
+				throw new Error("the Current List resolver must not watch Items");
+			}),
 			addItem: unused,
 			setItemChecked: unused,
 		},
 	};
-}
-
-function itemQuery(listId: string): ItemQuery {
-	const query = {
-		listId,
-		compile: () => ({ sql: "SELECT items", parameters: [listId] }),
-		execute: async () => itemResults.get(listId)?.data ?? [],
-	};
-	itemQueryListIds.set(query, listId);
-	return query;
-}
-
-function queryObject(query: unknown): object | null {
-	return typeof query === "object" && query !== null ? query : null;
 }
 
 function sessionFixture(): AuthenticatedAppSession {
@@ -550,22 +468,5 @@ function summary(id: string, name = id): ListSummary {
 		lastActivityAt: 1,
 		uncheckedItemCount: 0,
 		checkedItemCount: 0,
-	};
-}
-
-function item(id: string, listId: string): Item {
-	return {
-		id,
-		householdId: "hh_1",
-		listId,
-		name: id,
-		quantity: null,
-		notes: null,
-		checked: false,
-		checkedByUserId: null,
-		position: 0,
-		createdByUserId: "usr_avery",
-		createdAt: 1,
-		updatedAt: 1,
 	};
 }

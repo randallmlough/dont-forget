@@ -88,10 +88,7 @@ describe("CurrentList", () => {
 		const scrollToOffset = jest
 			.spyOn(FlatList.prototype, "scrollToOffset")
 			.mockImplementation();
-		const deps = activeListDeps(
-			jest.fn(async () => undefined),
-			[groceriesListSummary, pantryListSummary],
-		);
+		const deps = activeListDeps([groceriesListSummary, pantryListSummary]);
 
 		try {
 			const view = await render(
@@ -238,10 +235,7 @@ describe("CurrentList", () => {
 		await render(
 			<HomeCurrentList
 				session={authenticatedAppSession}
-				deps={activeListDeps(undefined, [
-					groceriesListSummary,
-					pantryListSummary,
-				])}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={onFocusList}
 				onOpenLists={jest.fn()}
@@ -267,10 +261,7 @@ describe("CurrentList", () => {
 		await render(
 			<HomeCurrentList
 				session={authenticatedAppSession}
-				deps={activeListDeps(undefined, [
-					groceriesListSummary,
-					pantryListSummary,
-				])}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -293,10 +284,7 @@ describe("CurrentList", () => {
 		await render(
 			<HomeCurrentList
 				session={authenticatedAppSession}
-				deps={activeListDeps(undefined, [
-					groceriesListSummary,
-					pantryListSummary,
-				])}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -349,10 +337,7 @@ describe("CurrentList", () => {
 		await render(
 			<HomeCurrentList
 				session={authenticatedAppSession}
-				deps={activeListDeps(undefined, [
-					groceriesListSummary,
-					pantryListSummary,
-				])}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={onFocusList}
 				onOpenLists={jest.fn()}
@@ -381,10 +366,7 @@ describe("CurrentList", () => {
 		await render(
 			<HomeCurrentList
 				session={authenticatedAppSession}
-				deps={activeListDeps(undefined, [
-					groceriesListSummary,
-					pantryListSummary,
-				])}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={onFocusList}
 				onOpenLists={jest.fn()}
@@ -420,10 +402,7 @@ describe("CurrentList", () => {
 			await render(
 				<HomeCurrentList
 					session={authenticatedAppSession}
-					deps={activeListDeps(undefined, [
-						groceriesListSummary,
-						pantryListSummary,
-					])}
+					deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 					focusedListId="lst_groceries"
 					onFocusList={onFocusList}
 					onOpenLists={jest.fn()}
@@ -456,10 +435,7 @@ describe("CurrentList", () => {
 		await render(
 			<HomeCurrentList
 				session={authenticatedAppSession}
-				deps={activeListDeps(undefined, [
-					groceriesListSummary,
-					pantryListSummary,
-				])}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -478,10 +454,7 @@ describe("CurrentList", () => {
 		await render(
 			<HomeCurrentList
 				session={authenticatedAppSession}
-				deps={activeListDeps(undefined, [
-					groceriesListSummary,
-					pantryListSummary,
-				])}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 				focusedListId="lst_groceries"
 				onFocusList={jest.fn(async () => true)}
 				onOpenLists={jest.fn()}
@@ -571,6 +544,54 @@ describe("CurrentList", () => {
 			),
 		).toBeTruthy();
 	});
+
+	it("keeps every other List reachable when one page's Items fail to load", async () => {
+		jest.mocked(useListPage).mockImplementation((_session, summary) =>
+			summary.id === "lst_groceries"
+				? {
+						status: "error",
+						message: "Unable to load this List. Please try again.",
+					}
+				: {
+						status: "active",
+						listId: summary.id,
+						list: { ...emptyActiveListState, listName: summary.name },
+						actions: {
+							addItem: jest.fn(async () => undefined),
+							setItemChecked: jest.fn(async () => undefined),
+						},
+					},
+		);
+
+		await render(
+			<HomeCurrentList
+				session={authenticatedAppSession}
+				deps={activeListDeps([groceriesListSummary, pantryListSummary])}
+				focusedListId="lst_groceries"
+				onFocusList={jest.fn(async () => true)}
+				onOpenLists={jest.fn()}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		// The failure stays on the page that owns it.
+		expect(
+			within(screen.getByTestId("home-list-page-lst_groceries")).getByText(
+				"Unable to load this List. Please try again.",
+			),
+		).toBeTruthy();
+		// The pager and the healthy List beside it are still mounted, and the
+		// picker still opens, so the Household is not stuck on one bad List.
+		expect(
+			within(
+				screen.getByTestId("home-adjacent-list-page-lst_pantry", {
+					includeHiddenElements: true,
+				}),
+			).getByText("Pantry", { includeHiddenElements: true }),
+		).toBeTruthy();
+		await openListPicker();
+		expect(await screen.findByTestId("home-list-picker")).toBeTruthy();
+	});
 });
 
 /**
@@ -650,10 +671,7 @@ function pagedListSurface() {
 	return (
 		<HomeCurrentList
 			session={authenticatedAppSession}
-			deps={activeListDeps(undefined, [
-				groceriesListSummary,
-				pantryListSummary,
-			])}
+			deps={activeListDeps([groceriesListSummary, pantryListSummary])}
 			focusedListId="lst_groceries"
 			onFocusList={jest.fn(async () => true)}
 			onOpenLists={jest.fn()}
@@ -749,20 +767,11 @@ function horizontalScrollEvent(offsetX: number) {
 }
 
 function activeListDeps(
-	addItem = jest.fn(async () => undefined),
 	summaries = [groceriesListSummary],
 ): HomeCurrentListDeps {
 	return {
 		currentList: {
-			state: {
-				status: "active",
-				listId: "lst_groceries",
-				list: emptyActiveListState,
-				actions: {
-					addItem,
-					setItemChecked: jest.fn(async () => undefined),
-				},
-			},
+			state: { status: "active", listId: "lst_groceries" },
 			retry: jest.fn(),
 			reload: jest.fn(),
 		},
@@ -786,15 +795,7 @@ function zeroActiveListDeps(): HomeCurrentListDeps {
 function pantryCurrentListDeps(): HomeCurrentListDeps {
 	return {
 		currentList: {
-			state: {
-				status: "active",
-				listId: "lst_pantry",
-				list: { ...emptyActiveListState, listName: "Pantry" },
-				actions: {
-					addItem: jest.fn(async () => undefined),
-					setItemChecked: jest.fn(async () => undefined),
-				},
-			},
+			state: { status: "active", listId: "lst_pantry" },
 			retry: jest.fn(),
 			reload: jest.fn(),
 		},

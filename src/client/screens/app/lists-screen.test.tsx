@@ -87,19 +87,7 @@ beforeEach(() => {
 		rows: { status: "ready", summaries: summariesFixture() },
 	});
 	jest.mocked(useHomeCurrentList).mockReturnValue({
-		state: {
-			status: "active",
-			listId: "lst_groceries",
-			list: {
-				householdName: "Juniper House",
-				listName: "Groceries",
-				items: [],
-			},
-			actions: {
-				addItem: jest.fn(async () => undefined),
-				setItemChecked: jest.fn(async () => undefined),
-			},
-		},
+		state: { status: "active", listId: "lst_groceries" },
 		retry: jest.fn(),
 		reload: jest.fn(),
 	});

@@ -3,35 +3,18 @@ import {
 	clearCurrentListSelectionIfMatches,
 	getCurrentListSelection,
 } from "@/client/features/list/current-selection";
-import type { Item } from "@/client/features/list/item-service";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { useLogger } from "@/client/lib/logger";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { asError } from "@/shared/errors";
-import {
-	activeListStateFromItems,
-	type ListPageActions,
-	listPageActions,
-} from "./list-page-data";
-import type { ActiveListState } from "./list-view-types";
 import { usePowerSyncQuery } from "./use-powersync-query";
-import {
-	type ProductServices,
-	useProductServices,
-} from "./use-product-services";
-
-export type HomeCurrentListActions = ListPageActions;
+import { useProductServices } from "./use-product-services";
 
 export type HomeCurrentListState =
 	| { status: "loading" }
 	| { status: "error"; message: string }
 	| { status: "zeroActive" }
-	| {
-			status: "active";
-			listId: string;
-			list: ActiveListState;
-			actions: HomeCurrentListActions;
-	  };
+	| { status: "active"; listId: string };
 
 export type HomeCurrentListData = {
 	state: HomeCurrentListState;
@@ -42,17 +25,20 @@ export type HomeCurrentListData = {
 const LIST_ERROR_MESSAGE = "Unable to load this List. Please try again.";
 
 /**
- * Resolves the Current List for Home from live watched SQL snapshots plus the
- * AsyncStorage-backed explicit selection:
+ * Resolves which List is the Current List for Home from the live active List
+ * summaries snapshot plus the AsyncStorage-backed explicit selection:
  *
  * 1. Read the stored Current List selection for the active User + Household.
  * 2. Validate it against the live active List summaries snapshot.
  * 3. If the stored selection is inactive, clear it and fall back IN MEMORY to
  *    the most recently active List. Fallback is never persisted.
- * 4. Items are read through a watched query for the derived Current List id.
  *
- * SQL errors map to the retryable List error state. Selection-storage failures
- * log and degrade to the in-memory fallback.
+ * The resolver owns the selected List id only. Item rows belong to whichever
+ * List page renders them (`useListPage`), so one List's failed Items query
+ * surfaces on that page instead of gating Home's List pager and picker.
+ *
+ * Summaries SQL errors map to the retryable List error state. Selection-storage
+ * failures log and degrade to the in-memory fallback.
  */
 export function useHomeCurrentList(
 	session: AuthenticatedAppSession,
@@ -89,11 +75,6 @@ export function useHomeCurrentList(
 		selection.status === "ready" && summariesReady
 			? deriveCurrentListId(storedListId, summaries.data)
 			: null;
-	// Hooks cannot be conditional; an empty-string List id matches no rows
-	// while resolution is pending.
-	const items = usePowerSyncQuery<Item>(
-		services.items.listItemsQuery({ listId: currentListId ?? "" }),
-	);
 	const readySelectionKey = selection.status === "ready" ? selection.key : null;
 	const readySelectionInitialRead =
 		selection.status === "ready" && selection.initialRead;
@@ -162,14 +143,7 @@ export function useHomeCurrentList(
 	]);
 
 	return {
-		state: homeCurrentListState({
-			session,
-			services,
-			selection,
-			summaries,
-			items,
-			currentListId,
-		}),
+		state: homeCurrentListState({ selection, summaries, currentListId }),
 		retry: refreshSelection,
 		// Current List selection lives in AsyncStorage (not watched by
 		// PowerSync), so switch/create/delete flows re-read it explicitly
@@ -268,18 +242,11 @@ function deriveCurrentListId(
 }
 
 function homeCurrentListState(input: {
-	session: AuthenticatedAppSession;
-	services: ProductServices;
 	selection: StoredSelectionState;
-	summaries: {
-		data: ListSummary[];
-		isLoading: boolean;
-		error: Error | undefined;
-	};
-	items: { data: Item[]; isLoading: boolean; error: Error | undefined };
+	summaries: { isLoading: boolean; error: Error | undefined };
 	currentListId: string | null;
 }): HomeCurrentListState {
-	if (input.summaries.error || input.items.error) {
+	if (input.summaries.error) {
 		return { status: "error", message: LIST_ERROR_MESSAGE };
 	}
 	if (input.selection.status === "loading" || input.summaries.isLoading) {
@@ -288,32 +255,5 @@ function homeCurrentListState(input: {
 	if (input.currentListId === null) {
 		return { status: "zeroActive" };
 	}
-	if (input.items.isLoading) {
-		return { status: "loading" };
-	}
-	const summary = input.summaries.data.find(
-		(candidate) => candidate.id === input.currentListId,
-	);
-	if (!summary) {
-		// Type narrowing only: currentListId is derived from this same array.
-		return { status: "loading" };
-	}
-	// Right after a switch the watched Items query may briefly still hold the
-	// previous List's rows (the SDK keeps data while re-running on a
-	// parameter change); rows are List-scoped, so filter (Decision 7).
-	return {
-		status: "active",
-		listId: input.currentListId,
-		list: activeListStateFromItems({
-			session: input.session,
-			listName: summary.name,
-			listId: input.currentListId,
-			items: input.items.data,
-		}),
-		actions: listPageActions({
-			session: input.session,
-			services: input.services,
-			listId: input.currentListId,
-		}),
-	};
+	return { status: "active", listId: input.currentListId };
 }

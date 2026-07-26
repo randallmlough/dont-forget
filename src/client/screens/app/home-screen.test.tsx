@@ -924,15 +924,7 @@ async function waitForSelectionCount(count: number): Promise<void> {
 
 function activeCurrentList(): HomeCurrentListDeps["currentList"] {
 	return {
-		state: {
-			status: "active",
-			listId: "lst_groceries",
-			list: emptyActiveListState,
-			actions: {
-				addItem: jest.fn(async () => undefined),
-				setItemChecked: jest.fn(async () => undefined),
-			},
-		},
+		state: { status: "active", listId: "lst_groceries" },
 		retry: jest.fn(),
 		reload: jest.fn(),
 	};
