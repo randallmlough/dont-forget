@@ -37,6 +37,10 @@ jest.mock("@expo/ui/swift-ui", () =>
 	jest.requireActual("./mocks/expo-ui-swift"),
 );
 
+// Universal Expo UI controls are native container boundaries. The mock keeps
+// app-owned wrapper behavior testable without loading SwiftUI or Compose.
+jest.mock("@expo/ui", () => jest.requireActual("./mocks/expo-ui"));
+
 jest.mock("expo-glass-effect", () => {
 	const React = jest.requireActual<typeof import("react")>("react");
 	const { View } =
