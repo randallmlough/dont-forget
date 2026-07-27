@@ -1,59 +1,118 @@
-import type { ReactElement } from "react";
-import { Modal } from "react-native";
+import {
+	BottomSheet as ExpoBottomSheet,
+	type BottomSheetProps as ExpoBottomSheetProps,
+	RNHostView,
+} from "@expo/ui";
+import type { ReactNode } from "react";
+import { Text, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
-/**
- * App-owned bottom-sheet primitive. Every sheet in the app goes through this
- * component (see `docs/code-standards/ui-composition.md`) so the sheet
- * implementation has a single swap point.
- *
- * Contract — implementations may change, this may not:
- * - Children are mounted only while presented: `isPresented: false` renders
- *   nothing. Owner components rely on unmount-on-close to reset per-open
- *   state (the Home switcher's mode/rows do).
- * - A native swipe-down dismissal fires `onIsPresentedChange(false)`.
- *
- * Current internals: `pageSheet` is a UIKit large-detent sheet
- * (UISheetPresentationController), so the hosted React Native content gets a
- * real bounded height and row ScrollViews scroll natively within it.
- *
- * These internals replaced an `@expo/ui` BottomSheet/RNHostView shell:
- * simulator QA proved RNHostView's bidirectional size negotiation with Yoga
- * nondeterministically settles at fit-to-content height (frame == content
- * size), which makes row ScrollViews unscrollable and clips overflow rows.
- *
- * Swap plan: on the Expo SDK 56 upgrade, reimplement these internals over
- * `@expo/ui/community/bottom-sheet` behind this same prop surface —
- * `BottomSheetModal` presented/dismissed from `isPresented` via an effect,
- * explicit `snapPoints` such as `['50%', '90%']` to restore the medium
- * detent, and `BottomSheetScrollView` for row lists. Content stays in React
- * Native (no RNHostView), so the defect class above cannot recur. Acceptance
- * gate: the live QA in `ui-composition.md` must pass again, especially the
- * many-Lists (13+) scroll check.
- */
-export type BottomSheetProps = {
-	children: ReactElement;
+export type BottomSheetSnapPoint = NonNullable<
+	ExpoBottomSheetProps["snapPoints"]
+>[number];
+
+type BottomSheetHeaderProps =
+	| {
+			headerAction?: ReactNode;
+			title: string;
+	  }
+	| {
+			headerAction?: never;
+			title?: never;
+	  };
+
+export type BottomSheetProps = BottomSheetHeaderProps & {
+	children: ReactNode;
 	isPresented: boolean;
 	onIsPresentedChange: (isPresented: boolean) => void;
+	showDragIndicator?: boolean;
+	snapPoints?: BottomSheetSnapPoint[];
+	testID?: string;
 };
 
+/**
+ * App-owned wrapper around Expo UI's universal native bottom sheet.
+ *
+ * React Native content is hosted inside Expo UI here so callers do not need to
+ * know about the native host boundary. Children unmount when the sheet closes,
+ * which lets owners keep per-presentation state inside the sheet.
+ */
 export function BottomSheet({
 	children,
+	headerAction,
 	isPresented,
 	onIsPresentedChange,
+	showDragIndicator = true,
+	snapPoints,
+	testID,
+	title,
 }: BottomSheetProps) {
 	if (!isPresented) {
 		return null;
 	}
 
+	const hasSnapPoints = snapPoints !== undefined && snapPoints.length > 0;
+
 	return (
-		<Modal
-			visible
-			animationType="slide"
-			presentationStyle="pageSheet"
-			allowSwipeDismissal
-			onRequestClose={() => onIsPresentedChange(false)}
+		<ExpoBottomSheet
+			isPresented
+			onDismiss={() => onIsPresentedChange(false)}
+			showDragIndicator={showDragIndicator}
+			snapPoints={snapPoints}
+			testID={testID}
 		>
-			{children}
-		</Modal>
+			<RNHostView matchContents={!hasSnapPoints}>
+				<View
+					style={[styles.sheet, hasSnapPoints ? styles.boundedSheet : null]}
+				>
+					{title !== undefined ? (
+						<View style={styles.header}>
+							<Text accessibilityRole="header" style={styles.title}>
+								{title}
+							</Text>
+							{headerAction}
+						</View>
+					) : null}
+					<View
+						style={[
+							styles.content,
+							hasSnapPoints ? styles.boundedContent : null,
+						]}
+					>
+						{children}
+					</View>
+				</View>
+			</RNHostView>
+		</ExpoBottomSheet>
 	);
 }
+
+const styles = StyleSheet.create((theme) => ({
+	sheet: {
+		gap: theme.spacing(3),
+		paddingBottom: theme.spacing(4),
+	},
+	boundedSheet: {
+		flex: 1,
+	},
+	header: {
+		minHeight: theme.spacing(11),
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(3),
+		borderBottomWidth: theme.borders.hairline,
+		borderBottomColor: theme.colors.border,
+	},
+	title: {
+		...theme.typography.headline,
+		minWidth: 0,
+		flex: 1,
+		color: theme.colors.foreground,
+	},
+	content: {
+		gap: theme.spacing(4),
+	},
+	boundedContent: {
+		flex: 1,
+	},
+}));
