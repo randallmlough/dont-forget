@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import type { ListSummary } from "@/client/features/list/list-service";
+import type { ListCollectionState } from "@/client/features/list/use-list-collection";
 import { ListsScreenView } from "./lists-screen";
 
 const meta = {
@@ -24,8 +25,11 @@ const meta = {
 	],
 	args: {
 		session: sessionFixture(),
-		rows: { status: "ready", summaries: listSummaries(), isFetching: false },
-		currentListId: "lst_story_1",
+		collectionState: {
+			status: "active",
+			summaries: listSummaries(),
+			currentListId: "lst_story_1",
+		} satisfies ListCollectionState,
 		onSelectList: async () => undefined,
 		onCreateList: handled,
 		onRenameList: handled,
@@ -40,22 +44,31 @@ type Story = StoryObj<typeof meta>;
 export const Rows: Story = {};
 
 export const NoCurrentList: Story = {
-	args: { currentListId: null },
+	args: {
+		collectionState: {
+			status: "resolvingCurrentList",
+			summaries: listSummaries(),
+		},
+	},
 };
 
 export const Empty: Story = {
 	args: {
-		rows: { status: "ready", summaries: [], isFetching: false },
-		currentListId: null,
+		collectionState: { status: "zeroActive" },
 	},
 };
 
 export const Loading: Story = {
-	args: { rows: { status: "loading" } },
+	args: { collectionState: { status: "loading" } },
 };
 
 export const ErrorState: Story = {
-	args: { rows: { status: "error" } },
+	args: {
+		collectionState: {
+			status: "error",
+			message: "Unable to load your Lists. Please try again.",
+		},
+	},
 };
 
 function listSummaries(): ListSummary[] {

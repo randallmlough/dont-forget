@@ -10,24 +10,14 @@ import {
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@/client/app-shell/screen-scaffold";
-import {
-	clearCurrentListSelection,
-	setCurrentListSelection,
-} from "@/client/features/list/current-selection";
 import type {
-	CreateListResult,
-	DeleteListResult,
 	ListNameValidationError,
 	ListSummary,
-	RenameListResult,
 } from "@/client/features/list/list-service";
-import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
 import {
-	type ListRows,
-	useListRows,
-} from "@/client/features/list/use-list-rows";
-import { useProductServices } from "@/client/features/list/use-product-services";
-import { useSelectList } from "@/client/features/list/use-select-list";
+	type ListCollectionState,
+	useListCollection,
+} from "@/client/features/list/use-list-collection";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
@@ -77,105 +67,68 @@ function ListsScreenResource({
 }: {
 	session: AuthenticatedAppSession;
 }) {
-	const { rows } = useListRows(session);
-	const currentList = useCurrentListSelection(session, rows);
-	const selectList = useSelectList(session);
-	const services = useProductServices({
-		householdId: session.activeHousehold.id,
-		userId: session.activeMember.userId,
-	});
+	const collection = useListCollection(session);
 	const router = useRouter();
-	const userId = session.activeMember.userId;
-	const householdId = session.activeHousehold.id;
-	const currentListId =
-		currentList.state.status === "active" ? currentList.state.listId : null;
 
 	async function select(listId: string) {
-		if (listId === currentListId) {
+		const outcome = await collection.actions.selectList({ listId });
+		if (outcome.status === "selected" || outcome.status === "alreadyCurrent") {
 			router.replace("/");
-			return;
 		}
-		if (await selectList(listId, currentListId)) router.replace("/");
 	}
 
 	async function create(name: string): Promise<CreateListMutationOutcome> {
-		let result: CreateListResult;
-		try {
-			result = await services.lists.createList({ name });
-		} catch {
-			return { status: "error", message: GENERIC_ERROR_MESSAGE };
-		}
-		if (result.status === "invalidName") {
+		const outcome = await collection.actions.createList({ name });
+		if (outcome.status === "invalidName") {
 			return {
 				status: "error",
-				message: listNameValidationMessage(result.reason),
+				message: listNameValidationMessage(outcome.reason),
 			};
 		}
-		try {
-			await setCurrentListSelection(userId, householdId, result.list.id);
+		if (outcome.status === "createdAndSelected") {
 			router.replace("/");
 			return { status: "handled" };
-		} catch {
+		}
+		if (outcome.status === "createdSelectionFailed") {
 			return { status: "selectionFailed" };
 		}
+		return { status: "error", message: GENERIC_ERROR_MESSAGE };
 	}
 
 	async function rename(
 		listId: string,
 		name: string,
 	): Promise<ListMutationOutcome> {
-		let result: RenameListResult;
-		try {
-			result = await services.lists.renameList({ listId, name });
-		} catch {
-			return { status: "error", message: GENERIC_ERROR_MESSAGE };
-		}
-		if (result.status === "invalidName") {
+		const outcome = await collection.actions.renameList({ listId, name });
+		if (outcome.status === "invalidName") {
 			return {
 				status: "error",
-				message: listNameValidationMessage(result.reason),
+				message: listNameValidationMessage(outcome.reason),
 			};
 		}
-		if (result.status === "missing" || result.status === "deleted") {
+		if (outcome.status === "gone") {
 			return { status: "error", message: LIST_GONE_MESSAGE };
 		}
-		return { status: "handled" };
+		if (outcome.status === "renamed" || outcome.status === "unchanged") {
+			return { status: "handled" };
+		}
+		return { status: "error", message: GENERIC_ERROR_MESSAGE };
 	}
 
 	async function deleteList(listId: string): Promise<ListMutationOutcome> {
-		let result: DeleteListResult;
-		try {
-			result = await services.lists.deleteList({ listId });
-		} catch {
-			return { status: "error", message: GENERIC_ERROR_MESSAGE };
-		}
-		if (result.status === "missing") {
+		const outcome = await collection.actions.deleteList({ listId });
+		if (outcome.status === "gone") {
 			return { status: "error", message: LIST_GONE_MESSAGE };
 		}
-		if (result.didWrite && listId === currentListId) {
-			try {
-				const remaining = await services.lists.listLists({
-					archive: "active",
-					sort: "recentActivity",
-				});
-				const fallback = remaining[0];
-				if (fallback) {
-					await setCurrentListSelection(userId, householdId, fallback.id);
-				} else {
-					await clearCurrentListSelection(userId, householdId);
-				}
-			} catch {
-				// Home re-resolves the live summaries and falls back in memory.
-			}
-		}
-		return { status: "handled" };
+		return outcome.status === "deleted"
+			? { status: "handled" }
+			: { status: "error", message: GENERIC_ERROR_MESSAGE };
 	}
 
 	return (
 		<ListsScreenView
 			session={session}
-			rows={rows}
-			currentListId={currentListId}
+			collectionState={collection.state}
 			onSelectList={select}
 			onCreateList={create}
 			onRenameList={rename}
@@ -186,8 +139,7 @@ function ListsScreenResource({
 
 export type ListsScreenViewProps = {
 	session: AuthenticatedAppSession;
-	rows: ListRows;
-	currentListId: string | null;
+	collectionState: ListCollectionState;
 	onSelectList: (listId: string) => Promise<void>;
 	onCreateList: (name: string) => Promise<CreateListMutationOutcome>;
 	onRenameList: (listId: string, name: string) => Promise<ListMutationOutcome>;
@@ -196,8 +148,7 @@ export type ListsScreenViewProps = {
 
 export function ListsScreenView({
 	session,
-	rows,
-	currentListId,
+	collectionState,
 	onSelectList,
 	onCreateList,
 	onRenameList,
@@ -235,9 +186,8 @@ export function ListsScreenView({
 	return (
 		<ScreenScaffold label="Lists" title={session.activeHousehold.name}>
 			<View style={styles.pageContent}>
-				<ListRowsView
-					rows={rows}
-					currentListId={currentListId}
+				<ListCollectionView
+					collectionState={collectionState}
 					listMutationPending={listMutationPending}
 					onSelectList={onSelectList}
 					onCreate={() =>
@@ -272,17 +222,15 @@ export function ListsScreenView({
 	);
 }
 
-function ListRowsView({
-	rows,
-	currentListId,
+function ListCollectionView({
+	collectionState,
 	listMutationPending,
 	onSelectList,
 	onCreate,
 	onRename,
 	onDelete,
 }: {
-	rows: ListRows;
-	currentListId: string | null;
+	collectionState: ListCollectionState;
 	listMutationPending: boolean;
 	onSelectList: (listId: string) => Promise<void>;
 	onCreate: () => void;
@@ -290,20 +238,22 @@ function ListRowsView({
 	onDelete: (summary: ListSummary) => void;
 }) {
 	const { theme } = useUnistyles();
-	const loadFailed = rows.status === "error";
+	const loadFailed = collectionState.status === "error";
+	const currentListId =
+		collectionState.status === "active" ? collectionState.currentListId : null;
 	const { currentSummary, otherSummaries } = useMemo(() => {
-		if (rows.status !== "ready") {
-			return { currentSummary: undefined, otherSummaries: [] };
-		}
+		const summaries =
+			collectionState.status === "active" ||
+			collectionState.status === "resolvingCurrentList"
+				? collectionState.summaries
+				: [];
 		return {
-			currentSummary: rows.summaries.find(
-				(summary) => summary.id === currentListId,
-			),
-			otherSummaries: rows.summaries.filter(
+			currentSummary: summaries.find((summary) => summary.id === currentListId),
+			otherSummaries: summaries.filter(
 				(summary) => summary.id !== currentListId,
 			),
 		};
-	}, [rows, currentListId]);
+	}, [collectionState, currentListId]);
 
 	useEffect(() => {
 		if (loadFailed) toast.error("Unable to load your Lists.");
@@ -311,13 +261,13 @@ function ListRowsView({
 
 	return (
 		<View style={styles.listLayout}>
-			{rows.status === "loading" ? (
+			{collectionState.status === "loading" ? (
 				<View style={styles.statusContainer}>
 					<GlassSurface style={styles.statusSurface}>
 						<ActivityIndicator />
 					</GlassSurface>
 				</View>
-			) : rows.status === "error" ? null : (
+			) : collectionState.status === "error" ? null : (
 				<FlatList
 					alwaysBounceVertical={false}
 					contentContainerStyle={styles.rowsContent}
