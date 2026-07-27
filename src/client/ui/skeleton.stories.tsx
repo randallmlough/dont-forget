@@ -12,12 +12,12 @@ import {
 	CardTitle,
 } from "./card";
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemSeparator } from "./item";
-import { Skelton } from "./skelton";
+import { Skeleton } from "./skeleton";
 
 const meta = {
-	title: "UI/Skelton",
-	component: Skelton,
-} satisfies Meta<typeof Skelton>;
+	title: "UI/Skeleton",
+	component: Skeleton,
+} satisfies Meta<typeof Skeleton>;
 
 export default meta;
 
@@ -26,7 +26,7 @@ type Story = StoryObj<typeof meta>;
 export const Playground: Story = {
 	render: () => (
 		<View style={styles.playground}>
-			<Skelton style={styles.playgroundSkelton} />
+			<Skeleton style={styles.playgroundSkeleton} />
 		</View>
 	),
 };
@@ -40,11 +40,11 @@ export const ContentStates: Story = {
 };
 
 export const LightTheme: Story = {
-	render: () => <SkeltonGallery themeName="light" />,
+	render: () => <SkeletonGallery themeName="light" />,
 };
 
 export const DarkTheme: Story = {
-	render: () => <SkeltonGallery themeName="dark" />,
+	render: () => <SkeletonGallery themeName="dark" />,
 };
 
 function ContentStateExample() {
@@ -60,7 +60,7 @@ function ContentStateExample() {
 	);
 }
 
-function SkeltonGallery({ themeName }: { themeName: "light" | "dark" }) {
+function SkeletonGallery({ themeName }: { themeName: "light" | "dark" }) {
 	return (
 		<ScopedTheme name={themeName}>
 			<ScrollView contentContainerStyle={styles.canvas} style={styles.screen}>
@@ -71,10 +71,10 @@ function SkeltonGallery({ themeName }: { themeName: "light" | "dark" }) {
 						accessibilityState={{ busy: true }}
 						style={styles.textBlock}
 					>
-						<Skelton style={styles.headingLine} />
-						<Skelton style={styles.textLine} />
-						<Skelton style={styles.textLine} />
-						<Skelton style={styles.shortTextLine} />
+						<Skeleton style={styles.headingLine} />
+						<Skeleton style={styles.textLine} />
+						<Skeleton style={styles.textLine} />
+						<Skeleton style={styles.shortTextLine} />
 					</View>
 				</StorySection>
 
@@ -85,14 +85,14 @@ function SkeltonGallery({ themeName }: { themeName: "light" | "dark" }) {
 						accessibilityState={{ busy: true }}
 					>
 						<CardHeader style={styles.profileHeader}>
-							<Skelton style={styles.avatar} />
+							<Skeleton style={styles.avatar} />
 							<View style={styles.profileText}>
-								<Skelton style={styles.profileName} />
-								<Skelton style={styles.profileDetail} />
+								<Skeleton style={styles.profileName} />
+								<Skeleton style={styles.profileDetail} />
 							</View>
 						</CardHeader>
 						<CardContent>
-							<Skelton style={styles.cardImage} />
+							<Skeleton style={styles.cardImage} />
 						</CardContent>
 					</Card>
 				</StorySection>
@@ -106,7 +106,7 @@ function SkeltonGallery({ themeName }: { themeName: "light" | "dark" }) {
 					>
 						<LoadingField />
 						<LoadingField />
-						<Skelton style={styles.formAction} />
+						<Skeleton style={styles.formAction} />
 					</View>
 				</StorySection>
 
@@ -130,11 +130,11 @@ function ListSummaryLoading() {
 			accessibilityState={{ busy: true }}
 		>
 			<CardHeader style={styles.summaryHeader}>
-				<Skelton style={styles.summaryTitle} />
-				<Skelton style={styles.summaryDescription} />
+				<Skeleton style={styles.summaryTitle} />
+				<Skeleton style={styles.summaryDescription} />
 			</CardHeader>
 			<CardContent>
-				<Skelton style={styles.summaryBody} />
+				<Skeleton style={styles.summaryBody} />
 			</CardContent>
 		</Card>
 	);
@@ -159,8 +159,8 @@ function ListSummary() {
 function LoadingField() {
 	return (
 		<View style={styles.field}>
-			<Skelton style={styles.fieldLabel} />
-			<Skelton style={styles.fieldInput} />
+			<Skeleton style={styles.fieldLabel} />
+			<Skeleton style={styles.fieldInput} />
 		</View>
 	);
 }
@@ -186,11 +186,11 @@ function LoadingListRow() {
 	return (
 		<Item size="sm">
 			<ItemMedia variant="icon">
-				<Skelton style={styles.listIcon} />
+				<Skeleton style={styles.listIcon} />
 			</ItemMedia>
 			<ItemContent style={styles.rowContent}>
-				<Skelton style={styles.rowTitle} />
-				<Skelton style={styles.rowDetail} />
+				<Skeleton style={styles.rowTitle} />
+				<Skeleton style={styles.rowDetail} />
 			</ItemContent>
 		</Item>
 	);
@@ -217,11 +217,11 @@ function LoadingMemberRow() {
 	return (
 		<Item size="sm">
 			<ItemMedia>
-				<Skelton style={styles.memberAvatar} />
+				<Skeleton style={styles.memberAvatar} />
 			</ItemMedia>
 			<ItemContent style={styles.rowContent}>
-				<Skelton style={styles.memberName} />
-				<Skelton style={styles.memberRole} />
+				<Skeleton style={styles.memberName} />
+				<Skeleton style={styles.memberRole} />
 			</ItemContent>
 		</Item>
 	);
@@ -258,7 +258,7 @@ const styles = StyleSheet.create((theme) => ({
 		padding: theme.spacing(6),
 		backgroundColor: theme.colors.background,
 	},
-	playgroundSkelton: {
+	playgroundSkeleton: {
 		width: "70%",
 		height: theme.spacing(5),
 	},
