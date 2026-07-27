@@ -1,15 +1,15 @@
 import * as Crypto from "expo-crypto";
 import { z } from "zod";
-import {
-	sqlTimestampMillisSchema,
-	timestampMillisToSqlText,
-} from "@/client/features/list/sql-timestamp";
 import { track } from "@/client/lib/analytics";
 import { logger as defaultLogger, type Logger } from "@/client/lib/logger";
 import type {
 	ProductDatabase,
 	ProductQuery,
 } from "@/client/lib/product-database";
+import {
+	sqlTimestampMillisSchema,
+	timestampMillisToSqlText,
+} from "@/client/lib/sql-timestamp";
 import { asError } from "@/shared/errors";
 import { createAppId } from "@/shared/ids";
 import type { ServiceAnalytics } from "@/shared/service-analytics";

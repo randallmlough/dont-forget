@@ -18,7 +18,7 @@ import type {
 	List,
 	ListSummary,
 } from "@/client/features/list/list-service";
-import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
+import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
 import { useListRows } from "@/client/features/list/use-list-rows";
 import {
 	type ProductServices,
@@ -44,8 +44,8 @@ jest.mock("@/client/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
 }));
 
-jest.mock("@/client/features/list/use-home-current-list", () => ({
-	useHomeCurrentList: jest.fn(),
+jest.mock("@/client/features/list/use-current-list-selection", () => ({
+	useCurrentListSelection: jest.fn(),
 }));
 
 jest.mock("@/client/features/list/use-list-rows", () => ({
@@ -88,7 +88,7 @@ beforeEach(() => {
 	jest.mocked(useListRows).mockReturnValue({
 		rows: { status: "ready", summaries: summariesFixture(), isFetching: false },
 	});
-	jest.mocked(useHomeCurrentList).mockReturnValue({
+	jest.mocked(useCurrentListSelection).mockReturnValue({
 		state: { status: "active", listId: "lst_groceries" },
 		retry: jest.fn(),
 		reload: jest.fn(),

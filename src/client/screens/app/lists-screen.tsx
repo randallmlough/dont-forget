@@ -14,10 +14,6 @@ import {
 	clearCurrentListSelection,
 	setCurrentListSelection,
 } from "@/client/features/list/current-selection";
-import {
-	HomeRetryButton,
-	HomeStatus,
-} from "@/client/features/list/home-status";
 import type {
 	CreateListResult,
 	DeleteListResult,
@@ -25,7 +21,7 @@ import type {
 	ListSummary,
 	RenameListResult,
 } from "@/client/features/list/list-service";
-import { useHomeCurrentList } from "@/client/features/list/use-home-current-list";
+import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
 import {
 	type ListRows,
 	useListRows,
@@ -54,6 +50,7 @@ import {
 } from "@/client/ui/item";
 import { themedAlert, themedPrompt } from "@/client/ui/native-dialogs";
 import { ScreenSection } from "@/client/ui/screen-section";
+import { StatusCard } from "@/client/ui/status-card";
 import { toast } from "@/client/ui/toast";
 
 type ListMutationOutcome =
@@ -81,7 +78,7 @@ function ListsScreenResource({
 	session: AuthenticatedAppSession;
 }) {
 	const { rows } = useListRows(session);
-	const currentList = useHomeCurrentList(session, rows);
+	const currentList = useCurrentListSelection(session, rows);
 	const selectList = useSelectList(session);
 	const services = useProductServices({
 		householdId: session.activeHousehold.id,
@@ -630,18 +627,18 @@ function ListsSessionState({
 }) {
 	if (state.status === "error") {
 		return (
-			<HomeStatus title="Household unavailable" body={state.message}>
-				<HomeRetryButton onPress={onRetry} />
-			</HomeStatus>
+			<StatusCard title="Household unavailable" body={state.message}>
+				<Button onPress={onRetry}>Try again</Button>
+			</StatusCard>
 		);
 	}
 	return (
-		<HomeStatus
+		<StatusCard
 			title="Preparing your Household"
 			body="Loading your Household Lists."
 		>
 			<ActivityIndicator />
-		</HomeStatus>
+		</StatusCard>
 	);
 }
 

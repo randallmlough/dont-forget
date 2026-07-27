@@ -13,7 +13,7 @@ import {
 import type { ListSummary } from "@/client/features/list/list-service";
 import { logger } from "@/client/lib/logger";
 import type { AuthenticatedAppSession } from "@/client/session";
-import { useHomeCurrentList } from "./use-home-current-list";
+import { useCurrentListSelection } from "./use-current-list-selection";
 import type { ListRows } from "./use-list-rows";
 
 jest.mock("@/client/lib/logger", () =>
@@ -44,14 +44,14 @@ afterEach(() => {
 	jest.clearAllMocks();
 });
 
-describe("useHomeCurrentList", () => {
+describe("useCurrentListSelection", () => {
 	it("renders loading while the stored Current List selection is pending", async () => {
 		let resolveSelection: (value: string | null) => void = () => {};
 		const pendingSelection = new Promise<string | null>((resolve) => {
 			resolveSelection = resolve;
 		});
 		mockGetSelection.mockReturnValue(pendingSelection);
-		const view = await renderHomeCurrentList({
+		const view = await renderCurrentListSelection({
 			summaries: [summary("lst_recent")],
 		});
 
@@ -64,7 +64,7 @@ describe("useHomeCurrentList", () => {
 	});
 
 	it("renders loading while active List summaries are loading", async () => {
-		await renderHomeCurrentList({
+		await renderCurrentListSelection({
 			summaries: [],
 			summariesIsLoading: true,
 		});
@@ -75,7 +75,7 @@ describe("useHomeCurrentList", () => {
 
 	it("resolves the stored selection when it is an active List", async () => {
 		mockGetSelection.mockResolvedValue("lst_pantry");
-		await renderHomeCurrentList({
+		await renderCurrentListSelection({
 			summaries: [
 				summary("lst_groceries", "Groceries"),
 				summary("lst_pantry", "Pantry"),
@@ -88,7 +88,7 @@ describe("useHomeCurrentList", () => {
 
 	it("falls back in memory to the most recently active List when nothing is stored", async () => {
 		mockGetSelection.mockResolvedValue(null);
-		await renderHomeCurrentList({
+		await renderCurrentListSelection({
 			// Summaries are queried sort: recentActivity, so index 0 is most recent.
 			summaries: [
 				summary("lst_recent", "Recent"),
@@ -102,7 +102,7 @@ describe("useHomeCurrentList", () => {
 
 	it("clears an invalid stored selection after fresh List summaries emit and falls back without persisting the fallback", async () => {
 		mockGetSelection.mockResolvedValue("lst_gone");
-		const view = await renderHomeCurrentList({
+		const view = await renderCurrentListSelection({
 			summaries: [],
 			summariesIsLoading: true,
 		});
@@ -111,7 +111,7 @@ describe("useHomeCurrentList", () => {
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
 		listRows = readyListRows([summary("lst_recent", "Recent")]);
-		view.rerender(<HomeCurrentListHarness session={sessionFixture()} />);
+		view.rerender(<CurrentListSelectionHarness session={sessionFixture()} />);
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
 		await waitFor(() =>
@@ -129,7 +129,7 @@ describe("useHomeCurrentList", () => {
 			resolveSelection = resolve;
 		});
 		mockGetSelection.mockReturnValue(pendingSelection);
-		await renderHomeCurrentList({
+		await renderCurrentListSelection({
 			summaries: [summary("lst_recent", "Recent")],
 		});
 
@@ -150,13 +150,13 @@ describe("useHomeCurrentList", () => {
 	});
 
 	it("renders zero-active when there are no active Lists", async () => {
-		await renderHomeCurrentList({ summaries: [] });
+		await renderCurrentListSelection({ summaries: [] });
 
 		expect(await screen.findByText("zeroActive")).toBeTruthy();
 	});
 
 	it("maps a summaries query error to the List error state", async () => {
-		await renderHomeCurrentList({
+		await renderCurrentListSelection({
 			summaries: [],
 			summariesError: new Error("lists failed"),
 		});
@@ -171,7 +171,7 @@ describe("useHomeCurrentList", () => {
 	it("logs a clear failure and keeps rendering the active fallback", async () => {
 		mockGetSelection.mockResolvedValue("lst_gone");
 		mockClearSelection.mockRejectedValue(new Error("storage offline"));
-		const view = await renderHomeCurrentList({
+		const view = await renderCurrentListSelection({
 			summaries: [],
 			summariesIsLoading: true,
 		});
@@ -179,7 +179,7 @@ describe("useHomeCurrentList", () => {
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
 		listRows = readyListRows([summary("lst_recent")]);
-		view.rerender(<HomeCurrentListHarness session={sessionFixture()} />);
+		view.rerender(<CurrentListSelectionHarness session={sessionFixture()} />);
 
 		expect(await screen.findByText("active:lst_recent")).toBeTruthy();
 		await waitFor(() =>
@@ -192,7 +192,7 @@ describe("useHomeCurrentList", () => {
 
 	it("logs a selection read failure and renders the most recently active List", async () => {
 		mockGetSelection.mockRejectedValue(new Error("storage offline"));
-		await renderHomeCurrentList({
+		await renderCurrentListSelection({
 			summaries: [summary("lst_recent")],
 		});
 
@@ -209,7 +209,7 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection
 			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce("lst_pantry");
-		const { result } = await renderUseHomeCurrentList({
+		const { result } = await renderUseCurrentListSelection({
 			summaries: [
 				summary("lst_recent", "Recent"),
 				summary("lst_pantry", "Pantry"),
@@ -243,7 +243,7 @@ describe("useHomeCurrentList", () => {
 				resolveRefresh = resolve;
 			}),
 		);
-		const { result } = await renderUseHomeCurrentList({
+		const { result } = await renderUseCurrentListSelection({
 			summaries: [
 				summary("lst_recent", "Recent"),
 				summary("lst_pantry", "Pantry"),
@@ -282,7 +282,7 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection
 			.mockResolvedValueOnce("lst_recent")
 			.mockResolvedValueOnce("lst_pantry");
-		const { result, rerender } = await renderUseHomeCurrentList({
+		const { result, rerender } = await renderUseCurrentListSelection({
 			summaries: [
 				summary("lst_recent", "Recent"),
 				summary("lst_pantry", "Pantry"),
@@ -329,7 +329,7 @@ describe("useHomeCurrentList", () => {
 		mockGetSelection
 			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce("lst_pantry");
-		const { result } = await renderUseHomeCurrentList({
+		const { result } = await renderUseCurrentListSelection({
 			summaries: [summary("lst_recent", "Recent")],
 		});
 
@@ -357,7 +357,7 @@ describe("useHomeCurrentList", () => {
 
 	it("does not clear an absent stored selection while summaries are fetching", async () => {
 		mockGetSelection.mockResolvedValue("lst_gone");
-		const { rerender } = await renderUseHomeCurrentList({
+		const { rerender } = await renderUseCurrentListSelection({
 			summaries: [],
 			summariesIsLoading: true,
 		});
@@ -373,12 +373,12 @@ describe("useHomeCurrentList", () => {
 	});
 });
 
-function HomeCurrentListHarness({
+function CurrentListSelectionHarness({
 	session,
 }: {
 	session: AuthenticatedAppSession;
 }) {
-	const { state } = useHomeCurrentList(session, listRows);
+	const { state } = useCurrentListSelection(session, listRows);
 	if (state.status === "active") {
 		return <Text>{`active:${state.listId}`}</Text>;
 	}
@@ -388,14 +388,14 @@ function HomeCurrentListHarness({
 	return <Text>{state.status}</Text>;
 }
 
-async function renderHomeCurrentList(input: ListRowsFixture) {
+async function renderCurrentListSelection(input: ListRowsFixture) {
 	arrangeListRows(input);
-	return render(<HomeCurrentListHarness session={sessionFixture()} />);
+	return render(<CurrentListSelectionHarness session={sessionFixture()} />);
 }
 
-async function renderUseHomeCurrentList(input: ListRowsFixture) {
+async function renderUseCurrentListSelection(input: ListRowsFixture) {
 	arrangeListRows(input);
-	return renderHook(() => useHomeCurrentList(sessionFixture(), listRows));
+	return renderHook(() => useCurrentListSelection(sessionFixture(), listRows));
 }
 
 type ListRowsFixture = {

@@ -2,15 +2,18 @@ import { useState } from "react";
 import type { Item } from "@/client/features/list/item-service";
 import type { ListSummary } from "@/client/features/list/list-service";
 import type { ProductQuery } from "@/client/lib/product-database";
+import { useProductQuery } from "@/client/lib/use-product-query";
 import type { AuthenticatedAppSession } from "@/client/session";
+import type { ActiveListState, AddListItemInput } from "./list-view-types";
 import {
-	activeListStateFromItems,
-	type ListPageActions,
-	listPageActions,
-} from "./list-page-data";
-import type { ActiveListState } from "./list-view-types";
-import { usePowerSyncQuery } from "./use-powersync-query";
-import { useProductServices } from "./use-product-services";
+	type ProductServices,
+	useProductServices,
+} from "./use-product-services";
+
+export type ListPageActions = {
+	addItem: (input: AddListItemInput) => Promise<void>;
+	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
+};
 
 export type ListPageState =
 	| { status: "loading" }
@@ -24,6 +27,85 @@ export type ListPageState =
 
 const LIST_ERROR_MESSAGE = "Unable to load this List. Please try again.";
 
+function activeListStateFromItems({
+	session,
+	listName,
+	listId,
+	items,
+}: {
+	session: AuthenticatedAppSession;
+	listName: string;
+	listId: string;
+	items: readonly Item[];
+}): ActiveListState {
+	const memberNames = memberNamesFromSession(session);
+
+	return {
+		householdName: session.activeHousehold.name,
+		listName,
+		items: items
+			.filter((item) => item.listId === listId)
+			.map((item) => ({
+				id: item.id,
+				name: item.name,
+				quantity: item.quantity,
+				notes: item.notes,
+				checked: item.checked,
+				checkedByMemberName:
+					item.checked && item.checkedByUserId
+						? (memberNames.get(item.checkedByUserId) ?? null)
+						: null,
+			})),
+	};
+}
+
+function listPageActions({
+	session,
+	services,
+	listId,
+}: {
+	session: AuthenticatedAppSession;
+	services: ProductServices;
+	listId: string;
+}): ListPageActions {
+	return {
+		async addItem(input: AddListItemInput) {
+			await services.items.addItem({
+				listId: input.listId,
+				userId: session.activeMember.userId,
+				name: input.name,
+				quantity: input.quantity,
+				notes: input.notes,
+			});
+		},
+		async setItemChecked(itemId: string, checked: boolean) {
+			await services.items.setItemChecked({
+				listId,
+				itemId,
+				userId: session.activeMember.userId,
+				checked,
+			});
+		},
+	};
+}
+
+function memberNamesFromSession(
+	session: AuthenticatedAppSession,
+): Map<string, string | null> {
+	const names = new Map<string, string | null>();
+	for (const member of session.members) {
+		names.set(member.userId, member.displayName);
+	}
+	names.set(
+		session.activeMember.userId,
+		session.activeMember.displayName ??
+			session.user.displayName ??
+			session.user.email ??
+			"Member",
+	);
+	return names;
+}
+
 export function useListPage(
 	session: AuthenticatedAppSession,
 	summary: ListSummary,
@@ -33,7 +115,7 @@ export function useListPage(
 		userId: session.activeMember.userId,
 	});
 	const [retryEpoch, setRetryEpoch] = useState(0);
-	const items = usePowerSyncQuery<Item>(
+	const items = useProductQuery<Item>(
 		retryKeyedQuery(
 			services.items.listItemsQuery({ listId: summary.id }),
 			retryEpoch,

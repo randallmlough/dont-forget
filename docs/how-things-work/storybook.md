@@ -16,15 +16,13 @@ For route screens, extract composed view components for Storybook and keep hooks
 
 If a Story renders an app route shell that already owns safe-area handling, set `parameters.noSafeArea = true` on that Story or meta. React Native Storybook's mobile UI adds safe-area padding by default, and route shells such as `ListsScreenView` already apply their own safe area through `ScreenScaffold`.
 
-For Current List UI, pass loaded List view state and explicit callback props. Stories can use local state; production signed-in routes consume Authenticated App Session provider dependencies and route-owned List loading backed by feature services. Do not inject raw PowerSync or database clients, Drizzle row types, or generic storage repositories into presentational components.
+For Current List UI, keep pager pre-load states story-driven with explicit props. Active page data uses the feature-owned `ListPage` runtime boundary, where `useListPage` watches Items for one explicit List. Do not inject raw PowerSync or database clients, Drizzle row types, or generic storage repositories into presentational components.
 
-Use dot-notation compound exports only when pieces share a real provider and state contract. The current Home List surface is deliberately flattened into prop-driven components; do not force simple standalone components like `AuthScreen` into a compound namespace unless they grow shared state.
+Use dot-notation compound exports only when pieces share a real provider and state contract. The screen-owned `HomeListPager` composes the feature-owned `ListPage` through explicit props; neither needs a provider or compound interface. Do not force simple standalone components like `AuthScreen` into a compound namespace unless they grow shared state.
 
-Keep User/session controls outside Current List presentation. Sign-out and account affordances belong to signed-in route/provider composition, not to Current List components.
+Keep User/session controls outside Current List presentation. Sign-out and account affordances belong to signed-in route/provider composition, not to the Home pager or List-page components.
 
-The first Current List stories model Home's selected List for the authenticated app session. Do not add multiple-List switching until that product slice is being built.
-
-Current List stories may use a UI-facing Item shape with an effective checked state for the current Member, plus optional display metadata such as who checked it. Production route-owned List loading computes that shape from List and Item service results.
+`HomeListPager` stories cover loading, unavailable, and zero-active states before a pager mounts. Multiple-List switching is implemented in the runtime pager and characterized by its screen-local tests. Active `ListPage` data is runtime-backed rather than injected into the pager stories.
 
 The first Add Item flow is text-only. Append Items in local state for Storybook; the app writes Items through authenticated app session Item services with an explicit List ID. Notes, manual ordering, and richer Item editing belong to later product slices.
 
@@ -33,9 +31,9 @@ Co-locate stories next to the component or view they describe under `src/client/
 ## Initial Scope
 
 - `AuthScreen` stories show authentication layout states.
-- `Home` stories render selected Current List and no-List states for the authenticated app session.
-- Home stories cover at least an empty List, a List with Items, and the no-List state. Home stories may use local React state for lightweight Item interactions, such as checking an Item or appending fixture Items.
-- The first implementation replaces the Expo starter Home route with a thin product-shaped composition using the same Current List surface that production backs with route-owned `useHomeCurrentList(session)` over feature services and watched PowerSync queries.
+- `HomeListPager` stories render loading, unavailable, and no-active-List states for the authenticated app session.
+- Active List rendering and interactions are exercised at the feature `ListPage` boundary and in runtime-backed Home tests.
+- Production Home shares one `useListRows(session)` snapshot with `useCurrentListSelection(session, rows)`, then composes the screen-owned pager with feature-owned List pages.
 
 ## Commands
 

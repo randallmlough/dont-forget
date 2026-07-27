@@ -36,7 +36,7 @@ For composed feature surfaces, export a namespace object:
 
 This keeps related pieces discoverable and lets screens arrange them without prop drilling.
 
-Only use compound exports where the pieces share a meaningful provider. Components like `AuthScreen` should stay as normal named exports unless they grow shared state. The repo currently has no live compound exemplar; Home's Current List surface was deliberately flattened into prop-driven components in `src/client/features/list/current-list.tsx`.
+Only use compound exports where the pieces share a meaningful provider. Components like `AuthScreen` should stay as normal named exports unless they grow shared state. The repo currently has no live compound exemplar; the screen-owned `HomeListPager` composes the feature-owned `ListPage` through explicit props, so neither needs a provider or compound interface.
 
 ## Feature Surface Decomposition
 
