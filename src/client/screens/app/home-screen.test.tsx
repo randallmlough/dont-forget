@@ -513,6 +513,39 @@ describe("HomeScreen", () => {
 		).toBeNull();
 	});
 
+	it("keeps the Household loading card up until the Current List resolves", async () => {
+		showCollection({ status: "loading" });
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+
+		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
+
+		showCollection({
+			status: "resolvingCurrentList",
+			summaries: [groceriesListSummary],
+		});
+		await view.rerender(homeScreenSurface());
+
+		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
+		// No List page mounts until there is a Current List to focus.
+		expect(
+			screen.queryByTestId("home-list-pager", { includeHiddenElements: true }),
+		).toBeNull();
+	});
+
+	it("offers a retry when the List collection fails to load", async () => {
+		showCollection({ status: "error", message: "Unable to load your Lists." });
+
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(await screen.findByText("List unavailable")).toBeTruthy();
+		expect(screen.getByText("Unable to load your Lists.")).toBeTruthy();
+		await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
+
+		expect(mockRetry).toHaveBeenCalledTimes(1);
+	});
+
 	it("renders the Home header and status view without a session", async () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "loading" },

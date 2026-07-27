@@ -540,6 +540,11 @@ describe("useListCollection selectList", () => {
 	it("returns semantic selection failures and blocks concurrent writes", async () => {
 		const write = deferred<void>();
 		mockSetSelection.mockReturnValue(write.promise);
+		// The store honours the write: the refresh read after a successful switch
+		// returns the List that was just persisted.
+		mockGetSelection
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce("lst_pantry");
 		const { result } = await renderCollection();
 		await waitFor(() =>
 			expect(result.current.state).toMatchObject({ status: "active" }),
@@ -558,6 +563,12 @@ describe("useListCollection selectList", () => {
 			await first;
 		});
 		await expect(first).resolves.toEqual({ status: "selected" });
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				currentListId: "lst_pantry",
+			}),
+		);
 		mockSetSelection.mockRejectedValueOnce(new Error("offline"));
 		await act(async () => {
 			await expect(
@@ -707,6 +718,66 @@ describe("useListCollection selectList", () => {
 			"lst_recent",
 		);
 	});
+
+	it("releases the internal Current List ref when the selected List stops being active before the refreshed read", async () => {
+		const refresh = deferred<string | null>();
+		mockGetSelection
+			.mockResolvedValueOnce(null)
+			.mockReturnValueOnce(refresh.promise);
+		arrangeQuery({ data: [summary("lst_recent"), summary("lst_pantry")] });
+		const { result, rerender } = await renderCollection();
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				currentListId: "lst_recent",
+			}),
+		);
+
+		await act(async () => {
+			await expect(
+				result.current.actions.selectList({ listId: "lst_pantry" }),
+			).resolves.toEqual({ status: "selected" });
+		});
+
+		// Another Member deletes the switched-to List before the refreshed read
+		// lands, so that read can never make it the derived Current List.
+		await act(async () => {
+			arrangeQuery({ data: [summary("lst_recent")] });
+			rerender(undefined);
+		});
+		await act(async () => {
+			refresh.resolve("lst_pantry");
+		});
+		await waitFor(() =>
+			expect(result.current.state).toMatchObject({
+				status: "active",
+				currentListId: "lst_recent",
+			}),
+		);
+
+		mockSetSelection.mockClear();
+		mockTrack.mockClear();
+		// The ref names the List on screen again, so selecting it writes nothing
+		// and reports no switch...
+		await expect(
+			result.current.actions.selectList({ listId: "lst_recent" }),
+		).resolves.toEqual({ status: "alreadyCurrent" });
+		expect(mockSetSelection).not.toHaveBeenCalled();
+		expect(mockTrack).not.toHaveBeenCalled();
+
+		// ...and deleting it still repairs the Current List to a remaining one.
+		listLists.mockResolvedValueOnce([summary("lst_bakery")]);
+		await act(async () => {
+			await expect(
+				result.current.actions.deleteList({ listId: "lst_recent" }),
+			).resolves.toEqual({ status: "deleted" });
+		});
+		expect(mockSetSelection).toHaveBeenCalledWith(
+			"usr_avery",
+			"hh_1",
+			"lst_bakery",
+		);
+	});
 });
 
 describe("useListCollection createList", () => {
@@ -729,6 +800,12 @@ describe("useListCollection createList", () => {
 	});
 
 	it("updates the internal Current List ref and refreshes selection after create", async () => {
+		// The created List is Current the moment the write lands; the refresh read
+		// is still in flight, so only the internal ref can say so.
+		const refresh = deferred<string | null>();
+		mockGetSelection
+			.mockResolvedValueOnce(null)
+			.mockReturnValueOnce(refresh.promise);
 		const { result } = await renderCollection();
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
 
@@ -868,6 +945,9 @@ describe("useListCollection deleteList", () => {
 		mockGetSelection.mockResolvedValue("lst_recent");
 		const { result } = await renderCollection();
 		await waitFor(() => expect(result.current.state.status).toBe("active"));
+		// listLists({ archive: "active" }) filters deleted Lists, so the repair read
+		// after deleting lst_recent can only see what is left.
+		listLists.mockResolvedValueOnce([summary("lst_pantry")]);
 		await act(async () => {
 			await expect(
 				result.current.actions.deleteList({ listId: "lst_recent" }),
@@ -880,7 +960,7 @@ describe("useListCollection deleteList", () => {
 		expect(mockSetSelection).toHaveBeenCalledWith(
 			"usr_avery",
 			"hh_1",
-			"lst_recent",
+			"lst_pantry",
 		);
 		expect(mockTrack).not.toHaveBeenCalled();
 	});
@@ -953,6 +1033,7 @@ describe("useListCollection deleteList", () => {
 		mockSetSelection.mockRejectedValueOnce(new Error("write failed"));
 		const { result } = await renderCollection();
 		await waitFor(() => expect(mockGetSelection).toHaveBeenCalledTimes(1));
+		listLists.mockResolvedValueOnce([summary("lst_pantry")]);
 
 		await act(async () => {
 			await expect(

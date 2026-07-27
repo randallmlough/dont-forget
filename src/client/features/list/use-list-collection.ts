@@ -77,6 +77,7 @@ type StoredSelectionState =
 			status: "ready";
 			key: string;
 			initialRead: boolean;
+			refreshing: boolean;
 			storedListId: string | null;
 	  };
 
@@ -118,8 +119,9 @@ export function useListCollection(
 		observedSummariesAfterSelection: false,
 	});
 	const latestCurrentListIdRef = useRef<string | null>(null);
-	const selectionOverrideRef = useRef<string | null>(null);
 	const selectionWriteInFlightRef = useRef(false);
+	// The watched summaries snapshot while it is on screen, and null while it is
+	// loading or failed. Its identity is what marks a fresh emission.
 	const summaries = query.error || query.isLoading ? null : query.data;
 	const summariesFetching = summaries !== null && query.isFetching;
 	const storedListId =
@@ -131,6 +133,8 @@ export function useListCollection(
 	const readySelectionKey = selection.status === "ready" ? selection.key : null;
 	const readySelectionInitialRead =
 		selection.status === "ready" && selection.initialRead;
+	const selectionRefreshing =
+		selection.status === "ready" && selection.refreshing;
 	const summariesSettled = summaries !== null && !summariesFetching;
 
 	useEffect(() => {
@@ -155,14 +159,31 @@ export function useListCollection(
 		summariesSettled,
 	]);
 
+	// `selectList`, `createList`, and `deleteList` write the id they just
+	// persisted straight into this ref, so a second action in the same
+	// interaction compares against that selection instead of the derived value
+	// the pending read has not published yet. This effect hands the ref back to
+	// the derived Current List as soon as that read lands, whatever it returns,
+	// so a write the read never confirms — because the List stopped being
+	// active, or because the read itself failed — cannot pin the ref for the
+	// life of the screen.
 	useEffect(() => {
+		if (selectionRefreshing) return;
 		if (currentListId === null) return;
-		const override = selectionOverrideRef.current;
-		if (override !== null && currentListId !== override) return;
 		latestCurrentListIdRef.current = currentListId;
-		if (override === currentListId) selectionOverrideRef.current = null;
-	}, [currentListId]);
+	}, [currentListId, selectionRefreshing]);
 
+	// A stored selection that is no longer an active List is stale: clear it so
+	// it cannot shadow a later explicit selection. The in-memory fallback is
+	// never persisted. The clear normally waits for a summaries emission after
+	// the current selection read so a just-persisted selection is not cleared
+	// against a stale trailing-throttled watched-query snapshot; that wait is
+	// what `selectionClearGuard` tracks. The first read for a User + Household
+	// has no just-persisted selection to protect, so it may clear against an
+	// already-settled, non-fetching summaries snapshot.
+	// `clearCurrentListSelectionIfMatches` is idempotent, so re-runs on later
+	// emissions are no-ops. A clear failure logs and degrades: the fallback List
+	// still renders.
 	useEffect(() => {
 		const canClearAgainstSummaries =
 			selectionClearGuard.current.selectionKey === readySelectionKey &&
@@ -216,7 +237,6 @@ export function useListCollection(
 				selectionWriteInFlightRef.current = false;
 			}
 			latestCurrentListIdRef.current = listId;
-			selectionOverrideRef.current = listId;
 			track("list_switched", {
 				household_id: householdId,
 				list_id: listId,
@@ -252,7 +272,6 @@ export function useListCollection(
 				};
 			}
 			latestCurrentListIdRef.current = result.list.id;
-			selectionOverrideRef.current = result.list.id;
 			refreshSelection();
 			return { status: "createdAndSelected", listId: result.list.id };
 		},
@@ -314,11 +333,9 @@ export function useListCollection(
 						fallback.id,
 					);
 					latestCurrentListIdRef.current = fallback.id;
-					selectionOverrideRef.current = fallback.id;
 				} else {
 					await selectionStore.clearCurrentListSelection(userId, householdId);
 					latestCurrentListIdRef.current = null;
-					selectionOverrideRef.current = null;
 				}
 			} catch {
 				// The live summaries resolver will fall back in memory after refresh.
@@ -359,6 +376,13 @@ function useStoredCurrentListSelection(
 ): { selection: StoredSelectionState; refreshSelection: () => void } {
 	const logger = useLogger();
 	const identity = `${userId}:${householdId}`;
+	// `epoch` is a trigger token: `refreshSelection` bumps it to re-read the
+	// AsyncStorage-backed selection after a switch/create/delete persisted a new
+	// one. A refresh read keeps serving the snapshot it is revalidating, so
+	// re-reading after a List switch never drops Home back to loading and
+	// unmounts the List pager mid-switch. Only a User or Household change has no
+	// snapshot left to serve and reports loading. The `cancelled` flag guards
+	// against publishing after unmount or after that change.
 	const [epoch, setEpoch] = useState(0);
 	const [snapshot, setSnapshot] = useState<StoredSelectionSnapshot | null>(
 		null,
@@ -369,6 +393,7 @@ function useStoredCurrentListSelection(
 					status: "ready",
 					key: `${snapshot.identity}:${snapshot.epoch}`,
 					initialRead: snapshot.initialRead,
+					refreshing: snapshot.epoch !== epoch,
 					storedListId: snapshot.storedListId,
 				}
 			: { status: "loading" };
@@ -378,6 +403,8 @@ function useStoredCurrentListSelection(
 		selectionStore
 			.getCurrentListSelection(userId, householdId)
 			.catch((error: unknown) => {
+				// A failed read behaves like no stored selection: the most recently
+				// active List still renders.
 				logger.error("current List selection read failed", {
 					error: asError(error),
 				});
@@ -388,6 +415,9 @@ function useStoredCurrentListSelection(
 				setSnapshot((previous) => ({
 					identity,
 					epoch,
+					// Only the first read for a User + Household has no just-persisted
+					// selection to protect from a stale summaries snapshot; a refresh
+					// read always follows one.
 					initialRead: previous?.identity !== identity,
 					storedListId,
 				}));
@@ -413,6 +443,8 @@ function deriveCurrentListId(
 	) {
 		return storedListId;
 	}
+	// In-memory fallback to the most recently active List (the summaries query's
+	// sort order); never persisted.
 	return activeSummaries[0]?.id ?? null;
 }
 
