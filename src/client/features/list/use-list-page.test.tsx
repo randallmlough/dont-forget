@@ -126,8 +126,9 @@ describe("useListPage", () => {
 		if (failed.status !== "error") {
 			throw new Error("Expected a failed List page");
 		}
-		// The watched query is keyed by compiled SQL plus parameters, so a retry
-		// that hands back the same key leaves the page stuck on its error.
+		// The page hands its error state the watched query's own retry, which
+		// re-keys the query the SDK sees; a retry that hands back the same
+		// compiled key would leave the page stuck on its error.
 		const failedKey = watchedQueryKey();
 
 		mockUseQuery.mockReturnValue(
@@ -199,6 +200,13 @@ function productServices({
 			})),
 			addItem,
 			setItemChecked,
+		},
+		currentListSelection: {
+			getCurrentListSelection: unused,
+			setCurrentListSelection: unused,
+			clearCurrentListSelection: unused,
+			clearCurrentListSelectionIfMatches: unused,
+			clearUserCurrentListSelections: unused,
 		},
 	};
 }

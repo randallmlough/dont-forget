@@ -238,7 +238,8 @@ function ListCollectionView({
 	onDelete: (summary: ListSummary) => void;
 }) {
 	const { theme } = useUnistyles();
-	const loadFailed = collectionState.status === "error";
+	const loadErrorMessage =
+		collectionState.status === "error" ? collectionState.message : null;
 	const currentListId =
 		collectionState.status === "active" ? collectionState.currentListId : null;
 	const { currentSummary, otherSummaries } = useMemo(() => {
@@ -256,8 +257,8 @@ function ListCollectionView({
 	}, [collectionState, currentListId]);
 
 	useEffect(() => {
-		if (loadFailed) toast.error("Unable to load your Lists.");
-	}, [loadFailed]);
+		if (loadErrorMessage !== null) toast.error(loadErrorMessage);
+	}, [loadErrorMessage]);
 
 	return (
 		<View style={styles.listLayout}>

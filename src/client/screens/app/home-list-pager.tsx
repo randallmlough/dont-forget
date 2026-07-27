@@ -130,12 +130,7 @@ export function HomeListPager({
 
 	return (
 		<ActiveHomeListPager
-			focusedListId={
-				focusedListId ??
-				(collectionState.status === "active"
-					? collectionState.currentListId
-					: "")
-			}
+			focusedListId={focusedListId ?? collectionState.currentListId}
 			collapsedTitleScroll={collapsedTitleScroll}
 			composerOpen={composerOpen}
 			listSummaries={collectionState.summaries}

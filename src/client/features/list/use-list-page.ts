@@ -1,10 +1,6 @@
-import { useState } from "react";
 import type { Item } from "@/client/features/list/item-service";
 import type { ListSummary } from "@/client/features/list/list-service";
-import {
-	useProductQuery,
-	withProductQueryRetryKey,
-} from "@/client/lib/use-product-query";
+import { useProductQuery } from "@/client/lib/use-product-query";
 import type { AuthenticatedAppSession } from "@/client/session";
 import type { ActiveListState, AddListItemInput } from "./list-view-types";
 import {
@@ -116,19 +112,15 @@ export function useListPage(
 		householdId: session.activeHousehold.id,
 		userId: session.activeMember.userId,
 	});
-	const [retryEpoch, setRetryEpoch] = useState(0);
 	const items = useProductQuery<Item>(
-		withProductQueryRetryKey(
-			services.items.listItemsQuery({ listId: summary.id }),
-			retryEpoch,
-		),
+		services.items.listItemsQuery({ listId: summary.id }),
 	);
 
 	if (items.error) {
 		return {
 			status: "error",
 			message: LIST_ERROR_MESSAGE,
-			retry: () => setRetryEpoch((epoch) => epoch + 1),
+			retry: items.retry,
 		};
 	}
 	if (items.isLoading) {

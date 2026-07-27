@@ -11,9 +11,8 @@ src/client/features/list/
   item-service.ts
   list-page.tsx
   list-service.ts
-  use-current-list-selection.ts
+  use-list-collection.ts
   use-list-page.ts
-  use-list-rows.ts
   use-product-services.ts
 
 src/client/lib/

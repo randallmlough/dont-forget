@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-	clearCurrentListSelection,
-	clearCurrentListSelectionIfMatches,
-	getCurrentListSelection,
-	setCurrentListSelection,
-} from "@/client/features/list/current-selection";
+import type { CurrentListSelectionStore } from "@/client/features/list/current-selection";
 import type {
 	CreateListResult,
 	DeleteListResult,
@@ -14,10 +9,7 @@ import type {
 } from "@/client/features/list/list-service";
 import { track } from "@/client/lib/analytics";
 import { useLogger } from "@/client/lib/logger";
-import {
-	useProductQuery,
-	withProductQueryRetryKey,
-} from "@/client/lib/use-product-query";
+import { useProductQuery } from "@/client/lib/use-product-query";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { asError } from "@/shared/errors";
 import { useProductServices } from "./use-product-services";
@@ -95,6 +87,12 @@ type StoredSelectionSnapshot = {
 	storedListId: string | null;
 };
 
+/**
+ * Each mounted screen owns its own collection instance, with its own watched
+ * summaries query and its own in-flight selection guard. That guard serializes
+ * Current List writes within one instance only, which is enough because Home
+ * and Lists never mount concurrently.
+ */
 export function useListCollection(
 	session: AuthenticatedAppSession,
 ): ListCollection {
@@ -102,19 +100,17 @@ export function useListCollection(
 	const householdId = session.activeHousehold.id;
 	const logger = useLogger();
 	const services = useProductServices({ householdId, userId });
-	const [retryEpoch, setRetryEpoch] = useState(0);
+	const selectionStore = services.currentListSelection;
 	const { selection, refreshSelection } = useStoredCurrentListSelection(
+		selectionStore,
 		userId,
 		householdId,
 	);
 	const query = useProductQuery<ListSummary>(
-		withProductQueryRetryKey(
-			services.lists.listListsQuery({
-				archive: "active",
-				sort: "recentActivity",
-			}),
-			retryEpoch,
-		),
+		services.lists.listListsQuery({
+			archive: "active",
+			sort: "recentActivity",
+		}),
 	);
 	const selectionClearGuard = useRef<SelectionClearGuard>({
 		selectionKey: null,
@@ -174,28 +170,23 @@ export function useListCollection(
 		if (summaries === null || storedListId === null) return;
 		if (summariesFetching || !canClearAgainstSummaries) return;
 		if (summaries.some((summary) => summary.id === storedListId)) return;
-		void clearCurrentListSelectionIfMatches(
-			userId,
-			householdId,
-			storedListId,
-		).catch((error: unknown) => {
-			logger.error("current List selection clear failed", {
-				error: asError(error),
+		void selectionStore
+			.clearCurrentListSelectionIfMatches(userId, householdId, storedListId)
+			.catch((error: unknown) => {
+				logger.error("current List selection clear failed", {
+					error: asError(error),
+				});
 			});
-		});
 	}, [
 		householdId,
 		logger,
 		readySelectionKey,
+		selectionStore,
 		storedListId,
 		summaries,
 		summariesFetching,
 		userId,
 	]);
-
-	const retry = useCallback(() => {
-		setRetryEpoch((epoch) => epoch + 1);
-	}, []);
 
 	const selectList = useCallback(
 		async ({ listId }: { listId: string }): Promise<SelectListOutcome> => {
@@ -210,7 +201,11 @@ export function useListCollection(
 			}
 			selectionWriteInFlightRef.current = true;
 			try {
-				await setCurrentListSelection(userId, householdId, listId);
+				await selectionStore.setCurrentListSelection(
+					userId,
+					householdId,
+					listId,
+				);
 			} catch {
 				return {
 					status: "notSelected",
@@ -230,7 +225,7 @@ export function useListCollection(
 			refreshSelection();
 			return { status: "selected" };
 		},
-		[householdId, refreshSelection, userId],
+		[householdId, refreshSelection, selectionStore, userId],
 	);
 
 	const createList = useCallback(
@@ -245,7 +240,11 @@ export function useListCollection(
 				return { status: "invalidName", reason: result.reason };
 			}
 			try {
-				await setCurrentListSelection(userId, householdId, result.list.id);
+				await selectionStore.setCurrentListSelection(
+					userId,
+					householdId,
+					result.list.id,
+				);
 			} catch {
 				return {
 					status: "createdSelectionFailed",
@@ -257,7 +256,7 @@ export function useListCollection(
 			refreshSelection();
 			return { status: "createdAndSelected", listId: result.list.id };
 		},
-		[householdId, refreshSelection, services.lists, userId],
+		[householdId, refreshSelection, selectionStore, services.lists, userId],
 	);
 
 	const renameList = useCallback(
@@ -309,11 +308,15 @@ export function useListCollection(
 				});
 				const fallback = remaining[0];
 				if (fallback) {
-					await setCurrentListSelection(userId, householdId, fallback.id);
+					await selectionStore.setCurrentListSelection(
+						userId,
+						householdId,
+						fallback.id,
+					);
 					latestCurrentListIdRef.current = fallback.id;
 					selectionOverrideRef.current = fallback.id;
 				} else {
-					await clearCurrentListSelection(userId, householdId);
+					await selectionStore.clearCurrentListSelection(userId, householdId);
 					latestCurrentListIdRef.current = null;
 					selectionOverrideRef.current = null;
 				}
@@ -323,7 +326,7 @@ export function useListCollection(
 			refreshSelection();
 			return { status: "deleted" };
 		},
-		[householdId, refreshSelection, services.lists, userId],
+		[householdId, refreshSelection, selectionStore, services.lists, userId],
 	);
 
 	return {
@@ -333,7 +336,13 @@ export function useListCollection(
 			selection,
 			summaries: query.data,
 		}),
-		actions: { retry, selectList, createList, renameList, deleteList },
+		actions: {
+			retry: query.retry,
+			selectList,
+			createList,
+			renameList,
+			deleteList,
+		},
 	};
 }
 
@@ -344,6 +353,7 @@ type SelectionClearGuard = {
 };
 
 function useStoredCurrentListSelection(
+	selectionStore: CurrentListSelectionStore,
 	userId: string,
 	householdId: string,
 ): { selection: StoredSelectionState; refreshSelection: () => void } {
@@ -365,7 +375,8 @@ function useStoredCurrentListSelection(
 
 	useEffect(() => {
 		let cancelled = false;
-		getCurrentListSelection(userId, householdId)
+		selectionStore
+			.getCurrentListSelection(userId, householdId)
 			.catch((error: unknown) => {
 				logger.error("current List selection read failed", {
 					error: asError(error),
@@ -384,7 +395,7 @@ function useStoredCurrentListSelection(
 		return () => {
 			cancelled = true;
 		};
-	}, [epoch, householdId, identity, logger, userId]);
+	}, [epoch, householdId, identity, logger, selectionStore, userId]);
 
 	return {
 		selection,
