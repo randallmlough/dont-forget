@@ -90,7 +90,7 @@
 
 ## Custom Hooks
 
-- **Must** name hooks by the behavior they own, such as `useCurrentListSelection` or `useHomeListSwitcherRows`, not vague names like `useData` when the domain is known.
+- **Must** name hooks by the behavior they own, such as `useListCollection` or `useListPage`, not vague names like `useData` when the domain is known.
 - **Must** return explicit objects rather than positional tuples unless matching a React or native convention.
 - **Must** model route-owned async resources as discriminated states such as `loading`, `ready`, `error`, and `empty`, not scattered booleans, nullable data, and retry counters.
 - **Must** key route-owned async resource state by the resource identity it represents, such as authenticated app session resource key plus List ID, so stale loads cannot publish into the current view.
