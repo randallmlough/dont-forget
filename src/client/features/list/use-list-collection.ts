@@ -305,6 +305,7 @@ export function useListCollection(
 
 	const deleteList = useCallback(
 		async ({ listId }: { listId: string }): Promise<DeleteListOutcome> => {
+			const wasCurrentList = latestCurrentListIdRef.current === listId;
 			let result: DeleteListResult;
 			try {
 				result = await services.lists.deleteList({ listId });
@@ -312,8 +313,7 @@ export function useListCollection(
 				return { status: "failed" };
 			}
 			if (result.status === "missing") return { status: "gone" };
-			if (latestCurrentListIdRef.current !== listId)
-				return { status: "deleted" };
+			if (!wasCurrentList) return { status: "deleted" };
 
 			if (!result.didWrite) {
 				refreshSelection();
