@@ -8,6 +8,20 @@ export type ProductQueryResult<T> = {
 	error: Error | undefined;
 };
 
+export function withProductQueryRetryKey<RowType>(
+	query: ProductQuery<RowType>,
+	retryEpoch: number,
+): ProductQuery<RowType> {
+	if (retryEpoch === 0) return query;
+	return {
+		execute: () => query.execute(),
+		compile: () => {
+			const compiled = query.compile();
+			return { ...compiled, sql: `${compiled.sql}\n-- retry ${retryEpoch}` };
+		},
+	};
+}
+
 export function useProductQuery<RowType>(
 	query: ProductQuery<RowType>,
 ): ProductQueryResult<RowType> {
