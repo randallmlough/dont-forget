@@ -1,60 +1,85 @@
-import { act, render, screen } from "@testing-library/react-native";
-import { Text, View } from "react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { BottomSheet } from "./bottom-sheet";
 
-it("renders children inside the sheet Modal while presented", async () => {
-	const rendered = await render(
-		<BottomSheet isPresented onIsPresentedChange={jest.fn()}>
-			<View>
-				<Text>Sheet content</Text>
-			</View>
+it("renders its header and content inside the Expo UI sheet", async () => {
+	await render(
+		<BottomSheet
+			headerAction={
+				<Pressable accessibilityRole="button">
+					<Text>Save</Text>
+				</Pressable>
+			}
+			isPresented
+			onIsPresentedChange={jest.fn()}
+			title="Add Item"
+		>
+			<Text>Sheet content</Text>
 		</BottomSheet>,
 	);
 
-	expect(
-		rendered.root?.queryAll((instance) => instance.type === "Modal", {
-			includeSelf: true,
-		}),
-	).toHaveLength(1);
+	expect(screen.getByRole("header", { name: "Add Item" })).toBeTruthy();
+	expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
 	expect(screen.getByText("Sheet content")).toBeTruthy();
 });
 
 it("renders nothing when not presented", async () => {
-	const rendered = await render(
+	await render(
 		<BottomSheet isPresented={false} onIsPresentedChange={jest.fn()}>
-			<View>
-				<Text>Sheet content</Text>
-			</View>
+			<Text>Sheet content</Text>
 		</BottomSheet>,
 	);
 
 	expect(screen.queryByText("Sheet content")).toBeNull();
-	expect(
-		rendered.root?.queryAll((instance) => instance.type === "Modal", {
-			includeSelf: true,
-		}) ?? [],
-	).toHaveLength(0);
+	expect(screen.queryByTestId("expo-bottom-sheet")).toBeNull();
 });
 
-it("reports dismissal when the Modal's onRequestClose fires", async () => {
+it("reports native dismissal through the controlled presentation callback", async () => {
 	const onIsPresentedChange = jest.fn();
-	const rendered = await render(
+	await render(
 		<BottomSheet isPresented onIsPresentedChange={onIsPresentedChange}>
-			<View>
-				<Text>Sheet content</Text>
-			</View>
+			<Text>Sheet content</Text>
 		</BottomSheet>,
 	);
 
-	// Native swipe-down dismissal fires the sheet Modal's onRequestClose.
-	await act(() => {
-		rendered.root
-			?.queryAll((instance) => instance.type === "Modal", {
-				includeSelf: true,
-			})[0]
-			?.props.onRequestClose();
-	});
+	fireEvent.press(screen.getByRole("button", { name: "Dismiss bottom sheet" }));
 
 	expect(onIsPresentedChange).toHaveBeenCalledWith(false);
+});
+
+it("forwards snap points and fills the bounded native host", async () => {
+	await render(
+		<BottomSheet
+			isPresented
+			onIsPresentedChange={jest.fn()}
+			showDragIndicator={false}
+			snapPoints={["half", "full"]}
+			testID="list-sheet"
+		>
+			<View />
+		</BottomSheet>,
+	);
+
+	expect(screen.getByTestId("list-sheet")).toHaveAccessibilityValue({
+		text: JSON.stringify({
+			showDragIndicator: false,
+			snapPoints: ["half", "full"],
+		}),
+	});
+	expect(screen.getByTestId("expo-rn-host-view")).toHaveAccessibilityValue({
+		text: "fill",
+	});
+});
+
+it("matches content height when no snap points are provided", async () => {
+	await render(
+		<BottomSheet isPresented onIsPresentedChange={jest.fn()}>
+			<Text>Short content</Text>
+		</BottomSheet>,
+	);
+
+	expect(screen.getByTestId("expo-rn-host-view")).toHaveAccessibilityValue({
+		text: "match contents",
+	});
 });

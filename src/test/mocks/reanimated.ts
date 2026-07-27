@@ -18,7 +18,8 @@ import {
  *   Testing Library fires,
  * - `withSpring` and `withTiming` land on their target value immediately but
  *   hold their completion callback until a test calls `settleAnimations`, so a
- *   test can assert what a surface does mid-transition and then finish it,
+ *   test can assert what a surface does mid-transition and then finish it;
+ *   `withRepeat` preserves that target without looping under Jest,
  * - assigning anything to a shared value that is still holding a completion
  *   callback cancels it with `finished: false`, the way the real library
  *   cancels an animation that a new one retargets.
@@ -194,6 +195,10 @@ export function withTiming<Value>(
 	onSettled?: MockAnimationCallback,
 ): Value {
 	return animate(value, onSettled);
+}
+
+export function withRepeat<Value>(animation: Value): Value {
+	return animation;
 }
 
 /**
