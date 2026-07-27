@@ -20,6 +20,7 @@ import {
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { StatusCard } from "@/client/ui/status-card";
+import { HomeAddItemButton } from "./home-add-item-button";
 import {
 	type CollapsedTitleScroll,
 	HomeListPager,
@@ -93,7 +94,10 @@ function HomeScreenResource({
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
 	// Home's interaction state lives here because the native bottom toolbar
 	// renders from the page component, outside the List surface it drives.
-	const [composerOpen, setComposerOpen] = useState(false);
+	const [itemEditorActive, setItemEditorActive] = useState(false);
+	const [addItemRequestKey, setAddItemRequestKey] = useState<number | null>(
+		null,
+	);
 	const [pickerPhase, setPickerPhase] = useState<HomeListPickerPhase>("closed");
 	const [selectionPending, setSelectionPending] = useState(false);
 	const currentListId =
@@ -150,6 +154,21 @@ function HomeScreenResource({
 		if (summary) void focusList(summary.id);
 	}
 
+	function startAddingItem() {
+		setAddItemRequestKey((current) => (current ?? 0) + 1);
+		setItemEditorActivity(true);
+	}
+
+	function setItemEditorActivity(active: boolean) {
+		// An unselected Household falls back to its most recently active List.
+		// Pin the visible List while editing so a write that changes activity
+		// ordering cannot carry the user to the Item's destination List.
+		if (active && resolvedFocusedListId !== null) {
+			setFocusedListId(resolvedFocusedListId);
+		}
+		setItemEditorActive(active);
+	}
+
 	return (
 		<>
 			<HomeStackHeader
@@ -162,12 +181,9 @@ function HomeScreenResource({
 				onOpenNavigation={onOpenNavigation}
 				onOpenLists={onOpenLists}
 			/>
-			{/* The composer owns the bottom of the screen while it is open. The
-			    page control returns as soon as the picker starts receding:
-			    "closing" is not interactive, so waiting for the zoom to settle
-			    would only delay the scrub coming back. */}
-			{listSummaries.length > 0 && !composerOpen ? (
+			{listSummaries.length > 0 ? (
 				<HomeListToolbar
+					disabled={itemEditorActive}
 					focusedIndex={focusedIndex}
 					lists={listSummaries}
 					pickerOpen={pickerPhase === "open"}
@@ -177,22 +193,30 @@ function HomeScreenResource({
 					onScrubToPage={scrubToPage}
 				/>
 			) : null}
-			<HomeListPager
-				session={session}
-				composerOpen={composerOpen}
-				collectionState={collection.state}
-				syncState={syncState}
-				focusedListId={resolvedFocusedListId}
-				collapsedTitleScroll={collapsedTitleScroll}
-				pickerPhase={pickerPhase}
-				selectionPending={selectionPending}
-				onComposerOpenChange={setComposerOpen}
-				onFocusList={focusList}
-				onOpenLists={onOpenLists}
-				onRetry={collection.actions.retry}
-				onPickerPhaseChange={setPickerPhase}
-				topContentInset={headerHeight}
-			/>
+			<View style={styles.content}>
+				<HomeListPager
+					session={session}
+					addItemRequestKey={addItemRequestKey}
+					collectionState={collection.state}
+					syncState={syncState}
+					focusedListId={resolvedFocusedListId}
+					collapsedTitleScroll={collapsedTitleScroll}
+					itemEditorActive={itemEditorActive}
+					pickerPhase={pickerPhase}
+					selectionPending={selectionPending}
+					onFocusList={focusList}
+					onItemEditorActiveChange={setItemEditorActivity}
+					onOpenLists={onOpenLists}
+					onRetry={collection.actions.retry}
+					onPickerPhaseChange={setPickerPhase}
+					topContentInset={headerHeight}
+				/>
+				{listSummaries.length > 0 &&
+				pickerPhase === "closed" &&
+				!itemEditorActive ? (
+					<HomeAddItemButton onPress={startAddingItem} />
+				) : null}
+			</View>
 		</>
 	);
 }
@@ -336,6 +360,9 @@ const styles = StyleSheet.create((theme) => ({
 	root: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
+	},
+	content: {
+		flex: 1,
 	},
 	collapsedListTitle: {
 		...theme.typography.headline,

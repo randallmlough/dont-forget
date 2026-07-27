@@ -1,10 +1,10 @@
+import type { ActiveListItem } from "@/client/features/item/item-view-types";
 import {
 	addFixtureItem,
 	largeActiveListState,
 	populatedActiveListState,
 	setFixtureItemChecked,
 } from "./list-test-support";
-import type { ActiveListItem } from "./list-view-types";
 
 describe("List test support", () => {
 	it.each([

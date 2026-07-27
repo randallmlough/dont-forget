@@ -1,31 +1,32 @@
 import { useQuery } from "@powersync/react";
 import { act, renderHook } from "@testing-library/react-native";
-import type { Item } from "./item-service";
+import type { Item, ItemService } from "@/client/features/item/item-service";
+import { useItemService } from "@/client/features/item/use-item-service";
 import {
 	authenticatedAppSession,
 	groceriesListSummary,
 } from "./list-test-support";
 import { useListPage } from "./use-list-page";
-import {
-	type ProductServices,
-	useProductServices,
-} from "./use-product-services";
 
 jest.mock("@powersync/react", () => ({ useQuery: jest.fn() }));
-jest.mock("./use-product-services", () => ({ useProductServices: jest.fn() }));
+jest.mock("@/client/features/item/use-item-service", () => ({
+	useItemService: jest.fn(),
+}));
 
 const mockUseQuery = jest.mocked(useQuery);
-const mockUseProductServices = jest.mocked(useProductServices);
+const mockUseItemService = jest.mocked(useItemService);
 
 describe("useListPage", () => {
 	let addItem: jest.Mock;
+	let updateItem: jest.Mock;
 	let setItemChecked: jest.Mock;
 
 	beforeEach(() => {
 		addItem = jest.fn(async () => undefined);
+		updateItem = jest.fn(async () => undefined);
 		setItemChecked = jest.fn(async () => undefined);
-		mockUseProductServices.mockReturnValue(
-			productServices({ addItem, setItemChecked }),
+		mockUseItemService.mockReturnValue(
+			itemService({ addItem, updateItem, setItemChecked }),
 		);
 		mockUseQuery.mockReturnValue(queryResult({ data: [] }));
 	});
@@ -74,6 +75,14 @@ describe("useListPage", () => {
 				quantity: null,
 				notes: null,
 			});
+			await page.actions.updateItem({
+				itemId: "itm_milk",
+				sourceListId: "lst_groceries",
+				destinationListId: "lst_pantry",
+				name: "Oat milk",
+				quantity: "2",
+				notes: "Unsweetened",
+			});
 			await page.actions.setItemChecked("itm_milk", true);
 		});
 
@@ -83,6 +92,14 @@ describe("useListPage", () => {
 			name: "Milk",
 			quantity: null,
 			notes: null,
+		});
+		expect(updateItem).toHaveBeenCalledWith({
+			itemId: "itm_milk",
+			sourceListId: "lst_groceries",
+			destinationListId: "lst_pantry",
+			name: "Oat milk",
+			quantity: "2",
+			notes: "Unsweetened",
 		});
 		expect(setItemChecked).toHaveBeenCalledWith({
 			listId: "lst_groceries",
@@ -171,43 +188,27 @@ function queryResult(input: {
 	};
 }
 
-function productServices({
+function itemService({
 	addItem,
+	updateItem,
 	setItemChecked,
 }: {
 	addItem: jest.Mock;
+	updateItem: jest.Mock;
 	setItemChecked: jest.Mock;
-}): ProductServices {
+}): ItemService {
 	const unused = jest.fn(async () => {
 		throw new Error("unexpected service call");
 	});
 	return {
-		lists: {
-			listLists: unused,
-			listListsQuery: jest.fn(() => ({
-				compile: () => ({ sql: "SELECT lists", parameters: [] }),
-				execute: async () => [],
-			})),
-			createList: unused,
-			renameList: unused,
-			deleteList: unused,
-		},
-		items: {
-			listItems: unused,
-			listItemsQuery: jest.fn(() => ({
-				compile: () => ({ sql: "SELECT items", parameters: [] }),
-				execute: async () => [],
-			})),
-			addItem,
-			setItemChecked,
-		},
-		currentListSelection: {
-			getCurrentListSelection: unused,
-			setCurrentListSelection: unused,
-			clearCurrentListSelection: unused,
-			clearCurrentListSelectionIfMatches: unused,
-			clearUserCurrentListSelections: unused,
-		},
+		listItems: unused,
+		listItemsQuery: jest.fn(() => ({
+			compile: () => ({ sql: "SELECT items", parameters: [] }),
+			execute: async () => [],
+		})),
+		addItem,
+		updateItem,
+		setItemChecked,
 	};
 }
 

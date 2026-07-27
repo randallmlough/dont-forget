@@ -789,19 +789,38 @@ describe("Home bottom toolbar", () => {
 		expect(screen.queryByTestId("home-list-picker")).toBeNull();
 	});
 
-	it("hands the bottom of the screen to the add Item composer while it is open", async () => {
+	it("starts inline creation from the floating add button", async () => {
 		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
 		expect(pageControl()).toBeTruthy();
 
-		await fireEvent.press(
-			screen.getByRole("button", { name: "Add the first Item" }),
-		);
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
 
+		expect(await screen.findByLabelText("Item name")).toBeTruthy();
 		expect(
-			screen.queryByTestId("home-list-page-control", {
+			screen.queryByRole("button", {
+				name: "Add Item",
 				includeHiddenElements: true,
 			}),
 		).toBeNull();
+		expect(pageControl()).toBeTruthy();
+		expect(pageControl().props.accessibilityState).toEqual({ disabled: true });
+		expect(
+			screen.getByRole("button", { name: "Choose List" }).props
+				.accessibilityState,
+		).toEqual({ disabled: true });
+	});
+
+	it("keeps the source List focused when an Item write reorders recent activity", async () => {
+		showLists([groceriesListSummary, pantryListSummary]);
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		showLists([pantryListSummary, groceriesListSummary]);
+		await view.rerender(homeScreenSurface());
+
+		expect(screen.getByTestId("home-list-page-lst_groceries")).toBeTruthy();
 	});
 });
 

@@ -2,9 +2,9 @@ import type { Meta, StoryObj } from "@storybook/react-native";
 import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-
-import { AddItemForm } from "./add-item-form";
-import { ItemRows } from "./item-rows";
+import type { UpdateListItemInput } from "@/client/features/item/item-view-types";
+import { useItemEditor } from "@/client/features/item/use-item-editor";
+import { ListItems } from "./list-items";
 import { ListOverview } from "./list-overview";
 import {
 	addFixtureItem,
@@ -14,7 +14,6 @@ import {
 	setFixtureItemChecked,
 } from "./list-test-support";
 import type { ActiveListState } from "./list-view-types";
-import { useListActions } from "./use-list-actions";
 
 const meta = {
 	title: "Features/List/List Parts",
@@ -32,25 +31,51 @@ export const WithItems: Story = {
 	render: () => <ListPartsStory initialState={populatedActiveListState} />,
 };
 
+export const Creating: Story = {
+	render: () => (
+		<ListPartsStory
+			creationRequestKey={1}
+			initialState={populatedActiveListState}
+		/>
+	),
+};
+
 export const ManyItems: Story = {
 	render: () => <ListPartsStory initialState={largeActiveListState} />,
 };
 
-function ListPartsStory({ initialState }: { initialState: ActiveListState }) {
+function ListPartsStory({
+	initialState,
+	creationRequestKey = null,
+}: {
+	initialState: ActiveListState;
+	creationRequestKey?: number | null;
+}) {
 	const [state, setState] = useState(initialState);
-	const actions = useListActions({
+	const editor = useItemEditor({
+		currentListId: "lst_story",
 		items: state.items,
+		listOptions: [
+			{ id: "lst_story", name: state.listName },
+			{ id: "lst_costco", name: "Costco" },
+		],
+		creationRequestKey,
 		onAddItem: async (input) => {
 			setState((current) => addFixtureItem(current, input));
+		},
+		onUpdateItem: async (input) => {
+			setState((current) => updateFixtureItem(current, input));
 		},
 		onSetItemChecked: async (itemId, checked) => {
 			setState((current) => setFixtureItemChecked(current, itemId, checked));
 		},
+		onActiveChange: () => undefined,
 	});
 
 	return (
 		<View style={styles.canvas}>
-			<ItemRows
+			<ListItems
+				editor={editor}
 				items={state.items}
 				listOverview={
 					<ListOverview
@@ -61,15 +86,34 @@ function ListPartsStory({ initialState }: { initialState: ActiveListState }) {
 						}}
 					/>
 				}
-				onToggleItem={actions.toggleItem}
-			/>
-			<AddItemForm
-				currentListId="lst_story"
-				listOptions={[{ id: "lst_story", name: state.listName }]}
-				onAddItem={actions.addItem}
 			/>
 		</View>
 	);
+}
+
+function updateFixtureItem(
+	list: ActiveListState,
+	input: UpdateListItemInput,
+): ActiveListState {
+	if (input.destinationListId !== input.sourceListId) {
+		return {
+			...list,
+			items: list.items.filter((item) => item.id !== input.itemId),
+		};
+	}
+	return {
+		...list,
+		items: list.items.map((item) =>
+			item.id === input.itemId
+				? {
+						...item,
+						name: input.name,
+						quantity: input.quantity,
+						notes: input.notes,
+					}
+				: item,
+		),
+	};
 }
 
 const styles = StyleSheet.create((theme) => ({

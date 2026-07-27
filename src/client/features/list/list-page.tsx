@@ -3,7 +3,8 @@ import { ActivityIndicator, Text, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import type { AddItemListOption } from "@/client/features/list/add-item-composer";
+import type { ItemListOption } from "@/client/features/item/item-view-types";
+import { useItemEditor } from "@/client/features/item/use-item-editor";
 import type { ListSummary } from "@/client/features/list/list-service";
 import {
 	type AuthenticatedAppSession,
@@ -11,11 +12,9 @@ import {
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { StatusCard } from "@/client/ui/status-card";
-import { AddItemForm } from "./add-item-form";
-import { ItemRows } from "./item-rows";
+import { ListItems } from "./list-items";
 import { ListOverview } from "./list-overview";
 import type { ActiveListSyncState } from "./list-view-types";
-import { useListActions } from "./use-list-actions";
 import { type ListPageState, useListPage } from "./use-list-page";
 
 export type ListPageScrollState = {
@@ -29,11 +28,10 @@ export type ListPageProps = {
 	listSummaries: readonly ListSummary[];
 	syncState: ActiveListSyncState;
 	focused: boolean;
-	composerOpen: boolean;
+	addItemRequestKey: number | null;
 	scrollState: ListPageScrollState;
 	topContentInset: number;
-	onOpenComposer: () => void;
-	onDismissComposer: () => void;
+	onItemEditorActiveChange: (active: boolean) => void;
 };
 
 export function ListPage({
@@ -43,15 +41,14 @@ export function ListPage({
 	listSummaries,
 	focused,
 	scrollState,
-	composerOpen,
+	addItemRequestKey,
 	topContentInset,
-	onOpenComposer,
-	onDismissComposer,
+	onItemEditorActiveChange,
 }: ListPageProps) {
 	const state = useListPage(session, summary);
 	const active = state.status === "active";
 
-	// Only a page rendering its List publishes to the header: `ItemRows` returns
+	// Only a page rendering its List publishes to the header: `ListItems` returns
 	// the offset to the top on focus and `ActiveListPage` republishes its large
 	// title height. A focused page that is loading or failed has neither, so it
 	// zeroes both itself; otherwise the values the page the pager just left
@@ -90,7 +87,7 @@ export function ListPage({
 
 	return (
 		<ActiveListPage
-			composerOpen={composerOpen}
+			addItemRequestKey={addItemRequestKey}
 			focused={focused}
 			listSummaries={listSummaries}
 			loadState={state}
@@ -99,8 +96,7 @@ export function ListPage({
 			summary={summary}
 			syncState={syncState}
 			topContentInset={topContentInset}
-			onDismissComposer={onDismissComposer}
-			onOpenComposer={onOpenComposer}
+			onItemEditorActiveChange={onItemEditorActiveChange}
 		/>
 	);
 }
@@ -113,9 +109,8 @@ function ActiveListPage({
 	summary,
 	focused,
 	scrollState,
-	composerOpen,
-	onOpenComposer,
-	onDismissComposer,
+	addItemRequestKey,
+	onItemEditorActiveChange,
 	topContentInset,
 }: ListPageProps & {
 	loadState: Extract<ListPageState, { status: "active" }>;
@@ -123,15 +118,19 @@ function ActiveListPage({
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
 	const [largeTitleHeight, setLargeTitleHeight] = useState(0);
-	const actions = useListActions({
-		items: loadState.list.items,
-		onAddItem: loadState.actions.addItem,
-		onSetItemChecked: loadState.actions.setItemChecked,
-	});
-	const composerListOptions = addItemListOptions({
+	const itemEditor = useItemEditor({
 		currentListId: loadState.listId,
-		currentListName: summary.name,
-		summaries: listSummaries,
+		items: loadState.list.items,
+		listOptions: itemListOptions({
+			currentListId: loadState.listId,
+			currentListName: summary.name,
+			summaries: listSummaries,
+		}),
+		creationRequestKey: focused ? addItemRequestKey : null,
+		onActiveChange: onItemEditorActiveChange,
+		onAddItem: loadState.actions.addItem,
+		onUpdateItem: loadState.actions.updateItem,
+		onSetItemChecked: loadState.actions.setItemChecked,
 	});
 
 	// Only the focused page publishes to the header, and it republishes on focus
@@ -143,43 +142,30 @@ function ActiveListPage({
 	}, [focused, scrollState, largeTitleHeight]);
 
 	return (
-		<>
-			<ItemRows
-				bottomContentInset={insets.bottom + theme.spacing(20)}
-				focused={focused}
-				items={loadState.list.items}
-				listOverview={
-					<View>
-						<ListPageTitle
-							title={summary.name}
-							onMeasureHeight={setLargeTitleHeight}
-						/>
-						<ListOverview
-							state={loadState.list}
-							meta={{
-								currentMemberName: sessionMemberDisplayName(session),
-								syncState,
-							}}
-						/>
-					</View>
-				}
-				onPressBlankSpace={focused ? onOpenComposer : undefined}
-				scrollOffsetY={focused ? scrollState.offsetY : undefined}
-				topContentInset={topContentInset}
-				onToggleItem={actions.toggleItem}
-				testID={`home-list-items-${summary.id}`}
-			/>
-			<AddItemForm
-				currentListId={loadState.listId}
-				listOptions={composerListOptions}
-				onAddItem={actions.addItem}
-				presentation={{
-					kind: "controlledOverlay",
-					isOpen: composerOpen,
-					onDismiss: onDismissComposer,
-				}}
-			/>
-		</>
+		<ListItems
+			bottomContentInset={insets.bottom + theme.spacing(20)}
+			editor={itemEditor}
+			focused={focused}
+			items={loadState.list.items}
+			listOverview={
+				<View>
+					<ListPageTitle
+						title={summary.name}
+						onMeasureHeight={setLargeTitleHeight}
+					/>
+					<ListOverview
+						state={loadState.list}
+						meta={{
+							currentMemberName: sessionMemberDisplayName(session),
+							syncState,
+						}}
+					/>
+				</View>
+			}
+			scrollOffsetY={focused ? scrollState.offsetY : undefined}
+			topContentInset={topContentInset}
+			testID={`home-list-items-${summary.id}`}
+		/>
 	);
 }
 
@@ -201,7 +187,7 @@ function ListPageTitle({
 	);
 }
 
-function addItemListOptions({
+function itemListOptions({
 	currentListId,
 	currentListName,
 	summaries,
@@ -209,7 +195,7 @@ function addItemListOptions({
 	currentListId: string;
 	currentListName: string;
 	summaries: readonly ListSummary[];
-}): AddItemListOption[] {
+}): ItemListOption[] {
 	return [
 		{ id: currentListId, name: currentListName },
 		...summaries

@@ -6,14 +6,16 @@ import { BottomSheet } from "./bottom-sheet";
 it("renders its header and content inside the Expo UI sheet", async () => {
 	await render(
 		<BottomSheet
-			headerAction={
-				<Pressable accessibilityRole="button">
-					<Text>Save</Text>
-				</Pressable>
-			}
+			header={{
+				title: "Add Item",
+				trailingAction: (
+					<Pressable accessibilityRole="button">
+						<Text>Save</Text>
+					</Pressable>
+				),
+			}}
 			isPresented
 			onIsPresentedChange={jest.fn()}
-			title="Add Item"
 		>
 			<Text>Sheet content</Text>
 		</BottomSheet>,

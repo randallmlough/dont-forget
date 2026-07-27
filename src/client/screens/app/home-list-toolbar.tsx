@@ -43,6 +43,7 @@ const PAGE_OVERFLOW_GUTTER_WIDTH = 12;
 const PAGE_CONTROL_ACTIONS = [{ name: "increment" }, { name: "decrement" }];
 
 export type HomeListToolbarProps = {
+	disabled?: boolean;
 	focusedIndex: number;
 	lists: readonly ListSummary[];
 	pickerOpen: boolean;
@@ -61,6 +62,7 @@ export type HomeListToolbarProps = {
  * offers.
  */
 export function HomeListToolbar({
+	disabled = false,
 	focusedIndex,
 	lists,
 	pickerOpen,
@@ -97,6 +99,7 @@ export function HomeListToolbar({
 			<Stack.Toolbar.Spacer />
 			<Stack.Toolbar.View>
 				<HomeListPageControl
+					disabled={disabled}
 					focusedIndex={focusedIndex}
 					lists={lists}
 					onCommitPage={onCommitPage}
@@ -107,6 +110,7 @@ export function HomeListToolbar({
 			<Stack.Toolbar.Button
 				accessibilityHint="Opens the Home List picker"
 				accessibilityLabel="Choose List"
+				disabled={disabled}
 				icon="list.bullet"
 				onPress={onOpenPicker}
 			/>
@@ -125,11 +129,13 @@ export function HomeListToolbar({
  * landed on, so dragging again carries on through the Lists.
  */
 export function HomeListPageControl({
+	disabled = false,
 	focusedIndex,
 	lists,
 	onCommitPage,
 	onScrubToPage,
 }: {
+	disabled?: boolean;
 	focusedIndex: number;
 	lists: readonly ListSummary[];
 	onCommitPage: (index: number) => void;
@@ -172,6 +178,7 @@ export function HomeListPageControl({
 	}
 
 	function adjustPage(event: AccessibilityActionEvent) {
+		if (disabled) return;
 		const step = event.nativeEvent.actionName === "increment" ? 1 : -1;
 		const index = Math.min(pageCount - 1, Math.max(0, focusedIndex + step));
 		if (index !== focusedIndex) onCommitPage(index);
@@ -214,18 +221,25 @@ export function HomeListPageControl({
 	// The toolbar hosts this view outside the app's view tree, so the gesture
 	// needs its own gesture-handler root here.
 	return (
-		<GestureHandlerRootView style={styles.pageControlRoot(pageWindow.width)}>
+		<GestureHandlerRootView
+			pointerEvents={disabled ? "none" : "auto"}
+			style={styles.pageControlRoot(pageWindow.width)}
+		>
 			<GestureDetector gesture={scrub}>
 				<View
 					accessible
 					accessibilityActions={PAGE_CONTROL_ACTIONS}
 					accessibilityLabel="Focused List"
 					accessibilityRole="adjustable"
+					accessibilityState={{ disabled }}
 					accessibilityValue={{
 						text: `${lists[focusedIndex]?.name ?? ""}, List ${focusedIndex + 1} of ${pageCount}`,
 					}}
 					onAccessibilityAction={adjustPage}
-					style={styles.pageControl}
+					style={[
+						styles.pageControl,
+						disabled ? styles.pageControlDisabled : undefined,
+					]}
 					testID="home-list-page-control"
 				>
 					{pageWindow.size < pageCount ? (
@@ -349,6 +363,9 @@ const styles = StyleSheet.create((theme) => ({
 		flexDirection: "row",
 		alignItems: "center",
 		paddingHorizontal: PAGE_CONTROL_EDGE_SLOP,
+	},
+	pageControlDisabled: {
+		opacity: theme.opacities.disabled,
 	},
 	overflowGutter: {
 		width: PAGE_OVERFLOW_GUTTER_WIDTH,

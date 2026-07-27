@@ -3,12 +3,17 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react-native";
 import type { ReactElement } from "react";
 import { View } from "react-native";
+import type {
+	AddListItemInput,
+	UpdateListItemInput,
+} from "@/client/features/item/item-view-types";
+import { useItemEditor } from "@/client/features/item/use-item-editor";
 import { TestSafeAreaProvider } from "@/test/safe-area";
-import { AddItemForm } from "./add-item-form";
-import { ItemRows } from "./item-rows";
+import { ListItems } from "./list-items";
 import { ListOverview } from "./list-overview";
 import {
 	emptyActiveListState,
@@ -61,35 +66,148 @@ describe("List parts", () => {
 		expect(await screen.findByText(label)).toBeTruthy();
 	});
 
-	it("calls the toggle callback when an Item row is pressed", async () => {
-		const onToggleItem = jest.fn();
-		const onPressBlankSpace = jest.fn();
+	it("edits Item text inline without changing completion", async () => {
+		const onSetItemChecked = jest.fn(async () => undefined);
 		await renderWithSafeArea(
-			<ItemRows
-				items={populatedActiveListState.items}
-				onPressBlankSpace={onPressBlankSpace}
-				onToggleItem={onToggleItem}
-			/>,
+			<TestListItems onSetItemChecked={onSetItemChecked} />,
 		);
 
-		await fireEvent.press(await screen.findByText("Milk"));
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
 
-		expect(onToggleItem).toHaveBeenCalledWith("item-1");
-		expect(onPressBlankSpace).not.toHaveBeenCalled();
+		expect(await screen.findByLabelText("Item name")).toHaveDisplayValue(
+			"Milk",
+		);
+		expect(onSetItemChecked).not.toHaveBeenCalled();
 	});
 
-	it("renders the empty List state", async () => {
-		await renderWithSafeArea(<ItemRows items={[]} onToggleItem={jest.fn()} />);
+	it("changes completion only from the separate circle", async () => {
+		const onSetItemChecked = jest.fn(async () => undefined);
+		await renderWithSafeArea(
+			<TestListItems onSetItemChecked={onSetItemChecked} />,
+		);
 
-		expect(await screen.findByText("This List is empty.")).toBeTruthy();
+		await fireEvent.press(
+			await screen.findByRole("checkbox", { name: "Milk" }),
+		);
+
+		await waitFor(() => {
+			expect(onSetItemChecked).toHaveBeenCalledWith("item-1", true);
+		});
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+	});
+
+	it("starts inline creation and Return saves then readies another draft", async () => {
+		const onAddItem = jest.fn(async () => undefined);
+		await renderWithSafeArea(
+			<TestListItems creationRequestKey={1} onAddItem={onAddItem} />,
+		);
+
+		const nameInput = await screen.findByLabelText("Item name");
+		await fireEvent.changeText(nameInput, " Milk ");
+		await fireEvent(nameInput, "submitEditing");
+
+		await waitFor(() => {
+			expect(onAddItem).toHaveBeenCalledWith({
+				listId: "lst_groceries",
+				name: "Milk",
+				quantity: null,
+				notes: null,
+			});
+		});
+		expect(await screen.findByLabelText("Item name")).toHaveDisplayValue("");
+	});
+
+	it("supports optional inline notes", async () => {
+		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Add Note" }),
+		);
+
+		expect(await screen.findByLabelText("Item notes")).toBeTruthy();
+	});
+
+	it("saves details through the stacked List selector without starting another draft", async () => {
+		const onAddItem = jest.fn(async () => undefined);
+		await renderWithSafeArea(
+			<TestListItems creationRequestKey={1} onAddItem={onAddItem} />,
+		);
+		await fireEvent.changeText(
+			await screen.findByLabelText("Item name"),
+			"Coffee",
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+
+		const details = await screen.findByTestId("item-details-sheet");
 		expect(
-			await screen.findByText("Add the first Item for your Household."),
+			within(details).getByRole("header", { name: "Details" }),
 		).toBeTruthy();
+		await fireEvent.press(
+			within(details).getByRole("button", { name: "List, Groceries" }),
+		);
+
+		const selector = await screen.findByTestId("item-list-selector-sheet");
+		expect(
+			within(selector).getByRole("radio", {
+				name: "Groceries, Selected",
+			}),
+		).toBeTruthy();
+		await fireEvent.press(
+			within(selector).getByRole("radio", { name: "Pantry" }),
+		);
+		await fireEvent.press(
+			within(details).getByRole("button", { name: "Save Item" }),
+		);
+
+		await waitFor(() => {
+			expect(onAddItem).toHaveBeenCalledWith({
+				listId: "lst_pantry",
+				name: "Coffee",
+				quantity: null,
+				notes: null,
+			});
+		});
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+	});
+
+	it("marks an existing Item's source List as Current", async () => {
+		await renderWithSafeArea(<TestListItems />);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+		const details = await screen.findByTestId("item-details-sheet");
+		await fireEvent.press(
+			within(details).getByRole("button", { name: "List, Groceries" }),
+		);
+
+		const selector = await screen.findByTestId("item-list-selector-sheet");
+		expect(
+			within(selector).getByRole("radio", {
+				name: "Groceries, Current, Selected",
+			}),
+		).toBeTruthy();
+		expect(within(selector).getByText("Current")).toBeTruthy();
+	});
+
+	it("renders the empty List state without making its body an add target", async () => {
+		await renderWithSafeArea(
+			<TestListItems initialState={emptyActiveListState} />,
+		);
+
+		expect(await screen.findByText("Tap + to add an Item.")).toBeTruthy();
+		expect(screen.queryByLabelText("Item name")).toBeNull();
 	});
 
 	it("renders a larger List with long names and checked attribution", async () => {
 		await renderWithSafeArea(
-			<ItemRows items={largeActiveListState.items} onToggleItem={jest.fn()} />,
+			<TestListItems initialState={largeActiveListState} />,
 		);
 
 		expect(
@@ -101,77 +219,39 @@ describe("List parts", () => {
 			await screen.findAllByText("Checked by Avery Chen"),
 		).not.toHaveLength(0);
 	});
-
-	it("opens the composer and submits a trimmed Item draft", async () => {
-		const onAddItem = jest.fn(async () => undefined);
-		await renderWithSafeArea(
-			<AddItemForm
-				currentListId="lst_groceries"
-				listOptions={[
-					{ id: "lst_groceries", name: "Groceries" },
-					{ id: "lst_costco", name: "Costco" },
-				]}
-				onAddItem={onAddItem}
-			/>,
-		);
-
-		await fireEvent(await screen.findByLabelText("Add Item"), "focus");
-		await fireEvent.changeText(
-			await screen.findByLabelText("Item name"),
-			" Milk ",
-		);
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Add Item" }),
-		);
-
-		await waitFor(() => {
-			expect(onAddItem).toHaveBeenCalledWith({
-				listId: "lst_groceries",
-				name: "Milk",
-				quantity: "",
-				notes: "",
-			});
-		});
-	});
-
-	it("keeps the composer open while selecting a destination List", async () => {
-		const onAddItem = jest.fn(async () => undefined);
-		await renderWithSafeArea(
-			<AddItemForm
-				currentListId="lst_groceries"
-				listOptions={[
-					{ id: "lst_groceries", name: "Groceries" },
-					{ id: "lst_costco", name: "Costco" },
-				]}
-				onAddItem={onAddItem}
-			/>,
-		);
-
-		await fireEvent(await screen.findByLabelText("Add Item"), "focus");
-		await fireEvent.changeText(
-			await screen.findByLabelText("Item name"),
-			"Coffee",
-		);
-		await fireEvent.press(
-			await screen.findByRole("menuitem", { name: "Select List: Costco" }),
-		);
-
-		expect(screen.getByLabelText("Item name")).toHaveDisplayValue("Coffee");
-		expect(screen.getByLabelText("Add Item composer")).toBeOnTheScreen();
-
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Add Item" }),
-		);
-		await waitFor(() => {
-			expect(onAddItem).toHaveBeenCalledWith({
-				listId: "lst_costco",
-				name: "Coffee",
-				quantity: "",
-				notes: "",
-			});
-		});
-	});
 });
+
+type TestListItemsProps = {
+	initialState?: ActiveListState;
+	creationRequestKey?: number | null;
+	onAddItem?: (input: AddListItemInput) => Promise<void>;
+	onUpdateItem?: (input: UpdateListItemInput) => Promise<void>;
+	onSetItemChecked?: (itemId: string, checked: boolean) => Promise<void>;
+};
+
+function TestListItems({
+	initialState = populatedActiveListState,
+	creationRequestKey = null,
+	onAddItem = async () => undefined,
+	onUpdateItem = async () => undefined,
+	onSetItemChecked = async () => undefined,
+}: TestListItemsProps) {
+	const editor = useItemEditor({
+		currentListId: "lst_groceries",
+		items: initialState.items,
+		listOptions: [
+			{ id: "lst_groceries", name: "Groceries" },
+			{ id: "lst_pantry", name: "Pantry" },
+		],
+		creationRequestKey,
+		onAddItem,
+		onUpdateItem,
+		onSetItemChecked,
+		onActiveChange: () => undefined,
+	});
+
+	return <ListItems editor={editor} items={initialState.items} />;
+}
 
 function renderWithSafeArea(element: ReactElement) {
 	return render(<View style={{ flex: 1 }}>{element}</View>, {

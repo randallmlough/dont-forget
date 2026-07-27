@@ -60,13 +60,13 @@ export type HomeListPagerProps = {
 	syncState: ActiveListSyncState;
 	focusedListId: string | null;
 	collapsedTitleScroll: CollapsedTitleScroll;
-	/** Whether the add Item composer is open over the focused List page. */
-	composerOpen: boolean;
+	addItemRequestKey: number | null;
+	itemEditorActive: boolean;
 	/** Whether the List picker should be showing instead of the focused List. */
 	pickerPhase: HomeListPickerPhase;
 	/** Whether a List selection is still being written. */
 	selectionPending: boolean;
-	onComposerOpenChange: (open: boolean) => void;
+	onItemEditorActiveChange: (active: boolean) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
 	onRetry: () => void;
@@ -85,10 +85,11 @@ export function HomeListPager({
 	syncState,
 	focusedListId,
 	collapsedTitleScroll,
-	composerOpen,
+	addItemRequestKey,
+	itemEditorActive,
 	pickerPhase,
 	selectionPending,
-	onComposerOpenChange,
+	onItemEditorActiveChange,
 	onFocusList,
 	onOpenLists,
 	onRetry,
@@ -132,13 +133,14 @@ export function HomeListPager({
 		<ActiveHomeListPager
 			focusedListId={focusedListId ?? collectionState.currentListId}
 			collapsedTitleScroll={collapsedTitleScroll}
-			composerOpen={composerOpen}
+			addItemRequestKey={addItemRequestKey}
+			itemEditorActive={itemEditorActive}
 			listSummaries={collectionState.summaries}
 			pickerPhase={pickerPhase}
 			selectionPending={selectionPending}
 			session={session}
 			syncState={syncState}
-			onComposerOpenChange={onComposerOpenChange}
+			onItemEditorActiveChange={onItemEditorActiveChange}
 			onFocusList={onFocusList}
 			onPickerPhaseChange={onPickerPhaseChange}
 			topContentInset={topContentInset}
@@ -149,13 +151,14 @@ export function HomeListPager({
 type ActiveHomeListPagerProps = {
 	focusedListId: string;
 	collapsedTitleScroll: CollapsedTitleScroll;
-	composerOpen: boolean;
+	addItemRequestKey: number | null;
+	itemEditorActive: boolean;
 	listSummaries: readonly ListSummary[];
 	pickerPhase: HomeListPickerPhase;
 	selectionPending: boolean;
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
-	onComposerOpenChange: (open: boolean) => void;
+	onItemEditorActiveChange: (active: boolean) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onPickerPhaseChange: (phase: HomeListPickerPhase) => void;
 	topContentInset: number;
@@ -164,13 +167,14 @@ type ActiveHomeListPagerProps = {
 function ActiveHomeListPager({
 	focusedListId,
 	collapsedTitleScroll,
-	composerOpen,
+	addItemRequestKey,
+	itemEditorActive,
 	listSummaries,
 	pickerPhase,
 	selectionPending,
 	session,
 	syncState,
-	onComposerOpenChange,
+	onItemEditorActiveChange,
 	onFocusList,
 	onPickerPhaseChange,
 	topContentInset,
@@ -339,7 +343,7 @@ function ActiveHomeListPager({
 								width={width}
 							>
 								<ListPage
-									composerOpen={composerOpen && focused}
+									addItemRequestKey={focused ? addItemRequestKey : null}
 									focused={focused}
 									listSummaries={listSummaries}
 									scrollState={collapsedTitleScroll}
@@ -347,8 +351,7 @@ function ActiveHomeListPager({
 									summary={summary}
 									syncState={syncState}
 									topContentInset={topContentInset}
-									onDismissComposer={() => onComposerOpenChange(false)}
-									onOpenComposer={() => onComposerOpenChange(true)}
+									onItemEditorActiveChange={onItemEditorActiveChange}
 								/>
 							</CarouselPage>
 						);
@@ -356,7 +359,7 @@ function ActiveHomeListPager({
 					scrollEnabled={
 						listSummaries.length > 1 &&
 						pickerPhase === "closed" &&
-						!composerOpen &&
+						!itemEditorActive &&
 						!selectionPending
 					}
 					scrollEventThrottle={16}

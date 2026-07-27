@@ -12,7 +12,7 @@ import { useLogger } from "@/client/lib/logger";
 import { useProductQuery } from "@/client/lib/use-product-query";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { asError } from "@/shared/errors";
-import { useProductServices } from "./use-product-services";
+import { useListServices } from "./use-list-services";
 
 const LIST_ERROR_MESSAGE = "Unable to load your Lists. Please try again.";
 
@@ -100,7 +100,7 @@ export function useListCollection(
 	const userId = session.activeMember.userId;
 	const householdId = session.activeHousehold.id;
 	const logger = useLogger();
-	const services = useProductServices({ householdId, userId });
+	const services = useListServices({ householdId, userId });
 	const selectionStore = services.currentListSelection;
 	const { selection, refreshSelection } = useStoredCurrentListSelection(
 		selectionStore,

@@ -3,26 +3,24 @@ import {
 	type BottomSheetProps as ExpoBottomSheetProps,
 	RNHostView,
 } from "@expo/ui";
+import { presentationBackground } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
 import { Text, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export type BottomSheetSnapPoint = NonNullable<
 	ExpoBottomSheetProps["snapPoints"]
 >[number];
 
-type BottomSheetHeaderProps =
-	| {
-			headerAction?: ReactNode;
-			title: string;
-	  }
-	| {
-			headerAction?: never;
-			title?: never;
-	  };
+export type BottomSheetHeader = {
+	title: string;
+	leadingAction?: ReactNode;
+	trailingAction?: ReactNode;
+};
 
-export type BottomSheetProps = BottomSheetHeaderProps & {
+export type BottomSheetProps = {
 	children: ReactNode;
+	header?: BottomSheetHeader;
 	isPresented: boolean;
 	onIsPresentedChange: (isPresented: boolean) => void;
 	showDragIndicator?: boolean;
@@ -39,14 +37,15 @@ export type BottomSheetProps = BottomSheetHeaderProps & {
  */
 export function BottomSheet({
 	children,
-	headerAction,
+	header,
 	isPresented,
 	onIsPresentedChange,
 	showDragIndicator = true,
 	snapPoints,
 	testID,
-	title,
 }: BottomSheetProps) {
+	const { theme } = useUnistyles();
+
 	if (!isPresented) {
 		return null;
 	}
@@ -56,6 +55,7 @@ export function BottomSheet({
 	return (
 		<ExpoBottomSheet
 			isPresented
+			modifiers={[presentationBackground(theme.colors.background)]}
 			onDismiss={() => onIsPresentedChange(false)}
 			showDragIndicator={showDragIndicator}
 			snapPoints={snapPoints}
@@ -65,12 +65,13 @@ export function BottomSheet({
 				<View
 					style={[styles.sheet, hasSnapPoints ? styles.boundedSheet : null]}
 				>
-					{title !== undefined ? (
+					{header ? (
 						<View style={styles.header}>
+							<View style={styles.headerAction}>{header.leadingAction}</View>
 							<Text accessibilityRole="header" style={styles.title}>
-								{title}
+								{header.title}
 							</Text>
-							{headerAction}
+							<View style={styles.headerAction}>{header.trailingAction}</View>
 						</View>
 					) : null}
 					<View
@@ -91,6 +92,7 @@ const styles = StyleSheet.create((theme) => ({
 	sheet: {
 		gap: theme.spacing(3),
 		paddingBottom: theme.spacing(4),
+		backgroundColor: theme.colors.background,
 	},
 	boundedSheet: {
 		flex: 1,
@@ -100,14 +102,21 @@ const styles = StyleSheet.create((theme) => ({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: theme.spacing(3),
+		paddingHorizontal: theme.spacing(3),
 		borderBottomWidth: theme.borders.hairline,
 		borderBottomColor: theme.colors.border,
+	},
+	headerAction: {
+		width: theme.spacing(11),
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	title: {
 		...theme.typography.headline,
 		minWidth: 0,
 		flex: 1,
 		color: theme.colors.foreground,
+		textAlign: "center",
 	},
 	content: {
 		gap: theme.spacing(4),
