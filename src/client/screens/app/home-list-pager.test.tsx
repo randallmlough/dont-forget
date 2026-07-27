@@ -473,6 +473,7 @@ function TestHomeListPager({ onFocusList, ...props }: TestHomeListPagerProps) {
 				onComposerOpenChange={setComposerOpen}
 				onFocusList={focusList}
 				onPickerPhaseChange={setPickerPhase}
+				onRetry={jest.fn()}
 			/>
 		</>
 	);
@@ -486,6 +487,7 @@ type TestHomeListPagerProps = Omit<
 	| "selectionPending"
 	| "onComposerOpenChange"
 	| "onPickerPhaseChange"
+	| "onRetry"
 >;
 
 /**
@@ -597,29 +599,23 @@ function activeListProps(
 	summaries = [groceriesListSummary],
 ): HomeListPagerDataProps {
 	return {
-		currentListSelection: {
-			state: { status: "active", listId: "lst_groceries" },
-			retry: jest.fn(),
-			reload: jest.fn(),
+		collectionState: {
+			status: "active",
+			summaries,
+			currentListId: "lst_groceries",
 		},
 		syncState: "synced",
-		listRows: { status: "ready", summaries, isFetching: false },
 	};
 }
 
 function zeroActiveListProps(): HomeListPagerDataProps {
 	return {
-		currentListSelection: {
-			state: { status: "zeroActive" },
-			retry: jest.fn(),
-			reload: jest.fn(),
-		},
+		collectionState: { status: "zeroActive" },
 		syncState: "synced",
-		listRows: { status: "ready", summaries: [], isFetching: false },
 	};
 }
 
 type HomeListPagerDataProps = Pick<
 	HomeListPagerProps,
-	"currentListSelection" | "listRows" | "syncState"
+	"collectionState" | "syncState"
 >;

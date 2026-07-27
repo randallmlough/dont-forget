@@ -31,13 +31,8 @@ export const Loading: Story = {
 	render: () => (
 		<HomeListPagerStory
 			data={{
-				currentListSelection: {
-					state: { status: "loading" },
-					retry: noop,
-					reload: noop,
-				},
+				collectionState: { status: "loading" },
 				syncState: "synced",
-				listRows: { status: "loading" },
 			}}
 		/>
 	),
@@ -47,16 +42,11 @@ export const Unavailable: Story = {
 	render: () => (
 		<HomeListPagerStory
 			data={{
-				currentListSelection: {
-					state: {
-						status: "error",
-						message: "Unable to load this List. Please try again.",
-					},
-					retry: noop,
-					reload: noop,
+				collectionState: {
+					status: "error",
+					message: "Unable to load your Lists. Please try again.",
 				},
 				syncState: "failed",
-				listRows: { status: "error" },
 			}}
 		/>
 	),
@@ -66,13 +56,8 @@ export const ZeroActive: Story = {
 	render: () => (
 		<HomeListPagerStory
 			data={{
-				currentListSelection: {
-					state: { status: "zeroActive" },
-					retry: noop,
-					reload: noop,
-				},
+				collectionState: { status: "zeroActive" },
 				syncState: "synced",
-				listRows: { status: "ready", summaries: [], isFetching: false },
 			}}
 		/>
 	),
@@ -80,7 +65,7 @@ export const ZeroActive: Story = {
 
 type HomeListPagerData = Pick<
 	HomeListPagerProps,
-	"currentListSelection" | "listRows" | "syncState"
+	"collectionState" | "syncState"
 >;
 
 function HomeListPagerStory({ data }: { data: HomeListPagerData }) {
@@ -104,6 +89,7 @@ function HomeListPagerStory({ data }: { data: HomeListPagerData }) {
 			onComposerOpenChange={noop}
 			onFocusList={focusList}
 			onOpenLists={noop}
+			onRetry={noop}
 			onPickerPhaseChange={noop}
 		/>
 	);

@@ -10,21 +10,18 @@ import { Alert } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
 import {
-	clearCurrentListSelection,
-	setCurrentListSelection,
-} from "@/client/features/list/current-selection";
+	groceriesListSummary,
+	pantryListSummary,
+} from "@/client/features/list/list-test-support";
 import type {
-	CreateListResult,
-	List,
-	ListSummary,
-} from "@/client/features/list/list-service";
-import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
-import { useListRows } from "@/client/features/list/use-list-rows";
-import {
-	type ProductServices,
-	useProductServices,
-} from "@/client/features/list/use-product-services";
-import { track } from "@/client/lib/analytics";
+	CreateListOutcome,
+	DeleteListOutcome,
+	ListCollection,
+	ListCollectionState,
+	RenameListOutcome,
+	SelectListOutcome,
+} from "@/client/features/list/use-list-collection";
+import { useListCollection } from "@/client/features/list/use-list-collection";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { useAuthenticatedAppSession } from "@/client/session";
 import { Toaster } from "@/client/ui/toast";
@@ -33,6 +30,30 @@ import { drainToasts } from "@/test/toast";
 import ListsScreen from "./lists-screen";
 
 const mockReplace = jest.fn();
+const mockSelectList = jest.fn(
+	async (_input: { listId: string }): Promise<SelectListOutcome> => ({
+		status: "selected",
+	}),
+);
+const mockCreateList = jest.fn(
+	async (_input: { name: string }): Promise<CreateListOutcome> => ({
+		status: "createdAndSelected",
+		listId: "lst_created",
+	}),
+);
+const mockRenameList = jest.fn(
+	async (_input: {
+		listId: string;
+		name: string;
+	}): Promise<RenameListOutcome> => ({
+		status: "renamed",
+	}),
+);
+const mockDeleteList = jest.fn(
+	async (_input: { listId: string }): Promise<DeleteListOutcome> => ({
+		status: "deleted",
+	}),
+);
 const mockAlert = jest.spyOn(Alert, "alert");
 const mockPrompt = jest.spyOn(Alert, "prompt");
 
@@ -40,44 +61,34 @@ jest.mock("expo-router", () => ({
 	useRouter: () => ({ replace: mockReplace }),
 }));
 
+// The Authenticated App Session and the List collection both sit on the native
+// session and PowerSync watched-query boundary, which has no deterministic local
+// harness. The seam under test here is the screen's presentation, prompts, and
+// outcome-to-copy mapping; List policy is proven in the collection's own suite.
+// Justification per docs/code-standards/testing.md:9.
 jest.mock("@/client/session", () => ({
 	useAuthenticatedAppSession: jest.fn(),
 }));
 
-jest.mock("@/client/features/list/use-current-list-selection", () => ({
-	useCurrentListSelection: jest.fn(),
+jest.mock("@/client/features/list/use-list-collection", () => ({
+	useListCollection: jest.fn(),
 }));
-
-jest.mock("@/client/features/list/use-list-rows", () => ({
-	useListRows: jest.fn(),
-}));
-jest.mock("@/client/features/list/use-product-services", () => ({
-	useProductServices: jest.fn(),
-}));
-jest.mock("@/client/features/list/current-selection", () => ({
-	clearCurrentListSelection: jest.fn(),
-	setCurrentListSelection: jest.fn(),
-}));
-jest.mock("@/client/lib/analytics", () =>
-	jest.requireActual("@/test/mocks/analytics"),
-);
-
-const mockCreateList = jest.fn();
-const mockRenameList = jest.fn();
-const mockDeleteList = jest.fn();
-const mockListLists = jest.fn();
 
 beforeEach(() => {
 	mockReplace.mockReset();
 	mockAlert.mockReset();
 	mockPrompt.mockReset();
+	mockSelectList.mockReset();
 	mockCreateList.mockReset();
 	mockRenameList.mockReset();
 	mockDeleteList.mockReset();
-	mockListLists.mockReset();
-	jest.mocked(track).mockClear();
-	jest.mocked(setCurrentListSelection).mockReset().mockResolvedValue();
-	jest.mocked(clearCurrentListSelection).mockReset().mockResolvedValue();
+	mockSelectList.mockResolvedValue({ status: "selected" });
+	mockCreateList.mockResolvedValue({
+		status: "createdAndSelected",
+		listId: "lst_created",
+	});
+	mockRenameList.mockResolvedValue({ status: "renamed" });
+	mockDeleteList.mockResolvedValue({ status: "deleted" });
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: sessionFixture(),
@@ -85,34 +96,35 @@ beforeEach(() => {
 		reloadSession: jest.fn(),
 		signOut: jest.fn(),
 	});
-	jest.mocked(useListRows).mockReturnValue({
-		rows: { status: "ready", summaries: summariesFixture(), isFetching: false },
+	showCollection({
+		status: "active",
+		summaries: summariesFixture(),
+		currentListId: "lst_groceries",
 	});
-	jest.mocked(useCurrentListSelection).mockReturnValue({
-		state: { status: "active", listId: "lst_groceries" },
-		retry: jest.fn(),
-		reload: jest.fn(),
-	});
-	jest.mocked(useProductServices).mockReturnValue(productServicesFixture());
 });
 
 afterEach(drainToasts);
 
 describe("ListsScreen", () => {
-	it("renders the loading rows state", async () => {
-		jest.mocked(useListRows).mockReturnValueOnce({
-			rows: { status: "loading" },
-		});
+	it("renders the loading collection state", async () => {
+		showCollection({ status: "loading" });
 		await renderScreen();
 
 		expect(screen.getByText("New List")).toBeTruthy();
+		expect(screen.queryByText("Groceries")).toBeNull();
 	});
 
-	it("reports a toast when the rows cannot load", async () => {
-		jest.mocked(useListRows).mockReturnValue({ rows: { status: "error" } });
+	it("reports a toast when the Lists cannot load", async () => {
+		showCollection({
+			status: "error",
+			message: "Unable to load your Lists. Please try again.",
+		});
 		await renderScreen();
 
-		expect(await screen.findByText("Unable to load your Lists.")).toBeTruthy();
+		expect(
+			await screen.findByText("Unable to load your Lists. Please try again."),
+		).toBeTruthy();
+		expect(screen.getByText("New List")).toBeTruthy();
 	});
 
 	it("renders List counts and the Current badge", async () => {
@@ -123,13 +135,27 @@ describe("ListsScreen", () => {
 		expect(screen.getByText("Current List")).toBeTruthy();
 	});
 
-	it("uses the current List without persisting or tracking a switch", async () => {
+	it("renders summaries without a Current badge while the Current List resolves", async () => {
+		showCollection({
+			status: "resolvingCurrentList",
+			summaries: summariesFixture(),
+		});
+		await renderScreen();
+
+		expect(screen.getByText("Groceries")).toBeTruthy();
+		expect(screen.getByText("Pantry")).toBeTruthy();
+		expect(screen.queryByText("Current List")).toBeNull();
+	});
+
+	it("opens the Current List without a new selection", async () => {
+		mockSelectList.mockResolvedValue({ status: "alreadyCurrent" });
 		await renderScreen();
 
 		await fireEvent.press(screen.getByRole("button", { name: "Groceries" }));
 
-		expect(setCurrentListSelection).not.toHaveBeenCalled();
-		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
+		await waitFor(() =>
+			expect(mockSelectList).toHaveBeenCalledWith({ listId: "lst_groceries" }),
+		);
 		expect(mockReplace).toHaveBeenCalledWith("/");
 	});
 
@@ -139,42 +165,27 @@ describe("ListsScreen", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "Pantry" }));
 
 		await waitFor(() =>
-			expect(setCurrentListSelection).toHaveBeenCalledWith(
-				"usr_avery",
-				"hh_juniper",
-				"lst_pantry",
-			),
+			expect(mockSelectList).toHaveBeenCalledWith({ listId: "lst_pantry" }),
 		);
-		expect(track).toHaveBeenCalledWith("list_switched", {
-			household_id: "hh_juniper",
-			list_id: "lst_pantry",
-			user_id: "usr_avery",
-		});
 		expect(mockReplace).toHaveBeenCalledWith("/");
 	});
 
-	it("stays on Lists when non-current selection persistence fails", async () => {
-		jest
-			.mocked(setCurrentListSelection)
-			.mockRejectedValueOnce(new Error("storage unavailable"));
+	it("stays on Lists when a non-current selection is not persisted", async () => {
+		mockSelectList.mockResolvedValue({
+			status: "notSelected",
+			reason: "selectionFailed",
+			currentListId: "lst_groceries",
+		});
 		await renderScreen();
 
 		await fireEvent.press(screen.getByRole("button", { name: "Pantry" }));
 
-		await waitFor(() =>
-			expect(setCurrentListSelection).toHaveBeenCalledTimes(1),
-		);
-		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
+		await waitFor(() => expect(mockSelectList).toHaveBeenCalledTimes(1));
+		expect(mockAlert).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
-	it("persists a created List selection before navigating Home", async () => {
-		const created = listFixture("lst_created", "Hardware");
-		mockCreateList.mockResolvedValue({
-			status: "available",
-			list: created,
-			didWrite: true,
-		});
+	it("creates a List from the native prompt and opens it", async () => {
 		await renderScreen();
 
 		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
@@ -186,27 +197,17 @@ describe("ListsScreen", () => {
 		await submitListPrompt("Create", "Hardware");
 
 		await waitFor(() =>
-			expect(setCurrentListSelection).toHaveBeenCalledWith(
-				"usr_avery",
-				"hh_juniper",
-				"lst_created",
-			),
+			expect(mockCreateList).toHaveBeenCalledWith({ name: "Hardware" }),
 		);
 		expect(mockReplace).toHaveBeenCalledWith("/");
 	});
 
-	it("returns an empty Household to retryable rows when created List selection persistence fails", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: [], isFetching: false },
-		});
+	it("returns an empty Household to retryable Lists when the created List cannot be opened", async () => {
+		showCollection({ status: "zeroActive" });
 		mockCreateList.mockResolvedValue({
-			status: "available",
-			list: listFixture("lst_created", "Hardware"),
-			didWrite: true,
+			status: "createdSelectionFailed",
+			listId: "lst_created",
 		});
-		jest
-			.mocked(setCurrentListSelection)
-			.mockRejectedValueOnce(new Error("storage unavailable"));
 		await renderScreen();
 
 		expect(mockPrompt).not.toHaveBeenCalled();
@@ -229,11 +230,10 @@ describe("ListsScreen", () => {
 		expect(mockPrompt).toHaveBeenCalledTimes(2);
 	});
 
-	it("shows the service validation message for an invalid create name", async () => {
+	it("shows the validation message for an invalid create name", async () => {
 		mockCreateList.mockResolvedValue({
 			status: "invalidName",
 			reason: "required",
-			didWrite: false,
 		});
 		await renderScreen();
 
@@ -257,7 +257,7 @@ describe("ListsScreen", () => {
 	});
 
 	it("restores the attempted name after create fails", async () => {
-		mockCreateList.mockRejectedValue(new Error("database unavailable"));
+		mockCreateList.mockResolvedValue({ status: "failed" });
 		await renderScreen();
 
 		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
@@ -287,7 +287,7 @@ describe("ListsScreen", () => {
 	});
 
 	it("serializes List mutations and exposes disabled controls", async () => {
-		const pendingCreate = deferred<CreateListResult>();
+		const pendingCreate = deferred<CreateListOutcome>();
 		mockCreateList.mockReturnValue(pendingCreate.promise);
 		await renderScreen();
 
@@ -313,9 +313,8 @@ describe("ListsScreen", () => {
 
 		await act(async () =>
 			pendingCreate.resolve({
-				status: "available",
-				list: listFixture("lst_created", "Hardware"),
-				didWrite: true,
+				status: "createdAndSelected",
+				listId: "lst_created",
 			}),
 		);
 
@@ -336,11 +335,6 @@ describe("ListsScreen", () => {
 	});
 
 	it("renames a List from its native action menu", async () => {
-		mockRenameList.mockResolvedValue({
-			status: "available",
-			list: listFixture("lst_pantry", "Weekly Pantry"),
-			didWrite: true,
-		});
 		await renderScreen();
 
 		await chooseListAction("Pantry", "Rename");
@@ -357,17 +351,14 @@ describe("ListsScreen", () => {
 				name: "Weekly Pantry",
 			}),
 		);
+		expect(mockAlert).not.toHaveBeenCalled();
 		expect(
 			screen.getByRole("button", { name: "List actions for Pantry" }),
 		).toBeTruthy();
 	});
 
-	it("restores the attempted name after rename finds a missing List", async () => {
-		mockRenameList.mockResolvedValue({
-			status: "missing",
-			listId: "lst_pantry",
-			didWrite: false,
-		});
+	it("restores the attempted name after rename finds a List gone", async () => {
+		mockRenameList.mockResolvedValue({ status: "gone" });
 		await renderScreen();
 
 		await chooseListAction("Pantry", "Rename");
@@ -396,132 +387,61 @@ describe("ListsScreen", () => {
 		});
 	});
 
-	it("repairs selection after deleting the current List", async () => {
-		mockDeleteList.mockResolvedValue({
-			status: "deleted",
-			listId: "lst_groceries",
-			deletedAt: 2,
-			updatedAt: 2,
-			didWrite: true,
-		});
-		mockListLists.mockResolvedValue([summariesFixture()[1]]);
+	it("deletes the Current List from its native action menu and stays on Lists", async () => {
 		await renderScreen();
 
 		await chooseListAction("Groceries", "Delete");
 		await confirmListDeletion("Groceries");
 
 		await waitFor(() =>
-			expect(mockListLists).toHaveBeenCalledWith({
-				archive: "active",
-				sort: "recentActivity",
-			}),
+			expect(mockDeleteList).toHaveBeenCalledWith({ listId: "lst_groceries" }),
 		);
-		expect(setCurrentListSelection).toHaveBeenCalledWith(
-			"usr_avery",
-			"hh_juniper",
-			"lst_pantry",
-		);
-		expect(screen.getByText("Groceries")).toBeTruthy();
-		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
+		expect(mockAlert).toHaveBeenCalledTimes(1);
 		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
-	it("clears selection after deleting the only current List", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [summariesFixture()[0]],
-				isFetching: false,
-			},
-		});
-		mockDeleteList.mockResolvedValue({
-			status: "deleted",
-			listId: "lst_groceries",
-			deletedAt: 2,
-			updatedAt: 2,
-			didWrite: true,
-		});
-		mockListLists.mockResolvedValue([]);
+	it("reports a List that is already gone when deletion cannot find it", async () => {
+		mockDeleteList.mockResolvedValue({ status: "gone" });
 		await renderScreen();
 
-		await chooseListAction("Groceries", "Delete");
-		await confirmListDeletion("Groceries");
+		await chooseListAction("Pantry", "Delete");
+		await confirmListDeletion("Pantry");
 
 		await waitFor(() =>
-			expect(clearCurrentListSelection).toHaveBeenCalledWith(
-				"usr_avery",
-				"hh_juniper",
+			expect(mockAlert).toHaveBeenLastCalledWith(
+				"Unable to Delete List",
+				"This List is no longer available.",
+				undefined,
+				{ userInterfaceStyle: "light" },
 			),
 		);
-		expect(setCurrentListSelection).not.toHaveBeenCalled();
-		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
 		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
-	it("returns to rows when current List repair cannot read remaining Lists", async () => {
-		mockDeleteList.mockResolvedValue({
-			status: "deleted",
-			listId: "lst_groceries",
-			deletedAt: 2,
-			updatedAt: 2,
-			didWrite: true,
-		});
-		mockListLists.mockRejectedValue(new Error("database unavailable"));
+	it("reports a generic failure when deletion fails", async () => {
+		mockDeleteList.mockResolvedValue({ status: "failed" });
 		await renderScreen();
 
-		await chooseListAction("Groceries", "Delete");
-		await confirmListDeletion("Groceries");
+		await chooseListAction("Pantry", "Delete");
+		await confirmListDeletion("Pantry");
 
-		expect(
-			await screen.findByRole("button", {
-				name: "List actions for Groceries",
-			}),
-		).toBeTruthy();
-		expect(setCurrentListSelection).not.toHaveBeenCalled();
-		expect(clearCurrentListSelection).not.toHaveBeenCalled();
-		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
-		expect(mockReplace).not.toHaveBeenCalled();
-	});
-
-	it("returns to rows when current List repair cannot persist its fallback", async () => {
-		mockDeleteList.mockResolvedValue({
-			status: "deleted",
-			listId: "lst_groceries",
-			deletedAt: 2,
-			updatedAt: 2,
-			didWrite: true,
-		});
-		mockListLists.mockResolvedValue([summariesFixture()[1]]);
-		jest
-			.mocked(setCurrentListSelection)
-			.mockRejectedValueOnce(new Error("storage unavailable"));
-		await renderScreen();
-
-		await chooseListAction("Groceries", "Delete");
-		await confirmListDeletion("Groceries");
-
-		expect(
-			await screen.findByRole("button", {
-				name: "List actions for Groceries",
-			}),
-		).toBeTruthy();
-		expect(setCurrentListSelection).toHaveBeenCalledWith(
-			"usr_avery",
-			"hh_juniper",
-			"lst_pantry",
+		await waitFor(() =>
+			expect(mockAlert).toHaveBeenLastCalledWith(
+				"Unable to Delete List",
+				"Something went wrong. Please try again.",
+				undefined,
+				{ userInterfaceStyle: "light" },
+			),
 		);
-		expect(clearCurrentListSelection).not.toHaveBeenCalled();
-		expect(track).not.toHaveBeenCalledWith("list_switched", expect.anything());
 		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
 	it("keeps empty Lists visible until New List is selected", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: [], isFetching: false },
-		});
+		showCollection({ status: "zeroActive" });
 
 		await renderScreen();
 
+		expect(screen.queryByText("Current List")).toBeNull();
 		expect(mockPrompt).not.toHaveBeenCalled();
 		await fireEvent.press(screen.getByRole("button", { name: "New List" }));
 		expectListNamePrompt({
@@ -635,71 +555,32 @@ function TestAppShellProvider({ children }: PropsWithChildren) {
 	);
 }
 
-function productServicesFixture(): ProductServices {
-	const unexpected = jest.fn(async () => {
-		throw new Error("unexpected service call");
-	});
+function showCollection(state: ListCollectionState): void {
+	jest.mocked(useListCollection).mockReturnValue(collectionFixture(state));
+}
+
+function collectionFixture(state: ListCollectionState): ListCollection {
 	return {
-		lists: {
+		state,
+		actions: {
+			retry: jest.fn(),
+			selectList: mockSelectList,
 			createList: mockCreateList,
 			renameList: mockRenameList,
 			deleteList: mockDeleteList,
-			listLists: mockListLists,
-			listListsQuery: jest.fn(() => ({
-				compile: () => ({ sql: "SELECT lists", parameters: [] }),
-				execute: async () => [],
-			})),
-		},
-		items: {
-			listItems: unexpected,
-			listItemsQuery: jest.fn(() => ({
-				compile: () => ({ sql: "SELECT items", parameters: [] }),
-				execute: async () => [],
-			})),
-			addItem: unexpected,
-			setItemChecked: unexpected,
 		},
 	};
 }
 
-function summariesFixture(): ListSummary[] {
+function summariesFixture() {
 	return [
 		{
-			...summaryFixture("lst_groceries", "Groceries"),
+			...groceriesListSummary,
 			uncheckedItemCount: 3,
 			checkedItemCount: 2,
 		},
-		summaryFixture("lst_pantry", "Pantry"),
+		pantryListSummary,
 	];
-}
-
-function summaryFixture(id: string, name: string): ListSummary {
-	return {
-		id,
-		householdId: "hh_juniper",
-		name,
-		createdByUserId: "usr_avery",
-		createdAt: 1,
-		updatedAt: 1,
-		archived: false,
-		archivedAt: null,
-		lastActivityAt: 1,
-		uncheckedItemCount: 0,
-		checkedItemCount: 0,
-	};
-}
-
-function listFixture(id: string, name: string): List {
-	return {
-		id,
-		householdId: "hh_juniper",
-		name,
-		createdByUserId: "usr_avery",
-		createdAt: 1,
-		updatedAt: 1,
-		archived: false,
-		archivedAt: null,
-	};
 }
 
 function sessionFixture(): AuthenticatedAppSession {

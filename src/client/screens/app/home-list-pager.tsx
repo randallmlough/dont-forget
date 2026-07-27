@@ -31,8 +31,7 @@ import {
 } from "@/client/features/list/list-page";
 import type { ListSummary } from "@/client/features/list/list-service";
 import type { ActiveListSyncState } from "@/client/features/list/list-view-types";
-import type { CurrentListSelection } from "@/client/features/list/use-current-list-selection";
-import type { ListRows } from "@/client/features/list/use-list-rows";
+import type { ListCollectionState } from "@/client/features/list/use-list-collection";
 import type { AuthenticatedAppSession } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { StatusCard } from "@/client/ui/status-card";
@@ -57,8 +56,7 @@ export type HomeListPickerPhase = "closed" | "open" | "closing";
 
 export type HomeListPagerProps = {
 	session: AuthenticatedAppSession;
-	currentListSelection: CurrentListSelection;
-	listRows: ListRows;
+	collectionState: ListCollectionState;
 	syncState: ActiveListSyncState;
 	focusedListId: string | null;
 	collapsedTitleScroll: CollapsedTitleScroll;
@@ -71,6 +69,7 @@ export type HomeListPagerProps = {
 	onComposerOpenChange: (open: boolean) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
+	onRetry: () => void;
 	onPickerPhaseChange: (phase: HomeListPickerPhase) => void;
 	/**
 	 * Height of the transparent stack header each List page scrolls under. It
@@ -82,8 +81,7 @@ export type HomeListPagerProps = {
 
 export function HomeListPager({
 	session,
-	currentListSelection,
-	listRows,
+	collectionState,
 	syncState,
 	focusedListId,
 	collapsedTitleScroll,
@@ -93,12 +91,14 @@ export function HomeListPager({
 	onComposerOpenChange,
 	onFocusList,
 	onOpenLists,
+	onRetry,
 	onPickerPhaseChange,
 	topContentInset = 0,
 }: HomeListPagerProps) {
-	const loadState = currentListSelection.state;
-
-	if (listRows.status === "loading" || loadState.status === "loading") {
+	if (
+		collectionState.status === "loading" ||
+		collectionState.status === "resolvingCurrentList"
+	) {
 		return (
 			<StatusCard
 				title="Preparing your Household"
@@ -109,22 +109,15 @@ export function HomeListPager({
 		);
 	}
 
-	if (listRows.status === "error" || loadState.status === "error") {
+	if (collectionState.status === "error") {
 		return (
-			<StatusCard
-				title="List unavailable"
-				body={
-					loadState.status === "error"
-						? loadState.message
-						: "Unable to load your Lists. Please try again."
-				}
-			>
-				<Button onPress={currentListSelection.retry}>Try again</Button>
+			<StatusCard title="List unavailable" body={collectionState.message}>
+				<Button onPress={onRetry}>Try again</Button>
 			</StatusCard>
 		);
 	}
 
-	if (loadState.status === "zeroActive" || listRows.summaries.length === 0) {
+	if (collectionState.status === "zeroActive") {
 		return (
 			<StatusCard
 				title="No active Lists"
@@ -137,10 +130,10 @@ export function HomeListPager({
 
 	return (
 		<ActiveHomeListPager
-			focusedListId={focusedListId ?? loadState.listId}
+			focusedListId={focusedListId ?? collectionState.currentListId}
 			collapsedTitleScroll={collapsedTitleScroll}
 			composerOpen={composerOpen}
-			listSummaries={listRows.summaries}
+			listSummaries={collectionState.summaries}
 			pickerPhase={pickerPhase}
 			selectionPending={selectionPending}
 			session={session}
@@ -157,7 +150,7 @@ type ActiveHomeListPagerProps = {
 	focusedListId: string;
 	collapsedTitleScroll: CollapsedTitleScroll;
 	composerOpen: boolean;
-	listSummaries: ListSummary[];
+	listSummaries: readonly ListSummary[];
 	pickerPhase: HomeListPickerPhase;
 	selectionPending: boolean;
 	session: AuthenticatedAppSession;

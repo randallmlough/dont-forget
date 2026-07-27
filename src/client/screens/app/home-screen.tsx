@@ -1,6 +1,6 @@
 import { Stack, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import Animated, {
 	Extrapolation,
@@ -11,9 +11,7 @@ import Animated, {
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
 import type { ListSummary } from "@/client/features/list/list-service";
-import { useCurrentListSelection } from "@/client/features/list/use-current-list-selection";
-import { useListRows } from "@/client/features/list/use-list-rows";
-import { useSelectList } from "@/client/features/list/use-select-list";
+import { useListCollection } from "@/client/features/list/use-list-collection";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
@@ -88,26 +86,25 @@ function HomeScreenResource({
 		[offsetY, largeTitleHeight, pagerDrift],
 	);
 	const syncState = useSyncState();
-	const { rows } = useListRows(session);
+	const collection = useListCollection(session);
 	// The Current List resolves here, not inside HomeListPager, so the native
 	// stack header keeps its fallback title through the loading, error, and
 	// zeroActive states, where no List page is mounted to own a title.
-	const currentListSelection = useCurrentListSelection(session, rows);
-	const selectList = useSelectList(session);
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
 	// Home's interaction state lives here because the native bottom toolbar
 	// renders from the page component, outside the List surface it drives.
 	const [composerOpen, setComposerOpen] = useState(false);
 	const [pickerPhase, setPickerPhase] = useState<HomeListPickerPhase>("closed");
 	const [selectionPending, setSelectionPending] = useState(false);
-	// The List whose selection is persisted. It trails `focusedListId`, which
-	// moves with the pager before the switch is written.
-	const persistedListIdRef = useRef<string | null>(null);
 	const currentListId =
-		currentListSelection.state.status === "active"
-			? currentListSelection.state.listId
+		collection.state.status === "active"
+			? collection.state.currentListId
 			: null;
-	const listSummaries = rows.status === "ready" ? rows.summaries : [];
+	const listSummaries =
+		collection.state.status === "active" ||
+		collection.state.status === "resolvingCurrentList"
+			? collection.state.summaries
+			: [];
 	const resolvedFocusedListId = resolveFocusedListId({
 		focusedListId,
 		currentListId,
@@ -121,26 +118,18 @@ function HomeScreenResource({
 
 	async function focusList(listId: string): Promise<boolean> {
 		if (selectionPending) return false;
-		const persistedListId = persistedListIdRef.current ?? currentListId;
 		setFocusedListId(listId);
-		if (listId === persistedListId) return true;
-
 		setSelectionPending(true);
 		try {
-			const didSelect = await selectList(listId, persistedListId);
-			if (!didSelect) {
-				setFocusedListId(persistedListId);
-				return false;
+			const outcome = await collection.actions.selectList({ listId });
+			if (
+				outcome.status === "selected" ||
+				outcome.status === "alreadyCurrent"
+			) {
+				return true;
 			}
-
-			persistedListIdRef.current = listId;
-			// The Current List selection lives in AsyncStorage, which no watched
-			// query re-emits, so the resolver has to be told to re-read what was
-			// just persisted; otherwise it keeps validating the selection this
-			// switch replaced. The re-read keeps serving the selection it is
-			// revalidating, so the pager stays put through it.
-			currentListSelection.reload();
-			return true;
+			setFocusedListId(outcome.currentListId);
+			return false;
 		} finally {
 			setSelectionPending(false);
 		}
@@ -191,8 +180,7 @@ function HomeScreenResource({
 			<HomeListPager
 				session={session}
 				composerOpen={composerOpen}
-				currentListSelection={currentListSelection}
-				listRows={rows}
+				collectionState={collection.state}
 				syncState={syncState}
 				focusedListId={resolvedFocusedListId}
 				collapsedTitleScroll={collapsedTitleScroll}
@@ -201,6 +189,7 @@ function HomeScreenResource({
 				onComposerOpenChange={setComposerOpen}
 				onFocusList={focusList}
 				onOpenLists={onOpenLists}
+				onRetry={collection.actions.retry}
 				onPickerPhaseChange={setPickerPhase}
 				topContentInset={headerHeight}
 			/>

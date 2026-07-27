@@ -10,29 +10,35 @@ import { selectionAsync } from "expo-haptics";
 import type { PropsWithChildren } from "react";
 import { Dimensions, FlatList } from "react-native";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
+import type { ListSummary } from "@/client/features/list/list-service";
 import {
 	activeListPage,
 	authenticatedAppSession,
 	groceriesListSummary,
 	pantryListSummary,
 } from "@/client/features/list/list-test-support";
-import {
-	type CurrentListSelection,
-	useCurrentListSelection,
-} from "@/client/features/list/use-current-list-selection";
+import type {
+	ListCollection,
+	ListCollectionState,
+	SelectListOutcome,
+} from "@/client/features/list/use-list-collection";
+import { useListCollection } from "@/client/features/list/use-list-collection";
 import { useListPage } from "@/client/features/list/use-list-page";
-import { useListRows } from "@/client/features/list/use-list-rows";
-import { useSelectList } from "@/client/features/list/use-select-list";
 import { useAuthenticatedAppSession, useSyncState } from "@/client/session";
+import { deferred } from "@/test/async";
 import { panBegin, panEnd, panMove } from "@/test/mocks/gesture-handler";
 import { settleAnimations } from "@/test/mocks/reanimated";
 import { TestSafeAreaProvider } from "@/test/safe-area";
 import HomeScreen, { HomeScreenView } from "./home-screen";
 
 const mockReplace = jest.fn();
-const mockSelectList = jest.fn(async () => true);
+const mockRetry = jest.fn();
+const mockSelectList = jest.fn(
+	async (_input: { listId: string }): Promise<SelectListOutcome> => ({
+		status: "selected",
+	}),
+);
 const mockStackScreenOptions = jest.fn();
-const mockUseHeaderHeight = jest.fn(() => 116);
 /** Measured height a List page reports for its large in-page title. */
 const LARGE_TITLE_HEIGHT = 66;
 const hardwareListSummary = {
@@ -108,7 +114,7 @@ jest.mock("expo-router", () => {
 });
 
 jest.mock("expo-router/build/react-navigation/elements", () => ({
-	useHeaderHeight: () => mockUseHeaderHeight(),
+	useHeaderHeight: () => 116,
 }));
 
 // Native haptics and native gesture recognition have no deterministic JS
@@ -121,11 +127,11 @@ jest.mock("react-native-gesture-handler", () =>
 	jest.requireActual("@/test/mocks/gesture-handler"),
 );
 
-// useAuthenticatedAppSession, useSyncState, useCurrentListSelection, and
-// useListRows all sit on the PowerSync watched-query and native-session
-// boundary, which has no deterministic local harness. The seam under test in
-// this file is the screen's stack title and toolbar wiring, not List loading;
-// List behavior runs against the real pager and List-page components.
+// useAuthenticatedAppSession, useSyncState, useListCollection, and useListPage
+// all sit on the PowerSync watched-query and native-session boundary, which has
+// no deterministic local harness. The seam under test in this file is the
+// screen's stack title, toolbar, and focus wiring, not List loading; List
+// behavior runs against the real pager and List-page components.
 // Justification per docs/code-standards/testing.md:9.
 jest.mock("@/client/session", () => ({
 	...jest.requireActual("@/client/session"),
@@ -133,32 +139,18 @@ jest.mock("@/client/session", () => ({
 	useSyncState: jest.fn(),
 }));
 
-jest.mock("@/client/features/list/use-current-list-selection", () => ({
-	useCurrentListSelection: jest.fn(),
-}));
-
-jest.mock("@/client/features/list/use-list-rows", () => ({
-	useListRows: jest.fn(),
+jest.mock("@/client/features/list/use-list-collection", () => ({
+	useListCollection: jest.fn(),
 }));
 
 jest.mock("@/client/features/list/use-list-page", () => ({
 	useListPage: jest.fn(),
 }));
 
-jest.mock("@/client/features/list/use-select-list", () => ({
-	useSelectList: jest.fn(),
-}));
-
-jest.mock("@/client/session/powersync", () => ({
-	PowerSyncConnector: jest.fn(),
-	powerSyncAppDatabase: {},
-	readPowerSyncUrl: jest.fn(() => "https://sync.test"),
-}));
-
 beforeEach(() => {
 	mockReplace.mockReset();
+	mockRetry.mockReset();
 	mockStackScreenOptions.mockClear();
-	mockUseHeaderHeight.mockReturnValue(116);
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: authenticatedAppSession,
@@ -167,20 +159,12 @@ beforeEach(() => {
 		signOut: jest.fn(),
 	});
 	jest.mocked(useSyncState).mockReturnValue("synced");
-	jest.mocked(useCurrentListSelection).mockReturnValue(activeCurrentList());
-	jest.mocked(useListRows).mockReturnValue({
-		rows: {
-			status: "ready",
-			summaries: [groceriesListSummary],
-			isFetching: false,
-		},
-	});
 	jest
 		.mocked(useListPage)
 		.mockImplementation((_session, summary) => activeListPage(summary));
 	mockSelectList.mockReset();
-	mockSelectList.mockResolvedValue(true);
-	jest.mocked(useSelectList).mockReturnValue(mockSelectList);
+	mockSelectList.mockResolvedValue({ status: "selected" });
+	showLists([groceriesListSummary]);
 });
 
 describe("HomeScreenView", () => {
@@ -219,6 +203,7 @@ describe("HomeScreen", () => {
 		expect(
 			await screen.findByRole("header", { name: "Groceries" }),
 		).toBeTruthy();
+		expect(useListCollection).toHaveBeenCalledWith(authenticatedAppSession);
 
 		await fireEvent.press(
 			screen.getByRole("button", { name: "Open navigation" }),
@@ -286,13 +271,7 @@ describe("HomeScreen", () => {
 	});
 
 	it("fades the collapsed List title out while the pager drifts off its List", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [groceriesListSummary, pantryListSummary],
-				isFetching: false,
-			},
-		});
+		showLists([groceriesListSummary, pantryListSummary]);
 		const view = await render(homeScreenSurface(), {
 			wrapper: TestSafeAreaProvider,
 		});
@@ -308,13 +287,7 @@ describe("HomeScreen", () => {
 	});
 
 	it("hands the collapsed List title to the List the pager settles on", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [groceriesListSummary, pantryListSummary],
-				isFetching: false,
-			},
-		});
+		showLists([groceriesListSummary, pantryListSummary]);
 		const view = await render(homeScreenSurface(), {
 			wrapper: TestSafeAreaProvider,
 		});
@@ -349,13 +322,7 @@ describe("HomeScreen", () => {
 			} as const,
 		],
 	])("clears the collapsed List title when the pager settles on a page that is %s", async (_label, pantryState) => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [groceriesListSummary, pantryListSummary],
-				isFetching: false,
-			},
-		});
+		showLists([groceriesListSummary, pantryListSummary]);
 		jest
 			.mocked(useListPage)
 			.mockImplementation((_session, summary) =>
@@ -379,37 +346,24 @@ describe("HomeScreen", () => {
 	});
 
 	it("updates the page title and persists selection when paging settles", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [groceriesListSummary, pantryListSummary],
-				isFetching: false,
-			},
-		});
+		showLists([groceriesListSummary, pantryListSummary]);
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
 				<HomeScreen />
 			</NavigationDrawerProvider>,
 			{ wrapper: TestSafeAreaProvider },
 		);
+
 		await settlePagerAt(1);
 
 		expect(await screen.findByRole("header", { name: "Pantry" })).toBeTruthy();
-		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
+		expect(mockSelectList).toHaveBeenCalledWith({ listId: "lst_pantry" });
 	});
 
-	it("re-reads the Current List selection once a page switch persists it", async () => {
-		const reload = jest.fn();
-		jest
-			.mocked(useCurrentListSelection)
-			.mockReturnValue({ ...activeCurrentList(), reload });
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [groceriesListSummary, pantryListSummary],
-				isFetching: false,
-			},
-		});
+	it("moves the pager onto the settled List before the selection write resolves", async () => {
+		showLists([groceriesListSummary, pantryListSummary]);
+		const pendingSelection = deferred<SelectListOutcome>();
+		mockSelectList.mockReturnValue(pendingSelection.promise);
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
 				<HomeScreen />
@@ -417,26 +371,22 @@ describe("HomeScreen", () => {
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await settlePagerAt(1);
+		await settlePagerScrollTo(1);
 
-		// The selection lives in AsyncStorage, so without this the resolver keeps
-		// validating the List the switch replaced.
-		await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+		// The focus moves on the swipe, not on the write it starts.
+		expect(screen.getByRole("header", { name: "Pantry" })).toBeTruthy();
+		expect(mockSelectList).toHaveBeenCalledWith({ listId: "lst_pantry" });
+
+		await act(async () => {
+			pendingSelection.resolve({ status: "selected" });
+		});
+		expect(screen.getByRole("header", { name: "Pantry" })).toBeTruthy();
 	});
 
-	it("does not re-read the Current List selection when persisting the switch fails", async () => {
-		const reload = jest.fn();
-		jest
-			.mocked(useCurrentListSelection)
-			.mockReturnValue({ ...activeCurrentList(), reload });
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [groceriesListSummary, pantryListSummary],
-				isFetching: false,
-			},
-		});
-		mockSelectList.mockResolvedValue(false);
+	it("ignores a second page switch while the first selection is still pending", async () => {
+		showLists([groceriesListSummary, pantryListSummary, hardwareListSummary]);
+		const pendingSelection = deferred<SelectListOutcome>();
+		mockSelectList.mockReturnValue(pendingSelection.promise);
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
 				<HomeScreen />
@@ -444,20 +394,30 @@ describe("HomeScreen", () => {
 			{ wrapper: TestSafeAreaProvider },
 		);
 
-		await settlePagerAt(1);
+		await settlePagerScrollTo(1);
+		expect(mockSelectList).toHaveBeenCalledTimes(1);
+		// A pending write also parks the pager, so a swipe cannot outrun it.
+		expect(screen.getByTestId("home-list-pager")).toHaveProp(
+			"scrollEnabled",
+			false,
+		);
 
-		await waitFor(() => expect(mockSelectList).toHaveBeenCalledTimes(1));
-		expect(reload).not.toHaveBeenCalled();
+		await settlePagerScrollTo(2);
+
+		expect(mockSelectList).toHaveBeenCalledTimes(1);
+		expect(screen.getByRole("header", { name: "Pantry" })).toBeTruthy();
+
+		await act(async () => {
+			pendingSelection.resolve({ status: "selected" });
+		});
+		expect(screen.getByTestId("home-list-pager")).toHaveProp(
+			"scrollEnabled",
+			true,
+		);
 	});
 
 	it("insets every List page below the transparent stack header", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [groceriesListSummary, pantryListSummary],
-				isFetching: false,
-			},
-		});
+		showLists([groceriesListSummary, pantryListSummary]);
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
 				<HomeScreen />
@@ -484,14 +444,12 @@ describe("HomeScreen", () => {
 	});
 
 	it("reverts the focused List when persisting the selection fails", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [groceriesListSummary, pantryListSummary],
-				isFetching: false,
-			},
+		showLists([groceriesListSummary, pantryListSummary]);
+		mockSelectList.mockResolvedValue({
+			status: "notSelected",
+			reason: "selectionFailed",
+			currentListId: "lst_groceries",
 		});
-		mockSelectList.mockResolvedValue(false);
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
 				<HomeScreen />
@@ -501,7 +459,8 @@ describe("HomeScreen", () => {
 
 		await settlePagerAt(1);
 
-		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
+		expect(mockSelectList).toHaveBeenCalledWith({ listId: "lst_pantry" });
+		// The rejected write names the List the pager must return to.
 		await waitFor(() => {
 			expect(screen.getByTestId("home-list-page-lst_groceries")).toBeTruthy();
 		});
@@ -513,17 +472,7 @@ describe("HomeScreen", () => {
 	});
 
 	it("updates the page title across consecutive horizontal swipes", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [
-					groceriesListSummary,
-					pantryListSummary,
-					hardwareListSummary,
-				],
-				isFetching: false,
-			},
-		});
+		showLists([groceriesListSummary, pantryListSummary, hardwareListSummary]);
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
 				<HomeScreen />
@@ -539,22 +488,13 @@ describe("HomeScreen", () => {
 		expect(
 			await screen.findByRole("header", { name: "Hardware" }),
 		).toBeTruthy();
-		expect(mockSelectList).toHaveBeenNthCalledWith(
-			2,
-			"lst_hardware",
-			"lst_pantry",
-		);
+		expect(mockSelectList).toHaveBeenNthCalledWith(2, {
+			listId: "lst_hardware",
+		});
 	});
 
 	it("falls back to the Home title while the Current List is unresolved", async () => {
-		jest.mocked(useCurrentListSelection).mockReturnValue({
-			state: { status: "zeroActive" },
-			retry: jest.fn(),
-			reload: jest.fn(),
-		});
-		jest.mocked(useListRows).mockReturnValue({
-			rows: { status: "ready", summaries: [], isFetching: false },
-		});
+		showCollection({ status: "zeroActive" });
 
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
@@ -565,6 +505,45 @@ describe("HomeScreen", () => {
 
 		expect(await screen.findByRole("header", { name: "Home" })).toBeTruthy();
 		expect(await screen.findByText("No active Lists")).toBeTruthy();
+		// With no List on screen there is nothing for the page control to page.
+		expect(
+			screen.queryByTestId("home-list-page-control", {
+				includeHiddenElements: true,
+			}),
+		).toBeNull();
+	});
+
+	it("keeps the Household loading card up until the Current List resolves", async () => {
+		showCollection({ status: "loading" });
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
+
+		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
+
+		showCollection({
+			status: "resolvingCurrentList",
+			summaries: [groceriesListSummary],
+		});
+		await view.rerender(homeScreenSurface());
+
+		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
+		// No List page mounts until there is a Current List to focus.
+		expect(
+			screen.queryByTestId("home-list-pager", { includeHiddenElements: true }),
+		).toBeNull();
+	});
+
+	it("offers a retry when the List collection fails to load", async () => {
+		showCollection({ status: "error", message: "Unable to load your Lists." });
+
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(await screen.findByText("List unavailable")).toBeTruthy();
+		expect(screen.getByText("Unable to load your Lists.")).toBeTruthy();
+		await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
+
+		expect(mockRetry).toHaveBeenCalledTimes(1);
 	});
 
 	it("renders the Home header and status view without a session", async () => {
@@ -590,17 +569,7 @@ describe("HomeScreen", () => {
 
 describe("Home bottom toolbar", () => {
 	beforeEach(() => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: [
-					groceriesListSummary,
-					pantryListSummary,
-					hardwareListSummary,
-				],
-				isFetching: false,
-			},
-		});
+		showLists([groceriesListSummary, pantryListSummary, hardwareListSummary]);
 	});
 
 	it("reserves the Search placement without offering a search yet", async () => {
@@ -645,10 +614,7 @@ describe("Home bottom toolbar", () => {
 			expect(scrollToIndex).toHaveBeenCalledWith({ animated: false, index: 2 });
 			expect(selectionAsync).toHaveBeenCalledTimes(2);
 			expect(mockSelectList).toHaveBeenCalledTimes(1);
-			expect(mockSelectList).toHaveBeenCalledWith(
-				"lst_hardware",
-				"lst_groceries",
-			);
+			expect(mockSelectList).toHaveBeenCalledWith({ listId: "lst_hardware" });
 			expect(pageControl()).toHaveProp("accessibilityValue", {
 				text: "Hardware, List 3 of 3",
 			});
@@ -661,13 +627,7 @@ describe("Home bottom toolbar", () => {
 		const scrollToIndex = jest
 			.spyOn(FlatList.prototype, "scrollToIndex")
 			.mockImplementation();
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: manyListSummaries(30),
-				isFetching: false,
-			},
-		});
+		showLists(manyListSummaries(30));
 
 		try {
 			await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
@@ -696,10 +656,9 @@ describe("Home bottom toolbar", () => {
 				"List 25, List 25 of 30",
 				"List 30, List 30 of 30",
 			]);
-			expect(mockSelectList).toHaveBeenLastCalledWith(
-				"lst_list_30",
-				"lst_list_25",
-			);
+			expect(mockSelectList).toHaveBeenLastCalledWith({
+				listId: "lst_list_30",
+			});
 			// The window has run out of Lists to show on the far side.
 			expect(overflowChevron("before")).toBeTruthy();
 			expect(overflowChevron("after")).toBeNull();
@@ -712,13 +671,7 @@ describe("Home bottom toolbar", () => {
 		const scrollToIndex = jest
 			.spyOn(FlatList.prototype, "scrollToIndex")
 			.mockImplementation();
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: manyListSummaries(30),
-				isFetching: false,
-			},
-		});
+		showLists(manyListSummaries(30));
 
 		try {
 			await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
@@ -751,13 +704,7 @@ describe("Home bottom toolbar", () => {
 	});
 
 	it("steps through every List for assistive technology, window or not", async () => {
-		jest.mocked(useListRows).mockReturnValue({
-			rows: {
-				status: "ready",
-				summaries: manyListSummaries(30),
-				isFetching: false,
-			},
-		});
+		showLists(manyListSummaries(30));
 		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
 
 		// The window shows ten Lists; stepping past its edge moves the Lists on,
@@ -774,7 +721,11 @@ describe("Home bottom toolbar", () => {
 	});
 
 	it("returns the page control to the focused List when persisting the drag fails", async () => {
-		mockSelectList.mockResolvedValue(false);
+		mockSelectList.mockResolvedValue({
+			status: "notSelected",
+			reason: "selectionFailed",
+			currentListId: "lst_groceries",
+		});
 		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
 
 		await dragPageControlAcross([DOT_TOUCH_X[0], DOT_TOUCH_X[1]]);
@@ -795,17 +746,16 @@ describe("Home bottom toolbar", () => {
 				nativeEvent: { actionName: "increment" },
 			});
 		});
-		expect(mockSelectList).toHaveBeenCalledWith("lst_pantry", "lst_groceries");
+		expect(mockSelectList).toHaveBeenCalledWith({ listId: "lst_pantry" });
 
 		await act(async () => {
 			fireEvent(pageControl(), "accessibilityAction", {
 				nativeEvent: { actionName: "decrement" },
 			});
 		});
-		expect(mockSelectList).toHaveBeenLastCalledWith(
-			"lst_groceries",
-			"lst_pantry",
-		);
+		expect(mockSelectList).toHaveBeenLastCalledWith({
+			listId: "lst_groceries",
+		});
 	});
 
 	it("becomes the List picker's close button while the picker is open", async () => {
@@ -837,6 +787,21 @@ describe("Home bottom toolbar", () => {
 			settleAnimations();
 		});
 		expect(screen.queryByTestId("home-list-picker")).toBeNull();
+	});
+
+	it("hands the bottom of the screen to the add Item composer while it is open", async () => {
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+		expect(pageControl()).toBeTruthy();
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Add the first Item" }),
+		);
+
+		expect(
+			screen.queryByTestId("home-list-page-control", {
+				includeHiddenElements: true,
+			}),
+		).toBeNull();
 	});
 });
 
@@ -994,7 +959,8 @@ async function dragPagerTo(offsetX: number): Promise<void> {
 	});
 }
 
-async function settlePagerAt(index: number): Promise<void> {
+/** Lands the pager on a page without waiting for the selection write. */
+async function settlePagerScrollTo(index: number): Promise<void> {
 	await act(async () => {
 		fireEvent(screen.getByTestId("home-list-pager"), "momentumScrollEnd", {
 			nativeEvent: {
@@ -1002,6 +968,10 @@ async function settlePagerAt(index: number): Promise<void> {
 			},
 		});
 	});
+}
+
+async function settlePagerAt(index: number): Promise<void> {
+	await settlePagerScrollTo(index);
 	await waitFor(() => {
 		expect(screen.getByTestId("home-list-pager")).toHaveProp(
 			"scrollEnabled",
@@ -1016,10 +986,29 @@ async function waitForSelectionCount(count: number): Promise<void> {
 	});
 }
 
-function activeCurrentList(): CurrentListSelection {
+/** Puts the collection in its active state around the given List summaries. */
+function showLists(summaries: readonly ListSummary[]): void {
+	const currentListId = summaries[0]?.id;
+	showCollection(
+		currentListId === undefined
+			? { status: "zeroActive" }
+			: { status: "active", summaries, currentListId },
+	);
+}
+
+function showCollection(state: ListCollectionState): void {
+	jest.mocked(useListCollection).mockReturnValue(collectionFixture(state));
+}
+
+function collectionFixture(state: ListCollectionState): ListCollection {
 	return {
-		state: { status: "active", listId: "lst_groceries" },
-		retry: jest.fn(),
-		reload: jest.fn(),
+		state,
+		actions: {
+			retry: mockRetry,
+			selectList: mockSelectList,
+			createList: jest.fn(async () => ({ status: "failed" as const })),
+			renameList: jest.fn(async () => ({ status: "failed" as const })),
+			deleteList: jest.fn(async () => ({ status: "failed" as const })),
+		},
 	};
 }

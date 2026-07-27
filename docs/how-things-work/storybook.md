@@ -33,7 +33,7 @@ Co-locate stories next to the component or view they describe under `src/client/
 - `AuthScreen` stories show authentication layout states.
 - `HomeListPager` stories render loading, unavailable, and no-active-List states for the authenticated app session.
 - Active List rendering and interactions are exercised at the feature `ListPage` boundary and in runtime-backed Home tests.
-- Production Home shares one `useListRows(session)` snapshot with `useCurrentListSelection(session, rows)`, then composes the screen-owned pager with feature-owned List pages.
+- Production Home passes one `useListCollection(session)` state to the screen-owned pager, which composes feature-owned List pages.
 
 ## Commands
 
