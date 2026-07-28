@@ -3,8 +3,10 @@ import { useRef } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { BottomSheet } from "@/client/ui/bottom-sheet";
+import { Button } from "@/client/ui/button";
 import { ButtonIconGlass } from "@/client/ui/button-icon-glass";
 import { ItemSeparator } from "@/client/ui/item";
+import { themedAlert } from "@/client/ui/native-dialogs";
 import type { ItemEditorDetailsPresentation } from "./item-editor-reducer";
 import { ItemListSelectorSheet } from "./item-list-selector-sheet";
 import type { ItemEditor } from "./use-item-editor";
@@ -192,6 +194,18 @@ function ItemDetailsSheetContent({
 						) : null}
 					</Pressable>
 				</View>
+
+				{presentation.source.kind === "existing" ? (
+					<Button
+						accessibilityHint="Deletes this Item"
+						accessibilityLabel="Delete Item"
+						onPress={() => confirmItemDeletion(editor)}
+						style={styles.deleteButton}
+						variant="destructive"
+					>
+						Delete Item
+					</Button>
+				) : null}
 			</ScrollView>
 
 			<ItemListSelectorSheet
@@ -206,11 +220,25 @@ function ItemDetailsSheetContent({
 	);
 }
 
+function confirmItemDeletion(editor: ItemEditor) {
+	themedAlert("Delete Item", "This action cannot be undone.", [
+		{ text: "Cancel", style: "cancel" },
+		{
+			text: "Delete",
+			style: "destructive",
+			onPress: () => {
+				void editor.actions.deleteItem();
+			},
+		},
+	]);
+}
+
 const styles = StyleSheet.create((theme) => ({
 	scroll: {
 		flex: 1,
 	},
 	content: {
+		flexGrow: 1,
 		gap: theme.spacing(5),
 		paddingHorizontal: theme.spacing(4),
 		paddingBottom: theme.spacing(8),
@@ -265,6 +293,10 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	unavailable: {
 		color: theme.colors.destructive,
+	},
+	deleteButton: {
+		alignSelf: "stretch",
+		marginTop: "auto",
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

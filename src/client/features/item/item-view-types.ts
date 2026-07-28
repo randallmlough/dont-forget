@@ -30,6 +30,11 @@ export type UpdateListItemInput = {
 	notes: string | null;
 };
 
+export type DeleteListItemInput = {
+	itemId: string;
+	listId: string;
+};
+
 export type ItemListOption = {
 	id: string;
 	name: string;

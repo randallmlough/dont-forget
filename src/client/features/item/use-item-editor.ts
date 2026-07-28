@@ -17,6 +17,7 @@ import { nullableTrimmed } from "./item-service";
 import type {
 	ActiveListItem,
 	AddListItemInput,
+	DeleteListItemInput,
 	ItemDraftValues,
 	ItemListOption,
 	UpdateListItemInput,
@@ -29,6 +30,7 @@ export type UseItemEditorInput = {
 	creationRequestKey: number | null;
 	onAddItem: (input: AddListItemInput) => Promise<void>;
 	onUpdateItem: (input: UpdateListItemInput) => Promise<void>;
+	onDeleteItem: (input: DeleteListItemInput) => Promise<void>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	onActiveChange: (active: boolean) => void;
 	onCreationRequestAcknowledged?: (requestKey: number) => void;
@@ -46,6 +48,7 @@ export type ItemEditorActions = {
 	openDetails: () => void;
 	cancelDetails: () => void;
 	saveDetails: () => Promise<void>;
+	deleteItem: () => Promise<void>;
 	openListSelector: () => void;
 	closeListSelector: () => void;
 	selectList: (listId: string) => void;
@@ -332,6 +335,22 @@ function createItemEditorActions(
 		await performSave(state, "finish");
 	}
 
+	async function deleteItem() {
+		const { state, input } = getLatest();
+		if (state.status !== "details" || state.source.kind !== "existing") return;
+		const deletion = {
+			itemId: state.source.itemId,
+			listId: state.source.sourceListId,
+		};
+		dispatch({ type: "editingEnded" });
+		input.onActiveChange(false);
+		try {
+			await input.onDeleteItem(deletion);
+		} catch {
+			toast.error("Unable to delete that Item. Please try again.");
+		}
+	}
+
 	function selectList(listId: string) {
 		if (!getLatest().input.listOptions.some((option) => option.id === listId))
 			return;
@@ -375,6 +394,7 @@ function createItemEditorActions(
 		openDetails: () => dispatch({ type: "detailsOpened" }),
 		cancelDetails: () => dispatch({ type: "detailsCancelled" }),
 		saveDetails,
+		deleteItem,
 		openListSelector: () => dispatch({ type: "listSelectorOpened" }),
 		closeListSelector: () => dispatch({ type: "listSelectorClosed" }),
 		selectList,

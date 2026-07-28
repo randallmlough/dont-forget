@@ -124,6 +124,7 @@ export function activeListPage(
 		actions: {
 			addItem: jest.fn(async () => undefined),
 			updateItem: jest.fn(async () => undefined),
+			deleteItem: jest.fn(async () => undefined),
 			setItemChecked: jest.fn(async () => undefined),
 			...overrides.actions,
 		},

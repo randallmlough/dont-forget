@@ -1,6 +1,7 @@
 import type { Item, ItemService } from "@/client/features/item/item-service";
 import type {
 	AddListItemInput,
+	DeleteListItemInput,
 	UpdateListItemInput,
 } from "@/client/features/item/item-view-types";
 import { useItemService } from "@/client/features/item/use-item-service";
@@ -12,6 +13,7 @@ import type { ActiveListState } from "./list-view-types";
 export type ListPageActions = {
 	addItem: (input: AddListItemInput) => Promise<void>;
 	updateItem: (input: UpdateListItemInput) => Promise<void>;
+	deleteItem: (input: DeleteListItemInput) => Promise<void>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -80,6 +82,12 @@ function listPageActions({
 		},
 		async updateItem(input: UpdateListItemInput) {
 			await itemService.updateItem({
+				...input,
+				userId: session.activeMember.userId,
+			});
+		},
+		async deleteItem(input: DeleteListItemInput) {
+			await itemService.deleteItem({
 				...input,
 				userId: session.activeMember.userId,
 			});

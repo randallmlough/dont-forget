@@ -66,6 +66,12 @@ function ListPartsStory({
 		onUpdateItem: async (input) => {
 			setState((current) => updateFixtureItem(current, input));
 		},
+		onDeleteItem: async (input) => {
+			setState((current) => ({
+				...current,
+				items: current.items.filter((item) => item.id !== input.itemId),
+			}));
+		},
 		onSetItemChecked: async (itemId, checked) => {
 			setState((current) => setFixtureItemChecked(current, itemId, checked));
 		},
