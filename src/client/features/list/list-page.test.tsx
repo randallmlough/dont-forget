@@ -5,7 +5,7 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react-native";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FlatList } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import type { ListSummary } from "@/client/features/list/list-service";
@@ -17,7 +17,11 @@ import {
 } from "@/client/features/list/list-test-support";
 import { useListPage } from "@/client/features/list/use-list-page";
 import { TestSafeAreaProvider } from "@/test/safe-area";
-import { ListPage } from "./list-page";
+import {
+	ListPage,
+	type ListPageEditorEvent,
+	type ListPageEditorOwnerToken,
+} from "./list-page";
 
 jest.mock("@/client/features/list/use-list-page", () => ({
 	useListPage: jest.fn(),
@@ -35,7 +39,7 @@ describe("ListPage", () => {
 			wrapper: TestSafeAreaProvider,
 		});
 
-		expect(await screen.findByText("No Items yet")).toBeTruthy();
+		expect(await screen.findByText("Tap + to add an Item.")).toBeTruthy();
 	});
 
 	it("resets both List pages to the toolbar inset when focus changes", async () => {
@@ -110,27 +114,28 @@ describe("ListPage", () => {
 			.mockReturnValue(
 				activeListPage(groceriesListSummary, { actions: { addItem } }),
 			);
-		await render(<TestListPage focused summary={groceriesListSummary} />, {
-			wrapper: TestSafeAreaProvider,
-		});
-
-		expect(screen.queryByText("Add an Item…")).toBeNull();
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Add the first Item" }),
+		await render(
+			<TestListPage
+				focused
+				addItemRequestKey={1}
+				summary={groceriesListSummary}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
 		);
+
 		await fireEvent.changeText(
 			await screen.findByLabelText("Item name"),
 			" Milk ",
 		);
-		await fireEvent.press(
-			await screen.findByRole("button", { name: "Add Item" }),
-		);
+		await fireEvent(screen.getByLabelText("Item name"), "submitEditing");
 
-		expect(addItem).toHaveBeenCalledWith({
-			listId: "lst_groceries",
-			name: "Milk",
-			quantity: null,
-			notes: null,
+		await waitFor(() => {
+			expect(addItem).toHaveBeenCalledWith({
+				listId: "lst_groceries",
+				name: "Milk",
+				quantity: null,
+				notes: null,
+			});
 		});
 	});
 
@@ -203,10 +208,12 @@ function TestListPages({ focusedListId }: { focusedListId: string }) {
 function TestListPage({
 	focused,
 	summary,
+	addItemRequestKey = null,
 	topContentInset = 0,
 }: {
 	focused: boolean;
 	summary: ListSummary;
+	addItemRequestKey?: number | null;
 	topContentInset?: number;
 }) {
 	const offsetY = useSharedValue(0);
@@ -215,11 +222,19 @@ function TestListPage({
 		() => ({ offsetY, largeTitleHeight }),
 		[offsetY, largeTitleHeight],
 	);
-	const [composerOpen, setComposerOpen] = useState(false);
-
+	const [ownerToken, setOwnerToken] = useState<ListPageEditorOwnerToken | null>(
+		null,
+	);
+	const handleEditorEvent = useCallback((event: ListPageEditorEvent) => {
+		if (event.type === "registered") setOwnerToken(event.ownerToken);
+	}, []);
 	return (
 		<ListPage
-			composerOpen={composerOpen}
+			addItemRequest={
+				addItemRequestKey === null || ownerToken === null
+					? null
+					: { key: addItemRequestKey, ownerToken }
+			}
 			focused={focused}
 			listSummaries={[groceriesListSummary, pantryListSummary]}
 			scrollState={scrollState}
@@ -227,8 +242,7 @@ function TestListPage({
 			summary={summary}
 			syncState="synced"
 			topContentInset={topContentInset}
-			onDismissComposer={() => setComposerOpen(false)}
-			onOpenComposer={() => setComposerOpen(true)}
+			onItemEditorEvent={handleEditorEvent}
 		/>
 	);
 }

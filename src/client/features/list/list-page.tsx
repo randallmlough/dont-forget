@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import type { AddItemListOption } from "@/client/features/list/add-item-composer";
+import type { ItemListOption } from "@/client/features/item/item-view-types";
+import { useItemEditor } from "@/client/features/item/use-item-editor";
 import type { ListSummary } from "@/client/features/list/list-service";
 import {
 	type AuthenticatedAppSession,
@@ -11,11 +12,9 @@ import {
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { StatusCard } from "@/client/ui/status-card";
-import { AddItemForm } from "./add-item-form";
-import { ItemRows } from "./item-rows";
+import { ListItems } from "./list-items";
 import { ListOverview } from "./list-overview";
 import type { ActiveListSyncState } from "./list-view-types";
-import { useListActions } from "./use-list-actions";
 import { type ListPageState, useListPage } from "./use-list-page";
 
 export type ListPageScrollState = {
@@ -23,17 +22,48 @@ export type ListPageScrollState = {
 	largeTitleHeight: SharedValue<number>;
 };
 
+export type ListPageEditorOwnerToken = symbol;
+
+export type ListPageAddItemRequest = {
+	key: number;
+	ownerToken: ListPageEditorOwnerToken;
+};
+
+export type ListPageEditorEvent =
+	| {
+			type: "registered";
+			listId: string;
+			ownerToken: ListPageEditorOwnerToken;
+			finish: () => Promise<boolean>;
+	  }
+	| {
+			type: "unregistered";
+			listId: string;
+			ownerToken: ListPageEditorOwnerToken;
+	  }
+	| {
+			type: "activityChanged";
+			listId: string;
+			ownerToken: ListPageEditorOwnerToken;
+			active: boolean;
+	  }
+	| {
+			type: "creationRequestAcknowledged";
+			listId: string;
+			ownerToken: ListPageEditorOwnerToken;
+			requestKey: number;
+	  };
+
 export type ListPageProps = {
 	session: AuthenticatedAppSession;
 	summary: ListSummary;
 	listSummaries: readonly ListSummary[];
 	syncState: ActiveListSyncState;
 	focused: boolean;
-	composerOpen: boolean;
+	addItemRequest: ListPageAddItemRequest | null;
 	scrollState: ListPageScrollState;
 	topContentInset: number;
-	onOpenComposer: () => void;
-	onDismissComposer: () => void;
+	onItemEditorEvent: (event: ListPageEditorEvent) => void;
 };
 
 export function ListPage({
@@ -43,15 +73,14 @@ export function ListPage({
 	listSummaries,
 	focused,
 	scrollState,
-	composerOpen,
+	addItemRequest,
 	topContentInset,
-	onOpenComposer,
-	onDismissComposer,
+	onItemEditorEvent,
 }: ListPageProps) {
 	const state = useListPage(session, summary);
 	const active = state.status === "active";
 
-	// Only a page rendering its List publishes to the header: `ItemRows` returns
+	// Only a page rendering its List publishes to the header: `ListItems` returns
 	// the offset to the top on focus and `ActiveListPage` republishes its large
 	// title height. A focused page that is loading or failed has neither, so it
 	// zeroes both itself; otherwise the values the page the pager just left
@@ -90,7 +119,7 @@ export function ListPage({
 
 	return (
 		<ActiveListPage
-			composerOpen={composerOpen}
+			addItemRequest={addItemRequest}
 			focused={focused}
 			listSummaries={listSummaries}
 			loadState={state}
@@ -99,8 +128,7 @@ export function ListPage({
 			summary={summary}
 			syncState={syncState}
 			topContentInset={topContentInset}
-			onDismissComposer={onDismissComposer}
-			onOpenComposer={onOpenComposer}
+			onItemEditorEvent={onItemEditorEvent}
 		/>
 	);
 }
@@ -113,9 +141,8 @@ function ActiveListPage({
 	summary,
 	focused,
 	scrollState,
-	composerOpen,
-	onOpenComposer,
-	onDismissComposer,
+	addItemRequest,
+	onItemEditorEvent,
 	topContentInset,
 }: ListPageProps & {
 	loadState: Extract<ListPageState, { status: "active" }>;
@@ -123,16 +150,78 @@ function ActiveListPage({
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
 	const [largeTitleHeight, setLargeTitleHeight] = useState(0);
-	const actions = useListActions({
+	const [editorOwnerToken] = useState<ListPageEditorOwnerToken>(() =>
+		Symbol(loadState.listId),
+	);
+	const publishEditorActivity = useCallback(
+		(active: boolean) => {
+			onItemEditorEvent({
+				type: "activityChanged",
+				listId: loadState.listId,
+				ownerToken: editorOwnerToken,
+				active,
+			});
+		},
+		[editorOwnerToken, loadState.listId, onItemEditorEvent],
+	);
+	const acknowledgeCreationRequest = useCallback(
+		(requestKey: number) => {
+			onItemEditorEvent({
+				type: "creationRequestAcknowledged",
+				listId: loadState.listId,
+				ownerToken: editorOwnerToken,
+				requestKey,
+			});
+		},
+		[editorOwnerToken, loadState.listId, onItemEditorEvent],
+	);
+	const itemEditor = useItemEditor({
+		currentListId: loadState.listId,
 		items: loadState.list.items,
+		listOptions: itemListOptions({
+			currentListId: loadState.listId,
+			currentListName: summary.name,
+			summaries: listSummaries,
+		}),
+		creationRequestKey:
+			focused && addItemRequest?.ownerToken === editorOwnerToken
+				? addItemRequest.key
+				: null,
+		onActiveChange: publishEditorActivity,
+		onCreationRequestAcknowledged: acknowledgeCreationRequest,
 		onAddItem: loadState.actions.addItem,
+		onUpdateItem: loadState.actions.updateItem,
 		onSetItemChecked: loadState.actions.setItemChecked,
 	});
-	const composerListOptions = addItemListOptions({
-		currentListId: loadState.listId,
-		currentListName: summary.name,
-		summaries: listSummaries,
-	});
+	const itemEditorActions = itemEditor.actions;
+
+	useLayoutEffect(() => {
+		onItemEditorEvent({
+			type: "registered",
+			listId: loadState.listId,
+			ownerToken: editorOwnerToken,
+			finish: itemEditorActions.finish,
+		});
+		return () => {
+			onItemEditorEvent({
+				type: "unregistered",
+				listId: loadState.listId,
+				ownerToken: editorOwnerToken,
+			});
+		};
+	}, [
+		editorOwnerToken,
+		itemEditorActions,
+		loadState.listId,
+		onItemEditorEvent,
+	]);
+
+	// Editing ends when the pager carries this page out of focus, whichever
+	// interaction changed focus. The blur is a no-op on an idle editor.
+	useEffect(() => {
+		if (focused) return;
+		void itemEditorActions.blurInlineEditor(() => undefined);
+	}, [focused, itemEditorActions]);
 
 	// Only the focused page publishes to the header, and it republishes on focus
 	// so the header collapses against this page's large title rather than the
@@ -143,43 +232,30 @@ function ActiveListPage({
 	}, [focused, scrollState, largeTitleHeight]);
 
 	return (
-		<>
-			<ItemRows
-				bottomContentInset={insets.bottom + theme.spacing(20)}
-				focused={focused}
-				items={loadState.list.items}
-				listOverview={
-					<View>
-						<ListPageTitle
-							title={summary.name}
-							onMeasureHeight={setLargeTitleHeight}
-						/>
-						<ListOverview
-							state={loadState.list}
-							meta={{
-								currentMemberName: sessionMemberDisplayName(session),
-								syncState,
-							}}
-						/>
-					</View>
-				}
-				onPressBlankSpace={focused ? onOpenComposer : undefined}
-				scrollOffsetY={focused ? scrollState.offsetY : undefined}
-				topContentInset={topContentInset}
-				onToggleItem={actions.toggleItem}
-				testID={`home-list-items-${summary.id}`}
-			/>
-			<AddItemForm
-				currentListId={loadState.listId}
-				listOptions={composerListOptions}
-				onAddItem={actions.addItem}
-				presentation={{
-					kind: "controlledOverlay",
-					isOpen: composerOpen,
-					onDismiss: onDismissComposer,
-				}}
-			/>
-		</>
+		<ListItems
+			bottomContentInset={insets.bottom + theme.spacing(20)}
+			editor={itemEditor}
+			focused={focused}
+			items={loadState.list.items}
+			listOverview={
+				<View>
+					<ListPageTitle
+						title={summary.name}
+						onMeasureHeight={setLargeTitleHeight}
+					/>
+					<ListOverview
+						state={loadState.list}
+						meta={{
+							currentMemberName: sessionMemberDisplayName(session),
+							syncState,
+						}}
+					/>
+				</View>
+			}
+			scrollOffsetY={focused ? scrollState.offsetY : undefined}
+			topContentInset={topContentInset}
+			testID={`home-list-items-${summary.id}`}
+		/>
 	);
 }
 
@@ -201,7 +277,7 @@ function ListPageTitle({
 	);
 }
 
-function addItemListOptions({
+function itemListOptions({
 	currentListId,
 	currentListName,
 	summaries,
@@ -209,7 +285,7 @@ function addItemListOptions({
 	currentListId: string;
 	currentListName: string;
 	summaries: readonly ListSummary[];
-}): AddItemListOption[] {
+}): ItemListOption[] {
 	return [
 		{ id: currentListId, name: currentListName },
 		...summaries

@@ -12,9 +12,9 @@ const meta = {
 	excludeStories: ["BottomSheetStory"],
 	args: {
 		children: null,
+		header: { title: "Bottom Sheet" },
 		isPresented: false,
 		onIsPresentedChange: noop,
-		title: "Bottom Sheet",
 	},
 	parameters: {
 		controls: { disable: true },
@@ -149,21 +149,22 @@ export function BottomSheetStory({
 		<View style={styles.canvas}>
 			<Button onPress={() => setIsPresented(true)}>{`Open ${title}`}</Button>
 			<BottomSheet
-				headerAction={
-					actionLabel !== undefined ? (
-						<Button
-							onPress={() => setIsPresented(false)}
-							size="sm"
-							variant="ghost"
-						>
-							{actionLabel}
-						</Button>
-					) : undefined
-				}
+				header={{
+					title,
+					trailingAction:
+						actionLabel !== undefined ? (
+							<Button
+								onPress={() => setIsPresented(false)}
+								size="sm"
+								variant="ghost"
+							>
+								{actionLabel}
+							</Button>
+						) : undefined,
+				}}
 				isPresented={isPresented}
 				onIsPresentedChange={setIsPresented}
 				snapPoints={snapPoints}
-				title={title}
 			>
 				{children}
 			</BottomSheet>

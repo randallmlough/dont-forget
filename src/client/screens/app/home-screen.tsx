@@ -1,6 +1,6 @@
 import { Stack, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import Animated, {
 	Extrapolation,
@@ -10,6 +10,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useNavigationDrawer } from "@/client/app-shell/navigation-drawer-context";
+import type { ListPageEditorEvent } from "@/client/features/list/list-page";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { useListCollection } from "@/client/features/list/use-list-collection";
 import {
@@ -20,8 +21,10 @@ import {
 } from "@/client/session";
 import { Button } from "@/client/ui/button";
 import { StatusCard } from "@/client/ui/status-card";
+import { HomeAddItemButton } from "./home-add-item-button";
 import {
 	type CollapsedTitleScroll,
+	type HomeAddItemRequest,
 	HomeListPager,
 	type HomeListPickerPhase,
 } from "./home-list-pager";
@@ -69,6 +72,18 @@ type HomeScreenResourceProps = {
 	onOpenLists: () => void;
 };
 
+type RegisteredItemEditor = Extract<
+	ListPageEditorEvent,
+	{ type: "registered" }
+>;
+
+type ItemEditorSession = Pick<RegisteredItemEditor, "listId" | "ownerToken">;
+
+type ItemEditorCoordination = {
+	registrations: ReadonlyMap<string, RegisteredItemEditor>;
+	session: ItemEditorSession | null;
+};
+
 function HomeScreenResource({
 	session,
 	onOpenNavigation,
@@ -93,9 +108,17 @@ function HomeScreenResource({
 	const [focusedListId, setFocusedListId] = useState<string | null>(null);
 	// Home's interaction state lives here because the native bottom toolbar
 	// renders from the page component, outside the List surface it drives.
-	const [composerOpen, setComposerOpen] = useState(false);
+	const [itemEditorCoordination, setItemEditorCoordination] =
+		useState<ItemEditorCoordination>(() => ({
+			registrations: new Map(),
+			session: null,
+		}));
+	const [addItemRequest, setAddItemRequest] =
+		useState<HomeAddItemRequest | null>(null);
+	const nextAddItemRequestKeyRef = useRef(0);
 	const [pickerPhase, setPickerPhase] = useState<HomeListPickerPhase>("closed");
 	const [selectionPending, setSelectionPending] = useState(false);
+	const [editorFinishPending, setEditorFinishPending] = useState(false);
 	const currentListId =
 		collection.state.status === "active"
 			? collection.state.currentListId
@@ -106,7 +129,7 @@ function HomeScreenResource({
 			? collection.state.summaries
 			: [];
 	const resolvedFocusedListId = resolveFocusedListId({
-		focusedListId,
+		focusedListId: itemEditorCoordination.session?.listId ?? focusedListId,
 		currentListId,
 		listSummaries,
 	});
@@ -115,9 +138,100 @@ function HomeScreenResource({
 		listSummaries.findIndex((summary) => summary.id === resolvedFocusedListId),
 	);
 	const focusedListName = listSummaries[focusedIndex]?.name;
+	const focusedEditorRegistration =
+		resolvedFocusedListId === null
+			? undefined
+			: itemEditorCoordination.registrations.get(resolvedFocusedListId);
+	const itemEditorActive = itemEditorCoordination.session !== null;
+
+	const handleItemEditorEvent = useCallback((event: ListPageEditorEvent) => {
+		switch (event.type) {
+			case "registered":
+				setItemEditorCoordination((current) => {
+					const registered = current.registrations.get(event.listId);
+					if (
+						registered?.ownerToken === event.ownerToken &&
+						registered.finish === event.finish
+					) {
+						return current;
+					}
+					const registrations = new Map(current.registrations);
+					registrations.set(event.listId, event);
+					return { ...current, registrations };
+				});
+				return;
+			case "unregistered":
+				setItemEditorCoordination((current) => {
+					const registered = current.registrations.get(event.listId);
+					const ownsRegistration = registered?.ownerToken === event.ownerToken;
+					const ownsSession =
+						current.session?.listId === event.listId &&
+						current.session.ownerToken === event.ownerToken;
+					if (!ownsRegistration && !ownsSession) return current;
+
+					const registrations = new Map(current.registrations);
+					if (ownsRegistration) registrations.delete(event.listId);
+					return {
+						registrations,
+						session: ownsSession ? null : current.session,
+					};
+				});
+				setAddItemRequest((current) =>
+					current?.listId === event.listId &&
+					current.ownerToken === event.ownerToken
+						? null
+						: current,
+				);
+				return;
+			case "activityChanged":
+				setItemEditorCoordination((current) => {
+					if (event.active) {
+						const registered = current.registrations.get(event.listId);
+						if (registered?.ownerToken !== event.ownerToken) return current;
+						return {
+							...current,
+							session: {
+								listId: event.listId,
+								ownerToken: event.ownerToken,
+							},
+						};
+					}
+					return current.session?.listId === event.listId &&
+						current.session.ownerToken === event.ownerToken
+						? { ...current, session: null }
+						: current;
+				});
+				return;
+			case "creationRequestAcknowledged":
+				setAddItemRequest((current) =>
+					current?.key === event.requestKey &&
+					current.listId === event.listId &&
+					current.ownerToken === event.ownerToken
+						? null
+						: current,
+				);
+				return;
+		}
+	}, []);
+
+	async function finishActiveItemEditor(): Promise<boolean> {
+		const session = itemEditorCoordination.session;
+		if (session === null) return true;
+		if (editorFinishPending) return false;
+		const registration = itemEditorCoordination.registrations.get(
+			session.listId,
+		);
+		if (registration?.ownerToken !== session.ownerToken) return false;
+
+		setEditorFinishPending(true);
+		return registration.finish().finally(() => {
+			setEditorFinishPending(false);
+		});
+	}
 
 	async function focusList(listId: string): Promise<boolean> {
-		if (selectionPending) return false;
+		if (selectionPending || editorFinishPending) return false;
+		if (!(await finishActiveItemEditor())) return false;
 		setFocusedListId(listId);
 		setSelectionPending(true);
 		try {
@@ -150,6 +264,27 @@ function HomeScreenResource({
 		if (summary) void focusList(summary.id);
 	}
 
+	function startAddingItem() {
+		if (
+			resolvedFocusedListId === null ||
+			focusedEditorRegistration === undefined ||
+			itemEditorCoordination.session !== null
+		) {
+			return;
+		}
+		nextAddItemRequestKeyRef.current += 1;
+		setAddItemRequest({
+			key: nextAddItemRequestKeyRef.current,
+			listId: resolvedFocusedListId,
+			ownerToken: focusedEditorRegistration.ownerToken,
+		});
+	}
+
+	async function openListsAfterFinishingEditor() {
+		if (!(await finishActiveItemEditor())) return;
+		onOpenLists();
+	}
+
 	return (
 		<>
 			<HomeStackHeader
@@ -160,14 +295,13 @@ function HomeScreenResource({
 				}
 				title={focusedListName === undefined ? FALLBACK_TITLE : undefined}
 				onOpenNavigation={onOpenNavigation}
-				onOpenLists={onOpenLists}
+				onOpenLists={() => {
+					void openListsAfterFinishingEditor();
+				}}
 			/>
-			{/* The composer owns the bottom of the screen while it is open. The
-			    page control returns as soon as the picker starts receding:
-			    "closing" is not interactive, so waiting for the zoom to settle
-			    would only delay the scrub coming back. */}
-			{listSummaries.length > 0 && !composerOpen ? (
+			{listSummaries.length > 0 ? (
 				<HomeListToolbar
+					disabled={itemEditorActive}
 					focusedIndex={focusedIndex}
 					lists={listSummaries}
 					pickerOpen={pickerPhase === "open"}
@@ -177,22 +311,39 @@ function HomeScreenResource({
 					onScrubToPage={scrubToPage}
 				/>
 			) : null}
-			<HomeListPager
-				session={session}
-				composerOpen={composerOpen}
-				collectionState={collection.state}
-				syncState={syncState}
-				focusedListId={resolvedFocusedListId}
-				collapsedTitleScroll={collapsedTitleScroll}
-				pickerPhase={pickerPhase}
-				selectionPending={selectionPending}
-				onComposerOpenChange={setComposerOpen}
-				onFocusList={focusList}
-				onOpenLists={onOpenLists}
-				onRetry={collection.actions.retry}
-				onPickerPhaseChange={setPickerPhase}
-				topContentInset={headerHeight}
-			/>
+			<View style={styles.content}>
+				<HomeListPager
+					session={session}
+					addItemRequest={addItemRequest}
+					collectionState={collection.state}
+					syncState={syncState}
+					focusedListId={resolvedFocusedListId}
+					collapsedTitleScroll={collapsedTitleScroll}
+					pickerPhase={pickerPhase}
+					selectionPending={selectionPending}
+					editorFinishPending={editorFinishPending}
+					onFocusList={focusList}
+					onItemEditorEvent={handleItemEditorEvent}
+					onOpenLists={() => {
+						void openListsAfterFinishingEditor();
+					}}
+					onRetry={collection.actions.retry}
+					onPickerPhaseChange={setPickerPhase}
+					topContentInset={headerHeight}
+				/>
+				{listSummaries.length > 0 &&
+				pickerPhase === "closed" &&
+				focusedEditorRegistration !== undefined ? (
+					<HomeAddItemButton
+						editorActive={itemEditorActive}
+						finishing={editorFinishPending}
+						onAddItem={startAddingItem}
+						onFinishEditing={() => {
+							void finishActiveItemEditor();
+						}}
+					/>
+				) : null}
+			</View>
 		</>
 	);
 }
@@ -336,6 +487,9 @@ const styles = StyleSheet.create((theme) => ({
 	root: {
 		flex: 1,
 		backgroundColor: theme.colors.background,
+	},
+	content: {
+		flex: 1,
 	},
 	collapsedListTitle: {
 		...theme.typography.headline,

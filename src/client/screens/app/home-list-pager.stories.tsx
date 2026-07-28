@@ -80,14 +80,15 @@ function HomeListPagerStory({ data }: { data: HomeListPagerData }) {
 	return (
 		<HomeListPager
 			{...data}
+			addItemRequest={null}
 			session={authenticatedAppSession}
-			composerOpen={false}
 			focusedListId={null}
 			collapsedTitleScroll={collapsedTitleScroll}
+			editorFinishPending={false}
 			pickerPhase="closed"
 			selectionPending={false}
-			onComposerOpenChange={noop}
 			onFocusList={focusList}
+			onItemEditorEvent={noop}
 			onOpenLists={noop}
 			onRetry={noop}
 			onPickerPhaseChange={noop}

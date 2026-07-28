@@ -23,25 +23,36 @@ export function BottomSheet({
 	snapPoints,
 	testID,
 }: MockBottomSheetProps) {
-	if (!isPresented) {
-		return null;
-	}
-
 	return (
 		<View
 			accessibilityValue={{
-				text: JSON.stringify({ showDragIndicator, snapPoints }),
+				text: JSON.stringify({
+					isPresented,
+					showDragIndicator,
+					snapPoints,
+				}),
 			}}
 			testID={testID ?? "expo-bottom-sheet"}
 		>
-			<Pressable
-				accessibilityLabel="Dismiss bottom sheet"
-				accessibilityRole="button"
-				onPress={onDismiss}
-			>
-				<Text>Dismiss bottom sheet</Text>
-			</Pressable>
-			{children}
+			{isPresented ? (
+				<>
+					<Pressable
+						accessibilityLabel="Dismiss bottom sheet"
+						accessibilityRole="button"
+						onPress={onDismiss}
+					>
+						<Text>Dismiss bottom sheet</Text>
+					</Pressable>
+					{children}
+				</>
+			) : (
+				<Pressable
+					accessibilityLabel="Complete bottom sheet dismissal"
+					accessibilityRole="button"
+					testID={`${testID ?? "expo-bottom-sheet"}-complete-dismissal`}
+					onPress={onDismiss}
+				/>
+			)}
 		</View>
 	);
 }

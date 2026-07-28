@@ -10,10 +10,16 @@ const OTHER_HOUSEHOLD = "hh_2";
 describe("createItemService", () => {
 	let store: TestProductDatabase;
 	let service: ItemService;
+	let track: jest.Mock;
 
 	beforeEach(() => {
 		store = createTestProductDatabase();
-		service = createItemService({ householdId: HOUSEHOLD, store });
+		track = jest.fn();
+		service = createItemService({
+			householdId: HOUSEHOLD,
+			store,
+			analytics: { track },
+		});
 		store.seedList({ id: "lst_groceries", householdId: HOUSEHOLD });
 	});
 
@@ -295,6 +301,148 @@ describe("createItemService", () => {
 					notes: null,
 				}),
 			).rejects.toThrow("List is not active");
+		});
+	});
+
+	describe("updateItem", () => {
+		beforeEach(() => {
+			store.seedList({ id: "lst_pantry", householdId: HOUSEHOLD });
+			store.seedItem({
+				id: "itm_milk",
+				listId: "lst_groceries",
+				name: "Milk",
+				quantity: "1",
+				notes: "Whole",
+				position: 2,
+			});
+		});
+
+		it("updates and trims content without changing its List position", async () => {
+			const updated = await service.updateItem({
+				itemId: "itm_milk",
+				userId: "usr_avery",
+				sourceListId: "lst_groceries",
+				destinationListId: "lst_groceries",
+				name: " Oat milk ",
+				quantity: " 2 ",
+				notes: "  ",
+			});
+
+			expect(updated).toMatchObject({
+				id: "itm_milk",
+				listId: "lst_groceries",
+				name: "Oat milk",
+				quantity: "2",
+				notes: null,
+				position: 2,
+			});
+			expect(track).toHaveBeenCalledWith("item_updated", {
+				household_id: HOUSEHOLD,
+				item_id: "itm_milk",
+				user_id: "usr_avery",
+				source_list_id: "lst_groceries",
+				destination_list_id: "lst_groceries",
+				content_changed: true,
+				list_changed: false,
+			});
+			await expect(
+				service.listItems({ listId: "lst_groceries" }),
+			).resolves.toEqual([updated]);
+		});
+
+		it("moves an Item to the destination tail while preserving completion", async () => {
+			store.seedItem({
+				id: "itm_flour",
+				listId: "lst_pantry",
+				position: 4,
+			});
+			store.seedItemCheck({
+				id: "chk_milk",
+				itemId: "itm_milk",
+				checkedAtMillis: 1_780_000_000_000,
+				checkedByUserId: "usr_avery",
+			});
+
+			const moved = await service.updateItem({
+				itemId: "itm_milk",
+				userId: "usr_avery",
+				sourceListId: "lst_groceries",
+				destinationListId: "lst_pantry",
+				name: "Milk",
+				quantity: "1",
+				notes: "Whole",
+			});
+
+			expect(moved).toMatchObject({
+				listId: "lst_pantry",
+				position: 5,
+				checked: true,
+				checkedByUserId: "usr_avery",
+			});
+			await expect(
+				service.listItems({ listId: "lst_groceries" }),
+			).resolves.toEqual([]);
+			expect(
+				(await service.listItems({ listId: "lst_pantry" })).map(
+					(item) => item.id,
+				),
+			).toEqual(["itm_flour", "itm_milk"]);
+		});
+
+		it("rejects a stale source List without changing the Item", async () => {
+			await expect(
+				service.updateItem({
+					itemId: "itm_milk",
+					userId: "usr_avery",
+					sourceListId: "lst_pantry",
+					destinationListId: "lst_pantry",
+					name: "Oat milk",
+					quantity: null,
+					notes: null,
+				}),
+			).rejects.toThrow("Item not found in source List");
+
+			const [stored] = await service.listItems({ listId: "lst_groceries" });
+			expect(stored.name).toBe("Milk");
+		});
+
+		it.each([
+			["deleted", { deletedAtMillis: 1_780_000_000_000 }],
+			["archived", { archivedAtMillis: 1_780_000_000_000 }],
+		])("refuses to move into a %s List", async (_label, lifecycle) => {
+			store.seedList({
+				id: `lst_${_label}`,
+				householdId: HOUSEHOLD,
+				...lifecycle,
+			});
+
+			await expect(
+				service.updateItem({
+					itemId: "itm_milk",
+					userId: "usr_avery",
+					sourceListId: "lst_groceries",
+					destinationListId: `lst_${_label}`,
+					name: "Milk",
+					quantity: "1",
+					notes: "Whole",
+				}),
+			).rejects.toThrow("Destination List is not active");
+		});
+
+		it("refuses to move into another Household's List", async () => {
+			store.seedList({ id: "lst_other", householdId: OTHER_HOUSEHOLD });
+
+			await expect(
+				service.updateItem({
+					itemId: "itm_milk",
+					userId: "usr_avery",
+					sourceListId: "lst_groceries",
+					destinationListId: "lst_other",
+					name: "Milk",
+					quantity: "1",
+					notes: "Whole",
+				}),
+			).rejects.toThrow("Destination List is not active");
 		});
 	});
 

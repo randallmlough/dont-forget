@@ -42,6 +42,16 @@ export type AddItemInput = {
 	notes: string | null;
 };
 
+export type UpdateItemInput = {
+	itemId: string;
+	userId: string;
+	sourceListId: string;
+	destinationListId: string;
+	name: string;
+	quantity: string | null;
+	notes: string | null;
+};
+
 export type SetItemCheckedInput = {
 	listId: string;
 	itemId: string;
@@ -53,6 +63,7 @@ export type ItemService = {
 	listItems(input: ListItemsInput): Promise<Item[]>;
 	listItemsQuery(input: ListItemsInput): ProductQuery<Item>;
 	addItem(input: AddItemInput): Promise<Item>;
+	updateItem(input: UpdateItemInput): Promise<Item>;
 	setItemChecked(input: SetItemCheckedInput): Promise<void>;
 };
 
@@ -81,7 +92,26 @@ const checkTargetRowSchema = z.object({
 	check_id: z.string().nullable(),
 });
 
+const destinationPositionRowSchema = z.object({
+	position: sqlNumberSchema,
+});
+
 let lastItemServiceTimestamp: number | null = null;
+
+// The one column list feeding `itemRowSchema`/`itemFromRow`, shared by every
+// Item read so a schema change edits a single statement fragment.
+const itemSelectColumns = `
+              i.id,
+              i.list_id,
+              i.name,
+              i.quantity,
+              i.notes,
+              c.checked_by_user_id AS checked_by_user_id,
+              c.checked_at AS checked_at,
+              i.position,
+              i.created_by_user_id,
+              i.created_at,
+              i.updated_at`;
 
 export function createItemService(deps: ItemServiceDeps): ItemService {
 	const log = (deps.logger ?? defaultLogger).with({
@@ -102,18 +132,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		// tie-breaker within each partition.
 		return {
 			sql: `
-            SELECT
-              i.id,
-              i.list_id,
-              i.name,
-              i.quantity,
-              i.notes,
-              c.checked_by_user_id AS checked_by_user_id,
-              c.checked_at AS checked_at,
-              i.position,
-              i.created_by_user_id,
-              i.created_at,
-              i.updated_at
+            SELECT${itemSelectColumns}
             FROM items i
             JOIN lists l ON l.id = i.list_id
             LEFT JOIN item_checks c ON c.item_id = i.id
@@ -259,6 +278,142 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 				throw error;
 			}
 		},
+		async updateItem(input) {
+			const name = input.name.trim();
+			if (!name) {
+				throw new Error("Item name is required");
+			}
+			const quantity = nullableTrimmed(input.quantity);
+			const notes = nullableTrimmed(input.notes);
+
+			try {
+				const outcome = await deps.store.writeTransaction(async (tx) => {
+					const storedRow = await tx.getOptional(
+						`
+              SELECT${itemSelectColumns}
+              FROM items i
+              JOIN lists l ON l.id = i.list_id
+              LEFT JOIN item_checks c ON c.item_id = i.id
+              WHERE i.id = ?
+                AND i.list_id = ?
+                AND l.household_id = ?
+                AND i.deleted_at IS NULL
+                AND l.deleted_at IS NULL
+                AND l.archived_at IS NULL
+              LIMIT 1
+            `,
+						[input.itemId, input.sourceListId, deps.householdId],
+					);
+					if (!storedRow) {
+						throw new Error("Item not found in source List");
+					}
+					const stored = itemFromRow(storedRow, deps.householdId);
+					const listChanged = input.destinationListId !== input.sourceListId;
+					const contentChanged =
+						stored.name !== name ||
+						stored.quantity !== quantity ||
+						stored.notes !== notes;
+					if (!listChanged && !contentChanged) {
+						return {
+							item: stored,
+							contentChanged: false,
+							listChanged: false,
+						};
+					}
+
+					let position = stored.position;
+					if (listChanged) {
+						const destination = await tx.getOptional(
+							`
+              SELECT
+                (
+                  SELECT COALESCE(MAX(position), -1) + 1
+                  FROM items
+                  WHERE list_id = l.id AND deleted_at IS NULL
+                ) AS position
+              FROM lists l
+              WHERE l.id = ?
+                AND l.household_id = ?
+                AND l.deleted_at IS NULL
+                AND l.archived_at IS NULL
+              LIMIT 1
+            `,
+							[input.destinationListId, deps.householdId],
+						);
+						if (!destination) {
+							throw new Error("Destination List is not active");
+						}
+						position = destinationPositionRowSchema.parse(destination).position;
+					}
+					const now = nextItemServiceTimestamp();
+					const nowText = timestampMillisToSqlText(now);
+
+					await tx.execute(
+						`
+              UPDATE items
+              SET
+                list_id = ?,
+                name = ?,
+                quantity = ?,
+                notes = ?,
+                position = ?,
+                updated_at = ?
+              WHERE id = ?
+                AND list_id = ?
+                AND deleted_at IS NULL
+            `,
+						[
+							input.destinationListId,
+							name,
+							quantity,
+							notes,
+							position,
+							nowText,
+							input.itemId,
+							input.sourceListId,
+						],
+					);
+
+					// The row was read in this same transaction, so the UPDATE cannot
+					// miss; the updated Item is `stored` plus the values just written.
+					return {
+						item: {
+							...stored,
+							listId: input.destinationListId,
+							name,
+							quantity,
+							notes,
+							position,
+							updatedAt: now,
+						},
+						contentChanged,
+						listChanged,
+					};
+				});
+
+				if (outcome.contentChanged || outcome.listChanged) {
+					analytics.track("item_updated", {
+						household_id: deps.householdId,
+						item_id: input.itemId,
+						user_id: input.userId,
+						source_list_id: input.sourceListId,
+						destination_list_id: input.destinationListId,
+						content_changed: outcome.contentChanged,
+						list_changed: outcome.listChanged,
+					});
+				}
+
+				return outcome.item;
+			} catch (error) {
+				log.error("item update failed", {
+					error: asError(error),
+					item_id: input.itemId,
+					source_list_id: input.sourceListId,
+					destination_list_id: input.destinationListId,
+				});
+				throw error;
+			}
+		},
 		async setItemChecked(input) {
 			try {
 				const now = nextItemServiceTimestamp();
@@ -360,7 +515,9 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 	};
 }
 
-function nullableTrimmed(value: string | null | undefined): string | null {
+export function nullableTrimmed(
+	value: string | null | undefined,
+): string | null {
 	const trimmed = value?.trim() ?? "";
 	return trimmed ? trimmed : null;
 }

@@ -1,4 +1,10 @@
-import { Children, isValidElement, type ReactNode, useState } from "react";
+import {
+	Children,
+	isValidElement,
+	type ReactElement,
+	type ReactNode,
+	useState,
+} from "react";
 import {
 	ActivityIndicator,
 	Pressable,
@@ -9,9 +15,11 @@ import {
 
 type MockModifier = {
 	$type: string;
+	angle?: number;
 	disabled?: boolean;
 	eventListener?: () => void;
 	hint?: string;
+	isDisabled?: boolean;
 	label?: string;
 	tag?: string | number;
 	value?: string;
@@ -20,8 +28,23 @@ type MockModifier = {
 type MockContainerProps = {
 	children?: ReactNode;
 	colorScheme?: "light" | "dark";
+	modifiers?: MockModifier[];
 	style?: object;
 	testID?: string;
+};
+
+type MockBottomSheetProps = {
+	children: ReactNode;
+	fitToContents?: boolean;
+	isPresented: boolean;
+	onDismiss?: () => void;
+	onIsPresentedChange: (isPresented: boolean) => void;
+	testID?: string;
+};
+
+type MockRNHostViewProps = {
+	children: ReactElement;
+	matchContents?: boolean;
 };
 
 type MockTextFieldProps = {
@@ -85,6 +108,87 @@ export function Host({
 	);
 }
 
+export function BottomSheet({
+	children,
+	fitToContents = false,
+	isPresented,
+	onDismiss,
+	onIsPresentedChange,
+	testID,
+}: MockBottomSheetProps) {
+	const [isMounted, setIsMounted] = useState(isPresented);
+
+	if (isPresented && !isMounted) {
+		setIsMounted(true);
+	}
+	if (!isMounted) return null;
+
+	const dismissDisabled = hasInteractiveDismissDisabled(children);
+
+	return (
+		<View
+			accessibilityValue={{
+				text: JSON.stringify({
+					fitToContents,
+					isPresented,
+					interactiveDismissDisabled: dismissDisabled,
+				}),
+			}}
+			testID={testID ?? "expo-bottom-sheet"}
+		>
+			{isPresented ? (
+				<Pressable
+					accessibilityLabel="Dismiss bottom sheet"
+					accessibilityRole="button"
+					accessibilityState={{ disabled: dismissDisabled }}
+					disabled={dismissDisabled}
+					onPress={() => onIsPresentedChange(false)}
+				>
+					<ReactNativeText>Dismiss bottom sheet</ReactNativeText>
+				</Pressable>
+			) : (
+				<Pressable
+					accessibilityLabel="Complete bottom sheet dismissal"
+					accessibilityRole="button"
+					onPress={() => {
+						setIsMounted(false);
+						onDismiss?.();
+					}}
+					testID={`${testID ?? "expo-bottom-sheet"}-complete-dismissal`}
+				/>
+			)}
+			{children}
+		</View>
+	);
+}
+
+export function Group({ children, modifiers }: MockContainerProps) {
+	return (
+		<View
+			accessibilityValue={{ text: JSON.stringify(modifiers) }}
+			testID="expo-bottom-sheet-group"
+		>
+			{children}
+		</View>
+	);
+}
+
+export function RNHostView({
+	children,
+	matchContents = false,
+}: MockRNHostViewProps) {
+	return (
+		<View
+			accessibilityValue={{
+				text: matchContents ? "match contents" : "fill",
+			}}
+			testID="expo-rn-host-view"
+		>
+			{children}
+		</View>
+	);
+}
+
 export function VStack({ children }: MockContainerProps) {
 	return <View>{children}</View>;
 }
@@ -105,9 +209,21 @@ export function ProgressView() {
 	return <ActivityIndicator />;
 }
 
-export function Image({ systemName }: { systemName?: string }) {
+export function Image({
+	modifiers,
+	systemName,
+}: {
+	modifiers?: MockModifier[];
+	systemName?: string;
+}) {
+	const rotation = modifier(modifiers, "rotationEffect")?.angle ?? 0;
 	return (
-		<ReactNativeText accessibilityElementsHidden>{systemName}</ReactNativeText>
+		<ReactNativeText
+			accessibilityElementsHidden
+			style={{ transform: [{ rotate: `${rotation}deg` }] }}
+		>
+			{systemName}
+		</ReactNativeText>
 	);
 }
 
@@ -330,4 +446,14 @@ function modifier(
 	type: string,
 ): MockModifier | undefined {
 	return modifiers?.find((candidate) => candidate.$type === type);
+}
+
+function hasInteractiveDismissDisabled(children: ReactNode): boolean {
+	return Children.toArray(children).some((child) => {
+		if (!isValidElement<MockContainerProps>(child)) return false;
+		return (
+			modifier(child.props.modifiers, "interactiveDismissDisabled")
+				?.isDisabled === true
+		);
+	});
 }

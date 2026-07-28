@@ -27,6 +27,8 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
 import {
 	ListPage,
+	type ListPageEditorEvent,
+	type ListPageEditorOwnerToken,
 	type ListPageScrollState,
 } from "@/client/features/list/list-page";
 import type { ListSummary } from "@/client/features/list/list-service";
@@ -54,19 +56,26 @@ export type CollapsedTitleScroll = ListPageScrollState & {
  */
 export type HomeListPickerPhase = "closed" | "open" | "closing";
 
+export type HomeAddItemRequest = {
+	key: number;
+	listId: string;
+	ownerToken: ListPageEditorOwnerToken;
+};
+
 export type HomeListPagerProps = {
 	session: AuthenticatedAppSession;
 	collectionState: ListCollectionState;
 	syncState: ActiveListSyncState;
 	focusedListId: string | null;
 	collapsedTitleScroll: CollapsedTitleScroll;
-	/** Whether the add Item composer is open over the focused List page. */
-	composerOpen: boolean;
+	addItemRequest: HomeAddItemRequest | null;
 	/** Whether the List picker should be showing instead of the focused List. */
 	pickerPhase: HomeListPickerPhase;
 	/** Whether a List selection is still being written. */
 	selectionPending: boolean;
-	onComposerOpenChange: (open: boolean) => void;
+	/** Whether the focused editor is still deciding whether paging can finish. */
+	editorFinishPending: boolean;
+	onItemEditorEvent: (event: ListPageEditorEvent) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
 	onRetry: () => void;
@@ -85,10 +94,11 @@ export function HomeListPager({
 	syncState,
 	focusedListId,
 	collapsedTitleScroll,
-	composerOpen,
+	addItemRequest,
 	pickerPhase,
 	selectionPending,
-	onComposerOpenChange,
+	editorFinishPending,
+	onItemEditorEvent,
 	onFocusList,
 	onOpenLists,
 	onRetry,
@@ -132,13 +142,14 @@ export function HomeListPager({
 		<ActiveHomeListPager
 			focusedListId={focusedListId ?? collectionState.currentListId}
 			collapsedTitleScroll={collapsedTitleScroll}
-			composerOpen={composerOpen}
+			addItemRequest={addItemRequest}
 			listSummaries={collectionState.summaries}
 			pickerPhase={pickerPhase}
 			selectionPending={selectionPending}
+			editorFinishPending={editorFinishPending}
 			session={session}
 			syncState={syncState}
-			onComposerOpenChange={onComposerOpenChange}
+			onItemEditorEvent={onItemEditorEvent}
 			onFocusList={onFocusList}
 			onPickerPhaseChange={onPickerPhaseChange}
 			topContentInset={topContentInset}
@@ -149,13 +160,14 @@ export function HomeListPager({
 type ActiveHomeListPagerProps = {
 	focusedListId: string;
 	collapsedTitleScroll: CollapsedTitleScroll;
-	composerOpen: boolean;
+	addItemRequest: HomeAddItemRequest | null;
 	listSummaries: readonly ListSummary[];
 	pickerPhase: HomeListPickerPhase;
 	selectionPending: boolean;
+	editorFinishPending: boolean;
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
-	onComposerOpenChange: (open: boolean) => void;
+	onItemEditorEvent: (event: ListPageEditorEvent) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onPickerPhaseChange: (phase: HomeListPickerPhase) => void;
 	topContentInset: number;
@@ -164,13 +176,14 @@ type ActiveHomeListPagerProps = {
 function ActiveHomeListPager({
 	focusedListId,
 	collapsedTitleScroll,
-	composerOpen,
+	addItemRequest,
 	listSummaries,
 	pickerPhase,
 	selectionPending,
+	editorFinishPending,
 	session,
 	syncState,
-	onComposerOpenChange,
+	onItemEditorEvent,
 	onFocusList,
 	onPickerPhaseChange,
 	topContentInset,
@@ -314,6 +327,7 @@ function ActiveHomeListPager({
 				<Animated.FlatList
 					data={listSummaries}
 					decelerationRate="fast"
+					extraData={focusedListId}
 					getItemLayout={pageLayout}
 					horizontal
 					initialNumToRender={Math.min(3, listSummaries.length)}
@@ -339,7 +353,14 @@ function ActiveHomeListPager({
 								width={width}
 							>
 								<ListPage
-									composerOpen={composerOpen && focused}
+									addItemRequest={
+										focused && addItemRequest?.listId === summary.id
+											? {
+													key: addItemRequest.key,
+													ownerToken: addItemRequest.ownerToken,
+												}
+											: null
+									}
 									focused={focused}
 									listSummaries={listSummaries}
 									scrollState={collapsedTitleScroll}
@@ -347,8 +368,7 @@ function ActiveHomeListPager({
 									summary={summary}
 									syncState={syncState}
 									topContentInset={topContentInset}
-									onDismissComposer={() => onComposerOpenChange(false)}
-									onOpenComposer={() => onComposerOpenChange(true)}
+									onItemEditorEvent={onItemEditorEvent}
 								/>
 							</CarouselPage>
 						);
@@ -356,8 +376,8 @@ function ActiveHomeListPager({
 					scrollEnabled={
 						listSummaries.length > 1 &&
 						pickerPhase === "closed" &&
-						!composerOpen &&
-						!selectionPending
+						!selectionPending &&
+						!editorFinishPending
 					}
 					scrollEventThrottle={16}
 					showsHorizontalScrollIndicator={false}

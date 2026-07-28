@@ -1,10 +1,10 @@
-import type { AuthenticatedAppSession } from "@/client/session";
-import type { ListSummary } from "./list-service";
 import type {
 	ActiveListItem,
-	ActiveListState,
-	AddActiveListItemInput,
-} from "./list-view-types";
+	AddListItemInput,
+} from "@/client/features/item/item-view-types";
+import type { AuthenticatedAppSession } from "@/client/session";
+import type { ListSummary } from "./list-service";
+import type { ActiveListState } from "./list-view-types";
 import type { ListPageActions, ListPageState } from "./use-list-page";
 
 export const authenticatedAppSession: AuthenticatedAppSession = {
@@ -123,6 +123,7 @@ export function activeListPage(
 		},
 		actions: {
 			addItem: jest.fn(async () => undefined),
+			updateItem: jest.fn(async () => undefined),
 			setItemChecked: jest.fn(async () => undefined),
 			...overrides.actions,
 		},
@@ -152,7 +153,7 @@ export const largeActiveListState: ActiveListState = {
 
 export function addFixtureItem(
 	list: ActiveListState,
-	input: AddActiveListItemInput,
+	input: Pick<AddListItemInput, "name" | "quantity" | "notes">,
 ): ActiveListState {
 	return {
 		...list,

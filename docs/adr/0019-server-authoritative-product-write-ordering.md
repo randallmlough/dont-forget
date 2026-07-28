@@ -50,7 +50,7 @@ The live code was re-verified on 2026-07-07:
 - `src/server/db/schema/postgres/sync-columns.ts` has explicit
   `CLIENT_WRITABLE` and `SERVER_OWNED` declarations. `SERVER_OWNED` is empty,
   and `updated_at` is client-writable for all product tables.
-- `src/client/features/list/item-service.ts` and
+- `src/client/features/item/item-service.ts` and
   `src/client/features/list/list-service.ts` still stamp product `updated_at`
   from the device clock via `Date.now()` and local monotonic helpers.
 - `infra/powersync/sync-config.yaml` streams `SELECT *` from `lists`, `items`,

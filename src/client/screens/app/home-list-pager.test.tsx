@@ -438,7 +438,6 @@ function TestHomeListPager({ onFocusList, ...props }: TestHomeListPagerProps) {
 		() => ({ offsetY, largeTitleHeight, pagerDrift }),
 		[offsetY, largeTitleHeight, pagerDrift],
 	);
-	const [composerOpen, setComposerOpen] = useState(false);
 	const [pickerPhase, setPickerPhase] = useState<HomeListPickerPhase>("closed");
 	const [selectionPending, setSelectionPending] = useState(false);
 
@@ -466,12 +465,13 @@ function TestHomeListPager({ onFocusList, ...props }: TestHomeListPagerProps) {
 			/>
 			<HomeListPager
 				{...props}
+				addItemRequest={null}
 				collapsedTitleScroll={collapsedTitleScroll}
-				composerOpen={composerOpen}
+				editorFinishPending={false}
 				pickerPhase={pickerPhase}
 				selectionPending={selectionPending}
-				onComposerOpenChange={setComposerOpen}
 				onFocusList={focusList}
+				onItemEditorEvent={jest.fn()}
 				onPickerPhaseChange={setPickerPhase}
 				onRetry={jest.fn()}
 			/>
@@ -481,11 +481,12 @@ function TestHomeListPager({ onFocusList, ...props }: TestHomeListPagerProps) {
 
 type TestHomeListPagerProps = Omit<
 	HomeListPagerProps,
+	| "addItemRequest"
 	| "collapsedTitleScroll"
-	| "composerOpen"
+	| "editorFinishPending"
 	| "pickerPhase"
 	| "selectionPending"
-	| "onComposerOpenChange"
+	| "onItemEditorEvent"
 	| "onPickerPhaseChange"
 	| "onRetry"
 >;

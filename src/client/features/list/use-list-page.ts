@@ -1,15 +1,17 @@
-import type { Item } from "@/client/features/list/item-service";
+import type { Item, ItemService } from "@/client/features/item/item-service";
+import type {
+	AddListItemInput,
+	UpdateListItemInput,
+} from "@/client/features/item/item-view-types";
+import { useItemService } from "@/client/features/item/use-item-service";
 import type { ListSummary } from "@/client/features/list/list-service";
 import { useProductQuery } from "@/client/lib/use-product-query";
 import type { AuthenticatedAppSession } from "@/client/session";
-import type { ActiveListState, AddListItemInput } from "./list-view-types";
-import {
-	type ProductServices,
-	useProductServices,
-} from "./use-product-services";
+import type { ActiveListState } from "./list-view-types";
 
 export type ListPageActions = {
 	addItem: (input: AddListItemInput) => Promise<void>;
+	updateItem: (input: UpdateListItemInput) => Promise<void>;
 	setItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -59,16 +61,16 @@ function activeListStateFromItems({
 
 function listPageActions({
 	session,
-	services,
+	itemService,
 	listId,
 }: {
 	session: AuthenticatedAppSession;
-	services: ProductServices;
+	itemService: ItemService;
 	listId: string;
 }): ListPageActions {
 	return {
 		async addItem(input: AddListItemInput) {
-			await services.items.addItem({
+			await itemService.addItem({
 				listId: input.listId,
 				userId: session.activeMember.userId,
 				name: input.name,
@@ -76,8 +78,14 @@ function listPageActions({
 				notes: input.notes,
 			});
 		},
+		async updateItem(input: UpdateListItemInput) {
+			await itemService.updateItem({
+				...input,
+				userId: session.activeMember.userId,
+			});
+		},
 		async setItemChecked(itemId: string, checked: boolean) {
-			await services.items.setItemChecked({
+			await itemService.setItemChecked({
 				listId,
 				itemId,
 				userId: session.activeMember.userId,
@@ -108,12 +116,11 @@ export function useListPage(
 	session: AuthenticatedAppSession,
 	summary: ListSummary,
 ): ListPageState {
-	const services = useProductServices({
+	const itemService = useItemService({
 		householdId: session.activeHousehold.id,
-		userId: session.activeMember.userId,
 	});
 	const items = useProductQuery<Item>(
-		services.items.listItemsQuery({ listId: summary.id }),
+		itemService.listItemsQuery({ listId: summary.id }),
 	);
 
 	if (items.error) {
@@ -136,6 +143,6 @@ export function useListPage(
 			listId: summary.id,
 			items: items.data,
 		}),
-		actions: listPageActions({ session, services, listId: summary.id }),
+		actions: listPageActions({ session, itemService, listId: summary.id }),
 	};
 }
