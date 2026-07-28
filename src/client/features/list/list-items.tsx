@@ -8,6 +8,7 @@ import {
 import {
 	type FlatList,
 	type ListRenderItemInfo,
+	Pressable,
 	Text,
 	View,
 } from "react-native";
@@ -61,9 +62,12 @@ export function ListItems({
 		() => itemListRows(items, activeInline),
 		[activeInline, items],
 	);
-	const draftIndex = rows.findIndex(isNewItemDraftRow);
-	const draftKey =
-		activeInline?.sourceKind === "new" ? activeInline.draftKey : null;
+	const activeInlineIndex = activeInline
+		? rows.findIndex((row) => isActiveInlineRow(row, activeInline))
+		: -1;
+	const activeInlineKey = activeInline
+		? inlinePresentationKey(activeInline)
+		: null;
 	const scrollIndicatorInsets = useMemo(
 		() =>
 			topContentInset === undefined ? undefined : { top: topContentInset },
@@ -162,16 +166,16 @@ export function ListItems({
 	}, [focused, resetScrollPosition]);
 
 	useEffect(() => {
-		if (draftKey === null || draftIndex < 0) return;
+		if (activeInlineKey === null || activeInlineIndex < 0) return;
 		const frame = requestAnimationFrame(() => {
 			listRef.current?.scrollToIndex({
 				animated: true,
-				index: draftIndex,
-				viewPosition: 0.8,
+				index: activeInlineIndex,
+				viewPosition: 0.5,
 			});
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [draftIndex, draftKey]);
+	}, [activeInlineIndex, activeInlineKey]);
 
 	function contentSizeChanged() {
 		if (!initialResetPendingRef.current) return;
@@ -179,16 +183,43 @@ export function ListItems({
 		resetScrollPosition();
 	}
 
+	function dismissInlineEditor() {
+		void editor.actions.blurInlineEditor(() => undefined);
+	}
+
 	return (
 		<>
 			<Animated.FlatList
+				automaticallyAdjustKeyboardInsets
 				data={rows}
 				extraData={editor.state}
 				keyExtractor={keyExtractor}
 				renderItem={renderItem}
 				ItemSeparatorComponent={ItemSeparator}
 				ListEmptyComponent={renderEmpty}
-				ListHeaderComponent={listOverview}
+				ListFooterComponent={
+					activeInline ? (
+						<Pressable
+							accessible={false}
+							style={styles.backgroundDismissTarget}
+							testID="list-background-dismiss-target"
+							onPress={dismissInlineEditor}
+						/>
+					) : undefined
+				}
+				ListHeaderComponent={
+					activeInline && listOverview ? (
+						<Pressable
+							accessible={false}
+							testID="list-overview-dismiss-target"
+							onPress={dismissInlineEditor}
+						>
+							{listOverview}
+						</Pressable>
+					) : (
+						listOverview
+					)
+				}
 				keyboardDismissMode="interactive"
 				keyboardShouldPersistTaps="handled"
 				contentInsetAdjustmentBehavior={
@@ -292,6 +323,20 @@ function isNewItemDraftRow(row: ItemListRow): row is NewItemDraftRow {
 	return "kind" in row && row.kind === "newItemDraft";
 }
 
+function isActiveInlineRow(
+	row: ItemListRow,
+	activeInline: InlinePresentation,
+): boolean {
+	if (activeInline.sourceKind === "new") return isNewItemDraftRow(row);
+	return !isNewItemDraftRow(row) && row.id === activeInline.itemId;
+}
+
+function inlinePresentationKey(activeInline: InlinePresentation): string {
+	return activeInline.sourceKind === "new"
+		? `new:${activeInline.draftKey}`
+		: `existing:${activeInline.itemId}`;
+}
+
 function keyExtractor(row: ItemListRow): string {
 	return row.id;
 }
@@ -316,6 +361,10 @@ const styles = StyleSheet.create((theme) => ({
 	itemsContent: {
 		flexGrow: 1,
 		paddingBottom: theme.spacing(2),
+	},
+	backgroundDismissTarget: {
+		minHeight: theme.spacing(11),
+		flex: 1,
 	},
 	contentInsets: (top: number, bottom: number) => ({
 		paddingTop: top,

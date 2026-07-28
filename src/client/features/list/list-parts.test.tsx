@@ -1,4 +1,5 @@
 import {
+	act,
 	fireEvent,
 	render,
 	screen,
@@ -6,7 +7,7 @@ import {
 	within,
 } from "@testing-library/react-native";
 import type { ReactElement } from "react";
-import { View } from "react-native";
+import { FlatList, View } from "react-native";
 import type {
 	AddListItemInput,
 	UpdateListItemInput,
@@ -129,6 +130,109 @@ describe("List parts", () => {
 		expect(await screen.findByLabelText("Item notes")).toBeTruthy();
 	});
 
+	it("dismisses an empty creation draft from the List background", async () => {
+		await renderWithSafeArea(
+			<TestListItems
+				creationRequestKey={1}
+				listOverview={<View testID="test-list-overview" />}
+			/>,
+		);
+
+		await screen.findByLabelText("Item name");
+		await fireEvent.press(screen.getByTestId("list-overview-dismiss-target"));
+
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+	});
+
+	it("keeps the focused Item visible when the keyboard changes", async () => {
+		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
+
+		expect(screen.getByTestId("test-list-items")).toHaveProp(
+			"automaticallyAdjustKeyboardInsets",
+			true,
+		);
+	});
+
+	it("centers an existing Item when inline editing starts", async () => {
+		const scrollToIndex = jest
+			.spyOn(FlatList.prototype, "scrollToIndex")
+			.mockImplementation();
+		try {
+			await renderWithSafeArea(<TestListItems />);
+
+			await fireEvent.press(
+				await screen.findByRole("button", { name: "Edit Apples" }),
+			);
+
+			await waitFor(() => {
+				expect(scrollToIndex).toHaveBeenCalledWith({
+					animated: true,
+					index: 2,
+					viewPosition: 0.5,
+				});
+			});
+		} finally {
+			scrollToIndex.mockRestore();
+		}
+	});
+
+	it("opens details when title blur precedes the Details press", async () => {
+		await renderWithSafeArea(<TestListItems />);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
+		const nameInput = await screen.findByLabelText("Item name");
+		const detailsButton = await screen.findByRole("button", {
+			name: "Item Details",
+		});
+
+		jest.useFakeTimers();
+		try {
+			await fireEvent(nameInput, "blur");
+			await fireEvent(detailsButton, "touchStart");
+			await fireEvent(detailsButton, "touchEnd");
+			await act(() => {
+				jest.advanceTimersByTime(1);
+			});
+
+			expect(screen.getByTestId("item-details-sheet")).toBeTruthy();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("returns to inline editing while the native Details dismissal finishes", async () => {
+		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Cancel Item Details" }),
+		);
+
+		expect(screen.getByTestId("item-details-sheet")).toHaveAccessibilityValue({
+			text: JSON.stringify({
+				isPresented: false,
+				showDragIndicator: false,
+				snapPoints: ["full"],
+			}),
+		});
+		expect(screen.getByRole("button", { name: "Item Details" })).toBeTruthy();
+
+		await fireEvent.press(
+			screen.getByTestId("item-details-sheet-complete-dismissal"),
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Item Details" }));
+		expect(screen.getByTestId("item-details-sheet")).toHaveAccessibilityValue({
+			text: JSON.stringify({
+				isPresented: true,
+				showDragIndicator: false,
+				snapPoints: ["full"],
+			}),
+		});
+	});
+
 	it("saves details through the stacked List selector without starting another draft", async () => {
 		const onAddItem = jest.fn(async () => undefined);
 		await renderWithSafeArea(
@@ -172,6 +276,13 @@ describe("List parts", () => {
 			});
 		});
 		expect(screen.queryByLabelText("Item name")).toBeNull();
+		expect(screen.getByTestId("item-details-sheet")).toHaveAccessibilityValue({
+			text: JSON.stringify({
+				isPresented: false,
+				showDragIndicator: false,
+				snapPoints: ["full"],
+			}),
+		});
 	});
 
 	it("marks an existing Item's source List as Current", async () => {
@@ -224,6 +335,7 @@ describe("List parts", () => {
 type TestListItemsProps = {
 	initialState?: ActiveListState;
 	creationRequestKey?: number | null;
+	listOverview?: ReactElement;
 	onAddItem?: (input: AddListItemInput) => Promise<void>;
 	onUpdateItem?: (input: UpdateListItemInput) => Promise<void>;
 	onSetItemChecked?: (itemId: string, checked: boolean) => Promise<void>;
@@ -232,6 +344,7 @@ type TestListItemsProps = {
 function TestListItems({
 	initialState = populatedActiveListState,
 	creationRequestKey = null,
+	listOverview,
 	onAddItem = async () => undefined,
 	onUpdateItem = async () => undefined,
 	onSetItemChecked = async () => undefined,
@@ -250,7 +363,14 @@ function TestListItems({
 		onActiveChange: () => undefined,
 	});
 
-	return <ListItems editor={editor} items={initialState.items} />;
+	return (
+		<ListItems
+			editor={editor}
+			items={initialState.items}
+			listOverview={listOverview}
+			testID="test-list-items"
+		/>
+	);
 }
 
 function renderWithSafeArea(element: ReactElement) {

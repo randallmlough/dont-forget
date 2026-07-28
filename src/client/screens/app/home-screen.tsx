@@ -23,6 +23,7 @@ import { StatusCard } from "@/client/ui/status-card";
 import { HomeAddItemButton } from "./home-add-item-button";
 import {
 	type CollapsedTitleScroll,
+	type HomeAddItemRequest,
 	HomeListPager,
 	type HomeListPickerPhase,
 } from "./home-list-pager";
@@ -95,9 +96,8 @@ function HomeScreenResource({
 	// Home's interaction state lives here because the native bottom toolbar
 	// renders from the page component, outside the List surface it drives.
 	const [itemEditorActive, setItemEditorActive] = useState(false);
-	const [addItemRequestKey, setAddItemRequestKey] = useState<number | null>(
-		null,
-	);
+	const [addItemRequest, setAddItemRequest] =
+		useState<HomeAddItemRequest | null>(null);
 	const [pickerPhase, setPickerPhase] = useState<HomeListPickerPhase>("closed");
 	const [selectionPending, setSelectionPending] = useState(false);
 	const currentListId =
@@ -155,7 +155,11 @@ function HomeScreenResource({
 	}
 
 	function startAddingItem() {
-		setAddItemRequestKey((current) => (current ?? 0) + 1);
+		if (resolvedFocusedListId === null) return;
+		setAddItemRequest((current) => ({
+			key: (current?.key ?? 0) + 1,
+			listId: resolvedFocusedListId,
+		}));
 		setItemEditorActivity(true);
 	}
 
@@ -196,12 +200,11 @@ function HomeScreenResource({
 			<View style={styles.content}>
 				<HomeListPager
 					session={session}
-					addItemRequestKey={addItemRequestKey}
+					addItemRequest={addItemRequest}
 					collectionState={collection.state}
 					syncState={syncState}
 					focusedListId={resolvedFocusedListId}
 					collapsedTitleScroll={collapsedTitleScroll}
-					itemEditorActive={itemEditorActive}
 					pickerPhase={pickerPhase}
 					selectionPending={selectionPending}
 					onFocusList={focusList}

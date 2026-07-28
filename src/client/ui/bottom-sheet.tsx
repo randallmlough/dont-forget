@@ -4,7 +4,7 @@ import {
 	RNHostView,
 } from "@expo/ui";
 import { presentationBackground } from "@expo/ui/swift-ui/modifiers";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -32,8 +32,9 @@ export type BottomSheetProps = {
  * App-owned wrapper around Expo UI's universal native bottom sheet.
  *
  * React Native content is hosted inside Expo UI here so callers do not need to
- * know about the native host boundary. Children unmount when the sheet closes,
- * which lets owners keep per-presentation state inside the sheet.
+ * know about the native host boundary. The native container and its latest
+ * content stay mounted through dismissal so SwiftUI can animate the sheet down;
+ * children unmount after the native dismissal finishes.
  */
 export function BottomSheet({
 	children,
@@ -45,45 +46,69 @@ export function BottomSheet({
 	testID,
 }: BottomSheetProps) {
 	const { theme } = useUnistyles();
-
-	if (!isPresented) {
-		return null;
-	}
-
 	const hasSnapPoints = snapPoints !== undefined && snapPoints.length > 0;
+	const [retainedContent, setRetainedContent] = useState({ children, header });
+	const [nativeDismissed, setNativeDismissed] = useState(!isPresented);
+
+	useEffect(() => {
+		if (!isPresented) return;
+		// The last presented React tree is the snapshot SwiftUI animates down
+		// after a controlled close clears the caller's current children.
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setRetainedContent({ children, header });
+	}, [children, header, isPresented]);
+
+	useEffect(() => {
+		if (!isPresented) return;
+		// A new native presentation starts a fresh dismissal lifecycle.
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setNativeDismissed(false);
+	}, [isPresented]);
+
+	const content = isPresented ? { children, header } : retainedContent;
+	const renderContent = isPresented || !nativeDismissed;
 
 	return (
 		<ExpoBottomSheet
-			isPresented
+			isPresented={isPresented}
 			modifiers={[presentationBackground(theme.colors.background)]}
-			onDismiss={() => onIsPresentedChange(false)}
+			onDismiss={() => {
+				setNativeDismissed(true);
+				onIsPresentedChange(false);
+			}}
 			showDragIndicator={showDragIndicator}
 			snapPoints={snapPoints}
 			testID={testID}
 		>
-			<RNHostView matchContents={!hasSnapPoints}>
-				<View
-					style={[styles.sheet, hasSnapPoints ? styles.boundedSheet : null]}
-				>
-					{header ? (
-						<View style={styles.header}>
-							<View style={styles.headerAction}>{header.leadingAction}</View>
-							<Text accessibilityRole="header" style={styles.title}>
-								{header.title}
-							</Text>
-							<View style={styles.headerAction}>{header.trailingAction}</View>
-						</View>
-					) : null}
+			{renderContent ? (
+				<RNHostView matchContents={!hasSnapPoints}>
 					<View
-						style={[
-							styles.content,
-							hasSnapPoints ? styles.boundedContent : null,
-						]}
+						style={[styles.sheet, hasSnapPoints ? styles.boundedSheet : null]}
 					>
-						{children}
+						{content.header ? (
+							<View style={styles.header}>
+								<View style={styles.headerAction}>
+									{content.header.leadingAction}
+								</View>
+								<Text accessibilityRole="header" style={styles.title}>
+									{content.header.title}
+								</Text>
+								<View style={styles.headerAction}>
+									{content.header.trailingAction}
+								</View>
+							</View>
+						) : null}
+						<View
+							style={[
+								styles.content,
+								hasSnapPoints ? styles.boundedContent : null,
+							]}
+						>
+							{content.children}
+						</View>
 					</View>
-				</View>
-			</RNHostView>
+				</RNHostView>
+			) : null}
 		</ExpoBottomSheet>
 	);
 }

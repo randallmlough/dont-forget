@@ -792,6 +792,9 @@ describe("Home bottom toolbar", () => {
 	it("starts inline creation from the floating add button", async () => {
 		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
 		expect(pageControl()).toBeTruthy();
+		expect(screen.getByTestId("home-add-item-button-position")).toHaveStyle({
+			bottom: 88,
+		});
 
 		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
 
@@ -808,6 +811,28 @@ describe("Home bottom toolbar", () => {
 			screen.getByRole("button", { name: "Choose List" }).props
 				.accessibilityState,
 		).toEqual({ disabled: true });
+		expect(screen.getByTestId("home-list-pager")).toHaveProp(
+			"scrollEnabled",
+			true,
+		);
+	});
+
+	it("does not replay a dismissed creation draft after paging", async () => {
+		showLists([groceriesListSummary, pantryListSummary]);
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		await screen.findByLabelText("Item name");
+
+		await settlePagerAt(1);
+
+		expect(screen.getByRole("header", { name: "Pantry" })).toBeTruthy();
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+		expect(screen.getByRole("button", { name: "Add Item" })).toBeTruthy();
+
+		await settlePagerAt(0);
+		expect(screen.getByRole("header", { name: "Groceries" })).toBeTruthy();
+		expect(screen.queryByLabelText("Item name")).toBeNull();
 	});
 
 	it("keeps the source List focused when an Item write reorders recent activity", async () => {

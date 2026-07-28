@@ -28,7 +28,7 @@ import { BottomSheet } from "@/client/ui/bottom-sheet";
 </BottomSheet>
 ```
 
-The primitive's contract: children are mounted only while presented (`isPresented: false` renders nothing), and a native dismissal fires `onIsPresentedChange(false)`. Owner components may rely on unmount-on-close to reset per-open state.
+The primitive's contract: the native container stays mounted and receives controlled presentation changes. Its latest children remain mounted through a dismissal animation, then unmount when the native dismissal fires `onIsPresentedChange(false)`. Owner components may rely on unmount-after-close to reset per-open state.
 
 On iPad, React Native Storybook renders its desktop sidebar beside the story preview inside one application window. Expo UI presents the native sheet over that window, so the sheet remains centered over the full window and may overlap the Storybook sidebar. This is Storybook host behavior, not production sheet positioning; do not compensate for it in the primitive.
 

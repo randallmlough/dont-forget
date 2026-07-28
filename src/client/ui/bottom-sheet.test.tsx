@@ -26,7 +26,7 @@ it("renders its header and content inside the Expo UI sheet", async () => {
 	expect(screen.getByText("Sheet content")).toBeTruthy();
 });
 
-it("renders nothing when not presented", async () => {
+it("keeps the native container mounted while not presented", async () => {
 	await render(
 		<BottomSheet isPresented={false} onIsPresentedChange={jest.fn()}>
 			<Text>Sheet content</Text>
@@ -34,7 +34,12 @@ it("renders nothing when not presented", async () => {
 	);
 
 	expect(screen.queryByText("Sheet content")).toBeNull();
-	expect(screen.queryByTestId("expo-bottom-sheet")).toBeNull();
+	expect(screen.getByTestId("expo-bottom-sheet")).toHaveAccessibilityValue({
+		text: JSON.stringify({
+			isPresented: false,
+			showDragIndicator: true,
+		}),
+	});
 });
 
 it("reports native dismissal through the controlled presentation callback", async () => {
@@ -65,6 +70,7 @@ it("forwards snap points and fills the bounded native host", async () => {
 
 	expect(screen.getByTestId("list-sheet")).toHaveAccessibilityValue({
 		text: JSON.stringify({
+			isPresented: true,
 			showDragIndicator: false,
 			snapPoints: ["half", "full"],
 		}),

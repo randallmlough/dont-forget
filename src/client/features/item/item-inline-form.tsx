@@ -2,6 +2,7 @@ import { SymbolView } from "expo-symbols";
 import { useEffect, useRef } from "react";
 import {
 	ActivityIndicator,
+	Keyboard,
 	Pressable,
 	Text,
 	TextInput,
@@ -70,18 +71,36 @@ export function ItemInlineForm({
 		}
 		if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
 		blurTimerRef.current = setTimeout(() => {
+			blurTimerRef.current = null;
 			if (titleFocusedRef.current || noteFocusedRef.current) return;
 			onBlurEditor(() => titleRef.current?.focus());
 		}, 0);
 	}
 
+	function cancelScheduledEditorBlur() {
+		if (!blurTimerRef.current) return;
+		clearTimeout(blurTimerRef.current);
+		blurTimerRef.current = null;
+	}
+
+	function keepEditorActiveForPress() {
+		if (blurTimerRef.current) {
+			cancelScheduledEditorBlur();
+			return;
+		}
+		suppressNextBlurRef.current = true;
+	}
+
 	function showNote() {
+		cancelScheduledEditorBlur();
 		focusNoteAfterRenderRef.current = true;
 		onShowNote();
 	}
 
 	function openDetails() {
+		cancelScheduledEditorBlur();
 		onOpenDetails();
+		Keyboard.dismiss();
 	}
 
 	function toggleItem() {
@@ -148,9 +167,8 @@ export function ItemInlineForm({
 						accessibilityRole="button"
 						disabled={saving}
 						onPress={showNote}
-						onPressIn={() => {
-							suppressNextBlurRef.current = true;
-						}}
+						onTouchEnd={showNote}
+						onTouchStart={keepEditorActiveForPress}
 						style={({ pressed }) => [
 							styles.addNote,
 							pressed ? styles.pressed : undefined,
@@ -170,9 +188,8 @@ export function ItemInlineForm({
 					accessibilityLabel="Item Details"
 					accessibilityRole="button"
 					onPress={openDetails}
-					onPressIn={() => {
-						suppressNextBlurRef.current = true;
-					}}
+					onTouchEnd={openDetails}
+					onTouchStart={keepEditorActiveForPress}
 					style={({ pressed }) => [
 						styles.detailTarget,
 						pressed ? styles.pressed : undefined,

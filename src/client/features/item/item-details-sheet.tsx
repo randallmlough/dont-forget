@@ -14,7 +14,19 @@ export type ItemDetailsSheetProps = {
 export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
 	const { theme } = useUnistyles();
 	const presentation = detailsPresentation(editor);
-	if (!presentation) return null;
+	if (!presentation) {
+		return (
+			<BottomSheet
+				isPresented={false}
+				onIsPresentedChange={() => undefined}
+				showDragIndicator={false}
+				snapPoints={["full"]}
+				testID="item-details-sheet"
+			>
+				{null}
+			</BottomSheet>
+		);
+	}
 
 	const selectedList = presentation.listOptions.find(
 		(option) => option.id === presentation.selectedListId,

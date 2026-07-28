@@ -33,7 +33,7 @@ const styles = StyleSheet.create((theme) => ({
 	position: (bottomInset: number) => ({
 		position: "absolute",
 		right: theme.spacing(5),
-		bottom: bottomInset + theme.spacing(20),
+		bottom: bottomInset + theme.spacing(16),
 		zIndex: 60,
 	}),
 }));

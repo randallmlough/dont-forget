@@ -80,11 +80,10 @@ function HomeListPagerStory({ data }: { data: HomeListPagerData }) {
 	return (
 		<HomeListPager
 			{...data}
-			addItemRequestKey={null}
+			addItemRequest={null}
 			session={authenticatedAppSession}
 			focusedListId={null}
 			collapsedTitleScroll={collapsedTitleScroll}
-			itemEditorActive={false}
 			pickerPhase="closed"
 			selectionPending={false}
 			onFocusList={focusList}

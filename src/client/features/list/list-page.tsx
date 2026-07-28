@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +32,10 @@ export type ListPageProps = {
 	scrollState: ListPageScrollState;
 	topContentInset: number;
 	onItemEditorActiveChange: (active: boolean) => void;
+	registerItemEditorDismissal: (
+		listId: string,
+		dismiss: () => void,
+	) => () => void;
 };
 
 export function ListPage({
@@ -44,6 +48,7 @@ export function ListPage({
 	addItemRequestKey,
 	topContentInset,
 	onItemEditorActiveChange,
+	registerItemEditorDismissal,
 }: ListPageProps) {
 	const state = useListPage(session, summary);
 	const active = state.status === "active";
@@ -97,6 +102,7 @@ export function ListPage({
 			syncState={syncState}
 			topContentInset={topContentInset}
 			onItemEditorActiveChange={onItemEditorActiveChange}
+			registerItemEditorDismissal={registerItemEditorDismissal}
 		/>
 	);
 }
@@ -111,6 +117,7 @@ function ActiveListPage({
 	scrollState,
 	addItemRequestKey,
 	onItemEditorActiveChange,
+	registerItemEditorDismissal,
 	topContentInset,
 }: ListPageProps & {
 	loadState: Extract<ListPageState, { status: "active" }>;
@@ -132,6 +139,17 @@ function ActiveListPage({
 		onUpdateItem: loadState.actions.updateItem,
 		onSetItemChecked: loadState.actions.setItemChecked,
 	});
+	const itemEditorRef = useRef(itemEditor);
+
+	useEffect(() => {
+		itemEditorRef.current = itemEditor;
+	}, [itemEditor]);
+
+	useEffect(() => {
+		return registerItemEditorDismissal(loadState.listId, () => {
+			void itemEditorRef.current.actions.blurInlineEditor(() => undefined);
+		});
+	}, [loadState.listId, registerItemEditorDismissal]);
 
 	// Only the focused page publishes to the header, and it republishes on focus
 	// so the header collapses against this page's large title rather than the

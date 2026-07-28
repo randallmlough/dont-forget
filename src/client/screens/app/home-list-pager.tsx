@@ -1,5 +1,5 @@
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useCallback, useEffect, useRef } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
@@ -54,14 +54,18 @@ export type CollapsedTitleScroll = ListPageScrollState & {
  */
 export type HomeListPickerPhase = "closed" | "open" | "closing";
 
+export type HomeAddItemRequest = {
+	key: number;
+	listId: string;
+};
+
 export type HomeListPagerProps = {
 	session: AuthenticatedAppSession;
 	collectionState: ListCollectionState;
 	syncState: ActiveListSyncState;
 	focusedListId: string | null;
 	collapsedTitleScroll: CollapsedTitleScroll;
-	addItemRequestKey: number | null;
-	itemEditorActive: boolean;
+	addItemRequest: HomeAddItemRequest | null;
 	/** Whether the List picker should be showing instead of the focused List. */
 	pickerPhase: HomeListPickerPhase;
 	/** Whether a List selection is still being written. */
@@ -85,8 +89,7 @@ export function HomeListPager({
 	syncState,
 	focusedListId,
 	collapsedTitleScroll,
-	addItemRequestKey,
-	itemEditorActive,
+	addItemRequest,
 	pickerPhase,
 	selectionPending,
 	onItemEditorActiveChange,
@@ -133,8 +136,7 @@ export function HomeListPager({
 		<ActiveHomeListPager
 			focusedListId={focusedListId ?? collectionState.currentListId}
 			collapsedTitleScroll={collapsedTitleScroll}
-			addItemRequestKey={addItemRequestKey}
-			itemEditorActive={itemEditorActive}
+			addItemRequest={addItemRequest}
 			listSummaries={collectionState.summaries}
 			pickerPhase={pickerPhase}
 			selectionPending={selectionPending}
@@ -151,8 +153,7 @@ export function HomeListPager({
 type ActiveHomeListPagerProps = {
 	focusedListId: string;
 	collapsedTitleScroll: CollapsedTitleScroll;
-	addItemRequestKey: number | null;
-	itemEditorActive: boolean;
+	addItemRequest: HomeAddItemRequest | null;
 	listSummaries: readonly ListSummary[];
 	pickerPhase: HomeListPickerPhase;
 	selectionPending: boolean;
@@ -167,8 +168,7 @@ type ActiveHomeListPagerProps = {
 function ActiveHomeListPager({
 	focusedListId,
 	collapsedTitleScroll,
-	addItemRequestKey,
-	itemEditorActive,
+	addItemRequest,
 	listSummaries,
 	pickerPhase,
 	selectionPending,
@@ -181,6 +181,7 @@ function ActiveHomeListPager({
 }: ActiveHomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
+	const itemEditorDismissalsRef = useRef(new Map<string, () => void>());
 	const focusedIndex = Math.max(
 		0,
 		listSummaries.findIndex((summary) => summary.id === focusedListId),
@@ -256,6 +257,22 @@ function ActiveHomeListPager({
 		void onFocusList(summary.id);
 	}
 
+	function itemEditorActivityChanged(active: boolean) {
+		onItemEditorActiveChange(active);
+	}
+
+	const registerItemEditorDismissal = useCallback(
+		(listId: string, dismiss: () => void) => {
+			itemEditorDismissalsRef.current.set(listId, dismiss);
+			return () => {
+				if (itemEditorDismissalsRef.current.get(listId) === dismiss) {
+					itemEditorDismissalsRef.current.delete(listId);
+				}
+			};
+		},
+		[],
+	);
+
 	function pageLayout(
 		_data: ArrayLike<ListSummary> | null | undefined,
 		index: number,
@@ -273,6 +290,8 @@ function ActiveHomeListPager({
 		);
 		const summary = listSummaries[settledIndex];
 		if (!summary || summary.id === focusedListId) return;
+		const dismissEditor = itemEditorDismissalsRef.current.get(focusedListId);
+		dismissEditor?.();
 		void onFocusList(summary.id).then((didFocus) => {
 			if (didFocus) return;
 			pagerRef.current?.scrollToIndex({
@@ -318,6 +337,7 @@ function ActiveHomeListPager({
 				<Animated.FlatList
 					data={listSummaries}
 					decelerationRate="fast"
+					extraData={focusedListId}
 					getItemLayout={pageLayout}
 					horizontal
 					initialNumToRender={Math.min(3, listSummaries.length)}
@@ -343,7 +363,11 @@ function ActiveHomeListPager({
 								width={width}
 							>
 								<ListPage
-									addItemRequestKey={focused ? addItemRequestKey : null}
+									addItemRequestKey={
+										focused && addItemRequest?.listId === summary.id
+											? addItemRequest.key
+											: null
+									}
 									focused={focused}
 									listSummaries={listSummaries}
 									scrollState={collapsedTitleScroll}
@@ -351,7 +375,8 @@ function ActiveHomeListPager({
 									summary={summary}
 									syncState={syncState}
 									topContentInset={topContentInset}
-									onItemEditorActiveChange={onItemEditorActiveChange}
+									onItemEditorActiveChange={itemEditorActivityChanged}
+									registerItemEditorDismissal={registerItemEditorDismissal}
 								/>
 							</CarouselPage>
 						);
@@ -359,7 +384,6 @@ function ActiveHomeListPager({
 					scrollEnabled={
 						listSummaries.length > 1 &&
 						pickerPhase === "closed" &&
-						!itemEditorActive &&
 						!selectionPending
 					}
 					scrollEventThrottle={16}
