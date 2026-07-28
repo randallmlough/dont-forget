@@ -281,6 +281,31 @@ describe("List parts", () => {
 		}
 	});
 
+	it("keeps the editor active when touch start precedes the native title blur", async () => {
+		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
+		const nameInput = await screen.findByLabelText("Item name");
+		const detailsButton = await screen.findByRole("button", {
+			name: "Item Details",
+		});
+
+		jest.useFakeTimers();
+		try {
+			await fireEvent(nameInput, "focus");
+			await fireEvent(detailsButton, "touchStart");
+			await fireEvent(nameInput, "blur");
+			await act(() => {
+				jest.advanceTimersByTime(1);
+			});
+			await fireEvent(detailsButton, "pressIn");
+			await fireEvent(detailsButton, "pressOut");
+			await fireEvent.press(detailsButton);
+
+			expect(screen.getByTestId("item-details-sheet")).toBeTruthy();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	it("returns to inline editing while the native Details dismissal finishes", async () => {
 		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
 		await fireEvent.press(
