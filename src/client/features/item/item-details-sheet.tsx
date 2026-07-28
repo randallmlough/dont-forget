@@ -199,6 +199,7 @@ function ItemDetailsSheetContent({
 					<Button
 						accessibilityHint="Deletes this Item"
 						accessibilityLabel="Delete Item"
+						disabled={presentation.saving}
 						onPress={() => confirmItemDeletion(editor)}
 						style={styles.deleteButton}
 						variant="destructive"

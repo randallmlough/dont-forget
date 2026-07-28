@@ -383,6 +383,38 @@ describe("List parts", () => {
 		expect(screen.queryByRole("button", { name: "Delete Item" })).toBeNull();
 	});
 
+	it("disables deletion while saving existing Item details", async () => {
+		const save = deferred<void>();
+		const onUpdateItem = jest.fn(() => save.promise);
+		await renderWithSafeArea(<TestListItems onUpdateItem={onUpdateItem} />);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+		const details = await screen.findByTestId("item-details-sheet");
+		await fireEvent.changeText(
+			within(details).getByLabelText("Item name"),
+			"Updated Milk",
+		);
+		await fireEvent.press(
+			within(details).getByRole("button", { name: "Save Item" }),
+		);
+
+		await waitFor(() => {
+			expect(onUpdateItem).toHaveBeenCalledTimes(1);
+		});
+		expect(
+			within(details).getByRole("button", { name: "Delete Item" }),
+		).toBeDisabled();
+
+		await act(async () => {
+			save.resolve();
+			await save.promise;
+		});
+	});
+
 	it("requests inline focus only after native Details dismissal completes", async () => {
 		const onReturnToInline = jest.fn();
 		await renderWithSafeArea(
