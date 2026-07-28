@@ -19,7 +19,7 @@ Read:
 Confirm the existing pattern in nearby services before editing, for example:
 
 - `src/client/features/list/list-service.ts`
-- `src/client/features/list/item-service.ts`
+- `src/client/features/item/item-service.ts`
 - `src/server/users/user-service.ts`
 - `src/server/households/member-service.ts`
 - `src/server/households/household-service.ts`
@@ -39,7 +39,7 @@ src/client/features/<feature>/
 Examples:
 
 - `src/client/features/list/list-service.ts`
-- `src/client/features/list/item-service.ts`
+- `src/client/features/item/item-service.ts`
 
 ### Server-only services
 
@@ -105,7 +105,7 @@ Keep the public types named for the domain:
 1. **Choose the owning domain folder.**
    - Use existing domains when the operation naturally belongs there.
    - Create a new folder only when the domain is genuinely new.
-   - Current client feature folders are `auth`, `household`, `list`, and `settings`; current server domain folders are `bootstrap`, `data`, `households`, `invitations`, `sync`, and `users`. Item services live under the List feature, and Member behavior lives under the server households module.
+   - Current client feature folders are `auth`, `household`, `item`, `list`, and `settings`; current server domain folders are `bootstrap`, `data`, `households`, `invitations`, `sync`, and `users`. Item services live under the Item feature, and Member behavior lives under the server households module.
 
 2. **Choose client or server placement.**
    - Client product services may depend on app-safe interfaces such as the `ProductDatabase` seam.

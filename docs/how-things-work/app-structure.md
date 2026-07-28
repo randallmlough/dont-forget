@@ -63,9 +63,9 @@ Keep `src/app/` files thin. A route file should usually export the screen it own
 export { default } from "@/client/screens/app/home-screen";
 ```
 
-Put route-owned screens and screen-local side effects in `src/client/screens/`, organized by route ownership. Keep feature UI, data hooks, and services in `src/client/features/<feature>/`. This includes keeping List and Item services with the List feature even when a screen consumes them.
+Put route-owned screens and screen-local side effects in `src/client/screens/`, organized by route ownership. Keep feature UI, data hooks, and services in `src/client/features/<feature>/`. List services and collection/page composition belong to the List feature; Item services, editor behavior, rows, and sheets belong to the Item feature.
 
-Put reusable primitives in `src/client/ui/`. Feature-owned UI stays with the owning feature folder, for example `src/client/features/list/list-page.tsx`, `list-overview.tsx`, `item-rows.tsx`, and `add-item-form.tsx`. Home's pager and toolbar stay with their route-owned screen composition under `src/client/screens/app/`.
+Put reusable primitives in `src/client/ui/`. Feature-owned UI stays with the owning feature folder. For example, `src/client/features/list/list-page.tsx` and `list-items.tsx` compose a List page, while `src/client/features/item/item-row.tsx`, `item-inline-form.tsx`, and the Item sheets own Item editing and presentation. Home's pager and toolbar stay with their route-owned screen composition under `src/client/screens/app/`.
 
 ## Components
 

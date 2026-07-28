@@ -10,10 +10,16 @@ const OTHER_HOUSEHOLD = "hh_2";
 describe("createItemService", () => {
 	let store: TestProductDatabase;
 	let service: ItemService;
+	let track: jest.Mock;
 
 	beforeEach(() => {
 		store = createTestProductDatabase();
-		service = createItemService({ householdId: HOUSEHOLD, store });
+		track = jest.fn();
+		service = createItemService({
+			householdId: HOUSEHOLD,
+			store,
+			analytics: { track },
+		});
 		store.seedList({ id: "lst_groceries", householdId: HOUSEHOLD });
 	});
 
@@ -314,6 +320,7 @@ describe("createItemService", () => {
 		it("updates and trims content without changing its List position", async () => {
 			const updated = await service.updateItem({
 				itemId: "itm_milk",
+				userId: "usr_avery",
 				sourceListId: "lst_groceries",
 				destinationListId: "lst_groceries",
 				name: " Oat milk ",
@@ -328,6 +335,15 @@ describe("createItemService", () => {
 				quantity: "2",
 				notes: null,
 				position: 2,
+			});
+			expect(track).toHaveBeenCalledWith("item_updated", {
+				household_id: HOUSEHOLD,
+				item_id: "itm_milk",
+				user_id: "usr_avery",
+				source_list_id: "lst_groceries",
+				destination_list_id: "lst_groceries",
+				content_changed: true,
+				list_changed: false,
 			});
 			await expect(
 				service.listItems({ listId: "lst_groceries" }),
@@ -349,6 +365,7 @@ describe("createItemService", () => {
 
 			const moved = await service.updateItem({
 				itemId: "itm_milk",
+				userId: "usr_avery",
 				sourceListId: "lst_groceries",
 				destinationListId: "lst_pantry",
 				name: "Milk",
@@ -376,6 +393,7 @@ describe("createItemService", () => {
 			await expect(
 				service.updateItem({
 					itemId: "itm_milk",
+					userId: "usr_avery",
 					sourceListId: "lst_pantry",
 					destinationListId: "lst_pantry",
 					name: "Oat milk",
@@ -401,6 +419,7 @@ describe("createItemService", () => {
 			await expect(
 				service.updateItem({
 					itemId: "itm_milk",
+					userId: "usr_avery",
 					sourceListId: "lst_groceries",
 					destinationListId: `lst_${_label}`,
 					name: "Milk",
@@ -416,6 +435,7 @@ describe("createItemService", () => {
 			await expect(
 				service.updateItem({
 					itemId: "itm_milk",
+					userId: "usr_avery",
 					sourceListId: "lst_groceries",
 					destinationListId: "lst_other",
 					name: "Milk",

@@ -7,7 +7,9 @@ import {
 	within,
 } from "@testing-library/react-native";
 import type { ReactElement } from "react";
-import { FlatList, View } from "react-native";
+import { FlatList, Pressable, View } from "react-native";
+import { ItemDetailsSheet } from "@/client/features/item/item-details-sheet";
+import { ItemInlineForm } from "@/client/features/item/item-inline-form";
 import type {
 	AddListItemInput,
 	UpdateListItemInput,
@@ -130,6 +132,70 @@ describe("List parts", () => {
 		expect(await screen.findByLabelText("Item notes")).toBeTruthy();
 	});
 
+	it("activates an inline target once through a completed press", async () => {
+		const onOpenDetails = jest.fn();
+		await renderWithSafeArea(
+			<ItemInlineForm
+				checked={false}
+				mode="existing"
+				name="Milk"
+				notes=""
+				noteVisible={false}
+				saving={false}
+				onBlurEditor={jest.fn()}
+				onChangeName={jest.fn()}
+				onChangeNotes={jest.fn()}
+				onOpenDetails={onOpenDetails}
+				onShowNote={jest.fn()}
+				onSubmitTitle={jest.fn()}
+				onToggleItem={jest.fn()}
+			/>,
+		);
+		const nameInput = await screen.findByLabelText("Item name");
+		const detailsButton = await screen.findByRole("button", {
+			name: "Item Details",
+		});
+
+		await fireEvent(nameInput, "focus");
+		await fireEvent(detailsButton, "pressIn");
+		await fireEvent(detailsButton, "pressOut");
+		await fireEvent.press(detailsButton);
+
+		expect(onOpenDetails).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not let a cancelled inline target press swallow the next blur", async () => {
+		const onUpdateItem = jest.fn(async () => undefined);
+		await renderWithSafeArea(<TestListItems onUpdateItem={onUpdateItem} />);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
+		const nameInput = await screen.findByLabelText("Item name");
+		const detailsButton = await screen.findByRole("button", {
+			name: "Item Details",
+		});
+
+		jest.useFakeTimers();
+		try {
+			await fireEvent(nameInput, "focus");
+			await fireEvent(detailsButton, "pressIn");
+			await fireEvent(detailsButton, "pressOut");
+			await act(() => {
+				jest.runOnlyPendingTimers();
+			});
+			await fireEvent(nameInput, "blur");
+			await act(() => {
+				jest.runOnlyPendingTimers();
+			});
+
+			await waitFor(() => {
+				expect(onUpdateItem).toHaveBeenCalledTimes(1);
+			});
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	it("dismisses an empty creation draft from the List background", async () => {
 		await renderWithSafeArea(
 			<TestListItems
@@ -140,6 +206,19 @@ describe("List parts", () => {
 
 		await screen.findByLabelText("Item name");
 		await fireEvent.press(screen.getByTestId("list-overview-dismiss-target"));
+
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+	});
+
+	it("grows the footer dismissal target through the short-List remainder", async () => {
+		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
+
+		await screen.findByLabelText("Item name");
+		expect(screen.getByTestId("test-list-items")).toHaveProp(
+			"ListFooterComponentStyle",
+			expect.objectContaining({ flexGrow: 1 }),
+		);
+		await fireEvent.press(screen.getByTestId("list-background-dismiss-target"));
 
 		expect(screen.queryByLabelText("Item name")).toBeNull();
 	});
@@ -189,8 +268,9 @@ describe("List parts", () => {
 		jest.useFakeTimers();
 		try {
 			await fireEvent(nameInput, "blur");
-			await fireEvent(detailsButton, "touchStart");
-			await fireEvent(detailsButton, "touchEnd");
+			await fireEvent(detailsButton, "pressIn");
+			await fireEvent(detailsButton, "pressOut");
+			await fireEvent.press(detailsButton);
 			await act(() => {
 				jest.advanceTimersByTime(1);
 			});
@@ -213,9 +293,9 @@ describe("List parts", () => {
 
 		expect(screen.getByTestId("item-details-sheet")).toHaveAccessibilityValue({
 			text: JSON.stringify({
+				fitToContents: false,
 				isPresented: false,
-				showDragIndicator: false,
-				snapPoints: ["full"],
+				interactiveDismissDisabled: false,
 			}),
 		});
 		expect(screen.getByRole("button", { name: "Item Details" })).toBeTruthy();
@@ -226,10 +306,72 @@ describe("List parts", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "Item Details" }));
 		expect(screen.getByTestId("item-details-sheet")).toHaveAccessibilityValue({
 			text: JSON.stringify({
+				fitToContents: false,
 				isPresented: true,
-				showDragIndicator: false,
-				snapPoints: ["full"],
+				interactiveDismissDisabled: false,
 			}),
+		});
+	});
+
+	it("requests inline focus only after native Details dismissal completes", async () => {
+		const onReturnToInline = jest.fn();
+		await renderWithSafeArea(
+			<TestItemDetailsSheet onReturnToInline={onReturnToInline} />,
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Open test Item Details" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Cancel Item Details" }),
+		);
+
+		expect(onReturnToInline).not.toHaveBeenCalled();
+		await fireEvent.press(
+			screen.getByRole("button", {
+				name: "Complete bottom sheet dismissal",
+			}),
+		);
+
+		expect(onReturnToInline).toHaveBeenCalledTimes(1);
+	});
+
+	it("disables interactive Details dismissal while saving", async () => {
+		const save = deferred<void>();
+		const onAddItem = jest.fn(() => save.promise);
+		await renderWithSafeArea(
+			<TestListItems creationRequestKey={1} onAddItem={onAddItem} />,
+		);
+		await fireEvent.changeText(
+			await screen.findByLabelText("Item name"),
+			"Coffee",
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Save Item" }),
+		);
+
+		await waitFor(() => {
+			expect(onAddItem).toHaveBeenCalledTimes(1);
+		});
+		const details = screen.getByTestId("item-details-sheet");
+		const dismissButton = within(details).getByRole("button", {
+			name: "Dismiss bottom sheet",
+		});
+		expect(dismissButton).toBeDisabled();
+		await fireEvent.press(dismissButton);
+		expect(details).toHaveAccessibilityValue({
+			text: JSON.stringify({
+				fitToContents: false,
+				isPresented: true,
+				interactiveDismissDisabled: true,
+			}),
+		});
+
+		await act(async () => {
+			save.resolve();
+			await save.promise;
 		});
 	});
 
@@ -275,14 +417,18 @@ describe("List parts", () => {
 				notes: null,
 			});
 		});
-		expect(screen.queryByLabelText("Item name")).toBeNull();
+		expect(screen.getByLabelText("Item name")).toBeTruthy();
 		expect(screen.getByTestId("item-details-sheet")).toHaveAccessibilityValue({
 			text: JSON.stringify({
+				fitToContents: false,
 				isPresented: false,
-				showDragIndicator: false,
-				snapPoints: ["full"],
+				interactiveDismissDisabled: false,
 			}),
 		});
+		await fireEvent.press(
+			screen.getByTestId("item-details-sheet-complete-dismissal"),
+		);
+		expect(screen.queryByLabelText("Item name")).toBeNull();
 	});
 
 	it("marks an existing Item's source List as Current", async () => {
@@ -373,6 +519,37 @@ function TestListItems({
 	);
 }
 
+function TestItemDetailsSheet({
+	onReturnToInline,
+}: {
+	onReturnToInline: () => void;
+}) {
+	const editor = useItemEditor({
+		currentListId: "lst_groceries",
+		items: populatedActiveListState.items,
+		listOptions: [
+			{ id: "lst_groceries", name: "Groceries" },
+			{ id: "lst_pantry", name: "Pantry" },
+		],
+		creationRequestKey: 1,
+		onAddItem: async () => undefined,
+		onUpdateItem: async () => undefined,
+		onSetItemChecked: async () => undefined,
+		onActiveChange: () => undefined,
+	});
+
+	return (
+		<>
+			<Pressable
+				accessibilityLabel="Open test Item Details"
+				accessibilityRole="button"
+				onPress={editor.actions.openDetails}
+			/>
+			<ItemDetailsSheet editor={editor} onReturnToInline={onReturnToInline} />
+		</>
+	);
+}
+
 function renderWithSafeArea(element: ReactElement) {
 	return render(<View style={{ flex: 1 }}>{element}</View>, {
 		wrapper: TestSafeAreaProvider,
@@ -396,4 +573,14 @@ function withCheckedItems(state: ActiveListState): ActiveListState {
 			checked: true,
 		})),
 	};
+}
+
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+		resolve = resolvePromise;
+		reject = rejectPromise;
+	});
+	return { promise, resolve, reject };
 }

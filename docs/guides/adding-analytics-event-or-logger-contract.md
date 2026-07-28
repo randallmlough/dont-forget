@@ -139,7 +139,7 @@ For analytics changes:
 Focused examples:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath src/client/features/list/item-service.test.ts
+pnpm exec jest --runInBand --runTestsByPath src/client/features/item/item-service.test.ts
 pnpm exec jest --runInBand --runTestsByPath src/client/session/provider.test.tsx
 ```
 

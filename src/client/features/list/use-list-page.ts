@@ -79,7 +79,10 @@ function listPageActions({
 			});
 		},
 		async updateItem(input: UpdateListItemInput) {
-			await itemService.updateItem(input);
+			await itemService.updateItem({
+				...input,
+				userId: session.activeMember.userId,
+			});
 		},
 		async setItemChecked(itemId: string, checked: boolean) {
 			await itemService.setItemChecked({

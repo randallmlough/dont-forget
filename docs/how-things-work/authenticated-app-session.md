@@ -27,14 +27,17 @@ type AuthenticatedAppSessionState =
 Route-owned hooks create product services after `session !== null`:
 
 ```ts
-const services = useProductServices({
+const listServices = useListServices({
   householdId: session.activeHousehold.id,
   userId: session.activeMember.userId,
+});
+const itemService = useItemService({
+  householdId: session.activeHousehold.id,
 });
 const syncStatus = useSyncState();
 ```
 
-`useProductServices` lives in `src/client/features/list/use-product-services.ts` and constructs List and Item services over `appProductDatabase`, the plain `ProductDatabase` singleton in `src/client/session/powersync-app-database.ts`. Reactive reads use `ProductQuery<T>` values from those services with `useProductQuery` in `src/client/lib/use-product-query.ts`, a thin wrapper over PowerSync watched queries.
+`useListServices` lives in `src/client/features/list/use-list-services.ts` and constructs the List service plus Current List selection store. `useItemService` lives in `src/client/features/item/use-item-service.ts` and constructs the Item service. Both service hooks use `appProductDatabase`, the plain `ProductDatabase` singleton in `src/client/session/powersync-app-database.ts`. Reactive reads use `ProductQuery<T>` values from those services with `useProductQuery` in `src/client/lib/use-product-query.ts`, a thin wrapper over PowerSync watched queries.
 
 There is no public `view` property and no nested `state.session`.
 
@@ -54,7 +57,7 @@ The machine uses an attempt counter as its cancellation token. A stale activatio
 
 The provider owns Authenticated App Session loading and composes the signed-in lifecycle in one place: bootstrap, PowerSync connection, session hinting, and sign-out. Activation publishes directory identity without loading the Current List, Lists, or Items. Consumers never manage the PowerSync connection or delete local data directly.
 
-The Home screen calls `useListCollection(session)` once. The collection owns List summaries, Current List resolution and selection, and List CRUD policy; the screen passes its single state to the screen-owned `HomeListPager`. Each feature-owned `ListPage` watches its explicit List's Items through `useListPage`, so one List's failed Items query cannot gate the pager. Item actions and watched-query results remain behind `ListPage`; callback props such as `onAddItem` and `onSetItemChecked` live on its internal `ListOverview`, `ItemRows`, and `AddItemForm` children.
+The Home screen calls `useListCollection(session)` once. The collection owns List summaries, Current List resolution and selection, and List CRUD policy; the screen passes its single state to the screen-owned `HomeListPager`. Each feature-owned `ListPage` watches its explicit List's Items through `useListPage`, so one List's failed Items query cannot gate the pager. Item actions and watched-query results remain behind `ListPage`, which owns `useItemEditor` and passes the resulting editor and Items to `ListItems`. `ListItems` composes the Item-owned `ItemRow`, `ItemInlineForm`, and details and List-selector sheets.
 
 After accept, join, or switch mutations update directory state, screens call the provider-owned `reloadSession()` action. Screens do not call bootstrap directly and do not manage the PowerSync connection or session resources.
 

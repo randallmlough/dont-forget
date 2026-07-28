@@ -5,7 +5,7 @@ import {
 	waitFor,
 	within,
 } from "@testing-library/react-native";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FlatList } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import type { ListSummary } from "@/client/features/list/list-service";
@@ -17,7 +17,11 @@ import {
 } from "@/client/features/list/list-test-support";
 import { useListPage } from "@/client/features/list/use-list-page";
 import { TestSafeAreaProvider } from "@/test/safe-area";
-import { ListPage } from "./list-page";
+import {
+	ListPage,
+	type ListPageEditorEvent,
+	type ListPageEditorOwnerToken,
+} from "./list-page";
 
 jest.mock("@/client/features/list/use-list-page", () => ({
 	useListPage: jest.fn(),
@@ -218,9 +222,19 @@ function TestListPage({
 		() => ({ offsetY, largeTitleHeight }),
 		[offsetY, largeTitleHeight],
 	);
+	const [ownerToken, setOwnerToken] = useState<ListPageEditorOwnerToken | null>(
+		null,
+	);
+	const handleEditorEvent = useCallback((event: ListPageEditorEvent) => {
+		if (event.type === "registered") setOwnerToken(event.ownerToken);
+	}, []);
 	return (
 		<ListPage
-			addItemRequestKey={addItemRequestKey}
+			addItemRequest={
+				addItemRequestKey === null || ownerToken === null
+					? null
+					: { key: addItemRequestKey, ownerToken }
+			}
 			focused={focused}
 			listSummaries={[groceriesListSummary, pantryListSummary]}
 			scrollState={scrollState}
@@ -228,7 +242,7 @@ function TestListPage({
 			summary={summary}
 			syncState="synced"
 			topContentInset={topContentInset}
-			onItemEditorActiveChange={() => undefined}
+			onItemEditorEvent={handleEditorEvent}
 		/>
 	);
 }

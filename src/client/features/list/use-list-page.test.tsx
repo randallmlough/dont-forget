@@ -95,6 +95,7 @@ describe("useListPage", () => {
 		});
 		expect(updateItem).toHaveBeenCalledWith({
 			itemId: "itm_milk",
+			userId: "usr_avery",
 			sourceListId: "lst_groceries",
 			destinationListId: "lst_pantry",
 			name: "Oat milk",

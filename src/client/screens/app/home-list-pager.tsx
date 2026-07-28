@@ -27,6 +27,8 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
 import {
 	ListPage,
+	type ListPageEditorEvent,
+	type ListPageEditorOwnerToken,
 	type ListPageScrollState,
 } from "@/client/features/list/list-page";
 import type { ListSummary } from "@/client/features/list/list-service";
@@ -57,6 +59,7 @@ export type HomeListPickerPhase = "closed" | "open" | "closing";
 export type HomeAddItemRequest = {
 	key: number;
 	listId: string;
+	ownerToken: ListPageEditorOwnerToken;
 };
 
 export type HomeListPagerProps = {
@@ -70,7 +73,9 @@ export type HomeListPagerProps = {
 	pickerPhase: HomeListPickerPhase;
 	/** Whether a List selection is still being written. */
 	selectionPending: boolean;
-	onItemEditorActiveChange: (active: boolean) => void;
+	/** Whether the focused editor is still deciding whether paging can finish. */
+	editorFinishPending: boolean;
+	onItemEditorEvent: (event: ListPageEditorEvent) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onOpenLists: () => void;
 	onRetry: () => void;
@@ -92,7 +97,8 @@ export function HomeListPager({
 	addItemRequest,
 	pickerPhase,
 	selectionPending,
-	onItemEditorActiveChange,
+	editorFinishPending,
+	onItemEditorEvent,
 	onFocusList,
 	onOpenLists,
 	onRetry,
@@ -140,9 +146,10 @@ export function HomeListPager({
 			listSummaries={collectionState.summaries}
 			pickerPhase={pickerPhase}
 			selectionPending={selectionPending}
+			editorFinishPending={editorFinishPending}
 			session={session}
 			syncState={syncState}
-			onItemEditorActiveChange={onItemEditorActiveChange}
+			onItemEditorEvent={onItemEditorEvent}
 			onFocusList={onFocusList}
 			onPickerPhaseChange={onPickerPhaseChange}
 			topContentInset={topContentInset}
@@ -157,9 +164,10 @@ type ActiveHomeListPagerProps = {
 	listSummaries: readonly ListSummary[];
 	pickerPhase: HomeListPickerPhase;
 	selectionPending: boolean;
+	editorFinishPending: boolean;
 	session: AuthenticatedAppSession;
 	syncState: ActiveListSyncState;
-	onItemEditorActiveChange: (active: boolean) => void;
+	onItemEditorEvent: (event: ListPageEditorEvent) => void;
 	onFocusList: (listId: string) => Promise<boolean>;
 	onPickerPhaseChange: (phase: HomeListPickerPhase) => void;
 	topContentInset: number;
@@ -172,9 +180,10 @@ function ActiveHomeListPager({
 	listSummaries,
 	pickerPhase,
 	selectionPending,
+	editorFinishPending,
 	session,
 	syncState,
-	onItemEditorActiveChange,
+	onItemEditorEvent,
 	onFocusList,
 	onPickerPhaseChange,
 	topContentInset,
@@ -344,9 +353,12 @@ function ActiveHomeListPager({
 								width={width}
 							>
 								<ListPage
-									addItemRequestKey={
+									addItemRequest={
 										focused && addItemRequest?.listId === summary.id
-											? addItemRequest.key
+											? {
+													key: addItemRequest.key,
+													ownerToken: addItemRequest.ownerToken,
+												}
 											: null
 									}
 									focused={focused}
@@ -356,7 +368,7 @@ function ActiveHomeListPager({
 									summary={summary}
 									syncState={syncState}
 									topContentInset={topContentInset}
-									onItemEditorActiveChange={onItemEditorActiveChange}
+									onItemEditorEvent={onItemEditorEvent}
 								/>
 							</CarouselPage>
 						);
@@ -364,7 +376,8 @@ function ActiveHomeListPager({
 					scrollEnabled={
 						listSummaries.length > 1 &&
 						pickerPhase === "closed" &&
-						!selectionPending
+						!selectionPending &&
+						!editorFinishPending
 					}
 					scrollEventThrottle={16}
 					showsHorizontalScrollIndicator={false}

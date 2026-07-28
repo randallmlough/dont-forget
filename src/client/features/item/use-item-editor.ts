@@ -31,6 +31,7 @@ export type UseItemEditorInput = {
 	onUpdateItem: (input: UpdateListItemInput) => Promise<void>;
 	onSetItemChecked: (itemId: string, checked: boolean) => Promise<void>;
 	onActiveChange: (active: boolean) => void;
+	onCreationRequestAcknowledged?: (requestKey: number) => void;
 };
 
 export type ItemEditorActions = {
@@ -40,7 +41,8 @@ export type ItemEditorActions = {
 	changeQuantity: (value: string) => void;
 	showNote: () => void;
 	submitTitle: () => Promise<void>;
-	blurInlineEditor: (refocus: () => void) => Promise<void>;
+	blurInlineEditor: (refocus: () => void) => Promise<boolean>;
+	finish: (refocus?: () => void) => Promise<boolean>;
 	openDetails: () => void;
 	cancelDetails: () => void;
 	saveDetails: () => Promise<void>;
@@ -89,6 +91,7 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 		items,
 		listOptions,
 		onActiveChange,
+		onCreationRequestAcknowledged,
 	} = input;
 
 	useEffect(() => {
@@ -98,10 +101,18 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 		) {
 			return;
 		}
-		handledCreationRequestRef.current = creationRequestKey;
 		if (state.status !== "idle") return;
+		handledCreationRequestRef.current = creationRequestKey;
 		dispatch({ type: "creationStarted", listId: currentListId });
-	}, [creationRequestKey, currentListId, state.status]);
+		onActiveChange(true);
+		onCreationRequestAcknowledged?.(creationRequestKey);
+	}, [
+		creationRequestKey,
+		currentListId,
+		onActiveChange,
+		onCreationRequestAcknowledged,
+		state.status,
+	]);
 
 	const activeItemId = existingItemId(state);
 	useEffect(() => {
@@ -143,33 +154,53 @@ function createItemEditorActions(
 	dispatch: Dispatch<ItemEditorAction>,
 	getLatest: () => LatestEditor,
 ): ItemEditorActions {
-	let saveInFlight: Promise<boolean> | null = null;
+	type SaveIntent = {
+		continuation: "createNext" | "finish";
+	};
+	let saveInFlight: {
+		intent: SaveIntent;
+		promise: Promise<boolean>;
+	} | null = null;
 
 	function performSave(
 		editor: ItemEditorInlineState | ItemEditorDetailsState,
 		continuation: "createNext" | "finish",
 	): Promise<boolean> {
-		if (saveInFlight) return saveInFlight;
+		if (saveInFlight) {
+			return continuation === "finish"
+				? finishSaveInFlight()
+				: saveInFlight.promise;
+		}
 
-		const request = saveEditor(editor, continuation);
-		saveInFlight = request;
+		const intent: SaveIntent = { continuation };
+		const request = saveEditor(editor, intent);
+		saveInFlight = { intent, promise: request };
 		void request.finally(() => {
-			if (saveInFlight === request) {
+			if (saveInFlight?.promise === request) {
 				saveInFlight = null;
 			}
 		});
 		return request;
 	}
 
+	function finishSaveInFlight(): Promise<boolean> {
+		if (!saveInFlight) return Promise.resolve(false);
+		if (saveInFlight.intent.continuation !== "finish") {
+			saveInFlight.intent.continuation = "finish";
+			dispatch({ type: "finishRequested" });
+		}
+		return saveInFlight.promise;
+	}
+
 	async function saveEditor(
 		editor: ItemEditorInlineState | ItemEditorDetailsState,
-		continuation: "createNext" | "finish",
+		intent: SaveIntent,
 	): Promise<boolean> {
 		const { input } = getLatest();
 		const name = editor.draft.name.trim();
 		if (!name) return false;
 
-		dispatch({ type: "saveStarted", continuation });
+		dispatch({ type: "saveStarted", continuation: intent.continuation });
 		try {
 			if (editor.source.kind === "new") {
 				await input.onAddItem({
@@ -189,7 +220,7 @@ function createItemEditorActions(
 				});
 			}
 			dispatch({ type: "saveSucceeded", nextListId: input.currentListId });
-			if (continuation === "finish") input.onActiveChange(false);
+			if (intent.continuation === "finish") input.onActiveChange(false);
 			return true;
 		} catch {
 			dispatch({ type: "saveFailed" });
@@ -207,6 +238,7 @@ function createItemEditorActions(
 			if (!hasOtherContent) {
 				dispatch({ type: "editingEnded" });
 				getLatest().input.onActiveChange(false);
+				return true;
 			}
 			return false;
 		}
@@ -246,29 +278,51 @@ function createItemEditorActions(
 		await saveInlineState(state, "createNext");
 	}
 
-	async function blurInlineEditor(refocus: () => void) {
+	async function finish(refocus: () => void = () => undefined) {
 		const { state, input } = getLatest();
-		if (state.status !== "inline") return;
+		if (state.status === "idle") return true;
+		if (state.status === "saving") {
+			return finishSaveInFlight();
+		}
 		const { hasName, hasOtherContent } = draftContent(state.draft);
 		if (!hasName && hasOtherContent) {
-			themedAlert(
-				"Item Name Required",
-				"An Item cannot be saved with notes or quantity alone.",
-				[
-					{
-						text: "Discard",
-						style: "destructive",
-						onPress: () => {
-							dispatch({ type: "editingEnded" });
-							input.onActiveChange(false);
+			return new Promise<boolean>((resolve) => {
+				themedAlert(
+					"Item Name Required",
+					"An Item cannot be saved with notes or quantity alone.",
+					[
+						{
+							text: "Discard",
+							style: "destructive",
+							onPress: () => {
+								dispatch({ type: "editingEnded" });
+								input.onActiveChange(false);
+								resolve(true);
+							},
 						},
-					},
-					{ text: "Keep Editing", onPress: refocus },
-				],
-			);
-			return;
+						{
+							text: "Keep Editing",
+							onPress: () => {
+								refocus();
+								resolve(false);
+							},
+						},
+					],
+				);
+			});
 		}
-		await saveInlineState(state, "finish");
+		if (state.status === "details") {
+			if (!canSaveDetails(state, input.listOptions) && hasName) return false;
+			if (hasName) return performSave(state, "finish");
+			dispatch({ type: "editingEnded" });
+			input.onActiveChange(false);
+			return true;
+		}
+		return saveInlineState(state, "finish");
+	}
+
+	function blurInlineEditor(refocus: () => void) {
+		return finish(refocus);
 	}
 
 	async function saveDetails() {
@@ -317,6 +371,7 @@ function createItemEditorActions(
 		showNote: () => dispatch({ type: "noteRequested" }),
 		submitTitle,
 		blurInlineEditor,
+		finish,
 		openDetails: () => dispatch({ type: "detailsOpened" }),
 		cancelDetails: () => dispatch({ type: "detailsCancelled" }),
 		saveDetails,

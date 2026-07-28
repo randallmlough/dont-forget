@@ -10,6 +10,7 @@ import {
 	type ListRenderItemInfo,
 	Pressable,
 	Text,
+	type TextInput as TextInputInstance,
 	View,
 } from "react-native";
 import Animated, {
@@ -55,6 +56,7 @@ export function ListItems({
 	testID,
 }: ListItemsProps) {
 	const listRef = useRef<FlatList<ItemListRow>>(null);
+	const inlineNameInputRef = useRef<TextInputInstance>(null);
 	const initialResetPendingRef = useRef(focused !== undefined);
 	const { actions } = editor;
 	const activeInline = editor.inline;
@@ -97,6 +99,7 @@ export function ListItems({
 						notes={activeInline.draft.notes}
 						noteVisible={activeInline.noteVisible}
 						saving={activeInline.saving}
+						nameInputRef={inlineNameInputRef}
 						onBlurEditor={(refocus) => {
 							void actions.blurInlineEditor(refocus);
 						}}
@@ -175,7 +178,6 @@ export function ListItems({
 			<Animated.FlatList
 				automaticallyAdjustKeyboardInsets
 				data={rows}
-				extraData={editor.state}
 				keyExtractor={keyExtractor}
 				renderItem={renderItem}
 				ItemSeparatorComponent={RowSeparator}
@@ -190,6 +192,7 @@ export function ListItems({
 						/>
 					) : undefined
 				}
+				ListFooterComponentStyle={styles.footer}
 				ListHeaderComponent={
 					activeInline && listOverview ? (
 						<Pressable
@@ -226,7 +229,10 @@ export function ListItems({
 					styles.contentInsets(topContentInset ?? 0, bottomContentInset),
 				]}
 			/>
-			<ItemDetailsSheet editor={editor} />
+			<ItemDetailsSheet
+				editor={editor}
+				onReturnToInline={() => inlineNameInputRef.current?.focus()}
+			/>
 		</>
 	);
 }
@@ -298,6 +304,9 @@ const styles = StyleSheet.create((theme) => ({
 	backgroundDismissTarget: {
 		minHeight: theme.spacing(11),
 		flex: 1,
+	},
+	footer: {
+		flexGrow: 1,
 	},
 	contentInsets: (top: number, bottom: number) => ({
 		paddingTop: top,

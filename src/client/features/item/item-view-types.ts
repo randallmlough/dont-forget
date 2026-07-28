@@ -14,12 +14,6 @@ export type ItemDraftValues = {
 	selectedListId: string;
 };
 
-export type AddActiveListItemInput = {
-	name: string;
-	quantity: string | null;
-	notes: string | null;
-};
-
 export type AddListItemInput = {
 	listId: string;
 	name: string;

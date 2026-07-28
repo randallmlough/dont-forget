@@ -84,10 +84,11 @@ function HomeListPagerStory({ data }: { data: HomeListPagerData }) {
 			session={authenticatedAppSession}
 			focusedListId={null}
 			collapsedTitleScroll={collapsedTitleScroll}
+			editorFinishPending={false}
 			pickerPhase="closed"
 			selectionPending={false}
 			onFocusList={focusList}
-			onItemEditorActiveChange={noop}
+			onItemEditorEvent={noop}
 			onOpenLists={noop}
 			onRetry={noop}
 			onPickerPhaseChange={noop}

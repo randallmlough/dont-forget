@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,16 +22,48 @@ export type ListPageScrollState = {
 	largeTitleHeight: SharedValue<number>;
 };
 
+export type ListPageEditorOwnerToken = symbol;
+
+export type ListPageAddItemRequest = {
+	key: number;
+	ownerToken: ListPageEditorOwnerToken;
+};
+
+export type ListPageEditorEvent =
+	| {
+			type: "registered";
+			listId: string;
+			ownerToken: ListPageEditorOwnerToken;
+			finish: () => Promise<boolean>;
+	  }
+	| {
+			type: "unregistered";
+			listId: string;
+			ownerToken: ListPageEditorOwnerToken;
+	  }
+	| {
+			type: "activityChanged";
+			listId: string;
+			ownerToken: ListPageEditorOwnerToken;
+			active: boolean;
+	  }
+	| {
+			type: "creationRequestAcknowledged";
+			listId: string;
+			ownerToken: ListPageEditorOwnerToken;
+			requestKey: number;
+	  };
+
 export type ListPageProps = {
 	session: AuthenticatedAppSession;
 	summary: ListSummary;
 	listSummaries: readonly ListSummary[];
 	syncState: ActiveListSyncState;
 	focused: boolean;
-	addItemRequestKey: number | null;
+	addItemRequest: ListPageAddItemRequest | null;
 	scrollState: ListPageScrollState;
 	topContentInset: number;
-	onItemEditorActiveChange: (active: boolean) => void;
+	onItemEditorEvent: (event: ListPageEditorEvent) => void;
 };
 
 export function ListPage({
@@ -41,9 +73,9 @@ export function ListPage({
 	listSummaries,
 	focused,
 	scrollState,
-	addItemRequestKey,
+	addItemRequest,
 	topContentInset,
-	onItemEditorActiveChange,
+	onItemEditorEvent,
 }: ListPageProps) {
 	const state = useListPage(session, summary);
 	const active = state.status === "active";
@@ -87,7 +119,7 @@ export function ListPage({
 
 	return (
 		<ActiveListPage
-			addItemRequestKey={addItemRequestKey}
+			addItemRequest={addItemRequest}
 			focused={focused}
 			listSummaries={listSummaries}
 			loadState={state}
@@ -96,7 +128,7 @@ export function ListPage({
 			summary={summary}
 			syncState={syncState}
 			topContentInset={topContentInset}
-			onItemEditorActiveChange={onItemEditorActiveChange}
+			onItemEditorEvent={onItemEditorEvent}
 		/>
 	);
 }
@@ -109,8 +141,8 @@ function ActiveListPage({
 	summary,
 	focused,
 	scrollState,
-	addItemRequestKey,
-	onItemEditorActiveChange,
+	addItemRequest,
+	onItemEditorEvent,
 	topContentInset,
 }: ListPageProps & {
 	loadState: Extract<ListPageState, { status: "active" }>;
@@ -118,6 +150,31 @@ function ActiveListPage({
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
 	const [largeTitleHeight, setLargeTitleHeight] = useState(0);
+	const [editorOwnerToken] = useState<ListPageEditorOwnerToken>(() =>
+		Symbol(loadState.listId),
+	);
+	const publishEditorActivity = useCallback(
+		(active: boolean) => {
+			onItemEditorEvent({
+				type: "activityChanged",
+				listId: loadState.listId,
+				ownerToken: editorOwnerToken,
+				active,
+			});
+		},
+		[editorOwnerToken, loadState.listId, onItemEditorEvent],
+	);
+	const acknowledgeCreationRequest = useCallback(
+		(requestKey: number) => {
+			onItemEditorEvent({
+				type: "creationRequestAcknowledged",
+				listId: loadState.listId,
+				ownerToken: editorOwnerToken,
+				requestKey,
+			});
+		},
+		[editorOwnerToken, loadState.listId, onItemEditorEvent],
+	);
 	const itemEditor = useItemEditor({
 		currentListId: loadState.listId,
 		items: loadState.list.items,
@@ -126,13 +183,38 @@ function ActiveListPage({
 			currentListName: summary.name,
 			summaries: listSummaries,
 		}),
-		creationRequestKey: focused ? addItemRequestKey : null,
-		onActiveChange: onItemEditorActiveChange,
+		creationRequestKey:
+			focused && addItemRequest?.ownerToken === editorOwnerToken
+				? addItemRequest.key
+				: null,
+		onActiveChange: publishEditorActivity,
+		onCreationRequestAcknowledged: acknowledgeCreationRequest,
 		onAddItem: loadState.actions.addItem,
 		onUpdateItem: loadState.actions.updateItem,
 		onSetItemChecked: loadState.actions.setItemChecked,
 	});
 	const itemEditorActions = itemEditor.actions;
+
+	useLayoutEffect(() => {
+		onItemEditorEvent({
+			type: "registered",
+			listId: loadState.listId,
+			ownerToken: editorOwnerToken,
+			finish: itemEditorActions.finish,
+		});
+		return () => {
+			onItemEditorEvent({
+				type: "unregistered",
+				listId: loadState.listId,
+				ownerToken: editorOwnerToken,
+			});
+		};
+	}, [
+		editorOwnerToken,
+		itemEditorActions,
+		loadState.listId,
+		onItemEditorEvent,
+	]);
 
 	// Editing ends when the pager carries this page out of focus, whichever
 	// interaction changed focus. The blur is a no-op on an idle editor.

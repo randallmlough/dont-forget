@@ -1,4 +1,5 @@
 import { SymbolView } from "expo-symbols";
+import { useRef } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { BottomSheet } from "@/client/ui/bottom-sheet";
@@ -10,10 +11,21 @@ import type { ItemEditor } from "./use-item-editor";
 
 export type ItemDetailsSheetProps = {
 	editor: ItemEditor;
+	onReturnToInline: () => void;
 };
 
-export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
+export function ItemDetailsSheet({
+	editor,
+	onReturnToInline,
+}: ItemDetailsSheetProps) {
 	const presentation = editor.details;
+	const refocusAfterDismissRef = useRef(false);
+
+	function cancelDetails() {
+		if (!presentation || presentation.saving) return;
+		refocusAfterDismissRef.current = true;
+		editor.actions.cancelDetails();
+	}
 
 	return (
 		<BottomSheet
@@ -26,7 +38,7 @@ export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
 									accessibilityHint="Discards detail changes and returns to inline editing"
 									accessibilityLabel="Cancel Item Details"
 									disabled={presentation.saving}
-									onPress={editor.actions.cancelDetails}
+									onPress={cancelDetails}
 									showTint={false}
 									systemImage="xmark"
 								/>
@@ -46,10 +58,16 @@ export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
 						}
 					: undefined
 			}
+			interactiveDismissDisabled={presentation?.saving ?? false}
 			isPresented={presentation !== null}
+			onDismiss={() => {
+				if (!refocusAfterDismissRef.current) return;
+				refocusAfterDismissRef.current = false;
+				onReturnToInline();
+			}}
 			onIsPresentedChange={(presented) => {
 				if (!presented && presentation && !presentation.saving) {
-					editor.actions.cancelDetails();
+					cancelDetails();
 				}
 			}}
 			showDragIndicator={false}

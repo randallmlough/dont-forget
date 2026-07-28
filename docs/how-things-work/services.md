@@ -1,19 +1,28 @@
 # Services
 
-Services are the primary entrypoint for querying and mutating product data in Don't Forget. Client product services live with the feature that consumes them; server services live with their server domain modules. See [ADR-0011](../adr/0011-domain-first-service-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md), [ADR-0016](../adr/0016-powersync-write-path.md), [ADR-0018](../adr/0018-current-list-selection-boundary.md), and [`docs/code-standards/architecture.md`](../code-standards/architecture.md).
+Services are the primary entrypoint for querying and mutating product data in Don't Forget. Client product services live with the feature that consumes them; server services live with their server domain modules. See [ADR-0011](../adr/0011-domain-first-service-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md), [ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0018](../adr/0018-single-postgres-self-hosted-powersync.md), and [`docs/code-standards/architecture.md`](../code-standards/architecture.md).
 
 ## Folder Shape
 
 Use the domain noun from `CONTEXT.md`, but place it on the correct side of the client/server boundary.
 
 ```txt
-src/client/features/list/
+src/client/features/item/
+  item-details-sheet.tsx
+  item-editor-reducer.ts
+  item-inline-form.tsx
+  item-row.tsx
   item-service.ts
+  use-item-editor.ts
+  use-item-service.ts
+
+src/client/features/list/
+  list-items.tsx
   list-page.tsx
   list-service.ts
   use-list-collection.ts
   use-list-page.ts
-  use-product-services.ts
+  use-list-services.ts
 
 src/client/lib/
   product-database.ts
@@ -59,7 +68,7 @@ src/server/db/fixtures/
 
 Rules:
 
-- Client List and Item services live under `src/client/features/list/` because they are app-safe product services over local PowerSync SQLite.
+- Client List and Item services live under their respective `src/client/features/list/` and `src/client/features/item/` folders because they are app-safe product services over local PowerSync SQLite.
 - Server domain modules live under `src/server/<domain>/` and own their services plus the `api.ts` handler for that domain.
 - `src/server/sync/` owns the `/api/data` applicator, authentication, payload validation, rate limiting, and transaction helpers.
 - Data-store infrastructure lives in `src/server/db/`: Drizzle schema, migrations, fixtures, seed/reset/migrate/generate scripts, and test database helpers.
@@ -157,7 +166,7 @@ export type ProductQuery<T> = {
 };
 ```
 
-`useProductServices({ householdId, userId })` constructs List and Item services over `appProductDatabase`. Because PowerSync's local tables are views, services confirm inserts with an app-generated `id` read-back rather than relying on `RETURNING` / `ON CONFLICT`.
+`useListServices({ householdId, userId })` constructs the List service and Current List selection store, while `useItemService({ householdId })` constructs the Item service. Both hooks compose their services over `appProductDatabase`. Because PowerSync's local tables are views, services confirm inserts with an app-generated `id` read-back rather than relying on `RETURNING` / `ON CONFLICT`.
 
 ## SQL Ownership
 
@@ -195,18 +204,21 @@ const { state, session, retry, reloadSession, signOut } =
 `state` is lifecycle/UI metadata only. `session` is top-level and nullable; when it is non-null, route-owned hooks create product services:
 
 ```ts
-const services = useProductServices({
+const listServices = useListServices({
   householdId: session.activeHousehold.id,
   userId: session.activeMember.userId,
 });
+const itemService = useItemService({
+  householdId: session.activeHousehold.id,
+});
 const items = useProductQuery(
-  services.items.listItemsQuery({ listId }),
+  itemService.listItemsQuery({ listId }),
 );
 ```
 
 PowerSync watched queries re-run when their dependent local rows change. UI consumes them through `useProductQuery`, which wraps `@powersync/react`'s `useQuery` and returns `{ data, isLoading, isFetching, error }`. Sync status comes from `useSyncState()` and is read-only connection state, not a data-reload trigger.
 
-Current List is selection state only. `useListCollection(session)` owns active List summaries, Current List resolution/selection, and List CRUD policy, allowing the route-owned native navigation surface to use the Current List name. The screen-owned `HomeListPager` coordinates focused presentation and composes one feature-owned `ListPage` per mounted List; each `ListPage` watches its explicit List's Items through `useListPage`. List switching changes the selected `listId`, not a Household-owned Current List service or data source. Item mutation callbacks remain internal to `ListPage` children such as `ListOverview`, `ItemRows`, and `AddItemForm`.
+Current List is selection state only. `useListCollection(session)` owns active List summaries, Current List resolution/selection, and List CRUD policy, allowing the route-owned native navigation surface to use the Current List name. The screen-owned `HomeListPager` coordinates focused presentation and composes one feature-owned `ListPage` per mounted List; each `ListPage` watches its explicit List's Items through `useListPage`. List switching changes the selected `listId`, not a Household-owned Current List service or data source. `ListPage` owns `useItemEditor` and passes its Item actions and watched-query results to `ListItems`. That List-owned composition renders the Item-owned `ItemRow`, `ItemInlineForm`, and details and List-selector sheets.
 
 There is one local PowerSync database rather than a per-Household resource set, so there is no cached-to-fresh resource swap or stale-resource lease to manage: switching the active Household re-points watched queries' `household_id` filters. Membership revocation is server-authoritative — PowerSync stops streaming and purges the rows for a Household the User is no longer an active Member of.
 

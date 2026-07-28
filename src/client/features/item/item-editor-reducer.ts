@@ -19,6 +19,7 @@ export type ItemEditorDetailsState = {
 	status: "details";
 	source: ItemEditorSource;
 	inlineDraft: ItemDraftValues;
+	inlineNoteVisible: boolean;
 	draft: ItemDraftValues;
 	listSelectorPresented: boolean;
 };
@@ -31,6 +32,7 @@ type ItemEditorSavingRecovery =
 	| {
 			kind: "details";
 			inlineDraft: ItemDraftValues;
+			inlineNoteVisible: boolean;
 	  };
 
 export type ItemEditorState =
@@ -62,6 +64,7 @@ export type ItemEditorAction =
 			type: "saveStarted";
 			continuation: "createNext" | "finish";
 	  }
+	| { type: "finishRequested" }
 	| { type: "saveSucceeded"; nextListId: string }
 	| { type: "saveFailed" }
 	| { type: "editingEnded" };
@@ -111,7 +114,7 @@ export function inlinePresentationFromState(
 		return {
 			...source,
 			draft: state.inlineDraft,
-			noteVisible: state.inlineDraft.notes.length > 0,
+			noteVisible: state.inlineNoteVisible,
 			saving: false,
 		};
 	}
@@ -126,7 +129,7 @@ export function inlinePresentationFromState(
 		noteVisible:
 			state.recovery.kind === "inline"
 				? state.recovery.noteVisible
-				: draft.notes.length > 0,
+				: state.recovery.inlineNoteVisible,
 		saving: true,
 	};
 }
@@ -202,6 +205,7 @@ export function itemEditorReducer(
 						status: "details",
 						source: state.source,
 						inlineDraft: state.draft,
+						inlineNoteVisible: state.noteVisible,
 						draft: state.draft,
 						listSelectorPresented: false,
 					}
@@ -212,7 +216,7 @@ export function itemEditorReducer(
 						status: "inline",
 						source: state.source,
 						draft: state.inlineDraft,
-						noteVisible: state.inlineDraft.notes.length > 0,
+						noteVisible: state.inlineNoteVisible,
 					}
 				: state;
 		case "listSelectorOpened":
@@ -254,12 +258,17 @@ export function itemEditorReducer(
 					recovery: {
 						kind: "details",
 						inlineDraft: state.inlineDraft,
+						inlineNoteVisible: state.inlineNoteVisible,
 					},
 					nextDraftKey: nextDraftKeyFromSource(state.source),
 				};
 			}
 			return state;
 		}
+		case "finishRequested":
+			return state.status === "saving" && state.continuation === "createNext"
+				? { ...state, continuation: "finish" }
+				: state;
 		case "saveSucceeded":
 			if (state.status !== "saving") return state;
 			if (state.continuation === "finish") {
@@ -288,6 +297,7 @@ export function itemEditorReducer(
 				status: "details",
 				source: state.source,
 				inlineDraft: state.recovery.inlineDraft,
+				inlineNoteVisible: state.recovery.inlineNoteVisible,
 				draft: state.draft,
 				listSelectorPresented: false,
 			};

@@ -467,10 +467,11 @@ function TestHomeListPager({ onFocusList, ...props }: TestHomeListPagerProps) {
 				{...props}
 				addItemRequest={null}
 				collapsedTitleScroll={collapsedTitleScroll}
+				editorFinishPending={false}
 				pickerPhase={pickerPhase}
 				selectionPending={selectionPending}
 				onFocusList={focusList}
-				onItemEditorActiveChange={jest.fn()}
+				onItemEditorEvent={jest.fn()}
 				onPickerPhaseChange={setPickerPhase}
 				onRetry={jest.fn()}
 			/>
@@ -482,9 +483,10 @@ type TestHomeListPagerProps = Omit<
 	HomeListPagerProps,
 	| "addItemRequest"
 	| "collapsedTitleScroll"
+	| "editorFinishPending"
 	| "pickerPhase"
 	| "selectionPending"
-	| "onItemEditorActiveChange"
+	| "onItemEditorEvent"
 	| "onPickerPhaseChange"
 	| "onRetry"
 >;

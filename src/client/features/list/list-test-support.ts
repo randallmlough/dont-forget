@@ -1,6 +1,6 @@
 import type {
 	ActiveListItem,
-	AddActiveListItemInput,
+	AddListItemInput,
 } from "@/client/features/item/item-view-types";
 import type { AuthenticatedAppSession } from "@/client/session";
 import type { ListSummary } from "./list-service";
@@ -153,7 +153,7 @@ export const largeActiveListState: ActiveListState = {
 
 export function addFixtureItem(
 	list: ActiveListState,
-	input: AddActiveListItemInput,
+	input: Pick<AddListItemInput, "name" | "quantity" | "notes">,
 ): ActiveListState {
 	return {
 		...list,

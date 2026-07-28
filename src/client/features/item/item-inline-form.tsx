@@ -1,5 +1,5 @@
 import { SymbolView } from "expo-symbols";
-import { useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef } from "react";
 import {
 	ActivityIndicator,
 	Keyboard,
@@ -19,6 +19,7 @@ export type ItemInlineFormProps = {
 	noteVisible: boolean;
 	checked: boolean;
 	saving: boolean;
+	nameInputRef?: RefObject<TextInputInstance | null>;
 	onChangeName: (value: string) => void;
 	onChangeNotes: (value: string) => void;
 	onShowNote: () => void;
@@ -35,6 +36,7 @@ export function ItemInlineForm({
 	noteVisible,
 	checked,
 	saving,
+	nameInputRef,
 	onChangeName,
 	onChangeNotes,
 	onShowNote,
@@ -44,17 +46,23 @@ export function ItemInlineForm({
 	onToggleItem,
 }: ItemInlineFormProps) {
 	const { theme } = useUnistyles();
-	const titleRef = useRef<TextInputInstance>(null);
+	const localTitleRef = useRef<TextInputInstance>(null);
+	const titleRef = nameInputRef ?? localTitleRef;
 	const noteRef = useRef<TextInputInstance>(null);
 	const titleFocusedRef = useRef(false);
 	const noteFocusedRef = useRef(false);
 	const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const pressCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
 	const suppressNextBlurRef = useRef(false);
 	const focusNoteAfterRenderRef = useRef(false);
 
 	useEffect(() => {
 		return () => {
 			if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+			if (pressCleanupTimerRef.current)
+				clearTimeout(pressCleanupTimerRef.current);
 		};
 	}, []);
 
@@ -84,20 +92,41 @@ export function ItemInlineForm({
 	}
 
 	function keepEditorActiveForPress() {
+		if (pressCleanupTimerRef.current) {
+			clearTimeout(pressCleanupTimerRef.current);
+			pressCleanupTimerRef.current = null;
+		}
 		if (blurTimerRef.current) {
 			cancelScheduledEditorBlur();
 			return;
 		}
+		if (!titleFocusedRef.current && !noteFocusedRef.current) return;
 		suppressNextBlurRef.current = true;
 	}
 
+	function releaseEditorAfterPress() {
+		if (!suppressNextBlurRef.current) return;
+		pressCleanupTimerRef.current = setTimeout(() => {
+			pressCleanupTimerRef.current = null;
+			suppressNextBlurRef.current = false;
+		}, 0);
+	}
+
+	function preserveEditorForCompletedPress() {
+		if (!pressCleanupTimerRef.current) return;
+		clearTimeout(pressCleanupTimerRef.current);
+		pressCleanupTimerRef.current = null;
+	}
+
 	function showNote() {
+		preserveEditorForCompletedPress();
 		cancelScheduledEditorBlur();
 		focusNoteAfterRenderRef.current = true;
 		onShowNote();
 	}
 
 	function openDetails() {
+		preserveEditorForCompletedPress();
 		cancelScheduledEditorBlur();
 		onOpenDetails();
 		Keyboard.dismiss();
@@ -162,9 +191,9 @@ export function ItemInlineForm({
 						accessibilityHint="Adds optional notes to this Item"
 						accessibilityRole="button"
 						disabled={saving}
+						onPressIn={keepEditorActiveForPress}
+						onPressOut={releaseEditorAfterPress}
 						onPress={showNote}
-						onTouchEnd={showNote}
-						onTouchStart={keepEditorActiveForPress}
 						style={({ pressed }) => [
 							styles.addNote,
 							pressed ? styles.pressed : undefined,
@@ -183,9 +212,9 @@ export function ItemInlineForm({
 					accessibilityHint="Opens all editable Item details"
 					accessibilityLabel="Item Details"
 					accessibilityRole="button"
+					onPressIn={keepEditorActiveForPress}
+					onPressOut={releaseEditorAfterPress}
 					onPress={openDetails}
-					onTouchEnd={openDetails}
-					onTouchStart={keepEditorActiveForPress}
 					style={({ pressed }) => [
 						styles.detailTarget,
 						pressed ? styles.pressed : undefined,

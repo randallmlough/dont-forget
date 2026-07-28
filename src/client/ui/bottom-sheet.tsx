@@ -1,16 +1,27 @@
 import {
 	BottomSheet as ExpoBottomSheet,
-	type BottomSheetProps as ExpoBottomSheetProps,
+	Group,
+	Host,
 	RNHostView,
-} from "@expo/ui";
-import { presentationBackground } from "@expo/ui/swift-ui/modifiers";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+} from "@expo/ui/swift-ui";
+import {
+	interactiveDismissDisabled as disableInteractiveDismiss,
+	frame,
+	type PresentationDetent,
+	padding,
+	presentationBackground,
+	presentationDetents,
+	presentationDragIndicator,
+} from "@expo/ui/swift-ui/modifiers";
+import { type ReactNode, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
-export type BottomSheetSnapPoint = NonNullable<
-	ExpoBottomSheetProps["snapPoints"]
->[number];
+export type BottomSheetSnapPoint =
+	| "half"
+	| "full"
+	| { fraction: number }
+	| { height: number };
 
 export type BottomSheetHeader = {
 	title: string;
@@ -21,7 +32,9 @@ export type BottomSheetHeader = {
 export type BottomSheetProps = {
 	children: ReactNode;
 	header?: BottomSheetHeader;
+	interactiveDismissDisabled?: boolean;
 	isPresented: boolean;
+	onDismiss?: () => void;
 	onIsPresentedChange: (isPresented: boolean) => void;
 	showDragIndicator?: boolean;
 	snapPoints?: BottomSheetSnapPoint[];
@@ -29,7 +42,7 @@ export type BottomSheetProps = {
 };
 
 /**
- * App-owned wrapper around Expo UI's universal native bottom sheet.
+ * App-owned wrapper around Expo UI's low-level SwiftUI bottom sheet.
  *
  * React Native content is hosted inside Expo UI here so callers do not need to
  * know about the native host boundary. The native container and its latest
@@ -39,7 +52,9 @@ export type BottomSheetProps = {
 export function BottomSheet({
 	children,
 	header,
+	interactiveDismissDisabled = false,
 	isPresented,
+	onDismiss,
 	onIsPresentedChange,
 	showDragIndicator = true,
 	snapPoints,
@@ -48,76 +63,94 @@ export function BottomSheet({
 	const { theme } = useUnistyles();
 	const hasSnapPoints = snapPoints !== undefined && snapPoints.length > 0;
 	const [retainedContent, setRetainedContent] = useState({ children, header });
-	const [nativeDismissed, setNativeDismissed] = useState(!isPresented);
 
-	useEffect(() => {
-		if (!isPresented) return;
+	if (
+		isPresented &&
+		(retainedContent.children !== children || retainedContent.header !== header)
+	) {
 		// The last presented React tree is the snapshot SwiftUI animates down
-		// after a controlled close clears the caller's current children.
-		// eslint-disable-next-line react-hooks/set-state-in-effect
+		// after a controlled close clears the caller's current children. Expo's
+		// low-level BottomSheet owns the native isMounted lifecycle and unmounts
+		// this retained tree only after its native onDismiss callback.
 		setRetainedContent({ children, header });
-	}, [children, header, isPresented]);
-
-	useEffect(() => {
-		if (!isPresented) return;
-		// A new native presentation starts a fresh dismissal lifecycle.
-		// eslint-disable-next-line react-hooks/set-state-in-effect
-		setNativeDismissed(false);
-	}, [isPresented]);
+	}
 
 	const modifiers = useMemo(
-		() => [presentationBackground(theme.colors.background)],
-		[theme.colors.background],
+		() => [
+			frame({ maxWidth: Infinity, alignment: "topLeading" }),
+			padding({ top: 16, leading: 16, trailing: 16 }),
+			presentationDragIndicator(showDragIndicator ? "visible" : "hidden"),
+			...(hasSnapPoints
+				? [presentationDetents(snapPoints.map(snapPointToDetent))]
+				: []),
+			presentationBackground(theme.colors.background),
+			...(interactiveDismissDisabled ? [disableInteractiveDismiss()] : []),
+		],
+		[
+			hasSnapPoints,
+			interactiveDismissDisabled,
+			showDragIndicator,
+			snapPoints,
+			theme.colors.background,
+		],
 	);
 	const content = isPresented ? { children, header } : retainedContent;
-	const renderContent = isPresented || !nativeDismissed;
 
 	return (
-		<ExpoBottomSheet
-			isPresented={isPresented}
-			modifiers={modifiers}
-			onDismiss={() => {
-				setNativeDismissed(true);
-				onIsPresentedChange(false);
-			}}
-			showDragIndicator={showDragIndicator}
-			snapPoints={snapPoints}
-			testID={testID}
-		>
-			{renderContent ? (
-				<RNHostView matchContents={!hasSnapPoints}>
-					<View
-						style={[styles.sheet, hasSnapPoints ? styles.boundedSheet : null]}
-					>
-						{content.header ? (
-							<View style={styles.header}>
-								<View style={styles.headerAction}>
-									{content.header.leadingAction}
-								</View>
-								<Text accessibilityRole="header" style={styles.title}>
-									{content.header.title}
-								</Text>
-								<View style={styles.headerAction}>
-									{content.header.trailingAction}
-								</View>
-							</View>
-						) : null}
+		<Host pointerEvents="none" style={styles.nativeHost}>
+			<ExpoBottomSheet
+				fitToContents={!hasSnapPoints}
+				isPresented={isPresented}
+				onDismiss={onDismiss}
+				onIsPresentedChange={onIsPresentedChange}
+				testID={testID}
+			>
+				<Group modifiers={modifiers}>
+					<RNHostView matchContents={!hasSnapPoints}>
 						<View
-							style={[
-								styles.content,
-								hasSnapPoints ? styles.boundedContent : null,
-							]}
+							style={[styles.sheet, hasSnapPoints ? styles.boundedSheet : null]}
 						>
-							{content.children}
+							{content.header ? (
+								<View style={styles.header}>
+									<View style={styles.headerAction}>
+										{content.header.leadingAction}
+									</View>
+									<Text accessibilityRole="header" style={styles.title}>
+										{content.header.title}
+									</Text>
+									<View style={styles.headerAction}>
+										{content.header.trailingAction}
+									</View>
+								</View>
+							) : null}
+							<View
+								style={[
+									styles.content,
+									hasSnapPoints ? styles.boundedContent : null,
+								]}
+							>
+								{content.children}
+							</View>
 						</View>
-					</View>
-				</RNHostView>
-			) : null}
-		</ExpoBottomSheet>
+					</RNHostView>
+				</Group>
+			</ExpoBottomSheet>
+		</Host>
 	);
 }
 
+function snapPointToDetent(
+	snapPoint: BottomSheetSnapPoint,
+): PresentationDetent {
+	if (snapPoint === "half") return "medium";
+	if (snapPoint === "full") return "large";
+	return snapPoint;
+}
+
 const styles = StyleSheet.create((theme) => ({
+	nativeHost: {
+		position: "absolute",
+	},
 	sheet: {
 		gap: theme.spacing(3),
 		paddingBottom: theme.spacing(4),

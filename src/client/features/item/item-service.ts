@@ -44,6 +44,7 @@ export type AddItemInput = {
 
 export type UpdateItemInput = {
 	itemId: string;
+	userId: string;
 	sourceListId: string;
 	destinationListId: string;
 	name: string;
@@ -394,6 +395,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 					analytics.track("item_updated", {
 						household_id: deps.householdId,
 						item_id: input.itemId,
+						user_id: input.userId,
 						source_list_id: input.sourceListId,
 						destination_list_id: input.destinationListId,
 						content_changed: outcome.contentChanged,

@@ -10,6 +10,7 @@ import { selectionAsync } from "expo-haptics";
 import type { PropsWithChildren } from "react";
 import { Dimensions, FlatList } from "react-native";
 import { NavigationDrawerProvider } from "@/client/app-shell/navigation-drawer-context";
+import type { ActiveListItem } from "@/client/features/item/item-view-types";
 import type { ListSummary } from "@/client/features/list/list-service";
 import {
 	activeListPage,
@@ -25,6 +26,7 @@ import type {
 import { useListCollection } from "@/client/features/list/use-list-collection";
 import { useListPage } from "@/client/features/list/use-list-page";
 import { useAuthenticatedAppSession, useSyncState } from "@/client/session";
+import { themedAlert } from "@/client/ui/native-dialogs";
 import { deferred } from "@/test/async";
 import { panBegin, panEnd, panMove } from "@/test/mocks/gesture-handler";
 import { settleAnimations } from "@/test/mocks/reanimated";
@@ -45,6 +47,14 @@ const hardwareListSummary = {
 	...pantryListSummary,
 	id: "lst_hardware",
 	name: "Hardware",
+};
+const milkItem: ActiveListItem = {
+	id: "itm_milk",
+	name: "Milk",
+	quantity: null,
+	notes: null,
+	checked: false,
+	checkedByMemberName: null,
 };
 
 jest.mock("expo-router", () => {
@@ -147,6 +157,14 @@ jest.mock("@/client/features/list/use-list-page", () => ({
 	useListPage: jest.fn(),
 }));
 
+jest.mock("@/client/ui/native-dialogs", () => ({
+	themedAlert: jest.fn(),
+}));
+
+jest.mock("@/client/ui/toast", () => ({
+	toast: { error: jest.fn() },
+}));
+
 beforeEach(() => {
 	mockReplace.mockReset();
 	mockRetry.mockReset();
@@ -225,6 +243,39 @@ describe("HomeScreen", () => {
 		);
 
 		expect(mockReplace).toHaveBeenCalledWith("/lists");
+	});
+
+	it("saves an edited Item before opening Lists", async () => {
+		const save = deferred<void>();
+		const updateItem = jest.fn(() => save.promise);
+		jest.mocked(useListPage).mockReturnValue(
+			activeListPage(groceriesListSummary, {
+				list: { items: [milkItem] },
+				actions: { updateItem },
+			}),
+		);
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Oat milk");
+		await fireEvent.press(screen.getByRole("button", { name: "Open Lists" }));
+
+		expect(updateItem).toHaveBeenCalledWith(
+			expect.objectContaining({
+				itemId: "itm_milk",
+				name: "Oat milk",
+			}),
+		);
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		await act(async () => {
+			save.resolve(undefined);
+		});
+		await waitFor(() => {
+			expect(mockReplace).toHaveBeenCalledWith("/lists");
+		});
 	});
 
 	it("keeps the transparent stack header title empty while Lists are paged", async () => {
@@ -343,6 +394,30 @@ describe("HomeScreen", () => {
 		// behind the header, so the collapsed title must not carry over from
 		// the page the pager just left.
 		expect(collapsedListTitle()).toHaveStyle({ opacity: 0 });
+	});
+
+	it.each([
+		["loading", { status: "loading" } as const],
+		[
+			"failed",
+			{
+				status: "error",
+				message: "Unable to load this List. Please try again.",
+				retry: jest.fn(),
+			} as const,
+		],
+	])("does not offer Add while the focused List page is %s", async (_label, listPageState) => {
+		jest.mocked(useListPage).mockReturnValue(listPageState);
+
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(
+			screen.queryByRole("button", {
+				name: "Add Item",
+				includeHiddenElements: true,
+			}),
+		).toBeNull();
+		expect(pageControl().props.accessibilityState).toEqual({ disabled: false });
 	});
 
 	it("updates the page title and persists selection when paging settles", async () => {
@@ -818,8 +893,21 @@ describe("Home bottom toolbar", () => {
 	});
 
 	it("does not replay a dismissed creation draft after paging", async () => {
-		showLists([groceriesListSummary, pantryListSummary]);
-		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+		showLists([groceriesListSummary, pantryListSummary, hardwareListSummary]);
+		let groceriesPageAvailable = true;
+		jest.mocked(useListPage).mockImplementation((_session, summary) => {
+			if (summary.id === groceriesListSummary.id && !groceriesPageAvailable) {
+				return {
+					status: "error",
+					message: "Unable to load this List. Please try again.",
+					retry: jest.fn(),
+				};
+			}
+			return activeListPage(summary);
+		});
+		const view = await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
 
 		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
 		await screen.findByLabelText("Item name");
@@ -830,9 +918,105 @@ describe("Home bottom toolbar", () => {
 		expect(screen.queryByLabelText("Item name")).toBeNull();
 		expect(screen.getByRole("button", { name: "Add Item" })).toBeTruthy();
 
+		groceriesPageAvailable = false;
+		await view.rerender(homeScreenSurface());
+		groceriesPageAvailable = true;
+		await view.rerender(homeScreenSurface());
+
 		await settlePagerAt(0);
 		expect(screen.getByRole("header", { name: "Groceries" })).toBeTruthy();
 		expect(screen.queryByLabelText("Item name")).toBeNull();
+	});
+
+	it("waits for a Return save before paging and leaves the destination editor owned", async () => {
+		showLists([groceriesListSummary, pantryListSummary]);
+		const save = deferred<void>();
+		const addItem = jest.fn(() => save.promise);
+		jest.mocked(useListPage).mockImplementation((_session, summary) =>
+			activeListPage(summary, {
+				actions:
+					summary.id === groceriesListSummary.id ? { addItem } : undefined,
+			}),
+		);
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		await fireEvent.changeText(
+			await screen.findByLabelText("Item name"),
+			"Milk",
+		);
+		await fireEvent(screen.getByLabelText("Item name"), "submitEditing");
+		await waitFor(() => expect(addItem).toHaveBeenCalledTimes(1));
+
+		await settlePagerScrollTo(1);
+		expect(screen.getByRole("header", { name: "Groceries" })).toBeTruthy();
+		expect(mockSelectList).not.toHaveBeenCalled();
+		expect(screen.getByTestId("home-list-pager")).toHaveProp(
+			"scrollEnabled",
+			false,
+		);
+
+		await act(async () => save.resolve(undefined));
+		await waitFor(() =>
+			expect(screen.getByRole("header", { name: "Pantry" })).toBeTruthy(),
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		expect(await screen.findByLabelText("Item name")).toBeTruthy();
+		expect(pageControl().props.accessibilityState).toEqual({ disabled: true });
+	});
+
+	it("returns to the source List when finishing its draft fails", async () => {
+		showLists([groceriesListSummary, pantryListSummary]);
+		const addItem = jest.fn(async () => {
+			throw new Error("write failed");
+		});
+		jest.mocked(useListPage).mockImplementation((_session, summary) =>
+			activeListPage(summary, {
+				actions:
+					summary.id === groceriesListSummary.id ? { addItem } : undefined,
+			}),
+		);
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		await fireEvent.changeText(
+			await screen.findByLabelText("Item name"),
+			"Milk",
+		);
+		await settlePagerScrollTo(1);
+
+		await waitFor(() => expect(addItem).toHaveBeenCalledTimes(1));
+		expect(mockSelectList).not.toHaveBeenCalled();
+		expect(screen.getByRole("header", { name: "Groceries" })).toBeTruthy();
+		expect(screen.getByLabelText("Item name")).toHaveProp("value", "Milk");
+	});
+
+	it("returns to the source List when the User keeps a notes-only draft", async () => {
+		showLists([groceriesListSummary, pantryListSummary]);
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Add Note" }),
+		);
+		await fireEvent.changeText(
+			screen.getByLabelText("Item notes"),
+			"Check aisle 4",
+		);
+		await settlePagerScrollTo(1);
+		await waitFor(() => expect(themedAlert).toHaveBeenCalledTimes(1));
+
+		const keepEditing = jest
+			.mocked(themedAlert)
+			.mock.calls[0]?.[2]?.find((button) => button.text === "Keep Editing");
+		await act(async () => keepEditing?.onPress?.());
+
+		expect(mockSelectList).not.toHaveBeenCalled();
+		expect(screen.getByRole("header", { name: "Groceries" })).toBeTruthy();
+		expect(screen.getByLabelText("Item notes")).toHaveProp(
+			"value",
+			"Check aisle 4",
+		);
 	});
 
 	it("keeps the source List focused when an Item write reorders recent activity", async () => {
