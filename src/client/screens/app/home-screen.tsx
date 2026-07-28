@@ -1,7 +1,7 @@
 import { Stack, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Keyboard, Text, View } from "react-native";
 import Animated, {
 	Extrapolation,
 	interpolate,
@@ -285,6 +285,15 @@ function HomeScreenResource({
 		onOpenLists();
 	}
 
+	async function openNavigationAfterFinishingEditor() {
+		if (!(await finishActiveItemEditor())) return;
+		Keyboard.dismiss();
+		await new Promise<void>((resolve) => {
+			requestAnimationFrame(() => resolve());
+		});
+		onOpenNavigation();
+	}
+
 	return (
 		<>
 			<HomeStackHeader
@@ -294,7 +303,9 @@ function HomeScreenResource({
 						: { name: focusedListName, scroll: collapsedTitleScroll }
 				}
 				title={focusedListName === undefined ? FALLBACK_TITLE : undefined}
-				onOpenNavigation={onOpenNavigation}
+				onOpenNavigation={() => {
+					void openNavigationAfterFinishingEditor();
+				}}
 				onOpenLists={() => {
 					void openListsAfterFinishingEditor();
 				}}

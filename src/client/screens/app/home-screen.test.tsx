@@ -278,6 +278,69 @@ describe("HomeScreen", () => {
 		});
 	});
 
+	it("saves an edited Item before opening navigation", async () => {
+		const open = jest.fn();
+		const save = deferred<void>();
+		const updateItem = jest.fn(() => save.promise);
+		jest.mocked(useListPage).mockReturnValue(
+			activeListPage(groceriesListSummary, {
+				list: { items: [milkItem] },
+				actions: { updateItem },
+			}),
+		);
+		await render(
+			<NavigationDrawerProvider open={open}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
+		await fireEvent.changeText(screen.getByLabelText("Item name"), "Oat milk");
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Open navigation" }),
+		);
+
+		expect(updateItem).toHaveBeenCalledWith(
+			expect.objectContaining({
+				itemId: "itm_milk",
+				name: "Oat milk",
+			}),
+		);
+		expect(open).not.toHaveBeenCalled();
+
+		await act(async () => {
+			save.resolve(undefined);
+		});
+		await waitFor(() => {
+			expect(open).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	it("finishes an empty Item draft before opening navigation", async () => {
+		const open = jest.fn();
+		await render(
+			<NavigationDrawerProvider open={open}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		expect(await screen.findByLabelText("Item name")).toBeTruthy();
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Open navigation" }),
+		);
+
+		await waitFor(() => {
+			expect(screen.queryByLabelText("Item name")).toBeNull();
+			expect(open).toHaveBeenCalledTimes(1);
+		});
+	});
+
 	it("keeps the transparent stack header title empty while Lists are paged", async () => {
 		await render(
 			<NavigationDrawerProvider open={jest.fn()}>
