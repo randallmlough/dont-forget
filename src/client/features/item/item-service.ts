@@ -97,6 +97,21 @@ const destinationPositionRowSchema = z.object({
 
 let lastItemServiceTimestamp: number | null = null;
 
+// The one column list feeding `itemRowSchema`/`itemFromRow`, shared by every
+// Item read so a schema change edits a single statement fragment.
+const itemSelectColumns = `
+              i.id,
+              i.list_id,
+              i.name,
+              i.quantity,
+              i.notes,
+              c.checked_by_user_id AS checked_by_user_id,
+              c.checked_at AS checked_at,
+              i.position,
+              i.created_by_user_id,
+              i.created_at,
+              i.updated_at`;
+
 export function createItemService(deps: ItemServiceDeps): ItemService {
 	const log = (deps.logger ?? defaultLogger).with({
 		household_id: deps.householdId,
@@ -116,18 +131,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 		// tie-breaker within each partition.
 		return {
 			sql: `
-            SELECT
-              i.id,
-              i.list_id,
-              i.name,
-              i.quantity,
-              i.notes,
-              c.checked_by_user_id AS checked_by_user_id,
-              c.checked_at AS checked_at,
-              i.position,
-              i.created_by_user_id,
-              i.created_at,
-              i.updated_at
+            SELECT${itemSelectColumns}
             FROM items i
             JOIN lists l ON l.id = i.list_id
             LEFT JOIN item_checks c ON c.item_id = i.id
@@ -285,18 +289,7 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 				const outcome = await deps.store.writeTransaction(async (tx) => {
 					const storedRow = await tx.getOptional(
 						`
-              SELECT
-                i.id,
-                i.list_id,
-                i.name,
-                i.quantity,
-                i.notes,
-                c.checked_by_user_id AS checked_by_user_id,
-                c.checked_at AS checked_at,
-                i.position,
-                i.created_by_user_id,
-                i.created_at,
-                i.updated_at
+              SELECT${itemSelectColumns}
               FROM items i
               JOIN lists l ON l.id = i.list_id
               LEFT JOIN item_checks c ON c.item_id = i.id
@@ -327,8 +320,10 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 						};
 					}
 
-					const destination = await tx.getOptional(
-						`
+					let position = stored.position;
+					if (listChanged) {
+						const destination = await tx.getOptional(
+							`
               SELECT
                 (
                   SELECT COALESCE(MAX(position), -1) + 1
@@ -342,14 +337,13 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
                 AND l.archived_at IS NULL
               LIMIT 1
             `,
-						[input.destinationListId, deps.householdId],
-					);
-					if (!destination) {
-						throw new Error("Destination List is not active");
+							[input.destinationListId, deps.householdId],
+						);
+						if (!destination) {
+							throw new Error("Destination List is not active");
+						}
+						position = destinationPositionRowSchema.parse(destination).position;
 					}
-					const destinationPosition =
-						destinationPositionRowSchema.parse(destination).position;
-					const position = listChanged ? destinationPosition : stored.position;
 					const now = nextItemServiceTimestamp();
 					const nowText = timestampMillisToSqlText(now);
 
@@ -379,39 +373,18 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 						],
 					);
 
-					const updatedRow = await tx.getOptional(
-						`
-              SELECT
-                i.id,
-                i.list_id,
-                i.name,
-                i.quantity,
-                i.notes,
-                c.checked_by_user_id AS checked_by_user_id,
-                c.checked_at AS checked_at,
-                i.position,
-                i.created_by_user_id,
-                i.created_at,
-                i.updated_at
-              FROM items i
-              JOIN lists l ON l.id = i.list_id
-              LEFT JOIN item_checks c ON c.item_id = i.id
-              WHERE i.id = ?
-                AND i.list_id = ?
-                AND l.household_id = ?
-                AND i.deleted_at IS NULL
-                AND l.deleted_at IS NULL
-                AND l.archived_at IS NULL
-              LIMIT 1
-            `,
-						[input.itemId, input.destinationListId, deps.householdId],
-					);
-					if (!updatedRow) {
-						throw new Error("Item update did not commit");
-					}
-
+					// The row was read in this same transaction, so the UPDATE cannot
+					// miss; the updated Item is `stored` plus the values just written.
 					return {
-						item: itemFromRow(updatedRow, deps.householdId),
+						item: {
+							...stored,
+							listId: input.destinationListId,
+							name,
+							quantity,
+							notes,
+							position,
+							updatedAt: now,
+						},
 						contentChanged,
 						listChanged,
 					};
@@ -540,7 +513,9 @@ function itemFromRow(row: Record<string, unknown>, householdId: string): Item {
 	};
 }
 
-function nullableTrimmed(value: string | null | undefined): string | null {
+export function nullableTrimmed(
+	value: string | null | undefined,
+): string | null {
 	const trimmed = value?.trim() ?? "";
 	return trimmed ? trimmed : null;
 }

@@ -1,5 +1,5 @@
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
@@ -181,7 +181,6 @@ function ActiveHomeListPager({
 }: ActiveHomeListPagerProps) {
 	const { width } = useWindowDimensions();
 	const pagerRef = useRef<FlatList<ListSummary>>(null);
-	const itemEditorDismissalsRef = useRef(new Map<string, () => void>());
 	const focusedIndex = Math.max(
 		0,
 		listSummaries.findIndex((summary) => summary.id === focusedListId),
@@ -257,22 +256,6 @@ function ActiveHomeListPager({
 		void onFocusList(summary.id);
 	}
 
-	function itemEditorActivityChanged(active: boolean) {
-		onItemEditorActiveChange(active);
-	}
-
-	const registerItemEditorDismissal = useCallback(
-		(listId: string, dismiss: () => void) => {
-			itemEditorDismissalsRef.current.set(listId, dismiss);
-			return () => {
-				if (itemEditorDismissalsRef.current.get(listId) === dismiss) {
-					itemEditorDismissalsRef.current.delete(listId);
-				}
-			};
-		},
-		[],
-	);
-
 	function pageLayout(
 		_data: ArrayLike<ListSummary> | null | undefined,
 		index: number,
@@ -290,8 +273,6 @@ function ActiveHomeListPager({
 		);
 		const summary = listSummaries[settledIndex];
 		if (!summary || summary.id === focusedListId) return;
-		const dismissEditor = itemEditorDismissalsRef.current.get(focusedListId);
-		dismissEditor?.();
 		void onFocusList(summary.id).then((didFocus) => {
 			if (didFocus) return;
 			pagerRef.current?.scrollToIndex({
@@ -375,8 +356,7 @@ function ActiveHomeListPager({
 									summary={summary}
 									syncState={syncState}
 									topContentInset={topContentInset}
-									onItemEditorActiveChange={itemEditorActivityChanged}
-									registerItemEditorDismissal={registerItemEditorDismissal}
+									onItemEditorActiveChange={onItemEditorActiveChange}
 								/>
 							</CarouselPage>
 						);

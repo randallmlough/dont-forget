@@ -103,17 +103,13 @@ export function ItemInlineForm({
 		Keyboard.dismiss();
 	}
 
-	function toggleItem() {
-		onToggleItem();
-	}
-
 	return (
 		<View accessibilityLabel="Item inline editor" style={styles.row}>
 			<ItemCompletionButton
 				checked={checked}
 				disabled={mode === "new" || saving}
 				itemName={name}
-				onPress={toggleItem}
+				onPress={onToggleItem}
 			/>
 			<View style={styles.fields}>
 				<TextInput

@@ -4,6 +4,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Badge } from "@/client/ui/badge";
 import { BottomSheet } from "@/client/ui/bottom-sheet";
 import { ButtonIconGlass } from "@/client/ui/button-icon-glass";
+import { ItemSeparator } from "@/client/ui/item";
 import type { ItemListOption } from "./item-view-types";
 
 export type ItemListSelectorSheetProps = {
@@ -106,7 +107,7 @@ function listKey(list: ItemListOption): string {
 }
 
 function ListSeparator() {
-	return <View style={styles.separator} />;
+	return <ItemSeparator style={styles.separator} />;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -133,8 +134,6 @@ const styles = StyleSheet.create((theme) => ({
 		opacity: theme.opacities.pressed,
 	},
 	separator: {
-		height: theme.borders.hairline,
 		marginLeft: theme.spacing(5),
-		backgroundColor: theme.colors.border,
 	},
 }));

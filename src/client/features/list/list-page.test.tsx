@@ -229,7 +229,6 @@ function TestListPage({
 			syncState="synced"
 			topContentInset={topContentInset}
 			onItemEditorActiveChange={() => undefined}
-			registerItemEditorDismissal={() => () => undefined}
 		/>
 	);
 }

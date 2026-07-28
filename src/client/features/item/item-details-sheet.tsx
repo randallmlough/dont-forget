@@ -3,7 +3,8 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { BottomSheet } from "@/client/ui/bottom-sheet";
 import { ButtonIconGlass } from "@/client/ui/button-icon-glass";
-import type { ItemEditorSource } from "./item-editor-reducer";
+import { ItemSeparator } from "@/client/ui/item";
+import type { ItemEditorDetailsPresentation } from "./item-editor-reducer";
 import { ItemListSelectorSheet } from "./item-list-selector-sheet";
 import type { ItemEditor } from "./use-item-editor";
 
@@ -12,61 +13,42 @@ export type ItemDetailsSheetProps = {
 };
 
 export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
-	const { theme } = useUnistyles();
-	const presentation = detailsPresentation(editor);
-	if (!presentation) {
-		return (
-			<BottomSheet
-				isPresented={false}
-				onIsPresentedChange={() => undefined}
-				showDragIndicator={false}
-				snapPoints={["full"]}
-				testID="item-details-sheet"
-			>
-				{null}
-			</BottomSheet>
-		);
-	}
-
-	const selectedList = presentation.listOptions.find(
-		(option) => option.id === presentation.selectedListId,
-	);
-	const canChooseList = presentation.listOptions.length > 1;
-	const sourceListId =
-		presentation.source.kind === "existing"
-			? presentation.source.sourceListId
-			: null;
+	const presentation = editor.details;
 
 	return (
 		<BottomSheet
-			header={{
-				title: "Details",
-				leadingAction: (
-					<ButtonIconGlass
-						accessibilityHint="Discards detail changes and returns to inline editing"
-						accessibilityLabel="Cancel Item Details"
-						disabled={presentation.saving}
-						onPress={editor.actions.cancelDetails}
-						showTint={false}
-						systemImage="xmark"
-					/>
-				),
-				trailingAction: (
-					<ButtonIconGlass
-						accessibilityHint="Saves this Item"
-						accessibilityLabel="Save Item"
-						disabled={!editor.meta.canSaveDetails}
-						loading={presentation.saving}
-						onPress={() => {
-							void editor.actions.saveDetails();
-						}}
-						systemImage="checkmark"
-					/>
-				),
-			}}
-			isPresented
+			header={
+				presentation
+					? {
+							title: "Details",
+							leadingAction: (
+								<ButtonIconGlass
+									accessibilityHint="Discards detail changes and returns to inline editing"
+									accessibilityLabel="Cancel Item Details"
+									disabled={presentation.saving}
+									onPress={editor.actions.cancelDetails}
+									showTint={false}
+									systemImage="xmark"
+								/>
+							),
+							trailingAction: (
+								<ButtonIconGlass
+									accessibilityHint="Saves this Item"
+									accessibilityLabel="Save Item"
+									disabled={!editor.meta.canSaveDetails}
+									loading={presentation.saving}
+									onPress={() => {
+										void editor.actions.saveDetails();
+									}}
+									systemImage="checkmark"
+								/>
+							),
+						}
+					: undefined
+			}
+			isPresented={presentation !== null}
 			onIsPresentedChange={(presented) => {
-				if (!presented && !presentation.saving) {
+				if (!presented && presentation && !presentation.saving) {
 					editor.actions.cancelDetails();
 				}
 			}}
@@ -74,6 +56,33 @@ export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
 			snapPoints={["full"]}
 			testID="item-details-sheet"
 		>
+			{presentation ? (
+				<ItemDetailsSheetContent editor={editor} presentation={presentation} />
+			) : null}
+		</BottomSheet>
+	);
+}
+
+function ItemDetailsSheetContent({
+	editor,
+	presentation,
+}: {
+	editor: ItemEditor;
+	presentation: ItemEditorDetailsPresentation;
+}) {
+	const { theme } = useUnistyles();
+	const listOptions = editor.meta.listOptions;
+	const selectedList = listOptions.find(
+		(option) => option.id === presentation.draft.selectedListId,
+	);
+	const canChooseList = listOptions.length > 1;
+	const sourceListId =
+		presentation.source.kind === "existing"
+			? presentation.source.sourceListId
+			: null;
+
+	return (
+		<>
 			<ScrollView
 				contentContainerStyle={styles.content}
 				keyboardShouldPersistTaps="handled"
@@ -92,9 +101,9 @@ export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
 						placeholderTextColor={theme.colors.mutedForeground}
 						scrollEnabled={false}
 						style={styles.nameInput}
-						value={presentation.name}
+						value={presentation.draft.name}
 					/>
-					<View style={styles.separator} />
+					<ItemSeparator style={styles.separator} />
 					<TextInput
 						accessibilityLabel="Item notes"
 						autoCapitalize="sentences"
@@ -105,9 +114,9 @@ export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
 						placeholder="Notes"
 						placeholderTextColor={theme.colors.mutedForeground}
 						style={styles.notesInput}
-						value={presentation.notes}
+						value={presentation.draft.notes}
 					/>
-					<View style={styles.separator} />
+					<ItemSeparator style={styles.separator} />
 					<TextInput
 						accessibilityLabel="Item quantity"
 						autoCapitalize="sentences"
@@ -117,7 +126,7 @@ export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
 						placeholder="Quantity, such as 2 kg"
 						placeholderTextColor={theme.colors.mutedForeground}
 						style={styles.quantityInput}
-						value={presentation.quantity}
+						value={presentation.draft.quantity}
 					/>
 				</View>
 
@@ -169,56 +178,14 @@ export function ItemDetailsSheet({ editor }: ItemDetailsSheetProps) {
 
 			<ItemListSelectorSheet
 				isPresented={presentation.listSelectorPresented}
-				lists={presentation.listOptions}
-				selectedListId={presentation.selectedListId}
+				lists={listOptions}
+				selectedListId={presentation.draft.selectedListId}
 				sourceListId={sourceListId}
 				onClose={editor.actions.closeListSelector}
 				onSelectList={editor.actions.selectList}
 			/>
-		</BottomSheet>
+		</>
 	);
-}
-
-type DetailsPresentation = {
-	source: ItemEditorSource;
-	name: string;
-	notes: string;
-	quantity: string;
-	selectedListId: string;
-	listSelectorPresented: boolean;
-	listOptions: ItemEditor["meta"]["listOptions"];
-	saving: boolean;
-};
-
-function detailsPresentation(editor: ItemEditor): DetailsPresentation | null {
-	if (editor.state.status === "details") {
-		return {
-			source: editor.state.source,
-			name: editor.state.draft.name,
-			notes: editor.state.draft.notes,
-			quantity: editor.state.draft.quantity,
-			selectedListId: editor.state.draft.selectedListId,
-			listSelectorPresented: editor.state.listSelectorPresented,
-			listOptions: editor.meta.listOptions,
-			saving: false,
-		};
-	}
-	if (
-		editor.state.status === "saving" &&
-		editor.state.recovery.kind === "details"
-	) {
-		return {
-			source: editor.state.source,
-			name: editor.state.draft.name,
-			notes: editor.state.draft.notes,
-			quantity: editor.state.draft.quantity,
-			selectedListId: editor.state.draft.selectedListId,
-			listSelectorPresented: false,
-			listOptions: editor.meta.listOptions,
-			saving: true,
-		};
-	}
-	return null;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -258,9 +225,7 @@ const styles = StyleSheet.create((theme) => ({
 		...theme.typography.body,
 	},
 	separator: {
-		height: theme.borders.hairline,
 		marginLeft: theme.spacing(4),
-		backgroundColor: theme.colors.border,
 	},
 	listRow: {
 		minHeight: theme.spacing(14),

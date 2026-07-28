@@ -18,13 +18,12 @@ import Animated, {
 } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { ItemDetailsSheet } from "@/client/features/item/item-details-sheet";
+import type { ItemEditorInlinePresentation } from "@/client/features/item/item-editor-reducer";
 import { ItemInlineForm } from "@/client/features/item/item-inline-form";
 import { ItemRow } from "@/client/features/item/item-row";
-import type {
-	ActiveListItem,
-	ItemDraftValues,
-} from "@/client/features/item/item-view-types";
+import type { ActiveListItem } from "@/client/features/item/item-view-types";
 import type { ItemEditor } from "@/client/features/item/use-item-editor";
+import { ItemSeparator } from "@/client/ui/item";
 
 type NewItemDraftRow = {
 	kind: "newItemDraft";
@@ -57,7 +56,8 @@ export function ListItems({
 }: ListItemsProps) {
 	const listRef = useRef<FlatList<ItemListRow>>(null);
 	const initialResetPendingRef = useRef(focused !== undefined);
-	const activeInline = inlinePresentation(editor);
+	const { actions } = editor;
+	const activeInline = editor.inline;
 	const rows = useMemo(
 		() => itemListRows(items, activeInline),
 		[activeInline, items],
@@ -73,61 +73,48 @@ export function ListItems({
 			topContentInset === undefined ? undefined : { top: topContentInset },
 		[topContentInset],
 	);
+	const editItem = useCallback(
+		(itemId: string) => {
+			void actions.startEditing(itemId);
+		},
+		[actions],
+	);
+	const toggleItem = useCallback(
+		(itemId: string) => {
+			void actions.toggleItem(itemId);
+		},
+		[actions],
+	);
 	const renderItem = useCallback(
 		({ item }: ListRenderItemInfo<ItemListRow>) => {
-			if (isNewItemDraftRow(item)) {
-				if (activeInline?.sourceKind !== "new") return null;
+			if (activeInline && isActiveInlineRow(item, activeInline)) {
+				const draftRow = isNewItemDraftRow(item);
 				return (
 					<ItemInlineForm
-						checked={false}
-						mode="new"
+						checked={draftRow ? false : item.checked}
+						mode={activeInline.sourceKind}
 						name={activeInline.draft.name}
 						notes={activeInline.draft.notes}
 						noteVisible={activeInline.noteVisible}
 						saving={activeInline.saving}
 						onBlurEditor={(refocus) => {
-							void editor.actions.blurInlineEditor(refocus);
+							void actions.blurInlineEditor(refocus);
 						}}
-						onChangeName={editor.actions.changeName}
-						onChangeNotes={editor.actions.changeNotes}
-						onOpenDetails={editor.actions.openDetails}
-						onShowNote={editor.actions.showNote}
+						onChangeName={actions.changeName}
+						onChangeNotes={actions.changeNotes}
+						onOpenDetails={actions.openDetails}
+						onShowNote={actions.showNote}
 						onSubmitTitle={() => {
-							void editor.actions.submitTitle();
+							void actions.submitTitle();
 						}}
-						onToggleItem={() => undefined}
+						onToggleItem={
+							draftRow ? () => undefined : () => toggleItem(item.id)
+						}
 					/>
 				);
 			}
 
-			if (
-				activeInline?.sourceKind === "existing" &&
-				activeInline.itemId === item.id
-			) {
-				return (
-					<ItemInlineForm
-						checked={item.checked}
-						mode="existing"
-						name={activeInline.draft.name}
-						notes={activeInline.draft.notes}
-						noteVisible={activeInline.noteVisible}
-						saving={activeInline.saving}
-						onBlurEditor={(refocus) => {
-							void editor.actions.blurInlineEditor(refocus);
-						}}
-						onChangeName={editor.actions.changeName}
-						onChangeNotes={editor.actions.changeNotes}
-						onOpenDetails={editor.actions.openDetails}
-						onShowNote={editor.actions.showNote}
-						onSubmitTitle={() => {
-							void editor.actions.submitTitle();
-						}}
-						onToggleItem={() => {
-							void editor.actions.toggleItem(item.id);
-						}}
-					/>
-				);
-			}
+			if (isNewItemDraftRow(item)) return null;
 
 			return (
 				<ItemRow
@@ -137,16 +124,12 @@ export function ListItems({
 					name={item.name}
 					notes={item.notes}
 					quantity={item.quantity}
-					onEditItem={(itemId) => {
-						void editor.actions.startEditing(itemId);
-					}}
-					onToggleItem={(itemId) => {
-						void editor.actions.toggleItem(itemId);
-					}}
+					onEditItem={editItem}
+					onToggleItem={toggleItem}
 				/>
 			);
 		},
-		[activeInline, editor.actions],
+		[activeInline, actions, editItem, toggleItem],
 	);
 	const renderEmpty = useCallback(() => <EmptyList />, []);
 	const scrollHandler = useAnimatedScrollHandler((event) => {
@@ -184,7 +167,7 @@ export function ListItems({
 	}
 
 	function dismissInlineEditor() {
-		void editor.actions.blurInlineEditor(() => undefined);
+		void actions.blurInlineEditor(() => undefined);
 	}
 
 	return (
@@ -195,7 +178,7 @@ export function ListItems({
 				extraData={editor.state}
 				keyExtractor={keyExtractor}
 				renderItem={renderItem}
-				ItemSeparatorComponent={ItemSeparator}
+				ItemSeparatorComponent={RowSeparator}
 				ListEmptyComponent={renderEmpty}
 				ListFooterComponent={
 					activeInline ? (
@@ -248,61 +231,9 @@ export function ListItems({
 	);
 }
 
-type InlinePresentation = {
-	sourceKind: "new" | "existing";
-	itemId: string | null;
-	draftKey: number;
-	draft: ItemDraftValues;
-	noteVisible: boolean;
-	saving: boolean;
-};
-
-function inlinePresentation(editor: ItemEditor): InlinePresentation | null {
-	const { state } = editor;
-	if (state.status === "idle") return null;
-
-	if (state.status === "inline") {
-		return {
-			sourceKind: state.source.kind,
-			itemId: state.source.kind === "existing" ? state.source.itemId : null,
-			draftKey: state.source.kind === "new" ? state.source.draftKey : 0,
-			draft: state.draft,
-			noteVisible: state.noteVisible,
-			saving: false,
-		};
-	}
-
-	if (state.status === "details") {
-		return {
-			sourceKind: state.source.kind,
-			itemId: state.source.kind === "existing" ? state.source.itemId : null,
-			draftKey: state.source.kind === "new" ? state.source.draftKey : 0,
-			draft: state.inlineDraft,
-			noteVisible: state.inlineDraft.notes.length > 0,
-			saving: false,
-		};
-	}
-
-	const recoveryDraft =
-		state.recovery.kind === "details"
-			? state.recovery.inlineDraft
-			: state.draft;
-	return {
-		sourceKind: state.source.kind,
-		itemId: state.source.kind === "existing" ? state.source.itemId : null,
-		draftKey: state.source.kind === "new" ? state.source.draftKey : 0,
-		draft: recoveryDraft,
-		noteVisible:
-			state.recovery.kind === "inline"
-				? state.recovery.noteVisible
-				: recoveryDraft.notes.length > 0,
-		saving: true,
-	};
-}
-
 function itemListRows(
 	items: readonly ActiveListItem[],
-	activeInline: InlinePresentation | null,
+	activeInline: ItemEditorInlinePresentation | null,
 ): ItemListRow[] {
 	if (activeInline?.sourceKind !== "new") return [...items];
 
@@ -325,13 +256,15 @@ function isNewItemDraftRow(row: ItemListRow): row is NewItemDraftRow {
 
 function isActiveInlineRow(
 	row: ItemListRow,
-	activeInline: InlinePresentation,
+	activeInline: ItemEditorInlinePresentation,
 ): boolean {
 	if (activeInline.sourceKind === "new") return isNewItemDraftRow(row);
 	return !isNewItemDraftRow(row) && row.id === activeInline.itemId;
 }
 
-function inlinePresentationKey(activeInline: InlinePresentation): string {
+function inlinePresentationKey(
+	activeInline: ItemEditorInlinePresentation,
+): string {
 	return activeInline.sourceKind === "new"
 		? `new:${activeInline.draftKey}`
 		: `existing:${activeInline.itemId}`;
@@ -349,8 +282,8 @@ function EmptyList() {
 	);
 }
 
-function ItemSeparator() {
-	return <View style={styles.itemSeparator} />;
+function RowSeparator() {
+	return <ItemSeparator style={styles.itemSeparator} />;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -381,9 +314,7 @@ const styles = StyleSheet.create((theme) => ({
 		textAlign: "center",
 	},
 	itemSeparator: {
-		height: theme.borders.hairline,
 		marginLeft: theme.spacing(14),
 		marginRight: theme.spacing(5),
-		backgroundColor: theme.colors.border,
 	},
 }));

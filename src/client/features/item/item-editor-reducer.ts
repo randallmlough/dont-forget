@@ -66,10 +66,92 @@ export type ItemEditorAction =
 	| { type: "saveFailed" }
 	| { type: "editingEnded" };
 
+/** What the inline editor row renders, derived from the editor state. */
+export type ItemEditorInlinePresentation = {
+	sourceKind: "new" | "existing";
+	itemId: string | null;
+	draftKey: number;
+	draft: ItemDraftValues;
+	noteVisible: boolean;
+	saving: boolean;
+};
+
+/** What the details sheet renders, derived from the editor state. */
+export type ItemEditorDetailsPresentation = {
+	source: ItemEditorSource;
+	draft: ItemDraftValues;
+	listSelectorPresented: boolean;
+	saving: boolean;
+};
+
 export const initialItemEditorState: ItemEditorState = {
 	status: "idle",
 	nextDraftKey: 0,
 };
+
+export function inlinePresentationFromState(
+	state: ItemEditorState,
+): ItemEditorInlinePresentation | null {
+	if (state.status === "idle") return null;
+
+	const source = {
+		sourceKind: state.source.kind,
+		itemId: state.source.kind === "existing" ? state.source.itemId : null,
+		draftKey: state.source.kind === "new" ? state.source.draftKey : 0,
+	};
+	if (state.status === "inline") {
+		return {
+			...source,
+			draft: state.draft,
+			noteVisible: state.noteVisible,
+			saving: false,
+		};
+	}
+	if (state.status === "details") {
+		return {
+			...source,
+			draft: state.inlineDraft,
+			noteVisible: state.inlineDraft.notes.length > 0,
+			saving: false,
+		};
+	}
+
+	const draft =
+		state.recovery.kind === "details"
+			? state.recovery.inlineDraft
+			: state.draft;
+	return {
+		...source,
+		draft,
+		noteVisible:
+			state.recovery.kind === "inline"
+				? state.recovery.noteVisible
+				: draft.notes.length > 0,
+		saving: true,
+	};
+}
+
+export function detailsPresentationFromState(
+	state: ItemEditorState,
+): ItemEditorDetailsPresentation | null {
+	if (state.status === "details") {
+		return {
+			source: state.source,
+			draft: state.draft,
+			listSelectorPresented: state.listSelectorPresented,
+			saving: false,
+		};
+	}
+	if (state.status === "saving" && state.recovery.kind === "details") {
+		return {
+			source: state.source,
+			draft: state.draft,
+			listSelectorPresented: false,
+			saving: true,
+		};
+	}
+	return null;
+}
 
 export function itemEditorReducer(
 	state: ItemEditorState,

@@ -4,7 +4,7 @@ import {
 	RNHostView,
 } from "@expo/ui";
 import { presentationBackground } from "@expo/ui/swift-ui/modifiers";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -65,13 +65,17 @@ export function BottomSheet({
 		setNativeDismissed(false);
 	}, [isPresented]);
 
+	const modifiers = useMemo(
+		() => [presentationBackground(theme.colors.background)],
+		[theme.colors.background],
+	);
 	const content = isPresented ? { children, header } : retainedContent;
 	const renderContent = isPresented || !nativeDismissed;
 
 	return (
 		<ExpoBottomSheet
 			isPresented={isPresented}
-			modifiers={[presentationBackground(theme.colors.background)]}
+			modifiers={modifiers}
 			onDismiss={() => {
 				setNativeDismissed(true);
 				onIsPresentedChange(false);

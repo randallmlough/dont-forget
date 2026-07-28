@@ -1,16 +1,23 @@
-import { useEffect, useReducer, useRef } from "react";
+import { type Dispatch, useEffect, useMemo, useReducer, useRef } from "react";
 import { themedAlert } from "@/client/ui/native-dialogs";
 import { toast } from "@/client/ui/toast";
 import {
+	detailsPresentationFromState,
+	type ItemEditorAction,
+	type ItemEditorDetailsPresentation,
 	type ItemEditorDetailsState,
+	type ItemEditorInlinePresentation,
 	type ItemEditorInlineState,
 	type ItemEditorState,
 	initialItemEditorState,
+	inlinePresentationFromState,
 	itemEditorReducer,
 } from "./item-editor-reducer";
+import { nullableTrimmed } from "./item-service";
 import type {
 	ActiveListItem,
 	AddListItemInput,
+	ItemDraftValues,
 	ItemListOption,
 	UpdateListItemInput,
 } from "./item-view-types";
@@ -27,7 +34,6 @@ export type UseItemEditorInput = {
 };
 
 export type ItemEditorActions = {
-	startCreating: () => void;
 	startEditing: (itemId: string) => Promise<void>;
 	changeName: (value: string) => void;
 	changeNotes: (value: string) => void;
@@ -45,36 +51,45 @@ export type ItemEditorActions = {
 };
 
 export type ItemEditorMeta = {
-	activeItemId: string | null;
-	active: boolean;
 	canSaveDetails: boolean;
 	listOptions: readonly ItemListOption[];
-	saving: boolean;
 };
 
 export type ItemEditor = {
 	state: ItemEditorState;
+	inline: ItemEditorInlinePresentation | null;
+	details: ItemEditorDetailsPresentation | null;
 	actions: ItemEditorActions;
 	meta: ItemEditorMeta;
 };
 
 export function useItemEditor(input: UseItemEditorInput): ItemEditor {
-	const {
-		currentListId,
-		items,
-		listOptions,
-		creationRequestKey,
-		onAddItem,
-		onUpdateItem,
-		onSetItemChecked,
-		onActiveChange,
-	} = input;
 	const [state, dispatch] = useReducer(
 		itemEditorReducer,
 		initialItemEditorState,
 	);
+	// Actions are created once and read the latest state and input through this
+	// ref, so their identities survive re-renders and memoized rows can bail out.
+	const latestRef = useRef({ state, input });
+	useEffect(() => {
+		latestRef.current = { state, input };
+	});
+	const actions = useMemo(
+		// The getter reads the ref only when an action runs, never during render;
+		// deferring the read is what keeps the actions' identities stable.
+		// eslint-disable-next-line react-hooks/refs
+		() => createItemEditorActions(dispatch, () => latestRef.current),
+		[],
+	);
 	const handledCreationRequestRef = useRef<number | null>(null);
-	const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+
+	const {
+		creationRequestKey,
+		currentListId,
+		items,
+		listOptions,
+		onActiveChange,
+	} = input;
 
 	useEffect(() => {
 		if (
@@ -103,17 +118,44 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 		toast.error("That Item is no longer available in this List.");
 	}, [activeItemId, items, onActiveChange, state.status]);
 
+	const inline = useMemo(() => inlinePresentationFromState(state), [state]);
+	const details = useMemo(() => detailsPresentationFromState(state), [state]);
+
+	return {
+		state,
+		inline,
+		details,
+		actions,
+		meta: {
+			canSaveDetails:
+				state.status === "details" ? canSaveDetails(state, listOptions) : false,
+			listOptions,
+		},
+	};
+}
+
+type LatestEditor = {
+	state: ItemEditorState;
+	input: UseItemEditorInput;
+};
+
+function createItemEditorActions(
+	dispatch: Dispatch<ItemEditorAction>,
+	getLatest: () => LatestEditor,
+): ItemEditorActions {
+	let saveInFlight: Promise<boolean> | null = null;
+
 	function performSave(
 		editor: ItemEditorInlineState | ItemEditorDetailsState,
 		continuation: "createNext" | "finish",
 	): Promise<boolean> {
-		if (saveInFlightRef.current) return saveInFlightRef.current;
+		if (saveInFlight) return saveInFlight;
 
 		const request = saveEditor(editor, continuation);
-		saveInFlightRef.current = request;
+		saveInFlight = request;
 		void request.finally(() => {
-			if (saveInFlightRef.current === request) {
-				saveInFlightRef.current = null;
+			if (saveInFlight === request) {
+				saveInFlight = null;
 			}
 		});
 		return request;
@@ -123,20 +165,21 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 		editor: ItemEditorInlineState | ItemEditorDetailsState,
 		continuation: "createNext" | "finish",
 	): Promise<boolean> {
+		const { input } = getLatest();
 		const name = editor.draft.name.trim();
 		if (!name) return false;
 
 		dispatch({ type: "saveStarted", continuation });
 		try {
 			if (editor.source.kind === "new") {
-				await onAddItem({
+				await input.onAddItem({
 					listId: editor.draft.selectedListId,
 					name,
 					quantity: nullableTrimmed(editor.draft.quantity),
 					notes: nullableTrimmed(editor.draft.notes),
 				});
 			} else {
-				await onUpdateItem({
+				await input.onUpdateItem({
 					itemId: editor.source.itemId,
 					sourceListId: editor.source.sourceListId,
 					destinationListId: editor.draft.selectedListId,
@@ -145,8 +188,8 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 					notes: nullableTrimmed(editor.draft.notes),
 				});
 			}
-			dispatch({ type: "saveSucceeded", nextListId: currentListId });
-			if (continuation === "finish") onActiveChange(false);
+			dispatch({ type: "saveSucceeded", nextListId: input.currentListId });
+			if (continuation === "finish") input.onActiveChange(false);
 			return true;
 		} catch {
 			dispatch({ type: "saveFailed" });
@@ -155,14 +198,24 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 		}
 	}
 
-	function startCreating() {
-		if (state.status !== "idle") return;
-		dispatch({ type: "creationStarted", listId: currentListId });
-		onActiveChange(true);
+	async function saveInlineState(
+		editor: ItemEditorInlineState,
+		continuation: "createNext" | "finish",
+	): Promise<boolean> {
+		const { hasName, hasOtherContent } = draftContent(editor.draft);
+		if (!hasName) {
+			if (!hasOtherContent) {
+				dispatch({ type: "editingEnded" });
+				getLatest().input.onActiveChange(false);
+			}
+			return false;
+		}
+		return performSave(editor, continuation);
 	}
 
 	async function startEditing(itemId: string) {
-		const item = items.find((candidate) => candidate.id === itemId);
+		const { state, input } = getLatest();
+		const item = input.items.find((candidate) => candidate.id === itemId);
 		if (!item || state.status === "saving" || state.status === "details")
 			return;
 		if (
@@ -173,53 +226,31 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 			return;
 		}
 		if (state.status === "inline") {
-			const hasName = state.draft.name.trim().length > 0;
-			const hasOtherContent =
-				state.draft.notes.trim().length > 0 ||
-				state.draft.quantity.trim().length > 0;
+			const { hasName, hasOtherContent } = draftContent(state.draft);
 			if (!hasName && !hasOtherContent) {
-				dispatch({ type: "editingStarted", item, listId: currentListId });
-				onActiveChange(true);
+				dispatch({ type: "editingStarted", item, listId: input.currentListId });
+				input.onActiveChange(true);
 				return;
 			}
 			const saved = await saveInlineState(state, "finish");
 			if (!saved) return;
 		}
 
-		dispatch({ type: "editingStarted", item, listId: currentListId });
-		onActiveChange(true);
-	}
-
-	async function saveInlineState(
-		editor: ItemEditorInlineState,
-		continuation: "createNext" | "finish",
-	): Promise<boolean> {
-		const name = editor.draft.name.trim();
-		const hasOtherContent =
-			editor.draft.notes.trim().length > 0 ||
-			editor.draft.quantity.trim().length > 0;
-		if (!name) {
-			if (!hasOtherContent) {
-				dispatch({ type: "editingEnded" });
-				onActiveChange(false);
-			}
-			return false;
-		}
-		return performSave(editor, continuation);
+		dispatch({ type: "editingStarted", item, listId: input.currentListId });
+		input.onActiveChange(true);
 	}
 
 	async function submitTitle() {
+		const { state } = getLatest();
 		if (state.status !== "inline") return;
 		await saveInlineState(state, "createNext");
 	}
 
 	async function blurInlineEditor(refocus: () => void) {
+		const { state, input } = getLatest();
 		if (state.status !== "inline") return;
-		const name = state.draft.name.trim();
-		const hasOtherContent =
-			state.draft.notes.trim().length > 0 ||
-			state.draft.quantity.trim().length > 0;
-		if (!name && hasOtherContent) {
+		const { hasName, hasOtherContent } = draftContent(state.draft);
+		if (!hasName && hasOtherContent) {
 			themedAlert(
 				"Item Name Required",
 				"An Item cannot be saved with notes or quantity alone.",
@@ -229,7 +260,7 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 						style: "destructive",
 						onPress: () => {
 							dispatch({ type: "editingEnded" });
-							onActiveChange(false);
+							input.onActiveChange(false);
 						},
 					},
 					{ text: "Keep Editing", onPress: refocus },
@@ -240,58 +271,38 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 		await saveInlineState(state, "finish");
 	}
 
-	function openDetails() {
-		if (state.status === "inline") {
-			dispatch({ type: "detailsOpened" });
-		}
-	}
-
-	function cancelDetails() {
-		if (state.status !== "details") return;
-		dispatch({ type: "detailsCancelled" });
-	}
-
 	async function saveDetails() {
+		const { state, input } = getLatest();
 		if (state.status !== "details") return;
-		if (!canSaveDetails(state, listOptions)) return;
+		if (!canSaveDetails(state, input.listOptions)) return;
 		await performSave(state, "finish");
 	}
 
-	function openListSelector() {
-		dispatch({ type: "listSelectorOpened" });
-	}
-
-	function closeListSelector() {
-		dispatch({ type: "listSelectorClosed" });
-	}
-
 	function selectList(listId: string) {
-		if (!listOptions.some((option) => option.id === listId)) return;
+		if (!getLatest().input.listOptions.some((option) => option.id === listId))
+			return;
 		dispatch({ type: "listSelected", listId });
 	}
 
 	async function toggleItem(itemId: string) {
+		const { state, input } = getLatest();
 		if (state.status === "saving" || state.status === "details") return;
-		const item = items.find((candidate) => candidate.id === itemId);
+		const item = input.items.find((candidate) => candidate.id === itemId);
 		if (!item) return;
 
-		if (
+		const editingThisItem =
 			state.status === "inline" &&
 			state.source.kind === "existing" &&
-			state.source.itemId === itemId
-		) {
+			state.source.itemId === itemId;
+		if (editingThisItem) {
 			const saved = await saveInlineState(state, "finish");
 			if (!saved) return;
 		}
 
 		try {
-			await onSetItemChecked(itemId, !item.checked);
-			if (
-				state.status === "inline" &&
-				state.source.kind === "existing" &&
-				state.source.itemId === itemId
-			) {
-				onActiveChange(false);
+			await input.onSetItemChecked(itemId, !item.checked);
+			if (editingThisItem) {
+				input.onActiveChange(false);
 			}
 		} catch {
 			toast.error("Unable to save that completion change. Please try again.");
@@ -299,32 +310,20 @@ export function useItemEditor(input: UseItemEditorInput): ItemEditor {
 	}
 
 	return {
-		state,
-		actions: {
-			startCreating,
-			startEditing,
-			changeName: (value) => dispatch({ type: "nameChanged", value }),
-			changeNotes: (value) => dispatch({ type: "notesChanged", value }),
-			changeQuantity: (value) => dispatch({ type: "quantityChanged", value }),
-			showNote: () => dispatch({ type: "noteRequested" }),
-			submitTitle,
-			blurInlineEditor,
-			openDetails,
-			cancelDetails,
-			saveDetails,
-			openListSelector,
-			closeListSelector,
-			selectList,
-			toggleItem,
-		},
-		meta: {
-			activeItemId,
-			active: state.status !== "idle",
-			canSaveDetails:
-				state.status === "details" ? canSaveDetails(state, listOptions) : false,
-			listOptions,
-			saving: state.status === "saving",
-		},
+		startEditing,
+		changeName: (value) => dispatch({ type: "nameChanged", value }),
+		changeNotes: (value) => dispatch({ type: "notesChanged", value }),
+		changeQuantity: (value) => dispatch({ type: "quantityChanged", value }),
+		showNote: () => dispatch({ type: "noteRequested" }),
+		submitTitle,
+		blurInlineEditor,
+		openDetails: () => dispatch({ type: "detailsOpened" }),
+		cancelDetails: () => dispatch({ type: "detailsCancelled" }),
+		saveDetails,
+		openListSelector: () => dispatch({ type: "listSelectorOpened" }),
+		closeListSelector: () => dispatch({ type: "listSelectorClosed" }),
+		selectList,
+		toggleItem,
 	};
 }
 
@@ -343,9 +342,15 @@ function canSaveDetails(
 	);
 }
 
-function nullableTrimmed(value: string): string | null {
-	const trimmed = value.trim();
-	return trimmed ? trimmed : null;
+function draftContent(draft: ItemDraftValues): {
+	hasName: boolean;
+	hasOtherContent: boolean;
+} {
+	return {
+		hasName: draft.name.trim().length > 0,
+		hasOtherContent:
+			draft.notes.trim().length > 0 || draft.quantity.trim().length > 0,
+	};
 }
 
 function saveFailureMessage(
