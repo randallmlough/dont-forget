@@ -9,10 +9,12 @@ import {
 	Text as SwiftUIText,
 } from "@expo/ui/swift-ui";
 import {
+	Animation,
 	accessibilityHidden,
 	accessibilityHint as accessibilityHintModifier,
 	accessibilityLabel as accessibilityLabelModifier,
 	accessibilityValue,
+	animation,
 	buttonBorderShape,
 	buttonStyle,
 	contentShape,
@@ -23,6 +25,7 @@ import {
 	frame,
 	glassEffect,
 	padding,
+	rotationEffect,
 	shapes,
 	tint,
 	type ViewModifier,
@@ -32,6 +35,8 @@ import { useUnistyles } from "react-native-unistyles";
 
 import { nativeColorScheme } from "@/client/theme/native-color-scheme";
 import type { ButtonRadius } from "./button";
+
+const ICON_ROTATION_DURATION_SECONDS = 0.3;
 
 export type ButtonGlassSize = "default" | "sm" | "lg";
 
@@ -59,6 +64,7 @@ type ButtonGlassContent =
 	  }
 	| {
 			kind: "icon";
+			rotation?: number;
 			systemImage: NonNullable<SwiftUIButtonProps["systemImage"]>;
 	  };
 
@@ -147,6 +153,21 @@ export function ButtonGlassControl({
 		font({ textStyle: sizeSpec.textStyle, weight: "semibold" }),
 		foregroundStyle(theme.colors.foreground),
 	];
+	const imageModifiers: ViewModifier[] = [
+		...labelModifiers,
+		...(content.kind === "icon" && content.rotation !== undefined
+			? [
+					rotationEffect(content.rotation),
+					animation(
+						Animation.easeInOut({
+							duration: ICON_ROTATION_DURATION_SECONDS,
+						}),
+						content.rotation,
+					),
+				]
+			: []),
+		accessibilityHidden(),
+	];
 
 	const button = (
 		<SwiftUIButton modifiers={modifiers} onPress={onPress} testID={testID}>
@@ -154,10 +175,7 @@ export function ButtonGlassControl({
 				{loading ? (
 					<ProgressView modifiers={[tint(theme.colors.foreground)]} />
 				) : content.systemImage ? (
-					<Image
-						modifiers={[...labelModifiers, accessibilityHidden()]}
-						systemName={content.systemImage}
-					/>
+					<Image modifiers={imageModifiers} systemName={content.systemImage} />
 				) : null}
 				{content.kind === "label" ? (
 					<SwiftUIText modifiers={labelModifiers}>{content.label}</SwiftUIText>

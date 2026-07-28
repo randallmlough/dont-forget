@@ -864,8 +864,10 @@ describe("Home bottom toolbar", () => {
 		expect(screen.queryByTestId("home-list-picker")).toBeNull();
 	});
 
-	it("starts inline creation from the floating add button", async () => {
-		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+	it("turns the floating add button into an editor dismissal", async () => {
+		await render(homeScreenSurface(), {
+			wrapper: TestSafeAreaProvider,
+		});
 		expect(pageControl()).toBeTruthy();
 		expect(screen.getByTestId("home-add-item-button-position")).toHaveStyle({
 			bottom: 88,
@@ -880,6 +882,9 @@ describe("Home bottom toolbar", () => {
 				includeHiddenElements: true,
 			}),
 		).toBeNull();
+		expect(
+			screen.getByRole("button", { name: "Finish editing Item" }),
+		).toBeTruthy();
 		expect(pageControl()).toBeTruthy();
 		expect(pageControl().props.accessibilityState).toEqual({ disabled: true });
 		expect(
@@ -890,6 +895,13 @@ describe("Home bottom toolbar", () => {
 			"scrollEnabled",
 			true,
 		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Finish editing Item" }),
+		);
+
+		expect(screen.queryByLabelText("Item name")).toBeNull();
+		expect(screen.getByRole("button", { name: "Add Item" })).toBeTruthy();
 	});
 
 	it("does not replay a dismissed creation draft after paging", async () => {

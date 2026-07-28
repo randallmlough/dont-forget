@@ -15,6 +15,7 @@ import {
 
 type MockModifier = {
 	$type: string;
+	angle?: number;
 	disabled?: boolean;
 	eventListener?: () => void;
 	hint?: string;
@@ -208,9 +209,21 @@ export function ProgressView() {
 	return <ActivityIndicator />;
 }
 
-export function Image({ systemName }: { systemName?: string }) {
+export function Image({
+	modifiers,
+	systemName,
+}: {
+	modifiers?: MockModifier[];
+	systemName?: string;
+}) {
+	const rotation = modifier(modifiers, "rotationEffect")?.angle ?? 0;
 	return (
-		<ReactNativeText accessibilityElementsHidden>{systemName}</ReactNativeText>
+		<ReactNativeText
+			accessibilityElementsHidden
+			style={{ transform: [{ rotate: `${rotation}deg` }] }}
+		>
+			{systemName}
+		</ReactNativeText>
 	);
 }
 

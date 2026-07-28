@@ -333,9 +333,15 @@ function HomeScreenResource({
 				/>
 				{listSummaries.length > 0 &&
 				pickerPhase === "closed" &&
-				!itemEditorActive &&
 				focusedEditorRegistration !== undefined ? (
-					<HomeAddItemButton onPress={startAddingItem} />
+					<HomeAddItemButton
+						editorActive={itemEditorActive}
+						finishing={editorFinishPending}
+						onAddItem={startAddingItem}
+						onFinishEditing={() => {
+							void finishActiveItemEditor();
+						}}
+					/>
 				) : null}
 			</View>
 		</>
