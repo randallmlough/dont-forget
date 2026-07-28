@@ -7,7 +7,7 @@ import {
 	within,
 } from "@testing-library/react-native";
 import type { ReactElement } from "react";
-import { FlatList, Pressable, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { ItemDetailsSheet } from "@/client/features/item/item-details-sheet";
 import { ItemInlineForm } from "@/client/features/item/item-inline-form";
 import type {
@@ -226,10 +226,11 @@ describe("List parts", () => {
 	it("keeps the focused Item visible when the keyboard changes", async () => {
 		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
 
-		expect(screen.getByTestId("test-list-items")).toHaveProp(
-			"automaticallyAdjustKeyboardInsets",
-			true,
-		);
+		const list = screen.getByTestId("test-list-items");
+		expect(list).toHaveProp("automaticallyAdjustKeyboardInsets", true);
+		expect(StyleSheet.flatten(list.props.contentContainerStyle)).toMatchObject({
+			paddingBottom: 60,
+		});
 	});
 
 	it("centers an existing Item when inline editing starts", async () => {
@@ -274,6 +275,31 @@ describe("List parts", () => {
 			await act(() => {
 				jest.advanceTimersByTime(1);
 			});
+
+			expect(screen.getByTestId("item-details-sheet")).toBeTruthy();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("keeps the editor active when touch start precedes the native title blur", async () => {
+		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
+		const nameInput = await screen.findByLabelText("Item name");
+		const detailsButton = await screen.findByRole("button", {
+			name: "Item Details",
+		});
+
+		jest.useFakeTimers();
+		try {
+			await fireEvent(nameInput, "focus");
+			await fireEvent(detailsButton, "touchStart");
+			await fireEvent(nameInput, "blur");
+			await act(() => {
+				jest.advanceTimersByTime(1);
+			});
+			await fireEvent(detailsButton, "pressIn");
+			await fireEvent(detailsButton, "pressOut");
+			await fireEvent.press(detailsButton);
 
 			expect(screen.getByTestId("item-details-sheet")).toBeTruthy();
 		} finally {

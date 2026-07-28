@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 import {
+	Dimensions,
 	Keyboard,
 	type KeyboardEvent,
 	type KeyboardEventName,
@@ -88,14 +89,6 @@ it("keeps the finish control above the keyboard", async () => {
 		const keyboardLayer = screen.getByTestId(
 			"home-add-item-button-keyboard-layer",
 		);
-		await act(async () => {
-			await keyboardLayer.props.onLayout({
-				persist: jest.fn(),
-				nativeEvent: {
-					layout: { x: 0, y: 0, width: 390, height: 844 },
-				},
-			});
-		});
 
 		expect(keyboardWillShow).toBeDefined();
 		await act(async () => {
@@ -112,13 +105,11 @@ it("keeps the finish control above the keyboard", async () => {
 		});
 
 		await waitFor(() => {
-			expect(keyboardLayer).toHaveStyle({ flex: 0, height: 588 });
+			expect(keyboardLayer).toHaveStyle({
+				bottom: Dimensions.get("window").height - 508 + 8,
+				right: 20,
+			});
 		});
-		expect(screen.getByTestId("home-add-item-button-position")).toHaveStyle({
-			bottom: 88,
-		});
-		// 588-point layer height - 88-point bottom offset = 500, leaving
-		// eight points before the keyboard starts at screenY 508.
 		expect(
 			screen.getByRole("button", { name: "Finish editing Item" }),
 		).toBeTruthy();

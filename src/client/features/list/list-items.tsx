@@ -17,7 +17,7 @@ import Animated, {
 	type SharedValue,
 	useAnimatedScrollHandler,
 } from "react-native-reanimated";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ItemDetailsSheet } from "@/client/features/item/item-details-sheet";
 import type { ItemEditorInlinePresentation } from "@/client/features/item/item-editor-reducer";
 import { ItemInlineForm } from "@/client/features/item/item-inline-form";
@@ -55,11 +55,13 @@ export function ListItems({
 	topContentInset,
 	testID,
 }: ListItemsProps) {
+	const { theme } = useUnistyles();
 	const listRef = useRef<FlatList<ItemListRow>>(null);
 	const inlineNameInputRef = useRef<TextInputInstance>(null);
 	const initialResetPendingRef = useRef(focused !== undefined);
 	const { actions } = editor;
 	const activeInline = editor.inline;
+	const editorBottomClearance = activeInline ? theme.spacing(15) : 0;
 	const rows = useMemo(
 		() => itemListRows(items, activeInline),
 		[activeInline, items],
@@ -226,7 +228,10 @@ export function ListItems({
 				}}
 				contentContainerStyle={[
 					styles.itemsContent,
-					styles.contentInsets(topContentInset ?? 0, bottomContentInset),
+					styles.contentInsets(
+						topContentInset ?? 0,
+						bottomContentInset + editorBottomClearance,
+					),
 				]}
 			/>
 			<ItemDetailsSheet

@@ -57,6 +57,7 @@ export function ItemInlineForm({
 	);
 	const suppressNextBlurRef = useRef(false);
 	const focusNoteAfterRenderRef = useRef(false);
+	const detailsOpenedForPressRef = useRef(false);
 
 	useEffect(() => {
 		return () => {
@@ -132,6 +133,20 @@ export function ItemInlineForm({
 		Keyboard.dismiss();
 	}
 
+	function beginDetailsPress() {
+		detailsOpenedForPressRef.current = true;
+		keepEditorActiveForPress();
+		openDetails();
+	}
+
+	function completeDetailsPress() {
+		if (detailsOpenedForPressRef.current) {
+			detailsOpenedForPressRef.current = false;
+			return;
+		}
+		openDetails();
+	}
+
 	return (
 		<View accessibilityLabel="Item inline editor" style={styles.row}>
 			<ItemCompletionButton
@@ -191,6 +206,7 @@ export function ItemInlineForm({
 						accessibilityHint="Adds optional notes to this Item"
 						accessibilityRole="button"
 						disabled={saving}
+						onTouchStart={keepEditorActiveForPress}
 						onPressIn={keepEditorActiveForPress}
 						onPressOut={releaseEditorAfterPress}
 						onPress={showNote}
@@ -212,9 +228,10 @@ export function ItemInlineForm({
 					accessibilityHint="Opens all editable Item details"
 					accessibilityLabel="Item Details"
 					accessibilityRole="button"
+					onTouchStart={beginDetailsPress}
 					onPressIn={keepEditorActiveForPress}
 					onPressOut={releaseEditorAfterPress}
-					onPress={openDetails}
+					onPress={completeDetailsPress}
 					style={({ pressed }) => [
 						styles.detailTarget,
 						pressed ? styles.pressed : undefined,
