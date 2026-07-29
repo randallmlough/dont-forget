@@ -13,6 +13,7 @@ minimumReleaseAge: 10080
 # preserving ajv's fast-uri 3.x compatibility.
 minimumReleaseAgeExclude:
   - 'fast-uri@3.1.4'
+  - '@expo/ui@56.0.23'
 
 # Dependency build (install/postinstall) scripts. pnpm 11 replaced
 # pnpm.onlyBuiltDependencies with this { name: true|false } map.

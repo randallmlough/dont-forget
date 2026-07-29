@@ -31,7 +31,7 @@
 		"@babel/core": "^7.29.0",
 		"@clerk/backend": "^3.4.7",
 		"@clerk/clerk-expo": "^2.19.36",
-		"@expo/ui": "~56.0.18",
+		"@expo/ui": "~56.0.23",
 		"@op-engineering/op-sqlite": "^16.2.0",
 		"@powersync/op-sqlite": "^0.9.10",
 		"@powersync/react": "^1.10.0",
