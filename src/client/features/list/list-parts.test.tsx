@@ -12,9 +12,11 @@ import { ItemDetailsSheet } from "@/client/features/item/item-details-sheet";
 import { ItemInlineForm } from "@/client/features/item/item-inline-form";
 import type {
 	AddListItemInput,
+	DeleteListItemInput,
 	UpdateListItemInput,
 } from "@/client/features/item/item-view-types";
 import { useItemEditor } from "@/client/features/item/use-item-editor";
+import { themedAlert } from "@/client/ui/native-dialogs";
 import { TestSafeAreaProvider } from "@/test/safe-area";
 import { ListItems } from "./list-items";
 import { ListOverview } from "./list-overview";
@@ -25,7 +27,15 @@ import {
 } from "./list-test-support";
 import type { ActiveListMeta, ActiveListState } from "./list-view-types";
 
+jest.mock("@/client/ui/native-dialogs", () => ({
+	themedAlert: jest.fn(),
+}));
+
 describe("List parts", () => {
+	afterEach(() => {
+		jest.clearAllMocks();
+	});
+
 	it("renders overview progress for an empty List", async () => {
 		await renderWithSafeArea(
 			<ListOverview state={emptyActiveListState} meta={meta()} />,
@@ -339,6 +349,98 @@ describe("List parts", () => {
 		});
 	});
 
+	it("confirms deletion from a full-width destructive Details action", async () => {
+		const onDeleteItem = jest.fn(async () => undefined);
+		await renderWithSafeArea(<TestListItems onDeleteItem={onDeleteItem} />);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+
+		const deleteButton = await screen.findByRole("button", {
+			name: "Delete Item",
+		});
+		expect(deleteButton).toHaveStyle({ alignSelf: "stretch" });
+		await fireEvent.press(deleteButton);
+
+		expect(themedAlert).toHaveBeenCalledWith(
+			"Delete Item",
+			"This action cannot be undone.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				expect.objectContaining({
+					text: "Delete",
+					style: "destructive",
+				}),
+			],
+		);
+		expect(onDeleteItem).not.toHaveBeenCalled();
+
+		const deleteAlertButton = jest
+			.mocked(themedAlert)
+			.mock.calls[0]?.[2]?.find((button) => button.text === "Delete");
+		await act(async () => {
+			deleteAlertButton?.onPress?.();
+		});
+
+		await waitFor(() => {
+			expect(onDeleteItem).toHaveBeenCalledWith({
+				itemId: "item-1",
+				listId: "lst_groceries",
+			});
+		});
+		expect(screen.getByTestId("item-details-sheet")).toHaveAccessibilityValue({
+			text: JSON.stringify({
+				fitToContents: false,
+				isPresented: false,
+				interactiveDismissDisabled: false,
+			}),
+		});
+	});
+
+	it("does not offer deletion for a new Item draft", async () => {
+		await renderWithSafeArea(<TestListItems creationRequestKey={1} />);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+
+		expect(screen.queryByRole("button", { name: "Delete Item" })).toBeNull();
+	});
+
+	it("disables deletion while saving existing Item details", async () => {
+		const save = deferred<void>();
+		const onUpdateItem = jest.fn(() => save.promise);
+		await renderWithSafeArea(<TestListItems onUpdateItem={onUpdateItem} />);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Edit Milk" }),
+		);
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+		const details = await screen.findByTestId("item-details-sheet");
+		await fireEvent.changeText(
+			within(details).getByLabelText("Item name"),
+			"Updated Milk",
+		);
+		await fireEvent.press(
+			within(details).getByRole("button", { name: "Save Item" }),
+		);
+
+		await waitFor(() => {
+			expect(onUpdateItem).toHaveBeenCalledTimes(1);
+		});
+		expect(
+			within(details).getByRole("button", { name: "Delete Item" }),
+		).toBeDisabled();
+
+		await act(async () => {
+			save.resolve();
+			await save.promise;
+		});
+	});
+
 	it("requests inline focus only after native Details dismissal completes", async () => {
 		const onReturnToInline = jest.fn();
 		await renderWithSafeArea(
@@ -510,6 +612,7 @@ type TestListItemsProps = {
 	listOverview?: ReactElement;
 	onAddItem?: (input: AddListItemInput) => Promise<void>;
 	onUpdateItem?: (input: UpdateListItemInput) => Promise<void>;
+	onDeleteItem?: (input: DeleteListItemInput) => Promise<void>;
 	onSetItemChecked?: (itemId: string, checked: boolean) => Promise<void>;
 };
 
@@ -519,6 +622,7 @@ function TestListItems({
 	listOverview,
 	onAddItem = async () => undefined,
 	onUpdateItem = async () => undefined,
+	onDeleteItem = async () => undefined,
 	onSetItemChecked = async () => undefined,
 }: TestListItemsProps) {
 	const editor = useItemEditor({
@@ -531,6 +635,7 @@ function TestListItems({
 		creationRequestKey,
 		onAddItem,
 		onUpdateItem,
+		onDeleteItem,
 		onSetItemChecked,
 		onActiveChange: () => undefined,
 	});
@@ -560,6 +665,7 @@ function TestItemDetailsSheet({
 		creationRequestKey: 1,
 		onAddItem: async () => undefined,
 		onUpdateItem: async () => undefined,
+		onDeleteItem: async () => undefined,
 		onSetItemChecked: async () => undefined,
 		onActiveChange: () => undefined,
 	});

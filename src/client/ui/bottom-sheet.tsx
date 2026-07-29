@@ -164,9 +164,7 @@ const styles = StyleSheet.create((theme) => ({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: theme.spacing(3),
-		paddingHorizontal: theme.spacing(3),
-		borderBottomWidth: theme.borders.hairline,
-		borderBottomColor: theme.colors.border,
+		marginBottom: theme.spacing(6),
 	},
 	headerAction: {
 		width: theme.spacing(11),

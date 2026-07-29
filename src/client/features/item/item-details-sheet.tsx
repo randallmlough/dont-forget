@@ -3,8 +3,11 @@ import { useRef } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { BottomSheet } from "@/client/ui/bottom-sheet";
+import { Button } from "@/client/ui/button";
 import { ButtonIconGlass } from "@/client/ui/button-icon-glass";
 import { ItemSeparator } from "@/client/ui/item";
+import { themedAlert } from "@/client/ui/native-dialogs";
+import { ScreenSection } from "@/client/ui/screen-section.tsx";
 import type { ItemEditorDetailsPresentation } from "./item-editor-reducer";
 import { ItemListSelectorSheet } from "./item-list-selector-sheet";
 import type { ItemEditor } from "./use-item-editor";
@@ -107,91 +110,105 @@ function ItemDetailsSheetContent({
 				nestedScrollEnabled
 				style={styles.scroll}
 			>
-				<View style={styles.fieldGroup}>
-					<TextInput
-						accessibilityLabel="Item name"
-						autoCapitalize="sentences"
-						autoCorrect
-						editable={!presentation.saving}
-						multiline
-						onChangeText={editor.actions.changeName}
-						placeholder="Item name"
-						placeholderTextColor={theme.colors.mutedForeground}
-						scrollEnabled={false}
-						style={styles.nameInput}
-						value={presentation.draft.name}
-					/>
-					<ItemSeparator style={styles.separator} />
-					<TextInput
-						accessibilityLabel="Item notes"
-						autoCapitalize="sentences"
-						autoCorrect
-						editable={!presentation.saving}
-						multiline
-						onChangeText={editor.actions.changeNotes}
-						placeholder="Notes"
-						placeholderTextColor={theme.colors.mutedForeground}
-						style={styles.notesInput}
-						value={presentation.draft.notes}
-					/>
-					<ItemSeparator style={styles.separator} />
-					<TextInput
-						accessibilityLabel="Item quantity"
-						autoCapitalize="sentences"
-						autoCorrect
-						editable={!presentation.saving}
-						onChangeText={editor.actions.changeQuantity}
-						placeholder="Quantity, such as 2 kg"
-						placeholderTextColor={theme.colors.mutedForeground}
-						style={styles.quantityInput}
-						value={presentation.draft.quantity}
-					/>
-				</View>
-
-				<View style={styles.fieldGroup}>
-					<Pressable
-						accessibilityHint={
-							canChooseList
-								? "Opens the available Lists"
-								: "This is the only active List"
-						}
-						accessibilityLabel={`List, ${selectedList?.name ?? "Unavailable"}`}
-						accessibilityRole="button"
-						accessibilityState={{
-							disabled: !canChooseList || presentation.saving,
-						}}
-						disabled={!canChooseList || presentation.saving}
-						onPress={editor.actions.openListSelector}
-						style={({ pressed }) => [
-							styles.listRow,
-							pressed ? styles.pressed : undefined,
-						]}
-					>
-						<SymbolView
-							name="list.bullet"
-							size={22}
-							tintColor={theme.colors.primary}
+				<ScreenSection title="Item Details">
+					<View style={styles.fieldGroup}>
+						<TextInput
+							accessibilityLabel="Item name"
+							autoCapitalize="sentences"
+							autoCorrect
+							editable={!presentation.saving}
+							multiline
+							onChangeText={editor.actions.changeName}
+							placeholder="Item name"
+							placeholderTextColor={theme.colors.mutedForeground}
+							scrollEnabled={false}
+							style={styles.nameInput}
+							value={presentation.draft.name}
 						/>
-						<Text style={styles.listLabel}>List</Text>
-						<Text
-							numberOfLines={1}
-							style={[
-								styles.listValue,
-								selectedList ? undefined : styles.unavailable,
+						<ItemSeparator />
+						<TextInput
+							accessibilityLabel="Item notes"
+							autoCapitalize="sentences"
+							autoCorrect
+							editable={!presentation.saving}
+							multiline
+							onChangeText={editor.actions.changeNotes}
+							placeholder="Notes"
+							placeholderTextColor={theme.colors.mutedForeground}
+							style={styles.notesInput}
+							value={presentation.draft.notes}
+						/>
+						<ItemSeparator />
+						<TextInput
+							accessibilityLabel="Item quantity"
+							autoCapitalize="sentences"
+							autoCorrect
+							editable={!presentation.saving}
+							onChangeText={editor.actions.changeQuantity}
+							placeholder="Quantity, such as 2 kg"
+							placeholderTextColor={theme.colors.mutedForeground}
+							style={styles.quantityInput}
+							value={presentation.draft.quantity}
+						/>
+					</View>
+					<View style={styles.fieldGroup}>
+						<Pressable
+							accessibilityHint={
+								canChooseList
+									? "Opens the available Lists"
+									: "This is the only active List"
+							}
+							accessibilityLabel={`List, ${selectedList?.name ?? "Unavailable"}`}
+							accessibilityRole="button"
+							accessibilityState={{
+								disabled: !canChooseList || presentation.saving,
+							}}
+							disabled={!canChooseList || presentation.saving}
+							onPress={editor.actions.openListSelector}
+							style={({ pressed }) => [
+								styles.listRow,
+								pressed ? styles.pressed : undefined,
 							]}
 						>
-							{selectedList?.name ?? "Unavailable"}
-						</Text>
-						{canChooseList ? (
 							<SymbolView
-								name="chevron.right"
-								size={14}
-								tintColor={theme.colors.subtleForeground}
-								weight="semibold"
+								name="list.bullet"
+								size={22}
+								tintColor={theme.colors.primary}
 							/>
-						) : null}
-					</Pressable>
-				</View>
+							<Text style={styles.listLabel}>List</Text>
+							<Text
+								numberOfLines={1}
+								style={[
+									styles.listValue,
+									selectedList ? undefined : styles.unavailable,
+								]}
+							>
+								{selectedList?.name ?? "Unavailable"}
+							</Text>
+							{canChooseList ? (
+								<SymbolView
+									name="chevron.right"
+									size={14}
+									tintColor={theme.colors.subtleForeground}
+									weight="semibold"
+								/>
+							) : null}
+						</Pressable>
+					</View>
+				</ScreenSection>
+
+				{presentation.source.kind === "existing" ? (
+					<Button
+						accessibilityHint="Deletes this Item"
+						accessibilityLabel="Delete Item"
+						disabled={presentation.saving}
+						onPress={() => confirmItemDeletion(editor)}
+						style={styles.deleteButton}
+						variant="destructive"
+					>
+						Delete Item
+					</Button>
+				) : null}
 			</ScrollView>
 
 			<ItemListSelectorSheet
@@ -206,11 +223,25 @@ function ItemDetailsSheetContent({
 	);
 }
 
+function confirmItemDeletion(editor: ItemEditor) {
+	themedAlert("Delete Item", "This action cannot be undone.", [
+		{ text: "Cancel", style: "cancel" },
+		{
+			text: "Delete",
+			style: "destructive",
+			onPress: () => {
+				void editor.actions.deleteItem();
+			},
+		},
+	]);
+}
+
 const styles = StyleSheet.create((theme) => ({
 	scroll: {
 		flex: 1,
 	},
 	content: {
+		flexGrow: 1,
 		gap: theme.spacing(5),
 		paddingHorizontal: theme.spacing(4),
 		paddingBottom: theme.spacing(8),
@@ -242,9 +273,6 @@ const styles = StyleSheet.create((theme) => ({
 		color: theme.colors.foreground,
 		...theme.typography.body,
 	},
-	separator: {
-		marginLeft: theme.spacing(4),
-	},
 	listRow: {
 		minHeight: theme.spacing(14),
 		flexDirection: "row",
@@ -265,6 +293,10 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	unavailable: {
 		color: theme.colors.destructive,
+	},
+	deleteButton: {
+		alignSelf: "stretch",
+		marginTop: "auto",
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

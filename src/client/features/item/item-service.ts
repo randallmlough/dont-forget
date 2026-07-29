@@ -59,11 +59,18 @@ export type SetItemCheckedInput = {
 	checked: boolean;
 };
 
+export type DeleteItemInput = {
+	itemId: string;
+	listId: string;
+	userId: string;
+};
+
 export type ItemService = {
 	listItems(input: ListItemsInput): Promise<Item[]>;
 	listItemsQuery(input: ListItemsInput): ProductQuery<Item>;
 	addItem(input: AddItemInput): Promise<Item>;
 	updateItem(input: UpdateItemInput): Promise<Item>;
+	deleteItem(input: DeleteItemInput): Promise<void>;
 	setItemChecked(input: SetItemCheckedInput): Promise<void>;
 };
 
@@ -94,6 +101,10 @@ const checkTargetRowSchema = z.object({
 
 const destinationPositionRowSchema = z.object({
 	position: sqlNumberSchema,
+});
+
+const deletedItemRowSchema = z.object({
+	deleted_at: sqlTimestampMillisSchema.nullable(),
 });
 
 let lastItemServiceTimestamp: number | null = null;
@@ -410,6 +421,68 @@ export function createItemService(deps: ItemServiceDeps): ItemService {
 					item_id: input.itemId,
 					source_list_id: input.sourceListId,
 					destination_list_id: input.destinationListId,
+				});
+				throw error;
+			}
+		},
+		async deleteItem(input) {
+			try {
+				const now = nextItemServiceTimestamp();
+				const nowText = timestampMillisToSqlText(now);
+				const deletedAt = await deps.store.writeTransaction(async (tx) => {
+					await tx.execute(
+						`
+	              UPDATE items
+	              SET deleted_at = ?, updated_at = ?
+	              WHERE id = ?
+	                AND list_id = ?
+	                AND deleted_at IS NULL
+	                AND EXISTS (
+	                  SELECT 1
+	                  FROM lists l
+	                  WHERE l.id = items.list_id
+	                    AND l.household_id = ?
+	                    AND l.deleted_at IS NULL
+	                    AND l.archived_at IS NULL
+	                )
+	            `,
+						[nowText, nowText, input.itemId, input.listId, deps.householdId],
+					);
+					const row = await tx.getOptional(
+						`
+	              SELECT i.deleted_at
+	              FROM items i
+	              JOIN lists l ON l.id = i.list_id
+	              WHERE i.id = ?
+	                AND i.list_id = ?
+	                AND l.household_id = ?
+	              LIMIT 1
+	            `,
+						[input.itemId, input.listId, deps.householdId],
+					);
+					if (!row) {
+						throw new Error("Item not found in List");
+					}
+					const parsed = deletedItemRowSchema.parse(row);
+					if (parsed.deleted_at === null) {
+						throw new Error("Item not found in List");
+					}
+					return parsed.deleted_at;
+				});
+
+				if (deletedAt === now) {
+					analytics.track("item_deleted", {
+						household_id: deps.householdId,
+						list_id: input.listId,
+						item_id: input.itemId,
+						user_id: input.userId,
+					});
+				}
+			} catch (error) {
+				log.error("item delete failed", {
+					error: asError(error),
+					list_id: input.listId,
+					item_id: input.itemId,
 				});
 				throw error;
 			}

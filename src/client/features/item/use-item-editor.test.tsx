@@ -352,6 +352,60 @@ describe("useItemEditor", () => {
 		);
 	});
 
+	it("closes Details before deleting an existing Item", async () => {
+		const deletion = deferred<void>();
+		const input = editorInput({
+			items: [milk],
+			onDeleteItem: jest.fn(() => deletion.promise),
+		});
+		const { result } = await renderHook(() => useItemEditor(input));
+
+		await act(async () => {
+			await result.current.actions.startEditing("itm_milk");
+			result.current.actions.openDetails();
+		});
+		let request: Promise<void> | undefined;
+		await act(async () => {
+			request = result.current.actions.deleteItem();
+		});
+
+		expect(input.onDeleteItem).toHaveBeenCalledWith({
+			itemId: "itm_milk",
+			listId: "lst_groceries",
+		});
+		expect(result.current.state.status).toBe("idle");
+		expect(input.onActiveChange).toHaveBeenLastCalledWith(false);
+
+		await act(async () => {
+			deletion.resolve();
+			await request;
+		});
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it("reports an Item deletion failure after closing Details", async () => {
+		const input = editorInput({
+			items: [milk],
+			onDeleteItem: jest.fn(async () => {
+				throw new Error("delete failed");
+			}),
+		});
+		const { result } = await renderHook(() => useItemEditor(input));
+
+		await act(async () => {
+			await result.current.actions.startEditing("itm_milk");
+			result.current.actions.openDetails();
+		});
+		await act(async () => {
+			await result.current.actions.deleteItem();
+		});
+
+		expect(result.current.state.status).toBe("idle");
+		expect(toast.error).toHaveBeenCalledWith(
+			"Unable to delete that Item. Please try again.",
+		);
+	});
+
 	it("asks before discarding notes without an Item name", async () => {
 		const input = editorInput({ creationRequestKey: 1 });
 		const { result } = await renderHook(() => useItemEditor(input));
@@ -443,6 +497,7 @@ function editorInput(
 		creationRequestKey: null,
 		onAddItem: jest.fn(async () => undefined),
 		onUpdateItem: jest.fn(async () => undefined),
+		onDeleteItem: jest.fn(async () => undefined),
 		onSetItemChecked: jest.fn(async () => undefined),
 		onActiveChange: jest.fn(),
 		...overrides,

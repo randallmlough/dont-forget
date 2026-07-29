@@ -446,6 +446,57 @@ describe("createItemService", () => {
 		});
 	});
 
+	describe("deleteItem", () => {
+		beforeEach(() => {
+			store.seedItem({
+				id: "itm_milk",
+				listId: "lst_groceries",
+				name: "Milk",
+			});
+		});
+
+		it("tombstones the Item and removes it from List queries", async () => {
+			await service.deleteItem({
+				itemId: "itm_milk",
+				listId: "lst_groceries",
+				userId: "usr_avery",
+			});
+
+			const row = store.raw
+				.prepare(
+					"SELECT deleted_at, updated_at FROM items WHERE id = ? LIMIT 1",
+				)
+				.get("itm_milk") as {
+				deleted_at: string | null;
+				updated_at: string;
+			};
+			expect(row.deleted_at).not.toBeNull();
+			expect(row.updated_at).toBe(row.deleted_at);
+			await expect(
+				service.listItems({ listId: "lst_groceries" }),
+			).resolves.toEqual([]);
+			expect(track).toHaveBeenCalledWith("item_deleted", {
+				household_id: HOUSEHOLD,
+				list_id: "lst_groceries",
+				item_id: "itm_milk",
+				user_id: "usr_avery",
+			});
+		});
+
+		it("refuses to delete an Item outside the active Household", async () => {
+			store.seedList({ id: "lst_other", householdId: OTHER_HOUSEHOLD });
+			store.seedItem({ id: "itm_other", listId: "lst_other" });
+
+			await expect(
+				service.deleteItem({
+					itemId: "itm_other",
+					listId: "lst_other",
+					userId: "usr_avery",
+				}),
+			).rejects.toThrow("Item not found in List");
+		});
+	});
+
 	describe("setItemChecked", () => {
 		beforeEach(() => {
 			store.seedItem({ id: "itm_milk", listId: "lst_groceries", position: 0 });

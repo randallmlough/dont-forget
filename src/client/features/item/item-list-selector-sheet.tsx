@@ -36,7 +36,6 @@ export function ItemListSelectorSheet({
 						accessibilityLabel="Cancel List Selection"
 						onPress={onClose}
 						showTint={false}
-						size="sm"
 						systemImage="xmark"
 					/>
 				),
@@ -46,7 +45,7 @@ export function ItemListSelectorSheet({
 				if (!presented) onClose();
 			}}
 			showDragIndicator
-			snapPoints={[{ fraction: 0.9 }]}
+			snapPoints={[{ fraction: 1 }]}
 			testID="item-list-selector-sheet"
 		>
 			<FlatList
@@ -78,20 +77,22 @@ export function ItemListSelectorSheet({
 								pressed ? styles.pressed : undefined,
 							]}
 						>
-							<Text numberOfLines={1} style={styles.name}>
-								{item.name}
-							</Text>
-							{current ? <Badge variant="secondary">Current</Badge> : null}
-							{selected ? (
-								<SymbolView
-									name="checkmark"
-									size={18}
-									tintColor={theme.colors.primary}
-									weight="semibold"
-								/>
-							) : (
-								<View style={styles.checkPlaceholder} />
-							)}
+							<View
+								style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
+							>
+								<Text numberOfLines={1} style={styles.name}>
+									{item.name}
+								</Text>
+								{current ? <Badge variant="secondary">Current</Badge> : null}
+								{selected && !current ? (
+									<SymbolView
+										name="checkmark"
+										size={18}
+										tintColor={theme.colors.primary}
+										weight="semibold"
+									/>
+								) : null}
+							</View>
 						</Pressable>
 					);
 				}}
@@ -126,9 +127,6 @@ const styles = StyleSheet.create((theme) => ({
 		flex: 1,
 		minWidth: 0,
 		color: theme.colors.foreground,
-	},
-	checkPlaceholder: {
-		width: theme.spacing(5),
 	},
 	pressed: {
 		opacity: theme.opacities.pressed,

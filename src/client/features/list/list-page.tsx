@@ -191,6 +191,7 @@ function ActiveListPage({
 		onCreationRequestAcknowledged: acknowledgeCreationRequest,
 		onAddItem: loadState.actions.addItem,
 		onUpdateItem: loadState.actions.updateItem,
+		onDeleteItem: loadState.actions.deleteItem,
 		onSetItemChecked: loadState.actions.setItemChecked,
 	});
 	const itemEditorActions = itemEditor.actions;

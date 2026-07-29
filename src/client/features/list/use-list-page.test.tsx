@@ -19,14 +19,16 @@ const mockUseItemService = jest.mocked(useItemService);
 describe("useListPage", () => {
 	let addItem: jest.Mock;
 	let updateItem: jest.Mock;
+	let deleteItem: jest.Mock;
 	let setItemChecked: jest.Mock;
 
 	beforeEach(() => {
 		addItem = jest.fn(async () => undefined);
 		updateItem = jest.fn(async () => undefined);
+		deleteItem = jest.fn(async () => undefined);
 		setItemChecked = jest.fn(async () => undefined);
 		mockUseItemService.mockReturnValue(
-			itemService({ addItem, updateItem, setItemChecked }),
+			itemService({ addItem, updateItem, deleteItem, setItemChecked }),
 		);
 		mockUseQuery.mockReturnValue(queryResult({ data: [] }));
 	});
@@ -83,6 +85,10 @@ describe("useListPage", () => {
 				quantity: "2",
 				notes: "Unsweetened",
 			});
+			await page.actions.deleteItem({
+				itemId: "itm_milk",
+				listId: "lst_groceries",
+			});
 			await page.actions.setItemChecked("itm_milk", true);
 		});
 
@@ -101,6 +107,11 @@ describe("useListPage", () => {
 			name: "Oat milk",
 			quantity: "2",
 			notes: "Unsweetened",
+		});
+		expect(deleteItem).toHaveBeenCalledWith({
+			itemId: "itm_milk",
+			listId: "lst_groceries",
+			userId: "usr_avery",
 		});
 		expect(setItemChecked).toHaveBeenCalledWith({
 			listId: "lst_groceries",
@@ -192,10 +203,12 @@ function queryResult(input: {
 function itemService({
 	addItem,
 	updateItem,
+	deleteItem,
 	setItemChecked,
 }: {
 	addItem: jest.Mock;
 	updateItem: jest.Mock;
+	deleteItem: jest.Mock;
 	setItemChecked: jest.Mock;
 }): ItemService {
 	const unused = jest.fn(async () => {
@@ -209,6 +222,7 @@ function itemService({
 		})),
 		addItem,
 		updateItem,
+		deleteItem,
 		setItemChecked,
 	};
 }
