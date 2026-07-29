@@ -45,6 +45,7 @@ export type ItemEditorActions = {
 	finish: (refocus?: () => void) => Promise<boolean>;
 	openDetails: () => void;
 	cancelDetails: () => void;
+	completeDetailsDismissal: () => void;
 	saveDetails: () => Promise<void>;
 	openListSelector: () => void;
 	closeListSelector: () => void;
@@ -160,6 +161,10 @@ function createItemEditorActions(
 	let saveInFlight: {
 		intent: SaveIntent;
 		promise: Promise<boolean>;
+	} | null = null;
+	let detailsDismissal: {
+		promise: Promise<void>;
+		resolve: () => void;
 	} | null = null;
 
 	function performSave(
@@ -279,6 +284,13 @@ function createItemEditorActions(
 	}
 
 	async function finish(refocus: () => void = () => undefined) {
+		const finished = await finishEditor(refocus);
+		if (!finished) return false;
+		await detailsDismissal?.promise;
+		return true;
+	}
+
+	async function finishEditor(refocus: () => void) {
 		const { state, input } = getLatest();
 		if (state.status === "idle") return true;
 		if (state.status === "saving") {
@@ -372,8 +384,21 @@ function createItemEditorActions(
 		submitTitle,
 		blurInlineEditor,
 		finish,
-		openDetails: () => dispatch({ type: "detailsOpened" }),
+		openDetails: () => {
+			if (!detailsDismissal) {
+				let resolve!: () => void;
+				const promise = new Promise<void>((resolvePromise) => {
+					resolve = resolvePromise;
+				});
+				detailsDismissal = { promise, resolve };
+			}
+			dispatch({ type: "detailsOpened" });
+		},
 		cancelDetails: () => dispatch({ type: "detailsCancelled" }),
+		completeDetailsDismissal: () => {
+			detailsDismissal?.resolve();
+			detailsDismissal = null;
+		},
 		saveDetails,
 		openListSelector: () => dispatch({ type: "listSelectorOpened" }),
 		closeListSelector: () => dispatch({ type: "listSelectorClosed" }),

@@ -61,6 +61,7 @@ export function ItemDetailsSheet({
 			interactiveDismissDisabled={presentation?.saving ?? false}
 			isPresented={presentation !== null}
 			onDismiss={() => {
+				editor.actions.completeDetailsDismissal();
 				if (!refocusAfterDismissRef.current) return;
 				refocusAfterDismissRef.current = false;
 				onReturnToInline();

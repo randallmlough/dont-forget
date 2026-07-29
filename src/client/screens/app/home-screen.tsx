@@ -216,12 +216,14 @@ function HomeScreenResource({
 
 	async function finishActiveItemEditor(): Promise<boolean> {
 		const session = itemEditorCoordination.session;
-		if (session === null) return true;
 		if (editorFinishPending) return false;
-		const registration = itemEditorCoordination.registrations.get(
-			session.listId,
-		);
-		if (registration?.ownerToken !== session.ownerToken) return false;
+		const registration =
+			session === null
+				? focusedEditorRegistration
+				: itemEditorCoordination.registrations.get(session.listId);
+		if (registration === undefined) return true;
+		if (session !== null && registration.ownerToken !== session.ownerToken)
+			return false;
 
 		setEditorFinishPending(true);
 		return registration.finish().finally(() => {

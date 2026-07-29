@@ -227,7 +227,9 @@ describe("HomeScreen", () => {
 			screen.getByRole("button", { name: "Open navigation" }),
 		);
 
-		expect(open).toHaveBeenCalledTimes(1);
+		await waitFor(() => {
+			expect(open).toHaveBeenCalledTimes(1);
+		});
 	});
 
 	it("opens Lists from the stack toolbar", async () => {
@@ -337,6 +339,77 @@ describe("HomeScreen", () => {
 
 		await waitFor(() => {
 			expect(screen.queryByLabelText("Item name")).toBeNull();
+			expect(open).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	it("waits for Item Details to finish dismissing before opening navigation", async () => {
+		const open = jest.fn();
+		await render(
+			<NavigationDrawerProvider open={open}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Item Details" }),
+		);
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Cancel Item Details" }),
+		);
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Open navigation" }),
+		);
+
+		expect(open).not.toHaveBeenCalled();
+
+		await fireEvent.press(
+			screen.getByTestId("item-details-sheet-complete-dismissal"),
+		);
+		await waitFor(() => {
+			expect(open).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	it("waits for saved Item Details to finish dismissing before opening navigation", async () => {
+		const open = jest.fn();
+		await render(
+			<NavigationDrawerProvider open={open}>
+				<HomeScreen />
+			</NavigationDrawerProvider>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Add Item" }));
+		await fireEvent.changeText(
+			await screen.findByLabelText("Item name"),
+			"Apples",
+		);
+		await fireEvent.press(screen.getByRole("button", { name: "Item Details" }));
+		await fireEvent.press(screen.getByRole("button", { name: "Save Item" }));
+		await waitFor(() => {
+			expect(screen.getByTestId("item-details-sheet")).toHaveAccessibilityValue(
+				{
+					text: JSON.stringify({
+						fitToContents: false,
+						isPresented: false,
+						interactiveDismissDisabled: false,
+					}),
+				},
+			);
+		});
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Open navigation" }),
+		);
+
+		expect(open).not.toHaveBeenCalled();
+
+		await fireEvent.press(
+			screen.getByTestId("item-details-sheet-complete-dismissal"),
+		);
+		await waitFor(() => {
 			expect(open).toHaveBeenCalledTimes(1);
 		});
 	});
