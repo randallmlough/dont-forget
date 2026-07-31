@@ -198,10 +198,8 @@ const routeCases = [
 	},
 	{
 		method: "PATCH",
-		requestPath:
-			"/api/households/household-1/members/membership-1",
-		routePath:
-			"/api/households/:householdId/members/:membershipId",
+		requestPath: "/api/households/household-1/members/membership-1",
+		routePath: "/api/households/:householdId/members/:membershipId",
 		handlerName: "handleChangeMemberRole",
 		expectedCall: {
 			kind: "handler-with-params",
@@ -213,10 +211,8 @@ const routeCases = [
 	},
 	{
 		method: "DELETE",
-		requestPath:
-			"/api/households/household-1/members/membership-1",
-		routePath:
-			"/api/households/:householdId/members/:membershipId",
+		requestPath: "/api/households/household-1/members/membership-1",
+		routePath: "/api/households/:householdId/members/:membershipId",
 		handlerName: "handleRemoveMember",
 		expectedCall: {
 			kind: "handler-with-params",
@@ -258,10 +254,8 @@ const routeCases = [
 	},
 	{
 		method: "POST",
-		requestPath:
-			"/api/households/household-1/join-code/regenerate",
-		routePath:
-			"/api/households/:householdId/join-code/regenerate",
+		requestPath: "/api/households/household-1/join-code/regenerate",
+		routePath: "/api/households/:householdId/join-code/regenerate",
 		handlerName: "handleRegenerateJoinCode",
 		expectedCall: {
 			kind: "handler-with-params",
@@ -341,13 +335,13 @@ const routeCases = [
 
 type HandlerMock = {
 	mock: {
-		calls: ReadonlyArray<ReadonlyArray<unknown>>;
+		calls: readonly (readonly unknown[])[];
 	};
 };
 
 function createTestHarness() {
 	// The transport mocks never read this inert DirectoryDb test seam.
-	const fakeDirectory = {} as DirectoryDb;
+	const fakeDirectory: DirectoryDb = Object.create(null);
 	const fakeAuthenticate: ApiAuth = async () => {
 		throw new Error("unexpected authenticate call in dispatch test");
 	};
@@ -370,7 +364,7 @@ function createTestHarness() {
 	};
 }
 
-function firstCall(handler: HandlerMock): ReadonlyArray<unknown> {
+function firstCall(handler: HandlerMock): readonly unknown[] {
 	const call = handler.mock.calls.at(0);
 	if (!call) {
 		throw new Error("Expected handler to have been called");
@@ -409,59 +403,53 @@ describe("createApiApp", () => {
 		jest.clearAllMocks();
 	});
 
-	it.each(routeCases)(
-		"$method $requestPath dispatches to $handlerName",
-		async ({ method, requestPath, handlerName, expectedCall }) => {
-			const { app, fakeAuthenticate, fakeData, fakeDirectory } =
-				createTestHarness();
-			const handler = mockedHandlers[handlerName];
+	it.each(
+		routeCases,
+	)("$method $requestPath dispatches to $handlerName", async ({
+		method,
+		requestPath,
+		handlerName,
+		expectedCall,
+	}) => {
+		const { app, fakeAuthenticate, fakeData, fakeDirectory } =
+			createTestHarness();
+		const handler = mockedHandlers[handlerName];
 
-			const response = await app.request(requestPath, { method });
-			const result = await readJsonResponse(response);
+		const response = await app.request(requestPath, { method });
+		const result = await readJsonResponse(response);
 
-			expect(result.status).toBe(200);
-			expect(result.body).toEqual({ handler: handlerName });
-			expect(handler).toHaveBeenCalledTimes(1);
+		expect(result.status).toBe(200);
+		expect(result.body).toEqual({ handler: handlerName });
+		expect(handler).toHaveBeenCalledTimes(1);
 
-			const call = firstCall(handler);
-			const request = firstRequest(handler);
-			expect(request.method).toBe(method);
-			expect(new URL(request.url).pathname).toBe(requestPath);
+		const call = firstCall(handler);
+		const request = firstRequest(handler);
+		expect(request.method).toBe(method);
+		expect(new URL(request.url).pathname).toBe(requestPath);
 
-			switch (expectedCall.kind) {
-				case "bootstrap":
-					expect(call).toHaveLength(1);
-					break;
-				case "data":
-					expect(call).toHaveLength(2);
-					expect(call.at(1)).toBe(fakeData);
-					break;
-				case "handler-static":
-					expect(call).toHaveLength(2);
-					expectHandlerDeps(
-						call.at(1),
-						fakeDirectory,
-						fakeAuthenticate,
-					);
-					break;
-				case "handler-with-params":
-					expect(call).toHaveLength(3);
-					expect(call.at(1)).toEqual(expectedCall.params);
-					expectHandlerDeps(
-						call.at(2),
-						fakeDirectory,
-						fakeAuthenticate,
-					);
-					break;
-				default: {
-					const exhaustive: never = expectedCall;
-					throw new Error(
-						`Unexpected call expectation: ${String(exhaustive)}`,
-					);
-				}
+		switch (expectedCall.kind) {
+			case "bootstrap":
+				expect(call).toHaveLength(1);
+				break;
+			case "data":
+				expect(call).toHaveLength(2);
+				expect(call.at(1)).toBe(fakeData);
+				break;
+			case "handler-static":
+				expect(call).toHaveLength(2);
+				expectHandlerDeps(call.at(1), fakeDirectory, fakeAuthenticate);
+				break;
+			case "handler-with-params":
+				expect(call).toHaveLength(3);
+				expect(call.at(1)).toEqual(expectedCall.params);
+				expectHandlerDeps(call.at(2), fakeDirectory, fakeAuthenticate);
+				break;
+			default: {
+				const exhaustive: never = expectedCall;
+				throw new Error(`Unexpected call expectation: ${String(exhaustive)}`);
 			}
-		},
-	);
+		}
+	});
 
 	it("registers exactly the planned method and path pairs", () => {
 		const { app } = createTestHarness();
@@ -498,24 +486,24 @@ describe("createApiApp", () => {
 			queryValue: "CODE1",
 			handlerName: "handlePreviewJoinCode",
 		},
-	] satisfies Array<{
+	] satisfies {
 		path: string;
 		queryName: string;
 		queryValue: string;
 		handlerName: HandlerName;
-	}>)(
-		"$path preserves the query string",
-		async ({ path, queryName, queryValue, handlerName }) => {
-			const { app } = createTestHarness();
+	}[])("$path preserves the query string", async ({
+		path,
+		queryName,
+		queryValue,
+		handlerName,
+	}) => {
+		const { app } = createTestHarness();
 
-			await app.request(path);
+		await app.request(path);
 
-			const request = firstRequest(mockedHandlers[handlerName]);
-			expect(new URL(request.url).searchParams.get(queryName)).toBe(
-				queryValue,
-			);
-		},
-	);
+		const request = firstRequest(mockedHandlers[handlerName]);
+		expect(new URL(request.url).searchParams.get(queryName)).toBe(queryValue);
+	});
 
 	it("preserves the Authorization header", async () => {
 		const { app } = createTestHarness();
@@ -527,9 +515,7 @@ describe("createApiApp", () => {
 
 		await app.request(request);
 
-		const receivedRequest = firstRequest(
-			mockedHandlers.handleUpdateUserName,
-		);
+		const receivedRequest = firstRequest(mockedHandlers.handleUpdateUserName);
 		expect(receivedRequest.headers.get("authorization")).toBe(
 			"Bearer test-token",
 		);

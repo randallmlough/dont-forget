@@ -48,9 +48,7 @@ export function createApiApp(deps: ApiAppDeps): Hono {
 	// the EDD §6.4 table order; no two same-method routes here can match
 	// the same concrete path.
 	// The bootstrap deps seam arrives in T2 (EDD 002 R4).
-	app.post("/api/bootstrap", (context) =>
-		handleBootstrap(context.req.raw),
-	);
+	app.post("/api/bootstrap", (context) => handleBootstrap(context.req.raw));
 	app.post("/api/data", (context) =>
 		handleDataUpload(context.req.raw, deps.data),
 	);
@@ -71,29 +69,25 @@ export function createApiApp(deps: ApiAppDeps): Hono {
 			handlerDeps,
 		),
 	);
-	app.patch(
-		"/api/households/:householdId/members/:membershipId",
-		(context) =>
-			handleChangeMemberRole(
-				context.req.raw,
-				{
-					householdId: context.req.param("householdId"),
-					membershipId: context.req.param("membershipId"),
-				},
-				handlerDeps,
-			),
+	app.patch("/api/households/:householdId/members/:membershipId", (context) =>
+		handleChangeMemberRole(
+			context.req.raw,
+			{
+				householdId: context.req.param("householdId"),
+				membershipId: context.req.param("membershipId"),
+			},
+			handlerDeps,
+		),
 	);
-	app.delete(
-		"/api/households/:householdId/members/:membershipId",
-		(context) =>
-			handleRemoveMember(
-				context.req.raw,
-				{
-					householdId: context.req.param("householdId"),
-					membershipId: context.req.param("membershipId"),
-				},
-				handlerDeps,
-			),
+	app.delete("/api/households/:householdId/members/:membershipId", (context) =>
+		handleRemoveMember(
+			context.req.raw,
+			{
+				householdId: context.req.param("householdId"),
+				membershipId: context.req.param("membershipId"),
+			},
+			handlerDeps,
+		),
 	);
 	app.post("/api/households/:householdId/members/me/leave", (context) =>
 		handleLeaveHousehold(
@@ -116,14 +110,12 @@ export function createApiApp(deps: ApiAppDeps): Hono {
 			handlerDeps,
 		),
 	);
-	app.post(
-		"/api/households/:householdId/join-code/regenerate",
-		(context) =>
-			handleRegenerateJoinCode(
-				context.req.raw,
-				{ householdId: context.req.param("householdId") },
-				handlerDeps,
-			),
+	app.post("/api/households/:householdId/join-code/regenerate", (context) =>
+		handleRegenerateJoinCode(
+			context.req.raw,
+			{ householdId: context.req.param("householdId") },
+			handlerDeps,
+		),
 	);
 	app.get("/api/households/join-code/preview", (context) =>
 		handlePreviewJoinCode(context.req.raw, handlerDeps),
