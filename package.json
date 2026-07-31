@@ -69,6 +69,7 @@
 		"expo-system-ui": "~56.0.5",
 		"expo-web-browser": "~56.0.5",
 		"express": "^5.2.1",
+		"hono": "^4.12.31",
 		"pg": "^8.22.0",
 		"posthog-node": "^5.35.6",
 		"posthog-react-native": "^4.44.0",
