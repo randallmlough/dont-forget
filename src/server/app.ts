@@ -47,6 +47,9 @@ export function createApiApp(deps: ApiAppDeps): Hono {
 	// route params into the deps slot (EDD 002 R3). Registration follows
 	// the EDD §6.4 table order; no two same-method routes here can match
 	// the same concrete path.
+	// Route-param boundary exception: preserve the Expo transport's raw string
+	// identifiers so this additive route table does not change HTTP behavior.
+	// Domain handlers retain the existing identifier lookup and not-found behavior.
 	// The bootstrap deps seam arrives in T2 (EDD 002 R4).
 	app.post("/api/bootstrap", (context) => handleBootstrap(context.req.raw));
 	app.post("/api/data", (context) =>

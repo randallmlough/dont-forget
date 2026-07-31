@@ -340,8 +340,9 @@ type HandlerMock = {
 };
 
 function createTestHarness() {
-	// The transport mocks never read this inert DirectoryDb test seam.
-	const fakeDirectory: DirectoryDb = Object.create(null);
+	// The transport mocks never read this inert test seam, so a narrow test-only
+	// assertion avoids constructing a real database client.
+	const fakeDirectory = Object.freeze({}) as DirectoryDb;
 	const fakeAuthenticate: ApiAuth = async () => {
 		throw new Error("unexpected authenticate call in dispatch test");
 	};
@@ -380,11 +381,15 @@ function firstRequest(handler: HandlerMock): Request {
 	return request;
 }
 
-function expectHandlerDeps(
-	value: unknown,
-	fakeDirectory: DirectoryDb,
-	fakeAuthenticate: ApiAuth,
-): void {
+function expectHandlerDeps({
+	value,
+	fakeDirectory,
+	fakeAuthenticate,
+}: {
+	value: unknown;
+	fakeDirectory: DirectoryDb;
+	fakeAuthenticate: ApiAuth;
+}): void {
 	if (
 		typeof value !== "object" ||
 		value === null ||
@@ -437,12 +442,20 @@ describe("createApiApp", () => {
 				break;
 			case "handler-static":
 				expect(call).toHaveLength(2);
-				expectHandlerDeps(call.at(1), fakeDirectory, fakeAuthenticate);
+				expectHandlerDeps({
+					value: call.at(1),
+					fakeDirectory,
+					fakeAuthenticate,
+				});
 				break;
 			case "handler-with-params":
 				expect(call).toHaveLength(3);
 				expect(call.at(1)).toEqual(expectedCall.params);
-				expectHandlerDeps(call.at(2), fakeDirectory, fakeAuthenticate);
+				expectHandlerDeps({
+					value: call.at(2),
+					fakeDirectory,
+					fakeAuthenticate,
+				});
 				break;
 			default: {
 				const exhaustive: never = expectedCall;
