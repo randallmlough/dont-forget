@@ -1,11 +1,559 @@
-import { Hono } from "hono";
+import { handleBootstrap } from "@/server/bootstrap/api";
+import { type DataDeps, handleDataUpload } from "@/server/data/api";
+import type { DirectoryDb } from "@/server/db/client";
+import {
+	handleChangeMemberRole,
+	handleCreateHousehold,
+	handleGetJoinCode,
+	handleJoinByCode,
+	handleLeaveHousehold,
+	handleListMembers,
+	handlePreviewJoinCode,
+	handleRegenerateJoinCode,
+	handleRemoveMember,
+	handleRenameHousehold,
+	handleSetJoinCodeEnabled,
+	handleSwitchActiveHousehold,
+} from "@/server/households/api";
+import type { ApiAuth } from "@/server/http";
+import {
+	handleAcceptInvitation,
+	handleCreateInvitation,
+	handleListInvitations,
+	handlePreviewInvitation,
+	handleRevokeInvitation,
+} from "@/server/invitations/api";
+import { handleUpdateUserName } from "@/server/users/api";
+import { createApiRequest, readJsonResponse } from "@/test/api";
+import { createApiApp } from "./app";
 
-it("dispatches through app.request", async () => {
-	const app = new Hono();
-	app.get("/ping", (context) => context.json({ ok: true }));
+// Transport-dispatch suite: the unit under test is the route table in
+// src/server/app.ts, so the domain handlers are mocked at the module
+// boundary. Handler behavior is proven by the colocated
+// src/server/**/api.test.ts suites (docs/code-standards/testing.md —
+// mock justification).
+jest.mock("@/server/bootstrap/api", () => ({
+	handleBootstrap: jest.fn(async () =>
+		Response.json({ handler: "handleBootstrap" }),
+	),
+}));
 
-	const response = await app.request("/ping");
+jest.mock("@/server/data/api", () => ({
+	handleDataUpload: jest.fn(async () =>
+		Response.json({ handler: "handleDataUpload" }),
+	),
+}));
 
-	expect(response.status).toBe(200);
-	await expect(response.json()).resolves.toEqual({ ok: true });
+jest.mock("@/server/households/api", () => ({
+	handleChangeMemberRole: jest.fn(async () =>
+		Response.json({ handler: "handleChangeMemberRole" }),
+	),
+	handleCreateHousehold: jest.fn(async () =>
+		Response.json({ handler: "handleCreateHousehold" }),
+	),
+	handleGetJoinCode: jest.fn(async () =>
+		Response.json({ handler: "handleGetJoinCode" }),
+	),
+	handleJoinByCode: jest.fn(async () =>
+		Response.json({ handler: "handleJoinByCode" }),
+	),
+	handleLeaveHousehold: jest.fn(async () =>
+		Response.json({ handler: "handleLeaveHousehold" }),
+	),
+	handleListMembers: jest.fn(async () =>
+		Response.json({ handler: "handleListMembers" }),
+	),
+	handlePreviewJoinCode: jest.fn(async () =>
+		Response.json({ handler: "handlePreviewJoinCode" }),
+	),
+	handleRegenerateJoinCode: jest.fn(async () =>
+		Response.json({ handler: "handleRegenerateJoinCode" }),
+	),
+	handleRemoveMember: jest.fn(async () =>
+		Response.json({ handler: "handleRemoveMember" }),
+	),
+	handleRenameHousehold: jest.fn(async () =>
+		Response.json({ handler: "handleRenameHousehold" }),
+	),
+	handleSetJoinCodeEnabled: jest.fn(async () =>
+		Response.json({ handler: "handleSetJoinCodeEnabled" }),
+	),
+	handleSwitchActiveHousehold: jest.fn(async () =>
+		Response.json({ handler: "handleSwitchActiveHousehold" }),
+	),
+}));
+
+jest.mock("@/server/invitations/api", () => ({
+	handleAcceptInvitation: jest.fn(async () =>
+		Response.json({ handler: "handleAcceptInvitation" }),
+	),
+	handleCreateInvitation: jest.fn(async () =>
+		Response.json({ handler: "handleCreateInvitation" }),
+	),
+	handleListInvitations: jest.fn(async () =>
+		Response.json({ handler: "handleListInvitations" }),
+	),
+	handlePreviewInvitation: jest.fn(async () =>
+		Response.json({ handler: "handlePreviewInvitation" }),
+	),
+	handleRevokeInvitation: jest.fn(async () =>
+		Response.json({ handler: "handleRevokeInvitation" }),
+	),
+}));
+
+jest.mock("@/server/users/api", () => ({
+	handleUpdateUserName: jest.fn(async () =>
+		Response.json({ handler: "handleUpdateUserName" }),
+	),
+}));
+
+const mockedHandlers = {
+	handleAcceptInvitation: jest.mocked(handleAcceptInvitation),
+	handleBootstrap: jest.mocked(handleBootstrap),
+	handleChangeMemberRole: jest.mocked(handleChangeMemberRole),
+	handleCreateHousehold: jest.mocked(handleCreateHousehold),
+	handleCreateInvitation: jest.mocked(handleCreateInvitation),
+	handleDataUpload: jest.mocked(handleDataUpload),
+	handleGetJoinCode: jest.mocked(handleGetJoinCode),
+	handleJoinByCode: jest.mocked(handleJoinByCode),
+	handleLeaveHousehold: jest.mocked(handleLeaveHousehold),
+	handleListInvitations: jest.mocked(handleListInvitations),
+	handleListMembers: jest.mocked(handleListMembers),
+	handlePreviewInvitation: jest.mocked(handlePreviewInvitation),
+	handlePreviewJoinCode: jest.mocked(handlePreviewJoinCode),
+	handleRegenerateJoinCode: jest.mocked(handleRegenerateJoinCode),
+	handleRemoveMember: jest.mocked(handleRemoveMember),
+	handleRenameHousehold: jest.mocked(handleRenameHousehold),
+	handleRevokeInvitation: jest.mocked(handleRevokeInvitation),
+	handleSetJoinCodeEnabled: jest.mocked(handleSetJoinCodeEnabled),
+	handleSwitchActiveHousehold: jest.mocked(handleSwitchActiveHousehold),
+	handleUpdateUserName: jest.mocked(handleUpdateUserName),
+};
+
+type HandlerName = keyof typeof mockedHandlers;
+
+type RouteParams =
+	| { householdId: string }
+	| { invitationId: string }
+	| { householdId: string; membershipId: string };
+
+type ExpectedCall =
+	| { kind: "bootstrap" }
+	| { kind: "data" }
+	| { kind: "handler-static" }
+	| {
+			kind: "handler-with-params";
+			params: RouteParams;
+	  };
+
+type RouteCase = {
+	method: "DELETE" | "GET" | "PATCH" | "POST";
+	requestPath: string;
+	routePath: string;
+	handlerName: HandlerName;
+	expectedCall: ExpectedCall;
+};
+
+const routeCases = [
+	{
+		method: "POST",
+		requestPath: "/api/bootstrap",
+		routePath: "/api/bootstrap",
+		handlerName: "handleBootstrap",
+		expectedCall: { kind: "bootstrap" },
+	},
+	{
+		method: "POST",
+		requestPath: "/api/data",
+		routePath: "/api/data",
+		handlerName: "handleDataUpload",
+		expectedCall: { kind: "data" },
+	},
+	{
+		method: "POST",
+		requestPath: "/api/households",
+		routePath: "/api/households",
+		handlerName: "handleCreateHousehold",
+		expectedCall: { kind: "handler-static" },
+	},
+	{
+		method: "PATCH",
+		requestPath: "/api/households/household-1",
+		routePath: "/api/households/:householdId",
+		handlerName: "handleRenameHousehold",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: { householdId: "household-1" },
+		},
+	},
+	{
+		method: "GET",
+		requestPath: "/api/households/household-1/members",
+		routePath: "/api/households/:householdId/members",
+		handlerName: "handleListMembers",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: { householdId: "household-1" },
+		},
+	},
+	{
+		method: "PATCH",
+		requestPath:
+			"/api/households/household-1/members/membership-1",
+		routePath:
+			"/api/households/:householdId/members/:membershipId",
+		handlerName: "handleChangeMemberRole",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: {
+				householdId: "household-1",
+				membershipId: "membership-1",
+			},
+		},
+	},
+	{
+		method: "DELETE",
+		requestPath:
+			"/api/households/household-1/members/membership-1",
+		routePath:
+			"/api/households/:householdId/members/:membershipId",
+		handlerName: "handleRemoveMember",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: {
+				householdId: "household-1",
+				membershipId: "membership-1",
+			},
+		},
+	},
+	{
+		method: "POST",
+		requestPath: "/api/households/household-1/members/me/leave",
+		routePath: "/api/households/:householdId/members/me/leave",
+		handlerName: "handleLeaveHousehold",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: { householdId: "household-1" },
+		},
+	},
+	{
+		method: "GET",
+		requestPath: "/api/households/household-1/join-code",
+		routePath: "/api/households/:householdId/join-code",
+		handlerName: "handleGetJoinCode",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: { householdId: "household-1" },
+		},
+	},
+	{
+		method: "PATCH",
+		requestPath: "/api/households/household-1/join-code",
+		routePath: "/api/households/:householdId/join-code",
+		handlerName: "handleSetJoinCodeEnabled",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: { householdId: "household-1" },
+		},
+	},
+	{
+		method: "POST",
+		requestPath:
+			"/api/households/household-1/join-code/regenerate",
+		routePath:
+			"/api/households/:householdId/join-code/regenerate",
+		handlerName: "handleRegenerateJoinCode",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: { householdId: "household-1" },
+		},
+	},
+	{
+		method: "GET",
+		requestPath: "/api/households/join-code/preview",
+		routePath: "/api/households/join-code/preview",
+		handlerName: "handlePreviewJoinCode",
+		expectedCall: { kind: "handler-static" },
+	},
+	{
+		method: "POST",
+		requestPath: "/api/households/join-code/join",
+		routePath: "/api/households/join-code/join",
+		handlerName: "handleJoinByCode",
+		expectedCall: { kind: "handler-static" },
+	},
+	{
+		method: "GET",
+		requestPath: "/api/households/household-1/invitations",
+		routePath: "/api/households/:householdId/invitations",
+		handlerName: "handleListInvitations",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: { householdId: "household-1" },
+		},
+	},
+	{
+		method: "POST",
+		requestPath: "/api/invitations",
+		routePath: "/api/invitations",
+		handlerName: "handleCreateInvitation",
+		expectedCall: { kind: "handler-static" },
+	},
+	{
+		method: "GET",
+		requestPath: "/api/invitations/preview",
+		routePath: "/api/invitations/preview",
+		handlerName: "handlePreviewInvitation",
+		expectedCall: { kind: "handler-static" },
+	},
+	{
+		method: "POST",
+		requestPath: "/api/invitations/accept",
+		routePath: "/api/invitations/accept",
+		handlerName: "handleAcceptInvitation",
+		expectedCall: { kind: "handler-static" },
+	},
+	{
+		method: "PATCH",
+		requestPath: "/api/invitations/invitation-1",
+		routePath: "/api/invitations/:invitationId",
+		handlerName: "handleRevokeInvitation",
+		expectedCall: {
+			kind: "handler-with-params",
+			params: { invitationId: "invitation-1" },
+		},
+	},
+	{
+		method: "PATCH",
+		requestPath: "/api/users/me",
+		routePath: "/api/users/me",
+		handlerName: "handleUpdateUserName",
+		expectedCall: { kind: "handler-static" },
+	},
+	{
+		method: "PATCH",
+		requestPath: "/api/users/me/active-household",
+		routePath: "/api/users/me/active-household",
+		handlerName: "handleSwitchActiveHousehold",
+		expectedCall: { kind: "handler-static" },
+	},
+] satisfies RouteCase[];
+
+type HandlerMock = {
+	mock: {
+		calls: ReadonlyArray<ReadonlyArray<unknown>>;
+	};
+};
+
+function createTestHarness() {
+	// The transport mocks never read this inert DirectoryDb test seam.
+	const fakeDirectory = {} as DirectoryDb;
+	const fakeAuthenticate: ApiAuth = async () => {
+		throw new Error("unexpected authenticate call in dispatch test");
+	};
+	const fakeData: DataDeps = {
+		authenticate: async () => "user-1",
+		withTransaction: async () => {
+			throw new Error("unexpected transaction in dispatch test");
+		},
+	};
+
+	return {
+		app: createApiApp({
+			directory: fakeDirectory,
+			data: fakeData,
+			authenticate: fakeAuthenticate,
+		}),
+		fakeAuthenticate,
+		fakeData,
+		fakeDirectory,
+	};
+}
+
+function firstCall(handler: HandlerMock): ReadonlyArray<unknown> {
+	const call = handler.mock.calls.at(0);
+	if (!call) {
+		throw new Error("Expected handler to have been called");
+	}
+	return call;
+}
+
+function firstRequest(handler: HandlerMock): Request {
+	const request = firstCall(handler).at(0);
+	if (!(request instanceof Request)) {
+		throw new Error("Expected handler to receive a Request");
+	}
+	return request;
+}
+
+function expectHandlerDeps(
+	value: unknown,
+	fakeDirectory: DirectoryDb,
+	fakeAuthenticate: ApiAuth,
+): void {
+	if (
+		typeof value !== "object" ||
+		value === null ||
+		!("directory" in value) ||
+		!("authenticate" in value)
+	) {
+		throw new Error("Expected handler deps");
+	}
+
+	expect(value.directory).toBe(fakeDirectory);
+	expect(value.authenticate).toBe(fakeAuthenticate);
+}
+
+describe("createApiApp", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it.each(routeCases)(
+		"$method $requestPath dispatches to $handlerName",
+		async ({ method, requestPath, handlerName, expectedCall }) => {
+			const { app, fakeAuthenticate, fakeData, fakeDirectory } =
+				createTestHarness();
+			const handler = mockedHandlers[handlerName];
+
+			const response = await app.request(requestPath, { method });
+			const result = await readJsonResponse(response);
+
+			expect(result.status).toBe(200);
+			expect(result.body).toEqual({ handler: handlerName });
+			expect(handler).toHaveBeenCalledTimes(1);
+
+			const call = firstCall(handler);
+			const request = firstRequest(handler);
+			expect(request.method).toBe(method);
+			expect(new URL(request.url).pathname).toBe(requestPath);
+
+			switch (expectedCall.kind) {
+				case "bootstrap":
+					expect(call).toHaveLength(1);
+					break;
+				case "data":
+					expect(call).toHaveLength(2);
+					expect(call.at(1)).toBe(fakeData);
+					break;
+				case "handler-static":
+					expect(call).toHaveLength(2);
+					expectHandlerDeps(
+						call.at(1),
+						fakeDirectory,
+						fakeAuthenticate,
+					);
+					break;
+				case "handler-with-params":
+					expect(call).toHaveLength(3);
+					expect(call.at(1)).toEqual(expectedCall.params);
+					expectHandlerDeps(
+						call.at(2),
+						fakeDirectory,
+						fakeAuthenticate,
+					);
+					break;
+				default: {
+					const exhaustive: never = expectedCall;
+					throw new Error(
+						`Unexpected call expectation: ${String(exhaustive)}`,
+					);
+				}
+			}
+		},
+	);
+
+	it("registers exactly the planned method and path pairs", () => {
+		const { app } = createTestHarness();
+		const compareRoutes = (
+			left: { method: string; path: string },
+			right: { method: string; path: string },
+		) =>
+			`${left.method} ${left.path}`.localeCompare(
+				`${right.method} ${right.path}`,
+			);
+		const expectedRoutes = routeCases
+			.map(({ method, routePath }) => ({
+				method,
+				path: routePath,
+			}))
+			.sort(compareRoutes);
+		const actualRoutes = app.routes
+			.map(({ method, path }) => ({ method, path }))
+			.sort(compareRoutes);
+
+		expect(actualRoutes).toEqual(expectedRoutes);
+	});
+
+	it.each([
+		{
+			path: "/api/invitations/preview?token=tok-1",
+			queryName: "token",
+			queryValue: "tok-1",
+			handlerName: "handlePreviewInvitation",
+		},
+		{
+			path: "/api/households/join-code/preview?code=CODE1",
+			queryName: "code",
+			queryValue: "CODE1",
+			handlerName: "handlePreviewJoinCode",
+		},
+	] satisfies Array<{
+		path: string;
+		queryName: string;
+		queryValue: string;
+		handlerName: HandlerName;
+	}>)(
+		"$path preserves the query string",
+		async ({ path, queryName, queryValue, handlerName }) => {
+			const { app } = createTestHarness();
+
+			await app.request(path);
+
+			const request = firstRequest(mockedHandlers[handlerName]);
+			expect(new URL(request.url).searchParams.get(queryName)).toBe(
+				queryValue,
+			);
+		},
+	);
+
+	it("preserves the Authorization header", async () => {
+		const { app } = createTestHarness();
+		const request = createApiRequest({
+			method: "PATCH",
+			path: "/api/users/me",
+			bearerToken: "test-token",
+		});
+
+		await app.request(request);
+
+		const receivedRequest = firstRequest(
+			mockedHandlers.handleUpdateUserName,
+		);
+		expect(receivedRequest.headers.get("authorization")).toBe(
+			"Bearer test-token",
+		);
+	});
+
+	it("passes through the handler response", async () => {
+		const { app } = createTestHarness();
+		mockedHandlers.handleCreateHousehold.mockResolvedValueOnce(
+			new Response(JSON.stringify({ created: true }), {
+				status: 201,
+				headers: {
+					"content-type": "application/json",
+					"x-transport-test": "preserved",
+				},
+			}),
+		);
+
+		const response = await app.request("/api/households", {
+			method: "POST",
+		});
+
+		expect(response.status).toBe(201);
+		expect(response.headers.get("content-type")).toBe("application/json");
+		expect(response.headers.get("x-transport-test")).toBe("preserved");
+		await expect(response.json()).resolves.toEqual({ created: true });
+	});
 });
