@@ -869,7 +869,9 @@ describe("Home bottom toolbar", () => {
 			wrapper: TestSafeAreaProvider,
 		});
 		expect(pageControl()).toBeTruthy();
-		expect(screen.getByTestId("home-add-item-button-position")).toHaveStyle({
+		expect(
+			screen.getByTestId("home-add-item-button-keyboard-layer"),
+		).toHaveStyle({
 			bottom: 88,
 		});
 
