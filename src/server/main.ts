@@ -16,6 +16,9 @@ const API_HOST = "0.0.0.0";
 
 export async function startApiServer(): Promise<void> {
 	const explicitAppEnv = process.env.APP_ENV?.trim();
+	if (explicitAppEnv !== undefined) {
+		process.env.APP_ENV = explicitAppEnv;
+	}
 	if (explicitAppEnv === "local") {
 		// loadEnvFile resolves from process.cwd(); make api intentionally runs at
 		// the repository root.

@@ -137,15 +137,16 @@ describe("startApiServer", () => {
 		jest.restoreAllMocks();
 	});
 
-	it("loads local env before config and completes readiness before listen", async () => {
+	it("normalizes padded local before dotenv and config, then readies before listen", async () => {
+		process.env.APP_ENV = "  local  ";
 		const order: string[] = [];
 		const readiness = deferred<void>();
 		mockedLoadEnvFile.mockImplementation(() => {
-			order.push("load env");
+			order.push(`load env:${process.env.APP_ENV}`);
 			return "local";
 		});
 		mockedReadApiServerConfig.mockImplementation(() => {
-			order.push("read config");
+			order.push(`read config:${process.env.APP_ENV}`);
 			return config;
 		});
 		jest.mocked(Pool.prototype.query).mockImplementation(async () => {
@@ -167,15 +168,19 @@ describe("startApiServer", () => {
 		const start = startApiServer();
 		await Promise.resolve();
 
-		expect(order).toEqual(["load env", "read config", "readiness start"]);
+		expect(order).toEqual([
+			"load env:local",
+			"read config:local",
+			"readiness start",
+		]);
 		expect(mockedServe).not.toHaveBeenCalled();
 
 		readiness.resolve();
 		await start;
 
 		expect(order).toEqual([
-			"load env",
-			"read config",
+			"load env:local",
+			"read config:local",
 			"readiness start",
 			"readiness complete",
 			"listen",
@@ -183,6 +188,7 @@ describe("startApiServer", () => {
 	});
 
 	it.each([
+		"test",
 		"staging",
 		"production",
 	] as const)("does not load dotenv for %s", async (appEnv) => {
