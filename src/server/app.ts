@@ -41,6 +41,7 @@ export function createApiApp(deps: ApiAppDeps): Hono {
 	};
 
 	const app = new Hono();
+	app.get("/health", (context) => context.json({ ok: true }));
 
 	// Explicit adapter per route: static-path handlers take deps in the
 	// second position, so a generic (request, params) adapter would pass
@@ -50,8 +51,9 @@ export function createApiApp(deps: ApiAppDeps): Hono {
 	// Route-param boundary exception: preserve the Expo transport's raw string
 	// identifiers so this additive route table does not change HTTP behavior.
 	// Domain handlers retain the existing identifier lookup and not-found behavior.
-	// The bootstrap deps seam arrives in T2 (EDD 002 R4).
-	app.post("/api/bootstrap", (context) => handleBootstrap(context.req.raw));
+	app.post("/api/bootstrap", (context) =>
+		handleBootstrap(context.req.raw, { directory: deps.directory }),
+	);
 	app.post("/api/data", (context) =>
 		handleDataUpload(context.req.raw, deps.data),
 	);

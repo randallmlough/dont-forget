@@ -403,6 +403,25 @@ function expectHandlerDeps({
 	expect(value.authenticate).toBe(fakeAuthenticate);
 }
 
+function expectBootstrapDeps({
+	value,
+	fakeDirectory,
+}: {
+	value: unknown;
+	fakeDirectory: DirectoryDb;
+}): void {
+	if (
+		typeof value !== "object" ||
+		value === null ||
+		!("directory" in value)
+	) {
+		throw new Error("Expected bootstrap deps");
+	}
+
+	expect(value.directory).toBe(fakeDirectory);
+	expect(Object.keys(value)).toEqual(["directory"]);
+}
+
 describe("createApiApp", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -434,7 +453,11 @@ describe("createApiApp", () => {
 
 		switch (expectedCall.kind) {
 			case "bootstrap":
-				expect(call).toHaveLength(1);
+				expect(call).toHaveLength(2);
+				expectBootstrapDeps({
+					value: call.at(1),
+					fakeDirectory,
+				});
 				break;
 			case "data":
 				expect(call).toHaveLength(2);
@@ -480,10 +503,24 @@ describe("createApiApp", () => {
 			}))
 			.sort(compareRoutes);
 		const actualRoutes = app.routes
+			.filter(({ path }) => path.startsWith("/api/"))
 			.map(({ method, path }) => ({ method, path }))
 			.sort(compareRoutes);
 
 		expect(actualRoutes).toEqual(expectedRoutes);
+	});
+
+	it("serves database-free liveness", async () => {
+		const { app } = createTestHarness();
+
+		const response = await app.request("/health");
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("content-type")).toContain("application/json");
+		await expect(response.json()).resolves.toEqual({ ok: true });
+		for (const handler of Object.values(mockedHandlers)) {
+			expect(handler).not.toHaveBeenCalled();
+		}
 	});
 
 	it.each([
