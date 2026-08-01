@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const DEFAULT_API_PORT = 8080;
+
 const APP_ENVS = ["local", "test", "staging", "production"] as const;
 const appEnvSchema = z.enum(APP_ENVS);
 const requiredEnvValueSchema = z
