@@ -8,8 +8,8 @@ import { readApiServerConfig } from "@/server/config";
 import { directoryDb } from "@/server/db/client";
 import { defaultAuthenticate, defaultWithTransaction } from "@/server/sync";
 import { DEFAULT_API_PORT } from "@/shared/env";
-import { deferred, waitForAsync } from "@/test/async";
 import { loadEnvFile } from "@/shared/load-env";
+import { deferred, waitForAsync } from "@/test/async";
 import { startApiServer } from "./main";
 
 // Composition-boundary mocks are intentional: this suite proves dependency
@@ -56,9 +56,7 @@ const mockedDefaultWithTransaction = jest.mocked(defaultWithTransaction);
 const mockedPool = jest.mocked(Pool);
 const originalAppEnv = process.env.APP_ENV;
 
-function processExitWithoutTerminating(
-	_code?: string | number | null,
-): never;
+function processExitWithoutTerminating(_code?: string | number | null): never;
 function processExitWithoutTerminating(): undefined {
 	return undefined;
 }
@@ -156,7 +154,7 @@ describe("startApiServer", () => {
 			order.push("readiness complete");
 			return readinessResult;
 		});
-		mockedServe.mockImplementation((options, listeningListener) => {
+		mockedServe.mockImplementation((_options, listeningListener) => {
 			order.push("listen");
 			listeningListener?.({
 				address: "0.0.0.0",
@@ -184,19 +182,19 @@ describe("startApiServer", () => {
 		]);
 	});
 
-	it.each(["staging", "production"] as const)(
-		"does not load dotenv for %s",
-		async (appEnv) => {
-			process.env.APP_ENV = appEnv;
-			mockedReadApiServerConfig.mockReturnValue({ ...config, appEnv });
+	it.each([
+		"staging",
+		"production",
+	] as const)("does not load dotenv for %s", async (appEnv) => {
+		process.env.APP_ENV = appEnv;
+		mockedReadApiServerConfig.mockReturnValue({ ...config, appEnv });
 
-			await startApiServer();
+		await startApiServer();
 
-			expect(mockedLoadEnvFile).not.toHaveBeenCalled();
-			expect(mockedReadApiServerConfig).toHaveBeenCalledTimes(1);
-			expect(mockedReadApiServerConfig).toHaveBeenCalledWith(process.env);
-		},
-	);
+		expect(mockedLoadEnvFile).not.toHaveBeenCalled();
+		expect(mockedReadApiServerConfig).toHaveBeenCalledTimes(1);
+		expect(mockedReadApiServerConfig).toHaveBeenCalledWith(process.env);
+	});
 
 	it("wires one Pool through readiness and every production dependency", async () => {
 		await startApiServer();
@@ -211,9 +209,7 @@ describe("startApiServer", () => {
 		expect(mockedDirectoryDb).toHaveBeenCalledWith(pool);
 
 		const appDeps = createdAppDeps();
-		expect(appDeps.directory).toBe(
-			mockedDirectoryDb.mock.results.at(0)?.value,
-		);
+		expect(appDeps.directory).toBe(mockedDirectoryDb.mock.results.at(0)?.value);
 		expect(appDeps.authenticate).toBeUndefined();
 
 		const request = new Request("https://api.invalid/api/data", {

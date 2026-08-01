@@ -1,6 +1,6 @@
 import type { Server } from "node:http";
 
-import { serve, type ServerType } from "@hono/node-server";
+import { type ServerType, serve } from "@hono/node-server";
 import { Pool } from "pg";
 
 import { createApiApp } from "@/server/app";

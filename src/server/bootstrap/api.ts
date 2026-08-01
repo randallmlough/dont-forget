@@ -3,8 +3,8 @@ import {
 	createProductionAuthenticatedAppSessionBootstrapDeps,
 } from "@/server/bootstrap/bootstrap-service";
 import {
-	directoryDb,
 	type DirectoryDb,
+	directoryDb,
 	postgresPool,
 } from "@/server/db/client";
 import {

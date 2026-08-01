@@ -410,11 +410,7 @@ function expectBootstrapDeps({
 	value: unknown;
 	fakeDirectory: DirectoryDb;
 }): void {
-	if (
-		typeof value !== "object" ||
-		value === null ||
-		!("directory" in value)
-	) {
+	if (typeof value !== "object" || value === null || !("directory" in value)) {
 		throw new Error("Expected bootstrap deps");
 	}
 

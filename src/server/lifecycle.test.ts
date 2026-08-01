@@ -1,8 +1,5 @@
 import { deferred } from "@/test/async";
-import {
-	createGracefulShutdown,
-	SHUTDOWN_DEADLINE_MS,
-} from "./lifecycle";
+import { createGracefulShutdown, SHUTDOWN_DEADLINE_MS } from "./lifecycle";
 
 describe("createGracefulShutdown", () => {
 	it("closes the server, ends the Pool, and exits cleanly in order", async () => {
@@ -86,9 +83,7 @@ describe("createGracefulShutdown", () => {
 
 			expect(forceCloseServer).toHaveBeenCalledTimes(1);
 			expect(endPool).not.toHaveBeenCalled();
-			expect(logError).toHaveBeenCalledWith(
-				"api shutdown deadline exceeded",
-			);
+			expect(logError).toHaveBeenCalledWith("api shutdown deadline exceeded");
 			expect(exit).toHaveBeenCalledWith(1);
 			await expect(run).resolves.toBeUndefined();
 		} finally {

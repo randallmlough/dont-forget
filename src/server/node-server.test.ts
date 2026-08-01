@@ -1,25 +1,22 @@
 import type { Server } from "node:http";
 
-import { serve, type ServerType } from "@hono/node-server";
+import { type ServerType, serve } from "@hono/node-server";
 import { eq } from "drizzle-orm";
 
 import type { DataDeps } from "@/server/data/api";
 import {
 	householdJoinCodeFixture,
+	type InvitationVariantsScenario,
 	PRIMARY_HOUSEHOLD_SEED,
 	seedInvitationVariantsScenario,
-	type InvitationVariantsScenario,
 } from "@/server/db/fixtures";
 import {
 	householdJoinCodes,
 	type User,
 	users,
 } from "@/server/db/schema/postgres";
-import {
-	createTestDirectoryDb,
-	type TestDirectoryDb,
-} from "@/server/db/test";
-import { ApiUnauthorizedError, type ApiAuth } from "@/server/http";
+import { createTestDirectoryDb, type TestDirectoryDb } from "@/server/db/test";
+import { type ApiAuth, ApiUnauthorizedError } from "@/server/http";
 import type { DataTransaction } from "@/server/sync";
 import * as payload from "@/server/sync/payload";
 import * as rateLimit from "@/server/sync/rate-limit";
@@ -240,17 +237,14 @@ async function listen(
 ): Promise<{ origin: string; server: Server }> {
 	const server = await new Promise<Server>((resolve, reject) => {
 		const onError = (error: Error) => reject(error);
-		const candidate = serve(
-			{ fetch, hostname: TEST_HOST, port: 0 },
-			() => {
-				candidate.off("error", onError);
-				if (!isHttpServer(candidate)) {
-					reject(new Error("Node adapter returned an unsupported server"));
-					return;
-				}
-				resolve(candidate);
-			},
-		);
+		const candidate = serve({ fetch, hostname: TEST_HOST, port: 0 }, () => {
+			candidate.off("error", onError);
+			if (!isHttpServer(candidate)) {
+				reject(new Error("Node adapter returned an unsupported server"));
+				return;
+			}
+			resolve(candidate);
+		});
 		candidate.once("error", onError);
 	});
 	const address = server.address();

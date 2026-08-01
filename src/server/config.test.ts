@@ -66,14 +66,16 @@ describe("readApiServerConfig", () => {
 		).toThrow();
 	});
 
-	it.each(["0", "65536", "1.5", "not-a-number", "", "   "])(
-		"rejects invalid API port %p",
-		(API_PORT) => {
-			expect(() =>
-				readApiServerConfig({ ...validSource(), API_PORT }),
-			).toThrow();
-		},
-	);
+	it.each([
+		"0",
+		"65536",
+		"1.5",
+		"not-a-number",
+		"",
+		"   ",
+	])("rejects invalid API port %p", (API_PORT) => {
+		expect(() => readApiServerConfig({ ...validSource(), API_PORT })).toThrow();
+	});
 
 	it.each([
 		{ appEnv: "local", validPrefix: "sk_test_", invalidPrefix: "sk_live_" },
@@ -84,25 +86,26 @@ describe("readApiServerConfig", () => {
 			validPrefix: "sk_live_",
 			invalidPrefix: "sk_test_",
 		},
-	])(
-		"preserves the Clerk key prefix rule for $appEnv",
-		({ appEnv, validPrefix, invalidPrefix }) => {
-			expect(() =>
-				readApiServerConfig({
-					...validSource(),
-					APP_ENV: appEnv,
-					CLERK_SECRET_KEY: `${validPrefix}synthetic`,
-				}),
-			).not.toThrow();
-			expect(() =>
-				readApiServerConfig({
-					...validSource(),
-					APP_ENV: appEnv,
-					CLERK_SECRET_KEY: `${invalidPrefix}synthetic`,
-				}),
-			).toThrow();
-		},
-	);
+	])("preserves the Clerk key prefix rule for $appEnv", ({
+		appEnv,
+		validPrefix,
+		invalidPrefix,
+	}) => {
+		expect(() =>
+			readApiServerConfig({
+				...validSource(),
+				APP_ENV: appEnv,
+				CLERK_SECRET_KEY: `${validPrefix}synthetic`,
+			}),
+		).not.toThrow();
+		expect(() =>
+			readApiServerConfig({
+				...validSource(),
+				APP_ENV: appEnv,
+				CLERK_SECRET_KEY: `${invalidPrefix}synthetic`,
+			}),
+		).toThrow();
+	});
 
 	it.each([
 		{ key: "PUBLIC_APP_BASE_URL", value: "not-a-url" },
