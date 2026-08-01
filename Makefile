@@ -34,6 +34,10 @@ worktree-db-destroy: ## Delete this worktree's directory DB plus its Household D
 start: ## Start Expo for normal app development *common*
 	@APP_ENV="$(APP_ENV_VALUE)" NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --localhost $(PORT_ARG)
 
+.PHONY: api
+api: ## Start the standalone API server in watch mode *common*
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) exec tsx watch src/server/main.ts
+
 .PHONY: ios
 ios: ## Run the native iOS target *common*
 	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo run:ios $(PORT_ARG)

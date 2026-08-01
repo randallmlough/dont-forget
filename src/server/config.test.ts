@@ -29,6 +29,7 @@ describe("readApiServerConfig", () => {
 	it("maps and trims the required server values and defaults the API port", () => {
 		const source = {
 			...validSource(),
+			APP_ENV: "  test  ",
 			DATABASE_URL: "  postgresql://synthetic.invalid/dont_forget  ",
 			UNKNOWN_SERVER_VALUE: "ignored",
 		};

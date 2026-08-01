@@ -6,7 +6,9 @@ const requiredStringSchema = z.string().trim().min(1);
 
 const apiServerConfigSchema = z
 	.object({
-		APP_ENV: z.enum(["local", "test", "staging", "production"]),
+		APP_ENV: requiredStringSchema.pipe(
+			z.enum(["local", "test", "staging", "production"]),
+		),
 		DATABASE_URL: requiredStringSchema,
 		CLERK_SECRET_KEY: requiredStringSchema,
 		PUBLIC_APP_BASE_URL: requiredStringSchema.pipe(z.url()),
