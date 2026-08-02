@@ -46,6 +46,10 @@ web: ## Start the dedicated public web link surface *common*
 web-build: ## Build and verify the dedicated public web link surface
 	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/web build
 
+.PHONY: api-build
+api-build: ## Build and verify the standalone API artifact
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) api:build
+
 .PHONY: ios
 ios: ## Run the native iOS target *common*
 	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo run:ios $(PORT_ARG)
