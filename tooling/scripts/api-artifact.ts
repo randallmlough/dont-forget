@@ -34,6 +34,32 @@ const metafileSchema = z.object({
 	),
 });
 
+const API_RUNTIME_PACKAGE_ROOTS = new Set([
+	"@clerk/backend",
+	"@clerk/shared",
+	"@hono/node-server",
+	"@posthog/core",
+	"dotenv",
+	"drizzle-orm",
+	"hono",
+	"pg",
+	"pg-cloudflare",
+	"pg-connection-string",
+	"pg-int8",
+	"pg-pool",
+	"pg-protocol",
+	"pg-types",
+	"pgpass",
+	"postgres-array",
+	"postgres-bytea",
+	"postgres-date",
+	"postgres-interval",
+	"posthog-node",
+	"split2",
+	"xtend",
+	"zod",
+]);
+
 export async function buildApiArtifact({
 	projectRoot,
 	outputDirectory,
@@ -113,15 +139,19 @@ export async function verifyApiArtifact({
 
 function verifyInputPath(projectRoot: string, inputPath: string): void {
 	const normalizedInput = normalizeProjectInput(projectRoot, inputPath);
-	if (isMobileRuntimeInput(normalizedInput)) {
-		throw new Error(`Mobile runtime leaked into API bundle: ${inputPath}`);
-	}
 	if (
-		normalizedInput.startsWith("node_modules/") ||
 		normalizedInput.startsWith("src/server/") ||
 		normalizedInput.startsWith("src/shared/")
 	) {
 		return;
+	}
+
+	const packageRoot = nodeModulesPackageRoot(normalizedInput);
+	if (packageRoot && API_RUNTIME_PACKAGE_ROOTS.has(packageRoot)) return;
+	if (packageRoot) {
+		throw new Error(
+			`Unexpected API runtime package ${packageRoot}: ${inputPath}`,
+		);
 	}
 
 	throw new Error(`Unexpected app-owned API input: ${inputPath}`);
@@ -139,23 +169,17 @@ function normalizeProjectInput(projectRoot: string, inputPath: string): string {
 	return normalizePath(relativeInput);
 }
 
-function isMobileRuntimeInput(inputPath: string): boolean {
-	const dependencyPaths = `/${inputPath}`.split("/node_modules/").slice(1);
-	return dependencyPaths.some((dependencyPath) => {
-		return (
-			dependencyPath === "expo" ||
-			dependencyPath.startsWith("expo/") ||
-			dependencyPath.startsWith("expo-") ||
-			dependencyPath.startsWith("@expo/") ||
-			dependencyPath === "react-native" ||
-			dependencyPath.startsWith("react-native/") ||
-			dependencyPath.startsWith("@react-native/") ||
-			dependencyPath === "react-dom" ||
-			dependencyPath.startsWith("react-dom/") ||
-			dependencyPath === "react-native-web" ||
-			dependencyPath.startsWith("react-native-web/")
-		);
-	});
+function nodeModulesPackageRoot(inputPath: string): string | undefined {
+	const segments = `/${inputPath}`.split("/node_modules/");
+	if (segments.length === 1) return undefined;
+
+	const dependencyPath = segments[segments.length - 1];
+	if (!dependencyPath) return undefined;
+
+	const [root, scopedName] = dependencyPath.split("/");
+	if (!root) return undefined;
+	if (!root.startsWith("@")) return root;
+	return scopedName ? `${root}/${scopedName}` : undefined;
 }
 
 function normalizePath(path: string): string {

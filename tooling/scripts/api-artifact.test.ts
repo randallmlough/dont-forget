@@ -62,6 +62,33 @@ describe("API artifact", () => {
 		);
 	});
 
+	it.each([
+		"node_modules/@tanstack/react-start/dist/index.js",
+		"node_modules/vite/dist/node/index.js",
+		"node_modules/@clerk/backend/node_modules/react/index.js",
+	])("rejects forbidden frontend package input %s", async (inputPath) => {
+		const fixture = await writeArtifactFixture({
+			inputs: {
+				"src/server/main.ts": input(),
+				[inputPath]: input(),
+			},
+		});
+
+		await expect(verifyApiArtifact(fixture)).rejects.toThrow(inputPath);
+	});
+
+	it("accepts an allowlisted scoped package from a nested node_modules path", async () => {
+		const fixture = await writeArtifactFixture({
+			inputs: {
+				"src/server/main.ts": input(),
+				"node_modules/.pnpm/@clerk+shared@1.0.0/node_modules/@clerk/shared/dist/index.js":
+					input(),
+			},
+		});
+
+		await expect(verifyApiArtifact(fixture)).resolves.toBeUndefined();
+	});
+
 	it("rejects non-built-in external imports", async () => {
 		const fixture = await writeArtifactFixture({
 			externalImports: ["left-pad"],
