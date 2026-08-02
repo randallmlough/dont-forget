@@ -2,8 +2,14 @@
 
 set -eu
 
-image=${1:-dont-forget-web:t5}
-browser_image=${2:-selenium/standalone-chromium:4.44.0-20260505}
+if [ "$#" -lt 1 ] || [ -z "$1" ]; then
+	echo "Usage: $0 <expected-app-scheme> [web-image] [browser-image]" >&2
+	exit 2
+fi
+
+expected_app_scheme=$1
+image=${2:-dont-forget-web:t5}
+browser_image=${3:-selenium/standalone-chromium:4.44.0-20260505}
 container="dont-forget-web-t5-$$"
 browser_container="dont-forget-web-browser-t5-$$"
 network="dont-forget-web-t5-$$"
@@ -113,7 +119,7 @@ fi
 node infra/web/verify-hydration.mjs \
 	"http://127.0.0.1:$webdriver_port" \
 	"http://$container:8080" \
-	"dontforget-test"
+	"$expected_app_scheme"
 
 logs=$(docker logs "$container" 2>&1)
 if printf '%s' "$logs" | grep -Eq 't5-token-marker|t5-code-marker'; then
