@@ -1,10 +1,7 @@
-import { Pool } from "pg";
 import { postgresPool } from "@/server/db/client";
 import {
 	DataAuthError,
 	type DataTransaction,
-	defaultAuthenticate,
-	defaultWithTransaction,
 	PAYLOAD_MAX_BYTES,
 	RATE_LIMIT_CAPACITY,
 	resetRateLimiterForTests,
@@ -13,11 +10,6 @@ import { createApiRequest, readJsonResponse } from "@/test/api/requests";
 import { type DataDeps, handleDataUpload } from "./api";
 
 jest.mock("@/server/db/client", () => ({ postgresPool: jest.fn() }));
-jest.mock("@/server/sync", () => ({
-	...jest.requireActual("@/server/sync"),
-	defaultAuthenticate: jest.fn(),
-	defaultWithTransaction: jest.fn(),
-}));
 
 type FakeRowState = {
 	updatedAt: Date | null;
@@ -117,6 +109,7 @@ function overCapJsonPayload(): string {
 
 describe("/api/data handler", () => {
 	beforeEach(() => {
+		jest.clearAllMocks();
 		resetRateLimiterForTests();
 	});
 
@@ -584,55 +577,21 @@ describe("/api/data handler", () => {
 		]);
 	});
 
-	it("production path builds ONE pool shared by auth and transaction, ended once", async () => {
-		const end = jest.fn().mockResolvedValue(undefined);
-		const pool: Pool = Object.assign(Object.create(Pool.prototype), { end });
-		jest.mocked(postgresPool).mockReturnValueOnce(pool);
-		const seenPools: unknown[] = [];
-		jest
-			.mocked(defaultAuthenticate)
-			.mockImplementationOnce(async (_request, p) => {
-				seenPools.push(p);
-				return "user_a";
-			});
-		jest
-			.mocked(defaultWithTransaction)
-			.mockImplementationOnce(async (p, run) => {
-				seenPools.push(p);
-				const { tx } = fakeTransaction({});
-				return run(tx); // empty batch -> the op loop never touches tx
-			});
-
-		const response = await handleDataUpload(request([])); // no deps -> production wiring
-
-		expect(response.status).toBe(200);
-		expect(jest.mocked(postgresPool)).toHaveBeenCalledTimes(1);
-		expect(seenPools).toEqual([pool, pool]); // the SAME pool instance, both seams
-		expect(end).toHaveBeenCalledTimes(1);
-	});
-
-	it("returns a server error when production pool creation fails", async () => {
-		const error = new Error("missing DATABASE_URL");
+	it("has no Pool fallback when required dependencies are absent at runtime", async () => {
+		jest.mocked(postgresPool).mockImplementation(() => {
+			throw new Error("legacy Pool fallback reached");
+		});
 		const consoleError = jest
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
+
 		try {
-			jest.mocked(postgresPool).mockImplementationOnce(() => {
-				throw error;
-			});
+			const response = await Reflect.apply(handleDataUpload, undefined, [
+				request([]),
+			]);
 
-			const response = await handleDataUpload(request([]));
-
-			await expect(readJsonResponse(response)).resolves.toMatchObject({
-				status: 500,
-				body: { error: "Server error" },
-			});
-			expect(consoleError).toHaveBeenCalledWith(
-				"/api/data pool creation failed",
-				error,
-			);
-			expect(jest.mocked(defaultAuthenticate)).not.toHaveBeenCalled();
-			expect(jest.mocked(defaultWithTransaction)).not.toHaveBeenCalled();
+			expect(response.status).toBe(500);
+			expect(postgresPool).not.toHaveBeenCalled();
 		} finally {
 			consoleError.mockRestore();
 		}

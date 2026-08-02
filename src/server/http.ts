@@ -3,11 +3,7 @@ import {
 	createClerkClient,
 	verifyToken,
 } from "@clerk/backend";
-import {
-	type DirectoryDb,
-	directoryDb,
-	postgresPool,
-} from "@/server/db/client";
+import type { DirectoryDb } from "@/server/db/client";
 import type { User } from "@/server/db/schema/postgres";
 import { createUserService } from "@/server/users/user-service";
 import { readClerkServerConfig, requireEnv } from "@/shared/env";
@@ -53,32 +49,23 @@ export type ApiAuth = (
 ) => Promise<User>;
 
 export type ApiHandlerDeps = {
-	directory?: DirectoryDb;
+	directory: DirectoryDb;
 	authenticate?: ApiAuth;
 };
 
 export async function withDirectory<T>(
-	deps: ApiHandlerDeps | undefined,
+	deps: ApiHandlerDeps,
 	handler: (directory: DirectoryDb) => Promise<T>,
 ): Promise<T> {
-	if (deps?.directory) {
-		return handler(deps.directory);
-	}
-
-	const client = postgresPool();
-	try {
-		return await handler(directoryDb(client));
-	} finally {
-		await client.end();
-	}
+	return handler(deps.directory);
 }
 
 export async function authenticateApiUser(
 	request: Request,
 	directory: DirectoryDb,
-	deps?: ApiHandlerDeps,
+	deps: ApiHandlerDeps,
 ): Promise<User> {
-	if (deps?.authenticate) {
+	if (deps.authenticate) {
 		return deps.authenticate(request, directory);
 	}
 

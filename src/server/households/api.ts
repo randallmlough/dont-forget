@@ -82,7 +82,7 @@ export type HouseholdApiDeps = ApiHandlerDeps & {
 
 export async function handleCreateHousehold(
 	request: Request,
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -117,7 +117,7 @@ export async function handleCreateHousehold(
 
 export async function handleSwitchActiveHousehold(
 	request: Request,
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -140,7 +140,7 @@ export async function handleSwitchActiveHousehold(
 export async function handleListMembers(
 	request: Request,
 	{ householdId }: { householdId: string },
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -164,7 +164,7 @@ export async function handleListMembers(
 export async function handleRenameHousehold(
 	request: Request,
 	{ householdId }: { householdId: string },
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -190,7 +190,7 @@ export async function handleRenameHousehold(
 export async function handleRemoveMember(
 	request: Request,
 	{ householdId, membershipId }: { householdId: string; membershipId: string },
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -211,7 +211,7 @@ export async function handleRemoveMember(
 export async function handleChangeMemberRole(
 	request: Request,
 	{ householdId, membershipId }: { householdId: string; membershipId: string },
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -235,7 +235,7 @@ export async function handleChangeMemberRole(
 export async function handleLeaveHousehold(
 	request: Request,
 	{ householdId }: { householdId: string },
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -259,7 +259,7 @@ export async function handleLeaveHousehold(
 export async function handleGetJoinCode(
 	request: Request,
 	{ householdId }: { householdId: string },
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -282,7 +282,7 @@ export async function handleGetJoinCode(
 export async function handleRegenerateJoinCode(
 	request: Request,
 	{ householdId }: { householdId: string },
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -308,7 +308,7 @@ export async function handleRegenerateJoinCode(
 export async function handleSetJoinCodeEnabled(
 	request: Request,
 	{ householdId }: { householdId: string },
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -338,7 +338,7 @@ export async function handleSetJoinCodeEnabled(
 
 export async function handlePreviewJoinCode(
 	request: Request,
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -362,7 +362,7 @@ export async function handlePreviewJoinCode(
 
 export async function handleJoinByCode(
 	request: Request,
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -408,9 +408,9 @@ function createHouseholdNameFromBody(body: Record<string, unknown>): string {
 
 function activeHouseholdService(
 	directory: ActiveHouseholdServiceDirectory,
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): ActiveHouseholdService {
-	if (deps?.createActiveHouseholdService) {
+	if (deps.createActiveHouseholdService) {
 		return deps.createActiveHouseholdService(directory);
 	}
 	return createActiveHouseholdService({ directory });
@@ -418,9 +418,9 @@ function activeHouseholdService(
 
 function householdJoinCodeService(
 	directory: DirectoryDb,
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): HouseholdJoinCodeService {
-	if (deps?.createHouseholdJoinCodeService) {
+	if (deps.createHouseholdJoinCodeService) {
 		return deps.createHouseholdJoinCodeService(directory);
 	}
 	return createHouseholdJoinCodeService(
@@ -430,17 +430,17 @@ function householdJoinCodeService(
 
 function memberService(
 	directory: MemberServiceDirectory,
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): MemberService {
-	if (deps?.createMemberService) return deps.createMemberService(directory);
+	if (deps.createMemberService) return deps.createMemberService(directory);
 	return createMemberService({ directory });
 }
 
 function householdService(
 	directory: HouseholdServiceDirectory,
-	deps?: HouseholdApiDeps,
+	deps: HouseholdApiDeps,
 ): HouseholdService {
-	if (deps?.createHouseholdService)
+	if (deps.createHouseholdService)
 		return deps.createHouseholdService(directory);
 	return createHouseholdService({ directory });
 }

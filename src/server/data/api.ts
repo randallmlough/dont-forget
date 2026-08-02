@@ -1,11 +1,10 @@
 // /api/data — the PowerSync write endpoint. HTTP transport shim only: it reads
-// the Request, owns the per-request pg Pool, dispatches authentication and the
-// transaction through a deps seam (production defaults wired from @/server/sync),
+// the Request, dispatches authentication and the transaction through required
+// dependencies wired by the process composition root,
 // runs the db-owned applicator inside one transaction, and maps errors to status
 // codes. All write logic, the batch contract, and the SQL live in the db layer
 // (@/server/sync; ADR-0014).
 
-import { postgresPool } from "@/server/db/client";
 import {
 	allowDataRequest,
 	applyOp,
@@ -14,8 +13,6 @@ import {
 	DataClientError,
 	type DataOp,
 	type DataTransaction,
-	defaultAuthenticate,
-	defaultWithTransaction,
 	PAYLOAD_MAX_BYTES,
 	readBoundedJsonBody,
 } from "@/server/sync";
@@ -29,28 +26,9 @@ export type DataDeps = {
 
 export async function handleDataUpload(
 	request: Request,
-	deps?: DataDeps,
+	deps: DataDeps,
 ): Promise<Response> {
-	if (deps) {
-		return applyDataUpload(request, deps);
-	}
-	// Production: one pool per request, shared by authentication and the
-	// transaction, closed when the request is done.
-	let pool: ReturnType<typeof postgresPool>;
-	try {
-		pool = postgresPool();
-	} catch (error) {
-		console.error("/api/data pool creation failed", error);
-		return errorResponse("Server error", 500);
-	}
-	try {
-		return await applyDataUpload(request, {
-			authenticate: (r) => defaultAuthenticate(r, pool),
-			withTransaction: (run) => defaultWithTransaction(pool, run),
-		});
-	} finally {
-		await pool.end();
-	}
+	return applyDataUpload(request, deps);
 }
 
 async function applyDataUpload(

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+
 import { handleBootstrap } from "@/server/bootstrap/api";
 import { type DataDeps, handleDataUpload } from "@/server/data/api";
 import type { DirectoryDb } from "@/server/db/client";
@@ -485,6 +487,7 @@ describe("createApiApp", () => {
 
 	it("registers exactly the planned method and path pairs", () => {
 		const { app } = createTestHarness();
+		expect(routeCases).toHaveLength(20);
 		const compareRoutes = (
 			left: { method: string; path: string },
 			right: { method: string; path: string },
@@ -504,6 +507,11 @@ describe("createApiApp", () => {
 			.sort(compareRoutes);
 
 		expect(actualRoutes).toEqual(expectedRoutes);
+	});
+
+	it("keeps the retired Expo API transport absent", () => {
+		// Repository commands and Jest run from the project root.
+		expect(existsSync("src/app/api")).toBe(false);
 	});
 
 	it("serves database-free liveness", async () => {

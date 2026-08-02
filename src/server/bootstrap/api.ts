@@ -2,11 +2,7 @@ import {
 	bootstrapAuthenticatedAppSession,
 	createProductionAuthenticatedAppSessionBootstrapDeps,
 } from "@/server/bootstrap/bootstrap-service";
-import {
-	type DirectoryDb,
-	directoryDb,
-	postgresPool,
-} from "@/server/db/client";
+import type { DirectoryDb } from "@/server/db/client";
 import {
 	type ServerUserProfile,
 	UnauthorizedError,
@@ -22,21 +18,11 @@ export type BootstrapApiDeps = {
 
 export async function handleBootstrap(
 	request: Request,
-	deps?: BootstrapApiDeps,
+	deps: BootstrapApiDeps,
 ): Promise<Response> {
 	try {
 		const profile = await verifyClerkRequest(request);
-		if (deps) {
-			return await createBootstrapResponse(profile, deps.directory);
-		}
-
-		const client = postgresPool();
-
-		try {
-			return await createBootstrapResponse(profile, directoryDb(client));
-		} finally {
-			await client.end();
-		}
+		return await createBootstrapResponse(profile, deps.directory);
 	} catch (error) {
 		if (error instanceof UnauthorizedError) {
 			return Response.json({ error: error.message }, { status: 401 });

@@ -38,7 +38,7 @@ export type InvitationApiDeps = ApiHandlerDeps & {
 
 export async function handleCreateInvitation(
 	request: Request,
-	deps?: InvitationApiDeps,
+	deps: InvitationApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -65,7 +65,7 @@ export async function handleCreateInvitation(
 
 export async function handlePreviewInvitation(
 	request: Request,
-	deps?: InvitationApiDeps,
+	deps: InvitationApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -85,7 +85,7 @@ export async function handlePreviewInvitation(
 
 export async function handleAcceptInvitation(
 	request: Request,
-	deps?: InvitationApiDeps,
+	deps: InvitationApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -105,7 +105,7 @@ export async function handleAcceptInvitation(
 export async function handleListInvitations(
 	request: Request,
 	{ householdId }: { householdId: string },
-	deps?: InvitationApiDeps,
+	deps: InvitationApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -128,7 +128,7 @@ export async function handleListInvitations(
 export async function handleRevokeInvitation(
 	request: Request,
 	{ invitationId }: { invitationId: string },
-	deps?: InvitationApiDeps,
+	deps: InvitationApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -155,9 +155,9 @@ export async function handleRevokeInvitation(
 
 function invitationService(
 	directory: DirectoryDb,
-	deps?: InvitationApiDeps,
+	deps: InvitationApiDeps,
 ): InvitationService {
-	if (deps?.createInvitationService) {
+	if (deps.createInvitationService) {
 		return deps.createInvitationService(directory);
 	}
 	return createInvitationService(productionInvitationServiceDeps(directory));

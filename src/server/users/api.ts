@@ -35,7 +35,7 @@ export type UserApiDeps = UsersApiDeps;
 
 export async function handleUpdateUserName(
 	request: Request,
-	deps?: UsersApiDeps,
+	deps: UsersApiDeps,
 ): Promise<Response> {
 	try {
 		return await withDirectory(deps, async (directory) => {
@@ -104,14 +104,14 @@ function currentUserResponse(user: User): CurrentUser {
 
 function userService(
 	directory: DirectoryDb,
-	deps: UsersApiDeps | undefined,
+	deps: UsersApiDeps,
 ): Pick<UserService, "updateUserName"> {
-	if (deps?.createUserService) {
+	if (deps.createUserService) {
 		return deps.createUserService(directory);
 	}
 	return createUserService({
 		directory,
-		updateClerkUserName: deps?.updateClerkUserName,
+		updateClerkUserName: deps.updateClerkUserName,
 	});
 }
 
