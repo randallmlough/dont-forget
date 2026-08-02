@@ -186,12 +186,15 @@ make start APP_ENV=production
 These commands connect to live production services and data. Use the staging
 environment for routine validation.
 
-## Deploy the backend
+## Deploy the services
 
 Staging and production run as isolated Docker Compose projects. Before
 deploying, adapt the Compose ingress and external-network declarations to the
-target hosting platform. Both the API and PowerSync services must be reachable
-from the mobile app over public HTTPS endpoints.
+target hosting platform. API, public web, and PowerSync must each have a
+distinct public HTTPS origin. `EXPO_PUBLIC_API_BASE_URL` is the API origin,
+`PUBLIC_WEB_BASE_URL` is the public web origin used when the API constructs
+Invitation and Household Join Code links, and `EXPO_PUBLIC_POWERSYNC_URL` is
+the PowerSync origin.
 
 ### Deploy staging
 
@@ -207,10 +210,12 @@ make infra-deploy APP_ENV=staging
 make infra-ps APP_ENV=staging
 ```
 
-Configure the hosting platform to expose the staging API and PowerSync services.
-Use their public HTTPS endpoints in `.env.staging` and the EAS `preview`
-environment. Clerk authenticates app requests, so the endpoints must remain
-directly reachable by the mobile app.
+Configure the hosting platform to expose the staging API, web, and PowerSync
+services at separate public HTTPS origins. Put the web origin in
+`PUBLIC_WEB_BASE_URL` in `.env.staging`; put the API and PowerSync origins in
+the corresponding `EXPO_PUBLIC_*` values in the EAS `preview` environment.
+Clerk authenticates app requests, so the API and PowerSync endpoints must
+remain directly reachable by the mobile app.
 
 Redeploy staging after pulling changes:
 
@@ -231,11 +236,11 @@ make infra-deploy APP_ENV=production
 make infra-ps APP_ENV=production
 ```
 
-Configure the hosting platform to expose the production API and PowerSync
-services. Use their public HTTPS endpoints in `.env.production` and the EAS
-`production` environment. Production Postgres data is stored under
-`infra/data/`; include it in backups. Never run
-`make infra-destroy APP_ENV=production`.
+Configure the hosting platform to expose the production API, web, and
+PowerSync services at separate public HTTPS origins. Set `PUBLIC_WEB_BASE_URL`
+to the web origin and use the API and PowerSync origins in the corresponding
+EAS `production` values. Production Postgres data is stored under `infra/data/`;
+include it in backups. Never run `make infra-destroy APP_ENV=production`.
 
 Redeploy production after pulling changes:
 

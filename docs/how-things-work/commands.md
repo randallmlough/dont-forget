@@ -17,6 +17,7 @@ to `8080`; the dedicated web package uses `WEB_PORT` and defaults to `3000`:
 
 ```bash
 make api API_PORT=8088
+make api-build
 make web WEB_PORT=3010
 make web-build
 ```
@@ -37,6 +38,8 @@ shared `.env.local` link/copy behavior and creates an ignored, secret-free
 | `make install` | Install dependencies. |
 | `make worktree-env` | Link/copy local `.env.local` and generate checkout-local API/web ports in `.env.worktree`. |
 | `make start` | Start the Expo development server for the app. |
+| `make api` | Start the standalone API in watch mode. |
+| `make api-build` | Build and mechanically verify the standalone Node 22 API bundle. |
 | `make web` | Start the dedicated public web link surface. |
 | `make ios` | Build and run the app on iOS. |
 | `make storybook` | Start Storybook for an installed native iOS build/dev client. |
@@ -50,12 +53,19 @@ shared `.env.local` link/copy behavior and creates an ignored, secret-free
 | `make start` | Start Expo for normal app development. |
 | `make ios` | Run the native iOS target. |
 
+## API
+
+| Command | Description |
+| --- | --- |
+| `make api` | Start the standalone API in watch mode. Pass `API_PORT=<number>` to override port 8080. |
+| `make api-build` | Independently build and verify `dist/main.mjs`; the artifact excludes mobile and web application inputs. |
+
 ## Web
 
 | Command | Description |
 | --- | --- |
 | `make web` | Start the dedicated public Invitation and Household Join Code link surface. Pass `WEB_PORT=<number>` to override port 3000. |
-| `make web-build` | Build and mechanically verify the dedicated public web artifact. |
+| `make web-build` | Independently build and mechanically verify the dedicated public static web artifact. |
 
 ## Storybook
 
