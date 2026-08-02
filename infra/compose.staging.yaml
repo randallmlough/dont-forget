@@ -1,7 +1,8 @@
 # the staging house rules applied:
 #   - NO published ports. The only ingress is the Cloudflare Tunnel reaching
-#     `dontforget-staging-powersync:${PS_PORT}` and `dontforget-staging-api:8080`
-#     over proxy-net; both Postgres instances are on the internal network only.
+#     `dontforget-staging-powersync:${PS_PORT}`, `dontforget-staging-api:8080`,
+#     and `dontforget-staging-web:8080` over proxy-net; both Postgres instances
+#     are on the internal network only.
 #   - Named volumes on purpose: staging is wipeable with `docker compose down -v`
 #     (fresh DBs, re-run drizzle-kit migrate). Container names deliberately do
 #     NOT end in `-db` so the nightly backup script's pg_dumpall loop skips them.
@@ -22,8 +23,6 @@ services:
     build:
       context: ..
       dockerfile: infra/api/Dockerfile
-      args:
-        APP_ENV: staging
     container_name: dontforget-staging-api
     restart: unless-stopped
     depends_on:
@@ -31,6 +30,7 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: staging
+      API_PORT: 8080
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
       PUBLIC_WEB_BASE_URL: ${PUBLIC_WEB_BASE_URL}
@@ -47,7 +47,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://localhost:8080/api/bootstrap').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))",
+          "fetch('http://localhost:8080/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))",
         ]
       interval: 10s
       timeout: 3s
@@ -59,8 +59,6 @@ services:
       context: ..
       dockerfile: infra/api/Dockerfile
       target: builder
-      args:
-        APP_ENV: staging
     environment:
       APP_ENV: staging
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
@@ -77,6 +75,26 @@ services:
         condition: service_healthy
     networks:
       - internal
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web/Dockerfile
+      args:
+        APP_ENV: staging
+    container_name: dontforget-staging-web
+    restart: unless-stopped
+    networks:
+      - proxy-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://localhost:8080/.well-known/apple-app-site-association || exit 1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
 
   pg-source:
     image: postgres:18

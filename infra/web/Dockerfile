@@ -3,21 +3,20 @@ FROM node:22-alpine AS builder
 RUN corepack enable
 WORKDIR /app
 
+ARG APP_ENV
+ENV APP_ENV=$APP_ENV
+
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/package.json
 COPY tooling/package.json tooling/package.json
 RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm api:build
+RUN pnpm --filter @dont-forget/web build
 
-FROM node:22-alpine AS runner
+FROM nginx:1.30.4-alpine AS runner
 
-ENV NODE_ENV=production
-WORKDIR /app
+COPY infra/web/nginx.conf /etc/nginx/nginx.conf
+COPY --from=builder /app/apps/web/dist/client /usr/share/nginx/html
 
-COPY --from=builder /app/dist/main.mjs /app/dist/main.mjs
-
-USER node
 EXPOSE 8080
-CMD ["node", "dist/main.mjs"]

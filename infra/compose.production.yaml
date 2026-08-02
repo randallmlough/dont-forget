@@ -5,9 +5,9 @@
 # Where staging deliberately opts OUT of the homelab house rules, production
 # opts back IN:
 #   - NO published ports (same as staging). The only ingress is the Cloudflare
-#     Tunnel reaching `dontforget-prod-powersync:${PS_PORT}` and
-#     `dontforget-prod-api:8080` over proxy-net; both Postgres instances are on
-#     the internal network only.
+#     Tunnel reaching `dontforget-prod-powersync:${PS_PORT}`,
+#     `dontforget-prod-api:8080`, and `dontforget-prod-web:8080` over proxy-net;
+#     both Postgres instances are on the internal network only.
 #   - Bind mounts under ./data/ instead of named volumes: production is NOT
 #     wipeable, and `docker compose down -v` must never be able to destroy it.
 #   - Postgres container names END in `-db` so the nightly backup script's
@@ -30,8 +30,6 @@ services:
     build:
       context: ..
       dockerfile: infra/api/Dockerfile
-      args:
-        APP_ENV: production
     container_name: dontforget-prod-api
     restart: unless-stopped
     depends_on:
@@ -39,6 +37,7 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: production
+      API_PORT: 8080
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
       PUBLIC_WEB_BASE_URL: ${PUBLIC_WEB_BASE_URL}
@@ -55,7 +54,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://localhost:8080/api/bootstrap').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))",
+          "fetch('http://localhost:8080/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))",
         ]
       interval: 10s
       timeout: 3s
@@ -67,8 +66,6 @@ services:
       context: ..
       dockerfile: infra/api/Dockerfile
       target: builder
-      args:
-        APP_ENV: production
     environment:
       APP_ENV: production
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
@@ -85,6 +82,26 @@ services:
         condition: service_healthy
     networks:
       - internal
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web/Dockerfile
+      args:
+        APP_ENV: production
+    container_name: dontforget-prod-web
+    restart: unless-stopped
+    networks:
+      - proxy-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://localhost:8080/.well-known/apple-app-site-association || exit 1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
 
   pg-source:
     image: postgres:18
