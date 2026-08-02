@@ -59,14 +59,18 @@ async function assertNoHandAuthoredIndexRoute() {
 
 async function verifyPublicPage({ path, expectedCopy }) {
 	const html = await readFile(resolve(clientRoot, path), "utf8");
+	const htmlWithoutEmptyComments = stripReactEmptyComments(html);
 	assert.match(
 		html,
 		/<meta name="referrer" content="no-referrer"\s*\/>/,
 		`${path} must disable referrer forwarding`,
 	);
-	assert.ok(html.includes(expectedCopy), `${path} must contain its safe copy`);
 	assert.ok(
-		html.includes("Open in Don&#x27;t Forget"),
+		htmlWithoutEmptyComments.includes(expectedCopy),
+		`${path} must contain its safe copy`,
+	);
+	assert.ok(
+		htmlWithoutEmptyComments.includes("Open in Don&#x27;t Forget"),
 		`${path} must contain the app CTA`,
 	);
 	assert.doesNotMatch(
@@ -100,9 +104,14 @@ async function verifyTechnicalRootIfPresent() {
 		throw error;
 	}
 
+	const htmlWithoutEmptyComments = stripReactEmptyComments(html);
 	assert.doesNotMatch(
-		html,
+		htmlWithoutEmptyComments,
 		/(?:This Invitation opens|Household Join Code opens|Open in Don't Forget|Open in Don&#x27;t Forget|http-equiv="refresh"|window\.location|marketing)/i,
 		"A framework-emitted root document must remain a content-free technical shell",
 	);
+}
+
+function stripReactEmptyComments(html) {
+	return html.replace(/<!--\s*-->/g, "");
 }
