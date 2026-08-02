@@ -39,6 +39,7 @@ jest.mock("@clerk/backend", () => ({
 }));
 
 const now = PRIMARY_HOUSEHOLD_SEED.now + 100_000;
+const TEST_PUBLIC_WEB_BASE_URL = "https://app.invalid";
 
 describe("Household API handlers", () => {
 	it("requires auth for Household creation", async () => {
@@ -51,6 +52,7 @@ describe("Household API handlers", () => {
 				}),
 				{
 					directory: directory.db,
+					publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 					authenticate: async () => {
 						throw new ApiUnauthorizedError("Invalid Clerk session token");
 					},
@@ -177,6 +179,7 @@ describe("Household API handlers", () => {
 				}),
 				{
 					directory: directory.db,
+					publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 					authenticate: async () => {
 						throw new ApiUnauthorizedError("Invalid Clerk session token");
 					},
@@ -287,6 +290,7 @@ describe("Household API handlers", () => {
 				householdId: "hh_avery",
 				deps: {
 					directory: directory.db,
+					publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 					authenticate: async () => {
 						throw new ApiUnauthorizedError("Invalid Clerk session token");
 					},
@@ -406,6 +410,7 @@ describe("Household API handlers", () => {
 				{ householdId: "hh_avery", membershipId: "mbr_blake" },
 				{
 					directory: directory.db,
+					publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 					authenticate: async () => {
 						throw new ApiUnauthorizedError("Invalid Clerk session token");
 					},
@@ -613,6 +618,7 @@ describe("Household API handlers", () => {
 						}),
 						{
 							directory: directory.db,
+							publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 							authenticate: async () => {
 								throw new ApiUnauthorizedError("Missing bearer token");
 							},
@@ -786,6 +792,7 @@ describe("Household API handlers", () => {
 		};
 		const deps: HouseholdApiDeps = {
 			directory: directory.db,
+			publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 			authenticate: async (_request, db) =>
 				upsertAuthenticatedUser(
 					{
@@ -859,6 +866,7 @@ describe("Household API handlers", () => {
 				{ householdId: "hh_avery" },
 				{
 					directory: directory.db,
+					publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 					authenticate: async (_request, db) =>
 						upsertAuthenticatedUser(
 							{
@@ -915,6 +923,7 @@ function householdDeps(
 ): HouseholdApiDeps {
 	return {
 		directory: directory.db,
+		publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 		authenticate: async (_request, db) =>
 			upsertAuthenticatedUser(
 				{

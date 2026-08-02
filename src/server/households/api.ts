@@ -34,7 +34,6 @@ import {
 } from "@/server/households/member-service";
 import {
 	ApiForbiddenError,
-	type ApiHandlerDeps,
 	authenticateApiUser,
 	BadRequestError,
 	booleanField,
@@ -43,13 +42,13 @@ import {
 	isApiUnauthorizedError,
 	jsonResponse,
 	optionalStringField,
+	type PublicWebApiHandlerDeps,
 	publicWebLinkBuilders,
 	queryStringField,
 	readJsonObject,
 	stringField,
 	unavailableErrorResponse,
 	unavailablePreviewResponse,
-	withDirectory,
 } from "@/server/http";
 import type {
 	CreateHouseholdResponse,
@@ -67,7 +66,7 @@ import {
 } from "@/shared/household-join-code-source";
 import { redactAttributes } from "@/shared/redact";
 
-export type HouseholdApiDeps = ApiHandlerDeps & {
+export type HouseholdApiDeps = PublicWebApiHandlerDeps & {
 	createActiveHouseholdService?: (
 		directory: ActiveHouseholdServiceDirectory,
 	) => ActiveHouseholdService;
@@ -85,31 +84,30 @@ export async function handleCreateHousehold(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const body = await readJsonObject(request);
-			const name = createHouseholdNameFromBody(body);
-			const household = await directory.transaction(async (tx) => {
-				const created = await householdService(tx, deps).createOwnedHousehold({
-					user,
-					name,
-				});
-				await memberService(tx, deps).ensureOwnerMembership({
-					householdId: created.id,
-					user,
-				});
-				await activeHouseholdService(tx, deps).setActiveHousehold({
-					userId: user.id,
-					householdId: created.id,
-				});
-				return created;
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const body = await readJsonObject(request);
+		const name = createHouseholdNameFromBody(body);
+		const household = await directory.transaction(async (tx) => {
+			const created = await householdService(tx, deps).createOwnedHousehold({
+				user,
+				name,
 			});
-
-			const payload: CreateHouseholdResponse = {
-				household: { id: household.id, name: household.name },
-			};
-			return jsonResponse(payload, 201);
+			await memberService(tx, deps).ensureOwnerMembership({
+				householdId: created.id,
+				user,
+			});
+			await activeHouseholdService(tx, deps).setActiveHousehold({
+				userId: user.id,
+				householdId: created.id,
+			});
+			return created;
 		});
+
+		const payload: CreateHouseholdResponse = {
+			household: { id: household.id, name: household.name },
+		};
+		return jsonResponse(payload, 201);
 	} catch (error) {
 		return householdErrorResponse(error, "Create Household API failed");
 	}
@@ -120,18 +118,17 @@ export async function handleSwitchActiveHousehold(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const body = await readJsonObject(request);
-			const activeHousehold = await activeHouseholdService(
-				directory,
-				deps,
-			).switchActiveHousehold({
-				userId: user.id,
-				householdId: stringField(body, "householdId"),
-			});
-			return jsonResponse({ activeHousehold });
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const body = await readJsonObject(request);
+		const activeHousehold = await activeHouseholdService(
+			directory,
+			deps,
+		).switchActiveHousehold({
+			userId: user.id,
+			householdId: stringField(body, "householdId"),
 		});
+		return jsonResponse({ activeHousehold });
 	} catch (error) {
 		return householdErrorResponse(error, "Switch active Household API failed");
 	}
@@ -143,19 +140,18 @@ export async function handleListMembers(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const service = memberService(directory, deps);
-			const membership = await service.findActiveMembership({
-				userId: user.id,
-				householdId,
-			});
-			if (!membership) throw new ApiForbiddenError();
-
-			const members = await service.listHouseholdMembers(householdId);
-			const payload: ListMembersResponse = { members };
-			return jsonResponse(payload);
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const service = memberService(directory, deps);
+		const membership = await service.findActiveMembership({
+			userId: user.id,
+			householdId,
 		});
+		if (!membership) throw new ApiForbiddenError();
+
+		const members = await service.listHouseholdMembers(householdId);
+		const payload: ListMembersResponse = { members };
+		return jsonResponse(payload);
 	} catch (error) {
 		return householdErrorResponse(error, "List Members API failed");
 	}
@@ -167,21 +163,18 @@ export async function handleRenameHousehold(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const body = await readJsonObject(request);
-			const household = await householdService(directory, deps).renameHousehold(
-				{
-					householdId,
-					name: stringField(body, "name"),
-					requestedByUserId: user.id,
-				},
-			);
-			const payload: RenameHouseholdResponse = {
-				household: { id: household.id, name: household.name },
-			};
-			return jsonResponse(payload);
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const body = await readJsonObject(request);
+		const household = await householdService(directory, deps).renameHousehold({
+			householdId,
+			name: stringField(body, "name"),
+			requestedByUserId: user.id,
 		});
+		const payload: RenameHouseholdResponse = {
+			household: { id: household.id, name: household.name },
+		};
+		return jsonResponse(payload);
 	} catch (error) {
 		return householdErrorResponse(error, "Rename Household API failed");
 	}
@@ -193,16 +186,15 @@ export async function handleRemoveMember(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const service = memberService(directory, deps);
-			await service.removeMember({
-				householdId,
-				membershipId,
-				requestedByUserId: user.id,
-			});
-			return jsonResponse({ removed: true });
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const service = memberService(directory, deps);
+		await service.removeMember({
+			householdId,
+			membershipId,
+			requestedByUserId: user.id,
 		});
+		return jsonResponse({ removed: true });
 	} catch (error) {
 		return householdErrorResponse(error, "Remove Member API failed");
 	}
@@ -214,19 +206,18 @@ export async function handleChangeMemberRole(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const body = await readJsonObject(request);
-			const role = memberRoleField(body);
-			const service = memberService(directory, deps);
-			await service.changeMemberRole({
-				householdId,
-				membershipId,
-				role,
-				requestedByUserId: user.id,
-			});
-			return jsonResponse({ member: { membershipId, role } });
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const body = await readJsonObject(request);
+		const role = memberRoleField(body);
+		const service = memberService(directory, deps);
+		await service.changeMemberRole({
+			householdId,
+			membershipId,
+			role,
+			requestedByUserId: user.id,
 		});
+		return jsonResponse({ member: { membershipId, role } });
 	} catch (error) {
 		return householdErrorResponse(error, "Change Member role API failed");
 	}
@@ -238,19 +229,18 @@ export async function handleLeaveHousehold(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const service = memberService(directory, deps);
-			const { promotedMembershipId } = await service.leaveHousehold({
-				householdId,
-				userId: user.id,
-			});
-			const payload: LeaveHouseholdResponse = {
-				left: true,
-				promotedMembershipId,
-			};
-			return jsonResponse(payload);
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const service = memberService(directory, deps);
+		const { promotedMembershipId } = await service.leaveHousehold({
+			householdId,
+			userId: user.id,
 		});
+		const payload: LeaveHouseholdResponse = {
+			left: true,
+			promotedMembershipId,
+		};
+		return jsonResponse(payload);
 	} catch (error) {
 		return householdErrorResponse(error, "Leave Household API failed");
 	}
@@ -262,18 +252,17 @@ export async function handleGetJoinCode(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const joinCode = await householdJoinCodeService(
-				directory,
-				deps,
-			).getCurrentJoinCode({
-				householdId,
-				requestedByUserId: user.id,
-			});
-			const payload: JoinCodeResponse = { joinCode };
-			return jsonResponse(payload);
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const joinCode = await householdJoinCodeService(
+			directory,
+			deps,
+		).getCurrentJoinCode({
+			householdId,
+			requestedByUserId: user.id,
 		});
+		const payload: JoinCodeResponse = { joinCode };
+		return jsonResponse(payload);
 	} catch (error) {
 		return householdErrorResponse(error, "Get Household Join Code API failed");
 	}
@@ -285,18 +274,17 @@ export async function handleRegenerateJoinCode(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const joinCode = await householdJoinCodeService(
-				directory,
-				deps,
-			).regenerateJoinCode({
-				householdId,
-				requestedByUserId: user.id,
-			});
-			const payload: JoinCodeResponse = { joinCode };
-			return jsonResponse(payload);
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const joinCode = await householdJoinCodeService(
+			directory,
+			deps,
+		).regenerateJoinCode({
+			householdId,
+			requestedByUserId: user.id,
 		});
+		const payload: JoinCodeResponse = { joinCode };
+		return jsonResponse(payload);
 	} catch (error) {
 		return householdErrorResponse(
 			error,
@@ -311,23 +299,22 @@ export async function handleSetJoinCodeEnabled(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const body = await readJsonObject(request);
-			const enabled = booleanField(body, "enabled");
-			const service = householdJoinCodeService(directory, deps);
-			const joinCode = enabled
-				? await service.enableJoinCode({
-						householdId,
-						requestedByUserId: user.id,
-					})
-				: await service.disableJoinCode({
-						householdId,
-						requestedByUserId: user.id,
-					});
-			const payload: JoinCodeResponse = { joinCode };
-			return jsonResponse(payload);
-		});
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const body = await readJsonObject(request);
+		const enabled = booleanField(body, "enabled");
+		const service = householdJoinCodeService(directory, deps);
+		const joinCode = enabled
+			? await service.enableJoinCode({
+					householdId,
+					requestedByUserId: user.id,
+				})
+			: await service.disableJoinCode({
+					householdId,
+					requestedByUserId: user.id,
+				});
+		const payload: JoinCodeResponse = { joinCode };
+		return jsonResponse(payload);
 	} catch (error) {
 		return householdErrorResponse(
 			error,
@@ -341,17 +328,16 @@ export async function handlePreviewJoinCode(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			await authenticateApiUser(request, directory, deps);
-			const code = queryStringField(request, "code");
-			const preview: HouseholdJoinCodePreview = await householdJoinCodeService(
-				directory,
-				deps,
-			).previewJoinCode(code);
-			return preview.available
-				? jsonResponse(preview)
-				: unavailablePreviewResponse();
-		});
+		const directory = deps.directory;
+		await authenticateApiUser(request, directory, deps);
+		const code = queryStringField(request, "code");
+		const preview: HouseholdJoinCodePreview = await householdJoinCodeService(
+			directory,
+			deps,
+		).previewJoinCode(code);
+		return preview.available
+			? jsonResponse(preview)
+			: unavailablePreviewResponse();
 	} catch (error) {
 		return householdErrorResponse(
 			error,
@@ -365,18 +351,15 @@ export async function handleJoinByCode(
 	deps: HouseholdApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const body = await readJsonObject(request);
-			const result = await householdJoinCodeService(directory, deps).joinByCode(
-				{
-					code: stringField(body, "code"),
-					userId: user.id,
-					source: joinCodeSourceField(body),
-				},
-			);
-			return jsonResponse(result);
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const body = await readJsonObject(request);
+		const result = await householdJoinCodeService(directory, deps).joinByCode({
+			code: stringField(body, "code"),
+			userId: user.id,
+			source: joinCodeSourceField(body),
 		});
+		return jsonResponse(result);
 	} catch (error) {
 		return householdErrorResponse(
 			error,
@@ -424,7 +407,7 @@ function householdJoinCodeService(
 		return deps.createHouseholdJoinCodeService(directory);
 	}
 	return createHouseholdJoinCodeService(
-		productionJoinCodeServiceDeps(directory),
+		productionJoinCodeServiceDeps(directory, deps.publicWebBaseUrl),
 	);
 }
 
@@ -447,8 +430,9 @@ function householdService(
 
 function productionJoinCodeServiceDeps(
 	directory: DirectoryDb,
+	publicWebBaseUrl: string,
 ): HouseholdJoinCodeServiceDeps {
-	const { buildHouseholdJoinUrl } = publicWebLinkBuilders();
+	const { buildHouseholdJoinUrl } = publicWebLinkBuilders({ publicWebBaseUrl });
 	return {
 		directory,
 		buildJoinUrl: buildHouseholdJoinUrl,

@@ -40,6 +40,7 @@ export async function startApiServer(): Promise<void> {
 
 	const app = createApiApp({
 		directory: directoryDb(pool),
+		publicWebBaseUrl: config.publicWebBaseUrl,
 		data: {
 			authenticate: (request) => defaultAuthenticate(request, pool),
 			withTransaction: (run) => defaultWithTransaction(pool, run),

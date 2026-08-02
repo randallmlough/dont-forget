@@ -8,7 +8,6 @@ import {
 	isApiUnauthorizedError,
 	jsonResponse,
 	readJsonObject,
-	withDirectory,
 } from "@/server/http";
 import {
 	createUserService,
@@ -38,20 +37,19 @@ export async function handleUpdateUserName(
 	deps: UsersApiDeps,
 ): Promise<Response> {
 	try {
-		return await withDirectory(deps, async (directory) => {
-			const user = await authenticateApiUser(request, directory, deps);
-			const body = await readJsonObject(request);
-			const input = updateUserNameInput(body);
-			const updatedUser = await userService(directory, deps).updateUserName({
-				clerkUserId: user.clerkUserId,
-				...input,
-			});
-
-			const payload: UpdateUserNameResponse = {
-				user: currentUserResponse(updatedUser),
-			};
-			return jsonResponse(payload);
+		const directory = deps.directory;
+		const user = await authenticateApiUser(request, directory, deps);
+		const body = await readJsonObject(request);
+		const input = updateUserNameInput(body);
+		const updatedUser = await userService(directory, deps).updateUserName({
+			clerkUserId: user.clerkUserId,
+			...input,
 		});
+
+		const payload: UpdateUserNameResponse = {
+			user: currentUserResponse(updatedUser),
+		};
+		return jsonResponse(payload);
 	} catch (error) {
 		return usersErrorResponse(error, "Update User name API failed");
 	}

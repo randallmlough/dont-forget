@@ -24,6 +24,7 @@ jest.mock("@clerk/backend", () => ({
 }));
 
 const now = PRIMARY_HOUSEHOLD_SEED.now + 100_000;
+const TEST_PUBLIC_WEB_BASE_URL = "https://app.invalid";
 
 describe("Invitation API handlers", () => {
 	it("requires auth for Invitation creation", async () => {
@@ -33,6 +34,7 @@ describe("Invitation API handlers", () => {
 				createApiRequest({ body: { householdId: "hh_avery" } }),
 				{
 					directory: directory.db,
+					publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 					authenticate: async () => {
 						throw new ApiUnauthorizedError("Missing bearer token");
 					},
@@ -275,6 +277,7 @@ describe("Invitation API handlers", () => {
 				createApiRequest({ body: { householdId: "hh_avery" } }),
 				{
 					directory: directory.db,
+					publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 					authenticate: async (_request, db) =>
 						upsertAuthenticatedUser(
 							{
@@ -316,6 +319,7 @@ function invitationDeps(input: {
 	};
 	return {
 		directory: input.directory,
+		publicWebBaseUrl: TEST_PUBLIC_WEB_BASE_URL,
 		authenticate: async (_request, directory) => {
 			return upsertAuthenticatedUser(
 				{

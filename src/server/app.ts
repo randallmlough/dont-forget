@@ -16,7 +16,7 @@ import {
 	handleSetJoinCodeEnabled,
 	handleSwitchActiveHousehold,
 } from "@/server/households/api";
-import type { ApiAuth, ApiHandlerDeps } from "@/server/http";
+import type { ApiAuth, PublicWebApiHandlerDeps } from "@/server/http";
 import {
 	handleAcceptInvitation,
 	handleCreateInvitation,
@@ -29,15 +29,17 @@ import { handleUpdateUserName } from "@/server/users/api";
 export type ApiAppDeps = {
 	directory: DirectoryDb;
 	data: DataDeps;
+	publicWebBaseUrl: string;
 	// Test seam. Production leaves this undefined so handlers run the real
 	// Clerk verification path (src/server/http.ts authenticateApiUser).
 	authenticate?: ApiAuth;
 };
 
 export function createApiApp(deps: ApiAppDeps): Hono {
-	const handlerDeps: ApiHandlerDeps = {
+	const handlerDeps: PublicWebApiHandlerDeps = {
 		directory: deps.directory,
 		authenticate: deps.authenticate,
+		publicWebBaseUrl: deps.publicWebBaseUrl,
 	};
 
 	const app = new Hono();

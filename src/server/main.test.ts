@@ -216,6 +216,7 @@ describe("startApiServer", () => {
 
 		const appDeps = createdAppDeps();
 		expect(appDeps.directory).toBe(mockedDirectoryDb.mock.results.at(0)?.value);
+		expect(appDeps.publicWebBaseUrl).toBe(config.publicWebBaseUrl);
 		expect(appDeps.authenticate).toBeUndefined();
 
 		const request = new Request("https://api.invalid/api/data", {

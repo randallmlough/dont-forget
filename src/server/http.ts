@@ -6,7 +6,7 @@ import {
 import type { DirectoryDb } from "@/server/db/client";
 import type { User } from "@/server/db/schema/postgres";
 import { createUserService } from "@/server/users/user-service";
-import { readClerkServerConfig, requireEnv } from "@/shared/env";
+import { readClerkServerConfig } from "@/shared/env";
 
 export const INVITATION_UNAVAILABLE_MESSAGE =
 	"This Invitation is no longer available.";
@@ -53,12 +53,9 @@ export type ApiHandlerDeps = {
 	authenticate?: ApiAuth;
 };
 
-export async function withDirectory<T>(
-	deps: ApiHandlerDeps,
-	handler: (directory: DirectoryDb) => Promise<T>,
-): Promise<T> {
-	return handler(deps.directory);
-}
+export type PublicWebApiHandlerDeps = ApiHandlerDeps & {
+	publicWebBaseUrl: string;
+};
 
 export async function authenticateApiUser(
 	request: Request,
@@ -169,11 +166,15 @@ export function isApiForbiddenError(
 	return error instanceof ApiForbiddenError;
 }
 
-export function publicWebLinkBuilders(): {
+export function publicWebLinkBuilders({
+	publicWebBaseUrl,
+}: {
+	publicWebBaseUrl: string;
+}): {
 	buildInvitationAcceptUrl(input: { token: string }): string;
 	buildHouseholdJoinUrl(input: { code: string }): string;
 } {
-	const baseUrl = requireEnv("PUBLIC_WEB_BASE_URL").replace(/\/+$/, "");
+	const baseUrl = publicWebBaseUrl.replace(/\/+$/, "");
 	return {
 		buildInvitationAcceptUrl: ({ token }) =>
 			`${baseUrl}/invitations/accept?token=${encodeURIComponent(token)}`,

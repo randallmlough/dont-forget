@@ -345,6 +345,7 @@ function createTestHarness() {
 	// The transport mocks never read this inert test seam, so a narrow test-only
 	// assertion avoids constructing a real database client.
 	const fakeDirectory = Object.freeze({}) as DirectoryDb;
+	const fakePublicWebBaseUrl = "https://app.invalid";
 	const fakeAuthenticate: ApiAuth = async () => {
 		throw new Error("unexpected authenticate call in dispatch test");
 	};
@@ -360,10 +361,12 @@ function createTestHarness() {
 			directory: fakeDirectory,
 			data: fakeData,
 			authenticate: fakeAuthenticate,
+			publicWebBaseUrl: fakePublicWebBaseUrl,
 		}),
 		fakeAuthenticate,
 		fakeData,
 		fakeDirectory,
+		fakePublicWebBaseUrl,
 	};
 }
 
@@ -387,22 +390,26 @@ function expectHandlerDeps({
 	value,
 	fakeDirectory,
 	fakeAuthenticate,
+	fakePublicWebBaseUrl,
 }: {
 	value: unknown;
 	fakeDirectory: DirectoryDb;
 	fakeAuthenticate: ApiAuth;
+	fakePublicWebBaseUrl: string;
 }): void {
 	if (
 		typeof value !== "object" ||
 		value === null ||
 		!("directory" in value) ||
-		!("authenticate" in value)
+		!("authenticate" in value) ||
+		!("publicWebBaseUrl" in value)
 	) {
 		throw new Error("Expected handler deps");
 	}
 
 	expect(value.directory).toBe(fakeDirectory);
 	expect(value.authenticate).toBe(fakeAuthenticate);
+	expect(value.publicWebBaseUrl).toBe(fakePublicWebBaseUrl);
 }
 
 function expectBootstrapDeps({
@@ -433,8 +440,13 @@ describe("createApiApp", () => {
 		handlerName,
 		expectedCall,
 	}) => {
-		const { app, fakeAuthenticate, fakeData, fakeDirectory } =
-			createTestHarness();
+		const {
+			app,
+			fakeAuthenticate,
+			fakeData,
+			fakeDirectory,
+			fakePublicWebBaseUrl,
+		} = createTestHarness();
 		const handler = mockedHandlers[handlerName];
 
 		const response = await app.request(requestPath, { method });
@@ -467,6 +479,7 @@ describe("createApiApp", () => {
 					value: call.at(1),
 					fakeDirectory,
 					fakeAuthenticate,
+					fakePublicWebBaseUrl,
 				});
 				break;
 			case "handler-with-params":
@@ -476,6 +489,7 @@ describe("createApiApp", () => {
 					value: call.at(2),
 					fakeDirectory,
 					fakeAuthenticate,
+					fakePublicWebBaseUrl,
 				});
 				break;
 			default: {

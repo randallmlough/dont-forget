@@ -1,18 +1,13 @@
 import { createClerkClient } from "@clerk/backend";
-import { postgresPool } from "@/server/db/client";
 import {
 	bearerToken,
 	UnauthorizedError,
 	updateClerkUserName,
-	withDirectory,
 } from "@/server/http";
 
 jest.mock("@clerk/backend", () => ({
 	createClerkClient: jest.fn(),
 	verifyToken: jest.fn(),
-}));
-jest.mock("@/server/db/client", () => ({
-	postgresPool: jest.fn(),
 }));
 
 describe("bearerToken", () => {
@@ -24,19 +19,6 @@ describe("bearerToken", () => {
 		expect(() => bearerToken(null)).toThrow(UnauthorizedError);
 		expect(() => bearerToken("Basic session-token")).toThrow(UnauthorizedError);
 		expect(() => bearerToken("Bearer one two")).toThrow(UnauthorizedError);
-	});
-});
-
-describe("withDirectory", () => {
-	it("has no Pool fallback when required dependencies are absent at runtime", async () => {
-		jest.mocked(postgresPool).mockImplementation(() => {
-			throw new Error("legacy Pool fallback reached");
-		});
-
-		await expect(
-			Reflect.apply(withDirectory, undefined, [undefined, jest.fn()]),
-		).rejects.toThrow();
-		expect(postgresPool).not.toHaveBeenCalled();
 	});
 });
 

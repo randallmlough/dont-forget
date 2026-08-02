@@ -2,7 +2,7 @@ import type { Server } from "node:http";
 
 import { type ServerType, serve } from "@hono/node-server";
 import { eq } from "drizzle-orm";
-
+import { readApiServerConfig } from "@/server/config";
 import type { DataDeps } from "@/server/data/api";
 import {
 	householdJoinCodeFixture,
@@ -31,6 +31,16 @@ jest.mock("@clerk/backend", () => ({
 
 const TEST_HOST = "127.0.0.1";
 const TEST_NOW = PRIMARY_HOUSEHOLD_SEED.now + 100_000;
+const TEST_API_CONFIG = readApiServerConfig({
+	APP_ENV: "test",
+	DATABASE_URL: "postgresql://synthetic.invalid/dont_forget",
+	CLERK_SECRET_KEY: "sk_test_synthetic",
+	PUBLIC_WEB_BASE_URL: "  https://app.invalid/deep-links/  ",
+	RESEND_API_KEY: "re_synthetic",
+	RESEND_FROM_ADDRESS: "sender@example.com",
+	POSTHOG_PROJECT_TOKEN: "phc_synthetic",
+	POSTHOG_HOST: "https://posthog.invalid",
+});
 const jestFetch = globalThis.fetch;
 const originalPublicWebBaseUrl = process.env.PUBLIC_WEB_BASE_URL;
 const requestOrder: string[] = [];
@@ -75,7 +85,7 @@ const dataDeps: DataDeps = {
 describe("Node API server", () => {
 	beforeAll(async () => {
 		globalThis.fetch = readOriginalFetch();
-		process.env.PUBLIC_WEB_BASE_URL = "https://app.invalid";
+		process.env.PUBLIC_WEB_BASE_URL = "https://wrong.invalid";
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(TEST_NOW);
 		restoreDateNow = () => dateNow.mockRestore();
 
@@ -102,6 +112,7 @@ describe("Node API server", () => {
 			directory: testDirectory.db,
 			data: dataDeps,
 			authenticate: apiAuthenticate,
+			publicWebBaseUrl: TEST_API_CONFIG.publicWebBaseUrl,
 		});
 		const listener = await listen(app.fetch);
 		server = listener.server;
@@ -229,6 +240,33 @@ describe("Node API server", () => {
 			householdName: scenario.household.name,
 		});
 		expect(apiAuthenticate).toHaveBeenCalledTimes(2);
+	});
+
+	it("uses the parsed public web base URL for canonical Invitation and Household links", async () => {
+		const headers = { authorization: "Bearer synthetic-token" };
+		const invitationResponse = await globalThis.fetch(
+			`${origin}/api/households/${scenario.household.id}/invitations`,
+			{ headers },
+		);
+		const joinCodeResponse = await globalThis.fetch(
+			`${origin}/api/households/${scenario.household.id}/join-code`,
+			{ headers },
+		);
+
+		expect(invitationResponse.status).toBe(200);
+		await expect(invitationResponse.json()).resolves.toMatchObject({
+			invitations: expect.arrayContaining([
+				expect.objectContaining({
+					acceptUrl: `https://app.invalid/deep-links/invitations/accept?token=${encodeURIComponent(scenario.invitations.pendingEmail.token)}`,
+				}),
+			]),
+		});
+		expect(joinCodeResponse.status).toBe(200);
+		await expect(joinCodeResponse.json()).resolves.toMatchObject({
+			joinCode: {
+				joinUrl: `https://app.invalid/deep-links/households/join?code=${encodeURIComponent(joinCode.code)}`,
+			},
+		});
 	});
 });
 
