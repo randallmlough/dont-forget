@@ -520,6 +520,21 @@ describe("createApiApp", () => {
 	});
 
 	it.each([
+		{ path: "/.well-known/apple-app-site-association" },
+		{ path: "/invitations/accept?token=synthetic" },
+		{ path: "/households/join?code=synthetic" },
+	])("keeps $path outside the API origin", async ({ path }) => {
+		const { app } = createTestHarness();
+
+		const response = await app.request(path);
+
+		expect(response.status).toBe(404);
+		expect(
+			response.headers.get("content-type")?.startsWith("text/html") ?? false,
+		).toBe(false);
+	});
+
+	it.each([
 		{
 			path: "/api/invitations/preview?token=tok-1",
 			queryName: "token",

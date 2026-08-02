@@ -43,7 +43,7 @@ import {
 	isApiUnauthorizedError,
 	jsonResponse,
 	optionalStringField,
-	publicAppLinkBuilders,
+	publicWebLinkBuilders,
 	queryStringField,
 	readJsonObject,
 	stringField,
@@ -448,7 +448,7 @@ function householdService(
 function productionJoinCodeServiceDeps(
 	directory: DirectoryDb,
 ): HouseholdJoinCodeServiceDeps {
-	const { buildHouseholdJoinUrl } = publicAppLinkBuilders();
+	const { buildHouseholdJoinUrl } = publicWebLinkBuilders();
 	return {
 		directory,
 		buildJoinUrl: buildHouseholdJoinUrl,

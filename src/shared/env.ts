@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const DEFAULT_API_PORT = 8080;
+export const DEFAULT_WEB_PORT = 3000;
 
 const APP_ENVS = ["local", "test", "staging", "production"] as const;
 const appEnvSchema = z.enum(APP_ENVS);
@@ -9,6 +10,10 @@ const requiredEnvValueSchema = z
 	.refine((value) => value.trim().length > 0);
 
 export type AppEnv = (typeof APP_ENVS)[number];
+
+export function appSchemeForEnv(baseScheme: string, appEnv: AppEnv): string {
+	return appEnv === "production" ? baseScheme : `${baseScheme}-${appEnv}`;
+}
 
 type EnvSource = Record<string, string | undefined>;
 

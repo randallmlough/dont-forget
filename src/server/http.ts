@@ -182,11 +182,11 @@ export function isApiForbiddenError(
 	return error instanceof ApiForbiddenError;
 }
 
-export function publicAppLinkBuilders(): {
+export function publicWebLinkBuilders(): {
 	buildInvitationAcceptUrl(input: { token: string }): string;
 	buildHouseholdJoinUrl(input: { code: string }): string;
 } {
-	const baseUrl = requireEnv("PUBLIC_APP_BASE_URL").replace(/\/+$/, "");
+	const baseUrl = requireEnv("PUBLIC_WEB_BASE_URL").replace(/\/+$/, "");
 	return {
 		buildInvitationAcceptUrl: ({ token }) =>
 			`${baseUrl}/invitations/accept?token=${encodeURIComponent(token)}`,

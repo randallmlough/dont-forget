@@ -16,7 +16,7 @@
 		"test:ci": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
 		"test:eslint-rules": "node tooling/eslint-plugin/no-client-server-imports.test.js && node tooling/eslint-plugin/no-raw-color-literals.test.js",
 		"test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --runInBand",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && pnpm --filter @dont-forget/web typecheck",
 		"db:generate": "tsx src/server/db/generate.ts",
 		"db:migrate": "tsx src/server/db/migrate.ts",
 		"db:reset": "tsx src/server/db/reset.ts",

@@ -1,6 +1,6 @@
 # Commands
 
-Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm` or `yarn` unless you are explicitly fixing package scripts. Don't Forget is iOS-only: Android and Web targets are unsupported.
+Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm` or `yarn` unless you are explicitly fixing package scripts. The Don't Forget mobile application is iOS-only. A dedicated web package supports only the public Invitation and Household Join Code link surface; it is not a general web version of the app.
 
 App and Storybook make targets default to `APP_ENV=local` unless you pass another environment. Database migrations are the exception: they require an explicit `APP_ENV`.
 
@@ -10,6 +10,14 @@ collide on Metro's default `8081` port:
 ```bash
 make start PORT=8090
 make ios PORT=8090
+```
+
+`PORT` controls Metro/iOS only. The dedicated web package uses `WEB_PORT` and
+defaults to port `3000`:
+
+```bash
+make web WEB_PORT=3010
+make web-build
 ```
 
 <!-- ==================================================================================== -->
@@ -23,6 +31,7 @@ make ios PORT=8090
 | `make install` | Install dependencies. |
 | `make worktree-env` | Link or copy a local `.env.local` into a fresh worktree. |
 | `make start` | Start the Expo development server for the app. |
+| `make web` | Start the dedicated public web link surface. |
 | `make ios` | Build and run the app on iOS. |
 | `make storybook` | Start Storybook for an installed native iOS build/dev client. |
 | `make verify` | Run typecheck, Biome, local ESLint rule tests, whole-project ESLint, and tests. |
@@ -34,6 +43,13 @@ make ios PORT=8090
 | --- | --- |
 | `make start` | Start Expo for normal app development. |
 | `make ios` | Run the native iOS target. |
+
+## Web
+
+| Command | Description |
+| --- | --- |
+| `make web` | Start the dedicated public Invitation and Household Join Code link surface. Pass `WEB_PORT=<number>` to override port 3000. |
+| `make web-build` | Build and mechanically verify the dedicated public web artifact. |
 
 ## Storybook
 

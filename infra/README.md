@@ -30,7 +30,7 @@ The migration command applies the Drizzle schema and PowerSync publication.
 The API image exports the web server bundle with
 `pnpm expo export --platform web --no-ssg`; web UI rendering is intentionally
 disabled because this deployment serves API routes only. The public Invitation
-and Household Join Code links built from `PUBLIC_APP_BASE_URL` therefore get
+and Household Join Code links built from `PUBLIC_WEB_BASE_URL` therefore get
 minimal open-in-the-app fallback pages from `server.mjs` instead of web screens.
 
 ## Tunnel and authentication
@@ -41,7 +41,7 @@ In the Cloudflare dashboard, add two public hostnames to the `homelab` tunnel:
 - PowerSync: `dontforget-powersync:<PS_PORT>`
 
 Do not add a Cloudflare Access policy to either hostname; Clerk owns
-authentication. Use the resulting public HTTPS URLs for `PUBLIC_APP_BASE_URL`
+authentication. Use the resulting public HTTPS URLs for `PUBLIC_WEB_BASE_URL`
 in the server `.env.staging`, and for `EXPO_PUBLIC_API_BASE_URL` and
 `EXPO_PUBLIC_POWERSYNC_URL` in the EAS `preview` environment used by staging
 iOS builds. The server env files need no `EXPO_PUBLIC_*` variables — the API

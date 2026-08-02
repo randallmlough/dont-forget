@@ -30,7 +30,7 @@ const config = {
 	appEnv: "local",
 	databaseUrl: "postgresql://synthetic.invalid/dont_forget",
 	clerkSecretKey: "sk_test_synthetic",
-	publicAppBaseUrl: "https://app.invalid",
+	publicWebBaseUrl: "https://app.invalid",
 	resendApiKey: "re_synthetic",
 	resendFromAddress: "sender@example.com",
 	posthogProjectToken: "phc_synthetic",

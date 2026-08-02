@@ -1,6 +1,8 @@
 import {
+	appSchemeForEnv,
 	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
+	DEFAULT_WEB_PORT,
 	parseAppEnv,
 	readPublicExpoConfig,
 	validateClerkKeyForEnv,
@@ -16,6 +18,19 @@ describe("environment config", () => {
 
 	it("rejects unsupported APP_ENV values", () => {
 		expect(() => parseAppEnv("prod")).toThrow('Invalid APP_ENV "prod"');
+	});
+
+	it.each([
+		["local", "dontforget-local"],
+		["test", "dontforget-test"],
+		["staging", "dontforget-staging"],
+		["production", "dontforget"],
+	] as const)("derives the %s app scheme", (appEnv, expected) => {
+		expect(appSchemeForEnv("dontforget", appEnv)).toBe(expected);
+	});
+
+	it("defaults the web port to 3000", () => {
+		expect(DEFAULT_WEB_PORT).toBe(3000);
 	});
 
 	it("requires Clerk development publishable keys outside production", () => {

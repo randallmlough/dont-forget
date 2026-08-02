@@ -7,7 +7,7 @@ import {
 	isApiUnauthorizedError,
 	jsonResponse,
 	optionalStringField,
-	publicAppLinkBuilders,
+	publicWebLinkBuilders,
 	queryStringField,
 	readJsonObject,
 	stringField,
@@ -166,7 +166,7 @@ function invitationService(
 function productionInvitationServiceDeps(
 	directory: DirectoryDb,
 ): InvitationServiceDeps {
-	const { buildInvitationAcceptUrl } = publicAppLinkBuilders();
+	const { buildInvitationAcceptUrl } = publicWebLinkBuilders();
 	return {
 		directory,
 		buildAcceptUrl: buildInvitationAcceptUrl,

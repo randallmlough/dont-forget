@@ -27,8 +27,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY infra/api/server.mjs ./server.mjs
 
-# Runtime env (DATABASE_URL, CLERK_SECRET_KEY, PUBLIC_APP_BASE_URL, RESEND_*,
-# POSTHOG_*) comes from compose `environment:` ← server .env. PUBLIC_APP_BASE_URL
+# Runtime env (DATABASE_URL, CLERK_SECRET_KEY, PUBLIC_WEB_BASE_URL, RESEND_*,
+# POSTHOG_*) comes from compose `environment:` ← server .env. PUBLIC_WEB_BASE_URL
 # is read at src/server/http.ts:189; without it invitation links throw.
 
 USER node

@@ -5,7 +5,7 @@ const requiredKeys = [
 	"APP_ENV",
 	"DATABASE_URL",
 	"CLERK_SECRET_KEY",
-	"PUBLIC_APP_BASE_URL",
+	"PUBLIC_WEB_BASE_URL",
 	"RESEND_API_KEY",
 	"RESEND_FROM_ADDRESS",
 	"POSTHOG_PROJECT_TOKEN",
@@ -17,7 +17,7 @@ function validSource(): Record<string, string | undefined> {
 		APP_ENV: "test",
 		DATABASE_URL: "postgresql://synthetic.invalid/dont_forget",
 		CLERK_SECRET_KEY: "sk_test_synthetic",
-		PUBLIC_APP_BASE_URL: "https://app.invalid",
+		PUBLIC_WEB_BASE_URL: "https://app.invalid",
 		RESEND_API_KEY: "re_synthetic",
 		RESEND_FROM_ADDRESS: "sender@example.com",
 		POSTHOG_PROJECT_TOKEN: "phc_synthetic",
@@ -38,7 +38,7 @@ describe("readApiServerConfig", () => {
 			appEnv: "test",
 			databaseUrl: "postgresql://synthetic.invalid/dont_forget",
 			clerkSecretKey: "sk_test_synthetic",
-			publicAppBaseUrl: "https://app.invalid",
+			publicWebBaseUrl: "https://app.invalid",
 			resendApiKey: "re_synthetic",
 			resendFromAddress: "sender@example.com",
 			posthogProjectToken: "phc_synthetic",
@@ -108,7 +108,7 @@ describe("readApiServerConfig", () => {
 	});
 
 	it.each([
-		{ key: "PUBLIC_APP_BASE_URL", value: "not-a-url" },
+		{ key: "PUBLIC_WEB_BASE_URL", value: "not-a-url" },
 		{ key: "POSTHOG_HOST", value: "not-a-url" },
 		{ key: "RESEND_FROM_ADDRESS", value: "not-an-email" },
 	])("rejects malformed $key", ({ key, value }) => {

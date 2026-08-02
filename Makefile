@@ -38,6 +38,14 @@ start: ## Start Expo for normal app development *common*
 api: ## Start the standalone API server in watch mode *common*
 	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) exec tsx watch src/server/main.ts
 
+.PHONY: web
+web: ## Start the dedicated public web link surface *common*
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/web dev
+
+.PHONY: web-build
+web-build: ## Build and verify the dedicated public web link surface
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/web build
+
 .PHONY: ios
 ios: ## Run the native iOS target *common*
 	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo run:ios $(PORT_ARG)

@@ -1,0 +1,29 @@
+{
+	"name": "@dont-forget/web",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=22.12.0"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build && node scripts/verify-static-artifact.mjs",
+		"preview": "vite preview",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"verify:static": "node scripts/verify-static-artifact.mjs"
+	},
+	"dependencies": {
+		"@tanstack/react-router": "1.170.18",
+		"@tanstack/react-start": "1.168.32",
+		"react": "19.2.3",
+		"react-dom": "19.2.3"
+	},
+	"devDependencies": {
+		"@types/node": "26.1.1",
+		"@types/react": "19.2.14",
+		"@types/react-dom": "19.2.3",
+		"@vitejs/plugin-react": "6.0.1",
+		"typescript": "6.0.3",
+		"vite": "8.0.14"
+	}
+}

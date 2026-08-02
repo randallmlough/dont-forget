@@ -1,0 +1,15 @@
+{
+	"applinks": {
+		"apps": [],
+		"details": [
+			{
+				"appID": "D64V4GPNLJ.com.dont-forget.app.staging",
+				"paths": ["/invitations/accept", "/households/join"]
+			},
+			{
+				"appID": "D64V4GPNLJ.com.dont-forget.app",
+				"paths": ["/invitations/accept", "/households/join"]
+			}
+		]
+	}
+}

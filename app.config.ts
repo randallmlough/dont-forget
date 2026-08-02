@@ -5,6 +5,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 
 import {
 	type AppEnv,
+	appSchemeForEnv,
 	readPublicExpoConfigIfPresent,
 } from "./src/shared/env.ts";
 import { loadEnvFile } from "./src/shared/load-env.ts";
@@ -27,7 +28,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			process.env.EXPO_APP_NAME ??
 			appNameForEnv(config.name ?? "Don't Forget", appEnv),
 		slug: config.slug ?? "dont-forget",
-		scheme: process.env.EXPO_SCHEME ?? schemeForEnv(baseScheme, appEnv),
+		scheme: process.env.EXPO_SCHEME ?? appSchemeForEnv(baseScheme, appEnv),
 		ios: {
 			...config.ios,
 			bundleIdentifier:
@@ -86,14 +87,6 @@ function appNameForEnv(baseName: string, appEnv: AppEnv): string {
 	}
 
 	return `${baseName} ${labelForEnv(appEnv)}`;
-}
-
-function schemeForEnv(baseScheme: string, appEnv: AppEnv): string {
-	if (appEnv === "production") {
-		return baseScheme;
-	}
-
-	return `${baseScheme}-${appEnv}`;
 }
 
 function bundleIdentifierForEnv(

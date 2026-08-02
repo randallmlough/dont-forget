@@ -50,7 +50,7 @@ requires). A worktree
 running Metro on a non-default port therefore cannot silently call another
 checkout's server, and physical devices reach the host machine through the
 address they loaded the bundle from. Deployed builds (staging,
-production) still configure `EXPO_PUBLIC_API_BASE_URL`. `PUBLIC_APP_BASE_URL`
+production) still configure `EXPO_PUBLIC_API_BASE_URL`. `PUBLIC_WEB_BASE_URL`
 (server-side links) remains env-configured for now.
 
 ### Per-worktree database isolation

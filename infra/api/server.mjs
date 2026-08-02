@@ -13,7 +13,7 @@ const SERVER_BUILD_DIR = path.join(process.cwd(), "dist/server");
 const app = express();
 
 // The web export renders no UI (root layout is a null stub), so the public
-// Invitation/Household Join Code links built from PUBLIC_APP_BASE_URL get a
+// Invitation/Household Join Code links built from PUBLIC_WEB_BASE_URL get a
 // minimal fallback page instead of a 404. The page forwards the query string
 // (token/code) to the app through its custom scheme — mirrors schemeForEnv in
 // app.config.ts — so the link stays actionable until universal links land

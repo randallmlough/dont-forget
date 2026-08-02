@@ -32,7 +32,7 @@ jest.mock("@clerk/backend", () => ({
 const TEST_HOST = "127.0.0.1";
 const TEST_NOW = PRIMARY_HOUSEHOLD_SEED.now + 100_000;
 const jestFetch = globalThis.fetch;
-const originalPublicAppBaseUrl = process.env.PUBLIC_APP_BASE_URL;
+const originalPublicWebBaseUrl = process.env.PUBLIC_WEB_BASE_URL;
 const requestOrder: string[] = [];
 const dataTransaction: DataTransaction = {
 	householdsForOp: jest.fn(async () => []),
@@ -75,7 +75,7 @@ const dataDeps: DataDeps = {
 describe("Node API server", () => {
 	beforeAll(async () => {
 		globalThis.fetch = readOriginalFetch();
-		process.env.PUBLIC_APP_BASE_URL = "https://app.invalid";
+		process.env.PUBLIC_WEB_BASE_URL = "https://app.invalid";
 		const dateNow = jest.spyOn(Date, "now").mockReturnValue(TEST_NOW);
 		restoreDateNow = () => dateNow.mockRestore();
 
@@ -121,10 +121,10 @@ describe("Node API server", () => {
 			} finally {
 				restoreDateNow();
 				globalThis.fetch = jestFetch;
-				if (originalPublicAppBaseUrl === undefined) {
-					delete process.env.PUBLIC_APP_BASE_URL;
+				if (originalPublicWebBaseUrl === undefined) {
+					delete process.env.PUBLIC_WEB_BASE_URL;
 				} else {
-					process.env.PUBLIC_APP_BASE_URL = originalPublicAppBaseUrl;
+					process.env.PUBLIC_WEB_BASE_URL = originalPublicWebBaseUrl;
 				}
 			}
 		}

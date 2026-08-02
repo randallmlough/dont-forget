@@ -12,7 +12,8 @@ module.exports = defineConfig([
 			".agents/**",
 			".claude/**",
 			".rnstorybook/storybook.requires.ts",
-			"dist/**",
+			"apps/web/src/routeTree.gen.ts",
+			"**/dist/**",
 		],
 	},
 	{
