@@ -4,17 +4,22 @@ import { config as loadDotenv } from "dotenv";
 import { type AppEnv, parseAppEnv } from "./env.ts";
 
 type LoadEnvFileOptions = {
+	cwd?: string;
 	requireAppEnv?: boolean;
 };
 
-export function loadEnvFile(options?: { requireAppEnv?: true }): AppEnv;
+export function loadEnvFile(options?: {
+	cwd?: string;
+	requireAppEnv?: true;
+}): AppEnv;
 export function loadEnvFile(options: {
+	cwd?: string;
 	requireAppEnv: false;
 }): AppEnv | undefined;
 export function loadEnvFile(
 	options: LoadEnvFileOptions = {},
 ): AppEnv | undefined {
-	const { requireAppEnv = true } = options;
+	const { cwd = process.cwd(), requireAppEnv = true } = options;
 	const value = process.env.APP_ENV;
 
 	if (!value) {
@@ -25,6 +30,10 @@ export function loadEnvFile(
 	}
 
 	const appEnv = parseAppEnv(value);
-	loadDotenv({ path: path.join(process.cwd(), `.env.${appEnv}`), quiet: true });
+	const dotenvPaths =
+		appEnv === "local"
+			? [path.join(cwd, ".env.worktree"), path.join(cwd, ".env.local")]
+			: [path.join(cwd, `.env.${appEnv}`)];
+	loadDotenv({ path: dotenvPaths, quiet: true });
 	return appEnv;
 }

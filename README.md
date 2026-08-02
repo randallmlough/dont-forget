@@ -76,6 +76,13 @@ make infra-up APP_ENV=local
 make db-migrate APP_ENV=local
 ```
 
+Start the standalone API and public web link surface in separate terminals:
+
+```sh
+make api APP_ENV=local
+make web APP_ENV=local
+```
+
 Start the app in the iOS Simulator:
 
 ```sh
@@ -96,7 +103,7 @@ make infra-logs APP_ENV=local
 make infra-down APP_ENV=local
 ```
 
-### Run locally on a physical iPhone through an Expo tunnel
+### Run locally on a physical iPhone
 
 This project uses custom native modules and does not run in the stock Expo Go
 app. Install a development build first.
@@ -114,17 +121,27 @@ the device was registered after the build was created, rebuild before trying to
 install it.
 
 Ensure `EXPO_PUBLIC_POWERSYNC_URL` in `.env.local` is an HTTPS endpoint the
-iPhone can reach. The Expo tunnel exposes Metro and the local Expo API routes;
-it does not expose the separate PowerSync port.
+iPhone can reach. For LAN development, Metro supplies the reachable host and the
+app uses the generated local `API_PORT` for the standalone API process.
 
-Start Metro and the local API routes through an Expo tunnel:
+Start the standalone API and public web link surface:
 
 ```sh
-APP_ENV=local pnpm exec expo start --dev-client --tunnel
+make api APP_ENV=local
+make web APP_ENV=local
 ```
 
-Scan the terminal QR code with the iPhone Camera app and open it in the installed
-Don't Forget Local development build.
+Then start Metro without the Makefile's `--localhost` flag so the QR code
+advertises a LAN-reachable host:
+
+```sh
+APP_ENV=local EXPO_NO_DOTENV=1 NODE_OPTIONS=--dns-result-order=ipv4first pnpm exec expo start --dev-client
+```
+
+Scan the terminal QR code with the iPhone Camera app and open it in the
+installed Don't Forget Local development build. `expo start --tunnel` exposes
+Metro but does not expose the standalone local API port, so tunnel runs are not
+supported for local API calls in this phase.
 
 For a USB-connected device, Xcode can create and install the development build
 directly:

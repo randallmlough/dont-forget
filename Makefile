@@ -19,7 +19,7 @@ install: ## Install dependencies *common*
 	@$(PNPM) install
 
 .PHONY: worktree-env
-worktree-env: ## Link or copy local .env.local into this worktree
+worktree-env: ## Link/copy .env.local and generate checkout-local API/web ports
 	@./tooling/scripts/setup_worktree_env.sh
 
 .PHONY: worktree-db

@@ -1,17 +1,23 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vite";
 
-import {
-	appSchemeForEnv,
-	DEFAULT_WEB_PORT,
-	readAppEnv,
-} from "../../src/shared/env";
+import { appSchemeForEnv, readAppEnv, readWebPort } from "../../src/shared/env";
+import { loadEnvFile } from "../../src/shared/load-env.ts";
 import { headersForPublicWebRequest } from "./src/public-response-policy";
 
+const REPO_ROOT = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"../..",
+);
+
+loadEnvFile({ cwd: REPO_ROOT });
 const APP_SCHEME = appSchemeForEnv("dontforget", readAppEnv());
-const WEB_PORT = readWebPort(process.env.WEB_PORT);
+const WEB_PORT = readWebPort();
 
 export default defineConfig({
 	define: {
@@ -35,19 +41,6 @@ export default defineConfig({
 		viteReact(),
 	],
 });
-
-function readWebPort(value: string | undefined): number {
-	if (value === undefined) {
-		return DEFAULT_WEB_PORT;
-	}
-
-	const port = Number(value);
-	if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-		throw new Error("WEB_PORT must be an integer from 1 through 65535");
-	}
-
-	return port;
-}
 
 const applyPublicResponsePolicy: Connect.NextHandleFunction = (
 	request,

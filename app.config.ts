@@ -6,12 +6,14 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 import {
 	type AppEnv,
 	appSchemeForEnv,
+	readApiPort,
 	readPublicExpoConfigIfPresent,
 } from "./src/shared/env.ts";
 import { loadEnvFile } from "./src/shared/load-env.ts";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
 	const appEnv = loadEnvFile();
+	const apiPort = readApiPort();
 	// undefined only during the EAS CLI bootstrap evaluation (see
 	// readPublicExpoConfigIfPresent); identifiers derive from APP_ENV alone,
 	// and the second, env-injected evaluation fills the extras.
@@ -38,6 +40,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		extra: {
 			...config.extra,
 			appEnv,
+			apiPort,
 			...(publicConfig && {
 				apiBaseUrl: publicConfig.apiBaseUrl,
 				posthogProjectToken: publicConfig.posthogProjectToken,

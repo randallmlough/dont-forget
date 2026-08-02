@@ -8,6 +8,11 @@ const appEnvSchema = z.enum(APP_ENVS);
 const requiredEnvValueSchema = z
 	.string()
 	.refine((value) => value.trim().length > 0);
+const portValueSchema = z
+	.string()
+	.regex(/^[1-9][0-9]*$/)
+	.transform((value) => Number(value))
+	.pipe(z.number().int().min(1).max(65_535));
 
 export type AppEnv = (typeof APP_ENVS)[number];
 
@@ -59,6 +64,32 @@ export function optionalEnv(
 
 export function readAppEnv(source: EnvSource = process.env): AppEnv {
 	return parseAppEnv(requireEnv("APP_ENV", source));
+}
+
+export function readApiPort(source: EnvSource = process.env): number {
+	return readPort("API_PORT", DEFAULT_API_PORT, source);
+}
+
+export function readWebPort(source: EnvSource = process.env): number {
+	return readPort("WEB_PORT", DEFAULT_WEB_PORT, source);
+}
+
+function readPort(
+	key: "API_PORT" | "WEB_PORT",
+	defaultValue: number,
+	source: EnvSource,
+): number {
+	const value = source[key];
+	if (value === undefined) {
+		return defaultValue;
+	}
+
+	const result = portValueSchema.safeParse(value);
+	if (result.success) {
+		return result.data;
+	}
+
+	throw new Error(`${key} must be an integer from 1 through 65535`);
 }
 
 export function parseAppEnv(value: string): AppEnv {

@@ -40,18 +40,32 @@ The helper symlinks the first `.env.local` it finds in another git worktree. Use
 `WORKTREE_ENV_FILE=/path/to/.env.local` to choose a specific source, or
 `WORKTREE_ENV_MODE=copy` when a symlink is not appropriate.
 
+For `APP_ENV=local`, the same helper also creates an ignored `.env.worktree`
+regular file. It contains only generated checkout-local values:
+
+- `API_PORT`
+- `WEB_PORT`
+- `PUBLIC_WEB_BASE_URL=http://localhost:<WEB_PORT>`
+
+The effective local precedence is already-exported process env, then
+`.env.worktree`, then `.env.local`. `test`, `staging`, and `production` do not
+load `.env.worktree`; they load only `.env.<APP_ENV>`. The standalone API
+composition root still calls dotenv only for local, so staging/production
+containers remain process-env-only.
+
 ### Local API base URL is derived, not configured
 
-In `local` builds the app's API routes are served by the same Expo dev server
-that bundles the JS, so the client derives its API base URL at runtime from the dev-server URL the
-bundle actually loaded from (scheme included, so HTTPS tunnel origins work)
-instead of reading `EXPO_PUBLIC_API_BASE_URL` (which local no longer
-requires). A worktree
-running Metro on a non-default port therefore cannot silently call another
-checkout's server, and physical devices reach the host machine through the
-address they loaded the bundle from. Deployed builds (staging,
-production) still configure `EXPO_PUBLIC_API_BASE_URL`. `PUBLIC_WEB_BASE_URL`
-(server-side links) remains env-configured for now.
+In `local` builds the client derives scheme and host at runtime from the Metro
+dev-server URL that loaded the bundle, then replaces only the port with
+`extra.apiPort` baked by `app.config.ts` from the effective `API_PORT`. A
+worktree running Metro on a non-default `PORT` therefore still calls its own
+standalone API process, and physical devices keep using the host they loaded
+the bundle from.
+
+Deployed builds (`staging`, `production`) still configure
+`EXPO_PUBLIC_API_BASE_URL`. `PUBLIC_WEB_BASE_URL` is server-side link-generation
+configuration; locally it is generated in `.env.worktree` from the same
+checkout-local `WEB_PORT`.
 
 ### Per-worktree database isolation
 
@@ -103,7 +117,10 @@ PostHog analytics and logs are tagged with `APP_ENV`. Do not derive analytics/lo
 
 ## API Hosts
 
-App builds point at one API base URL for their selected environment. Local derives it at runtime from the Expo dev server that served the bundle (see "Local API base URL is derived, not configured" above); staging and production use separate hosted API deployments/domains.
+App builds point at one API base URL for their selected environment. Local
+derives the scheme/host from the Metro dev server and the port from
+`extra.apiPort` (see "Local API base URL is derived, not configured" above);
+staging and production use separate hosted API deployments/domains.
 
 `EXPO_PUBLIC_API_BASE_URL` is required for `staging` and `production` app builds. `local` ignores it in favor of the dev-server derivation, and `test` may omit it because tests mock app and API boundaries directly.
 

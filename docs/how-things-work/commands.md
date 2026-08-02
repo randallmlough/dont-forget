@@ -12,13 +12,19 @@ make start PORT=8090
 make ios PORT=8090
 ```
 
-`PORT` controls Metro/iOS only. The dedicated web package uses `WEB_PORT` and
-defaults to port `3000`:
+`PORT` controls Metro/iOS only. The standalone API uses `API_PORT` and defaults
+to `8080`; the dedicated web package uses `WEB_PORT` and defaults to `3000`:
 
 ```bash
+make api API_PORT=8088
 make web WEB_PORT=3010
 make web-build
 ```
+
+Fresh linked worktrees should run `make worktree-env` once. It preserves the
+shared `.env.local` link/copy behavior and creates an ignored, secret-free
+`.env.worktree` with checkout-local `API_PORT`, `WEB_PORT`, and matching
+`PUBLIC_WEB_BASE_URL` values.
 
 <!-- ==================================================================================== -->
 <!-- COMMANDS                                                                              -->
@@ -29,7 +35,7 @@ make web-build
 | Command | Description |
 | --- | --- |
 | `make install` | Install dependencies. |
-| `make worktree-env` | Link or copy a local `.env.local` into a fresh worktree. |
+| `make worktree-env` | Link/copy local `.env.local` and generate checkout-local API/web ports in `.env.worktree`. |
 | `make start` | Start the Expo development server for the app. |
 | `make web` | Start the dedicated public web link surface. |
 | `make ios` | Build and run the app on iOS. |
@@ -103,7 +109,7 @@ make web-build
 | Command | Description |
 | --- | --- |
 | `make help` | Display Makefile targets grouped by section. |
-| `make worktree-env` | Create `.env.local` for a worktree from another checkout or `WORKTREE_ENV_FILE`. Use `WORKTREE_ENV_MODE=copy` to copy instead of symlink. |
+| `make worktree-env` | Create `.env.local` for a worktree from another checkout or `WORKTREE_ENV_FILE`, then generate ignored checkout-local API/web port overrides in `.env.worktree`. Use `WORKTREE_ENV_MODE=copy` to copy instead of symlink. |
 | `make expo-config` | Print the public Expo config after dynamic config resolution. |
 | `make why PKG=<package>` | Inspect why a package is installed. |
 | `make outdated` | Show dependencies with available newer versions. |

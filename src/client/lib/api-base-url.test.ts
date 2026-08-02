@@ -22,40 +22,80 @@ describe("readApiBaseUrl", () => {
 		mockGetDevServer.mockReset();
 	});
 
-	it("derives the local API base URL from the dev server the bundle loaded from", () => {
-		setExpoConfig({ extra: { appEnv: "local" } });
+	it("derives the local API base URL from the dev server host and baked API port", () => {
+		setExpoConfig({ extra: { appEnv: "local", apiPort: 18087 } });
 		mockGetDevServer.mockReturnValue({
 			url: "http://192.168.0.32:8090/",
 			bundleLoadedFromServer: true,
 		});
 
-		expect(readApiBaseUrl()).toBe("http://192.168.0.32:8090");
+		expect(readApiBaseUrl()).toBe("http://192.168.0.32:18087");
 	});
 
-	it("preserves the scheme of tunneled HTTPS dev-server origins", () => {
-		setExpoConfig({ extra: { appEnv: "local" } });
+	it("replaces localhost dev-server ports with the baked API port", () => {
+		setExpoConfig({ extra: { appEnv: "local", apiPort: 18088 } });
+		mockGetDevServer.mockReturnValue({
+			url: "http://localhost:8091/",
+			bundleLoadedFromServer: true,
+		});
+
+		expect(readApiBaseUrl()).toBe("http://localhost:18088");
+	});
+
+	it("replaces IPv6 dev-server ports with the baked API port", () => {
+		setExpoConfig({ extra: { appEnv: "local", apiPort: 18089 } });
+		mockGetDevServer.mockReturnValue({
+			url: "http://[::1]:8092/",
+			bundleLoadedFromServer: true,
+		});
+
+		expect(readApiBaseUrl()).toBe("http://[::1]:18089");
+	});
+
+	it("documents the accepted tunnel limitation by preserving HTTPS host while using the standalone API port", () => {
+		setExpoConfig({ extra: { appEnv: "local", apiPort: 18090 } });
 		mockGetDevServer.mockReturnValue({
 			url: "https://abc-xyz.exp.direct/",
 			bundleLoadedFromServer: true,
 		});
 
-		expect(readApiBaseUrl()).toBe("https://abc-xyz.exp.direct");
+		expect(readApiBaseUrl()).toBe("https://abc-xyz.exp.direct:18090");
 	});
 
-	it("ignores a configured URL in local builds so the dev server stays the single source", () => {
+	it("ignores a configured URL in local builds so the dev server host and API port stay the source", () => {
 		setExpoConfig({
-			extra: { appEnv: "local", apiBaseUrl: "http://localhost:8081" },
+			extra: {
+				apiBaseUrl: "http://localhost:8081",
+				apiPort: 18091,
+				appEnv: "local",
+			},
 		});
 		mockGetDevServer.mockReturnValue({
 			url: "http://localhost:8090/",
 			bundleLoadedFromServer: true,
 		});
 
-		expect(readApiBaseUrl()).toBe("http://localhost:8090");
+		expect(readApiBaseUrl()).toBe("http://localhost:18091");
+	});
+
+	it.each([
+		["missing", undefined],
+		["string", "18087"],
+		["fractional", 18087.5],
+		["zero", 0],
+		["too high", 65536],
+	] as const)("throws when local extra.apiPort is %s", (_name, apiPort) => {
+		setExpoConfig({ extra: { appEnv: "local", apiPort } });
+		mockGetDevServer.mockReturnValue({
+			url: "http://localhost:8090/",
+			bundleLoadedFromServer: true,
+		});
+
+		expect(() => readApiBaseUrl()).toThrow(/API_PORT|Expo config/);
 	});
 
 	it("throws when a local bundle was not loaded from a dev server", () => {
-		setExpoConfig({ extra: { appEnv: "local" } });
+		setExpoConfig({ extra: { appEnv: "local", apiPort: 18087 } });
 		mockGetDevServer.mockReturnValue({
 			url: "http://localhost:8081/",
 			bundleLoadedFromServer: false,

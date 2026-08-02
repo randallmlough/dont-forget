@@ -2,9 +2,12 @@ import {
 	appSchemeForEnv,
 	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
+	DEFAULT_API_PORT,
 	DEFAULT_WEB_PORT,
 	parseAppEnv,
+	readApiPort,
 	readPublicExpoConfig,
+	readWebPort,
 	validateClerkKeyForEnv,
 } from "./env";
 
@@ -31,6 +34,30 @@ describe("environment config", () => {
 
 	it("defaults the web port to 3000", () => {
 		expect(DEFAULT_WEB_PORT).toBe(3000);
+	});
+
+	it("defaults the API port to 8080", () => {
+		expect(DEFAULT_API_PORT).toBe(8080);
+		expect(readApiPort({})).toBe(8080);
+	});
+
+	it("reads explicit API and web ports", () => {
+		expect(readApiPort({ API_PORT: "18087" })).toBe(18087);
+		expect(readWebPort({ WEB_PORT: "13087" })).toBe(13087);
+	});
+
+	it("defaults only the matching missing port key", () => {
+		expect(readApiPort({ WEB_PORT: "13087" })).toBe(8080);
+		expect(readWebPort({ API_PORT: "18087" })).toBe(3000);
+	});
+
+	it.each([
+		["API_PORT", readApiPort],
+		["WEB_PORT", readWebPort],
+	] as const)("rejects invalid %s values", (key, reader) => {
+		for (const value of ["", " ", "abc", "12.5", "0", "65536"]) {
+			expect(() => reader({ [key]: value })).toThrow(key);
+		}
 	});
 
 	it("requires Clerk development publishable keys outside production", () => {
