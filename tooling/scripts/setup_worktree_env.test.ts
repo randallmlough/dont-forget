@@ -36,7 +36,7 @@ const helperRelativePath = path.join(
 	"scripts",
 	"setup_worktree_env.sh",
 );
-const liveHelperPath = path.join(process.cwd(), helperRelativePath);
+const liveHelperPath = path.resolve(__dirname, "setup_worktree_env.sh");
 const syntheticEnv = [
 	"APP_ENV=local",
 	"CLERK_SECRET_KEY=sk_test_synthetic_secret",

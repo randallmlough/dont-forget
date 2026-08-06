@@ -6,8 +6,8 @@ import viteReact from "@vitejs/plugin-react";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vite";
 
-import { appSchemeForEnv, readAppEnv, readWebPort } from "../../src/shared/env";
-import { loadEnvFile } from "../../src/shared/load-env.ts";
+import { appSchemeForEnv, readAppEnv, readWebPort } from "@dont-forget/shared";
+import { loadEnvFile } from "@dont-forget/shared/node";
 import { headersForPublicWebRequest } from "./src/public-response-policy";
 
 const REPO_ROOT = path.resolve(
