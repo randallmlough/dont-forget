@@ -1,7 +1,7 @@
 export type PublicWebResponseHeaders =
 	| { "Content-Type": "application/json" }
 	| {
-			"Cache-Control": "no-store";
+			"Cache-Control": "no-store, no-transform";
 			"Referrer-Policy": "no-referrer";
 	  };
 
@@ -10,7 +10,7 @@ const AASA_HEADERS = {
 } satisfies PublicWebResponseHeaders;
 
 const SENSITIVE_PAGE_HEADERS = {
-	"Cache-Control": "no-store",
+	"Cache-Control": "no-store, no-transform",
 	"Referrer-Policy": "no-referrer",
 } satisfies PublicWebResponseHeaders;
 

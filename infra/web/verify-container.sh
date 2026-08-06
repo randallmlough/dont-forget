@@ -72,7 +72,7 @@ request invitation '/invitations/accept?token=t5-token-marker' 200
 request household '/households/join?code=t5-code-marker' 200
 for name in invitation household; do
 	grep -Eiq '^content-type: text/html\r?$' "$response_directory/$name.headers"
-	grep -Eiq '^cache-control: no-store\r?$' "$response_directory/$name.headers"
+	grep -Eiq '^cache-control: no-store, no-transform\r?$' "$response_directory/$name.headers"
 	grep -Eiq '^referrer-policy: no-referrer\r?$' "$response_directory/$name.headers"
 	grep -aq 'Open in <!-- -->Don&#x27;t Forget' "$response_directory/$name.body"
 done

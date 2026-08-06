@@ -10,9 +10,9 @@ describe("headersForPublicWebRequest", () => {
 	it.each([
 		"/invitations/accept",
 		"/households/join",
-	])("prevents caching and referrer forwarding for %s", (path) => {
+	])("prevents caching, transformation, and referrer forwarding for %s", (path) => {
 		expect(headersForPublicWebRequest(path)).toEqual({
-			"Cache-Control": "no-store",
+			"Cache-Control": "no-store, no-transform",
 			"Referrer-Policy": "no-referrer",
 		});
 	});
