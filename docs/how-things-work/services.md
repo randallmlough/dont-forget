@@ -1,13 +1,13 @@
 # Services
 
-Services are the primary entrypoint for querying and mutating product data in Don't Forget. Client product services live with the feature that consumes them; server services live with their server domain modules. See [ADR-0011](../adr/0011-domain-first-service-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md), [ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0018](../adr/0018-single-postgres-self-hosted-powersync.md), and [`docs/code-standards/architecture.md`](../code-standards/architecture.md).
+Services are the primary entrypoint for querying and mutating product data in Don't Forget. Mobile product services live with the feature that consumes them; API services live with their server domain modules. DB infrastructure and shared contracts are separate packages. See [ADR-0011](../adr/0011-domain-first-service-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md), [ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0018](../adr/0018-single-postgres-self-hosted-powersync.md), and [`docs/code-standards/architecture.md`](../code-standards/architecture.md).
 
 ## Folder Shape
 
 Use the domain noun from `CONTEXT.md`, but place it on the correct side of the client/server boundary.
 
 ```txt
-src/client/features/item/
+apps/mobile/src/features/item/
   item-details-sheet.tsx
   item-editor-reducer.ts
   item-inline-form.tsx
@@ -16,7 +16,7 @@ src/client/features/item/
   use-item-editor.ts
   use-item-service.ts
 
-src/client/features/list/
+apps/mobile/src/features/list/
   list-items.tsx
   list-page.tsx
   list-service.ts
@@ -24,59 +24,62 @@ src/client/features/list/
   use-list-page.ts
   use-list-services.ts
 
-src/client/lib/
+apps/mobile/src/lib/
   product-database.ts
   sql-timestamp.ts
   use-product-query.ts
 
-src/client/session/
+apps/mobile/src/session/
   bootstrap.ts
   provider.tsx
   session-machine.ts
   sign-out.ts
   powersync-app-database.ts
-src/client/session/powersync/
+apps/mobile/src/session/powersync/
   connector.ts
   provider.tsx
   powersync.ts
   schema.ts
 
-src/server/bootstrap/
+apps/api/src/bootstrap/
   api.ts
-src/server/data/
+apps/api/src/data/
   api.ts
-src/server/households/
-  household-service.ts
-  member-service.ts
-  api.ts
-src/server/invitations/
-  invitation-service.ts
-  api.ts
-src/server/sync/
-  applicator.ts
   authenticate.ts
   payload.ts
   rate-limit.ts
-src/server/users/
+apps/api/src/households/
+  household-service.ts
+  member-service.ts
+  api.ts
+apps/api/src/invitations/
+  invitation-service.ts
+  api.ts
+apps/api/src/users/
   user-service.ts
   api.ts
-src/server/db/
-src/server/db/schema/
-src/server/db/migrations/
-src/server/db/fixtures/
+
+packages/db/src/sync/
+  applicator.ts
+  pg-transaction.ts
+packages/db/src/schema/
+packages/db/src/migrations/
+packages/db/src/fixtures/
+
+packages/shared/src/contracts/
 ```
 
 Rules:
 
-- Client List and Item services live under their respective `src/client/features/list/` and `src/client/features/item/` folders because they are app-safe product services over local PowerSync SQLite.
-- Server domain modules live under `src/server/<domain>/` and own their services plus the `api.ts` handler for that domain.
-- `src/server/sync/` owns the `/api/data` applicator, authentication, payload validation, rate limiting, and transaction helpers.
-- Data-store infrastructure lives in `src/server/db/`: Drizzle schema, migrations, fixtures, seed/reset/migrate/generate scripts, and test database helpers.
-- Shared wire contracts and cross-boundary helpers live in `src/shared/`.
+- Mobile List and Item services live under `apps/mobile/src/features/list/` and `apps/mobile/src/features/item/` because they are app-safe product services over local PowerSync SQLite.
+- API domain modules live under `apps/api/src/<domain>/` and own their services plus the `api.ts` HTTP handler for that domain.
+- `apps/api/src/data/` owns `/api/data` HTTP authentication, payload bounds, rate limiting, transaction orchestration, and response mapping.
+- Data-store infrastructure lives in `packages/db/`: Drizzle schema, migrations, fixtures, seed/reset/migrate/generate scripts, test database helpers, the write applicator, and its Postgres transaction.
+- Shared wire contracts and cross-boundary helpers live in `packages/shared/` and are consumed through `@dont-forget/shared` exports.
 
 ## Runtime Boundary
 
-Client and server code cannot freely import each other. The `no-client-server-imports` ESLint rule in `tooling/eslint-plugin/` blocks client-to-server imports: it runs over `src/client` and non-API `src/app` files and forbids `@/server/*`. Server-to-client imports are prohibited by standards and review convention.
+Workspaces cannot reach into each other's source trees. The `dont-forget/package-boundaries` ESLint rule rejects relative escapes, cross-package aliases, undeclared workspace dependencies, and unexported package subpaths. `@mobile/*` and `@api/*` are package-local aliases; cross-workspace imports use declared/exported `@dont-forget/*` entrypoints.
 
 Client code must not import:
 
@@ -84,28 +87,27 @@ Client code must not import:
 - server Postgres clients or operator config
 - server-only environment readers such as `readPostgresConfig` or `readClerkServerConfig`
 - Drizzle directory DB clients
-- anything under `src/server/`
+- API or DB workspace source paths that are not exposed through declared package exports
 
-Server code must not import UI, React Native, or client-session modules. Shared types, Zod contracts, env helpers, analytics-event names, and redaction helpers belong under `src/shared/` when both sides need them.
+API and DB code must not import UI, React Native, or mobile-session modules. Shared types, Zod contracts, env helpers, analytics-event names, and redaction helpers belong under `packages/shared/` when more than one workspace needs them.
 
-Expo API Routes keep server imports lazy inside request handlers and delegate to domain handlers:
+The Hono composition root statically registers domain handlers:
 
 ```ts
-export async function POST(request: Request): Promise<Response> {
-  const { handleDataUpload } = await import("@/server/data/api");
-  return handleDataUpload(request);
-}
+app.post("/api/data", (context) =>
+  handleDataUpload(context.req.raw, deps.data),
+);
 ```
 
-This keeps route files thin and preserves native bundle safety. See [API Routes](./api-routes.md) for the route layering.
+This keeps composition mechanical while handlers and same-domain services own request and domain policy. See [API Routes](./api-routes.md) for the route layering.
 
 ## Service Style
 
 Use factory-based dependency injection:
 
 ```ts
-import { track } from "@/client/lib/analytics";
-import { logger as defaultLogger, type Logger } from "@/client/lib/logger";
+import { track } from "@mobile/lib/analytics";
+import { logger as defaultLogger, type Logger } from "@mobile/lib/logger";
 
 export type ItemService = {
   listItemsQuery(input: ListItemsInput): ProductQuery<Item>;
@@ -143,14 +145,14 @@ Service methods should emit informative product tracking after successful operat
 
 ## PowerSync Store and the ProductDatabase Seam
 
-The app's local product data lives in one PowerSync database under `src/client/session/powersync/`:
+The app's local product data lives in one PowerSync database under `apps/mobile/src/session/powersync/`:
 
 - `schema.ts` — the declarative `AppSchema` (client views over synced rows; there are no client migrations).
 - `powersync.ts` — the `PowerSyncDatabase` singleton.
 - `connector.ts` — the backend connector: it fetches the connection token from Clerk and uploads local writes to `/api/data`.
 - `provider.tsx` — the React provider that makes the database available to PowerSync watched-query hooks.
 
-Services never import PowerSync directly. They depend on the narrow `ProductDatabase` seam in `src/client/lib/product-database.ts`, which exposes `getAll` / `getOptional` / `execute`, `writeTransaction(run)`, and `ProductQuery<T>` for watched reads. `src/client/session/powersync-app-database.ts` adapts the PowerSync handle to this seam and exports the production `appProductDatabase` singleton.
+Services never import PowerSync directly. They depend on the narrow `ProductDatabase` seam in `apps/mobile/src/lib/product-database.ts`, which exposes `getAll` / `getOptional` / `execute`, `writeTransaction(run)`, and `ProductQuery<T>` for watched reads. `apps/mobile/src/session/powersync-app-database.ts` adapts the PowerSync handle to this seam and exports the production `appProductDatabase` singleton.
 
 ```ts
 export type ProductDatabase = ProductQuerier & {
@@ -176,7 +178,7 @@ Allowed:
 
 - client List/Item services executing SQL through the `ProductDatabase` seam
 - server User/Member/Household/Invitation services using Drizzle and server DB infrastructure
-- the `/api/data` write applicator in `src/server/sync/` issuing write-path SQL (see ADR-0016)
+- the `/api/data` write applicator in `packages/db/src/sync/` issuing write-path SQL (see ADR-0016)
 - route-owned hooks composing app-safe services for signed-in UI
 - service tests injecting fake or local SQL stores
 
@@ -194,7 +196,7 @@ Services should return domain-shaped records, not raw SQL rows and not component
 
 Reusable components keep UI-facing contracts. They should not import domain services directly when that would couple them to Authenticated App Session, stores, or service factories. Route-owned hooks or containers adapt domain services into component props.
 
-For signed-in UI, `src/client/session/provider.tsx` exposes:
+For signed-in UI, `apps/mobile/src/session/provider.tsx` exposes:
 
 ```ts
 const { state, session, retry, reloadSession, signOut } =
@@ -246,8 +248,8 @@ Use **Authenticated App Session** for the top-level signed-in app runtime. It id
 Preferred app-side names:
 
 - `createSessionBootstrapService().getSession`, not `bootstrapWithClerk`
-- `src/client/session/bootstrap.ts` for fresh online session loading
-- `src/client/session/provider.tsx` and `src/client/session/session-machine.ts` for signed-in runtime orchestration
+- `apps/mobile/src/session/bootstrap.ts` for fresh online session loading
+- `apps/mobile/src/session/provider.tsx` and `apps/mobile/src/session/session-machine.ts` for signed-in runtime orchestration
 
 The session bootstrap returns directory identity only — it carries no per-Household sync tokens (the PowerSync connection token is fetched directly from Clerk). Offline startup reads the local PowerSync database; streaming resumes when the connector reconnects and re-authenticates.
 

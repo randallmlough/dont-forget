@@ -8,12 +8,14 @@
 
 ## Stack And Layout
 
-- **pnpm** (not npm or yarn), Expo SDK 56, TypeScript, Jest, Biome + ESLint, Clerk auth, PowerSync + Postgres sync.
-- `src/app/` — expo-router routes (incl. `src/app/api/**/+api.ts`); keep route files thin.
-- `src/client/` — the iOS app: `src/client/screens/` (route-owned screens), `src/client/features/<feature>/` (feature UI, hooks, feature services), `src/client/session/` (Authenticated App Session + PowerSync), `src/client/lib/`, `src/client/theme/` (Unistyles theme tokens), `src/client/ui/`.
-- `src/server/` — server domain modules (`src/server/bootstrap/`, `src/server/data/`, `src/server/db/`, `src/server/households/`, `src/server/invitations/`, `src/server/sync/`, `src/server/users/`); all server SQL and Drizzle schema/migrations live under `src/server/db/`.
-- `src/shared/` — wire contracts and cross-boundary helpers (Zod contracts, env, analytics events).
-- `tooling/` — repo tooling: ESLint plugin, Expo config plugins, scripts.
+- **pnpm** (not npm or yarn), Expo SDK 56, TypeScript, Jest, Biome + ESLint, Clerk auth, Hono, and PowerSync + Postgres sync.
+- `apps/mobile/` — the iOS-only Expo/React Native app: `apps/mobile/app/` contains thin Expo Router routes; `apps/mobile/src/screens/` contains route-owned screens; `apps/mobile/src/features/<feature>/` contains feature UI, hooks, and services; `apps/mobile/src/session/` contains the Authenticated App Session + PowerSync; `apps/mobile/src/lib/`, `apps/mobile/src/theme/`, and `apps/mobile/src/ui/` own mobile infrastructure, theme tokens, and reusable UI.
+- `apps/api/` — the standalone Hono Node API: `src/app.ts` composes routes, while `src/<domain>/` contains HTTP handlers and same-domain services.
+- `apps/web/` — the separate TanStack/Vite public web surface for Invitation and Household Join Code links; it is not a web target for the mobile app.
+- `packages/shared/` — cross-boundary contracts and helpers exported through `@dont-forget/shared` and `@dont-forget/shared/node`.
+- `packages/db/` — Postgres/Drizzle schema, migrations, fixtures, test helpers, and the `/api/data` write applicator, exposed through curated `@dont-forget/db` exports.
+- `tooling/` — repo tooling workspace: ESLint rules, Expo config plugins, and scripts.
+- The repository root is orchestration-only: pnpm workspaces, Turbo, Make, shared config, infrastructure, documentation, and plans.
 
 ## Commands
 

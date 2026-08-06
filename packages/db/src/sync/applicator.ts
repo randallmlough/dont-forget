@@ -1,12 +1,12 @@
 // The /api/data write applicator: the transport-agnostic core that decides what
 // each PowerSync write op does, plus the shared contracts it exchanges with the
-// HTTP shim (lib/api/data) and the pg transaction (./pg-transaction).
+// HTTP shim (apps/api/src/data) and the pg transaction (./pg-transaction).
 //
-// This is data-store infrastructure owned by the db layer (ADR-0014): the
-// dependency arrow points lib/api -> db, so the Zod batch contract, the DataOp
-// type, and the transaction interface all live here, not in lib/api. The core is
-// pure (no Request, no pg) and runs against an injected DataTransaction; tests
-// provide a fake, production wires it to ./pg-transaction.
+// This is data-store infrastructure owned by packages/db (ADR-0014): apps/api
+// depends on @dont-forget/db, so the Zod batch contract, the DataOp type, and the
+// transaction interface all live here. The core is pure (no Request, no pg) and
+// runs against an injected DataTransaction; tests provide a fake, production
+// wires it to ./pg-transaction.
 //
 // Invariants preserved (do not change behavior):
 //   - Per-op table allow-list + per-column allow-list (closes the

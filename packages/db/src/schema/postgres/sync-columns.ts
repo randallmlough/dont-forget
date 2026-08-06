@@ -1,6 +1,7 @@
 // Allow-lists and Household-resolution paths for the /api/data write applicator.
-// The db layer owns this data-store infrastructure (ADR-0014); the applicator in
-// db/server/sync imports it downward, and lib/api never re-declares it.
+// The packages/db workspace owns this data-store infrastructure (ADR-0014);
+// apps/api consumes the applicator through @dont-forget/db instead of
+// re-declaring its contract.
 //
 // WRITABLE_COLUMNS is explicitly declared and checked against the Drizzle
 // schema at module load. A column added to the schema must be classified as

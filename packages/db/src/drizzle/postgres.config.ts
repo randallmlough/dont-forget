@@ -1,6 +1,6 @@
 import { defineConfig } from "drizzle-kit";
 
-// Connectionless config: schema + out + dialect only. db/server/generate.ts
+// Connectionless config: schema + out + dialect only. packages/db/src/generate.ts
 // evaluates this at module load with no DATABASE_URL guaranteed, and
 // `drizzle-kit generate` for postgresql never connects — so no dbCredentials.
 export default defineConfig({

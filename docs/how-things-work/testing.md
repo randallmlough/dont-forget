@@ -1,10 +1,8 @@
 # Testing
 
-Tests are React Native-first. The default stack is Jest through `jest-expo` plus React Native Testing Library. Use Expo Router testing utilities for router and auth-gate flows when a test needs real route behavior.
+Every workspace owns its Jest config and tests. `apps/mobile/` uses `jest-expo` plus React Native Testing Library and Expo Router testing utilities. `apps/api/`, `apps/web/`, `packages/shared/`, `packages/db/`, and `tooling/` use their package-owned Node Jest configs. The web track currently tests public-link policy and routing helpers in Node; it does not add a root or jsdom Jest track.
 
 Integration-first testing is the hard default for product behavior. If Household, Member, Owner, Invitation, List, Item, Authenticated App Session, or sync behavior can run locally through Jest, React Native Testing Library, Expo Router testing utilities, and/or isolated ephemeral local databases, the test should exercise that real collaboration instead of replacing it with app-owned fakes.
-
-There is no separate React DOM/jsdom track. Add one later only if the app grows web-specific behavior that cannot be exercised through the React Native surface.
 
 Native end-to-end coverage uses Maestro. Add Maestro flows when behavior depends on a real iOS app runtime, native modules, app relaunch, device state, or offline/online transitions that Jest cannot prove.
 
@@ -13,18 +11,29 @@ For manual native QA, simulator debugging, and tool-specific guidance, see [QA a
 ## Commands
 
 ```bash
-pnpm test
-pnpm test:ci
-pnpm test:coverage
-pnpm typecheck
-pnpm lint
+make test
+make test-ci
+make test-coverage
+make typecheck
+make lint
 ```
 
-- `pnpm test` runs Jest in watch mode for local development.
-- `pnpm test:ci` runs Jest once with `--runInBand`; prefer this for verification because integration tests may create temp databases.
-- `pnpm test:coverage` reports coverage but does not enforce a threshold.
+- `make test` dispatches each workspace's Jest watch script through Turbo.
+- `make test-ci` dispatches each workspace's Jest config once with `--runInBand`; prefer this for verification because integration tests may create temp databases.
+- `make test-coverage` reports package-owned coverage but does not enforce a threshold.
 - The standard proof for TS/TSX changes is `make verify`, which runs typecheck, Biome, Expo lint, and Jest when practical.
 - Maestro flows run against an installed iOS build with the Maestro CLI or EAS Workflows. Add exact commands here when the first `.maestro/` flow and build profile are committed.
+
+Select the owning workspace for a focused Jest run. Paths after `--filter` are package-relative:
+
+```bash
+pnpm --filter @dont-forget/mobile exec jest --runInBand --runTestsByPath ./src/session/bootstrap.test.ts
+pnpm --filter @dont-forget/api exec jest --runInBand --runTestsByPath ./src/http.auth.test.ts
+pnpm --filter @dont-forget/web exec jest --runInBand --runTestsByPath ./src/deep-link.test.ts
+pnpm --filter @dont-forget/shared exec jest --runInBand --runTestsByPath ./src/redact.test.ts
+pnpm --filter @dont-forget/db exec jest --runInBand --runTestsByPath ./src/migrations.test.ts
+pnpm --filter @dont-forget/tooling exec jest --runInBand --runTestsByPath ./infra/compose.test.ts
+```
 
 ## Test Boundaries
 
@@ -66,18 +75,18 @@ Database integration tests mirror production topology:
 
 The `test` environment means automated tests only. It is not a persistent cloud environment; staging is the persistent pre-production environment.
 
-Directory tests use helpers from `src/server/db/test.ts`, which run an ephemeral PGlite (embedded Postgres) database and apply the SQL in `src/server/db/migrations/postgres/*.sql`. Product-service tests (List/Item) run against an in-memory SQLite database that mirrors the PowerSync client schema (`src/test/product-database.ts`), so the real service SQL executes without the native PowerSync layer.
+API and DB tests import helpers from `@dont-forget/db/test`, implemented in `packages/db/src/test.ts`. Those helpers run an ephemeral PGlite (embedded Postgres) database and apply the SQL in `packages/db/src/migrations/postgres/*.sql`. Mobile product-service tests (List/Item) use `apps/mobile/src/test/product-database.ts`, an in-memory SQLite database that mirrors the PowerSync client schema, so the real service SQL executes without the native PowerSync layer.
 
-Do not use `pnpm db:migrate` in tests. That command is for intentionally applying migrations to configured databases.
+Do not use `make db-migrate` in tests. That command is for intentionally applying migrations to configured databases.
 
 ## Database Fixtures And Scenarios
 
-`src/server/db/fixtures/` is the shared persistence fixture layer. It contains:
+`packages/db/src/fixtures/`, exported as `@dont-forget/db/fixtures`, is the shared persistence fixture layer. It contains:
 
 - low-level Drizzle insert-shaped builders for User, Household, Membership/Member, Invitation, Household Join Code, Household Join Code use, List, Item, and `item_checks` rows;
 - scenario helpers that seed caller-provided directory and product database handles and return the inserted records/IDs.
 
-`src/server/db/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
+`packages/db/src/fixtures/` does not create `ListService`, `ItemService`, Authenticated App Session objects, providers, or UI view models. Tests compose those runtime objects in the owning module's test helper after the database facts are seeded.
 
 The first canonical scenario is `seedPrimaryHouseholdScenario`:
 
@@ -100,7 +109,7 @@ make db-seed EMAIL=email@email.com
 make db-reseed EMAIL=email@email.com
 ```
 
-- `db-seed` runs `tooling/scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist in the no-`EMAIL` path. It assumes the local Postgres database already exists and has migrations applied.
+- `db-seed` runs `packages/db/scripts/seed.ts`: local-only, seed-only, non-destructive, and fails if deterministic seed rows already exist in the no-`EMAIL` path. It assumes the local Postgres database already exists and has migrations applied.
 - Without `EMAIL`, seed/reseed keep the deterministic DB-only seed behavior.
 - With `EMAIL`, `db-seed` is additive: it creates an email-scoped seed Household without resetting unrelated local Users or Households. It creates or reuses two Clerk development Users: the supplied email as the Owner and the derived `+member` email as a plain Member. Both use password `testing1234`.
 - Existing matching Clerk development Users are reused and repaired before the local duplicate seed-data check runs.
@@ -111,14 +120,14 @@ make db-reseed EMAIL=email@email.com
 
 ## File Layout
 
-- `src/test/setup.ts` configures global Jest setup and native/SDK mocks.
-- `src/test/mocks/` contains reusable mock modules and fixtures, including observability helpers such as analytics module mocks and logger injection fixtures.
-- `src/server/db/test.ts` owns local temp DB helpers.
-- Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `src/server/db/test.ts` for test suites.
-- Screen flow tests live next to the screen they exercise, e.g. `src/client/screens/auth/sign-in-screen.test.tsx`.
-- Non-route modules colocate tests next to source, e.g. `src/shared/redact.test.ts`.
+- `apps/mobile/src/test/setup.ts` configures mobile Jest setup and native/SDK mocks.
+- `apps/mobile/src/test/mocks/` contains reusable mobile mock modules and fixtures, including observability helpers such as analytics module mocks and logger injection fixtures.
+- `packages/db/src/test.ts` owns local temp DB helpers and is exported as `@dont-forget/db/test`.
+- Name tests `*.test.ts` or `*.test.tsx` so Jest does not mistake helper files such as `packages/db/src/test.ts` for test suites.
+- Screen flow tests live next to the screen they exercise, e.g. `apps/mobile/src/screens/auth/sign-in-screen.test.tsx`.
+- Non-route modules colocate tests next to source, e.g. `packages/shared/src/redact.test.ts`.
 
-Do not put test files in `src/app/`; Expo Router treats files there as routes or layouts.
+Do not put test files in `apps/mobile/app/`; Expo Router treats files there as routes or layouts.
 
 ## What Needs Tests
 
@@ -131,7 +140,7 @@ Use integration-style tests for product behavior:
 - database migrations and repository/service logic
 - analytics/logging calls when they are part of the feature contract
 
-Prefer injected logger fixtures or narrow analytics test doubles for services and stores that accept observability dependencies. Reserve module mocks such as `@/client/lib/analytics` for UI and screen tests that import app-wide helpers directly.
+Prefer injected logger fixtures or narrow analytics test doubles for services and stores that accept observability dependencies. Reserve module mocks such as `@mobile/lib/analytics` for UI and screen tests that import app-wide helpers directly.
 
 Use focused unit tests for pure logic and narrow adapters:
 
@@ -149,10 +158,10 @@ Usually skip tests for:
 
 ## Coverage
 
-Coverage is visible through `pnpm test:coverage`, but there is no global threshold yet. The current gate is policy-based: new or changed product behavior needs meaningful tests. Add scoped coverage thresholds later after the core Household/List/Item flows exist.
+Coverage is visible through `make test-coverage`, but there is no global threshold yet. The current gate is policy-based: new or changed product behavior needs meaningful tests. Add scoped coverage thresholds later after the core Household/List/Item flows exist.
 
 ## Examples To Copy
 
-- `src/shared/redact.test.ts` shows a focused pure-helper unit test.
-- `src/server/db/migrations.test.ts` shows a local Postgres migration integration test.
-- `src/client/screens/auth/sign-in-screen.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.
+- `packages/shared/src/redact.test.ts` shows a focused pure-helper unit test.
+- `packages/db/src/migrations.test.ts` shows a local Postgres migration integration test.
+- `apps/mobile/src/screens/auth/sign-in-screen.test.tsx` shows a React Native auth flow with Clerk and analytics mocked at module boundaries.

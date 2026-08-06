@@ -13,13 +13,13 @@
 
 - **Must** use Biome as the preferred formatter, import organizer, and general TypeScript/React linter.
 - **Must** keep the Expo ESLint flat config in the verification path until we have evidence that removing it will not lose Expo or React Native-specific lint coverage.
-- **Must** run ESLint over the whole project, not Expo CLI's narrowed default directories, so `src/` and `tooling/` code are covered.
+- **Must** run ESLint over the whole repository, not Expo CLI's narrowed default directories, so every application/package workspace and root tooling are covered.
 - **Must** treat Biome as additive to the current ESLint stack during the first standards pass.
 - **Must** use Biome defaults for mechanical formatting unless a later standard documents a specific override.
 - **Must** treat React hook dependency correctness, explicit TypeScript safety, and React Native accessibility diagnostics as verification failures.
 - **Must** keep `react-hooks/exhaustive-deps`, `@typescript-eslint/no-unused-vars`, `@typescript-eslint/no-non-null-assertion`, `@typescript-eslint/no-explicit-any`, `@typescript-eslint/consistent-type-assertions`, and enabled `react-native-a11y/*` rules at error severity unless a later standards decision changes that policy.
 - **Must** keep repo-specific ESLint rules under `tooling/eslint-plugin/` tested with `pnpm test:eslint-rules`.
-- **Must** keep `dont-forget/no-client-server-imports` and `dont-forget/no-raw-color-literals` enabled in the Expo ESLint flat config.
+- **Must** keep `dont-forget/package-boundaries` and `dont-forget/no-raw-color-literals` enabled in the root ESLint flat config.
 - **Must** prefer adding ESLint enforcement for mechanical, low-false-positive standards when humans or AI agents repeatedly miss the documented rule.
 - **Should** let Biome own mechanical formatting and import organization instead of hand-formatting imports or debating whitespace in reviews.
 - **Should** provide a formatting command that applies Biome's safe formatter and import-organization fixes.
@@ -30,9 +30,10 @@
 
 ## Import Paths
 
-- **Must** use the `@/*` root alias for imports that cross top-level source folders such as `src/client`, `src/server`, `src/shared`, and `src/app`.
-- **Should** use relative imports for files within the same local module or folder when that keeps the relationship clearer than a root alias.
-- **Avoid** deep relative imports that walk across top-level folders, such as `../../client/...`; use `@/client/...` instead.
+- **Must** use `@mobile/*` for mobile internals and `@api/*` for API internals when an alias is clearer than a relative import.
+- **Must** use declared and exported `@dont-forget/*` entrypoints for cross-workspace imports; do not reach into another workspace through its package-local alias, source path, or unexported subpath.
+- **Should** use relative imports within the same local module or folder when that keeps the relationship clearer than a package-local alias.
+- **Avoid** deep relative imports that escape a workspace package; `dont-forget/package-boundaries` rejects them.
 - **Must** use `index.ts` and `index.tsx` only as curated public entrypoints for cohesive feature surfaces or modules.
 - **Must** keep feature entrypoints free of test-only, story-only, server-only, or internal implementation exports.
 - **Must** import internal files directly from within the same feature instead of routing through that feature's public entrypoint.

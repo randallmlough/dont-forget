@@ -104,7 +104,7 @@ shared `.env.local` link/copy behavior and creates an ignored, secret-free
 
 | Command | Description |
 | --- | --- |
-| `make db-generate` | Generate migrations for every Drizzle config in `src/server/db/drizzle`. |
+| `make db-generate` | Generate Postgres migrations from the Drizzle config in `packages/db/src/drizzle/`. |
 | `make db-migrate APP_ENV=staging` | Apply migrations to the selected environment. Only run when intentionally migrating real configured targets. Production also requires `CONFIRM_APP_ENV=production`. |
 | `make db-reset APP_ENV=local CONFIRM_DB_RESET=local` | Delete app data from the selected environment's Postgres database (directory and product tables). Production also requires `CONFIRM_APP_ENV=production`. |
 | `make db-seed` | Seed local data without resetting. Pass `EMAIL=<address>` to add an email-scoped Clerk-backed seed Household for Owner and plain Member sign-in. |
@@ -124,5 +124,5 @@ shared `.env.local` link/copy behavior and creates an ignored, secret-free
 | `make why PKG=<package>` | Inspect why a package is installed. |
 | `make outdated` | Show dependencies with available newer versions. |
 | `pnpm exec <bin>` | Run a package binary directly from the project dependency graph. |
-| `rg "<term>" docs src tooling` | Search docs and source for a term. |
+| `rg "<term>" docs apps packages tooling` | Search docs and workspace source for a term. |
 | `make status` | Check the current worktree without verbose output. |

@@ -1,8 +1,8 @@
 # Product analytics
 
-Product-event tracking goes through `src/client/lib/analytics.ts`. Events use a typed catalog defined in `src/shared/analytics-events.ts`. Identity is auto-synced from Clerk; you do not call `identify` from auth screens.
+Product events use one typed catalog in `packages/shared/src/analytics-events.ts`, exported by `@dont-forget/shared`. Mobile tracking goes through `apps/mobile/src/lib/analytics.ts`; API services use `apps/api/src/analytics.ts`. Mobile identity is auto-synced from Clerk, so auth screens do not call `identify`.
 
-For diagnostic logs (errors, debug info, anything exploratory), use the [logger](./logger.md), not analytics.
+For diagnostic logs (errors, debug info, anything exploratory), use [logging](./logging.md), not analytics.
 
 ## Logs vs analytics — pick the right one
 
@@ -18,13 +18,13 @@ Rule of thumb: if you're tempted to invent a new event name on the fly without e
 ## Quick reference
 
 ```ts
-import { track, reset, screen } from "@/client/lib/analytics";
+import { track, reset, screen } from "@mobile/lib/analytics";
 
 // product event — name and properties are type-checked against EventMap
 track("user_signed_up", { method: "email" });
 track("user_signed_in", { method: "apple" });
 
-// screen view (already wired in src/app/_layout.tsx — usually you don't call this)
+// Screen view (already wired in apps/mobile/app/_layout.tsx).
 screen("/lists/abc123", { previous_screen: "/lists" });
 
 // sign-out — clears PostHog identity. Pair with the user_signed_out event.
@@ -37,7 +37,7 @@ You will rarely call `identify` directly. See "Identity" below.
 For services and stores, pass analytics as an explicit dependency when the module owns a product outcome. Service methods should track after the operation succeeds, not before persistence, network validation, or local side effects complete:
 
 ```ts
-import { track } from "@/client/lib/analytics";
+import { track } from "@mobile/lib/analytics";
 
 type ItemServiceAnalytics = {
   track: typeof track;
@@ -65,7 +65,7 @@ Scope the dependency to the analytics operations the service/store actually need
 
 ## Adding a new event
 
-1. **Open `src/shared/analytics-events.ts`** and add the event to `EventMap`:
+1. **Open `packages/shared/src/analytics-events.ts`** and add the event to `EventMap`:
    ```ts
    export type EventMap = {
      // ...existing events...
@@ -110,6 +110,8 @@ You don't call `identify` from sign-in/sign-up code. After `setActive(...)`, Cle
 - Events appear in the Activity feed within seconds; funnels and insights index over a few minutes.
 - Service name `dont-forget`; environment tag comes from `APP_ENV` (`local`, `test`, `staging`, `production`). Filter dashboards by environment to keep non-production noise out.
 
+API services receive `serverServiceAnalytics` from `apps/api/src/analytics.ts` through their dependency boundary. The adapter uses the same `EventMap` and redaction helpers exported by `@dont-forget/shared`, adds `app_env` and `runtime: "server"`, and flushes during API shutdown. Mobile and API adapters must not invent separate event catalogs.
+
 ## Redaction
 
 Event properties pass through the same redactor as logs:
@@ -128,7 +130,7 @@ The typed event catalog is your first line of defense — if you don't add a `pa
 ## What not to do
 
 - **Don't call `posthog.capture/identify/reset/screen` directly.** Use the abstraction — that's why it exists.
-- **Don't force service/store tests to mock `@/client/lib/analytics` when the module can accept an injected analytics dependency.** Use the existing module mock for UI/screen tests that import the global helpers directly.
+- **Don't force service/store tests to mock `@mobile/lib/analytics` when the module can accept an injected analytics dependency.** Use the existing module mock for UI/screen tests that import the global helpers directly.
 - **Don't add events with loose `Record<string, unknown>` properties** to escape the type check. The whole point is the schema discipline. If you genuinely need a generic event, it's almost certainly a log instead.
 - **Don't call `track` for things only you'll read once.** That's `logger.info`. Events are forever (or at least until you migrate dashboards); logs are throwaway.
 - **Don't fire events from inside render functions.** Same as logs — use event handlers and effects.
@@ -138,7 +140,7 @@ The typed event catalog is your first line of defense — if you don't add a `pa
 
 Same pattern as the logger ([ADR-0004](../adr/0004-pluggable-logger-abstraction.md), [ADR-0005](../adr/0005-pluggable-analytics-abstraction.md)):
 
-1. Implement a new class matching the `AnalyticsAdapter` interface in `src/client/lib/analytics.ts` (four methods: `track`, `identify`, `reset`, `screen`).
+1. Implement a new class matching the `AnalyticsAdapter` interface in `apps/mobile/src/lib/analytics.ts` (four methods: `track`, `identify`, `reset`, `screen`). Treat the API adapter in `apps/api/src/analytics.ts` as a separate runtime implementation of the shared event contract.
 2. Replace `new PostHogAnalyticsAdapter()` on the `adapter` const.
 3. The `useAnalyticsIdentity()` hook keeps reading Clerk; the new adapter receives `userId` and traits identically. No call sites change.
 4. Note that swapping analytics providers also means rebuilding dashboards and funnels in the new tool — the *code* swap is cheap, the *data* migration isn't.

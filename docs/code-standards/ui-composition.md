@@ -4,7 +4,7 @@ Use this standard for native-feeling UI composition details that cross normal Re
 
 ## Bottom Sheets
 
-- **Must** use the app-owned bottom-sheet primitive in `src/client/ui/bottom-sheet.tsx`. A second ad-hoc sheet forfeits the single swap point the primitive provides.
+- **Must** use the app-owned bottom-sheet primitive in `apps/mobile/src/ui/bottom-sheet.tsx`. A second ad-hoc sheet forfeits the single swap point the primitive provides.
 - **Must** treat Expo UI bottom sheets as native container boundaries, not just React Native `View` trees: Expo UI owns presentation and height while `RNHostView` hosts app-owned content.
 - **Must** keep `RNHostView` inside the app-owned primitive. Feature code supplies React Native content without depending on Expo UI's host bridge.
 - **Must** use `onIsPresentedChange` for presentation intent and `onDismiss` for work that requires the native dismissal animation to be fully complete, such as restoring focus behind a sheet.
@@ -16,7 +16,7 @@ Use this standard for native-feeling UI composition details that cross normal Re
 Usage:
 
 ```tsx
-import { BottomSheet } from "@/client/ui/bottom-sheet";
+import { BottomSheet } from "@mobile/ui/bottom-sheet";
 
 <BottomSheet
 	header={{ title: "Choose a List" }}

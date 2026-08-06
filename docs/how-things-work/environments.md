@@ -151,4 +151,4 @@ make db-reset APP_ENV=production CONFIRM_DB_RESET=production CONFIRM_APP_ENV=pro
 
 `CONFIRM_DB_RESET` must match `APP_ENV` for every reset. Production also requires `CONFIRM_APP_ENV=production`.
 
-Tests must not call the real migration command. They use local temp databases loaded from `src/server/db/migrations/**` through test helpers.
+Tests must not call the real migration command. They use local temp databases loaded from `packages/db/src/migrations/**` through helpers exported by `@dont-forget/db/test`.

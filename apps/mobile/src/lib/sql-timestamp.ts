@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 // PowerSync stores the product tables' timestamps as ISO-8601 text — that is the
-// representation PR-A's sync stream emits and `lib/powersync/schema.ts` declares
-// (`column.text`). The applicator (`db/server/sync`) also expects ISO text: it
+// representation `apps/mobile/src/session/powersync/schema.ts` declares
+// (`column.text`). The `@dont-forget/db` applicator also expects ISO text: it
 // pushes the raw `updated_at` straight into a Postgres `timestamptz` param. The
 // services, however, work in epoch-millis numbers (monotonic LWW clocks, the
 // `Item`/`List` types). So we parse text → millis on read and serialize

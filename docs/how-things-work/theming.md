@@ -3,14 +3,14 @@
 Don't Forget uses Unistyles as the single app-owned styling foundation. Theme
 data has two layers:
 
-- `src/client/theme/palette.ts` contains raw brand primitives. This is the only
+- `apps/mobile/src/theme/palette.ts` contains raw brand primitives. This is the only
   source file where app UI color literals should be introduced.
-- `src/client/theme/unistyles.ts` maps those primitives into semantic theme tokens
+- `apps/mobile/src/theme/unistyles.ts` maps those primitives into semantic theme tokens
   consumed by components, screens, navigation chrome, and focused visual effects.
 
-`src/client/theme/theme-contract.ts` defines the complete `AppTheme` shape. The
+`apps/mobile/src/theme/theme-contract.ts` defines the complete `AppTheme` shape. The
 light and dark themes both use `satisfies AppTheme`, and
-`src/client/theme/unistyles.test.ts` compares their deep key paths so a missing
+`apps/mobile/src/theme/unistyles.test.ts` compares their deep key paths so a missing
 nested token is caught before a component can render with an incomplete theme.
 
 ## Runtime Behavior
@@ -22,8 +22,8 @@ exclusive, and this app stores the User's Appearance preference in AsyncStorage.
 AsyncStorage is asynchronous, so it cannot feed Unistyles' synchronous
 `initialTheme` setting.
 
-At boot, `src/app/_layout.tsx` reads the stored Appearance preference and applies it
-through `src/client/theme/appearance-preference.ts`:
+At boot, `apps/mobile/app/_layout.tsx` reads the stored Appearance preference and applies it
+through `apps/mobile/src/theme/appearance-preference.ts`:
 
 - `system` calls `UnistylesRuntime.setAdaptiveThemes(true)`.
 - `light` and `dark` call `setAdaptiveThemes(false)` and then
@@ -47,9 +47,9 @@ again.
 
 ## Rebrand Checklist
 
-1. Replace or rename primitives in `src/client/theme/palette.ts`.
-2. Review light and dark semantic mappings in `src/client/theme/unistyles.ts`.
-3. Run `pnpm test:ci src/client/theme` to confirm light-theme value stability and
+1. Replace or rename primitives in `apps/mobile/src/theme/palette.ts`.
+2. Review light and dark semantic mappings in `apps/mobile/src/theme/unistyles.ts`.
+3. Run `pnpm --filter @dont-forget/mobile exec jest --runInBand --runTestsByPath ./src/theme/unistyles.test.ts` to confirm light-theme value stability and
    light/dark key parity.
 4. Review build-time branding outside this system:
    - `app.json` name, slug, scheme, icon, and splash colors.
@@ -65,6 +65,6 @@ again.
 
 App-owned UI should use theme tokens, not direct color strings. The local ESLint
 rule `dont-forget/no-raw-color-literals` reports raw hex, rgb/rgba, and hsl/hsla
-strings in `src/app/` and `src/client/`. When a new color is needed,
+strings in `apps/mobile/app/` and `apps/mobile/src/`. When a new color is needed,
 add or reuse a palette primitive, map it into a semantic theme token, and consume
 that token from the component.

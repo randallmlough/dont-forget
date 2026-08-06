@@ -1,4 +1,4 @@
 export default function RootLayout() {
-	// The web export exists only to serve API routes; the iOS app shell is native.
+	// Public web links live in apps/web; the mobile app shell is iOS-native.
 	return null;
 }

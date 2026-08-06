@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use this guide to create or change one domain service under `src/client/features/<feature>/` or `src/server/<domain>/`.
+Use this guide to create or change one domain service under `apps/mobile/src/features/<feature>/` or `apps/api/src/<domain>/`.
 
 A service is the product data boundary for a domain such as Household, List, Item, Member, User, or Invitation. Services own SQL/database access and return domain-shaped records. Screens, reusable components, and hooks must not query databases directly.
 
@@ -18,11 +18,11 @@ Read:
 
 Confirm the existing pattern in nearby services before editing, for example:
 
-- `src/client/features/list/list-service.ts`
-- `src/client/features/item/item-service.ts`
-- `src/server/users/user-service.ts`
-- `src/server/households/member-service.ts`
-- `src/server/households/household-service.ts`
+- `apps/mobile/src/features/list/list-service.ts`
+- `apps/mobile/src/features/item/item-service.ts`
+- `apps/api/src/users/user-service.ts`
+- `apps/api/src/households/member-service.ts`
+- `apps/api/src/households/household-service.ts`
 
 ## Files and naming
 
@@ -31,31 +31,31 @@ Confirm the existing pattern in nearby services before editing, for example:
 Use this shape for client product services:
 
 ```text
-src/client/features/<feature>/
+apps/mobile/src/features/<feature>/
   <domain>-service.ts
   <domain>-service.test.ts
 ```
 
 Examples:
 
-- `src/client/features/list/list-service.ts`
-- `src/client/features/item/item-service.ts`
+- `apps/mobile/src/features/list/list-service.ts`
+- `apps/mobile/src/features/item/item-service.ts`
 
 ### Server-only services
 
-Use `src/server/<domain>/` for services that import server-only dependencies, directory DB infrastructure, Clerk backend helpers, the server Postgres client, Resend, or operator secrets:
+Use `apps/api/src/<domain>/` for services that import server-only dependencies, directory DB infrastructure, Clerk backend helpers, the server Postgres client, Resend, or operator secrets:
 
 ```text
-src/server/<domain>/
+apps/api/src/<domain>/
   <domain>-service.ts
   <domain>-service.test.ts
 ```
 
 Examples:
 
-- `src/server/users/user-service.ts`
-- `src/server/households/member-service.ts`
-- `src/server/households/household-service.ts`
+- `apps/api/src/users/user-service.ts`
+- `apps/api/src/households/member-service.ts`
+- `apps/api/src/households/household-service.ts`
 
 Do not add broad root barrels that mix unrelated domains or client/server surfaces.
 
@@ -109,7 +109,7 @@ Keep the public types named for the domain:
 
 2. **Choose client or server placement.**
    - Client product services may depend on app-safe interfaces such as the `ProductDatabase` seam.
-   - Server-only services go under `src/server/<domain>/`.
+   - Server-only services go under `apps/api/src/<domain>/`.
 
 3. **Define domain-shaped return types.**
    - Return Household, Member, User, List, Item, or Invitation concepts.
@@ -128,7 +128,7 @@ Keep the public types named for the domain:
 
 6. **Validate external or SQL row boundaries.**
    - Use Zod for untrusted API responses, persisted payloads, or SQL rows whose shape is not already narrowed by Drizzle.
-   - Prefer helper schemas such as `sqlNumberSchema` from `src/shared/sql.ts` when adapting client SQL values.
+   - Prefer helper schemas such as `sqlNumberSchema` from `@dont-forget/shared` when adapting mobile SQL values.
 
 7. **Log once at the service boundary.**
    - Bind safe context with `.with({ household_id, service: "<domain>" })`.
@@ -136,7 +136,7 @@ Keep the public types named for the domain:
    - Do not duplicate the same error log in the screen and service unless each layer adds different context.
 
 8. **Emit analytics only after success.**
-   - Add the event to `src/shared/analytics-events.ts` first.
+   - Add the event to `packages/shared/src/analytics-events.ts`, exported by `@dont-forget/shared`, first.
    - Track after the local write or product outcome succeeds.
    - Do not track exploratory diagnostics or validation failures as analytics events.
 
@@ -149,8 +149,8 @@ Keep the public types named for the domain:
 Add or update a focused service test next to the service:
 
 ```text
-src/client/features/<feature>/<domain>-service.test.ts
-src/server/<domain>/<domain>-service.test.ts
+apps/mobile/src/features/<feature>/<domain>-service.test.ts
+apps/api/src/<domain>/<domain>-service.test.ts
 ```
 
 Test the service contract, not implementation details:
@@ -165,8 +165,8 @@ Test the service contract, not implementation details:
 Use focused checks while iterating:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath src/client/features/list/list-service.test.ts
-pnpm exec jest --runInBand --runTestsByPath src/server/households/household-service.test.ts
+pnpm --filter @dont-forget/mobile exec jest --runInBand --runTestsByPath ./src/features/list/list-service.test.ts
+pnpm --filter @dont-forget/api exec jest --runInBand --runTestsByPath ./src/households/household-service.test.ts
 make eslint-rules
 make typecheck
 ```
@@ -181,7 +181,7 @@ make verify
 ## Review checklist
 
 - Uses `CONTEXT.md` domain language.
-- Lives under the correct `src/client/features/<feature>/` or `src/server/<domain>/` path.
+- Lives under the correct `apps/mobile/src/features/<feature>/` or `apps/api/src/<domain>/` path.
 - Uses `create<Domain>Service`, `<Domain>Service`, and `<Domain>ServiceDeps` names.
 - Does not add a broad root service barrel.
 - Does not cross the client/server boundary.
