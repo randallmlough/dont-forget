@@ -8,11 +8,11 @@ module.exports = {
 		type: "problem",
 		docs: {
 			description:
-				"Disallow raw color literals in app UI. Add colors to src/client/theme/palette.ts and expose semantic theme tokens instead.",
+				"Disallow raw color literals in app UI. Add colors to apps/mobile/src/theme/palette.ts and expose semantic theme tokens instead.",
 		},
 		messages: {
 			rawColor:
-				"Use Unistyles theme tokens instead of raw color literals. Raw color primitives belong in src/client/theme/palette.ts.",
+				"Use Unistyles theme tokens instead of raw color literals. Raw color primitives belong in apps/mobile/src/theme/palette.ts.",
 		},
 		schema: [],
 	},
@@ -35,6 +35,6 @@ module.exports = {
 };
 
 function shouldCheckFile(filename) {
-	if (/\/src\/client\/theme\//.test(filename)) return false;
-	return /\/src\/(?:app|client)\/.*\.[jt]sx?$/.test(filename);
+	if (/\/apps\/mobile\/src\/theme\//.test(filename)) return false;
+	return /\/apps\/mobile\/(?:app|src)\/.*\.[jt]sx?$/.test(filename);
 }

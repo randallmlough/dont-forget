@@ -30,9 +30,9 @@ import { createApiRequest, readJsonResponse } from "@api/test/api";
 import { createApiApp } from "./app";
 
 // Transport-dispatch suite: the unit under test is the route table in
-// src/server/app.ts, so the domain handlers are mocked at the module
+// src/app.ts, so the domain handlers are mocked at the module
 // boundary. Handler behavior is proven by the colocated
-// src/server/**/api.test.ts suites (docs/code-standards/testing.md —
+// src/**/api.test.ts suites (docs/code-standards/testing.md —
 // mock justification).
 jest.mock("@api/bootstrap/api", () => ({
 	handleBootstrap: jest.fn(async () =>

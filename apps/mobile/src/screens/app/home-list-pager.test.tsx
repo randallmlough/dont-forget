@@ -428,7 +428,7 @@ describe("HomeListPager", () => {
  * stand-in picker buttons play the part of the native bottom toolbar, which
  * renders outside this tree; what the real toolbar and native header do with
  * this state is asserted against the real screen in
- * `src/client/screens/app/home-screen.test.tsx`.
+ * `src/screens/app/home-screen.test.tsx`.
  */
 function TestHomeListPager({ onFocusList, ...props }: TestHomeListPagerProps) {
 	const offsetY = useSharedValue(0);

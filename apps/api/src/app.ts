@@ -31,7 +31,7 @@ export type ApiAppDeps = {
 	data: DataDeps;
 	publicWebBaseUrl: string;
 	// Test seam. Production leaves this undefined so handlers run the real
-	// Clerk verification path (src/server/http.ts authenticateApiUser).
+	// Clerk verification path (src/http.ts authenticateApiUser).
 	authenticate?: ApiAuth;
 };
 
