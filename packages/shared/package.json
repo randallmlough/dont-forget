@@ -1,8 +1,12 @@
 {
-	"name": "@dont-forget/tooling",
+	"name": "@dont-forget/shared",
 	"version": "0.0.0",
 	"private": true,
-	"type": "commonjs",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./node": "./src/node.ts"
+	},
 	"scripts": {
 		"biome:check": "biome ci .",
 		"format": "biome check --write .",
@@ -10,13 +14,10 @@
 		"test": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
 		"test:ci": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
 		"test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --runInBand",
-		"test:eslint-rules": "node eslint-plugin/package-boundaries.test.js && node eslint-plugin/no-raw-color-literals.test.js",
 		"typecheck": "tsc --noEmit -p tsconfig.json"
 	},
 	"dependencies": {
-		"eslint": "^9.25.0",
-		"expo": "~56.0.12",
-		"yaml": "^2.9.0",
+		"dotenv": "^17.4.2",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {

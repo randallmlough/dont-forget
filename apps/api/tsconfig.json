@@ -1,0 +1,11 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"lib": ["DOM", "ES2022"],
+		"paths": {
+			"@api/*": ["./src/*"]
+		},
+		"types": ["node", "jest"]
+	},
+	"include": ["src/**/*.ts", "scripts/**/*.ts"]
+}

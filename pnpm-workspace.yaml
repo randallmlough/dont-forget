@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - packages/*
   - tooling
 
 # Moved from .npmrc — pnpm 11 reads only auth/registry from .npmrc, so hoisting

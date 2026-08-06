@@ -1,0 +1,20 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"allowJs": true,
+		"customConditions": ["react-native"],
+		"jsx": "react-jsx",
+		"lib": ["DOM", "ESNext"],
+		"paths": {
+			"@mobile/*": ["./src/*"]
+		},
+		"types": ["jest"]
+	},
+	"include": [
+		"**/*.ts",
+		"**/*.tsx",
+		".expo/types/**/*.ts",
+		"expo-env.d.ts"
+	],
+	"exclude": ["android", "ios"]
+}
