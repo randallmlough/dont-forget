@@ -1,4 +1,13 @@
 import {
+	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
+	assertProductionConfirmation,
+	readPostgresConfig,
+} from "@dont-forget/shared";
+import { loadEnvFile } from "@dont-forget/shared/node";
+import { type DirectoryDb, directoryDb, postgresPool } from "./client";
+import { REPOSITORY_ROOT } from "./repository-root";
+import {
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
@@ -9,15 +18,6 @@ import {
 	lists as pgLists,
 	users,
 } from "./schema/postgres";
-import {
-	type AppEnv,
-	assertLocalDirectoryDatabaseUrl,
-	assertProductionConfirmation,
-	readPostgresConfig,
-} from "@dont-forget/shared";
-import { loadEnvFile } from "@dont-forget/shared/node";
-import { type DirectoryDb, directoryDb, postgresPool } from "./client";
-import { REPOSITORY_ROOT } from "./repository-root";
 
 type ResetConfirmationSource = Record<string, string | undefined>;
 

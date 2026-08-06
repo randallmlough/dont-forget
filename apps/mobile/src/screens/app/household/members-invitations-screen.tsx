@@ -1,14 +1,3 @@
-import { SymbolView } from "expo-symbols";
-import type { ReactNode } from "react";
-import { useState } from "react";
-import {
-	ActivityIndicator,
-	FlatList,
-	Pressable,
-	Text,
-	View,
-} from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@mobile/app-shell/screen-scaffold";
 import type {
 	HouseholdJoinCode,
@@ -49,6 +38,17 @@ import {
 	ItemTitle,
 } from "@mobile/ui/item";
 import { themedAlert } from "@mobile/ui/native-dialogs";
+import { SymbolView } from "expo-symbols";
+import type { ReactNode } from "react";
+import { useState } from "react";
+import {
+	ActivityIndicator,
+	FlatList,
+	Pressable,
+	Text,
+	View,
+} from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 type CollaborationRow =
 	| { type: "section"; id: string; title: string }

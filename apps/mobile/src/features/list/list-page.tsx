@@ -1,8 +1,3 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import type { SharedValue } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { ItemListOption } from "@mobile/features/item/item-view-types";
 import { useItemEditor } from "@mobile/features/item/use-item-editor";
 import type { ListSummary } from "@mobile/features/list/list-service";
@@ -12,6 +7,11 @@ import {
 } from "@mobile/session";
 import { Button } from "@mobile/ui/button";
 import { StatusCard } from "@mobile/ui/status-card";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { ActivityIndicator, Text, View } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ListItems } from "./list-items";
 import { ListOverview } from "./list-overview";
 import type { ActiveListSyncState } from "./list-view-types";

@@ -1,8 +1,10 @@
 node_modules
-ios
+apps/mobile/ios
+apps/mobile/android
 dist
 .git
-.expo
+apps/mobile/.expo
+.turbo
 .env*
 plans
 docs

@@ -1,5 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { BootstrapResponse } from "@dont-forget/shared";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
 	clearAuthenticatedAppSessionPresent,
 	hasAuthenticatedAppSessionHint,

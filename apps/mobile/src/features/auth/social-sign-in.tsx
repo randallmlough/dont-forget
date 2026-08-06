@@ -1,11 +1,11 @@
 import { useSignIn, useSignUp, useSSO } from "@clerk/clerk-expo";
+import { track } from "@mobile/lib/analytics";
+import { userMessage } from "@mobile/lib/clerk-errors";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import { Alert, Pressable, Text } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { track } from "@mobile/lib/analytics";
-import { userMessage } from "@mobile/lib/clerk-errors";
 
 const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
 

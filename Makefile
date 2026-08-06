@@ -24,19 +24,19 @@ worktree-env: ## Link/copy .env.local and generate checkout-local API/web ports
 
 .PHONY: worktree-db
 worktree-db: ## Create an isolated per-worktree directory DB and point .env.local at it
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) worktree:db
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/db worktree:db
 
 .PHONY: worktree-db-destroy
 worktree-db-destroy: ## Delete this worktree's directory DB plus its Household DBs and restore .env.local
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) worktree:db:destroy
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/db worktree:db:destroy
 
 .PHONY: start
 start: ## Start Expo for normal app development *common*
-	@APP_ENV="$(APP_ENV_VALUE)" NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --localhost $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/mobile dev -- $(PORT_ARG)
 
 .PHONY: api
 api: ## Start the standalone API server in watch mode *common*
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) exec tsx watch src/server/main.ts
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/api dev
 
 .PHONY: web
 web: ## Start the dedicated public web link surface *common*
@@ -48,15 +48,15 @@ web-build: ## Build and verify the dedicated public web link surface
 
 .PHONY: api-build
 api-build: ## Build and verify the standalone API artifact
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) api:build
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) turbo run build --filter @dont-forget/api
 
 .PHONY: ios
 ios: ## Run the native iOS target *common*
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo run:ios $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/mobile ios -- $(PORT_ARG)
 
 .PHONY: prebuild
 prebuild: ## Generate the native iOS project. Use `make prebuild -- --clean` to pass --clean
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo prebuild --platform ios $(if $(filter --clean,$(MAKECMDGOALS)),--clean,)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/mobile prebuild -- $(if $(filter --clean,$(MAKECMDGOALS)),--clean,)
 
 .PHONY: --clean
 --clean:
@@ -70,15 +70,15 @@ APPLE_TEAM_ID = D64V4GPNLJ
 
 .PHONY: eas-build
 eas-build: ## Build on EAS for the selected environment (APP_ENV, default local; PROFILE overrides)
-	APP_ENV="$(APP_ENV_VALUE)" EXPO_APPLE_TEAM_ID="$(APPLE_TEAM_ID)" eas build --profile $(EAS_BUILD_PROFILE) --platform ios
+	cd apps/mobile && APP_ENV="$(APP_ENV_VALUE)" EXPO_APPLE_TEAM_ID="$(APPLE_TEAM_ID)" eas build --profile $(EAS_BUILD_PROFILE) --platform ios
 
 .PHONY: submit
 submit: ## Submit the latest EAS build for the selected environment to TestFlight/App Store
-	@APP_ENV="$(APP_ENV_VALUE)" eas submit --profile $(APP_ENV_VALUE) --platform ios --latest
+	@cd apps/mobile && APP_ENV="$(APP_ENV_VALUE)" eas submit --profile $(APP_ENV_VALUE) --platform ios --latest
 
 .PHONY: storybook
 storybook: ## Start Storybook for the native iOS build *common*
-	@APP_ENV="$(APP_ENV_VALUE)" STORYBOOK_ENABLED=true NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --dev-client $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/mobile storybook:start -- $(PORT_ARG)
 
 .PHONY: verify
 verify: typecheck biome-check eslint-rules lint test-ci ## Run typecheck, Biome, lint, and tests *common*
@@ -90,11 +90,11 @@ ci: verify expo-check expo-config-check audit ## Run the full CI contract *commo
 
 .PHONY: storybook-ios
 storybook-ios: ## Build and run Storybook on iOS
-	@APP_ENV="$(APP_ENV_VALUE)" STORYBOOK_ENABLED=true $(PNPM) expo run:ios $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/mobile storybook:ios -- $(PORT_ARG)
 
 .PHONY: storybook-generate
 storybook-generate: ## Regenerate Storybook story imports
-	@$(PNPM) storybook:generate
+	@$(PNPM) --filter @dont-forget/mobile storybook:generate
 
 ##@ Verification
 
@@ -124,15 +124,15 @@ audit: ## Audit dependencies for high-severity vulnerabilities
 
 .PHONY: expo-check
 expo-check: ## Check Expo SDK package compatibility
-	@$(PNPM) expo install --check
+	@$(PNPM) --filter @dont-forget/mobile expo:check
 
 .PHONY: expo-config-check
 expo-config-check: ## Resolve the public Expo config without printing it
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo config --type public > /dev/null
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/mobile expo:config > /dev/null
 
 .PHONY: expo-clear
 expo-clear: ## Start Expo with a cleared Metro cache
-	@APP_ENV="$(APP_ENV_VALUE)" NODE_OPTIONS=--dns-result-order=ipv4first $(PNPM) expo start --clear --localhost $(PORT_ARG)
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/mobile expo:clear -- $(PORT_ARG)
 
 ##@ Tests
 
@@ -152,23 +152,23 @@ test-coverage: ## Run all tests once and report coverage
 
 .PHONY: db-generate
 db-generate: ## Generate directory migrations
-	@$(PNPM) db:generate
+	@$(PNPM) --filter @dont-forget/db db:generate
 
 .PHONY: db-migrate
 db-migrate: ## Apply migrations to configured databases
-	@APP_ENV="$(APP_ENV)" CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" $(PNPM) db:migrate
+	@APP_ENV="$(APP_ENV)" CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" $(PNPM) --filter @dont-forget/db db:migrate
 
 .PHONY: db-reset
 db-reset: ## Delete app data from configured databases
-	@APP_ENV="$(APP_ENV)" CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" CONFIRM_DB_RESET="$(CONFIRM_DB_RESET)" $(PNPM) db:reset
+	@APP_ENV="$(APP_ENV)" CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" CONFIRM_DB_RESET="$(CONFIRM_DB_RESET)" $(PNPM) --filter @dont-forget/db db:reset
 
 .PHONY: db-seed
 db-seed: ## Seed local deterministic data without resetting (requires migrated seed DB)
-	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) db:seed
+	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) --filter @dont-forget/db db:seed
 
 .PHONY: db-reseed
 db-reseed: ## Reset, migrate, and seed local deterministic development data
-	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) db:reseed
+	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) --filter @dont-forget/db db:reseed
 
 ##@ Infrastructure
 
@@ -232,7 +232,7 @@ ps-synced-rows: ## Show rows a user receives from PowerSync. Usage: make ps-sync
 
 .PHONY: expo-config
 expo-config: ## Print the public Expo config
-	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) expo config --type public
+	@APP_ENV="$(APP_ENV_VALUE)" $(PNPM) --filter @dont-forget/mobile expo:config
 
 .PHONY: why
 why: ## Inspect why a package is installed. Usage: make why PKG=<package>

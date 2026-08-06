@@ -1,5 +1,9 @@
-import { and, eq, isNull } from "drizzle-orm";
 import { serverServiceAnalytics } from "@api/analytics";
+import {
+	type DirectoryTransaction,
+	runDirectoryTransaction,
+} from "@api/directory-transaction";
+import type { ActiveMembership } from "@api/households/member-service";
 import type { DirectoryDb } from "@dont-forget/db";
 import {
 	type Household,
@@ -8,13 +12,9 @@ import {
 	memberships,
 	type User,
 } from "@dont-forget/db/schema";
-import {
-	type DirectoryTransaction,
-	runDirectoryTransaction,
-} from "@api/directory-transaction";
-import type { ActiveMembership } from "@api/households/member-service";
-import { createAppId } from "@dont-forget/shared";
 import type { ServiceAnalytics } from "@dont-forget/shared";
+import { createAppId } from "@dont-forget/shared";
+import { and, eq, isNull } from "drizzle-orm";
 import {
 	createInitialHouseholdJoinCode,
 	type HouseholdJoinCodeGenerator,

@@ -8,11 +8,11 @@
 // @dont-forget/shared's static graph via @dont-forget/db,
 // so importing them statically defers nothing.
 
-import { eq } from "drizzle-orm";
-import type { Pool } from "pg";
 import { directoryDb } from "@dont-forget/db";
 import { users } from "@dont-forget/db/schema";
 import { readClerkServerConfig } from "@dont-forget/shared";
+import { eq } from "drizzle-orm";
+import type { Pool } from "pg";
 
 // Auth failure (401).
 export class DataAuthError extends Error {

@@ -1,7 +1,7 @@
-import { useQuery } from "@powersync/react";
-import { act, renderHook } from "@testing-library/react-native";
 import type { ProductQuery } from "@mobile/lib/product-database";
 import { useProductQuery } from "@mobile/lib/use-product-query";
+import { useQuery } from "@powersync/react";
+import { act, renderHook } from "@testing-library/react-native";
 
 jest.mock("@powersync/react", () => ({ useQuery: jest.fn() }));
 

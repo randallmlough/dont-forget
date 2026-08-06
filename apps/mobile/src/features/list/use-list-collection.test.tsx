@@ -1,5 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { ListSummary } from "@mobile/features/list/list-service";
 import { track } from "@mobile/lib/analytics";
 import { logger } from "@mobile/lib/logger";
@@ -14,6 +12,8 @@ import {
 	createTestProductDatabase,
 	type TestProductDatabase,
 } from "@mobile/test/product-database";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { useListCollection } from "./use-list-collection";
 
 // The watched-query seam owns retry re-keying and proves it in its own suite;

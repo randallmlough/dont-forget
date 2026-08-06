@@ -1,16 +1,16 @@
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { directoryDb, postgresPool } from "./client";
-import { resetDirectoryDatabase } from "./reset";
-import { DRIZZLE_MIGRATIONS_TABLE } from "./utils";
 import {
 	assertLocalDirectoryDatabaseUrl,
 	readPostgresConfig,
 } from "@dont-forget/shared";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { directoryDb, postgresPool } from "./client";
+import { resetDirectoryDatabase } from "./reset";
 import {
 	assertLocalSeedPrerequisites,
 	readLocalSeedMode,
 	seedLocalDatabasesForMode,
 } from "./seed";
+import { DRIZZLE_MIGRATIONS_TABLE } from "./utils";
 
 const DIRECTORY_MIGRATIONS = "./src/migrations/postgres";
 

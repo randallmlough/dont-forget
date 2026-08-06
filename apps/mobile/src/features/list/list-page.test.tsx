@@ -1,3 +1,12 @@
+import type { ListSummary } from "@mobile/features/list/list-service";
+import {
+	activeListPage,
+	authenticatedAppSession,
+	groceriesListSummary,
+	pantryListSummary,
+} from "@mobile/features/list/list-test-support";
+import { useListPage } from "@mobile/features/list/use-list-page";
+import { TestSafeAreaProvider } from "@mobile/test/safe-area";
 import {
 	fireEvent,
 	render,
@@ -8,15 +17,6 @@ import {
 import { useCallback, useMemo, useState } from "react";
 import { FlatList } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
-import type { ListSummary } from "@mobile/features/list/list-service";
-import {
-	activeListPage,
-	authenticatedAppSession,
-	groceriesListSummary,
-	pantryListSummary,
-} from "@mobile/features/list/list-test-support";
-import { useListPage } from "@mobile/features/list/use-list-page";
-import { TestSafeAreaProvider } from "@mobile/test/safe-area";
 import {
 	ListPage,
 	type ListPageEditorEvent,

@@ -1,3 +1,4 @@
+import { createUserService } from "@api/users/user-service";
 import {
 	type User as ClerkUser,
 	createClerkClient,
@@ -5,7 +6,6 @@ import {
 } from "@clerk/backend";
 import type { DirectoryDb } from "@dont-forget/db";
 import type { User } from "@dont-forget/db/schema";
-import { createUserService } from "@api/users/user-service";
 import { readClerkServerConfig } from "@dont-forget/shared";
 
 export const INVITATION_UNAVAILABLE_MESSAGE =

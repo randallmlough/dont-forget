@@ -1,5 +1,3 @@
-import type { DirectoryDb } from "@dont-forget/db";
-import type { User } from "@dont-forget/db/schema";
 import {
 	type ApiHandlerDeps,
 	authenticateApiUser,
@@ -14,12 +12,10 @@ import {
 	type UpdateClerkUserName,
 	type UserService,
 } from "@api/users/user-service";
-import type {
-	CurrentUser,
-	UpdateUserNameResponse,
-} from "@dont-forget/shared";
-import { asError } from "@dont-forget/shared";
-import { redactAttributes } from "@dont-forget/shared";
+import type { DirectoryDb } from "@dont-forget/db";
+import type { User } from "@dont-forget/db/schema";
+import type { CurrentUser, UpdateUserNameResponse } from "@dont-forget/shared";
+import { asError, redactAttributes } from "@dont-forget/shared";
 
 const MAX_NAME_LENGTH = 50;
 

@@ -1,14 +1,3 @@
-import { Stack, useRouter } from "expo-router";
-import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import Animated, {
-	Extrapolation,
-	interpolate,
-	useAnimatedStyle,
-	useSharedValue,
-} from "react-native-reanimated";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useNavigationDrawer } from "@mobile/app-shell/navigation-drawer-context";
 import type { ListPageEditorEvent } from "@mobile/features/list/list-page";
 import type { ListSummary } from "@mobile/features/list/list-service";
@@ -21,6 +10,17 @@ import {
 } from "@mobile/session";
 import { Button } from "@mobile/ui/button";
 import { StatusCard } from "@mobile/ui/status-card";
+import { Stack, useRouter } from "expo-router";
+import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Text, View } from "react-native";
+import Animated, {
+	Extrapolation,
+	interpolate,
+	useAnimatedStyle,
+	useSharedValue,
+} from "react-native-reanimated";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { HomeAddItemButton } from "./home-add-item-button";
 import {
 	type CollapsedTitleScroll,

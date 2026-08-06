@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import type { ServerUserProfile } from "@api/http";
 import { households, memberships, users } from "@dont-forget/db/schema";
 import { createTestDirectoryDb } from "@dont-forget/db/test";
-import type { ServerUserProfile } from "@api/http";
+import { eq } from "drizzle-orm";
 import {
 	type AuthenticatedAppSessionBootstrapDeps,
 	bootstrapAuthenticatedAppSession,

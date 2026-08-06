@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
 import type { DirectoryDb } from "@dont-forget/db";
 import { households, memberships, users } from "@dont-forget/db/schema";
 import { createTestDirectoryDb } from "@dont-forget/db/test";
+import { eq } from "drizzle-orm";
 import {
 	createMemberService,
 	LastOwnerError,

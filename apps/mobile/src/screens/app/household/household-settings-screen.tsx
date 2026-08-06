@@ -1,10 +1,4 @@
 import { textInputAutocapitalization } from "@expo/ui/swift-ui/modifiers";
-import { useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
-import type { ReactNode } from "react";
-import { useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@mobile/app-shell/screen-scaffold";
 import {
 	type HouseholdSettingsActions,
@@ -36,6 +30,12 @@ import {
 	ItemTitle,
 } from "@mobile/ui/item";
 import { ScreenSection } from "@mobile/ui/screen-section";
+import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import type { ReactNode } from "react";
+import { useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function HouseholdSettingsScreen() {
 	const { state, session, retry, reloadSession } = useAuthenticatedAppSession();

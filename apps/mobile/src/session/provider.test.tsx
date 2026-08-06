@@ -1,3 +1,8 @@
+import { useLogger } from "@mobile/lib/logger";
+import type { SessionBootstrapService } from "@mobile/session/bootstrap";
+import { deferred } from "@mobile/test/async";
+import { createMockAnalytics } from "@mobile/test/mocks/analytics";
+import { createMockLogger, type MockLogger } from "@mobile/test/mocks/logger";
 import {
 	act,
 	fireEvent,
@@ -6,11 +11,6 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
-import { useLogger } from "@mobile/lib/logger";
-import type { SessionBootstrapService } from "@mobile/session/bootstrap";
-import { deferred } from "@mobile/test/async";
-import { createMockAnalytics } from "@mobile/test/mocks/analytics";
-import { createMockLogger, type MockLogger } from "@mobile/test/mocks/logger";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionConnectDatabase,

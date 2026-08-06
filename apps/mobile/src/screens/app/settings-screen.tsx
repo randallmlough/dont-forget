@@ -1,7 +1,3 @@
-import { useRouter } from "expo-router";
-import { type SFSymbol, SymbolView } from "expo-symbols";
-import { ScrollView } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@mobile/app-shell/screen-scaffold";
 import {
 	type SettingsActions,
@@ -20,6 +16,10 @@ import {
 	ItemTitle,
 } from "@mobile/ui/item";
 import { ScreenSection } from "@mobile/ui/screen-section";
+import { useRouter } from "expo-router";
+import { type SFSymbol, SymbolView } from "expo-symbols";
+import { ScrollView } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function SettingsScreen() {
 	const { state, actions } = useSettings();

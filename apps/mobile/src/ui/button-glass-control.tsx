@@ -30,10 +30,9 @@ import {
 	tint,
 	type ViewModifier,
 } from "@expo/ui/swift-ui/modifiers";
+import { nativeColorScheme } from "@mobile/theme/native-color-scheme";
 import type { StyleProp, ViewStyle } from "react-native";
 import { useUnistyles } from "react-native-unistyles";
-
-import { nativeColorScheme } from "@mobile/theme/native-color-scheme";
 import type { ButtonRadius } from "./button";
 
 const ICON_ROTATION_DURATION_SECONDS = 0.3;

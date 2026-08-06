@@ -1,13 +1,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
+import { appSchemeForEnv, readAppEnv, readWebPort } from "@dont-forget/shared";
+import { loadEnvFile } from "@dont-forget/shared/node";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vite";
-
-import { appSchemeForEnv, readAppEnv, readWebPort } from "@dont-forget/shared";
-import { loadEnvFile } from "@dont-forget/shared/node";
 import { headersForPublicWebRequest } from "./src/public-response-policy";
 
 const REPO_ROOT = path.resolve(

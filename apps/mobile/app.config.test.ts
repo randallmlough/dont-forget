@@ -1,6 +1,5 @@
-import type { ConfigContext } from "expo/config";
-
 import { loadEnvFile } from "@dont-forget/shared/node";
+import type { ConfigContext } from "expo/config";
 import appConfig from "./app.config";
 
 jest.mock("@dont-forget/shared/node", () => ({

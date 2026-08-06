@@ -1,4 +1,3 @@
-import Database from "better-sqlite3";
 import type {
 	ProductDatabase,
 	ProductQuerier,
@@ -6,6 +5,7 @@ import type {
 	ProductWriteResult,
 } from "@mobile/lib/product-database";
 import { timestampMillisToSqlText } from "@mobile/lib/sql-timestamp";
+import Database from "better-sqlite3";
 
 // A real in-memory SQLite (better-sqlite3) standing in for the on-device
 // PowerSync database in service tests. The dialect and `?`-positional

@@ -1,4 +1,11 @@
 import { createHash } from "node:crypto";
+import {
+	type AppEnv,
+	assertLocalDirectoryDatabaseUrl,
+	readClerkServerConfig,
+	readPostgresConfig,
+} from "@dont-forget/shared";
+import { loadEnvFile } from "@dont-forget/shared/node";
 import { inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { directoryDb, postgresPool } from "./client";
@@ -8,6 +15,7 @@ import {
 	seedEmailBackedPrimaryHouseholdScenario,
 	seedPrimaryHouseholdScenario,
 } from "./fixtures";
+import { REPOSITORY_ROOT } from "./repository-root";
 import {
 	householdJoinCodes,
 	households,
@@ -17,14 +25,6 @@ import {
 	memberships,
 	users,
 } from "./schema/postgres";
-import {
-	type AppEnv,
-	assertLocalDirectoryDatabaseUrl,
-	readClerkServerConfig,
-	readPostgresConfig,
-} from "@dont-forget/shared";
-import { loadEnvFile } from "@dont-forget/shared/node";
-import { REPOSITORY_ROOT } from "./repository-root";
 
 export const SEED_TEST_PASSWORD = "testing1234";
 

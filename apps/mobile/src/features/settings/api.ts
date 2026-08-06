@@ -1,9 +1,9 @@
-import { readApiBaseUrl } from "@mobile/lib/api-base-url";
 import {
 	type CurrentUser,
 	currentUserSchema,
 	updateUserNameResponseSchema,
 } from "@dont-forget/shared";
+import { readApiBaseUrl } from "@mobile/lib/api-base-url";
 
 export type { CurrentUser };
 export { currentUserSchema };

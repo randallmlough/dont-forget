@@ -1,6 +1,6 @@
-import { useMemo } from "react";
 import { useLogger } from "@mobile/lib/logger";
 import { appProductDatabase } from "@mobile/session/powersync-app-database";
+import { useMemo } from "react";
 import { createItemService, type ItemService } from "./item-service";
 
 export type UseItemServiceInput = {

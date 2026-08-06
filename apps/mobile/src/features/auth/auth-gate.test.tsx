@@ -1,9 +1,9 @@
-import { render, waitFor } from "@testing-library/react-native";
-import type { ReactNode } from "react";
 import { AuthGate } from "@mobile/features/auth/auth-gate";
 import { useAuthenticatedAppSessionMeta } from "@mobile/session";
 import { hasAuthenticatedAppSessionHint } from "@mobile/session/session-hint";
 import { setMockAuthState } from "@mobile/test/mocks/clerk";
+import { render, waitFor } from "@testing-library/react-native";
+import type { ReactNode } from "react";
 
 const mockReplace = jest.fn();
 

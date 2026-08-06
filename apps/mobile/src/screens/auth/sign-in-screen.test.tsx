@@ -1,3 +1,6 @@
+import SignInScreen from "@mobile/screens/auth/sign-in-screen";
+import { analyticsMocks } from "@mobile/test/mocks/analytics";
+import { clerkMocks } from "@mobile/test/mocks/clerk";
 import {
 	fireEvent,
 	render,
@@ -5,9 +8,6 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Alert } from "react-native";
-import SignInScreen from "@mobile/screens/auth/sign-in-screen";
-import { analyticsMocks } from "@mobile/test/mocks/analytics";
-import { clerkMocks } from "@mobile/test/mocks/clerk";
 
 jest.mock("@mobile/lib/analytics", () =>
 	jest.requireActual("@mobile/test/mocks/analytics"),

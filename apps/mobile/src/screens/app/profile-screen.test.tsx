@@ -1,4 +1,11 @@
 import { useAuth } from "@clerk/clerk-expo";
+import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
+import { createUsersApiClient } from "@mobile/features/settings/api";
+import { track } from "@mobile/lib/analytics";
+import { useLogger } from "@mobile/lib/logger";
+import type { AuthenticatedAppSession } from "@mobile/session";
+import { useAuthenticatedAppSession } from "@mobile/session";
+import { createMockLogger } from "@mobile/test/mocks/logger";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
 	fireEvent,
@@ -8,13 +15,6 @@ import {
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
-import { createUsersApiClient } from "@mobile/features/settings/api";
-import { track } from "@mobile/lib/analytics";
-import { useLogger } from "@mobile/lib/logger";
-import type { AuthenticatedAppSession } from "@mobile/session";
-import { useAuthenticatedAppSession } from "@mobile/session";
-import { createMockLogger } from "@mobile/test/mocks/logger";
 import ProfileScreen from "./profile-screen";
 
 const mockBack = jest.fn();

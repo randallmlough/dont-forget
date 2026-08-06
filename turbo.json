@@ -1,0 +1,113 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"globalDependencies": [
+		".env.example",
+		"biome.jsonc",
+		"eslint.config.js",
+		"pnpm-lock.yaml",
+		"pnpm-workspace.yaml",
+		"tsconfig.base.json"
+	],
+	"tasks": {
+		"//#biome:root": {
+			"inputs": [
+				"$TURBO_ROOT$/biome.jsonc",
+				"$TURBO_ROOT$/eslint.config.js",
+				"$TURBO_ROOT$/package.json",
+				"$TURBO_ROOT$/tsconfig.base.json",
+				"$TURBO_ROOT$/turbo.json"
+			]
+		},
+		"//#format:root": {
+			"cache": false
+		},
+		"biome:check": {
+			"dependsOn": ["//#biome:root"],
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/biome.jsonc"]
+		},
+		"build": {
+			"dependsOn": ["^build"],
+			"env": ["APP_ENV", "EXPO_SCHEME", "IOS_BUNDLE_IDENTIFIER", "WEB_PORT"],
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/.env.*",
+				"$TURBO_ROOT$/pnpm-lock.yaml"
+			],
+			"outputs": ["dist/**"]
+		},
+		"db:generate": { "cache": false },
+		"db:migrate": { "cache": false },
+		"db:reseed": { "cache": false },
+		"db:reset": { "cache": false },
+		"db:seed": { "cache": false },
+		"dev": {
+			"cache": false,
+			"persistent": true
+		},
+		"eas:build": { "cache": false },
+		"eas:submit": { "cache": false },
+		"expo:check": { "cache": false },
+		"expo:config": { "cache": false },
+		"format": {
+			"cache": false,
+			"dependsOn": ["//#format:root"]
+		},
+		"ios": { "cache": false },
+		"lint": {
+			"dependsOn": ["^lint"],
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/eslint.config.js"]
+		},
+		"prebuild": { "cache": false },
+		"preview": {
+			"cache": false,
+			"persistent": true
+		},
+		"storybook:generate": { "cache": false },
+		"storybook:ios": { "cache": false },
+		"storybook:start": {
+			"cache": false,
+			"persistent": true
+		},
+		"test": {
+			"cache": false,
+			"persistent": true
+		},
+		"test:ci": {
+			"dependsOn": ["^test:ci"],
+			"env": [
+				"APP_ENV",
+				"EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
+				"NODE_ENV",
+				"PUBLIC_WEB_BASE_URL"
+			],
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/infra/powersync/sync-config.yaml",
+				"$TURBO_ROOT$/packages/db/src/migrations/postgres/0001_powersync_publication.sql"
+			]
+		},
+		"test:coverage": {
+			"dependsOn": ["^test:coverage"],
+			"env": [
+				"APP_ENV",
+				"EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
+				"NODE_ENV",
+				"PUBLIC_WEB_BASE_URL"
+			],
+			"outputs": ["coverage/**"]
+		},
+		"test:eslint-rules": {
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/apps/*/package.json",
+				"$TURBO_ROOT$/packages/*/package.json"
+			]
+		},
+		"typecheck": {
+			"dependsOn": ["^typecheck"],
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tsconfig.base.json"]
+		},
+		"worktree:db": { "cache": false },
+		"worktree:db:destroy": { "cache": false }
+	}
+}

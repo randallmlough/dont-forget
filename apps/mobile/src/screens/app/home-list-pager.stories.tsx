@@ -1,9 +1,9 @@
+import { authenticatedAppSession } from "@mobile/features/list/list-test-support";
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { useMemo } from "react";
 import { View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
-import { authenticatedAppSession } from "@mobile/features/list/list-test-support";
 import { HomeListPager, type HomeListPagerProps } from "./home-list-pager";
 
 /**

@@ -6,11 +6,14 @@
 	"packageManager": "pnpm@11.9.0+sha512.bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
 	"scripts": {
 		"biome:check": "turbo run biome:check",
+		"biome:root": "biome ci biome.jsonc eslint.config.js package.json tsconfig.base.json turbo.json",
 		"format": "turbo run format",
+		"format:root": "biome check --write biome.jsonc eslint.config.js package.json tsconfig.base.json turbo.json",
 		"lint": "turbo run lint",
 		"test": "turbo run test",
 		"test:ci": "turbo run test:ci",
 		"test:coverage": "turbo run test:coverage",
+		"test:eslint-rules": "turbo run test:eslint-rules --filter @dont-forget/tooling",
 		"typecheck": "turbo run typecheck"
 	},
 	"devDependencies": {

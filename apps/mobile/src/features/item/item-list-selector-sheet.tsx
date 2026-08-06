@@ -1,10 +1,10 @@
-import { SymbolView } from "expo-symbols";
-import { FlatList, Pressable, Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Badge } from "@mobile/ui/badge";
 import { BottomSheet } from "@mobile/ui/bottom-sheet";
 import { ButtonIconGlass } from "@mobile/ui/button-icon-glass";
 import { ItemSeparator } from "@mobile/ui/item";
+import { SymbolView } from "expo-symbols";
+import { FlatList, Pressable, Text, View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { ItemListOption } from "./item-view-types";
 
 export type ItemListSelectorSheetProps = {

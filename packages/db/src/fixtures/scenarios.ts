@@ -1,10 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { DirectoryDb } from "../client";
-import type {
-	NewHousehold,
-	NewMembership,
-	NewUser,
-} from "../schema/postgres";
+import type { NewHousehold, NewMembership, NewUser } from "../schema/postgres";
 import {
 	householdJoinCodes,
 	householdJoinCodeUses,

@@ -1,3 +1,15 @@
+import {
+	ListPage,
+	type ListPageEditorEvent,
+	type ListPageEditorOwnerToken,
+	type ListPageScrollState,
+} from "@mobile/features/list/list-page";
+import type { ListSummary } from "@mobile/features/list/list-service";
+import type { ActiveListSyncState } from "@mobile/features/list/list-view-types";
+import type { ListCollectionState } from "@mobile/features/list/use-list-collection";
+import type { AuthenticatedAppSession } from "@mobile/session";
+import { Button } from "@mobile/ui/button";
+import { StatusCard } from "@mobile/ui/status-card";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useEffect, useRef } from "react";
 import {
@@ -25,18 +37,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
-import {
-	ListPage,
-	type ListPageEditorEvent,
-	type ListPageEditorOwnerToken,
-	type ListPageScrollState,
-} from "@mobile/features/list/list-page";
-import type { ListSummary } from "@mobile/features/list/list-service";
-import type { ActiveListSyncState } from "@mobile/features/list/list-view-types";
-import type { ListCollectionState } from "@mobile/features/list/use-list-collection";
-import type { AuthenticatedAppSession } from "@mobile/session";
-import { Button } from "@mobile/ui/button";
-import { StatusCard } from "@mobile/ui/status-card";
 
 /**
  * Scroll state the native stack header fades its collapsed List title against,

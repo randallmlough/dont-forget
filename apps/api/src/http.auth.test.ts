@@ -1,9 +1,5 @@
+import { bearerToken, UnauthorizedError, updateClerkUserName } from "@api/http";
 import { createClerkClient } from "@clerk/backend";
-import {
-	bearerToken,
-	UnauthorizedError,
-	updateClerkUserName,
-} from "@api/http";
 
 jest.mock("@clerk/backend", () => ({
 	createClerkClient: jest.fn(),

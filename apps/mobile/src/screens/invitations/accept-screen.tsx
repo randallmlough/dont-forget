@@ -1,6 +1,6 @@
-import { useLocalSearchParams } from "expo-router";
 import { usePublicHouseholdEntry } from "@mobile/features/household/use-public-household-entry";
 import { useAuthenticatedAppSession } from "@mobile/session";
+import { useLocalSearchParams } from "expo-router";
 import {
 	firstParam,
 	PublicHouseholdEntryView,

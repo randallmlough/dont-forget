@@ -1,9 +1,9 @@
-import { ActivityIndicator } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StyleSheet } from "react-native-unistyles";
 import type { PublicHouseholdEntryState } from "@mobile/features/household/use-public-household-entry";
 import { Button } from "@mobile/ui/button";
 import { Card, CardDescription, CardTitle } from "@mobile/ui/card";
+import { ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet } from "react-native-unistyles";
 
 export function PublicHouseholdEntryView({
 	state,

@@ -1,8 +1,8 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
 	type BootstrapResponse,
 	bootstrapResponseSchema,
 } from "@dont-forget/shared";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Cold-start restore payload. `auth-gate` reads its presence before the session
 // has had a chance to activate, and the session provider reads the same payload

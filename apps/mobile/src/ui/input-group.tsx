@@ -4,10 +4,10 @@ import {
 	opacity,
 	type ViewModifier,
 } from "@expo/ui/swift-ui/modifiers";
+import { nativeColorScheme } from "@mobile/theme/native-color-scheme";
 import { type ReactNode, use, useMemo, useRef, useState } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { nativeColorScheme } from "@mobile/theme/native-color-scheme";
 import { FieldContext } from "./field";
 import {
 	type FocusableInputRef,

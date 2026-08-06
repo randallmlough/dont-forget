@@ -1,6 +1,5 @@
-import { z } from "zod";
-
 import { DEFAULT_API_PORT, validateClerkKeyForEnv } from "@dont-forget/shared";
+import { z } from "zod";
 
 const requiredStringSchema = z.string().trim().min(1);
 

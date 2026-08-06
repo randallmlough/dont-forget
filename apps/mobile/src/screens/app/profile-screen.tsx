@@ -3,11 +3,6 @@ import {
 	textContentType,
 	textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
-import { useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
-import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@mobile/app-shell/screen-scaffold";
 import {
 	type SettingsActions,
@@ -33,6 +28,11 @@ import {
 	ItemTitle,
 } from "@mobile/ui/item";
 import { ScreenSection } from "@mobile/ui/screen-section";
+import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import { useState } from "react";
+import { ScrollView, Text, View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function ProfileScreen() {
 	const router = useRouter();

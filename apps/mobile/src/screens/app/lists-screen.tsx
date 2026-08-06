@@ -1,14 +1,3 @@
-import { useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-	ActivityIndicator,
-	FlatList,
-	Pressable,
-	Text,
-	View,
-} from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@mobile/app-shell/screen-scaffold";
 import type {
 	ListNameValidationError,
@@ -42,6 +31,17 @@ import { themedAlert, themedPrompt } from "@mobile/ui/native-dialogs";
 import { ScreenSection } from "@mobile/ui/screen-section";
 import { StatusCard } from "@mobile/ui/status-card";
 import { toast } from "@mobile/ui/toast";
+import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	ActivityIndicator,
+	FlatList,
+	Pressable,
+	Text,
+	View,
+} from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 type ListMutationOutcome =
 	| { status: "handled" }

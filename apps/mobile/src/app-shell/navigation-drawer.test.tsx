@@ -1,3 +1,6 @@
+import { track } from "@mobile/lib/analytics";
+import type { AuthenticatedAppSession } from "@mobile/session";
+import { useAuthenticatedAppSession } from "@mobile/session";
 import {
 	fireEvent,
 	render,
@@ -6,9 +9,6 @@ import {
 } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { track } from "@mobile/lib/analytics";
-import type { AuthenticatedAppSession } from "@mobile/session";
-import { useAuthenticatedAppSession } from "@mobile/session";
 import { AppShellLayout } from "./app-shell-layout";
 import { NavigationDrawer } from "./navigation-drawer";
 

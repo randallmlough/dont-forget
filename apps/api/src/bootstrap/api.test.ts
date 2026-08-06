@@ -3,12 +3,12 @@ import {
 	bootstrapAuthenticatedAppSession,
 	createProductionAuthenticatedAppSessionBootstrapDeps,
 } from "@api/bootstrap/bootstrap-service";
-import { type DirectoryDb, postgresPool } from "@dont-forget/db";
 import {
 	type ServerUserProfile,
 	UnauthorizedError,
 	verifyClerkRequest,
 } from "@api/http";
+import { type DirectoryDb, postgresPool } from "@dont-forget/db";
 import type { BootstrapResponse } from "@dont-forget/shared";
 import { handleBootstrap } from "./api";
 

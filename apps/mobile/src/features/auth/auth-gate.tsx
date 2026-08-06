@@ -1,10 +1,10 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { Stack, useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
-import { useEffect, useReducer } from "react";
 import { useAnalyticsIdentity } from "@mobile/lib/analytics";
 import { useAuthenticatedAppSessionMeta } from "@mobile/session";
 import { hasAuthenticatedAppSessionHint } from "@mobile/session/session-hint";
+import { Stack, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { useEffect, useReducer } from "react";
 import {
 	type AuthRedirectParams,
 	authRedirectTarget,

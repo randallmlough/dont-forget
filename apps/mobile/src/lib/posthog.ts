@@ -1,6 +1,6 @@
+import { readAppEnvFromExpoExtra } from "@dont-forget/shared";
 import Constants from "expo-constants";
 import PostHog from "posthog-react-native";
-import { readAppEnvFromExpoExtra } from "@dont-forget/shared";
 
 const appEnv = readAppEnvFromExpoExtra(Constants.expoConfig?.extra);
 const apiKey = Constants.expoConfig?.extra?.posthogProjectToken as

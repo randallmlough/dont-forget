@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 
 import { handleBootstrap } from "@api/bootstrap/api";
 import { type DataDeps, handleDataUpload } from "@api/data/api";
-import type { DirectoryDb } from "@dont-forget/db";
 import {
 	handleChangeMemberRole,
 	handleCreateHousehold,
@@ -25,8 +24,9 @@ import {
 	handlePreviewInvitation,
 	handleRevokeInvitation,
 } from "@api/invitations/api";
-import { handleUpdateUserName } from "@api/users/api";
 import { createApiRequest, readJsonResponse } from "@api/test/api";
+import { handleUpdateUserName } from "@api/users/api";
+import type { DirectoryDb } from "@dont-forget/db";
 import { createApiApp } from "./app";
 
 // Transport-dispatch suite: the unit under test is the route table in

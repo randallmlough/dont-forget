@@ -1,4 +1,8 @@
 import {
+	assertDatabaseResetConfirmation,
+	resetDirectoryDatabase,
+} from "./reset";
+import {
 	householdJoinCodes,
 	householdJoinCodeUses,
 	households,
@@ -10,10 +14,6 @@ import {
 	users,
 } from "./schema/postgres";
 import { createTestDirectoryDb } from "./test";
-import {
-	assertDatabaseResetConfirmation,
-	resetDirectoryDatabase,
-} from "./reset";
 
 describe("database reset", () => {
 	it("requires an environment-specific reset confirmation", () => {

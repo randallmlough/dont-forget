@@ -1,7 +1,7 @@
-import { act, renderHook } from "@testing-library/react-native";
+import { deferred } from "@mobile/test/async";
 import { themedAlert } from "@mobile/ui/native-dialogs";
 import { toast } from "@mobile/ui/toast";
-import { deferred } from "@mobile/test/async";
+import { act, renderHook } from "@testing-library/react-native";
 import type { ActiveListItem } from "./item-view-types";
 import { type UseItemEditorInput, useItemEditor } from "./use-item-editor";
 

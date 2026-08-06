@@ -1,8 +1,8 @@
+import type { ListSummary } from "@mobile/features/list/list-service";
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { useState } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type { ListSummary } from "@mobile/features/list/list-service";
 import { HomeListPageControl } from "./home-list-toolbar";
 
 /**

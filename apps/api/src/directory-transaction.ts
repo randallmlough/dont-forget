@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
 import type { DirectoryDb } from "@dont-forget/db";
 import { households } from "@dont-forget/db/schema";
+import { eq } from "drizzle-orm";
 
 export type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]

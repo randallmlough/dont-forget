@@ -6,10 +6,10 @@
 node_modules/
 
 # Expo
-.expo/
+apps/mobile/.expo/
 dist/
 web-build/
-expo-env.d.ts
+apps/mobile/expo-env.d.ts
 
 # Native
 .kotlin/
@@ -38,8 +38,9 @@ yarn-error.*
 app-example
 
 # generated native folders
-/ios
-/android
+/apps/mobile/ios
+/apps/mobile/android
+.turbo/
 .codex/environments/
 .claude/worktrees/
 .vscode
@@ -55,4 +56,3 @@ plans/
 
 # Production Postgres bind mounts (server-only data, root-owned)
 infra/data/
-

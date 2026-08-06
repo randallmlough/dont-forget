@@ -1,15 +1,15 @@
 import type {
-	PowerSyncDatabase,
-	QueryResult,
-	Transaction,
-} from "@powersync/react-native";
-import type {
 	ProductDatabase,
 	ProductQuerier,
 	ProductRow,
 	ProductWriteResult,
 } from "@mobile/lib/product-database";
 import { db } from "@mobile/session/powersync";
+import type {
+	PowerSyncDatabase,
+	QueryResult,
+	Transaction,
+} from "@powersync/react-native";
 
 // The app-facing product-data handle: the narrow `ProductDatabase` the services
 // consume over the op-sqlite-backed PowerSync handle. PowerSync lifecycle and

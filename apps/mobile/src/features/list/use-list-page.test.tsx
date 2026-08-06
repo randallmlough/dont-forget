@@ -1,7 +1,7 @@
-import { useQuery } from "@powersync/react";
-import { act, renderHook } from "@testing-library/react-native";
 import type { Item, ItemService } from "@mobile/features/item/item-service";
 import { useItemService } from "@mobile/features/item/use-item-service";
+import { useQuery } from "@powersync/react";
+import { act, renderHook } from "@testing-library/react-native";
 import {
 	authenticatedAppSession,
 	groceriesListSummary,

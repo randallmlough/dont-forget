@@ -1,6 +1,3 @@
-import { eq } from "drizzle-orm";
-import type { DirectoryDb } from "@dont-forget/db";
-import { type User, users } from "@dont-forget/db/schema";
 import { createHouseholdService } from "@api/households/household-service";
 import { generateInitialHouseholdName } from "@api/households/initial-household-name";
 import {
@@ -9,7 +6,10 @@ import {
 } from "@api/households/member-service";
 import type { ServerUserProfile } from "@api/http";
 import { createUserService } from "@api/users/user-service";
+import type { DirectoryDb } from "@dont-forget/db";
+import { type User, users } from "@dont-forget/db/schema";
 import type { BootstrapResponse } from "@dont-forget/shared";
+import { eq } from "drizzle-orm";
 
 export type AuthenticatedAppSessionBootstrapDeps = {
 	directory: DirectoryDb;

@@ -1,3 +1,4 @@
+import { TestSafeAreaProvider } from "@mobile/test/safe-area";
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 import {
 	Dimensions,
@@ -5,7 +6,6 @@ import {
 	type KeyboardEvent,
 	type KeyboardEventName,
 } from "react-native";
-import { TestSafeAreaProvider } from "@mobile/test/safe-area";
 import { HomeAddItemButton } from "./home-add-item-button";
 
 it("rotates only the plus symbol when editing", async () => {

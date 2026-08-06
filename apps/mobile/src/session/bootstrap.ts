@@ -1,11 +1,11 @@
-import { track } from "@mobile/lib/analytics";
-import { readApiBaseUrl } from "@mobile/lib/api-base-url";
+import type { ServiceAnalytics } from "@dont-forget/shared";
 import {
 	BOOTSTRAP_API_PATH,
 	type BootstrapResponse,
 	bootstrapResponseSchema,
 } from "@dont-forget/shared";
-import type { ServiceAnalytics } from "@dont-forget/shared";
+import { track } from "@mobile/lib/analytics";
+import { readApiBaseUrl } from "@mobile/lib/api-base-url";
 
 export type SessionBootstrap = BootstrapResponse;
 export type SessionUser = SessionBootstrap["user"];

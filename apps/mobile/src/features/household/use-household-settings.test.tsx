@@ -1,10 +1,4 @@
 import { useAuth } from "@clerk/clerk-expo";
-import {
-	act,
-	renderHook,
-	screen,
-	waitFor,
-} from "@testing-library/react-native";
 import type {
 	HouseholdApiClient,
 	HouseholdJoinCode,
@@ -18,6 +12,12 @@ import type {
 } from "@mobile/session/upload-queue";
 import { deferred } from "@mobile/test/async";
 import { drainToasts, ToastHarness } from "@mobile/test/toast";
+import {
+	act,
+	renderHook,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
 import { useHouseholdSettings } from "./use-household-settings";
 
 jest.mock("@clerk/clerk-expo", () => ({

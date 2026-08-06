@@ -1,7 +1,5 @@
 import { useAuth } from "@clerk/clerk-expo";
-import Constants from "expo-constants";
-import * as WebBrowser from "expo-web-browser";
-import { useEffect, useRef, useState } from "react";
+import { type AppEnv, readAppEnvFromExpoExtra } from "@dont-forget/shared";
 import {
 	createUsersApiClient,
 	type UsersApiClient,
@@ -16,7 +14,9 @@ import {
 	writeAppearancePreference,
 } from "@mobile/theme/appearance-preference";
 import { toast } from "@mobile/ui/toast";
-import { type AppEnv, readAppEnvFromExpoExtra } from "@dont-forget/shared";
+import Constants from "expo-constants";
+import * as WebBrowser from "expo-web-browser";
+import { useEffect, useRef, useState } from "react";
 
 export type SettingsState = {
 	appearancePreference: AppearancePreference;

@@ -1,5 +1,5 @@
-import { act, renderHook } from "@testing-library/react-native";
 import { db } from "@mobile/session/powersync";
+import { act, renderHook } from "@testing-library/react-native";
 import { useSyncState } from "./use-sync-state";
 
 type StatusListener = () => void;

@@ -1,7 +1,3 @@
-import { useRouter } from "expo-router";
-import { type SFSymbol, SymbolView } from "expo-symbols";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@mobile/app-shell/screen-scaffold";
 import {
 	type SettingsActions,
@@ -12,6 +8,10 @@ import type { AppearancePreference } from "@mobile/theme/appearance-preference";
 import { Card } from "@mobile/ui/card";
 import { GlassSurface } from "@mobile/ui/glass-surface";
 import { ScreenSection } from "@mobile/ui/screen-section";
+import { useRouter } from "expo-router";
+import { type SFSymbol, SymbolView } from "expo-symbols";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 const appearanceOptions = ["system", "light", "dark"] as const;
 

@@ -1,4 +1,13 @@
 import {
+	activeListPage,
+	authenticatedAppSession,
+	groceriesListSummary,
+	pantryListSummary,
+} from "@mobile/features/list/list-test-support";
+import { useListPage } from "@mobile/features/list/use-list-page";
+import { settleAnimations } from "@mobile/test/mocks/reanimated";
+import { TestSafeAreaProvider } from "@mobile/test/safe-area";
+import {
 	act,
 	fireEvent,
 	render,
@@ -15,15 +24,6 @@ import {
 	type ViewStyle,
 } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
-import {
-	activeListPage,
-	authenticatedAppSession,
-	groceriesListSummary,
-	pantryListSummary,
-} from "@mobile/features/list/list-test-support";
-import { useListPage } from "@mobile/features/list/use-list-page";
-import { settleAnimations } from "@mobile/test/mocks/reanimated";
-import { TestSafeAreaProvider } from "@mobile/test/safe-area";
 import {
 	HomeListPager,
 	type HomeListPagerProps,

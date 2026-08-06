@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import type { ServerUserProfile } from "@api/http";
 import type { DirectoryDb } from "@dont-forget/db";
 import { type User, users } from "@dont-forget/db/schema";
-import type { ServerUserProfile } from "@api/http";
 import { createAppId } from "@dont-forget/shared";
+import { eq } from "drizzle-orm";
 
 type DirectoryTransaction = Parameters<
 	Parameters<DirectoryDb["transaction"]>[0]

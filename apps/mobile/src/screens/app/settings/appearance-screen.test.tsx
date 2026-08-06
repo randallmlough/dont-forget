@@ -1,4 +1,12 @@
 import { useAuth } from "@clerk/clerk-expo";
+import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
+import { track } from "@mobile/lib/analytics";
+import { useLogger } from "@mobile/lib/logger";
+import type { AuthenticatedAppSession } from "@mobile/session";
+import { useAuthenticatedAppSession } from "@mobile/session";
+import { createMockLogger, type MockLogger } from "@mobile/test/mocks/logger";
+import { drainToasts } from "@mobile/test/toast";
+import { Toaster } from "@mobile/ui/toast";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
 	fireEvent,
@@ -9,14 +17,6 @@ import {
 import type { PropsWithChildren } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { UnistylesRuntime } from "react-native-unistyles";
-import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
-import { track } from "@mobile/lib/analytics";
-import { useLogger } from "@mobile/lib/logger";
-import type { AuthenticatedAppSession } from "@mobile/session";
-import { useAuthenticatedAppSession } from "@mobile/session";
-import { Toaster } from "@mobile/ui/toast";
-import { createMockLogger, type MockLogger } from "@mobile/test/mocks/logger";
-import { drainToasts } from "@mobile/test/toast";
 import AppearanceScreen from "./appearance-screen";
 
 const mockBack = jest.fn();

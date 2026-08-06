@@ -1,17 +1,14 @@
 import type { Server } from "node:http";
 import path from "node:path";
-
-import { type ServerType, serve } from "@hono/node-server";
-import { Pool } from "pg";
-
 import { createApiApp } from "@api/app";
 import { readApiServerConfig } from "@api/config";
 import { defaultAuthenticate } from "@api/data/authenticate";
-import { defaultWithTransaction, directoryDb } from "@dont-forget/db";
 import { createGracefulShutdown } from "@api/lifecycle";
-import { asError } from "@dont-forget/shared";
-import { redactAttributes } from "@dont-forget/shared";
+import { defaultWithTransaction, directoryDb } from "@dont-forget/db";
+import { asError, redactAttributes } from "@dont-forget/shared";
 import { loadEnvFile } from "@dont-forget/shared/node";
+import { type ServerType, serve } from "@hono/node-server";
+import { Pool } from "pg";
 
 const API_HOST = "0.0.0.0";
 const REPOSITORY_ROOT = path.resolve(process.cwd(), "../..");

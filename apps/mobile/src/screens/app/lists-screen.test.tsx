@@ -1,13 +1,3 @@
-import {
-	act,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@testing-library/react-native";
-import type { PropsWithChildren } from "react";
-import { Alert } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
 import {
 	groceriesListSummary,
@@ -24,9 +14,19 @@ import type {
 import { useListCollection } from "@mobile/features/list/use-list-collection";
 import type { AuthenticatedAppSession } from "@mobile/session";
 import { useAuthenticatedAppSession } from "@mobile/session";
-import { Toaster } from "@mobile/ui/toast";
 import { deferred } from "@mobile/test/async";
 import { drainToasts } from "@mobile/test/toast";
+import { Toaster } from "@mobile/ui/toast";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react-native";
+import type { PropsWithChildren } from "react";
+import { Alert } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import ListsScreen from "./lists-screen";
 
 const mockReplace = jest.fn();

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { deferred } from "@api/test/async";
 import type { DirectoryDb } from "@dont-forget/db";
 import {
 	householdFixture,
@@ -16,7 +16,7 @@ import {
 } from "@dont-forget/db/schema";
 import { createTestDirectoryDb } from "@dont-forget/db/test";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@dont-forget/shared";
-import { deferred } from "@api/test/async";
+import { eq } from "drizzle-orm";
 import {
 	createHouseholdJoinCodeService,
 	HouseholdJoinCodeMembershipRequiredError,

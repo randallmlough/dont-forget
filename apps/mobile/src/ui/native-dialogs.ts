@@ -1,5 +1,5 @@
-import { Alert, type AlertButton } from "react-native";
 import { nativeColorScheme } from "@mobile/theme/native-color-scheme";
+import { Alert, type AlertButton } from "react-native";
 
 export function themedAlert(
 	title: string,

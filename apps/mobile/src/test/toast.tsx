@@ -1,7 +1,7 @@
+import { Toaster, toast } from "@mobile/ui/toast";
 import { act } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Toaster, toast } from "@mobile/ui/toast";
 
 /**
  * Test support for the app-wide toast viewport. Toasts are raised through a

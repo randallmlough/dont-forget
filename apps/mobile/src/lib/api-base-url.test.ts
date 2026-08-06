@@ -1,6 +1,5 @@
-import Constants from "expo-constants";
-
 import { readApiBaseUrl } from "@mobile/lib/api-base-url";
+import Constants from "expo-constants";
 
 jest.mock("expo-constants", () => ({
 	__esModule: true,

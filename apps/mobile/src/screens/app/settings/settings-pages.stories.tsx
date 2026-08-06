@@ -1,10 +1,10 @@
-import type { Meta, StoryObj } from "@storybook/react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
 import type {
 	SettingsActions,
 	SettingsState,
 } from "@mobile/features/settings/use-settings";
+import type { Meta, StoryObj } from "@storybook/react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ProfileScreenView } from "../profile-screen";
 import { SettingsScreenView } from "../settings-screen";
 import { AppearanceScreenView } from "./appearance-screen";

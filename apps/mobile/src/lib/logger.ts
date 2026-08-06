@@ -1,6 +1,6 @@
 import { useUser } from "@clerk/clerk-expo";
-import { useMemo } from "react";
 import { redactAttributes, redactString } from "@dont-forget/shared";
+import { useMemo } from "react";
 
 import { posthog } from "./posthog";
 

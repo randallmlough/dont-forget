@@ -1,6 +1,5 @@
-import { DefaultTheme, type Theme } from "expo-router/react-navigation";
-
 import type { AppTheme } from "@mobile/theme/theme-contract";
+import { DefaultTheme, type Theme } from "expo-router/react-navigation";
 
 export function navigationThemeFor(theme: AppTheme, dark: boolean): Theme {
 	return {

@@ -1,6 +1,6 @@
-import { defineConfig } from "drizzle-kit";
 import { requireEnv } from "@dont-forget/shared";
 import { loadEnvFile } from "@dont-forget/shared/node";
+import { defineConfig } from "drizzle-kit";
 import { REPOSITORY_ROOT } from "../repository-root";
 import base from "./postgres.config";
 

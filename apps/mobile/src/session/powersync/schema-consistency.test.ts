@@ -1,9 +1,5 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { ColumnType } from "@powersync/common";
-import { type Table as DrizzleTable, getTableColumns } from "drizzle-orm";
-import { parse } from "yaml";
-import { z } from "zod";
 import {
 	households,
 	itemChecks,
@@ -12,6 +8,10 @@ import {
 	memberships,
 	users,
 } from "@dont-forget/db/schema";
+import { ColumnType } from "@powersync/common";
+import { type Table as DrizzleTable, getTableColumns } from "drizzle-orm";
+import { parse } from "yaml";
+import { z } from "zod";
 import { AppSchema } from "./schema";
 
 // One logical schema, four hand-kept artifacts: the Drizzle Postgres schema,

@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import {
 	householdFixture,
 	membershipFixture,
@@ -12,6 +11,7 @@ import {
 	users,
 } from "@dont-forget/db/schema";
 import { createTestDirectoryDb } from "@dont-forget/db/test";
+import { eq } from "drizzle-orm";
 import {
 	createHouseholdService,
 	HouseholdForbiddenError,

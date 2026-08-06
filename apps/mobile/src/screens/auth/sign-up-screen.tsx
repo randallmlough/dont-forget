@@ -4,10 +4,6 @@ import {
 	submitLabel,
 	textContentType,
 } from "@expo/ui/swift-ui/modifiers";
-import { useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { Alert } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
 import { AuthFooterLink } from "@mobile/features/auth/auth-footer-link";
 import { AuthScreen } from "@mobile/features/auth/auth-screen";
 import { OrDivider } from "@mobile/features/auth/or-divider";
@@ -20,6 +16,10 @@ import { Field, FieldGroup, FieldLabel } from "@mobile/ui/field";
 import { Form } from "@mobile/ui/form";
 import { Input } from "@mobile/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@mobile/ui/input-otp";
+import { useLocalSearchParams } from "expo-router";
+import { useState } from "react";
+import { Alert } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 
 const VERIFICATION_CODE_LENGTH = 6;
 const VERIFICATION_CODE_INDICES = [0, 1, 2, 3, 4, 5] as const;

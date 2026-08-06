@@ -1,4 +1,11 @@
 import { useAuth } from "@clerk/clerk-expo";
+import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
+import { useLogger } from "@mobile/lib/logger";
+import type { AuthenticatedAppSession } from "@mobile/session";
+import { useAuthenticatedAppSession } from "@mobile/session";
+import { createMockLogger, type MockLogger } from "@mobile/test/mocks/logger";
+import { drainToasts } from "@mobile/test/toast";
+import { Toaster } from "@mobile/ui/toast";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import Constants from "expo-constants";
@@ -6,13 +13,6 @@ import * as WebBrowser from "expo-web-browser";
 import { WebBrowserResultType } from "expo-web-browser";
 import type { PropsWithChildren, ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
-import { useLogger } from "@mobile/lib/logger";
-import type { AuthenticatedAppSession } from "@mobile/session";
-import { useAuthenticatedAppSession } from "@mobile/session";
-import { Toaster } from "@mobile/ui/toast";
-import { createMockLogger, type MockLogger } from "@mobile/test/mocks/logger";
-import { drainToasts } from "@mobile/test/toast";
 import SettingsScreen from "./settings-screen";
 
 const mockRouterPush = jest.fn();

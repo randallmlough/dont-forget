@@ -5,14 +5,10 @@ import { ThemeProvider } from "expo-router/react-navigation";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useRef } from "react";
 import "react-native-reanimated";
-import { PostHogProvider } from "posthog-react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
-	initialWindowMetrics,
-	SafeAreaProvider,
-} from "react-native-safe-area-context";
-import { useUnistyles } from "react-native-unistyles";
-
+	readAppEnvFromExpoExtra,
+	validateClerkKeyForEnv,
+} from "@dont-forget/shared";
 import { AuthGate } from "@mobile/features/auth/auth-gate";
 import {
 	AUTH_PATHS,
@@ -25,7 +21,13 @@ import { tokenCache } from "@mobile/lib/token-cache";
 import { AuthenticatedAppSessionProvider } from "@mobile/session";
 import { PowerSyncProvider } from "@mobile/session/powersync";
 import { Toaster } from "@mobile/ui/toast";
-import { readAppEnvFromExpoExtra, validateClerkKeyForEnv } from "@dont-forget/shared";
+import { PostHogProvider } from "posthog-react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import {
+	initialWindowMetrics,
+	SafeAreaProvider,
+} from "react-native-safe-area-context";
+import { useUnistyles } from "react-native-unistyles";
 import "@mobile/theme/unistyles";
 import { loadAndApplyAppearancePreference } from "@mobile/theme/appearance-preference";
 import { navigationThemeFor } from "@mobile/theme/navigation-theme";

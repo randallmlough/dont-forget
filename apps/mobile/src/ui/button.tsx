@@ -1,3 +1,4 @@
+import type { AppTheme } from "@mobile/theme/theme-contract";
 import { type ComponentRef, forwardRef, type ReactNode } from "react";
 import {
 	type AccessibilityState,
@@ -10,8 +11,6 @@ import {
 	type ViewStyle,
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-
-import type { AppTheme } from "@mobile/theme/theme-contract";
 
 export type ButtonVariant =
 	| "default"

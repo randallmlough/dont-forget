@@ -1,10 +1,10 @@
+import type { ServiceResetAnalytics } from "@dont-forget/shared";
+import { asError } from "@dont-forget/shared";
 import { clearUserCurrentListSelections } from "@mobile/features/list/current-selection";
 import { reset, track } from "@mobile/lib/analytics";
 import type { Logger } from "@mobile/lib/logger";
 import { logger as defaultLogger } from "@mobile/lib/logger";
 import { db } from "@mobile/session/powersync";
-import { asError } from "@dont-forget/shared";
-import type { ServiceResetAnalytics } from "@dont-forget/shared";
 import { clearAuthenticatedAppSessionPresent } from "./session-hint";
 
 export type AuthenticatedAppSessionSignOutAuth = {

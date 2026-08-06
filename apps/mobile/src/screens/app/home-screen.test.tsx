@@ -1,14 +1,3 @@
-import {
-	act,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-	within,
-} from "@testing-library/react-native";
-import { selectionAsync } from "expo-haptics";
-import type { PropsWithChildren } from "react";
-import { Dimensions, FlatList } from "react-native";
 import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
 import type { ActiveListItem } from "@mobile/features/item/item-view-types";
 import type { ListSummary } from "@mobile/features/list/list-service";
@@ -26,11 +15,22 @@ import type {
 import { useListCollection } from "@mobile/features/list/use-list-collection";
 import { useListPage } from "@mobile/features/list/use-list-page";
 import { useAuthenticatedAppSession, useSyncState } from "@mobile/session";
-import { themedAlert } from "@mobile/ui/native-dialogs";
 import { deferred } from "@mobile/test/async";
 import { panBegin, panEnd, panMove } from "@mobile/test/mocks/gesture-handler";
 import { settleAnimations } from "@mobile/test/mocks/reanimated";
 import { TestSafeAreaProvider } from "@mobile/test/safe-area";
+import { themedAlert } from "@mobile/ui/native-dialogs";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react-native";
+import { selectionAsync } from "expo-haptics";
+import type { PropsWithChildren } from "react";
+import { Dimensions, FlatList } from "react-native";
 import HomeScreen, { HomeScreenView } from "./home-screen";
 
 const mockReplace = jest.fn();

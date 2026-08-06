@@ -1,4 +1,3 @@
-import type { DirectoryDb } from "@dont-forget/db";
 import {
 	ActiveHouseholdMembershipRequiredError,
 	type ActiveHouseholdService,
@@ -50,6 +49,7 @@ import {
 	unavailableErrorResponse,
 	unavailablePreviewResponse,
 } from "@api/http";
+import type { DirectoryDb } from "@dont-forget/db";
 import type {
 	CreateHouseholdResponse,
 	HouseholdJoinCodePreview,
@@ -58,13 +58,13 @@ import type {
 	ListMembersResponse,
 	RenameHouseholdResponse,
 } from "@dont-forget/shared";
-import { asError } from "@dont-forget/shared";
 import {
+	asError,
 	type HouseholdJoinCodeSource,
 	isHouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
+	redactAttributes,
 } from "@dont-forget/shared";
-import { redactAttributes } from "@dont-forget/shared";
 
 export type HouseholdApiDeps = PublicWebApiHandlerDeps & {
 	createActiveHouseholdService?: (

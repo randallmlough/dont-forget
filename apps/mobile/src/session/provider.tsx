@@ -1,14 +1,5 @@
 import { useAuth } from "@clerk/clerk-expo";
-import {
-	createContext,
-	type PropsWithChildren,
-	use,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { asError } from "@dont-forget/shared";
 import type { clearUserCurrentListSelections } from "@mobile/features/list/current-selection";
 import { reset, track } from "@mobile/lib/analytics";
 import { readApiBaseUrl } from "@mobile/lib/api-base-url";
@@ -26,7 +17,16 @@ import {
 	type AuthenticatedAppSessionSignOutAnalytics,
 	createAuthenticatedAppSessionSignOut,
 } from "@mobile/session/sign-out";
-import { asError } from "@dont-forget/shared";
+import {
+	createContext,
+	type PropsWithChildren,
+	use,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	clearAuthenticatedAppSessionPresent,
 	persistAuthenticatedAppSession,

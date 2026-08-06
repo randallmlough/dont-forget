@@ -1,5 +1,5 @@
-import type { Href } from "expo-router";
 import { isSensitiveKey } from "@dont-forget/shared";
+import type { Href } from "expo-router";
 
 export type AuthRedirectParams = Record<string, string | string[] | undefined>;
 

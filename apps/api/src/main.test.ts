@@ -1,15 +1,14 @@
 import { createServer, type Server } from "node:http";
-import { serve } from "@hono/node-server";
-import { Hono } from "hono";
-import { Pool } from "pg";
-
 import { createApiApp } from "@api/app";
 import { readApiServerConfig } from "@api/config";
 import { defaultAuthenticate } from "@api/data/authenticate";
+import { deferred, waitForAsync } from "@api/test/async";
 import { defaultWithTransaction, directoryDb } from "@dont-forget/db";
 import { DEFAULT_API_PORT } from "@dont-forget/shared";
 import { loadEnvFile } from "@dont-forget/shared/node";
-import { deferred, waitForAsync } from "@api/test/async";
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+import { Pool } from "pg";
 import { startApiServer } from "./main";
 
 // Composition-boundary mocks are intentional: this suite proves dependency

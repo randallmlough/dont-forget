@@ -1,6 +1,5 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@dont-forget/shared";
 import {
 	type AuthRedirectParams,
 	authHrefWithIntent,
@@ -12,7 +11,8 @@ import {
 	type InvitationPreview,
 } from "@mobile/features/household/api";
 import { toast } from "@mobile/ui/toast";
-import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@dont-forget/shared";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 
 type PublicEntryKind = "invitation" | "joinCode";
 

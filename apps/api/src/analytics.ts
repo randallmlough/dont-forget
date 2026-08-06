@@ -1,10 +1,10 @@
+import type {
+	EventMap,
+	EventName,
+	ServiceAnalytics,
+} from "@dont-forget/shared";
+import { asError, optionalEnv, redactAttributes } from "@dont-forget/shared";
 import { PostHog } from "posthog-node";
-
-import type { EventMap, EventName } from "@dont-forget/shared";
-import { optionalEnv } from "@dont-forget/shared";
-import { asError } from "@dont-forget/shared";
-import { redactAttributes } from "@dont-forget/shared";
-import type { ServiceAnalytics } from "@dont-forget/shared";
 
 type ServerPostHogClient = Pick<PostHog, "capture" | "flush">;
 

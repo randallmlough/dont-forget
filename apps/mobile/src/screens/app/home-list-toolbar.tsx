@@ -1,3 +1,4 @@
+import type { ListSummary } from "@mobile/features/list/list-service";
 import * as Haptics from "expo-haptics";
 import { Stack } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -11,7 +12,6 @@ import {
 import { useSharedValue } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
-import type { ListSummary } from "@mobile/features/list/list-service";
 
 /**
  * Physical geometry of the page control, not design tokens.

@@ -1,13 +1,13 @@
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { DRIZZLE_MIGRATIONS_TABLE } from "./utils";
 import {
 	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
 	readPostgresConfig,
 } from "@dont-forget/shared";
 import { loadEnvFile } from "@dont-forget/shared/node";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { directoryDb, postgresPool } from "./client";
 import { REPOSITORY_ROOT } from "./repository-root";
+import { DRIZZLE_MIGRATIONS_TABLE } from "./utils";
 
 const DIRECTORY_MIGRATIONS = "./src/migrations/postgres";
 

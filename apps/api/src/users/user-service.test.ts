@@ -1,6 +1,6 @@
+import type { ServerUserProfile } from "@api/http";
 import { users } from "@dont-forget/db/schema";
 import { createTestDirectoryDb } from "@dont-forget/db/test";
-import type { ServerUserProfile } from "@api/http";
 import { createUserService } from "./user-service";
 
 describe("createUserService", () => {

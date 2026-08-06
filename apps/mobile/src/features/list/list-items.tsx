@@ -1,3 +1,10 @@
+import { ItemDetailsSheet } from "@mobile/features/item/item-details-sheet";
+import type { ItemEditorInlinePresentation } from "@mobile/features/item/item-editor-reducer";
+import { ItemInlineForm } from "@mobile/features/item/item-inline-form";
+import { ItemRow } from "@mobile/features/item/item-row";
+import type { ActiveListItem } from "@mobile/features/item/item-view-types";
+import type { ItemEditor } from "@mobile/features/item/use-item-editor";
+import { ItemSeparator } from "@mobile/ui/item";
 import {
 	type ReactElement,
 	useCallback,
@@ -18,13 +25,6 @@ import Animated, {
 	useAnimatedScrollHandler,
 } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { ItemDetailsSheet } from "@mobile/features/item/item-details-sheet";
-import type { ItemEditorInlinePresentation } from "@mobile/features/item/item-editor-reducer";
-import { ItemInlineForm } from "@mobile/features/item/item-inline-form";
-import { ItemRow } from "@mobile/features/item/item-row";
-import type { ActiveListItem } from "@mobile/features/item/item-view-types";
-import type { ItemEditor } from "@mobile/features/item/use-item-editor";
-import { ItemSeparator } from "@mobile/ui/item";
 
 type NewItemDraftRow = {
 	kind: "newItemDraft";

@@ -2,15 +2,14 @@ import {
 	bootstrapAuthenticatedAppSession,
 	createProductionAuthenticatedAppSessionBootstrapDeps,
 } from "@api/bootstrap/bootstrap-service";
-import type { DirectoryDb } from "@dont-forget/db";
 import {
 	type ServerUserProfile,
 	UnauthorizedError,
 	verifyClerkRequest,
 } from "@api/http";
+import type { DirectoryDb } from "@dont-forget/db";
 import type { BootstrapResponse } from "@dont-forget/shared";
-import { asError } from "@dont-forget/shared";
-import { redactAttributes } from "@dont-forget/shared";
+import { asError, redactAttributes } from "@dont-forget/shared";
 
 export type BootstrapApiDeps = {
 	directory: DirectoryDb;

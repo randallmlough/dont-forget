@@ -1,8 +1,8 @@
+import { nativeColorScheme } from "@mobile/theme/native-color-scheme";
 import { GlassView, isGlassEffectAPIAvailable } from "expo-glass-effect";
 import type { ReactNode } from "react";
 import { type StyleProp, View, type ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { nativeColorScheme } from "@mobile/theme/native-color-scheme";
 
 const canRenderNativeGlass = isGlassEffectAPIAvailable();
 

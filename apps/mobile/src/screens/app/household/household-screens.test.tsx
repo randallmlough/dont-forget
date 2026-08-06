@@ -1,12 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
-import type { PropsWithChildren } from "react";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationDrawerProvider } from "@mobile/app-shell/navigation-drawer-context";
 import type {
 	HouseholdSettingsActions,
 	HouseholdSettingsState,
 } from "@mobile/features/household/use-household-settings";
 import type { AuthenticatedAppSession } from "@mobile/session";
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import type { PropsWithChildren } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { HouseholdSettingsView } from "./household-settings-screen";
 import { HouseholdSwitchView } from "./household-switch-screen";
 import { MembersInvitationsView } from "./members-invitations-screen";

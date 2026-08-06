@@ -1,13 +1,13 @@
-import { SymbolView } from "expo-symbols";
-import { useRef } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { BottomSheet } from "@mobile/ui/bottom-sheet";
 import { Button } from "@mobile/ui/button";
 import { ButtonIconGlass } from "@mobile/ui/button-icon-glass";
 import { ItemSeparator } from "@mobile/ui/item";
 import { themedAlert } from "@mobile/ui/native-dialogs";
 import { ScreenSection } from "@mobile/ui/screen-section.tsx";
+import { SymbolView } from "expo-symbols";
+import { useRef } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { ItemEditorDetailsPresentation } from "./item-editor-reducer";
 import { ItemListSelectorSheet } from "./item-list-selector-sheet";
 import type { ItemEditor } from "./use-item-editor";

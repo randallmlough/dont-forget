@@ -1,3 +1,4 @@
+import { ButtonIconGlass } from "@mobile/ui/button-icon-glass";
 import { useEffect, useState } from "react";
 import {
 	Keyboard,
@@ -7,7 +8,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { ButtonIconGlass } from "@mobile/ui/button-icon-glass";
 
 export type HomeAddItemButtonProps = {
 	editorActive: boolean;

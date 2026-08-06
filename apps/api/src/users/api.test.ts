@@ -1,5 +1,5 @@
-import { createTestDirectoryDb } from "@dont-forget/db/test";
 import { ApiUnauthorizedError } from "@api/http";
+import { createTestDirectoryDb } from "@dont-forget/db/test";
 import { handleUpdateUserName } from "./api";
 
 jest.mock("@clerk/backend", () => ({

@@ -1,8 +1,5 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-
-import type { ConfigContext, ExpoConfig } from "expo/config";
-
 import {
 	type AppEnv,
 	appSchemeForEnv,
@@ -10,6 +7,7 @@ import {
 	readPublicExpoConfigIfPresent,
 } from "@dont-forget/shared";
 import { loadEnvFile } from "@dont-forget/shared/node";
+import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const REPOSITORY_ROOT = resolve(__dirname, "../..");
 

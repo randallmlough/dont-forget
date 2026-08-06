@@ -1,7 +1,7 @@
+import { HomeScreenView } from "@mobile/screens/app/home-screen";
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { HomeScreenView } from "@mobile/screens/app/home-screen";
 
 const meta = {
 	title: "screens/app/HomeScreen",

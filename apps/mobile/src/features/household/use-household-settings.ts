@@ -1,6 +1,4 @@
 import { useAuth } from "@clerk/clerk-expo";
-import * as Clipboard from "expo-clipboard";
-import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
 	type CreateInvitationResponse,
 	createHouseholdApiClient,
@@ -18,6 +16,8 @@ import {
 	uploadQueueMonitor,
 } from "@mobile/session/upload-queue";
 import { toast } from "@mobile/ui/toast";
+import * as Clipboard from "expo-clipboard";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 
 const UPLOAD_QUEUE_DRAIN_TIMEOUT_MS = 10_000;
 

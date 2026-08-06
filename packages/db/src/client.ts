@@ -1,7 +1,7 @@
+import { readPostgresConfig } from "@dont-forget/shared";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema/postgres";
-import { readPostgresConfig } from "@dont-forget/shared";
 
 export type DirectoryDb = ReturnType<typeof directoryDb>;
 

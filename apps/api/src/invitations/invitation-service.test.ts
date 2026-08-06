@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import type { DirectoryDb } from "@dont-forget/db";
 import {
 	householdFixture,
@@ -14,6 +13,7 @@ import {
 	users,
 } from "@dont-forget/db/schema";
 import { createTestDirectoryDb } from "@dont-forget/db/test";
+import { eq } from "drizzle-orm";
 import {
 	createInvitationService,
 	InvitationInvalidEmailError,

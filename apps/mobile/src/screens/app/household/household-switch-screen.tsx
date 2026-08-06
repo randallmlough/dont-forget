@@ -2,11 +2,6 @@ import {
 	autocorrectionDisabled,
 	textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
-import { SymbolView } from "expo-symbols";
-import { type ReactNode, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ScreenScaffold } from "@mobile/app-shell/screen-scaffold";
 import {
 	type HouseholdSwitchOperation,
@@ -37,6 +32,11 @@ import {
 	ItemTitle,
 } from "@mobile/ui/item";
 import { ScreenSection } from "@mobile/ui/screen-section";
+import { SymbolView } from "expo-symbols";
+import { type ReactNode, useState } from "react";
+import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 type HouseholdRow = AuthenticatedAppSession["households"][number];
 type HouseholdFormMode = "none" | "create" | "join";

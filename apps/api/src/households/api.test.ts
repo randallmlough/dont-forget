@@ -1,4 +1,10 @@
-import { eq } from "drizzle-orm";
+import { INITIAL_HOUSEHOLD_NAMES } from "@api/households/initial-household-name";
+import {
+	createHouseholdJoinCodeService,
+	type HouseholdJoinCodeService,
+} from "@api/households/join-code-service";
+import { ApiUnauthorizedError, upsertAuthenticatedUser } from "@api/http";
+import { createApiRequest, readJsonResponse } from "@api/test/api";
 import {
 	membershipFixture,
 	PRIMARY_HOUSEHOLD_SEED,
@@ -8,15 +14,12 @@ import {
 	userFixture,
 } from "@dont-forget/db/fixtures";
 import { households, memberships, users } from "@dont-forget/db/schema";
-import { createTestDirectoryDb, type TestDirectoryDb } from "@dont-forget/db/test";
-import { INITIAL_HOUSEHOLD_NAMES } from "@api/households/initial-household-name";
 import {
-	createHouseholdJoinCodeService,
-	type HouseholdJoinCodeService,
-} from "@api/households/join-code-service";
-import { ApiUnauthorizedError, upsertAuthenticatedUser } from "@api/http";
+	createTestDirectoryDb,
+	type TestDirectoryDb,
+} from "@dont-forget/db/test";
 import { JOIN_LINK_HOUSEHOLD_JOIN_CODE_SOURCE } from "@dont-forget/shared";
-import { createApiRequest, readJsonResponse } from "@api/test/api";
+import { eq } from "drizzle-orm";
 import {
 	type HouseholdApiDeps,
 	handleChangeMemberRole,

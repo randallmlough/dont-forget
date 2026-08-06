@@ -1,9 +1,3 @@
-import { usePathname, useRouter } from "expo-router";
-import { type SFSymbol, SymbolView } from "expo-symbols";
-import { useRef } from "react";
-import { Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { track } from "@mobile/lib/analytics";
 import {
 	sessionMemberDisplayName,
@@ -11,6 +5,12 @@ import {
 } from "@mobile/session";
 import { Button } from "@mobile/ui/button";
 import { SideDrawer } from "@mobile/ui/side-drawer";
+import { usePathname, useRouter } from "expo-router";
+import { type SFSymbol, SymbolView } from "expo-symbols";
+import { useRef } from "react";
+import { Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 type DrawerDestination =
 	| "/"

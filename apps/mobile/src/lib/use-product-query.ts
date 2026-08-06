@@ -1,6 +1,6 @@
+import type { ProductQuery } from "@mobile/lib/product-database";
 import type { useQuery as usePowerSyncWatchedQuery } from "@powersync/react";
 import { useCallback, useState } from "react";
-import type { ProductQuery } from "@mobile/lib/product-database";
 
 type WatchedQueryResult<RowType> = {
 	data: RowType[];

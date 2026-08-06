@@ -1,6 +1,6 @@
-import { useMemo } from "react";
 import { useLogger } from "@mobile/lib/logger";
 import { appProductDatabase } from "@mobile/session/powersync-app-database";
+import { useMemo } from "react";
 import {
 	type CurrentListSelectionStore,
 	createCurrentListSelectionStore,

@@ -13,7 +13,9 @@ import * as directorySchema from "./schema/postgres";
 import { DRIZZLE_MIGRATIONS_TABLE } from "./utils";
 
 const DIRECTORY_MIGRATIONS = path.dirname(
-	require.resolve("@dont-forget/db/migrations/postgres/0000_stormy_norman_osborn.sql"),
+	require.resolve(
+		"@dont-forget/db/migrations/postgres/0000_stormy_norman_osborn.sql",
+	),
 );
 const execFileAsync = promisify(execFile);
 let pgliteTemplateFilePromise: Promise<string> | undefined;
