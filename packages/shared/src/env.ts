@@ -4,6 +4,8 @@ export const DEFAULT_API_PORT = 8080;
 export const DEFAULT_WEB_PORT = 3000;
 
 const APP_ENVS = ["local", "test", "staging", "production"] as const;
+const DNS_HOSTNAME_MAX_LENGTH = 253;
+const DNS_LABEL_MAX_LENGTH = 63;
 const appEnvSchema = z.enum(APP_ENVS);
 const requiredEnvValueSchema = z
 	.string()
@@ -167,10 +169,36 @@ export function readPublicExpoConfigIfPresent(
 	return readPublicExpoConfig(source);
 }
 
+function isPublicDnsHostname(hostname: string): boolean {
+	if (
+		hostname.length > DNS_HOSTNAME_MAX_LENGTH ||
+		/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) ||
+		hostname.startsWith("[")
+	) {
+		return false;
+	}
+
+	const labels = hostname.split(".");
+	return (
+		labels.length >= 2 &&
+		labels.every(
+			(label) =>
+				label.length <= DNS_LABEL_MAX_LENGTH &&
+				/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
+		)
+	);
+}
+
 function parseIosAssociatedDomainWebOrigin(
 	value: unknown,
 	appEnv: AppEnv,
 ): URL {
+	if (typeof value === "string" && value !== value.trim()) {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must not have leading or trailing whitespace when APP_ENV=${appEnv}`,
+		);
+	}
+
 	const webBaseUrl = iosWebBaseUrlSchema.safeParse(value);
 	if (!webBaseUrl.success) {
 		throw new Error(
@@ -194,12 +222,7 @@ function parseIosAssociatedDomainWebOrigin(
 		);
 	}
 
-	const isIpv4Address = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(parsed.hostname);
-	if (
-		!parsed.hostname.includes(".") ||
-		isIpv4Address ||
-		parsed.hostname.startsWith("[")
-	) {
+	if (!isPublicDnsHostname(parsed.hostname)) {
 		throw new Error(
 			`PUBLIC_WEB_BASE_URL must use a public fully qualified domain name when APP_ENV=${appEnv}`,
 		);

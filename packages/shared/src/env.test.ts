@@ -287,6 +287,58 @@ describe("environment config", () => {
 		}
 	});
 
+	it("rejects whitespace and malformed public DNS hostnames", () => {
+		for (const webBaseUrl of [
+			" https://web.example.invalid",
+			"https://web.example.invalid ",
+			"https://example.invalid.",
+			"https://example..invalid",
+			"https://.example.invalid",
+			"https://under_score.example",
+			"https://-leading.example",
+			"https://trailing-.example",
+		]) {
+			expect(() =>
+				readIosAssociatedDomains("production", "https://api.example.invalid", {
+					PUBLIC_WEB_BASE_URL: webBaseUrl,
+				}),
+			).toThrow("PUBLIC_WEB_BASE_URL");
+		}
+	});
+
+	it("rejects public DNS hostnames beyond label and total length limits", () => {
+		const overlongLabelHostname = `${"a".repeat(64)}.example`;
+		const overlongHostname = [
+			"a".repeat(63),
+			"b".repeat(63),
+			"c".repeat(63),
+			"d".repeat(62),
+		].join(".");
+
+		for (const hostname of [overlongLabelHostname, overlongHostname]) {
+			expect(() =>
+				readIosAssociatedDomains("production", "https://api.example.invalid", {
+					PUBLIC_WEB_BASE_URL: `https://${hostname}`,
+				}),
+			).toThrow("PUBLIC_WEB_BASE_URL");
+		}
+	});
+
+	it("accepts a public DNS hostname at the label and total length limits", () => {
+		const hostname = [
+			"a".repeat(63),
+			"b".repeat(63),
+			"c".repeat(63),
+			"d".repeat(61),
+		].join(".");
+
+		expect(
+			readIosAssociatedDomains("production", "https://api.example.invalid", {
+				PUBLIC_WEB_BASE_URL: `https://${hostname}`,
+			}),
+		).toEqual([`applinks:${hostname}`]);
+	});
+
 	it("rejects a deployed web origin equal to the normalized API origin", () => {
 		expect(() =>
 			readIosAssociatedDomains("staging", "https://shared.example.invalid/", {
