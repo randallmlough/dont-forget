@@ -105,7 +105,7 @@ Keep the public types named for the domain:
 1. **Choose the owning domain folder.**
    - Use existing domains when the operation naturally belongs there.
    - Create a new folder only when the domain is genuinely new.
-   - Current client feature folders are `auth`, `household`, `item`, `list`, and `settings`; current server domain folders are `bootstrap`, `data`, `households`, `invitations`, and `users`. Item services live under the Item feature, and Member behavior lives under the server households module. Sync applicator and transaction infrastructure is DB-owned under `packages/db/src/sync/`.
+   - Current client feature folders are `auth`, `household`, `item`, `list`, and `settings`; current API service/domain folders are `bootstrap`, `households`, `invitations`, and `users`. Item services live under the Item feature, and Member behavior lives under the server households module. `apps/api/src/data/` is only the `/api/data` HTTP shim over DB-owned sync applicator and transaction infrastructure in `packages/db/src/sync/`.
 
 2. **Choose client or server placement.**
    - Client product services may depend on app-safe interfaces such as the `ProductDatabase` seam.
