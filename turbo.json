@@ -13,6 +13,7 @@
 			"inputs": [
 				"$TURBO_ROOT$/biome.jsonc",
 				"$TURBO_ROOT$/eslint.config.js",
+				"$TURBO_ROOT$/infra/web/verify-hydration.mjs",
 				"$TURBO_ROOT$/package.json",
 				"$TURBO_ROOT$/tsconfig.base.json",
 				"$TURBO_ROOT$/turbo.json"
@@ -53,8 +54,16 @@
 			"dependsOn": ["//#format:root"]
 		},
 		"ios": { "cache": false },
+		"//#lint:root": {
+			"inputs": [
+				"$TURBO_ROOT$/eslint.config.js",
+				"$TURBO_ROOT$/infra/web/verify-hydration.mjs",
+				"$TURBO_ROOT$/package.json",
+				"$TURBO_ROOT$/tooling/eslint-plugin/**"
+			]
+		},
 		"lint": {
-			"dependsOn": ["^lint"],
+			"dependsOn": ["//#lint:root", "^lint"],
 			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/eslint.config.js"]
 		},
 		"prebuild": { "cache": false },
@@ -93,6 +102,11 @@
 				"EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
 				"NODE_ENV",
 				"PUBLIC_WEB_BASE_URL"
+			],
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/infra/powersync/sync-config.yaml",
+				"$TURBO_ROOT$/packages/db/src/migrations/postgres/0001_powersync_publication.sql"
 			],
 			"outputs": ["coverage/**"]
 		},
