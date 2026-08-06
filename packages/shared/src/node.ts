@@ -1,1 +1,1 @@
-export { loadEnvFile } from "./load-env";
+export { loadEnvFile } from "./load-env.ts";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { householdMemberSchema } from "./members";
+import { householdMemberSchema } from "./members.ts";
 
 export const joinCodeSchema = z.discriminatedUnion("enabled", [
 	z.object({

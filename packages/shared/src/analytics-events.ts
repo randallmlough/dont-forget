@@ -1,4 +1,4 @@
-import type { HouseholdJoinCodeSource } from "./household-join-code-source";
+import type { HouseholdJoinCodeSource } from "./household-join-code-source.ts";
 
 /**
  * Catalog of every product-analytics event the app emits.

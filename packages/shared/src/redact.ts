@@ -1,4 +1,4 @@
-import { isSensitiveKey } from "./sensitive-keys";
+import { isSensitiveKey } from "./sensitive-keys.ts";
 
 const BEARER_TOKEN_RE = /Bearer\s+[A-Za-z0-9_\-.=]+/g;
 const JWT_RE = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;

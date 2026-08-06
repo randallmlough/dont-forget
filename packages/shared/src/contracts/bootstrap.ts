@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { memberRoleSchema } from "./members";
+import { memberRoleSchema } from "./members.ts";
 
 export const BOOTSTRAP_API_PATH = "/api/bootstrap";
 
