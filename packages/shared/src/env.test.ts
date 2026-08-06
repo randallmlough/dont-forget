@@ -6,6 +6,7 @@ import {
 	DEFAULT_WEB_PORT,
 	parseAppEnv,
 	readApiPort,
+	readIosAssociatedDomains,
 	readPublicExpoConfig,
 	readWebPort,
 	validateClerkKeyForEnv,
@@ -157,6 +158,115 @@ describe("environment config", () => {
 				EXPO_PUBLIC_POWERSYNC_URL: "https://ps.example.com",
 			}).powersyncUrl,
 		).toBe("https://ps.example.com");
+	});
+
+	it("omits iOS Associated Domains for local and test without reading web config", () => {
+		const unreadableSource = new Proxy<Record<string, string | undefined>>(
+			{},
+			{
+				get() {
+					throw new Error("source must not be read");
+				},
+			},
+		);
+
+		for (const appEnv of ["local", "test"] as const) {
+			expect(
+				readIosAssociatedDomains(appEnv, undefined, unreadableSource),
+			).toBeUndefined();
+			expect(
+				readIosAssociatedDomains(appEnv, undefined, {
+					PUBLIC_WEB_BASE_URL: "http://localhost:3000",
+				}),
+			).toBeUndefined();
+		}
+	});
+
+	it.each([
+		{
+			apiBaseUrl: "https://api-staging.example.invalid",
+			appEnv: "staging",
+			expected: ["applinks:web-staging.example.invalid"],
+			webBaseUrl: "https://web-staging.example.invalid",
+		},
+		{
+			apiBaseUrl: "https://api-staging.example.invalid",
+			appEnv: "staging",
+			expected: ["applinks:web-staging.example.invalid"],
+			webBaseUrl: "https://web-staging.example.invalid/",
+		},
+		{
+			apiBaseUrl: "https://api.example.invalid",
+			appEnv: "production",
+			expected: ["applinks:web.example.invalid"],
+			webBaseUrl: "https://web.example.invalid",
+		},
+	] as const)("derives one normalized iOS Associated Domain for $appEnv from $webBaseUrl", ({
+		apiBaseUrl,
+		appEnv,
+		expected,
+		webBaseUrl,
+	}) => {
+		expect(
+			readIosAssociatedDomains(appEnv, apiBaseUrl, {
+				PUBLIC_WEB_BASE_URL: webBaseUrl,
+			}),
+		).toEqual(expected);
+	});
+
+	it("rejects absent, malformed, and non-HTTPS deployed web origins", () => {
+		for (const webBaseUrl of [
+			undefined,
+			"",
+			" ",
+			"not a url",
+			"http://web.example.invalid",
+		]) {
+			expect(() =>
+				readIosAssociatedDomains("staging", "https://api.example.invalid", {
+					PUBLIC_WEB_BASE_URL: webBaseUrl,
+				}),
+			).toThrow("PUBLIC_WEB_BASE_URL");
+		}
+	});
+
+	it("rejects deployed web URLs that are not origin-only", () => {
+		for (const webBaseUrl of [
+			"https://user@web.example.invalid",
+			"https://user:password@web.example.invalid",
+			"https://web.example.invalid:8443",
+			"https://web.example.invalid:443",
+			"https://web.example.invalid/path",
+			"https://web.example.invalid?query=value",
+			"https://web.example.invalid#fragment",
+		]) {
+			expect(() =>
+				readIosAssociatedDomains("production", "https://api.example.invalid", {
+					PUBLIC_WEB_BASE_URL: webBaseUrl,
+				}),
+			).toThrow("PUBLIC_WEB_BASE_URL");
+		}
+	});
+
+	it("rejects a deployed web origin equal to the normalized API origin", () => {
+		expect(() =>
+			readIosAssociatedDomains("staging", "https://shared.example.invalid/", {
+				PUBLIC_WEB_BASE_URL: "https://shared.example.invalid",
+			}),
+		).toThrow("PUBLIC_WEB_BASE_URL must differ from EXPO_PUBLIC_API_BASE_URL");
+	});
+
+	it("keeps the mobile web-origin input out of public Expo runtime config", () => {
+		const config = readPublicExpoConfig({
+			APP_ENV: "staging",
+			EXPO_PUBLIC_API_BASE_URL: "https://api.example.invalid",
+			EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+			EXPO_PUBLIC_POWERSYNC_URL: "https://sync.example.invalid",
+			PUBLIC_WEB_BASE_URL: "https://web.example.invalid",
+		});
+
+		expect(config).not.toHaveProperty("webBaseUrl");
+		expect(config).not.toHaveProperty("publicWebBaseUrl");
 	});
 
 	it("allows local builds to omit the API base URL", () => {

@@ -8,6 +8,7 @@ const appEnvSchema = z.enum(APP_ENVS);
 const requiredEnvValueSchema = z
 	.string()
 	.refine((value) => value.trim().length > 0);
+const iosWebBaseUrlSchema = requiredEnvValueSchema.pipe(z.url());
 const portValueSchema = z
 	.string()
 	.regex(/^[1-9][0-9]*$/)
@@ -164,6 +165,53 @@ export function readPublicExpoConfigIfPresent(
 	}
 
 	return readPublicExpoConfig(source);
+}
+
+export function readIosAssociatedDomains(
+	appEnv: AppEnv,
+	apiBaseUrl: string | undefined,
+	source: EnvSource = process.env,
+): string[] | undefined {
+	if (appEnv === "local" || appEnv === "test") {
+		return undefined;
+	}
+
+	const webBaseUrl = iosWebBaseUrlSchema.safeParse(source.PUBLIC_WEB_BASE_URL);
+	if (!webBaseUrl.success) {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must be a valid URL when APP_ENV=${appEnv}`,
+		);
+	}
+	const parsedWebBaseUrl = new URL(webBaseUrl.data);
+	if (parsedWebBaseUrl.protocol !== "https:") {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must use https:// when APP_ENV=${appEnv}`,
+		);
+	}
+	const authority =
+		webBaseUrl.data.slice("https://".length).split(/[/?#]/)[0] ?? "";
+	const hostAndPort = authority.slice(authority.lastIndexOf("@") + 1);
+	const hasExplicitPort = hostAndPort.startsWith("[")
+		? hostAndPort.includes("]:")
+		: hostAndPort.includes(":");
+	if (
+		authority.includes("@") ||
+		hasExplicitPort ||
+		parsedWebBaseUrl.pathname !== "/" ||
+		parsedWebBaseUrl.search !== "" ||
+		parsedWebBaseUrl.hash !== ""
+	) {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must be an HTTPS origin without credentials, a port, path, query, or fragment when APP_ENV=${appEnv}`,
+		);
+	}
+	if (apiBaseUrl && parsedWebBaseUrl.origin === new URL(apiBaseUrl).origin) {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must differ from EXPO_PUBLIC_API_BASE_URL when APP_ENV=${appEnv}`,
+		);
+	}
+
+	return [`applinks:${parsedWebBaseUrl.hostname}`];
 }
 
 export function readPostgresConfig(

@@ -64,8 +64,8 @@ the bundle from.
 
 Deployed builds (`staging`, `production`) still configure
 `EXPO_PUBLIC_API_BASE_URL`. `PUBLIC_WEB_BASE_URL` is server-side link-generation
-configuration; locally it is generated in `.env.worktree` from the same
-checkout-local `WEB_PORT`.
+configuration and a deployed mobile build input; locally it is generated in
+`.env.worktree` from the same checkout-local `WEB_PORT`.
 
 ### Per-worktree database isolation
 
@@ -123,6 +123,35 @@ derives the scheme/host from the Metro dev server and the port from
 staging and production use separate hosted API deployments/domains.
 
 `EXPO_PUBLIC_API_BASE_URL` is required for `staging` and `production` app builds. `local` ignores it in favor of the dev-server derivation, and `test` may omit it because tests mock app and API boundaries directly.
+
+### Deployed external origins and iOS universal links
+
+Operators configure deployed mobile builds with three distinct external
+origins. The public hostnames are protected operator configuration and are not
+committed to the repository.
+
+| Role | Configuration | Ownership |
+| --- | --- | --- |
+| API | `EXPO_PUBLIC_API_BASE_URL` | Machine-facing `/api/*` routes and `/health` |
+| Web | `PUBLIC_WEB_BASE_URL` | The AASA document plus the Invitation accept and Household Join Code join browser documents |
+| PowerSync | `EXPO_PUBLIC_POWERSYNC_URL` | Device sync transport |
+
+`PUBLIC_WEB_BASE_URL` remains the API's link-generation input. For staging and
+production it is also a build-time-only mobile input used to derive the single
+iOS Associated Domains entitlement. It is not an `EXPO_PUBLIC_*` runtime field
+and is not copied into Expo `extra`.
+
+The mobile entitlement reader requires `PUBLIC_WEB_BASE_URL` to be an HTTPS
+origin without credentials, an explicit port, path, query, or fragment, and it
+requires the normalized web origin to differ from the API origin. The existing
+API runtime parser remains path-tolerant and unchanged; it does not enforce
+these mobile build constraints.
+
+Local and test builds omit the Associated Domains entitlement and use their
+environment-specific custom schemes. Physical staging QA uses the `preview`
+EAS profile because it is the internal-distribution profile with
+`APP_ENV=staging`; the `staging` profile is not the internal-distribution
+profile.
 
 ## iOS App Identity
 

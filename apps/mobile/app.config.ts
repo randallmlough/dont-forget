@@ -4,6 +4,7 @@ import {
 	type AppEnv,
 	appSchemeForEnv,
 	readApiPort,
+	readIosAssociatedDomains,
 	readPublicExpoConfigIfPresent,
 } from "@dont-forget/shared";
 import { loadEnvFile } from "@dont-forget/shared/node";
@@ -16,8 +17,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 	const apiPort = readApiPort();
 	// undefined only during the EAS CLI bootstrap evaluation (see
 	// readPublicExpoConfigIfPresent); identifiers derive from APP_ENV alone,
-	// and the second, env-injected evaluation fills the extras.
+	// and the second, env-injected evaluation fills the extras and entitlement.
 	const publicConfig = readPublicExpoConfigIfPresent();
+	const associatedDomains = publicConfig
+		? readIosAssociatedDomains(appEnv, publicConfig.apiBaseUrl)
+		: undefined;
 	const baseBundleIdentifier =
 		config.ios?.bundleIdentifier ?? "com.dont-forget.app";
 	const baseScheme =
@@ -33,6 +37,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		scheme: process.env.EXPO_SCHEME ?? appSchemeForEnv(baseScheme, appEnv),
 		ios: {
 			...config.ios,
+			associatedDomains,
 			bundleIdentifier:
 				process.env.IOS_BUNDLE_IDENTIFIER ??
 				bundleIdentifierForEnv(baseBundleIdentifier, appEnv),
