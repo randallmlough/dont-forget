@@ -167,6 +167,47 @@ export function readPublicExpoConfigIfPresent(
 	return readPublicExpoConfig(source);
 }
 
+function parseIosAssociatedDomainWebOrigin(
+	value: unknown,
+	appEnv: AppEnv,
+): URL {
+	const webBaseUrl = iosWebBaseUrlSchema.safeParse(value);
+	if (!webBaseUrl.success) {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must be a valid URL when APP_ENV=${appEnv}`,
+		);
+	}
+
+	const parsed = new URL(webBaseUrl.data);
+	if (parsed.protocol !== "https:") {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must use https:// when APP_ENV=${appEnv}`,
+		);
+	}
+
+	const isCanonicalOrigin =
+		webBaseUrl.data === parsed.origin ||
+		webBaseUrl.data === `${parsed.origin}/`;
+	if (parsed.port !== "" || !isCanonicalOrigin) {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must be an HTTPS origin without credentials, a port, path, query, or fragment when APP_ENV=${appEnv}`,
+		);
+	}
+
+	const isIpv4Address = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(parsed.hostname);
+	if (
+		!parsed.hostname.includes(".") ||
+		isIpv4Address ||
+		parsed.hostname.startsWith("[")
+	) {
+		throw new Error(
+			`PUBLIC_WEB_BASE_URL must use a public fully qualified domain name when APP_ENV=${appEnv}`,
+		);
+	}
+
+	return parsed;
+}
+
 export function readIosAssociatedDomains(
 	appEnv: AppEnv,
 	apiBaseUrl: string | undefined,
@@ -176,35 +217,10 @@ export function readIosAssociatedDomains(
 		return undefined;
 	}
 
-	const webBaseUrl = iosWebBaseUrlSchema.safeParse(source.PUBLIC_WEB_BASE_URL);
-	if (!webBaseUrl.success) {
-		throw new Error(
-			`PUBLIC_WEB_BASE_URL must be a valid URL when APP_ENV=${appEnv}`,
-		);
-	}
-	const parsedWebBaseUrl = new URL(webBaseUrl.data);
-	if (parsedWebBaseUrl.protocol !== "https:") {
-		throw new Error(
-			`PUBLIC_WEB_BASE_URL must use https:// when APP_ENV=${appEnv}`,
-		);
-	}
-	const authority =
-		webBaseUrl.data.slice("https://".length).split(/[/?#]/)[0] ?? "";
-	const hostAndPort = authority.slice(authority.lastIndexOf("@") + 1);
-	const hasExplicitPort = hostAndPort.startsWith("[")
-		? hostAndPort.includes("]:")
-		: hostAndPort.includes(":");
-	if (
-		authority.includes("@") ||
-		hasExplicitPort ||
-		parsedWebBaseUrl.pathname !== "/" ||
-		parsedWebBaseUrl.search !== "" ||
-		parsedWebBaseUrl.hash !== ""
-	) {
-		throw new Error(
-			`PUBLIC_WEB_BASE_URL must be an HTTPS origin without credentials, a port, path, query, or fragment when APP_ENV=${appEnv}`,
-		);
-	}
+	const parsedWebBaseUrl = parseIosAssociatedDomainWebOrigin(
+		source.PUBLIC_WEB_BASE_URL,
+		appEnv,
+	);
 	if (apiBaseUrl && parsedWebBaseUrl.origin === new URL(apiBaseUrl).origin) {
 		throw new Error(
 			`PUBLIC_WEB_BASE_URL must differ from EXPO_PUBLIC_API_BASE_URL when APP_ENV=${appEnv}`,

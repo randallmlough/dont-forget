@@ -193,6 +193,11 @@ describe("app config", () => {
 		{ label: "missing", webBaseUrl: undefined },
 		{ label: "invalid", webBaseUrl: "http://web.example.invalid" },
 		{
+			label: "a normalized path",
+			webBaseUrl: "https://web.example.invalid/.",
+		},
+		{ label: "a non-public host", webBaseUrl: "https://localhost" },
+		{
 			label: "the API origin",
 			webBaseUrl: "https://api.example.invalid/",
 		},

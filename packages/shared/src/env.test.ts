@@ -201,6 +201,12 @@ describe("environment config", () => {
 			expected: ["applinks:web.example.invalid"],
 			webBaseUrl: "https://web.example.invalid",
 		},
+		{
+			apiBaseUrl: "https://api.example.invalid",
+			appEnv: "production",
+			expected: ["applinks:xn--bcher-kva.example"],
+			webBaseUrl: "https://xn--bcher-kva.example",
+		},
 	] as const)("derives one normalized iOS Associated Domain for $appEnv from $webBaseUrl", ({
 		apiBaseUrl,
 		appEnv,
@@ -239,6 +245,39 @@ describe("environment config", () => {
 			"https://web.example.invalid/path",
 			"https://web.example.invalid?query=value",
 			"https://web.example.invalid#fragment",
+		]) {
+			expect(() =>
+				readIosAssociatedDomains("production", "https://api.example.invalid", {
+					PUBLIC_WEB_BASE_URL: webBaseUrl,
+				}),
+			).toThrow("PUBLIC_WEB_BASE_URL");
+		}
+	});
+
+	it("rejects non-canonical web origins normalized by the URL parser", () => {
+		for (const webBaseUrl of [
+			"https://web.example.invalid/.",
+			"https://web.example.invalid/..",
+			"https://web.example.invalid/%2e",
+			"https://web.example.invalid/%2e/",
+			"https://web.example.invalid/%2e%2e",
+			"https:////web.example.invalid",
+		]) {
+			expect(() =>
+				readIosAssociatedDomains("production", "https://api.example.invalid", {
+					PUBLIC_WEB_BASE_URL: webBaseUrl,
+				}),
+			).toThrow("PUBLIC_WEB_BASE_URL");
+		}
+	});
+
+	it("rejects web hosts unsuitable for public iOS Associated Domains", () => {
+		for (const webBaseUrl of [
+			"https://localhost",
+			"https://127.0.0.1",
+			"https://192.0.2.10",
+			"https://[2001:db8::1]",
+			"https://intranet",
 		]) {
 			expect(() =>
 				readIosAssociatedDomains("production", "https://api.example.invalid", {
