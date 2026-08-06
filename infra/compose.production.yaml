@@ -72,10 +72,12 @@ services:
     command:
       [
         "pnpm",
+        "--dir",
+        "packages/db",
         "exec",
         "drizzle-kit",
         "migrate",
-        "--config=src/server/db/drizzle/postgres.migrate.ts",
+        "--config=src/drizzle/postgres.migrate.ts",
       ]
     depends_on:
       pg-source:

@@ -3,13 +3,17 @@ FROM node:22-alpine AS builder
 RUN corepack enable
 WORKDIR /app
 
-ARG APP_ENV
-ENV APP_ENV=$APP_ENV
-
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/mobile/package.json apps/mobile/package.json
+COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/db/package.json packages/db/package.json
 COPY tooling/package.json tooling/package.json
 RUN pnpm install --frozen-lockfile
+
+ARG APP_ENV
+ENV APP_ENV=$APP_ENV
 
 COPY . .
 RUN pnpm --filter @dont-forget/web build
