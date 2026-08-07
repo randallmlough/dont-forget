@@ -107,8 +107,19 @@ shared `.env.local` link/copy behavior and creates an ignored, secret-free
 | `make db-generate` | Generate Postgres migrations from the Drizzle config in `packages/db/src/drizzle/`. |
 | `make db-migrate APP_ENV=staging` | Apply migrations to the selected environment. Only run when intentionally migrating real configured targets. Production also requires `CONFIRM_APP_ENV=production`. |
 | `make db-reset APP_ENV=local CONFIRM_DB_RESET=local` | Delete app data from the selected environment's Postgres database (directory and product tables). Production also requires `CONFIRM_APP_ENV=production`. |
-| `make db-seed` | Seed local data without resetting. Pass `EMAIL=<address>` to add an email-scoped Clerk-backed seed Household for Owner and plain Member sign-in. |
-| `make db-reseed` | Reset, migrate, and seed local deterministic development data. Pass `EMAIL=<address>` only when you intentionally want the destructive reset followed by the Clerk-backed seed path. |
+| `make db-seed` | Seed local data without resetting. Pass `EMAIL=<address>` to add an email-scoped Clerk-backed seed Household for Owner and plain Member sign-in. This command remains local-only. |
+| `make db-reseed` | Reset, migrate, and seed local deterministic development data. Pass `EMAIL=<address>` only when you intentionally want the destructive local reset followed by the Clerk-backed seed path. This command remains local-only. |
+
+## Infrastructure
+
+| Command | Description |
+| --- | --- |
+| `make infra-seed APP_ENV=staging` | After capturing `EMAIL` with the protected silent-prompt workflow in `infra/README.md`, add one confirmed EMAIL-backed QA fixture through `packages/db/scripts/seed.ts` inside staging's private network. The one-off container is removed afterward; the command does not reset, reseed, deploy, restart, or destroy volumes. Test and production are forbidden, and production Compose has no seed service. |
+
+`infra-seed` rejects a non-staging environment or blank `EMAIL` before Compose
+runs. The staging Compose service defaults an unset email to blank only so its
+inactive tools profile cannot break ordinary staging commands; the source
+policy independently refuses blank/deterministic staging seed mode.
 
 <!-- ==================================================================================== -->
 <!-- UTILITIES                                                                             -->

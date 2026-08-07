@@ -586,8 +586,6 @@ export async function seedEmailBackedPrimaryHouseholdScenario(
 			facts.rows.users.map((user) => user.id),
 			household.id,
 		);
-	});
-	await input.directory.transaction(async (tx) => {
 		await tx
 			.insert(lists)
 			.values([groceries, hardware, pharmacy, archivedList, deletedList]);

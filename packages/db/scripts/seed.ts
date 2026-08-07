@@ -1,6 +1,6 @@
-import { seedLocalDatabases } from "../src/seed";
+import { formatSeedCliError, seedDatabases } from "../src/seed";
 
-seedLocalDatabases().catch((error) => {
-	console.error(error);
+seedDatabases().catch((error) => {
+	console.error(formatSeedCliError(error));
 	process.exit(1);
 });

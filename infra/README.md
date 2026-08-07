@@ -41,6 +41,39 @@ configuration used to construct public Invitation and Household Join Code
 links; it must be the public web origin, never the API origin. The web image
 receives only the non-secret `APP_ENV` build argument.
 
+Staging has one narrow QA-fixture path for provisioning a purpose-created
+Owner through the package-owned `packages/db/scripts/seed.ts` entrypoint:
+
+```sh
+printf "Staging seed Owner email: "
+IFS= read -r -s STAGING_SEED_EMAIL
+printf "\n"
+EMAIL="$STAGING_SEED_EMAIL" make infra-seed APP_ENV=staging
+unset STAGING_SEED_EMAIL
+```
+
+`infra-seed` requires the explicit staging environment and a nonblank `EMAIL`,
+then builds and removes a one-off `tools`-profile container on the private
+`internal` network. The staging Compose service supplies the exact staging
+environment and confirmation; beyond those policy values, it supplies only the
+database URL, Clerk secret, and email required by the seed process. It
+publishes no ports and does not recreate or restart the API, web, PowerSync, or
+Postgres services.
+
+The Compose service defaults an unset `EMAIL` to blank so inactive-profile
+interpolation cannot break ordinary staging operations. Safety remains layered:
+the Make target rejects blank input before invoking Compose, and the seed source
+treats blank input as deterministic mode, which staging always refuses. Calling
+the Compose seed service directly without `EMAIL` therefore still fails closed.
+
+This is not a general staging reset or reseed workflow. Staging remains durable
+in routine operation; `make db-seed` and `make db-reseed` remain local-only,
+and test/production seeding is forbidden. Production Compose intentionally has
+no seed service. A successful staging run prints only a safe cleanup manifest.
+If persisted fixture insertion fails, its single transaction rolls back before
+the process cleans up only Clerk Users created by that invocation. No reset,
+reseed, deployment, restart, or volume operation is implied by `infra-seed`.
+
 ## Tunnel and authentication
 
 Choose three distinct public HTTPS origins and map them in Cloudflare Tunnel:

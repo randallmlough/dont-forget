@@ -164,10 +164,12 @@ db-reset: ## Delete app data from configured databases
 
 .PHONY: db-seed
 db-seed: ## Seed local deterministic data without resetting (requires migrated seed DB)
+	@test "$(APP_ENV_VALUE)" = "local" || (echo "db-seed requires APP_ENV=local" && exit 1)
 	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) --filter @dont-forget/db db:seed
 
 .PHONY: db-reseed
 db-reseed: ## Reset, migrate, and seed local deterministic development data
+	@test "$(APP_ENV_VALUE)" = "local" || (echo "db-reseed requires APP_ENV=local" && exit 1)
 	@APP_ENV="$(APP_ENV_VALUE)" EMAIL="$(EMAIL)" $(PNPM) --filter @dont-forget/db db:reseed
 
 ##@ Infrastructure
@@ -207,6 +209,12 @@ infra-build: ## Build stack images (staging/production api). Optional: SERVICE=a
 .PHONY: infra-migrate
 infra-migrate: ## Apply migrations via the stack's one-off migrate container (staging/production)
 	@$(COMPOSE) --profile tools run --build --rm migrate
+
+.PHONY: infra-seed
+infra-seed: ## Seed one confirmed email-backed staging QA fixture
+	@test "$${APP_ENV:-}" = "staging" || (echo "infra-seed requires APP_ENV=staging" && exit 1)
+	@case "$${EMAIL:-}" in *[![:space:]]*) ;; *) echo "infra-seed requires a nonblank EMAIL"; exit 1 ;; esac
+	@$(COMPOSE) --profile tools run --build --rm seed
 
 .PHONY: infra-deploy
 infra-deploy: infra-build infra-up infra-migrate ## Build images, start the stack, and migrate (staging/production)

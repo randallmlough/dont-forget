@@ -252,6 +252,57 @@ describe("database fixture scenarios", () => {
 		}
 	});
 
+	it("rolls back the whole email-backed scenario when a later List insert fails", async () => {
+		const directory = await createTestDirectoryDb();
+
+		try {
+			await expect(
+				seedEmailBackedPrimaryHouseholdScenario({
+					directory: directory.db,
+					ownerClerkUserId: "user_atomic_owner",
+					ownerEmail: "atomic@example.com",
+					memberClerkUserId: "user_atomic_member",
+					memberEmail: "atomic+member@example.com",
+					seed: {
+						users: {
+							avery: { id: "usr_atomic_owner" },
+							blake: { id: "usr_atomic_member" },
+							cameron: { id: "usr_atomic_cameron" },
+						},
+						household: { id: "hh_atomic" },
+						memberships: {
+							avery: { id: "mbr_atomic_owner" },
+							blake: { id: "mbr_atomic_member" },
+							cameron: { id: "mbr_atomic_cameron" },
+						},
+						joinCode: { id: "hjc_atomic", code: "DEFGHJKM" },
+						lists: {
+							groceries: { id: "lst_atomic_duplicate" },
+							hardware: { id: "lst_atomic_duplicate" },
+							pharmacy: { id: "lst_atomic_pharmacy" },
+							archived: { id: "lst_atomic_archived" },
+							deleted: { id: "lst_atomic_deleted" },
+						},
+					},
+				}),
+			).rejects.toThrow();
+
+			expect(
+				await Promise.all([
+					directory.db.select().from(users),
+					directory.db.select().from(households),
+					directory.db.select().from(memberships),
+					directory.db.select().from(householdJoinCodes),
+					directory.db.select().from(lists),
+					directory.db.select().from(items),
+					directory.db.select().from(itemChecks),
+				]),
+			).toEqual([[], [], [], [], [], [], []]);
+		} finally {
+			await directory.close();
+		}
+	});
+
 	it("seeds an email-backed primary Household alongside existing deterministic seed rows", async () => {
 		const directory = await createTestDirectoryDb();
 

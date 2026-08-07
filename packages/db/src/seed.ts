@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 import {
 	type AppEnv,
+	asError,
 	assertLocalDirectoryDatabaseUrl,
+	readAppEnv,
 	readClerkServerConfig,
 	readPostgresConfig,
+	redactString,
 } from "@dont-forget/shared";
 import { loadEnvFile } from "@dont-forget/shared/node";
 import { inArray, or } from "drizzle-orm";
@@ -30,12 +33,37 @@ export const SEED_TEST_PASSWORD = "testing1234";
 
 const EMAIL_SEED_HASH_LENGTH = 16;
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+const CLERK_SECRET_KEY_PATTERN = /\bsk_(?:test|live)_[A-Za-z0-9_-]+\b/g;
 
 const seedEmailSchema = z.email();
 
 export type SeedMode =
 	| { kind: "deterministic" }
 	| { kind: "clerk"; ownerEmail: string; memberEmail: string };
+
+export type SeedRuntime = {
+	appEnv: AppEnv;
+	seedMode: SeedMode;
+};
+
+type EmailSeedRuntime = {
+	appEnv: AppEnv;
+	seedMode: Extract<SeedMode, { kind: "clerk" }>;
+};
+
+export type StagingSeedManifest = {
+	householdId: string;
+	appUserIds: readonly string[];
+	membershipIds: readonly string[];
+	joinCodeRowIds: readonly string[];
+	listIds: readonly string[];
+	itemIds: readonly string[];
+	itemCheckIds: readonly string[];
+	clerkUsers: {
+		owner: { id: string; status: "created" | "reused" };
+		member: { id: string; status: "created" | "reused" };
+	};
+};
 
 type SeedEnvSource = Record<string, string | undefined>;
 
@@ -147,7 +175,7 @@ export function normalizeSeedEmail(email: string): string {
 	const normalized = email.trim().toLowerCase();
 	const result = seedEmailSchema.safeParse(normalized);
 	if (!result.success) {
-		throw new Error("Invalid EMAIL for local seed.");
+		throw new Error("Invalid EMAIL for seed.");
 	}
 	return result.data;
 }
@@ -155,7 +183,7 @@ export function normalizeSeedEmail(email: string): string {
 export function deriveSeedMemberEmail(ownerEmail: string): string {
 	const atIndex = ownerEmail.lastIndexOf("@");
 	if (atIndex === -1) {
-		throw new Error("Invalid EMAIL for local seed.");
+		throw new Error("Invalid EMAIL for seed.");
 	}
 
 	return `${ownerEmail.slice(0, atIndex)}+member${ownerEmail.slice(atIndex)}`;
@@ -164,7 +192,7 @@ export function deriveSeedMemberEmail(ownerEmail: string): string {
 function deriveSeedCameronEmail(ownerEmail: string): string {
 	const atIndex = ownerEmail.lastIndexOf("@");
 	if (atIndex === -1) {
-		throw new Error("Invalid EMAIL for local seed.");
+		throw new Error("Invalid EMAIL for seed.");
 	}
 
 	return `${ownerEmail.slice(0, atIndex)}+cameron${ownerEmail.slice(atIndex)}`;
@@ -272,9 +300,7 @@ async function ensureSeedClerkUsers(
 		});
 	} catch (error) {
 		if (owner.created) {
-			await cleanupSeedClerkUsers(client, [
-				{ user: owner.user, email: mode.ownerEmail },
-			]);
+			await cleanupSeedClerkUsers(client, [{ user: owner.user }]);
 		}
 		throw error;
 	}
@@ -283,11 +309,9 @@ async function ensureSeedClerkUsers(
 		await cleanupSeedClerkUsers(
 			client,
 			[
-				owner.created ? { user: owner.user, email: mode.ownerEmail } : null,
-				member.created ? { user: member.user, email: mode.memberEmail } : null,
-			].filter((user): user is { user: SeedClerkUser; email: string } =>
-				Boolean(user),
-			),
+				owner.created ? { user: owner.user } : null,
+				member.created ? { user: member.user } : null,
+			].filter((user): user is { user: SeedClerkUser } => Boolean(user)),
 		);
 		throw new Error(
 			`Refusing to seed because Owner ${mode.ownerEmail} and Member ${mode.memberEmail} resolve to the same Clerk User ${owner.user.id}. Use an EMAIL whose derived +member address belongs to a separate Clerk User.`,
@@ -318,7 +342,7 @@ async function ensureSeedClerkUser(
 		await client.disableUserMFA(user.id);
 		return { created: true, user };
 	} catch (error) {
-		await cleanupSeedClerkUsers(client, [{ user, email: input.email }]);
+		await cleanupSeedClerkUsers(client, [{ user }]);
 		throw error;
 	}
 }
@@ -363,16 +387,15 @@ async function findSeedClerkUserByEmail(
 
 export async function cleanupSeedClerkUsers(
 	client: SeedClerkClient,
-	usersToDelete: { user: SeedClerkUser; email: string }[],
+	usersToDelete: { user: SeedClerkUser }[],
 ): Promise<void> {
-	for (const { user, email } of usersToDelete) {
+	for (const { user } of usersToDelete) {
 		try {
 			await client.deleteUser(user.id);
 		} catch (error) {
 			console.error(
-				`[seed] Failed to delete created Clerk User ${user.id} (${email}). Delete it manually.`,
+				`[seed] ERROR: Failed to delete created Clerk User ${user.id}. Delete it manually. ${redactSeedError(asError(error).message)}`,
 			);
-			console.error(error);
 		}
 	}
 }
@@ -382,6 +405,18 @@ export function readLocalSeedMode(): SeedMode {
 	return parseOptionalSeedEmail();
 }
 
+export function readSeedRuntime(): SeedRuntime {
+	process.env.APP_ENV ??= "local";
+	const appEnv = loadEnvFile({ cwd: REPOSITORY_ROOT });
+	const seedMode = parseOptionalSeedEmail();
+	assertSeedPrerequisites({ appEnv, seedMode });
+	return { appEnv, seedMode };
+}
+
+export async function seedDatabases(): Promise<void> {
+	await seedDatabasesForRuntime(readSeedRuntime());
+}
+
 export async function seedLocalDatabases(): Promise<void> {
 	await seedLocalDatabasesForMode(readLocalSeedMode());
 }
@@ -389,12 +424,20 @@ export async function seedLocalDatabases(): Promise<void> {
 export async function seedLocalDatabasesForMode(
 	seedMode: SeedMode,
 ): Promise<void> {
-	if (seedMode.kind === "clerk") {
-		await seedEmailBackedLocalDatabases(seedMode);
+	assertLocalSeedPrerequisites({ seedMode });
+	await seedDatabasesForRuntime({ appEnv: "local", seedMode });
+}
+
+async function seedDatabasesForRuntime(input: SeedRuntime): Promise<void> {
+	if (input.seedMode.kind === "clerk") {
+		await seedEmailBackedDatabases({
+			appEnv: input.appEnv,
+			seedMode: input.seedMode,
+		});
 		return;
 	}
 
-	await seedDeterministicLocalDatabases(seedMode);
+	await seedDeterministicLocalDatabases(input.seedMode);
 }
 
 async function seedDeterministicLocalDatabases(
@@ -413,16 +456,16 @@ async function seedDeterministicLocalDatabases(
 			directory,
 		});
 
-		logSeedSummary({ scenario, seedMode });
+		logLocalSeedSummary({ scenario, seedMode });
 	} finally {
 		await pool.end();
 	}
 }
 
-async function seedEmailBackedLocalDatabases(
-	seedMode: Extract<SeedMode, { kind: "clerk" }>,
+async function seedEmailBackedDatabases(
+	input: EmailSeedRuntime,
 ): Promise<void> {
-	assertLocalSeedPrerequisites({ seedMode });
+	const { appEnv, seedMode } = input;
 	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
 	const seedTarget = emailBackedSeedTargetForMode(seedMode);
 	const clerkClient = await createProductionSeedClerkClient();
@@ -449,20 +492,22 @@ async function seedEmailBackedLocalDatabases(
 				memberEmail: seedMode.memberEmail,
 				seed: seedTarget.seed,
 			});
-			logSeedSummary({ scenario, seedMode });
+			if (appEnv === "staging") {
+				console.log(
+					formatStagingSeedSuccess(
+						stagingSeedManifest({ scenario, clerkUsers }),
+					),
+				);
+			} else {
+				logLocalSeedSummary({ scenario, seedMode });
+			}
 		} catch (error) {
 			await cleanupSeedClerkUsers(
 				clerkClient,
 				[
-					clerkUsers.owner.created
-						? { user: clerkUsers.owner.user, email: seedMode.ownerEmail }
-						: null,
-					clerkUsers.member.created
-						? { user: clerkUsers.member.user, email: seedMode.memberEmail }
-						: null,
-				].filter((user): user is { user: SeedClerkUser; email: string } =>
-					Boolean(user),
-				),
+					clerkUsers.owner.created ? { user: clerkUsers.owner.user } : null,
+					clerkUsers.member.created ? { user: clerkUsers.member.user } : null,
+				].filter((user): user is { user: SeedClerkUser } => Boolean(user)),
 			);
 			throw error;
 		}
@@ -489,16 +534,115 @@ export function assertLocalSeedPrerequisites(input: {
 	seedMode: SeedMode;
 	env?: SeedEnvSource;
 }): void {
-	assertLocalSeedEnvironment(
-		(input.env?.APP_ENV as AppEnv | undefined) ?? "local",
-	);
-	if (input.seedMode.kind === "clerk") {
-		readClerkServerConfig(input.env);
-	}
+	const env = input.env ?? process.env;
+	const appEnv = env.APP_ENV ? readAppEnv(env) : "local";
+	assertLocalSeedEnvironment(appEnv);
+	assertSeedPrerequisites({ appEnv, seedMode: input.seedMode, env });
 }
 
-function logSeedSummary(input: {
-	scenario: Awaited<ReturnType<typeof seedPrimaryHouseholdScenario>>;
+export function assertSeedPrerequisites(input: {
+	appEnv: AppEnv;
+	seedMode: SeedMode;
+	env?: SeedEnvSource;
+}): void {
+	const env: SeedEnvSource = {
+		...(input.env ?? process.env),
+		APP_ENV: input.appEnv,
+	};
+	if (input.appEnv === "local") {
+		if (input.seedMode.kind === "clerk") {
+			readClerkServerConfig(env);
+		}
+		return;
+	}
+	if (input.appEnv === "staging" && input.seedMode.kind === "deterministic") {
+		throw new Error("Staging seed requires EMAIL.");
+	}
+	if (input.appEnv === "staging" && env.CONFIRM_STAGING_SEED !== "staging") {
+		throw new Error("Staging seed requires CONFIRM_STAGING_SEED=staging.");
+	}
+	if (input.appEnv === "staging") {
+		readClerkServerConfig(env);
+		return;
+	}
+
+	throw new Error(`Seeding is forbidden for APP_ENV=${input.appEnv}.`);
+}
+
+export function formatStagingSeedSuccess(
+	manifest: StagingSeedManifest,
+): string {
+	const clerkUsers = Object.values(manifest.clerkUsers);
+	const createdCount = clerkUsers.filter(
+		(user) => user.status === "created",
+	).length;
+	const reusedCount = clerkUsers.length - createdCount;
+
+	return redactString(
+		[
+			"[seed] STAGING SEED PASS",
+			`[seed] clerk_user owner id=${manifest.clerkUsers.owner.id} status=${manifest.clerkUsers.owner.status}`,
+			`[seed] clerk_user member id=${manifest.clerkUsers.member.id} status=${manifest.clerkUsers.member.status}`,
+			`[seed] clerk_user_counts created=${createdCount} reused=${reusedCount}`,
+			`[seed] household_id=${manifest.householdId}`,
+			`[seed] app_user_ids=${manifest.appUserIds.join(",")}`,
+			`[seed] membership_ids=${manifest.membershipIds.join(",")}`,
+			`[seed] join_code_row_ids=${manifest.joinCodeRowIds.join(",")}`,
+			`[seed] list_ids=${manifest.listIds.join(",")}`,
+			`[seed] item_ids=${manifest.itemIds.join(",")}`,
+			`[seed] item_check_ids=${manifest.itemCheckIds.join(",")}`,
+			`[seed] row_counts households=1 app_users=${manifest.appUserIds.length} memberships=${manifest.membershipIds.length} join_code_rows=${manifest.joinCodeRowIds.length} lists=${manifest.listIds.length} items=${manifest.itemIds.length} item_checks=${manifest.itemCheckIds.length}`,
+		].join("\n"),
+	);
+}
+
+function stagingSeedManifest(input: {
+	scenario: Awaited<ReturnType<typeof seedEmailBackedPrimaryHouseholdScenario>>;
+	clerkUsers: EnsuredSeedClerkUsers;
+}): StagingSeedManifest {
+	return {
+		householdId: input.scenario.household.id,
+		appUserIds: Object.values(input.scenario.users).map((user) => user.id),
+		membershipIds: Object.values(input.scenario.memberships).map(
+			(membership) => membership.id,
+		),
+		joinCodeRowIds: Object.values(input.scenario.joinCodes).map(
+			(joinCode) => joinCode.id,
+		),
+		listIds: Object.values(input.scenario.lists).map((list) => list.id),
+		itemIds: Object.values(input.scenario.items).map((item) => item.id),
+		itemCheckIds: Object.values(input.scenario.itemChecks).map(
+			(itemCheck) => itemCheck.id,
+		),
+		clerkUsers: {
+			owner: {
+				id: input.clerkUsers.owner.user.id,
+				status: input.clerkUsers.owner.created ? "created" : "reused",
+			},
+			member: {
+				id: input.clerkUsers.member.user.id,
+				status: input.clerkUsers.member.created ? "created" : "reused",
+			},
+		},
+	};
+}
+
+export function formatSeedCliError(error: unknown): string {
+	return `[seed] ERROR: ${redactSeedError(asError(error).message)}`;
+}
+
+function redactSeedError(value: string): string {
+	return redactString(value)
+		.replace(CLERK_SECRET_KEY_PATTERN, "[REDACTED_CLERK_SECRET]")
+		.replaceAll(SEED_TEST_PASSWORD, "[REDACTED_SEED_PASSWORD]");
+}
+
+type SeedSummaryScenario =
+	| Awaited<ReturnType<typeof seedPrimaryHouseholdScenario>>
+	| Awaited<ReturnType<typeof seedEmailBackedPrimaryHouseholdScenario>>;
+
+function logLocalSeedSummary(input: {
+	scenario: SeedSummaryScenario;
 	seedMode: SeedMode;
 }): void {
 	const { scenario, seedMode } = input;
@@ -698,7 +842,7 @@ export function formatSeedConflictMessage(
 ): string {
 	if (seedMode.kind === "clerk") {
 		return (
-			`Refusing to seed because local seed data already exists for this EMAIL: ${conflicts.join(", ")}. ` +
+			`Refusing to seed because seed data already exists for this EMAIL: ${conflicts.join(", ")}. ` +
 			"Matching Clerk development Users were repaired before this check. " +
 			"Use a different EMAIL or remove that specific seed data before retrying. Do not run make db-reseed unless you intend to reset all local app data."
 		);

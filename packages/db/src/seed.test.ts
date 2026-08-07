@@ -1,15 +1,19 @@
 import {
 	assertLocalSeedPrerequisites,
+	assertSeedPrerequisites,
 	createSeedClerkUsers,
 	deriveSeedMemberEmail,
 	emailBackedSeedTargetForMode,
 	emailSeedDataTarget,
+	formatSeedCliError,
 	formatSeedConflictMessage,
+	formatStagingSeedSuccess,
 	normalizeSeedEmail,
 	parseOptionalSeedEmail,
 	SEED_TEST_PASSWORD,
 	type SeedClerkClient,
 	type SeedClerkUser,
+	type SeedMode,
 } from "./seed";
 
 function clerkUser(id: string, email: string): SeedClerkUser {
@@ -55,6 +59,180 @@ function mockUpdateEmailAddress() {
 		Parameters<SeedClerkClient["updateEmailAddress"]>
 	>();
 }
+
+describe("seed runtime policy", () => {
+	it("allows deterministic local seeding without confirmation", () => {
+		expect(() =>
+			assertSeedPrerequisites({
+				appEnv: "local",
+				seedMode: { kind: "deterministic" },
+				env: { APP_ENV: "local" },
+			}),
+		).not.toThrow();
+	});
+
+	it("allows EMAIL-backed local seeding without confirmation", () => {
+		expect(() =>
+			assertSeedPrerequisites({
+				appEnv: "local",
+				seedMode: {
+					kind: "clerk",
+					ownerEmail: "owner@example.com",
+					memberEmail: "owner+member@example.com",
+				},
+				env: { APP_ENV: "local", CLERK_SECRET_KEY: "sk_test_valid" },
+			}),
+		).not.toThrow();
+	});
+
+	it("refuses deterministic staging seeding", () => {
+		expect(() =>
+			assertSeedPrerequisites({
+				appEnv: "staging",
+				seedMode: { kind: "deterministic" },
+				env: {
+					APP_ENV: "staging",
+					CONFIRM_STAGING_SEED: "staging",
+				},
+			}),
+		).toThrow("Staging seed requires EMAIL");
+	});
+
+	it.each([
+		undefined,
+		"production",
+		"STAGING",
+	])("refuses EMAIL-backed staging seeding unless confirmation is exact (%s)", (confirmStagingSeed) => {
+		expect(() =>
+			assertSeedPrerequisites({
+				appEnv: "staging",
+				seedMode: {
+					kind: "clerk",
+					ownerEmail: "owner@example.com",
+					memberEmail: "owner+member@example.com",
+				},
+				env: {
+					APP_ENV: "staging",
+					CLERK_SECRET_KEY: "sk_test_valid",
+					CONFIRM_STAGING_SEED: confirmStagingSeed,
+				},
+			}),
+		).toThrow("CONFIRM_STAGING_SEED=staging");
+	});
+
+	it("allows confirmed EMAIL-backed staging seeding", () => {
+		expect(() =>
+			assertSeedPrerequisites({
+				appEnv: "staging",
+				seedMode: {
+					kind: "clerk",
+					ownerEmail: "owner@example.com",
+					memberEmail: "owner+member@example.com",
+				},
+				env: {
+					APP_ENV: "staging",
+					CLERK_SECRET_KEY: "sk_test_valid",
+					CONFIRM_STAGING_SEED: "staging",
+				},
+			}),
+		).not.toThrow();
+	});
+
+	it.each(["test", "production"] satisfies (
+		| "test"
+		| "production"
+	)[])("always refuses %s seeding", (appEnv) => {
+		const seedModes = [
+			{ kind: "deterministic" },
+			{
+				kind: "clerk",
+				ownerEmail: "owner@example.com",
+				memberEmail: "owner+member@example.com",
+			},
+		] satisfies SeedMode[];
+
+		for (const seedMode of seedModes) {
+			expect(() =>
+				assertSeedPrerequisites({
+					appEnv,
+					seedMode,
+					env: {
+						APP_ENV: appEnv,
+						CLERK_SECRET_KEY:
+							appEnv === "production" ? "sk_live_valid" : "sk_test_valid",
+						CONFIRM_APP_ENV: appEnv,
+						CONFIRM_STAGING_SEED: "staging",
+					},
+				}),
+			).toThrow(`Seeding is forbidden for APP_ENV=${appEnv}`);
+		}
+	});
+
+	it("formats a staging cleanup manifest without seed credentials or values", () => {
+		const output = formatStagingSeedSuccess({
+			householdId: "hh_staging",
+			appUserIds: ["usr_owner", "usr_member", "usr_cameron"],
+			membershipIds: ["mbr_owner", "mbr_member", "mbr_cameron"],
+			joinCodeRowIds: ["hjc_staging"],
+			listIds: ["lst_1", "lst_2", "lst_3", "lst_4", "lst_5"],
+			itemIds: Array.from({ length: 12 }, (_, index) => `itm_${index + 1}`),
+			itemCheckIds: ["chk_1", "chk_2", "chk_3"],
+			clerkUsers: {
+				owner: { id: "user_clerk_owner", status: "created" },
+				member: { id: "user_clerk_member", status: "reused" },
+			},
+		});
+
+		expect(output).toContain("STAGING SEED PASS");
+		for (const id of [
+			"hh_staging",
+			"usr_owner",
+			"usr_member",
+			"usr_cameron",
+			"mbr_owner",
+			"mbr_member",
+			"mbr_cameron",
+			"hjc_staging",
+			"user_clerk_owner",
+			"user_clerk_member",
+		]) {
+			expect(output).toContain(id);
+		}
+		expect(output).toContain("created=1 reused=1");
+		expect(output).toContain(
+			"households=1 app_users=3 memberships=3 join_code_rows=1 lists=5 items=12 item_checks=3",
+		);
+		for (const secret of [
+			"owner@example.com",
+			SEED_TEST_PASSWORD,
+			"BCDEFGHJ",
+			"invitation-token",
+		]) {
+			expect(output).not.toContain(secret);
+		}
+	});
+
+	it("formats one redacted CLI error message without a stack", () => {
+		const error = new Error(
+			`seed failed for owner@example.com with Bearer secret-token, eyJheader.payload.signature, sk_test_cli-secret, sk_live_cli-secret, and ${SEED_TEST_PASSWORD}`,
+		);
+		error.stack = "STACK_SENTINEL owner@example.com";
+
+		const output = formatSeedCliError(error);
+
+		expect(typeof output).toBe("string");
+		expect(output).toContain("[REDACTED_EMAIL]");
+		expect(output).toContain("Bearer [REDACTED]");
+		expect(output).toContain("[REDACTED_JWT]");
+		expect(output).not.toContain("owner@example.com");
+		expect(output).not.toContain("secret-token");
+		expect(output).not.toContain("eyJheader.payload.signature");
+		expect(output).not.toContain("sk_test_cli-secret");
+		expect(output).not.toContain("sk_live_cli-secret");
+		expect(output).not.toContain(SEED_TEST_PASSWORD);
+		expect(output).not.toContain("STACK_SENTINEL");
+	});
+});
 
 describe("seed EMAIL helpers", () => {
 	it("returns deterministic mode when EMAIL is missing", () => {
@@ -538,7 +716,7 @@ describe("seed Clerk adapter", () => {
 		expect(deleteUser).toHaveBeenCalledWith(owner.id);
 	});
 
-	it("logs manual cleanup details when cleanup deletion fails", async () => {
+	it("logs only redacted manual cleanup details when cleanup deletion fails", async () => {
 		const owner = clerkUser("user_seed_owner", "owner@example.com");
 		const consoleError = jest
 			.spyOn(console, "error")
@@ -560,7 +738,11 @@ describe("seed Clerk adapter", () => {
 					ReturnType<SeedClerkClient["deleteUser"]>,
 					Parameters<SeedClerkClient["deleteUser"]>
 				>()
-				.mockRejectedValueOnce(new Error("cleanup failed")),
+				.mockRejectedValueOnce(
+					new Error(
+						`cleanup failed for owner@example.com with Bearer cleanup-secret, sk_test_cleanup-secret, sk_live_cleanup-secret, and ${SEED_TEST_PASSWORD}`,
+					),
+				),
 		};
 
 		try {
@@ -571,12 +753,29 @@ describe("seed Clerk adapter", () => {
 					memberEmail: "owner+member@example.com",
 				}),
 			).rejects.toThrow("member creation failed");
+			expect(consoleError).toHaveBeenCalledTimes(1);
 			expect(consoleError).toHaveBeenCalledWith(
 				expect.stringContaining("user_seed_owner"),
 			);
 			expect(consoleError).toHaveBeenCalledWith(
+				expect.stringContaining("[REDACTED_EMAIL]"),
+			);
+			expect(consoleError).toHaveBeenCalledWith(
+				expect.stringContaining("Bearer [REDACTED]"),
+			);
+			expect(consoleError).not.toHaveBeenCalledWith(
 				expect.stringContaining("owner@example.com"),
 			);
+			expect(consoleError).not.toHaveBeenCalledWith(
+				expect.stringContaining("sk_test_cleanup-secret"),
+			);
+			expect(consoleError).not.toHaveBeenCalledWith(
+				expect.stringContaining("sk_live_cleanup-secret"),
+			);
+			expect(consoleError).not.toHaveBeenCalledWith(
+				expect.stringContaining(SEED_TEST_PASSWORD),
+			);
+			expect(consoleError).not.toHaveBeenCalledWith(expect.any(Error));
 		} finally {
 			consoleError.mockRestore();
 		}

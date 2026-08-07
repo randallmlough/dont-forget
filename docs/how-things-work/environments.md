@@ -93,6 +93,42 @@ duplicate deterministic seed data is caught intentionally. When
 exist, the Clerk development Users are repaired before the duplicate seed-data
 check refuses to insert another copy.
 
+The direct `make db-seed` and `make db-reseed` workflows remain local-only.
+Staging has one separate, additive QA-fixture command:
+
+```bash
+printf "Staging seed Owner email: "
+IFS= read -r -s STAGING_SEED_EMAIL
+printf "\n"
+EMAIL="$STAGING_SEED_EMAIL" make infra-seed APP_ENV=staging
+unset STAGING_SEED_EMAIL
+```
+
+`infra-seed` invokes `packages/db/scripts/seed.ts` in a disposable
+`tools`-profile container on staging's private database network. It requires
+EMAIL-backed mode, the explicit staging environment, and the exact staging
+confirmation supplied by the staging-only Compose service. Its process receives
+only those two policy values plus the database URL, Clerk secret, and
+purpose-created Owner email needed for the run. Production Compose has no seed
+service, and `test` and `production` are rejected by the source policy before
+Clerk or database clients are created.
+
+Compose defaults an unset staging seed `EMAIL` to blank so interpolation of the
+inactive tools profile does not break ordinary staging operations. The
+`infra-seed` Make target rejects blank input before invoking Compose, and the
+source policy independently interprets blank input as deterministic mode and
+refuses that mode in staging. Direct Compose execution without an email is
+therefore also fail-closed.
+
+This exception does not make durable staging a resettable seed sandbox. It does
+not run a reset/reseed, deploy or restart services, or touch volumes. Staging
+logs only safe fixture IDs, row counts, and created/reused Clerk status for
+exact cleanup; it never logs the email, shared password, Household Join Code
+value, Invitation token, raw error, or environment contents. All persisted
+fixture rows use one transaction, so a later product-row failure rolls them all
+back before newly-created Clerk Users are cleaned up; reused Clerk Users are
+preserved.
+
 ## Clerk
 
 Clerk only exposes development and production environments. Production uses Clerk production keys. `local`, `test`, and `staging` use Clerk development keys.

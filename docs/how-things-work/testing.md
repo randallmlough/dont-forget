@@ -116,7 +116,37 @@ make db-reseed EMAIL=email@email.com
 - `EMAIL` mode seeds 3 Members total: the Owner, the sign-inable plain Member, and Cameron as an app-only plain Member for Member-list UI coverage.
 - `db-reseed` is the explicit local destructive rebuild path: reset local app data, migrate the Postgres database, then seed. It defaults to local and no longer requires `CONFIRM_DB_RESET`.
 - `db-reset` still means reset to empty and remains confirmation-gated.
-- Seed/reseed commands fail closed outside `APP_ENV=local`; staging and production are not seed sandboxes.
+- The `db-seed` and `db-reseed` commands fail closed outside `APP_ENV=local`.
+
+Staging has one additive, confirmation-gated exception for a purpose-created QA
+Owner:
+
+```bash
+printf "Staging seed Owner email: "
+IFS= read -r -s STAGING_SEED_EMAIL
+printf "\n"
+EMAIL="$STAGING_SEED_EMAIL" make infra-seed APP_ENV=staging
+unset STAGING_SEED_EMAIL
+```
+
+This target runs the same package-owned seed entrypoint in a disposable
+`tools`-profile container attached only to staging's private database network.
+It accepts EMAIL-backed mode only, requires the exact staging confirmation,
+and prints a safe cleanup manifest instead of emails, the shared seed password,
+Household Join Code values, tokens, raw errors, or environment contents. The
+persisted Household scenario is inserted in one transaction, so a later List
+or Item failure rolls back every app row before newly-created Clerk Users are
+cleaned up. Reused Clerk Users are never deleted.
+
+The staging Compose service uses a blank default for an unset `EMAIL` so
+inactive-profile interpolation does not disrupt normal staging commands. The
+Make target rejects a blank value before Compose runs, and the source policy
+also refuses the resulting deterministic mode in staging, so bypassing Make
+cannot seed without an email.
+
+This staging path does not reset or reseed the durable staging database and
+does not deploy, restart, or destroy volumes. Automated `test` and production
+always reject seeding, and production Compose has no seed service.
 
 ## File Layout
 
