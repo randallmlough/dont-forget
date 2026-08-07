@@ -15,6 +15,7 @@ import {
 	type SeedClerkClient,
 	type SeedClerkUser,
 	type SeedMode,
+	seedEmailBackedDatabasesForRuntime,
 } from "./seed";
 
 function clerkUser(id: string, email: string): SeedClerkUser {
@@ -430,6 +431,91 @@ function seedTargetIds(
 }
 
 describe("seed Clerk adapter", () => {
+	it("refuses injected staging orchestration without exact confirmation", async () => {
+		const client: SeedClerkClient = {
+			getUserList: jest.fn(),
+			createUser: jest.fn(),
+			updateUser: jest.fn(),
+			disableUserMFA: jest.fn(),
+			updateEmailAddress: jest.fn(),
+			deleteUser: jest.fn(),
+		};
+		const createPool = jest.fn(() => {
+			throw new Error("pool must not be created");
+		});
+		const createDirectory = jest.fn(() => {
+			throw new Error("directory must not be created");
+		});
+
+		await expect(
+			seedEmailBackedDatabasesForRuntime({
+				appEnv: "staging",
+				seedMode: {
+					kind: "clerk",
+					ownerEmail: "owner@example.com",
+					memberEmail: "owner+member@example.com",
+				},
+				env: {
+					APP_ENV: "staging",
+					CLERK_SECRET_KEY: "sk_test_valid",
+				},
+				clerkClient: client,
+				createPool,
+				createDirectory,
+			}),
+		).rejects.toThrow("CONFIRM_STAGING_SEED=staging");
+		for (const clerkCall of Object.values(client)) {
+			expect(clerkCall).not.toHaveBeenCalled();
+		}
+		expect(createPool).not.toHaveBeenCalled();
+		expect(createDirectory).not.toHaveBeenCalled();
+	});
+
+	it.each(["test", "production"] satisfies (
+		| "test"
+		| "production"
+	)[])("always refuses injected %s orchestration", async (appEnv) => {
+		const client: SeedClerkClient = {
+			getUserList: jest.fn(),
+			createUser: jest.fn(),
+			updateUser: jest.fn(),
+			disableUserMFA: jest.fn(),
+			updateEmailAddress: jest.fn(),
+			deleteUser: jest.fn(),
+		};
+		const createPool = jest.fn(() => {
+			throw new Error("pool must not be created");
+		});
+		const createDirectory = jest.fn(() => {
+			throw new Error("directory must not be created");
+		});
+
+		await expect(
+			seedEmailBackedDatabasesForRuntime({
+				appEnv,
+				seedMode: {
+					kind: "clerk",
+					ownerEmail: "owner@example.com",
+					memberEmail: "owner+member@example.com",
+				},
+				env: {
+					APP_ENV: appEnv,
+					CLERK_SECRET_KEY:
+						appEnv === "production" ? "sk_live_valid" : "sk_test_valid",
+					CONFIRM_STAGING_SEED: "staging",
+				},
+				clerkClient: client,
+				createPool,
+				createDirectory,
+			}),
+		).rejects.toThrow(`Seeding is forbidden for APP_ENV=${appEnv}`);
+		for (const clerkCall of Object.values(client)) {
+			expect(clerkCall).not.toHaveBeenCalled();
+		}
+		expect(createPool).not.toHaveBeenCalled();
+		expect(createDirectory).not.toHaveBeenCalled();
+	});
+
 	it.each([
 		["Owner", "owner@example.com"],
 		["Member", "owner+member@example.com"],
@@ -494,6 +580,12 @@ describe("seed Clerk adapter", () => {
 		const updateEmailAddress = mockUpdateEmailAddress();
 		const disableUserMFA = mockDisableUserMFA();
 		const deleteUser = mockDeleteUser();
+		const createPool = jest.fn(() => {
+			throw new Error("pool must not be created");
+		});
+		const createDirectory = jest.fn(() => {
+			throw new Error("directory must not be created");
+		});
 		const client: SeedClerkClient = {
 			getUserList,
 			createUser,
@@ -504,10 +596,18 @@ describe("seed Clerk adapter", () => {
 		};
 
 		await expect(
-			assertStagingSeedClerkUsersDoNotExist(client, mode),
-		).resolves.toBeUndefined();
-		await expect(
-			createSeedClerkUsers(client, mode, { allowReuse: false }),
+			seedEmailBackedDatabasesForRuntime({
+				appEnv: "staging",
+				seedMode: mode,
+				env: {
+					APP_ENV: "staging",
+					CLERK_SECRET_KEY: "sk_test_valid",
+					CONFIRM_STAGING_SEED: "staging",
+				},
+				clerkClient: client,
+				createPool,
+				createDirectory,
+			}),
 		).rejects.toThrow(
 			"Staging seed requires new Clerk Users for both Owner and Member",
 		);
@@ -533,6 +633,93 @@ describe("seed Clerk adapter", () => {
 		expect(deleteUser).toHaveBeenCalledTimes(1);
 		expect(deleteUser).toHaveBeenCalledWith(owner.id);
 		expect(deleteUser).not.toHaveBeenCalledWith(racedMember.id);
+		expect(createPool).not.toHaveBeenCalled();
+		expect(createDirectory).not.toHaveBeenCalled();
+	});
+
+	it("cleans both fresh Clerk Users when pool creation fails", async () => {
+		const mode = {
+			kind: "clerk" as const,
+			ownerEmail: "owner@example.com",
+			memberEmail: "owner+member@example.com",
+		};
+		const owner = clerkUser("user_seed_owner", mode.ownerEmail);
+		const member = clerkUser("user_seed_member", mode.memberEmail);
+		const deleteUser = mockDeleteUser();
+		const createDirectory = jest.fn(() => {
+			throw new Error("directory must not be created");
+		});
+		const client: SeedClerkClient = {
+			getUserList: jest.fn(async () => ({ data: [] })),
+			createUser: mockCreateUser()
+				.mockResolvedValueOnce(owner)
+				.mockResolvedValueOnce(member),
+			updateUser: jest.fn(),
+			disableUserMFA: jest.fn(),
+			updateEmailAddress: jest.fn(),
+			deleteUser,
+		};
+
+		await expect(
+			seedEmailBackedDatabasesForRuntime({
+				appEnv: "staging",
+				seedMode: mode,
+				env: {
+					APP_ENV: "staging",
+					CLERK_SECRET_KEY: "sk_test_valid",
+					CONFIRM_STAGING_SEED: "staging",
+				},
+				clerkClient: client,
+				createPool: () => {
+					throw new Error("pool creation failed");
+				},
+				createDirectory,
+			}),
+		).rejects.toThrow("pool creation failed");
+		expect(deleteUser.mock.calls).toEqual([[owner.id], [member.id]]);
+		expect(createDirectory).not.toHaveBeenCalled();
+	});
+
+	it("does not clean reused local Clerk Users when DB setup fails", async () => {
+		const mode = {
+			kind: "clerk" as const,
+			ownerEmail: "owner@example.com",
+			memberEmail: "owner+member@example.com",
+		};
+		const owner = clerkUser("user_existing_owner", mode.ownerEmail);
+		const member = clerkUser("user_existing_member", mode.memberEmail);
+		const end = jest.fn(async () => undefined);
+		const deleteUser = mockDeleteUser();
+		const client: SeedClerkClient = {
+			getUserList: jest.fn(async ({ query }) => ({
+				data: query === mode.ownerEmail ? [owner] : [member],
+			})),
+			createUser: jest.fn(),
+			updateUser: mockUpdateUser()
+				.mockResolvedValueOnce(owner)
+				.mockResolvedValueOnce(member),
+			disableUserMFA: jest.fn(),
+			updateEmailAddress: jest.fn(),
+			deleteUser,
+		};
+
+		await expect(
+			seedEmailBackedDatabasesForRuntime({
+				appEnv: "local",
+				seedMode: mode,
+				env: {
+					APP_ENV: "local",
+					CLERK_SECRET_KEY: "sk_test_valid",
+				},
+				clerkClient: client,
+				createPool: () => ({ end }),
+				createDirectory: () => {
+					throw new Error("DB setup failed");
+				},
+			}),
+		).rejects.toThrow("DB setup failed");
+		expect(deleteUser).not.toHaveBeenCalled();
+		expect(end).toHaveBeenCalledTimes(1);
 	});
 
 	it("reuses an existing Owner Clerk User and repairs local seed login settings", async () => {

@@ -53,6 +53,19 @@ type EmailSeedRuntime = {
 	seedMode: Extract<SeedMode, { kind: "clerk" }>;
 };
 
+export type SeedDatabasePool = {
+	end(): Promise<void>;
+};
+
+export type SeedEmailBackedDatabasesForRuntimeInput<
+	TPool extends SeedDatabasePool,
+> = EmailSeedRuntime & {
+	env?: SeedEnvSource;
+	clerkClient: SeedClerkClient;
+	createPool(): TPool;
+	createDirectory(pool: TPool): ReturnType<typeof directoryDb>;
+};
+
 export type StagingSeedManifest = {
 	householdId: string;
 	appUserIds: readonly string[];
@@ -498,59 +511,67 @@ async function seedDeterministicLocalDatabases(
 async function seedEmailBackedDatabases(
 	input: EmailSeedRuntime,
 ): Promise<void> {
-	const { appEnv, seedMode } = input;
 	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
-	const seedTarget = emailBackedSeedTargetForMode(seedMode);
 	const clerkClient = await createProductionSeedClerkClient();
+	await seedEmailBackedDatabasesForRuntime({
+		...input,
+		clerkClient,
+		createPool: postgresPool,
+		createDirectory: directoryDb,
+	});
+}
+
+export async function seedEmailBackedDatabasesForRuntime<
+	TPool extends SeedDatabasePool,
+>(input: SeedEmailBackedDatabasesForRuntimeInput<TPool>): Promise<void> {
+	const { appEnv, seedMode, env, clerkClient, createPool, createDirectory } =
+		input;
+	assertSeedPrerequisites({ appEnv, seedMode, env });
+	const seedTarget = emailBackedSeedTargetForMode(seedMode);
 	if (appEnv === "staging") {
 		await assertStagingSeedClerkUsersDoNotExist(clerkClient, seedMode);
 	}
-
-	const pool = postgresPool();
+	const clerkUsers = await ensureSeedClerkUsers(clerkClient, seedMode, {
+		allowReuse: appEnv === "local",
+	});
+	let pool: TPool | undefined;
 
 	try {
-		const directory = directoryDb(pool);
-		const clerkUsers = await ensureSeedClerkUsers(clerkClient, seedMode, {
-			allowReuse: appEnv === "local",
+		pool = createPool();
+		const directory = createDirectory(pool);
+		await assertSeedDataDoesNotExist({
+			directory,
+			seedTarget: emailSeedDataTarget(seedTarget, seedMode, [
+				clerkUsers.owner.user.id,
+				clerkUsers.member.user.id,
+			]),
 		});
-
-		try {
-			await assertSeedDataDoesNotExist({
-				directory,
-				seedTarget: emailSeedDataTarget(seedTarget, seedMode, [
-					clerkUsers.owner.user.id,
-					clerkUsers.member.user.id,
-				]),
-			});
-			const scenario = await seedEmailBackedPrimaryHouseholdScenario({
-				directory,
-				ownerClerkUserId: clerkUsers.owner.user.id,
-				ownerEmail: seedMode.ownerEmail,
-				memberClerkUserId: clerkUsers.member.user.id,
-				memberEmail: seedMode.memberEmail,
-				seed: seedTarget.seed,
-			});
-			if (appEnv === "staging") {
-				console.log(
-					formatStagingSeedSuccess(
-						stagingSeedManifest({ scenario, clerkUsers }),
-					),
-				);
-			} else {
-				logLocalSeedSummary({ scenario, seedMode });
-			}
-		} catch (error) {
-			await cleanupSeedClerkUsers(
-				clerkClient,
-				[
-					clerkUsers.owner.created ? { user: clerkUsers.owner.user } : null,
-					clerkUsers.member.created ? { user: clerkUsers.member.user } : null,
-				].filter((user): user is { user: SeedClerkUser } => Boolean(user)),
+		const scenario = await seedEmailBackedPrimaryHouseholdScenario({
+			directory,
+			ownerClerkUserId: clerkUsers.owner.user.id,
+			ownerEmail: seedMode.ownerEmail,
+			memberClerkUserId: clerkUsers.member.user.id,
+			memberEmail: seedMode.memberEmail,
+			seed: seedTarget.seed,
+		});
+		if (appEnv === "staging") {
+			console.log(
+				formatStagingSeedSuccess(stagingSeedManifest({ scenario, clerkUsers })),
 			);
-			throw error;
+		} else {
+			logLocalSeedSummary({ scenario, seedMode });
 		}
+	} catch (error) {
+		await cleanupSeedClerkUsers(
+			clerkClient,
+			[
+				clerkUsers.owner.created ? { user: clerkUsers.owner.user } : null,
+				clerkUsers.member.created ? { user: clerkUsers.member.user } : null,
+			].filter((user): user is { user: SeedClerkUser } => Boolean(user)),
+		);
+		throw error;
 	} finally {
-		await pool.end();
+		await pool?.end();
 	}
 }
 
