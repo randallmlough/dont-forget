@@ -1,6 +1,7 @@
 import {
 	assertLocalSeedPrerequisites,
 	assertSeedPrerequisites,
+	assertStagingSeedClerkUsersDoNotExist,
 	createSeedClerkUsers,
 	deriveSeedMemberEmail,
 	emailBackedSeedTargetForMode,
@@ -179,7 +180,7 @@ describe("seed runtime policy", () => {
 			itemCheckIds: ["chk_1", "chk_2", "chk_3"],
 			clerkUsers: {
 				owner: { id: "user_clerk_owner", status: "created" },
-				member: { id: "user_clerk_member", status: "reused" },
+				member: { id: "user_clerk_member", status: "created" },
 			},
 		});
 
@@ -198,7 +199,7 @@ describe("seed runtime policy", () => {
 		]) {
 			expect(output).toContain(id);
 		}
-		expect(output).toContain("created=1 reused=1");
+		expect(output).toContain("created=2 reused=0");
 		expect(output).toContain(
 			"households=1 app_users=3 memberships=3 join_code_rows=1 lists=5 items=12 item_checks=3",
 		);
@@ -429,6 +430,111 @@ function seedTargetIds(
 }
 
 describe("seed Clerk adapter", () => {
+	it.each([
+		["Owner", "owner@example.com"],
+		["Member", "owner+member@example.com"],
+	] as const)("rejects staging when the exact %s Clerk User already exists", async (_role, existingEmail) => {
+		const mode = {
+			kind: "clerk" as const,
+			ownerEmail: "owner@example.com",
+			memberEmail: "owner+member@example.com",
+		};
+		const existing = clerkUser("user_existing", existingEmail);
+		const getUserList = jest.fn(async ({ query }: { query: string }) => ({
+			data: query === existingEmail ? [existing] : [],
+		}));
+		const client: SeedClerkClient = {
+			getUserList,
+			createUser: jest.fn(),
+			updateUser: jest.fn(),
+			disableUserMFA: jest.fn(),
+			updateEmailAddress: jest.fn(),
+			deleteUser: jest.fn(),
+		};
+
+		await expect(
+			assertStagingSeedClerkUsersDoNotExist(client, mode),
+		).rejects.toThrow(
+			"Staging seed requires new Clerk Users for both Owner and Member",
+		);
+		expect(getUserList.mock.calls).toEqual([
+			[{ query: mode.ownerEmail }],
+			[{ query: mode.memberEmail }],
+		]);
+		for (const mutation of [
+			client.createUser,
+			client.updateUser,
+			client.updateEmailAddress,
+			client.disableUserMFA,
+			client.deleteUser,
+		]) {
+			expect(mutation).not.toHaveBeenCalled();
+		}
+	});
+
+	it("refuses a Clerk User that appears after staging preflight", async () => {
+		const mode = {
+			kind: "clerk" as const,
+			ownerEmail: "owner@example.com",
+			memberEmail: "owner+member@example.com",
+		};
+		const owner = clerkUser("user_seed_owner", mode.ownerEmail);
+		const racedMember = clerkUser("user_existing_member", mode.memberEmail);
+		const getUserList = jest
+			.fn<
+				ReturnType<SeedClerkClient["getUserList"]>,
+				Parameters<SeedClerkClient["getUserList"]>
+			>()
+			.mockResolvedValueOnce({ data: [] })
+			.mockResolvedValueOnce({ data: [] })
+			.mockResolvedValueOnce({ data: [] })
+			.mockResolvedValueOnce({ data: [racedMember] });
+		const createUser = mockCreateUser().mockResolvedValueOnce(owner);
+		const updateUser = mockUpdateUser();
+		const updateEmailAddress = mockUpdateEmailAddress();
+		const disableUserMFA = mockDisableUserMFA();
+		const deleteUser = mockDeleteUser();
+		const client: SeedClerkClient = {
+			getUserList,
+			createUser,
+			updateUser,
+			disableUserMFA,
+			updateEmailAddress,
+			deleteUser,
+		};
+
+		await expect(
+			assertStagingSeedClerkUsersDoNotExist(client, mode),
+		).resolves.toBeUndefined();
+		await expect(
+			createSeedClerkUsers(client, mode, { allowReuse: false }),
+		).rejects.toThrow(
+			"Staging seed requires new Clerk Users for both Owner and Member",
+		);
+
+		expect(getUserList.mock.calls).toEqual([
+			[{ query: mode.ownerEmail }],
+			[{ query: mode.memberEmail }],
+			[{ query: mode.ownerEmail }],
+			[{ query: mode.memberEmail }],
+		]);
+		expect(createUser).toHaveBeenCalledTimes(1);
+		expect(updateUser).not.toHaveBeenCalled();
+		expect(updateEmailAddress).toHaveBeenCalledTimes(1);
+		expect(updateEmailAddress).toHaveBeenCalledWith(
+			owner.primaryEmailAddressId,
+			{
+				verified: true,
+				primary: true,
+			},
+		);
+		expect(disableUserMFA).toHaveBeenCalledWith(owner.id);
+		expect(disableUserMFA).not.toHaveBeenCalledWith(racedMember.id);
+		expect(deleteUser).toHaveBeenCalledTimes(1);
+		expect(deleteUser).toHaveBeenCalledWith(owner.id);
+		expect(deleteUser).not.toHaveBeenCalledWith(racedMember.id);
+	});
+
 	it("reuses an existing Owner Clerk User and repairs local seed login settings", async () => {
 		const owner = clerkUser("user_existing_owner", "owner@example.com");
 		const member = clerkUser("user_seed_member", "owner+member@example.com");

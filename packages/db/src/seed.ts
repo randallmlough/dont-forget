@@ -34,6 +34,8 @@ export const SEED_TEST_PASSWORD = "testing1234";
 const EMAIL_SEED_HASH_LENGTH = 16;
 const JOIN_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const CLERK_SECRET_KEY_PATTERN = /\bsk_(?:test|live)_[A-Za-z0-9_-]+\b/g;
+const STAGING_SEED_EXISTING_CLERK_USER_ERROR =
+	"Staging seed requires new Clerk Users for both Owner and Member.";
 
 const seedEmailSchema = z.email();
 
@@ -112,6 +114,10 @@ type EnsuredSeedClerkUser = {
 type EnsuredSeedClerkUsers = {
 	owner: EnsuredSeedClerkUser;
 	member: EnsuredSeedClerkUser;
+};
+
+export type SeedClerkUserPolicy = {
+	allowReuse: boolean;
 };
 
 type SeedClerkUserInput = {
@@ -276,28 +282,51 @@ export async function createProductionSeedClerkClient(): Promise<SeedClerkClient
 export async function createSeedClerkUsers(
 	client: SeedClerkClient,
 	mode: Extract<SeedMode, { kind: "clerk" }>,
+	policy: SeedClerkUserPolicy = { allowReuse: true },
 ): Promise<SeedClerkUsers> {
-	const users = await ensureSeedClerkUsers(client, mode);
+	const users = await ensureSeedClerkUsers(client, mode, policy);
 	return { owner: users.owner.user, member: users.member.user };
+}
+
+export async function assertStagingSeedClerkUsersDoNotExist(
+	client: SeedClerkClient,
+	mode: Extract<SeedMode, { kind: "clerk" }>,
+): Promise<void> {
+	const [owner, member] = await Promise.all([
+		findSeedClerkUserByEmail(client, mode.ownerEmail),
+		findSeedClerkUserByEmail(client, mode.memberEmail),
+	]);
+	if (!owner && !member) return;
+
+	throw new Error(STAGING_SEED_EXISTING_CLERK_USER_ERROR);
 }
 
 async function ensureSeedClerkUsers(
 	client: SeedClerkClient,
 	mode: Extract<SeedMode, { kind: "clerk" }>,
+	policy: SeedClerkUserPolicy,
 ): Promise<EnsuredSeedClerkUsers> {
-	const owner = await ensureSeedClerkUser(client, {
-		email: mode.ownerEmail,
-		firstName: "Seed",
-		lastName: "Owner",
-	});
+	const owner = await ensureSeedClerkUser(
+		client,
+		{
+			email: mode.ownerEmail,
+			firstName: "Seed",
+			lastName: "Owner",
+		},
+		policy,
+	);
 
 	let member: EnsuredSeedClerkUser;
 	try {
-		member = await ensureSeedClerkUser(client, {
-			email: mode.memberEmail,
-			firstName: "Seed",
-			lastName: "Member",
-		});
+		member = await ensureSeedClerkUser(
+			client,
+			{
+				email: mode.memberEmail,
+				firstName: "Seed",
+				lastName: "Member",
+			},
+			policy,
+		);
 	} catch (error) {
 		if (owner.created) {
 			await cleanupSeedClerkUsers(client, [{ user: owner.user }]);
@@ -324,9 +353,13 @@ async function ensureSeedClerkUsers(
 async function ensureSeedClerkUser(
 	client: SeedClerkClient,
 	input: SeedClerkUserInput,
+	policy: SeedClerkUserPolicy,
 ): Promise<EnsuredSeedClerkUser> {
 	const existing = await findSeedClerkUserByEmail(client, input.email);
 	if (existing) {
+		if (!policy.allowReuse) {
+			throw new Error(STAGING_SEED_EXISTING_CLERK_USER_ERROR);
+		}
 		const user = await client.updateUser(
 			existing.id,
 			seedClerkUserUpdate(input),
@@ -469,12 +502,17 @@ async function seedEmailBackedDatabases(
 	assertLocalDirectoryDatabaseUrl(readPostgresConfig());
 	const seedTarget = emailBackedSeedTargetForMode(seedMode);
 	const clerkClient = await createProductionSeedClerkClient();
+	if (appEnv === "staging") {
+		await assertStagingSeedClerkUsersDoNotExist(clerkClient, seedMode);
+	}
 
 	const pool = postgresPool();
 
 	try {
 		const directory = directoryDb(pool);
-		const clerkUsers = await ensureSeedClerkUsers(clerkClient, seedMode);
+		const clerkUsers = await ensureSeedClerkUsers(clerkClient, seedMode, {
+			allowReuse: appEnv === "local",
+		});
 
 		try {
 			await assertSeedDataDoesNotExist({
