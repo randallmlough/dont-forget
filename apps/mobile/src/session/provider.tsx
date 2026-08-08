@@ -255,8 +255,44 @@ export function AuthenticatedAppSessionProvider({
 			}
 
 			async function executeActivation(attempt: number, allowCached: boolean) {
+				let session: SessionBootstrap;
 				try {
-					const session = await bootstrapService.getSession(getToken);
+					session = await bootstrapService.getSession(getToken);
+				} catch (error) {
+					if (allowCached) {
+						try {
+							const persistedSession =
+								await readPersistedAuthenticatedAppSessionProp();
+							if (persistedSession && !activationSuperseded(attempt)) {
+								applyResult(
+									reduceSessionMachine(machineRef.current, {
+										type: "activationFallbackRequested",
+										attempt,
+										session: persistedSession,
+									}),
+								);
+								return;
+							}
+						} catch (readError) {
+							logger.error("authenticated app session restore read failed", {
+								error: asError(readError),
+							});
+						}
+					}
+					logger.error("authenticated app session activation failed", {
+						error: asError(error),
+					});
+					applyResult(
+						reduceSessionMachine(machineRef.current, {
+							type: "activationFailed",
+							attempt,
+							allowCached,
+						}),
+					);
+					return;
+				}
+
+				try {
 					// `attempt` is the machine's only cancellation token: consult it before
 					// starting the next side effect; terminal results are always dispatched
 					// and the reducer alone decides what a stale one means (including
@@ -328,6 +364,7 @@ export function AuthenticatedAppSessionProvider({
 			getToken,
 			logger,
 			persistAuthenticatedAppSessionProp,
+			readPersistedAuthenticatedAppSessionProp,
 		],
 	);
 

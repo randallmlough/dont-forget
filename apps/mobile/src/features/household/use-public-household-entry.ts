@@ -16,6 +16,11 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 
 type PublicEntryKind = "invitation" | "joinCode";
 
+type PublicHouseholdEntryClient = Pick<
+	HouseholdApiClient,
+	"acceptInvitation" | "joinByCode" | "previewInvitation" | "previewJoinCode"
+>;
+
 export type PublicHouseholdEntryState =
 	| { status: "loading" }
 	| { status: "unavailable"; message: string }
@@ -62,7 +67,7 @@ export function usePublicHouseholdEntry({
 	kind: PublicEntryKind;
 	secret: string | null;
 	reloadSession: () => void;
-	client?: HouseholdApiClient;
+	client?: PublicHouseholdEntryClient;
 }): {
 	state: PublicHouseholdEntryState;
 	submit: () => Promise<void>;
@@ -75,11 +80,11 @@ export function usePublicHouseholdEntry({
 	// and event handlers because react-hooks/refs forbids creating the
 	// token-forwarding closure during render.
 	const getTokenRef = useRef(getToken);
-	const defaultClientRef = useRef<HouseholdApiClient | null>(null);
+	const defaultClientRef = useRef<PublicHouseholdEntryClient | null>(null);
 	useEffect(() => {
 		getTokenRef.current = getToken;
 	}, [getToken]);
-	const resolveClient = useCallback((): HouseholdApiClient => {
+	const resolveClient = useCallback((): PublicHouseholdEntryClient => {
 		if (clientProp) return clientProp;
 		defaultClientRef.current ??= createHouseholdApiClient({
 			getToken: () => getTokenRef.current(),
@@ -157,7 +162,7 @@ export function usePublicHouseholdEntry({
 			}
 			reloadSession();
 			dispatch({ type: "complete", entryKey, message: "Household joined." });
-			router.replace("/");
+			router.dismissTo("/");
 		} catch (error) {
 			toast.error(messageFromError(error));
 			dispatch({ type: "failed", entryKey });

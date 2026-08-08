@@ -169,6 +169,40 @@ describe("reduceSessionMachine", () => {
 		expect(result.effects).toEqual([{ type: "markSessionHint", session }]);
 	});
 
+	it("restores a persisted session after signed-in cold-start activation fails", () => {
+		const session = sessionFixture();
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged(),
+		);
+		const fallback = reduceSessionMachine(activating.state, {
+			type: "activationFallbackRequested",
+			attempt: 1,
+			session,
+		});
+
+		expect(fallback.state.pendingActivationAttempt).toBeNull();
+		expect(fallback.state.pendingRestoreAttempt).toBe(1);
+		expect(fallback.effects).toEqual([
+			{ type: "restoreSession", attempt: 1, session },
+		]);
+
+		const restored = reduceSessionMachine(fallback.state, {
+			type: "sessionRestoreSucceeded",
+			attempt: 1,
+			session,
+		});
+
+		expect(restored.state.view).toEqual({
+			state: { status: "ready", refreshing: false },
+			session,
+		});
+		expect(restored.state.readySessionSource).toBe("restored");
+		expect(restored.effects).toEqual([
+			{ type: "trackSessionLoaded", source: "cached", session },
+		]);
+	});
+
 	it("restores a persisted session after a signed-out cold start observation", () => {
 		const session = sessionFixture();
 		const signedOut = reduceSessionMachine(

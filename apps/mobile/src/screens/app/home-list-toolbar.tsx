@@ -24,14 +24,15 @@ import { scheduleOnRN } from "react-native-worklets";
  *
  * Nothing caps how many Lists a Household keeps, and the toolbar hands this view
  * to UIKit as a bar item sized from its own frame, so a dot per List would grow
- * the strip until it clipped itself or the Search and Choose List buttons beside
- * it. The strip instead shows at most `PAGE_CONTROL_MAX_DOTS` dots, always at
- * full size, and windows the Lists past that: ten slots plus a chevron gutter on
- * each side is 200pt, inside the roughly 208pt those two buttons and the bar's
- * own margins leave free on the narrowest supported iPhone (375pt). The gutters
- * are reserved for as long as the Lists overflow so the dots keep their place
- * when a chevron comes and goes.
+ * the strip until it clipped itself or the fixed edge slots beside it. The strip
+ * instead shows at most `PAGE_CONTROL_MAX_DOTS` dots, always at full size, and
+ * windows the Lists past that: ten slots plus a chevron gutter on each side is
+ * 200pt, inside the roughly 208pt the edge slots and the bar's own margins leave
+ * free on the narrowest supported iPhone (375pt). The gutters are reserved for
+ * as long as the Lists overflow so the dots keep their place when a chevron
+ * comes and goes.
  */
+const TOOLBAR_ACTION_SLOT_WIDTH = 44;
 const PAGE_DOT_SIZE = 7;
 const PAGE_DOT_SLOT_WIDTH = 16;
 const PAGE_CONTROL_HEIGHT = 44;
@@ -56,9 +57,9 @@ export type HomeListToolbarProps = {
 };
 
 /**
- * Home's native bottom toolbar: Search on the left, the List page control in
- * the middle, and the List picker on the right. While the picker is up the
- * whole bar becomes its close button, which is the only action that surface
+ * Home's native bottom toolbar: the List page control centred between an empty
+ * leading action slot and the List picker on the right. While the picker is up
+ * the whole bar becomes its close button, which is the only action that surface
  * offers.
  */
 export function HomeListToolbar({
@@ -88,14 +89,7 @@ export function HomeListToolbar({
 
 	return (
 		<Stack.Toolbar>
-			{/* Searching Lists and Items does not exist yet. The bar reserves its
-			    place so the page control stays centred once it does. */}
-			<Stack.Toolbar.Button
-				accessibilityHint="Searching Lists and Items is not available yet"
-				accessibilityLabel="Search"
-				disabled
-				icon="magnifyingglass"
-			/>
+			<Stack.Toolbar.Spacer width={TOOLBAR_ACTION_SLOT_WIDTH} />
 			<Stack.Toolbar.Spacer />
 			<Stack.Toolbar.View>
 				<HomeListPageControl

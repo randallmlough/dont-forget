@@ -647,13 +647,10 @@ describe("Home bottom toolbar", () => {
 		showLists([groceriesListSummary, pantryListSummary, hardwareListSummary]);
 	});
 
-	it("reserves the Search placement without offering a search yet", async () => {
+	it("does not expose Search before searching Lists and Items exists", async () => {
 		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
 
-		expect(screen.getByRole("button", { name: "Search" })).toHaveProp(
-			"accessibilityState",
-			{ disabled: true },
-		);
+		expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
 	});
 
 	it("names the focused List on the page control for assistive technology", async () => {

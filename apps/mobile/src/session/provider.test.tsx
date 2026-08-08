@@ -125,6 +125,46 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
 	});
 
+	it("restores a persisted Authenticated App Session when signed-in bootstrap is offline during cold start", async () => {
+		const session = appSessionFixture({ displayName: "Cached Avery" });
+		const analytics = createMockAnalytics();
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
+		const connectDatabase = connectDatabaseFixture();
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockResolvedValueOnce(session);
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
+		expect(screen.getByText("hh_avery")).toBeTruthy();
+		expect(screen.getByText("ready")).toBeTruthy();
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+		expect(readPersistedAuthenticatedAppSession).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(analytics.track).toHaveBeenCalledWith(
+			"authenticated_app_session_loaded",
+			{
+				household_id: "hh_avery",
+				member_role: "owner",
+				member_count: 1,
+				source: "cached",
+			},
+		);
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
 	it("surfaces restore connect failures and retries the retained payload", async () => {
 		const connectError = new Error("restore connect failed");
 		const session = appSessionFixture({ displayName: "Cached Avery" });

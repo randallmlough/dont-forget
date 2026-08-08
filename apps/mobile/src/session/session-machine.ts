@@ -49,6 +49,11 @@ export type SessionMachineEvent =
 	| { type: "signOutSucceeded"; signedIn: boolean }
 	| { type: "signOutFailed"; authReady: boolean; signedIn: boolean }
 	| { type: "activationSucceeded"; attempt: number; session: SessionBootstrap }
+	| {
+			type: "activationFallbackRequested";
+			attempt: number;
+			session: SessionBootstrap;
+	  }
 	| { type: "activationFailed"; attempt: number; allowCached: boolean }
 	| { type: "sessionRestoreRequested"; session: SessionBootstrap }
 	| {
@@ -202,6 +207,21 @@ export function reduceSessionMachine(
 				effects: [{ type: "markSessionHint", session: event.session }],
 			};
 		}
+		case "activationFallbackRequested":
+			if (
+				event.attempt !== state.attempt ||
+				state.pendingActivationAttempt !== event.attempt
+			) {
+				return noChange(state);
+			}
+			return startRestore(
+				{
+					...state,
+					pendingActivationAttempt: null,
+					pendingActivationRestoredUserId: null,
+				},
+				event.session,
+			);
 		case "activationFailed": {
 			if (event.attempt !== state.attempt) {
 				return reduceStaleActivation(state, event);
@@ -244,8 +264,7 @@ export function reduceSessionMachine(
 		case "sessionRestoreSucceeded": {
 			if (
 				event.attempt !== state.attempt ||
-				state.pendingRestoreAttempt !== event.attempt ||
-				!sessionCanBeRestored(state)
+				state.pendingRestoreAttempt !== event.attempt
 			) {
 				return reduceStaleSessionConnection(state);
 			}

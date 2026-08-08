@@ -8,6 +8,7 @@ import { Alert, Pressable, Text } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 const APPLE_CANCELED_CODE = "ERR_REQUEST_CANCELED";
+const APPLE_CANCELED_MESSAGE = "The user canceled the authorization attempt";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -112,10 +113,13 @@ async function transferToSignUp(
 
 function isAppleCanceledError(error: unknown): boolean {
 	return (
-		typeof error === "object" &&
-		error !== null &&
-		"code" in error &&
-		(error as { code?: unknown }).code === APPLE_CANCELED_CODE
+		(typeof error === "object" &&
+			error !== null &&
+			"code" in error &&
+			(error as { code?: unknown }).code === APPLE_CANCELED_CODE) ||
+		(error instanceof Error &&
+			(error.message === APPLE_CANCELED_MESSAGE ||
+				error.message === `${APPLE_CANCELED_MESSAGE}.`))
 	);
 }
 
