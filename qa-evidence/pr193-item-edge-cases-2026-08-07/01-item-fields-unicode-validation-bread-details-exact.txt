@@ -1,0 +1,36 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 image Description: gearshape.fill, Secondary Actions: Cancel
+		7 button Description: Cancel Item Details, Help: Discards detail changes and returns to inline editing, Secondary Actions: Cancel
+		8 button Description: Save Item, Help: Saves this Item, Secondary Actions: Cancel
+		9 heading Description: Details, Secondary Actions: Cancel
+		10 text Description: ITEM DETAILS, Secondary Actions: Cancel
+		11 Group (settable, string) Description: Item name, Value: QA 193 Bread, Secondary Actions: Cancel
+		12 Group (settable, string) Description: Item notes, Value: Crème brûlée & 50% 🥛, Secondary Actions: Cancel
+		13 text field (settable, string) Description: Item quantity, Value: 2 packs, Placeholder: Quantity, such as 2 kg, Secondary Actions: Cancel
+		14 button Description: List, QA 193 Primary Renamed 20260807, Help: Opens the available Lists, Secondary Actions: Cancel
+		15 button Description: Delete Item, Help: Deletes this Item, Secondary Actions: Cancel
+	16 toolbar
+		17 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		18 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		19 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	20 close button
+	21 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	22 minimize button
+	23 text iPhone 17 Pro iOS 26.5
+24 menu bar
+	25 Simulator
+	26 File
+	27 Edit
+	28 Device
+	29 I/O
+	30 Features
+	31 Window
+	32 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

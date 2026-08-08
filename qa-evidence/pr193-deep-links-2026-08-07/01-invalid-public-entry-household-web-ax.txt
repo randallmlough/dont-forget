@@ -1,0 +1,32 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 button Description: Don't Forget Staging, Open in the Don't Forget Staging app, OPEN, Secondary Actions: Cancel
+		7 button (disabled) Description: Back, ID: BackButton, Secondary Actions: Cancel
+		8 button Description: Page Menu, ID: PageFormatMenuButton, Secondary Actions: Cancel
+		9 text field (settable, string) Description: Address, Value: ‎dontforget-staging-web.randylough.dev, ID: TabBarItemTitle, Secondary Actions: Cancel
+		10 button Description: refresh, ID: ReloadButton, Secondary Actions: Cancel
+		11 button Description: More, ID: MoreMenuButton, Secondary Actions: Cancel
+	12 toolbar
+		13 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		14 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		15 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	16 close button
+	17 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	18 minimize button
+	19 text iPhone 17 Pro iOS 26.5
+20 menu bar
+	21 Simulator
+	22 File
+	23 Edit
+	24 Device
+	25 I/O
+	26 Features
+	27 Window
+	28 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

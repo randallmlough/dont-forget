@@ -1,0 +1,26 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 image Description: gearshape.fill, Secondary Actions: Cancel
+	6 toolbar
+		7 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		8 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		9 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	10 close button
+	11 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	12 minimize button
+	13 text iPhone 17 Pro iOS 26.5
+14 menu bar
+	15 Simulator
+	16 File
+	17 Edit
+	18 Device
+	19 I/O
+	20 Features
+	21 Window
+	22 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

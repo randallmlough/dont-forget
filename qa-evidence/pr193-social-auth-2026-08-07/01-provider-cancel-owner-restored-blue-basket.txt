@@ -1,0 +1,50 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 text Description: DON'T FORGET, Secondary Actions: Cancel
+		7 text Description: Settings, Secondary Actions: Cancel
+		8 text Description: YOUR APP, Secondary Actions: Cancel
+		9 button Description: Profile, Secondary Actions: Cancel
+		10 element Description: Appearance, Secondary Actions: Cancel
+		11 text Description: HOUSEHOLD, Secondary Actions: Cancel
+		12 button Description: Household, Secondary Actions: Cancel
+		13 button Description: Members & Invitations, Secondary Actions: Cancel
+		14 button Description: Switch Household, Secondary Actions: Cancel
+		15 text Description: ABOUT, Secondary Actions: Cancel
+		16 text Description: Version, Secondary Actions: Cancel
+		17 text Description: 1.0.0 (staging), Secondary Actions: Cancel
+		18 button Description: Open navigation, Secondary Actions: Cancel
+		19 text Description: HOUSEHOLDS, Secondary Actions: Cancel
+		20 text Description: Switch Household, Secondary Actions: Cancel
+		21 text Description: Choose the Household you want to use., Secondary Actions: Cancel
+		22 text Description: YOUR HOUSEHOLDS, Secondary Actions: Cancel
+		23 button (selected, disabled) Description: Blue Basket, Secondary Actions: Cancel
+		24 button Description: QA 193 Alternate Renamed, Help: Switches to QA 193 Alternate Renamed, Secondary Actions: Cancel
+		25 text Description: ADD A HOUSEHOLD, Secondary Actions: Cancel
+		26 button Description: Create Household, Secondary Actions: Cancel
+		27 button Description: Join with Code, Secondary Actions: Cancel
+		28 text Description: Your Lists change with the selected Household., Secondary Actions: Cancel
+		29 image Description: gearshape.fill, Secondary Actions: Cancel
+	30 toolbar
+		31 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		32 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		33 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	34 close button
+	35 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	36 minimize button
+	37 text iPhone 17 Pro iOS 26.5
+38 menu bar
+	39 Simulator
+	40 File
+	41 Edit
+	42 Device
+	43 I/O
+	44 Features
+	45 Window
+	46 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

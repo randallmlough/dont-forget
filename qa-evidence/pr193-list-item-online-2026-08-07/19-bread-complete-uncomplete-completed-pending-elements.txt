@@ -1,0 +1,38 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 heading Description: QA 193 Primary Renamed 20260807, Secondary Actions: Cancel
+		7 text Description: 1 of 3 Items checked, Secondary Actions: Cancel
+		8 text Description: Pending sync, Secondary Actions: Cancel
+		9 element Description: QA 193 Oat Milk, Help: Marks the Item complete, Value: checkbox, unchecked, Secondary Actions: Cancel
+		10 element Description: Edit QA 193 Oat Milk, Help: Edits the Item inline, Secondary Actions: Cancel
+		11 element Description: QA 193 Apples, Help: Marks the Item complete, Value: checkbox, unchecked, Secondary Actions: Cancel
+		12 button Description: Edit QA 193 Apples, Help: Edits the Item inline, Secondary Actions: Cancel
+		13 button Description: Edit QA 193 Bread, Help: Edits the Item inline, Secondary Actions: Cancel
+		14 element Description: QA 193 Bread, Help: Marks the Item incomplete, Value: checkbox, checked, Secondary Actions: Cancel
+		15 button Description: Add Item, Help: Starts adding Items to the Current List, ID: home-add-item-button, Secondary Actions: Cancel
+		16 container Description: Toolbar, Secondary Actions: Cancel
+		17 image Description: gearshape.fill, Secondary Actions: Cancel
+	18 toolbar
+		19 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		20 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		21 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	22 close button
+	23 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	24 minimize button
+	25 text iPhone 17 Pro iOS 26.5
+26 menu bar
+	27 Simulator
+	28 File
+	29 Edit
+	30 Device
+	31 I/O
+	32 Features
+	33 Window
+	34 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

@@ -1,0 +1,38 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 text Description: Don't Forget, Secondary Actions: Cancel
+		7 text Description: Shared shopping lists for your household., Secondary Actions: Cancel
+		8 button Description: Sign in with Apple, Secondary Actions: Cancel
+		9 button Description: Continue with Google, Secondary Actions: Cancel
+		10 text Description: or, Secondary Actions: Cancel
+		11 text Description: Email, Secondary Actions: Cancel
+		12 text field (settable, string) Description: Email, Secondary Actions: Cancel
+		13 text Description: Password, Secondary Actions: Cancel
+		14 secure text field (settable, string) Description: Password, Secondary Actions: Cancel
+		15 button Description: Sign in, Secondary Actions: Cancel
+		16 text Description: Don't have an account? , Secondary Actions: Cancel
+		17 link Description: Sign up, Secondary Actions: Cancel
+	18 toolbar
+		19 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		20 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		21 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	22 close button
+	23 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	24 minimize button
+	25 text iPhone 17 Pro iOS 26.5
+26 menu bar
+	27 Simulator
+	28 File
+	29 Edit
+	30 Device
+	31 I/O
+	32 Features
+	33 Window
+	34 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

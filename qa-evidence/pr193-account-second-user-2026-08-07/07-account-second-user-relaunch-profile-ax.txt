@@ -1,0 +1,45 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 button Description: Go back, Secondary Actions: Cancel
+		7 text Description: SETTINGS, Secondary Actions: Cancel
+		8 text Description: Profile, Secondary Actions: Cancel
+		9 text Description: QM, Secondary Actions: Cancel
+		10 text Description: QA Member 193, Secondary Actions: Cancel
+		11 text Description: qa.pr193.member.20260807+clerk_test@example.com, Secondary Actions: Cancel
+		12 button Description: Edit, Secondary Actions: Cancel
+		13 text Description: PERSONAL INFORMATION, Secondary Actions: Cancel
+		14 text Description: First Name, Secondary Actions: Cancel
+		15 text Description: QA, Secondary Actions: Cancel
+		16 text Description: Last Name, Secondary Actions: Cancel
+		17 text Description: Member 193, Secondary Actions: Cancel
+		18 text Description: USER, Secondary Actions: Cancel
+		19 text Description: Email, Secondary Actions: Cancel
+		20 text Description: Managed by your sign-in provider, Secondary Actions: Cancel
+		21 text Description: qa.pr193.member.20260807+clerk_test@example.com, Secondary Actions: Cancel
+		22 text Description: SESSION, Secondary Actions: Cancel
+		23 button Description: Sign Out, Secondary Actions: Cancel
+		24 image Description: gearshape.fill, Secondary Actions: Cancel
+	25 toolbar
+		26 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		27 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		28 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	29 close button
+	30 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	31 minimize button
+	32 text iPhone 17 Pro iOS 26.5
+33 menu bar
+	34 Simulator
+	35 File
+	36 Edit
+	37 Device
+	38 I/O
+	39 Features
+	40 Window
+	41 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

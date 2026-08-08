@@ -1,0 +1,41 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 heading Description: QA 193 Primary Renamed 20260807, Secondary Actions: Cancel
+		7 text Description: 0 of 3 Items checked, Secondary Actions: Cancel
+		8 text Description: Synced, Secondary Actions: Cancel
+		9 element Description: QA 193 Milk, Help: Marks the Item complete, Value: checkbox, unchecked, Secondary Actions: Cancel
+		10 button Description: Edit QA 193 Milk, Help: Edits the Item inline, Secondary Actions: Cancel
+		11 element Description: QA 193 Bread, Help: Marks the Item complete, Value: checkbox, unchecked, Secondary Actions: Cancel
+		12 button Description: Edit QA 193 Bread, Help: Edits the Item inline, Secondary Actions: Cancel
+		13 element Description: QA 193 Apples, Help: Marks the Item complete, Value: checkbox, unchecked, Secondary Actions: Cancel
+		14 button Description: Edit QA 193 Apples, Help: Edits the Item inline, Secondary Actions: Cancel
+		15 button Description: Add Item, Help: Starts adding Items to the Current List, ID: home-add-item-button, Secondary Actions: Cancel
+		16 button (disabled) Description: Search, Secondary Actions: Cancel
+		17 slider (settable, string) Description: Focused List, Value: QA 193 Primary Renamed 20260807, List 1 of 2, ID: home-list-page-control, Secondary Actions: Cancel, increment, decrement
+		18 button Description: List, Secondary Actions: Cancel
+		19 image Description: gearshape.fill, Secondary Actions: Cancel
+		20 text Description: Tools, Secondary Actions: Cancel
+	21 toolbar
+		22 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		23 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		24 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	25 close button
+	26 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	27 minimize button
+	28 text iPhone 17 Pro iOS 26.5
+29 menu bar
+	30 Simulator
+	31 File
+	32 Edit
+	33 Device
+	34 I/O
+	35 Features
+	36 Window
+	37 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

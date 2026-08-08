@@ -1,0 +1,38 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 button Description: Open navigation, Secondary Actions: Cancel
+		7 text Description: HOUSEHOLDS, Secondary Actions: Cancel
+		8 text Description: Switch Household, Secondary Actions: Cancel
+		9 text Description: Choose the Household you want to use., Secondary Actions: Cancel
+		10 text Description: YOUR HOUSEHOLDS, Secondary Actions: Cancel
+		11 button (selected, disabled) Description: Blue Basket, Secondary Actions: Cancel
+		12 button Description: QA 193 Alternate Renamed, Help: Switches to QA 193 Alternate Renamed, Secondary Actions: Cancel
+		13 text Description: ADD A HOUSEHOLD, Secondary Actions: Cancel
+		14 button Description: Create Household, Secondary Actions: Cancel
+		15 element Description: Join with Code, Secondary Actions: Cancel
+		16 text Description: Your Lists change with the selected Household., Secondary Actions: Cancel
+		17 image Description: gearshape.fill, Secondary Actions: Cancel
+	18 toolbar
+		19 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		20 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		21 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	22 close button
+	23 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	24 minimize button
+	25 text iPhone 17 Pro iOS 26.5
+26 menu bar
+	27 Simulator
+	28 File
+	29 Edit
+	30 Device
+	31 I/O
+	32 Features
+	33 Window
+	34 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

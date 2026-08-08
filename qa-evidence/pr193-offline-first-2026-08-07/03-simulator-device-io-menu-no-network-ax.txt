@@ -1,0 +1,32 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 I/O, Secondary Actions: Cancel, Pick
+	1 menu Secondary Actions: Cancel
+		2 Input
+			3 menu Secondary Actions: Cancel
+				4 Send Keyboard Input to Device
+		5 Keyboard
+			6 menu Secondary Actions: Cancel
+				7 Use the Same Keyboard Language as macOS
+				8 Connect Hardware Keyboard
+				9 Toggle Software Keyboard
+		10 Audio Input
+			11 menu Secondary Actions: Cancel
+				12 System (MacBook Pro Microphone), ID: changeSelectedAudioDevice:
+				13 Randy’s iPhone Microphone, ID: changeSelectedAudioDevice:
+				14 MacBook Pro Microphone, ID: changeSelectedAudioDevice:
+		15 Audio Output
+			16 menu Secondary Actions: Cancel
+				17 System (MacBook Pro Speakers), ID: changeSelectedAudioDevice:
+				18 MacBook Pro Speakers, ID: changeSelectedAudioDevice:
+		19 Increase Volume
+		20 Decrease Volume
+		21 External Displays
+			22 menu Secondary Actions: Cancel
+				23 Disabled
+				24 640×480
+				25 720×480
+				26 1024×768
+				27 1280×720 (720p)
+				28 1920×1080 (1080p)
+				29 3840×2160 (4K)
+				30 CarPlay

@@ -1,0 +1,31 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 text Description: Household unavailable, Secondary Actions: Cancel
+		7 text Description: Unable to prepare your Household. Please try again., Secondary Actions: Cancel
+		8 button Description: Try again, Secondary Actions: Cancel
+		9 element Secondary Actions: Cancel, Description: !, [error] authenticated app session activation failed {"user_id":"user_3HbQtYWtqixgc7xTmTJKYBk8ZUh","error":{}}
+		10 image Description: gearshape.fill, Secondary Actions: Cancel
+	11 toolbar
+		12 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		13 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		14 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	15 close button
+	16 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	17 minimize button
+	18 text iPhone 17 Pro iOS 26.5
+19 menu bar
+	20 Simulator
+	21 File
+	22 Edit
+	23 Device
+	24 I/O
+	25 Features
+	26 Window
+	27 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise

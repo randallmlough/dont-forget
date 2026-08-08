@@ -1,0 +1,5 @@
+Phase: accept Invitation as QA Member
+Result: BLOCKED before navigation.
+Computer Use error: Computer Use was not approved to use Safari
+Attempt: Safari smart search field navigation to the approved staging Invitation URL.
+No token, email, Join Code, or password recorded.

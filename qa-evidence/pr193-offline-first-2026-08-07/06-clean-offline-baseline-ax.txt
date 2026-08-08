@@ -1,0 +1,37 @@
+Window: "iPhone 17 Pro", App: Simulator.
+0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
+	1 button Action
+	2 button Volume Up
+	3 button Volume Down
+	4 button Sleep/Wake
+	5 container
+		6 heading Description: QA 193 Primary Renamed 20260807, Secondary Actions: Cancel
+		7 text Description: 0 of 2 Items checked, Secondary Actions: Cancel
+		8 text Description: Sync failed - changes saved locally, Secondary Actions: Cancel
+		9 element Description: QA 193 Oat Milk, Help: Marks the Item complete, Value: checkbox, unchecked, Secondary Actions: Cancel
+		10 button Description: Edit QA 193 Oat Milk, Help: Edits the Item inline, Secondary Actions: Cancel
+		11 element Description: QA 193 Bread, Help: Marks the Item complete, Value: checkbox, unchecked, Secondary Actions: Cancel
+		12 button Description: Edit QA 193 Bread, Help: Edits the Item inline, Secondary Actions: Cancel
+		13 button Description: Add Item, Help: Starts adding Items to the Current List, ID: home-add-item-button, Secondary Actions: Cancel
+		14 slider (settable, string) Description: Focused List, Value: QA 193 Primary Renamed 20260807, List 1 of 2, ID: home-list-page-control, Secondary Actions: Cancel, increment, decrement
+		15 button Description: List, Secondary Actions: Cancel
+		16 image Description: gearshape.fill, Secondary Actions: Cancel
+	17 toolbar
+		18 button Description: Home, Secondary Actions: Move previous, Move next, Remove from toolbar
+		19 button Description: Save Screen, Secondary Actions: Move previous, Move next, Remove from toolbar
+		20 button Description: Rotate, Secondary Actions: Move previous, Move next, Remove from toolbar
+	21 close button
+	22 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	23 minimize button
+	24 text iPhone 17 Pro iOS 26.5
+25 menu bar
+	26 Simulator
+	27 File
+	28 Edit
+	29 Device
+	30 I/O
+	31 Features
+	32 Window
+	33 Help
+
+The focused UI element is 0 standard window iPhone 17 Pro – iOS 26.5, Secondary Actions: Raise
