@@ -36,17 +36,14 @@ export function createUserService(deps: UserServiceDeps): UserService {
 			return upsertUser(profile, deps.directory);
 		},
 		async updateUserName(input) {
-			const updateClerkUserName =
-				deps.updateClerkUserName ?? (await defaultUpdateClerkUserName());
+			const updateClerkUserName = deps.updateClerkUserName;
+			if (!updateClerkUserName) {
+				throw new Error("Clerk User name updates are not configured");
+			}
 			const profile = await updateClerkUserName(input);
 			return upsertUser(profile, deps.directory);
 		},
 	};
-}
-
-async function defaultUpdateClerkUserName(): Promise<UpdateClerkUserName> {
-	const { updateClerkUserName } = await import("@api/http");
-	return updateClerkUserName;
 }
 
 async function upsertUser(

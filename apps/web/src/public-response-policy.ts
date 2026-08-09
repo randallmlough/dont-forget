@@ -1,3 +1,8 @@
+import {
+	APPLE_APP_SITE_ASSOCIATION_PATH,
+	PUBLIC_ENTRY_PATHS,
+} from "@dont-forget/shared";
+
 export type PublicWebResponseHeaders =
 	| { "Content-Type": "application/json" }
 	| {
@@ -19,11 +24,11 @@ export function headersForPublicWebRequest(
 ): PublicWebResponseHeaders | undefined {
 	const pathname = new URL(requestUrl, "http://local.invalid").pathname;
 
-	if (pathname === "/.well-known/apple-app-site-association") {
+	if (pathname === APPLE_APP_SITE_ASSOCIATION_PATH) {
 		return AASA_HEADERS;
 	}
 
-	if (pathname === "/invitations/accept" || pathname === "/households/join") {
+	if (PUBLIC_ENTRY_PATHS.some((path) => pathname === path)) {
 		return SENSITIVE_PAGE_HEADERS;
 	}
 

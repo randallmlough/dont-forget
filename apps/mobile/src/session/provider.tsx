@@ -69,6 +69,7 @@ export type AuthenticatedAppSessionProviderAuth = {
 	getPowerSyncToken?: GetSessionToken;
 	authReady: boolean;
 	signedIn: boolean;
+	clerkUserId: string | null;
 	signOut: () => Promise<void>;
 };
 
@@ -136,13 +137,21 @@ export function AuthenticatedAppSessionProvider({
 			getPowerSyncToken: () => clerkGetToken({ template: "powersync" }),
 			authReady: clerkAuth.isLoaded,
 			signedIn: Boolean(clerkAuth.isSignedIn),
+			clerkUserId: clerkAuth.userId ?? null,
 			signOut: clerkSignOut,
 		}),
-		[clerkAuth.isLoaded, clerkAuth.isSignedIn, clerkGetToken, clerkSignOut],
+		[
+			clerkAuth.isLoaded,
+			clerkAuth.isSignedIn,
+			clerkAuth.userId,
+			clerkGetToken,
+			clerkSignOut,
+		],
 	);
 	const auth = authProp ?? defaultAuth;
 	const authReady = auth.authReady;
 	const signedIn = auth.signedIn;
+	const clerkUserId = auth.clerkUserId;
 	const authRef = useRef(auth);
 	const analyticsRef = useRef(analytics);
 	const machineRef = useRef(initialSessionMachineState);
@@ -214,7 +223,16 @@ export function AuthenticatedAppSessionProvider({
 					});
 					return Promise.resolve();
 				}
-				return persistAuthenticatedAppSessionProp(effect.session)
+				const currentClerkUserId = authRef.current.clerkUserId;
+				if (!currentClerkUserId) {
+					return clearAuthenticatedAppSessionPresentProp()
+						.catch(() => undefined)
+						.then(() => undefined);
+				}
+				return persistAuthenticatedAppSessionProp({
+					clerkUserId: currentClerkUserId,
+					session: effect.session,
+				})
 					.catch(() => undefined)
 					.then(() => undefined);
 			}
@@ -264,14 +282,23 @@ export function AuthenticatedAppSessionProvider({
 							const persistedSession =
 								await readPersistedAuthenticatedAppSessionProp();
 							if (persistedSession && !activationSuperseded(attempt)) {
-								applyResult(
-									reduceSessionMachine(machineRef.current, {
-										type: "activationFallbackRequested",
-										attempt,
-										session: persistedSession,
-									}),
-								);
-								return;
+								if (
+									!authRef.current.clerkUserId ||
+									persistedSession.clerkUserId !== authRef.current.clerkUserId
+								) {
+									await clearAuthenticatedAppSessionPresentProp().catch(
+										() => undefined,
+									);
+								} else {
+									applyResult(
+										reduceSessionMachine(machineRef.current, {
+											type: "activationFallbackRequested",
+											attempt,
+											session: persistedSession.session,
+										}),
+									);
+									return;
+								}
 							}
 						} catch (readError) {
 							logger.error("authenticated app session restore read failed", {
@@ -379,9 +406,19 @@ export function AuthenticatedAppSessionProvider({
 		let cancelled = false;
 
 		void readPersistedAuthenticatedAppSessionProp()
-			.then((session) => {
-				if (cancelled || !session) return;
-				void dispatch({ type: "sessionRestoreRequested", session });
+			.then(async (persistedSession) => {
+				if (cancelled || !persistedSession) return;
+				if (!clerkUserId || persistedSession.clerkUserId !== clerkUserId) {
+					await clearAuthenticatedAppSessionPresentProp().catch(
+						() => undefined,
+					);
+					return;
+				}
+				if (cancelled) return;
+				void dispatch({
+					type: "sessionRestoreRequested",
+					session: persistedSession.session,
+				});
 			})
 			.catch((error) => {
 				if (cancelled) return;
@@ -396,7 +433,9 @@ export function AuthenticatedAppSessionProvider({
 	}, [
 		authReady,
 		signedIn,
+		clerkUserId,
 		activationEnabled,
+		clearAuthenticatedAppSessionPresentProp,
 		dispatch,
 		logger,
 		readPersistedAuthenticatedAppSessionProp,

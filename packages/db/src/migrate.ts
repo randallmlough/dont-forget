@@ -1,9 +1,10 @@
+import path from "node:path";
 import {
 	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
+	loadEnvFile,
 	readPostgresConfig,
-} from "@dont-forget/shared";
-import { loadEnvFile } from "@dont-forget/shared/node";
+} from "@dont-forget/shared/node";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { directoryDb, postgresPool } from "./client";
 import { REPOSITORY_ROOT } from "./repository-root";
@@ -37,7 +38,11 @@ async function main(): Promise<void> {
 	}
 }
 
-if (require.main === module) {
+// pnpm runs this package entrypoint with packages/db as the working directory.
+if (
+	process.argv[1] &&
+	path.resolve(process.argv[1]) === path.resolve("src/migrate.ts")
+) {
 	main().catch((error) => {
 		console.error(error);
 		process.exit(1);

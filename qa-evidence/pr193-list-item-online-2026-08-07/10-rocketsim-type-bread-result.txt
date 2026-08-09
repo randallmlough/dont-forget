@@ -1,4 +1,0 @@
-Error: --screen is only meaningful with --id; raw type has no targeted element to guard.
-Usage: rocketsim interact type [<text>] [--stdin] [--file <file>] [--id <id>] [--screen <screen>] [--udid <udid>]
-  See 'rocketsim interact type --help' for more information.
-Exit code: 64

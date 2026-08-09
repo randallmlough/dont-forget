@@ -1,10 +1,16 @@
 import {
-	appSchemeForEnv,
+	APPLE_APP_SITE_ASSOCIATION_PATH,
+	appIdentityForEnv,
+	appleAppSiteAssociationForEnv,
 	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
+	buildPublicEntryUrl,
 	DEFAULT_API_PORT,
 	DEFAULT_WEB_PORT,
+	PUBLIC_HOUSEHOLD_JOIN_CODE_ENTRY,
+	PUBLIC_INVITATION_ENTRY,
 	parseAppEnv,
+	parsePublicWebBaseUrl,
 	readApiPort,
 	readIosAssociatedDomains,
 	readPublicExpoConfig,
@@ -25,12 +31,67 @@ describe("environment config", () => {
 	});
 
 	it.each([
-		["local", "dontforget-local"],
-		["test", "dontforget-test"],
-		["staging", "dontforget-staging"],
-		["production", "dontforget"],
-	] as const)("derives the %s app scheme", (appEnv, expected) => {
-		expect(appSchemeForEnv("dontforget", appEnv)).toBe(expected);
+		[
+			"local",
+			"dontforget-local",
+			"com.dont-forget.app.local",
+			"D64V4GPNLJ.com.dont-forget.app.local",
+		],
+		[
+			"test",
+			"dontforget-test",
+			"com.dont-forget.app.test",
+			"D64V4GPNLJ.com.dont-forget.app.test",
+		],
+		[
+			"staging",
+			"dontforget-staging",
+			"com.dont-forget.app.staging",
+			"D64V4GPNLJ.com.dont-forget.app.staging",
+		],
+		[
+			"production",
+			"dontforget",
+			"com.dont-forget.app",
+			"D64V4GPNLJ.com.dont-forget.app",
+		],
+	] as const)("derives the canonical %s app identity", (appEnv, scheme, bundleIdentifier, appleAppId) => {
+		expect(appIdentityForEnv(appEnv)).toEqual({
+			appleAppId,
+			bundleIdentifier,
+			scheme,
+		});
+	});
+
+	it("builds the AASA contract and public URLs from the canonical entry policy", () => {
+		expect(APPLE_APP_SITE_ASSOCIATION_PATH).toBe(
+			"/.well-known/apple-app-site-association",
+		);
+		expect(appleAppSiteAssociationForEnv("staging")).toEqual({
+			applinks: {
+				apps: [],
+				details: [
+					{
+						appID: "D64V4GPNLJ.com.dont-forget.app.staging",
+						paths: ["/invitations/accept", "/households/join"],
+					},
+				],
+			},
+		});
+		expect(
+			buildPublicEntryUrl({
+				entry: PUBLIC_INVITATION_ENTRY,
+				publicWebBaseUrl: "https://web.example.invalid",
+				value: "a/b+c=",
+			}),
+		).toBe("https://web.example.invalid/invitations/accept?token=a%2Fb%2Bc%3D");
+		expect(
+			buildPublicEntryUrl({
+				entry: PUBLIC_HOUSEHOLD_JOIN_CODE_ENTRY,
+				publicWebBaseUrl: "https://web.example.invalid",
+				value: "CODE 123",
+			}),
+		).toBe("https://web.example.invalid/households/join?code=CODE%20123");
 	});
 
 	it("defaults the web port to 3000", () => {
@@ -124,6 +185,7 @@ describe("environment config", () => {
 				EXPO_PUBLIC_API_BASE_URL: "https://api.example.com",
 				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
 				EXPO_PUBLIC_POWERSYNC_URL: "https://ps.example.com",
+				PUBLIC_WEB_BASE_URL: "https://web.example.com",
 			}).apiBaseUrl,
 		).toBe("https://api.example.com");
 	});
@@ -156,68 +218,55 @@ describe("environment config", () => {
 				EXPO_PUBLIC_API_BASE_URL: "https://api.example.com",
 				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
 				EXPO_PUBLIC_POWERSYNC_URL: "https://ps.example.com",
+				PUBLIC_WEB_BASE_URL: "https://web.example.com",
 			}).powersyncUrl,
 		).toBe("https://ps.example.com");
 	});
 
-	it("omits iOS Associated Domains for local and test without reading web config", () => {
-		const unreadableSource = new Proxy<Record<string, string | undefined>>(
-			{},
-			{
-				get() {
-					throw new Error("source must not be read");
-				},
-			},
-		);
+	it("requires a public web origin for deployed app builds", () => {
+		expect(() =>
+			readPublicExpoConfig({
+				APP_ENV: "staging",
+				EXPO_PUBLIC_API_BASE_URL: "https://api.example.com",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+				EXPO_PUBLIC_POWERSYNC_URL: "https://ps.example.com",
+			}),
+		).toThrow("PUBLIC_WEB_BASE_URL");
+	});
 
+	it("omits iOS Associated Domains for local and test", () => {
 		for (const appEnv of ["local", "test"] as const) {
-			expect(
-				readIosAssociatedDomains(appEnv, undefined, unreadableSource),
-			).toBeUndefined();
-			expect(
-				readIosAssociatedDomains(appEnv, undefined, {
-					PUBLIC_WEB_BASE_URL: "http://localhost:3000",
-				}),
-			).toBeUndefined();
+			expect(readIosAssociatedDomains(appEnv, undefined)).toBeUndefined();
 		}
 	});
 
 	it.each([
 		{
-			apiBaseUrl: "https://api-staging.example.invalid",
 			appEnv: "staging",
 			expected: ["applinks:web-staging.example.invalid"],
 			webBaseUrl: "https://web-staging.example.invalid",
 		},
 		{
-			apiBaseUrl: "https://api-staging.example.invalid",
 			appEnv: "staging",
 			expected: ["applinks:web-staging.example.invalid"],
 			webBaseUrl: "https://web-staging.example.invalid/",
 		},
 		{
-			apiBaseUrl: "https://api.example.invalid",
 			appEnv: "production",
 			expected: ["applinks:web.example.invalid"],
 			webBaseUrl: "https://web.example.invalid",
 		},
 		{
-			apiBaseUrl: "https://api.example.invalid",
 			appEnv: "production",
 			expected: ["applinks:xn--bcher-kva.example"],
 			webBaseUrl: "https://xn--bcher-kva.example",
 		},
 	] as const)("derives one normalized iOS Associated Domain for $appEnv from $webBaseUrl", ({
-		apiBaseUrl,
 		appEnv,
 		expected,
 		webBaseUrl,
 	}) => {
-		expect(
-			readIosAssociatedDomains(appEnv, apiBaseUrl, {
-				PUBLIC_WEB_BASE_URL: webBaseUrl,
-			}),
-		).toEqual(expected);
+		expect(readIosAssociatedDomains(appEnv, webBaseUrl)).toEqual(expected);
 	});
 
 	it("rejects absent, malformed, and non-HTTPS deployed web origins", () => {
@@ -228,11 +277,9 @@ describe("environment config", () => {
 			"not a url",
 			"http://web.example.invalid",
 		]) {
-			expect(() =>
-				readIosAssociatedDomains("staging", "https://api.example.invalid", {
-					PUBLIC_WEB_BASE_URL: webBaseUrl,
-				}),
-			).toThrow("PUBLIC_WEB_BASE_URL");
+			expect(() => parsePublicWebBaseUrl(webBaseUrl, "staging")).toThrow(
+				"PUBLIC_WEB_BASE_URL",
+			);
 		}
 	});
 
@@ -246,11 +293,9 @@ describe("environment config", () => {
 			"https://web.example.invalid?query=value",
 			"https://web.example.invalid#fragment",
 		]) {
-			expect(() =>
-				readIosAssociatedDomains("production", "https://api.example.invalid", {
-					PUBLIC_WEB_BASE_URL: webBaseUrl,
-				}),
-			).toThrow("PUBLIC_WEB_BASE_URL");
+			expect(() => parsePublicWebBaseUrl(webBaseUrl, "production")).toThrow(
+				"PUBLIC_WEB_BASE_URL",
+			);
 		}
 	});
 
@@ -263,11 +308,9 @@ describe("environment config", () => {
 			"https://web.example.invalid/%2e%2e",
 			"https:////web.example.invalid",
 		]) {
-			expect(() =>
-				readIosAssociatedDomains("production", "https://api.example.invalid", {
-					PUBLIC_WEB_BASE_URL: webBaseUrl,
-				}),
-			).toThrow("PUBLIC_WEB_BASE_URL");
+			expect(() => parsePublicWebBaseUrl(webBaseUrl, "production")).toThrow(
+				"PUBLIC_WEB_BASE_URL",
+			);
 		}
 	});
 
@@ -279,11 +322,9 @@ describe("environment config", () => {
 			"https://[2001:db8::1]",
 			"https://intranet",
 		]) {
-			expect(() =>
-				readIosAssociatedDomains("production", "https://api.example.invalid", {
-					PUBLIC_WEB_BASE_URL: webBaseUrl,
-				}),
-			).toThrow("PUBLIC_WEB_BASE_URL");
+			expect(() => parsePublicWebBaseUrl(webBaseUrl, "production")).toThrow(
+				"PUBLIC_WEB_BASE_URL",
+			);
 		}
 	});
 
@@ -298,11 +339,9 @@ describe("environment config", () => {
 			"https://-leading.example",
 			"https://trailing-.example",
 		]) {
-			expect(() =>
-				readIosAssociatedDomains("production", "https://api.example.invalid", {
-					PUBLIC_WEB_BASE_URL: webBaseUrl,
-				}),
-			).toThrow("PUBLIC_WEB_BASE_URL");
+			expect(() => parsePublicWebBaseUrl(webBaseUrl, "production")).toThrow(
+				"PUBLIC_WEB_BASE_URL",
+			);
 		}
 	});
 
@@ -317,9 +356,7 @@ describe("environment config", () => {
 
 		for (const hostname of [overlongLabelHostname, overlongHostname]) {
 			expect(() =>
-				readIosAssociatedDomains("production", "https://api.example.invalid", {
-					PUBLIC_WEB_BASE_URL: `https://${hostname}`,
-				}),
+				parsePublicWebBaseUrl(`https://${hostname}`, "production"),
 			).toThrow("PUBLIC_WEB_BASE_URL");
 		}
 	});
@@ -333,21 +370,37 @@ describe("environment config", () => {
 		].join(".");
 
 		expect(
-			readIosAssociatedDomains("production", "https://api.example.invalid", {
-				PUBLIC_WEB_BASE_URL: `https://${hostname}`,
-			}),
+			readIosAssociatedDomains("production", `https://${hostname}`),
 		).toEqual([`applinks:${hostname}`]);
 	});
 
-	it("rejects a deployed web origin equal to the normalized API origin", () => {
-		expect(() =>
-			readIosAssociatedDomains("staging", "https://shared.example.invalid/", {
-				PUBLIC_WEB_BASE_URL: "https://shared.example.invalid",
-			}),
-		).toThrow("PUBLIC_WEB_BASE_URL must differ from EXPO_PUBLIC_API_BASE_URL");
+	it("accepts the generated localhost origin and public HTTPS for local", () => {
+		expect(parsePublicWebBaseUrl("http://localhost:13087", "local")).toBe(
+			"http://localhost:13087",
+		);
+		expect(parsePublicWebBaseUrl("https://web.example.invalid/", "local")).toBe(
+			"https://web.example.invalid",
+		);
 	});
 
-	it("keeps the mobile web-origin input out of public Expo runtime config", () => {
+	it.each([
+		["EXPO_PUBLIC_API_BASE_URL", "https://web.example.invalid/path"],
+		["EXPO_PUBLIC_POWERSYNC_URL", "https://web.example.invalid/sync"],
+		["EXPO_PUBLIC_POWERSYNC_URL", "https://api.example.invalid/sync"],
+	] as const)("rejects a deployed %s origin collision", (key, value) => {
+		expect(() =>
+			readPublicExpoConfig({
+				APP_ENV: "staging",
+				EXPO_PUBLIC_API_BASE_URL: "https://api.example.invalid",
+				EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
+				EXPO_PUBLIC_POWERSYNC_URL: "https://sync.example.invalid",
+				PUBLIC_WEB_BASE_URL: "https://web.example.invalid",
+				[key]: value,
+			}),
+		).toThrow("must differ");
+	});
+
+	it("normalizes the mobile web-origin input for build-time consumers", () => {
 		const config = readPublicExpoConfig({
 			APP_ENV: "staging",
 			EXPO_PUBLIC_API_BASE_URL: "https://api.example.invalid",
@@ -356,8 +409,7 @@ describe("environment config", () => {
 			PUBLIC_WEB_BASE_URL: "https://web.example.invalid",
 		});
 
-		expect(config).not.toHaveProperty("webBaseUrl");
-		expect(config).not.toHaveProperty("publicWebBaseUrl");
+		expect(config.publicWebBaseUrl).toBe("https://web.example.invalid");
 	});
 
 	it("allows local builds to omit the API base URL", () => {

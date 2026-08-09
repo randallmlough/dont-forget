@@ -85,7 +85,9 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await expect(connectInput?.getPowerSyncToken()).resolves.toBe(
 			"powersync-token",
 		);
-		expect(persistAuthenticatedAppSession).toHaveBeenCalledWith(session);
+		expect(persistAuthenticatedAppSession).toHaveBeenCalledWith(
+			persistedSessionFixture(session),
+		);
 	});
 
 	it("restores a persisted Authenticated App Session when Clerk is ready but signed out", async () => {
@@ -95,7 +97,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const connectDatabase = connectDatabaseFixture();
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
-			.mockResolvedValueOnce(session);
+			.mockResolvedValueOnce(persistedSessionFixture(session));
 
 		await render(
 			<AuthenticatedAppSessionProvider
@@ -133,7 +135,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const connectDatabase = connectDatabaseFixture();
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
-			.mockResolvedValueOnce(session);
+			.mockResolvedValueOnce(persistedSessionFixture(session));
 
 		await render(
 			<AuthenticatedAppSessionProvider
@@ -165,6 +167,100 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(mockLogger.error).not.toHaveBeenCalled();
 	});
 
+	it("refuses a signed-in offline fallback cached for another Clerk subject after cleanup fails", async () => {
+		const userASession = appSessionFixture({ displayName: "User A" });
+		const bootstrapService = bootstrapServiceFixture(userASession);
+		const connectDatabase = connectDatabaseFixture();
+		const cleanupError = new Error("storage unavailable");
+		const clearSessionHint = jest
+			.fn<Promise<void>, []>()
+			.mockRejectedValueOnce(cleanupError)
+			.mockResolvedValueOnce(undefined);
+		const userAAuth = authFixture({ clerkUserId: "user_clerk_a" });
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={userAAuth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("User A")).toBeTruthy());
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...userAAuth, clerkUserId: null, signedIn: false }}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+
+		jest.mocked(readPersistedAuthenticatedAppSession).mockClear();
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockResolvedValueOnce(
+				persistedSessionFixture(userASession, "user_clerk_a"),
+			);
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...userAAuth, clerkUserId: "user_clerk_b", signedIn: true }}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(screen.queryByText("User A")).toBeNull();
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(readPersistedAuthenticatedAppSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("clears and refuses a signed-out cold restore cached for another Clerk subject", async () => {
+		const cachedSession = appSessionFixture({ displayName: "Cached User A" });
+		const clearSessionHint = jest.fn(async () => undefined);
+		const connectDatabase = connectDatabaseFixture();
+		jest
+			.mocked(readPersistedAuthenticatedAppSession)
+			.mockResolvedValueOnce(
+				persistedSessionFixture(cachedSession, "user_clerk_a"),
+			);
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture({
+					clerkUserId: "user_clerk_b",
+					signedIn: false,
+				})}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
+		expect(screen.queryByText("Cached User A")).toBeNull();
+		expect(connectDatabase).not.toHaveBeenCalled();
+	});
+
 	it("surfaces restore connect failures and retries the retained payload", async () => {
 		const connectError = new Error("restore connect failed");
 		const session = appSessionFixture({ displayName: "Cached Avery" });
@@ -175,7 +271,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			.mockResolvedValueOnce(undefined);
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
-			.mockResolvedValueOnce(session);
+			.mockResolvedValueOnce(persistedSessionFixture(session));
 
 		await render(
 			<AuthenticatedAppSessionProvider
@@ -289,7 +385,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const signedOutAuth = authFixture({ signedIn: false });
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
-			.mockResolvedValueOnce(cachedSession);
+			.mockResolvedValueOnce(persistedSessionFixture(cachedSession));
 
 		const view = await render(
 			<AuthenticatedAppSessionProvider
@@ -336,7 +432,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
 		expect(order).toEqual(["restoreConnect", "clear", "wipe", "freshConnect"]);
 		expect(persistAuthenticatedAppSession).toHaveBeenLastCalledWith(
-			freshSession,
+			persistedSessionFixture(freshSession),
 		);
 	});
 
@@ -350,7 +446,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const signedOutAuth = authFixture({ signedIn: false });
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
-			.mockResolvedValueOnce(cachedSession);
+			.mockResolvedValueOnce(persistedSessionFixture(cachedSession));
 
 		const view = await render(
 			<AuthenticatedAppSessionProvider
@@ -382,7 +478,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(connectDatabase).toHaveBeenCalledTimes(2);
 		expect(disconnectAndClear).not.toHaveBeenCalled();
 		expect(persistAuthenticatedAppSession).toHaveBeenLastCalledWith(
-			freshSession,
+			persistedSessionFixture(freshSession),
 		);
 	});
 
@@ -1260,9 +1356,17 @@ function authFixture(
 		getPowerSyncToken: jest.fn(async () => "powersync-token"),
 		authReady: true,
 		signedIn: true,
+		clerkUserId: "user_avery",
 		signOut: jest.fn(async () => undefined),
 		...overrides,
 	};
+}
+
+function persistedSessionFixture(
+	session: AuthenticatedAppSession,
+	clerkUserId = "user_avery",
+) {
+	return { clerkUserId, session };
 }
 
 function appSessionFixture(

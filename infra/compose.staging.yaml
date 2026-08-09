@@ -4,14 +4,13 @@
 #     and `dontforget-staging-web:8080` over proxy-net; both Postgres instances
 #     are on the internal network only.
 #   - Named volumes on purpose: staging is wipeable with `docker compose down -v`
-#     (fresh DBs, re-run drizzle-kit migrate). Container names deliberately do
+#     (fresh DBs, re-run the package-owned migration command). Container names deliberately do
 #     NOT end in `-db` so the nightly backup script's pg_dumpall loop skips them.
-#   - The server's repo-root .env.staging (never committed) sets
-#     COMPOSE_FILE=infra/compose.staging.yaml so `make infra-up APP_ENV=staging`
-#     and `docker compose --env-file .env.staging` use this file there.
+#   - The server's repo-root .env.staging (never committed) holds staging-only
+#     values. `make infra-* APP_ENV=staging` selects this file explicitly.
 #
 # SCHEMA AUTHORITY and REPLICATION COUPLING notes in docker-compose.yaml apply
-# here unchanged: apply schema via drizzle-kit migrate against the source
+# here unchanged: apply schema via the package-owned migration command against the source
 # Postgres, and wal_level=logical + the `powersync` publication are both
 # required. Connection URIs are assembled HERE from the PG_* parts in
 # .env.staging so each credential is stated exactly once.
@@ -25,6 +24,7 @@ services:
       dockerfile: infra/api/Dockerfile
     container_name: dontforget-staging-api
     restart: unless-stopped
+    stop_grace_period: 15s
     depends_on:
       pg-source:
         condition: service_healthy
@@ -61,17 +61,9 @@ services:
       target: builder
     environment:
       APP_ENV: staging
+      CONFIRM_APP_ENV: ${CONFIRM_APP_ENV:-}
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
-    command:
-      [
-        "pnpm",
-        "--dir",
-        "packages/db",
-        "exec",
-        "drizzle-kit",
-        "migrate",
-        "--config=src/drizzle/postgres.migrate.ts",
-      ]
+    command: ["pnpm", "--dir", "packages/db", "db:migrate"]
     depends_on:
       pg-source:
         condition: service_healthy

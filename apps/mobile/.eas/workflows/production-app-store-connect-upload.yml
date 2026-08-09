@@ -12,19 +12,9 @@ jobs:
     name: Approve production release
     type: require-approval
 
-  deploy_api:
-    name: Deploy production API
-    needs: [require_approval]
-    type: deploy
-    environment: production
-    env:
-      APP_ENV: production
-    params:
-      prod: true
-
   build_ios:
     name: Build production iOS
-    needs: [deploy_api]
+    needs: [require_approval]
     type: build
     environment: production
     env:

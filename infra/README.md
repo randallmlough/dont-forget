@@ -21,18 +21,19 @@ Run on the server:
 ssh homelab
 git clone <repo-url> ~/docker/dont-forget
 cd ~/docker/dont-forget
-# Create .env.staging (never commit it) with COMPOSE_FILE=infra/compose.staging.yaml and all
-# Postgres/PowerSync, Clerk, Resend, PostHog, and public-origin variables from .env.example.
+# Create .env.staging (never commit it) with all Postgres/PowerSync, Clerk,
+# Resend, PostHog, and public-origin variables from .env.example.
 # Postgres/PowerSync connection URIs are assembled inside compose.staging.yaml
 # from the PG_* variables — the env file holds only user/name/password parts.
 make infra-deploy APP_ENV=staging
 ```
 
-The `make infra-*` targets read `.env.$(APP_ENV)` from the repo root (default
-`local`), and that env file's `COMPOSE_FILE` selects the compose file — the
-Makefile hardcodes neither. `infra-deploy` chains `infra-build`, `infra-up`,
-and `infra-migrate` (the one-off migrate container from the `tools` profile);
-each is also runnable on its own.
+The `make infra-*` targets validate `APP_ENV`, select its exact Compose file,
+and read `.env.$(APP_ENV)` from the repo root (default `local`). Ambient
+`COMPOSE_FILE` values do not change that mapping. `infra-deploy` runs
+`infra-build`, `infra-up`, and `infra-migrate` in that order; each operation is
+also runnable on its own. Production deploys and migrations additionally
+require `CONFIRM_APP_ENV=production`.
 
 The migration command applies the Drizzle schema and PowerSync publication.
 `make infra-deploy` builds the API bundle image and static web image
@@ -130,11 +131,11 @@ Staging Postgres publishes no ports. For ad-hoc inspection from a database GUI
 source Postgres on the homelab's loopback only:
 
 ```sh
-# in .env.staging on the homelab
-COMPOSE_FILE=infra/compose.staging.yaml:infra/compose.staging.debug.yaml
+docker compose --env-file .env.staging \
+  -f infra/compose.staging.yaml \
+  -f infra/compose.staging.debug.yaml up -d
 ```
 
-Run `make infra-up APP_ENV=staging`, then connect through the GUI's SSH tunnel
-(SSH host: homelab; database host: `127.0.0.1:5432`; credentials from the
-`PG_DATABASE_*` values). Remove the override from `COMPOSE_FILE` and re-run
-`make infra-up APP_ENV=staging` to close the port.
+Connect through the GUI's SSH tunnel (SSH host: homelab; database host:
+`127.0.0.1:5432`; credentials from the `PG_DATABASE_*` values). Re-run
+`make infra-up APP_ENV=staging` without the debug file to close the port.

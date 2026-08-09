@@ -28,7 +28,7 @@
 		},
 		"build": {
 			"dependsOn": ["^build"],
-			"env": ["APP_ENV", "EXPO_SCHEME", "IOS_BUNDLE_IDENTIFIER", "WEB_PORT"],
+			"env": ["APP_ENV", "WEB_PORT"],
 			"inputs": [
 				"$TURBO_DEFAULT$",
 				"$TURBO_ROOT$/.env.*",
@@ -56,9 +56,16 @@
 		"ios": { "cache": false },
 		"//#lint:root": {
 			"inputs": [
+				"$TURBO_ROOT$/apps/*/package.json",
+				"$TURBO_ROOT$/apps/*/tsconfig.json",
 				"$TURBO_ROOT$/eslint.config.js",
 				"$TURBO_ROOT$/infra/web/verify-hydration.mjs",
 				"$TURBO_ROOT$/package.json",
+				"$TURBO_ROOT$/packages/*/package.json",
+				"$TURBO_ROOT$/packages/*/tsconfig.json",
+				"$TURBO_ROOT$/pnpm-workspace.yaml",
+				"$TURBO_ROOT$/tooling/package.json",
+				"$TURBO_ROOT$/tooling/tsconfig.json",
 				"$TURBO_ROOT$/tooling/eslint-plugin/**"
 			]
 		},
@@ -114,7 +121,12 @@
 			"inputs": [
 				"$TURBO_DEFAULT$",
 				"$TURBO_ROOT$/apps/*/package.json",
-				"$TURBO_ROOT$/packages/*/package.json"
+				"$TURBO_ROOT$/apps/*/tsconfig.json",
+				"$TURBO_ROOT$/packages/*/package.json",
+				"$TURBO_ROOT$/packages/*/tsconfig.json",
+				"$TURBO_ROOT$/pnpm-workspace.yaml",
+				"$TURBO_ROOT$/tooling/package.json",
+				"$TURBO_ROOT$/tooling/tsconfig.json"
 			]
 		},
 		"typecheck": {

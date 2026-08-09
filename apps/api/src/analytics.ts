@@ -1,37 +1,50 @@
+import type { ServerPostHogConfig } from "@api/config";
 import type {
+	AppEnv,
 	EventMap,
 	EventName,
 	ServiceAnalytics,
 } from "@dont-forget/shared";
-import { asError, optionalEnv, redactAttributes } from "@dont-forget/shared";
+import { asError, redactAttributes } from "@dont-forget/shared";
 import { PostHog } from "posthog-node";
 
 type ServerPostHogClient = Pick<PostHog, "capture" | "flush">;
 
 type ServerAnalyticsConfig = {
-	appEnv?: string;
+	appEnv: AppEnv;
+	posthog: ServerPostHogConfig;
 	client?: ServerPostHogClient;
-	host?: string;
-	projectToken?: string;
 };
 
-const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
+export type ServerAnalyticsRuntime = {
+	analytics: ServiceAnalytics;
+	flush: () => Promise<void>;
+};
 
-let defaultClient: ServerPostHogClient | null | undefined;
+let installedAnalytics: ServiceAnalytics = {
+	track() {
+		warnMissingPostHogConfig();
+	},
+};
 let warnedMissingConfig = false;
 let warnedCaptureError = false;
 
-export const serverServiceAnalytics: ServiceAnalytics = createServerAnalytics();
+export const serverServiceAnalytics: ServiceAnalytics = {
+	track(event, properties) {
+		installedAnalytics.track(event, properties);
+	},
+};
 
 export function createServerAnalytics(
-	config: ServerAnalyticsConfig = {},
-): ServiceAnalytics {
-	const configuredClient = config.client;
-
-	return {
+	config: ServerAnalyticsConfig,
+): ServerAnalyticsRuntime {
+	const client = config.client ?? posthogClient(config.posthog);
+	const analytics: ServiceAnalytics = {
 		track(event, properties) {
-			const client = configuredClient ?? defaultServerPostHogClient(config);
-			if (!client) return;
+			if (!client) {
+				warnMissingPostHogConfig();
+				return;
+			}
 
 			try {
 				client.capture({
@@ -39,7 +52,7 @@ export function createServerAnalytics(
 					event,
 					properties: {
 						...redactAttributes(properties),
-						app_env: config.appEnv ?? optionalEnv("APP_ENV"),
+						app_env: config.appEnv,
 						runtime: "server",
 					},
 				});
@@ -48,33 +61,29 @@ export function createServerAnalytics(
 			}
 		},
 	};
+
+	return {
+		analytics,
+		async flush() {
+			await client?.flush();
+		},
+	};
 }
 
-export async function flushServerAnalytics(
-	client: ServerPostHogClient | null | undefined = defaultClient,
-): Promise<void> {
-	await client?.flush().catch(warnCaptureError);
+export function installServerAnalytics(runtime: ServerAnalyticsRuntime): void {
+	installedAnalytics = runtime.analytics;
 }
 
-function defaultServerPostHogClient(
-	config: ServerAnalyticsConfig,
+function posthogClient(
+	config: ServerPostHogConfig,
 ): ServerPostHogClient | null {
-	if (defaultClient !== undefined) return defaultClient;
+	if (config.kind === "disabled") return null;
 
-	const projectToken =
-		config.projectToken ?? optionalEnv("POSTHOG_PROJECT_TOKEN");
-	if (!projectToken || projectToken === "phc_your_project_token_here") {
-		warnMissingPostHogConfig();
-		defaultClient = null;
-		return defaultClient;
-	}
-
-	defaultClient = new PostHog(projectToken, {
-		host: config.host ?? optionalEnv("POSTHOG_HOST") ?? DEFAULT_POSTHOG_HOST,
+	return new PostHog(config.projectToken, {
+		host: config.host,
 		flushAt: 1,
 		flushInterval: 0,
 	});
-	return defaultClient;
 }
 
 function distinctIdFromProperties<K extends EventName>(
@@ -89,11 +98,11 @@ function distinctIdFromProperties<K extends EventName>(
 }
 
 function stringProperty(properties: object, key: string): string | undefined {
-	const value = (properties as Record<string, unknown>)[key];
+	const value = Reflect.get(properties, key);
 	return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function warnMissingPostHogConfig() {
+function warnMissingPostHogConfig(): void {
 	if (warnedMissingConfig) return;
 	warnedMissingConfig = true;
 	console.warn(
@@ -102,7 +111,7 @@ function warnMissingPostHogConfig() {
 	);
 }
 
-function warnCaptureError(error: unknown) {
+function warnCaptureError(error: unknown): void {
 	if (warnedCaptureError) return;
 	warnedCaptureError = true;
 	console.warn(

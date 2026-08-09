@@ -1,0 +1,8 @@
+{
+	"compilerOptions": {
+		"paths": {
+			"@fixture/mobile/*": ["./src/*"],
+			"@fixture/escape/*": ["../db/src/*"]
+		}
+	}
+}

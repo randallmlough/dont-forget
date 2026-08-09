@@ -1,3 +1,0 @@
-xcrun simctl terminate 261F6427-153A-4C7B-8528-E6E8C542E15D com.dont-forget.app.staging: exit code 0
-xcrun simctl launch 261F6427-153A-4C7B-8528-E6E8C542E15D com.dont-forget.app.staging: com.dont-forget.app.staging: 53379
-After relaunch, Secondary was current and showed Apples once, Synced. Final verification switched to Primary, which showed Oat Milk + Bread only, 0 of 2, Synced.

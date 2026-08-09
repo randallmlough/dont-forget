@@ -14,7 +14,12 @@ import {
 	handleSetJoinCodeEnabled,
 	handleSwitchActiveHousehold,
 } from "@api/households/api";
-import type { ApiAuth, PublicWebApiHandlerDeps } from "@api/http";
+import {
+	type ApiAuth,
+	type ClerkGateway,
+	createApiAuth,
+	type PublicWebApiHandlerDeps,
+} from "@api/http";
 import {
 	handleAcceptInvitation,
 	handleCreateInvitation,
@@ -24,25 +29,34 @@ import {
 } from "@api/invitations/api";
 import { handleUpdateUserName } from "@api/users/api";
 import type { DirectoryDb } from "@dont-forget/db";
+import type { ServiceAnalytics } from "@dont-forget/shared";
 import { Hono } from "hono";
 
 export type ApiAppDeps = {
 	directory: DirectoryDb;
 	data: DataDeps;
 	publicWebBaseUrl: string;
-	// Test seam. Production leaves this undefined so handlers run the real
-	// Clerk verification path (src/http.ts authenticateApiUser).
+	clerk: ClerkGateway;
+	analytics: ServiceAnalytics;
 	authenticate?: ApiAuth;
 };
 
 export function createApiApp(deps: ApiAppDeps): Hono {
-	const handlerDeps: PublicWebApiHandlerDeps = {
+	const authenticate = deps.authenticate ?? createApiAuth(deps.clerk);
+	const handlerDeps = {
 		directory: deps.directory,
-		authenticate: deps.authenticate,
+		authenticate,
 		publicWebBaseUrl: deps.publicWebBaseUrl,
+		updateClerkUserName: deps.clerk.updateUserName,
+	} satisfies PublicWebApiHandlerDeps & {
+		updateClerkUserName: ClerkGateway["updateUserName"];
+	};
+	const invitationHandlerDeps = {
+		...handlerDeps,
+		analytics: deps.analytics,
 	};
 
-	const app = new Hono();
+	const app = new Hono({ strict: false });
 	app.get("/health", (context) => context.json({ ok: true }));
 
 	// Explicit adapter per route: static-path handlers take deps in the
@@ -54,7 +68,10 @@ export function createApiApp(deps: ApiAppDeps): Hono {
 	// identifiers so this additive route table does not change HTTP behavior.
 	// Domain handlers retain the existing identifier lookup and not-found behavior.
 	app.post("/api/bootstrap", (context) =>
-		handleBootstrap(context.req.raw, { directory: deps.directory }),
+		handleBootstrap(context.req.raw, {
+			directory: deps.directory,
+			authenticateRequest: deps.clerk.authenticateRequest,
+		}),
 	);
 	app.post("/api/data", (context) =>
 		handleDataUpload(context.req.raw, deps.data),
@@ -134,23 +151,23 @@ export function createApiApp(deps: ApiAppDeps): Hono {
 		handleListInvitations(
 			context.req.raw,
 			{ householdId: context.req.param("householdId") },
-			handlerDeps,
+			invitationHandlerDeps,
 		),
 	);
 	app.post("/api/invitations", (context) =>
-		handleCreateInvitation(context.req.raw, handlerDeps),
+		handleCreateInvitation(context.req.raw, invitationHandlerDeps),
 	);
 	app.get("/api/invitations/preview", (context) =>
-		handlePreviewInvitation(context.req.raw, handlerDeps),
+		handlePreviewInvitation(context.req.raw, invitationHandlerDeps),
 	);
 	app.post("/api/invitations/accept", (context) =>
-		handleAcceptInvitation(context.req.raw, handlerDeps),
+		handleAcceptInvitation(context.req.raw, invitationHandlerDeps),
 	);
 	app.patch("/api/invitations/:invitationId", (context) =>
 		handleRevokeInvitation(
 			context.req.raw,
 			{ invitationId: context.req.param("invitationId") },
-			handlerDeps,
+			invitationHandlerDeps,
 		),
 	);
 	app.patch("/api/users/me", (context) =>

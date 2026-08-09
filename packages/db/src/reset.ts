@@ -1,10 +1,11 @@
+import path from "node:path";
+import type { AppEnv } from "@dont-forget/shared";
 import {
-	type AppEnv,
 	assertLocalDirectoryDatabaseUrl,
 	assertProductionConfirmation,
+	loadEnvFile,
 	readPostgresConfig,
-} from "@dont-forget/shared";
-import { loadEnvFile } from "@dont-forget/shared/node";
+} from "@dont-forget/shared/node";
 import { type DirectoryDb, directoryDb, postgresPool } from "./client";
 import { REPOSITORY_ROOT } from "./repository-root";
 import {
@@ -88,7 +89,11 @@ async function main(): Promise<void> {
 	}
 }
 
-if (require.main === module) {
+// pnpm runs this package entrypoint with packages/db as the working directory.
+if (
+	process.argv[1] &&
+	path.resolve(process.argv[1]) === path.resolve("src/reset.ts")
+) {
 	main().catch((error) => {
 		console.error(error);
 		process.exit(1);

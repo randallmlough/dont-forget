@@ -13,12 +13,13 @@
 #   - Postgres container names END in `-db` so the nightly backup script's
 #     pg_dumpall loop picks them up. (The storage DB is rebuildable from the
 #     source DB, but backing it up is harmless and keeps the rule simple.)
-#   - The server's repo-root .env.production (never committed) sets
-#     COMPOSE_FILE=infra/compose.production.yaml plus production-only PG_*
-#     credentials, Clerk keys, and public URLs — never reuse staging values.
+#   - The server's repo-root .env.production (never committed) holds
+#     production-only PG_* credentials, Clerk keys, and public URLs — never
+#     reuse staging values. `make infra-* APP_ENV=production` selects this file
+#     explicitly.
 #
 # SCHEMA AUTHORITY and REPLICATION COUPLING notes in docker-compose.yaml apply
-# here unchanged: apply schema via drizzle-kit migrate against the source
+# here unchanged: apply schema via the package-owned migration command against the source
 # Postgres, and wal_level=logical + the `powersync` publication are both
 # required. Connection URIs are assembled HERE from the PG_* parts in
 # .env.production so each credential is stated exactly once.
@@ -32,6 +33,7 @@ services:
       dockerfile: infra/api/Dockerfile
     container_name: dontforget-prod-api
     restart: unless-stopped
+    stop_grace_period: 15s
     depends_on:
       pg-source:
         condition: service_healthy
@@ -68,17 +70,9 @@ services:
       target: builder
     environment:
       APP_ENV: production
+      CONFIRM_APP_ENV: ${CONFIRM_APP_ENV:-}
       DATABASE_URL: postgresql://${PG_DATABASE_USER}:${PG_DATABASE_PASSWORD}@pg-source:5432/${PG_DATABASE_NAME}
-    command:
-      [
-        "pnpm",
-        "--dir",
-        "packages/db",
-        "exec",
-        "drizzle-kit",
-        "migrate",
-        "--config=src/drizzle/postgres.migrate.ts",
-      ]
+    command: ["pnpm", "--dir", "packages/db", "db:migrate"]
     depends_on:
       pg-source:
         condition: service_healthy

@@ -1,9 +1,17 @@
+import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
+import path from "node:path";
 import { readApiServerConfig } from "@api/config";
 import type { DataDeps } from "@api/data/api";
 import * as payload from "@api/data/payload";
 import * as rateLimit from "@api/data/rate-limit";
-import { type ApiAuth, ApiUnauthorizedError } from "@api/http";
+import {
+	type ApiAuth,
+	ApiUnauthorizedError,
+	type ClerkGateway,
+	createClerkGateway,
+} from "@api/http";
+import { createClerkClient, verifyToken } from "@clerk/backend";
 import type { DataTransaction } from "@dont-forget/db";
 import {
 	householdJoinCodeFixture,
@@ -29,15 +37,19 @@ jest.mock("@clerk/backend", () => ({
 
 const TEST_HOST = "127.0.0.1";
 const TEST_NOW = PRIMARY_HOUSEHOLD_SEED.now + 100_000;
+const ENV_EXAMPLE = readFileSync(
+	path.resolve(__dirname, "../../..", ".env.example"),
+	"utf8",
+);
 const TEST_API_CONFIG = readApiServerConfig({
 	APP_ENV: "test",
 	DATABASE_URL: "postgresql://synthetic.invalid/dont_forget",
 	CLERK_SECRET_KEY: "sk_test_synthetic",
-	PUBLIC_WEB_BASE_URL: "  https://app.invalid/deep-links/  ",
-	RESEND_API_KEY: "re_synthetic",
-	RESEND_FROM_ADDRESS: "sender@example.com",
-	POSTHOG_PROJECT_TOKEN: "phc_synthetic",
-	POSTHOG_HOST: "https://posthog.invalid",
+	PUBLIC_WEB_BASE_URL: "https://app.invalid",
+	RESEND_API_KEY: envExampleValue("RESEND_API_KEY"),
+	RESEND_FROM_ADDRESS: envExampleValue("RESEND_FROM_ADDRESS"),
+	POSTHOG_PROJECT_TOKEN: envExampleValue("POSTHOG_PROJECT_TOKEN"),
+	POSTHOG_HOST: envExampleValue("POSTHOG_HOST"),
 });
 const jestFetch = globalThis.fetch;
 const originalPublicWebBaseUrl = process.env.PUBLIC_WEB_BASE_URL;
@@ -67,6 +79,12 @@ const apiAuthenticate = jest.fn(async (request: Request) => {
 	}
 	return authenticatedUser;
 }) satisfies ApiAuth;
+
+const clerkGateway = {
+	authenticateRequest: jest.fn(),
+	authenticateRequestSubject: jest.fn(),
+	updateUserName: jest.fn(),
+} satisfies ClerkGateway;
 
 const dataDeps: DataDeps = {
 	authenticate: async () => {
@@ -109,6 +127,8 @@ describe("Node API server", () => {
 			directory: testDirectory.db,
 			data: dataDeps,
 			authenticate: apiAuthenticate,
+			clerk: clerkGateway,
+			analytics: { track: jest.fn() },
 			publicWebBaseUrl: TEST_API_CONFIG.publicWebBaseUrl,
 		});
 		const listener = await listen(app.fetch);
@@ -144,6 +164,49 @@ describe("Node API server", () => {
 		expect(response.constructor.name).toBe("Response");
 		expect(response.status).toBe(200);
 		await expect(response.json()).resolves.toEqual({ ok: true });
+	});
+
+	it("starts from the blank optional example through first Clerk authentication", async () => {
+		expect(envExampleValue("POSTHOG_PROJECT_TOKEN")).toBe("");
+		expect(envExampleValue("RESEND_API_KEY")).toBe("");
+		expect(TEST_API_CONFIG.posthog).toEqual({ kind: "disabled" });
+		const mockedVerifyToken = jest.mocked(verifyToken);
+		// @ts-expect-error The SDK boundary needs only the verified subject here.
+		mockedVerifyToken.mockImplementation(async () => ({
+			sub: scenario.users.avery.clerkUserId,
+		}));
+		const getUser = jest.fn(async () => ({
+			id: scenario.users.avery.clerkUserId,
+			firstName: scenario.users.avery.firstName,
+			lastName: scenario.users.avery.lastName,
+			primaryEmailAddressId: "email_primary",
+			emailAddresses: [
+				{ id: "email_primary", emailAddress: scenario.users.avery.email },
+			],
+		}));
+		// @ts-expect-error Partial Clerk client mock for the getUser seam.
+		jest.mocked(createClerkClient).mockReturnValue({ users: { getUser } });
+		if (!directory) throw new Error("Expected test directory");
+		const app = createApiApp({
+			directory: directory.db,
+			clerk: createClerkGateway({
+				secretKey: TEST_API_CONFIG.clerkSecretKey,
+			}),
+			analytics: { track: jest.fn() },
+			publicWebBaseUrl: TEST_API_CONFIG.publicWebBaseUrl,
+			data: dataDeps,
+		});
+
+		const response = await app.request(
+			`/api/households/join-code/preview?code=${encodeURIComponent(joinCode.code)}`,
+			{ headers: { authorization: "Bearer synthetic-token" } },
+		);
+
+		expect(response.status).toBe(200);
+		expect(verifyToken).toHaveBeenCalledWith("synthetic-token", {
+			secretKey: TEST_API_CONFIG.clerkSecretKey,
+		});
+		expect(getUser).toHaveBeenCalledWith(scenario.users.avery.clerkUserId);
 	});
 
 	it("preserves the data pipeline order over HTTP", async () => {
@@ -254,14 +317,14 @@ describe("Node API server", () => {
 		await expect(invitationResponse.json()).resolves.toMatchObject({
 			invitations: expect.arrayContaining([
 				expect.objectContaining({
-					acceptUrl: `https://app.invalid/deep-links/invitations/accept?token=${encodeURIComponent(scenario.invitations.pendingEmail.token)}`,
+					acceptUrl: `https://app.invalid/invitations/accept?token=${encodeURIComponent(scenario.invitations.pendingEmail.token)}`,
 				}),
 			]),
 		});
 		expect(joinCodeResponse.status).toBe(200);
 		await expect(joinCodeResponse.json()).resolves.toMatchObject({
 			joinCode: {
-				joinUrl: `https://app.invalid/deep-links/households/join?code=${encodeURIComponent(joinCode.code)}`,
+				joinUrl: `https://app.invalid/households/join?code=${encodeURIComponent(joinCode.code)}`,
 			},
 		});
 	});
@@ -292,6 +355,11 @@ async function listen(
 		origin: `http://${TEST_HOST}:${address.port}`,
 		server,
 	};
+}
+
+function envExampleValue(key: string): string | undefined {
+	const match = ENV_EXAMPLE.match(new RegExp(`^${key}=(.*)$`, "m"));
+	return match?.[1]?.split(" #", 1)[0]?.trim();
 }
 
 function isHttpServer(server: ServerType): server is Server {

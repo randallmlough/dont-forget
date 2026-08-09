@@ -1,18 +1,10 @@
-// Production authentication for /api/data: sub-only Clerk verification, then
-// resolve the internal users.id by clerk_user_id from the pg directory.
-//
-// Lives in the db layer (ADR-0014). /http and @clerk/backend are
-// imported dynamically so the heavy, server-only Clerk SDK loads only when a
-// request is actually authenticated — a caller that injects its own auth (e.g.
-// the handler tests) never pulls it in. The other deps (drizzle, the pg schema,
-// @dont-forget/shared's static graph via @dont-forget/db,
-// so importing them statically defers nothing.
+// Production authentication for /api/data uses the process-owned Clerk gateway,
+// then resolves the internal users.id by clerk_user_id from the directory.
 
-import { directoryDb } from "@dont-forget/db";
+import type { ClerkGateway } from "@api/http";
+import type { DirectoryDb } from "@dont-forget/db";
 import { users } from "@dont-forget/db/schema";
-import { readClerkServerConfig } from "@dont-forget/shared";
 import { eq } from "drizzle-orm";
-import type { Pool } from "pg";
 
 // Auth failure (401).
 export class DataAuthError extends Error {
@@ -22,32 +14,19 @@ export class DataAuthError extends Error {
 	}
 }
 
-// Sub-only Clerk verification: verifyToken (no Backend-API getUser round-trip),
-// then resolve the internal users.id by clerk_user_id from the pg directory.
 export async function defaultAuthenticate(
 	request: Request,
-	pool: Pool,
+	directory: DirectoryDb,
+	gateway: ClerkGateway,
 ): Promise<string> {
-	const [{ bearerToken }, { verifyToken }] = await Promise.all([
-		import("@api/http"),
-		import("@clerk/backend"),
-	]);
-
-	let clerkUserId: string | undefined;
+	let clerkUserId: string;
 	try {
-		const token = bearerToken(request.headers.get("authorization"));
-		const { secretKey } = readClerkServerConfig();
-		const payload = await verifyToken(token, { secretKey });
-		clerkUserId = payload.sub;
+		clerkUserId = await gateway.authenticateRequestSubject(request);
 	} catch {
 		throw new DataAuthError("Invalid Clerk session token");
 	}
-	if (!clerkUserId) {
-		throw new DataAuthError("Invalid Clerk session token");
-	}
 
-	const db = directoryDb(pool);
-	const [row] = await db
+	const [row] = await directory
 		.select({ id: users.id })
 		.from(users)
 		.where(eq(users.clerkUserId, clerkUserId))

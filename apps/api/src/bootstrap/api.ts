@@ -2,17 +2,14 @@ import {
 	bootstrapAuthenticatedAppSession,
 	createProductionAuthenticatedAppSessionBootstrapDeps,
 } from "@api/bootstrap/bootstrap-service";
-import {
-	type ServerUserProfile,
-	UnauthorizedError,
-	verifyClerkRequest,
-} from "@api/http";
+import { type ServerUserProfile, UnauthorizedError } from "@api/http";
 import type { DirectoryDb } from "@dont-forget/db";
 import type { BootstrapResponse } from "@dont-forget/shared";
 import { asError, redactAttributes } from "@dont-forget/shared";
 
 export type BootstrapApiDeps = {
 	directory: DirectoryDb;
+	authenticateRequest: (request: Request) => Promise<ServerUserProfile>;
 };
 
 export async function handleBootstrap(
@@ -20,7 +17,7 @@ export async function handleBootstrap(
 	deps: BootstrapApiDeps,
 ): Promise<Response> {
 	try {
-		const profile = await verifyClerkRequest(request);
+		const profile = await deps.authenticateRequest(request);
 		return await createBootstrapResponse(profile, deps.directory);
 	} catch (error) {
 		if (error instanceof UnauthorizedError) {

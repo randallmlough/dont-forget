@@ -16,7 +16,7 @@ import {
 	handleSetJoinCodeEnabled,
 	handleSwitchActiveHousehold,
 } from "@api/households/api";
-import type { ApiAuth } from "@api/http";
+import type { ApiAuth, ClerkGateway } from "@api/http";
 import {
 	handleAcceptInvitation,
 	handleCreateInvitation,
@@ -335,6 +335,14 @@ const routeCases = [
 	},
 ] satisfies RouteCase[];
 
+const routeRequestCases = routeCases.flatMap((routeCase) => [
+	routeCase,
+	{
+		...routeCase,
+		requestPath: `${routeCase.requestPath}/`,
+	},
+]);
+
 type HandlerMock = {
 	mock: {
 		calls: readonly (readonly unknown[])[];
@@ -349,6 +357,17 @@ function createTestHarness() {
 	const fakeAuthenticate: ApiAuth = async () => {
 		throw new Error("unexpected authenticate call in dispatch test");
 	};
+	const fakeClerk: ClerkGateway = {
+		authenticateRequest: async () => {
+			throw new Error("unexpected Clerk request in dispatch test");
+		},
+		authenticateRequestSubject: async () => {
+			throw new Error("unexpected Clerk request in dispatch test");
+		},
+		updateUserName: async () => {
+			throw new Error("unexpected Clerk update in dispatch test");
+		},
+	};
 	const fakeData: DataDeps = {
 		authenticate: async () => "user-1",
 		withTransaction: async () => {
@@ -361,6 +380,8 @@ function createTestHarness() {
 			directory: fakeDirectory,
 			data: fakeData,
 			authenticate: fakeAuthenticate,
+			clerk: fakeClerk,
+			analytics: { track: jest.fn() },
 			publicWebBaseUrl: fakePublicWebBaseUrl,
 		}),
 		fakeAuthenticate,
@@ -424,7 +445,7 @@ function expectBootstrapDeps({
 	}
 
 	expect(value.directory).toBe(fakeDirectory);
-	expect(Object.keys(value)).toEqual(["directory"]);
+	expect(Object.keys(value)).toEqual(["directory", "authenticateRequest"]);
 }
 
 describe("createApiApp", () => {
@@ -433,7 +454,7 @@ describe("createApiApp", () => {
 	});
 
 	it.each(
-		routeCases,
+		routeRequestCases,
 	)("$method $requestPath dispatches to $handlerName", async ({
 		method,
 		requestPath,

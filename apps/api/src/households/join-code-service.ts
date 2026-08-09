@@ -9,11 +9,11 @@ import {
 	householdJoinCodeUses,
 	households,
 } from "@dont-forget/db/schema";
-import type { ServiceAnalytics } from "@dont-forget/shared";
 import {
 	createAppId,
 	type HouseholdJoinCodeSource,
 	MANUAL_HOUSEHOLD_JOIN_CODE_SOURCE,
+	type ServiceAnalytics,
 } from "@dont-forget/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import { createActiveHouseholdService } from "./active-household-service";

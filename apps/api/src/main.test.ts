@@ -1,7 +1,9 @@
 import { createServer, type Server } from "node:http";
+import { createServerAnalytics, installServerAnalytics } from "@api/analytics";
 import { createApiApp } from "@api/app";
 import { readApiServerConfig } from "@api/config";
 import { defaultAuthenticate } from "@api/data/authenticate";
+import { type ClerkGateway, createClerkGateway } from "@api/http";
 import { deferred, waitForAsync } from "@api/test/async";
 import { defaultWithTransaction, directoryDb } from "@dont-forget/db";
 import { DEFAULT_API_PORT } from "@dont-forget/shared";
@@ -18,6 +20,11 @@ jest.mock("pg");
 jest.mock("@hono/node-server", () => ({ serve: jest.fn() }));
 jest.mock("@api/app", () => ({ createApiApp: jest.fn() }));
 jest.mock("@api/config", () => ({ readApiServerConfig: jest.fn() }));
+jest.mock("@api/analytics", () => ({
+	createServerAnalytics: jest.fn(),
+	installServerAnalytics: jest.fn(),
+}));
+jest.mock("@api/http", () => ({ createClerkGateway: jest.fn() }));
 jest.mock("@dont-forget/db", () => ({
 	directoryDb: jest.fn(),
 	defaultWithTransaction: jest.fn(),
@@ -30,10 +37,11 @@ const config = {
 	databaseUrl: "postgresql://synthetic.invalid/dont_forget",
 	clerkSecretKey: "sk_test_synthetic",
 	publicWebBaseUrl: "https://app.invalid",
-	resendApiKey: "re_synthetic",
-	resendFromAddress: "sender@example.com",
-	posthogProjectToken: "phc_synthetic",
-	posthogHost: "https://posthog.invalid",
+	posthog: {
+		kind: "enabled",
+		projectToken: "phc_synthetic",
+		host: "https://posthog.invalid",
+	},
 	apiPort: DEFAULT_API_PORT,
 } as const;
 
@@ -52,8 +60,20 @@ const mockedLoadEnvFile = jest.mocked(loadEnvFile);
 const mockedDirectoryDb = jest.mocked(directoryDb);
 const mockedDefaultAuthenticate = jest.mocked(defaultAuthenticate);
 const mockedDefaultWithTransaction = jest.mocked(defaultWithTransaction);
+const mockedCreateClerkGateway = jest.mocked(createClerkGateway);
+const mockedCreateServerAnalytics = jest.mocked(createServerAnalytics);
+const mockedInstallServerAnalytics = jest.mocked(installServerAnalytics);
 const mockedPool = jest.mocked(Pool);
 const originalAppEnv = process.env.APP_ENV;
+const clerkGateway = {
+	authenticateRequest: jest.fn(),
+	authenticateRequestSubject: jest.fn(),
+	updateUserName: jest.fn(),
+} satisfies ClerkGateway;
+const analyticsRuntime = {
+	analytics: { track: jest.fn() },
+	flush: jest.fn(async () => {}),
+};
 
 function processExitWithoutTerminating(_code?: string | number | null): never;
 function processExitWithoutTerminating(): undefined {
@@ -121,6 +141,8 @@ describe("startApiServer", () => {
 		mockedServe.mockReturnValue(server);
 		mockedCreateApiApp.mockReturnValue(new Hono());
 		mockedReadApiServerConfig.mockReturnValue(config);
+		mockedCreateClerkGateway.mockReturnValue(clerkGateway);
+		mockedCreateServerAnalytics.mockReturnValue(analyticsRuntime);
 		jest
 			.mocked(Pool.prototype.query)
 			.mockImplementation(async () => readinessResult);
@@ -216,13 +238,26 @@ describe("startApiServer", () => {
 		const appDeps = createdAppDeps();
 		expect(appDeps.directory).toBe(mockedDirectoryDb.mock.results.at(0)?.value);
 		expect(appDeps.publicWebBaseUrl).toBe(config.publicWebBaseUrl);
-		expect(appDeps.authenticate).toBeUndefined();
+		expect(appDeps.clerk).toBe(clerkGateway);
+		expect(appDeps.analytics).toBe(analyticsRuntime.analytics);
+		expect(mockedCreateClerkGateway).toHaveBeenCalledWith({
+			secretKey: config.clerkSecretKey,
+		});
+		expect(mockedCreateServerAnalytics).toHaveBeenCalledWith({
+			appEnv: config.appEnv,
+			posthog: config.posthog,
+		});
+		expect(mockedInstallServerAnalytics).toHaveBeenCalledWith(analyticsRuntime);
 
 		const request = new Request("https://api.invalid/api/data", {
 			method: "POST",
 		});
 		await appDeps.data.authenticate(request);
-		expect(mockedDefaultAuthenticate).toHaveBeenCalledWith(request, pool);
+		expect(mockedDefaultAuthenticate).toHaveBeenCalledWith(
+			request,
+			appDeps.directory,
+			clerkGateway,
+		);
 
 		const runTransaction = jest.fn(async () => "result");
 		await appDeps.data.withTransaction(runTransaction);
@@ -251,7 +286,6 @@ describe("startApiServer", () => {
 			...config,
 			databaseUrl: "postgresql://do-not-log.invalid/dont_forget",
 			clerkSecretKey: "sk_test_do-not-log",
-			resendApiKey: "re_do-not-log",
 		};
 		mockedReadApiServerConfig.mockReturnValue(sensitiveConfig);
 
@@ -288,6 +322,7 @@ describe("startApiServer", () => {
 		await waitForAsync(() => {
 			expect(server.close).toHaveBeenCalledTimes(1);
 			expect(Pool.prototype.end).toHaveBeenCalledTimes(1);
+			expect(analyticsRuntime.flush).toHaveBeenCalledTimes(1);
 			expect(process.exit).toHaveBeenCalledWith(0);
 			expect(process.exit).toHaveBeenCalledTimes(1);
 		});

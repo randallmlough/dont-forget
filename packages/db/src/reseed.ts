@@ -1,7 +1,7 @@
 import {
 	assertLocalDirectoryDatabaseUrl,
 	readPostgresConfig,
-} from "@dont-forget/shared";
+} from "@dont-forget/shared/node";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { directoryDb, postgresPool } from "./client";
 import { resetDirectoryDatabase } from "./reset";

@@ -376,6 +376,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@clerk/backend':
+        specifier: ^3.4.7
+        version: 3.8.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@dont-forget/shared':
         specifier: workspace:*
         version: link:../shared

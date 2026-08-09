@@ -1,4 +1,3 @@
-import type { HouseholdMember } from "@dont-forget/shared";
 import {
 	type CreateInvitationResponse,
 	createHouseholdResponseSchema,
@@ -6,6 +5,7 @@ import {
 	type HouseholdJoinCode,
 	type HouseholdJoinCodePreview,
 	type HouseholdJoinCodeSource,
+	type HouseholdMember,
 	type InvitationPreview,
 	type InvitationRecord,
 	invitationPreviewSchema,

@@ -1,6 +1,13 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { appSchemeForEnv, readAppEnv, readWebPort } from "@dont-forget/shared";
+import {
+	APPLE_APP_SITE_ASSOCIATION_PATH,
+	appIdentityForEnv,
+	appleAppSiteAssociationForEnv,
+	PUBLIC_ENTRY_PATHS,
+	readAppEnv,
+	readWebPort,
+} from "@dont-forget/shared";
 import { loadEnvFile } from "@dont-forget/shared/node";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
@@ -14,7 +21,8 @@ const REPO_ROOT = path.resolve(
 );
 
 loadEnvFile({ cwd: REPO_ROOT });
-const APP_SCHEME = appSchemeForEnv("dontforget", readAppEnv());
+const APP_ENV = readAppEnv();
+const APP_SCHEME = appIdentityForEnv(APP_ENV).scheme;
 const WEB_PORT = readWebPort();
 
 export default defineConfig({
@@ -26,6 +34,7 @@ export default defineConfig({
 		strictPort: true,
 	},
 	plugins: [
+		appleAppSiteAssociationPlugin(),
 		publicResponsePolicyPlugin(),
 		tanstackStart({
 			prerender: {
@@ -34,11 +43,24 @@ export default defineConfig({
 				crawlLinks: false,
 				failOnError: true,
 			},
-			pages: [{ path: "/invitations/accept" }, { path: "/households/join" }],
+			pages: PUBLIC_ENTRY_PATHS.map((path) => ({ path })),
 		}),
 		viteReact(),
 	],
 });
+
+function appleAppSiteAssociationPlugin(): Plugin {
+	return {
+		name: "dont-forget-apple-app-site-association",
+		generateBundle() {
+			this.emitFile({
+				type: "asset",
+				fileName: APPLE_APP_SITE_ASSOCIATION_PATH.slice(1),
+				source: JSON.stringify(appleAppSiteAssociationForEnv(APP_ENV)),
+			});
+		},
+	};
+}
 
 const applyPublicResponsePolicy: Connect.NextHandleFunction = (
 	request,

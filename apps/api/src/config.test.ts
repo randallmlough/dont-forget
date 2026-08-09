@@ -6,10 +6,6 @@ const requiredKeys = [
 	"DATABASE_URL",
 	"CLERK_SECRET_KEY",
 	"PUBLIC_WEB_BASE_URL",
-	"RESEND_API_KEY",
-	"RESEND_FROM_ADDRESS",
-	"POSTHOG_PROJECT_TOKEN",
-	"POSTHOG_HOST",
 ] as const;
 
 function validSource(): Record<string, string | undefined> {
@@ -18,8 +14,6 @@ function validSource(): Record<string, string | undefined> {
 		DATABASE_URL: "postgresql://synthetic.invalid/dont_forget",
 		CLERK_SECRET_KEY: "sk_test_synthetic",
 		PUBLIC_WEB_BASE_URL: "https://app.invalid",
-		RESEND_API_KEY: "re_synthetic",
-		RESEND_FROM_ADDRESS: "sender@example.com",
 		POSTHOG_PROJECT_TOKEN: "phc_synthetic",
 		POSTHOG_HOST: "https://posthog.invalid",
 	};
@@ -39,12 +33,52 @@ describe("readApiServerConfig", () => {
 			databaseUrl: "postgresql://synthetic.invalid/dont_forget",
 			clerkSecretKey: "sk_test_synthetic",
 			publicWebBaseUrl: "https://app.invalid",
-			resendApiKey: "re_synthetic",
-			resendFromAddress: "sender@example.com",
-			posthogProjectToken: "phc_synthetic",
-			posthogHost: "https://posthog.invalid",
+			posthog: {
+				kind: "enabled",
+				projectToken: "phc_synthetic",
+				host: "https://posthog.invalid",
+			},
 			apiPort: DEFAULT_API_PORT,
 		});
+	});
+
+	it.each([
+		{},
+		{ POSTHOG_PROJECT_TOKEN: "", POSTHOG_HOST: "" },
+		{ POSTHOG_PROJECT_TOKEN: "   ", POSTHOG_HOST: "not-used" },
+		{ POSTHOG_PROJECT_TOKEN: "phc_your_project_token_here" },
+	])("allows PostHog to be disabled with optional values %#", (overrides) => {
+		expect(
+			readApiServerConfig({
+				...validSource(),
+				POSTHOG_PROJECT_TOKEN: undefined,
+				POSTHOG_HOST: undefined,
+				...overrides,
+			}).posthog,
+		).toEqual({ kind: "disabled" });
+	});
+
+	it("uses the default PostHog host when only a project token is configured", () => {
+		expect(
+			readApiServerConfig({
+				...validSource(),
+				POSTHOG_HOST: undefined,
+			}).posthog,
+		).toEqual({
+			kind: "enabled",
+			projectToken: "phc_synthetic",
+			host: "https://us.i.posthog.com",
+		});
+	});
+
+	it("ignores unconsumed Resend values", () => {
+		expect(() =>
+			readApiServerConfig({
+				...validSource(),
+				RESEND_API_KEY: "",
+				RESEND_FROM_ADDRESS: "not-an-email",
+			}),
+		).not.toThrow();
 	});
 
 	it("parses an explicit valid API port", () => {
@@ -109,11 +143,22 @@ describe("readApiServerConfig", () => {
 
 	it.each([
 		{ key: "PUBLIC_WEB_BASE_URL", value: "not-a-url" },
+		{ key: "PUBLIC_WEB_BASE_URL", value: "https://app.invalid/path" },
+		{ key: "PUBLIC_WEB_BASE_URL", value: " https://app.invalid " },
 		{ key: "POSTHOG_HOST", value: "not-a-url" },
-		{ key: "RESEND_FROM_ADDRESS", value: "not-an-email" },
-	])("rejects malformed $key", ({ key, value }) => {
+	])("rejects malformed enabled $key", ({ key, value }) => {
 		expect(() =>
 			readApiServerConfig({ ...validSource(), [key]: value }),
 		).toThrow();
+	});
+
+	it("allows the generated localhost web origin for local development", () => {
+		expect(
+			readApiServerConfig({
+				...validSource(),
+				APP_ENV: "local",
+				PUBLIC_WEB_BASE_URL: "http://localhost:3017",
+			}).publicWebBaseUrl,
+		).toBe("http://localhost:3017");
 	});
 });

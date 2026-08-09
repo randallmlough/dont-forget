@@ -12,29 +12,44 @@ const SESSION_HINT_KEY = "dont-forget/authenticated-app-session-present";
 describe("Authenticated App Session restore payload", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		jest.mocked(AsyncStorage.removeItem).mockResolvedValue(undefined);
 	});
 
 	it("persists and reads the last Authenticated App Session payload", async () => {
 		const session = sessionFixture();
+		const persistedSession = { clerkUserId: "user_avery", session };
 		jest
 			.mocked(AsyncStorage.getItem)
-			.mockResolvedValueOnce(JSON.stringify(session));
+			.mockResolvedValueOnce(JSON.stringify(persistedSession));
 
-		await persistAuthenticatedAppSession(session);
+		await persistAuthenticatedAppSession(persistedSession);
 
 		expect(AsyncStorage.setItem).toHaveBeenCalledWith(
 			SESSION_HINT_KEY,
-			JSON.stringify(session),
+			JSON.stringify(persistedSession),
 		);
 		await expect(readPersistedAuthenticatedAppSession()).resolves.toEqual(
-			session,
+			persistedSession,
 		);
 	});
 
+	it("validates the Clerk-bound envelope before persisting it", async () => {
+		await expect(
+			persistAuthenticatedAppSession({
+				clerkUserId: "",
+				session: sessionFixture(),
+			}),
+		).rejects.toThrow();
+		expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+	});
+
 	it("treats a valid persisted payload as the cold-start hint", async () => {
-		jest
-			.mocked(AsyncStorage.getItem)
-			.mockResolvedValueOnce(JSON.stringify(sessionFixture()));
+		jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce(
+			JSON.stringify({
+				clerkUserId: "user_avery",
+				session: sessionFixture(),
+			}),
+		);
 
 		await expect(hasAuthenticatedAppSessionHint()).resolves.toBe(true);
 	});
@@ -55,6 +70,15 @@ describe("Authenticated App Session restore payload", () => {
 
 		await expect(readPersistedAuthenticatedAppSession()).resolves.toBeNull();
 		await expect(hasAuthenticatedAppSessionHint()).resolves.toBe(false);
+	});
+
+	it("clears a legacy payload that is not bound to a Clerk subject", async () => {
+		jest
+			.mocked(AsyncStorage.getItem)
+			.mockResolvedValueOnce(JSON.stringify(sessionFixture()));
+
+		await expect(readPersistedAuthenticatedAppSession()).resolves.toBeNull();
+		expect(AsyncStorage.removeItem).toHaveBeenCalledWith(SESSION_HINT_KEY);
 	});
 
 	it("clears the same persisted payload key used for the restore hint", async () => {

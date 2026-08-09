@@ -1,4 +1,4 @@
-import { readPostgresConfig } from "@dont-forget/shared";
+import { readPostgresConfig } from "@dont-forget/shared/node";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema/postgres";

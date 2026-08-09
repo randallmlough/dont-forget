@@ -4,6 +4,7 @@ export type GracefulShutdownDeps = {
 	closeServer: () => Promise<void>;
 	forceCloseServer: () => void;
 	endPool: () => Promise<void>;
+	flushAnalytics: () => Promise<void>;
 	exit: (code: number) => void;
 	logError: (message: string, error?: unknown) => void;
 	deadlineMs?: number;
@@ -55,6 +56,12 @@ export function createGracefulShutdown(
 			} catch (error) {
 				failed = true;
 				deps.logError("api pool shutdown failed", error);
+			}
+			try {
+				await deps.flushAnalytics();
+			} catch (error) {
+				failed = true;
+				deps.logError("api analytics shutdown failed", error);
 			}
 			exitOnce(failed ? 1 : exitCode);
 		})();

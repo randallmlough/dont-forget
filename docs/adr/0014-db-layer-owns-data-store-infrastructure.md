@@ -2,11 +2,13 @@
 
 _Amended 2026-06-30 ([ADR-0018](0018-single-postgres-self-hosted-powersync.md)): `db/` still owns data-store infrastructure and the three ESLint rules (`no-db-server-imports`, `no-db-imports-outside-services`, `no-services-imports-in-db`) are unchanged — they now guard the server Postgres client and the `/api/data` applicator ([ADR-0016](0016-data-write-applicator-in-db-layer.md)). `HouseholdStore`, its operation queue, and the Turso sync contract are deleted; the app-side store is now PowerSync, opened in `lib/powersync/`._
 
+_Amended 2026-08-09: data-store infrastructure now has its own `packages/db/` workspace. The former root-relative `db/` layout and three path-specific lint rules below are historical; the current workspace boundary is enforced by `dont-forget/package-boundaries`._
+
 ADR-0011 placed `HouseholdStore` under `lib/services/household/` while declaring it "not a service". That contradiction grew visible: the app-safe `lib/services/household/index.ts` re-exported nothing but the store, the store contained no Household domain logic, and the server got its `DirectoryDb`/`HouseholdDb` connections from `db/client.ts` while the app got its symmetric store from the service layer. Meanwhile nothing enforced that app-safe services avoid `@libsql/client` infrastructure — the existing ESLint rule only guarded `app/`, `screens/`, and `components/`.
 
-We will make `db/` the single home for data-store infrastructure on both runtimes, with an explicit app-safe/server-only boundary inside it.
+The original decision made `db/` the single home for data-store infrastructure on both runtimes, with an explicit app-safe/server-only boundary inside it.
 
-## Decision
+## Historical decision
 
 - The `db/` root is app-safe and shared:
 
@@ -26,6 +28,13 @@ We will make `db/` the single home for data-store infrastructure on both runtime
 - A new ESLint rule (`no-db-server-imports`) enforces the boundary: `@/db/server/*` is importable only from `db/server/**`, `lib/services/**/server/**`, `lib/api/**`, `scripts/**`, tests, and lazily inside `app/api/**` request handlers. The existing `no-db-imports-outside-services` rule continues to bar app-facing code from all of `@/db/*`.
 - A companion ESLint rule (`no-services-imports-in-db`) enforces the downward direction: non-test code under `db/**` must not import `@/lib/services/**` or `@/lib/api/**`, so the layering inversion this ADR removed cannot silently return.
 
+## Current implementation amendment
+
+- `packages/db/src/schema/`, `migrations/`, `fixtures/`, and the operator/test utilities in `packages/db/src/` own Postgres/Drizzle infrastructure.
+- `packages/db/src/sync/applicator.ts` and `packages/db/src/sync/pg-transaction.ts` own the generic `/api/data` write core and Postgres transaction. `apps/api/src/data/` separately owns HTTP authentication, bounded payload parsing, rate limiting, transaction orchestration, and response mapping.
+- The mobile app owns its PowerSync database under `apps/mobile/src/session/powersync/` and exposes it to feature services through `apps/mobile/src/lib/product-database.ts`; mobile code does not import DB workspace internals.
+- API code consumes the DB workspace through declared, curated `@dont-forget/db` exports. The `dont-forget/package-boundaries` rule rejects relative source-tree escapes, foreign package aliases, undeclared workspace dependencies, and unexported workspace subpaths.
+
 ## Considered options
 
 - **Keep the store under `lib/services/household/` (status quo).** Rejected: ADR-0011's own text says the store is not a service; the app-side household folder held nothing else; the placement split symmetric infrastructure across two layers.
@@ -36,7 +45,7 @@ We will make `db/` the single home for data-store infrastructure on both runtime
 
 ## Consequences
 
-- The db layer is the bottom layer: it imports only cross-cutting `lib/` utilities (`lib/errors`, `lib/logger`, `lib/env`, `lib/load-env`, `lib/bootstrap` constants), never `lib/services/` or `lib/api/`. The never-services/api half is lint-enforced by `no-services-imports-in-db`.
-- App-safe service code is now lint-blocked from server db infrastructure instead of convention-blocked.
-- `package.json` db scripts point at `db/server/` (`db:generate`, `db:migrate`, `db:reset`).
+- The DB workspace is a bottom-layer package: it cannot import API or mobile package-local aliases or source paths, and consumers cannot bypass its declared exports.
+- Mobile feature code is lint-blocked from DB workspace internals instead of convention-blocked.
+- DB scripts resolve inside `packages/db/` (`db:generate`, `db:migrate`, `db:reset`, seed/reseed, and test helpers).
 - ADR-0011's service-layer rules (factory DI, SQL ownership, naming, runtime nesting for services) remain in force; only the store's placement clause is superseded.

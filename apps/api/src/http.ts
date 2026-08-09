@@ -6,7 +6,11 @@ import {
 } from "@clerk/backend";
 import type { DirectoryDb } from "@dont-forget/db";
 import type { User } from "@dont-forget/db/schema";
-import { readClerkServerConfig } from "@dont-forget/shared";
+import {
+	buildPublicEntryUrl,
+	PUBLIC_HOUSEHOLD_JOIN_CODE_ENTRY,
+	PUBLIC_INVITATION_ENTRY,
+} from "@dont-forget/shared";
 
 export const INVITATION_UNAVAILABLE_MESSAGE =
 	"This Invitation is no longer available.";
@@ -50,7 +54,7 @@ export type ApiAuth = (
 
 export type ApiHandlerDeps = {
 	directory: DirectoryDb;
-	authenticate?: ApiAuth;
+	authenticate: ApiAuth;
 };
 
 export type PublicWebApiHandlerDeps = ApiHandlerDeps & {
@@ -62,20 +66,22 @@ export async function authenticateApiUser(
 	directory: DirectoryDb,
 	deps: ApiHandlerDeps,
 ): Promise<User> {
-	if (deps.authenticate) {
-		return deps.authenticate(request, directory);
-	}
+	return deps.authenticate(request, directory);
+}
 
-	let profile: ServerUserProfile;
-	try {
-		profile = await verifyClerkRequest(request);
-	} catch (error) {
-		if (isServerUnauthorizedError(error)) {
-			throw new ApiUnauthorizedError(error.message);
+export function createApiAuth(gateway: ClerkGateway): ApiAuth {
+	return async (request, directory) => {
+		let profile: ServerUserProfile;
+		try {
+			profile = await gateway.authenticateRequest(request);
+		} catch (error) {
+			if (isServerUnauthorizedError(error)) {
+				throw new ApiUnauthorizedError(error.message);
+			}
+			throw error;
 		}
-		throw error;
-	}
-	return upsertAuthenticatedUser(profile, directory);
+		return upsertAuthenticatedUser(profile, directory);
+	};
 }
 
 export async function upsertAuthenticatedUser(
@@ -174,12 +180,19 @@ export function publicWebLinkBuilders({
 	buildInvitationAcceptUrl(input: { token: string }): string;
 	buildHouseholdJoinUrl(input: { code: string }): string;
 } {
-	const baseUrl = publicWebBaseUrl.replace(/\/+$/, "");
 	return {
 		buildInvitationAcceptUrl: ({ token }) =>
-			`${baseUrl}/invitations/accept?token=${encodeURIComponent(token)}`,
+			buildPublicEntryUrl({
+				entry: PUBLIC_INVITATION_ENTRY,
+				publicWebBaseUrl,
+				value: token,
+			}),
 		buildHouseholdJoinUrl: ({ code }) =>
-			`${baseUrl}/households/join?code=${encodeURIComponent(code)}`,
+			buildPublicEntryUrl({
+				entry: PUBLIC_HOUSEHOLD_JOIN_CODE_ENTRY,
+				publicWebBaseUrl,
+				value: code,
+			}),
 	};
 }
 
@@ -208,41 +221,56 @@ export type ServerUserProfile = {
 	displayName: string | null;
 };
 
-export async function verifyClerkRequest(
-	request: Request,
-): Promise<ServerUserProfile> {
-	const token = bearerToken(request.headers.get("authorization"));
-	const config = readClerkServerConfig();
-
-	let clerkUserId: string | undefined;
-	try {
-		const payload = await verifyToken(token, { secretKey: config.secretKey });
-		clerkUserId = payload.sub;
-	} catch {
-		throw new UnauthorizedError("Invalid Clerk session token");
-	}
-
-	if (!clerkUserId) {
-		throw new UnauthorizedError("Invalid Clerk session token");
-	}
-
-	const clerk = createClerkClient({ secretKey: config.secretKey });
-	const user = await clerk.users.getUser(clerkUserId);
-	return profileFromClerkUser(user);
-}
-
-export async function updateClerkUserName(input: {
+export type UpdateClerkUserNameInput = {
 	clerkUserId: string;
 	firstName: string | null;
 	lastName: string | null;
-}): Promise<ServerUserProfile> {
-	const config = readClerkServerConfig();
-	const clerk = createClerkClient({ secretKey: config.secretKey });
-	const user = await clerk.users.updateUser(input.clerkUserId, {
-		firstName: input.firstName ?? "",
-		lastName: input.lastName ?? "",
-	});
-	return profileFromClerkUser(user);
+};
+
+export type ClerkGateway = {
+	authenticateRequest(request: Request): Promise<ServerUserProfile>;
+	authenticateRequestSubject(request: Request): Promise<string>;
+	updateUserName(input: UpdateClerkUserNameInput): Promise<ServerUserProfile>;
+};
+
+export function createClerkGateway({
+	secretKey,
+}: {
+	secretKey: string;
+}): ClerkGateway {
+	const clerk = createClerkClient({ secretKey });
+	const authenticateRequestSubject = async (request: Request) => {
+		const token = bearerToken(request.headers.get("authorization"));
+
+		let clerkUserId: string | undefined;
+		try {
+			const payload = await verifyToken(token, { secretKey });
+			clerkUserId = payload.sub;
+		} catch {
+			throw new UnauthorizedError("Invalid Clerk session token");
+		}
+
+		if (!clerkUserId) {
+			throw new UnauthorizedError("Invalid Clerk session token");
+		}
+		return clerkUserId;
+	};
+
+	return {
+		async authenticateRequest(request) {
+			const clerkUserId = await authenticateRequestSubject(request);
+			const user = await clerk.users.getUser(clerkUserId);
+			return profileFromClerkUser(user);
+		},
+		authenticateRequestSubject,
+		async updateUserName(input) {
+			const user = await clerk.users.updateUser(input.clerkUserId, {
+				firstName: input.firstName ?? "",
+				lastName: input.lastName ?? "",
+			});
+			return profileFromClerkUser(user);
+		},
+	};
 }
 
 export function bearerToken(authorization: string | null): string {

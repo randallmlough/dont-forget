@@ -12,13 +12,11 @@ const mutatedEnvKeys = [
 	"APP_ENV",
 	"API_PORT",
 	"EXPO_APP_NAME",
-	"EXPO_SCHEME",
 	"EXPO_PUBLIC_API_BASE_URL",
 	"EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
 	"EXPO_PUBLIC_POWERSYNC_URL",
 	"EXPO_PUBLIC_PRIVACY_POLICY_URL",
 	"EXPO_PUBLIC_TERMS_URL",
-	"IOS_BUNDLE_IDENTIFIER",
 	"POSTHOG_HOST",
 	"POSTHOG_PROJECT_TOKEN",
 	"PUBLIC_WEB_BASE_URL",
@@ -114,7 +112,9 @@ describe("app config", () => {
 		mockedLoadEnvFile.mockReturnValue(appEnv);
 		process.env.APP_ENV = appEnv;
 		process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_synthetic";
-		process.env.PUBLIC_WEB_BASE_URL = "http://localhost:3000";
+		if (appEnv === "local") {
+			process.env.PUBLIC_WEB_BASE_URL = "http://localhost:3000";
+		}
 
 		const config = resolvedConfig({
 			ios: {
@@ -124,6 +124,7 @@ describe("app config", () => {
 
 		expect(config.ios?.associatedDomains).toBeUndefined();
 		expect(config.ios?.bundleIdentifier).toBe(`com.dont-forget.app.${appEnv}`);
+		expect(config.scheme).toBe(`dontforget-${appEnv}`);
 	});
 
 	it("preserves the EAS bootstrap pass without a web origin", () => {
@@ -139,6 +140,7 @@ describe("app config", () => {
 			associatedDomains: undefined,
 			bundleIdentifier: "com.dont-forget.app.staging",
 		});
+		expect(config.scheme).toBe("dontforget-staging");
 	});
 
 	it.each([
@@ -149,6 +151,7 @@ describe("app config", () => {
 			bundleIdentifier: "com.dont-forget.app.staging",
 			clerkPublishableKey: "pk_test_synthetic",
 			powersyncUrl: "https://sync-staging.example.invalid",
+			scheme: "dontforget-staging",
 			webBaseUrl: "https://web-staging.example.invalid",
 		},
 		{
@@ -158,6 +161,7 @@ describe("app config", () => {
 			bundleIdentifier: "com.dont-forget.app",
 			clerkPublishableKey: "pk_live_synthetic",
 			powersyncUrl: "https://sync.example.invalid",
+			scheme: "dontforget",
 			webBaseUrl: "https://web.example.invalid",
 		},
 	] as const)("resolves the $appEnv bundle identifier and iOS Associated Domain", ({
@@ -167,6 +171,7 @@ describe("app config", () => {
 		bundleIdentifier,
 		clerkPublishableKey,
 		powersyncUrl,
+		scheme,
 		webBaseUrl,
 	}) => {
 		mockedLoadEnvFile.mockReturnValue(appEnv);
@@ -182,6 +187,7 @@ describe("app config", () => {
 			associatedDomains,
 			bundleIdentifier,
 		});
+		expect(config.scheme).toBe(scheme);
 		expect(
 			Object.keys(config.extra ?? {}).filter((key) =>
 				/web|associated.?domains?/i.test(key),

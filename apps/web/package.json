@@ -8,7 +8,7 @@
 	},
 	"scripts": {
 		"biome:check": "biome ci .",
-		"build": "vite build && node scripts/verify-static-artifact.mjs",
+		"build": "vite build && node --experimental-strip-types scripts/verify-static-artifact.mjs",
 		"dev": "vite dev",
 		"format": "biome check --write .",
 		"lint": "eslint .",
@@ -17,7 +17,7 @@
 		"test:ci": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
 		"test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --runInBand",
 		"typecheck": "tsc --noEmit -p tsconfig.json",
-		"verify:static": "node scripts/verify-static-artifact.mjs"
+		"verify:static": "node --experimental-strip-types scripts/verify-static-artifact.mjs"
 	},
 	"dependencies": {
 		"@dont-forget/shared": "workspace:*",

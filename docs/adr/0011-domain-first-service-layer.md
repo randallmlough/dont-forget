@@ -2,11 +2,13 @@
 
 _Amended 2026-06-30 ([ADR-0018](0018-single-postgres-self-hosted-powersync.md)): the domain-first layout, factory DI, naming, and SQL-stays-in-services rules are unchanged, but the app-side data store is now the PowerSync `ProductDatabase` seam, not `HouseholdStore`, and the session runtime slice below has lost the per-Household resource/cache/lease machinery and Household provisioning._
 
+_Amended 2026-08-09: the monorepo split moved mobile feature services to `apps/mobile/src/features/<feature>/`, the Authenticated App Session runtime to `apps/mobile/src/session/`, API domains to `apps/api/src/<domain>/`, and data-store infrastructure to `packages/db/`. The original `lib/services/` paths below are retained as historical decision context._
+
 The application needs one primary pattern for querying and mutating product data. Earlier app code split this behavior between top-level `lib/app/` and `lib/server/` modules, with feature-specific adapters such as `active-list-adapter`. That made it hard to answer where a new User, Household, List, Item, Member, or Invitation operation should live.
 
-We will organize data access through a domain-first service layer under `lib/services/`. Services are the primary entrypoint for product data reads and writes. Top-level `lib/app/` and `lib/server/` are legacy locations: new data-access code must not be added there, and touched code should migrate into `lib/services/`.
+The original decision organized data access through a domain-first service layer under `lib/services/`. Services were the primary entrypoint for product data reads and writes. Top-level `lib/app/` and `lib/server/` were legacy locations: new data-access code was not added there, and touched code migrated into `lib/services/`.
 
-## Decision
+## Historical decision
 
 - Use domain folders as the top-level service boundary:
 
@@ -54,6 +56,16 @@ We will organize data access through a domain-first service layer under `lib/ser
 - Services own timestamp generation internally. Do not expose clock or time-provider dependencies from normal services; tests that need deterministic timestamp behavior should spy on `Date.now()` at the test boundary.
 - Services and stores accept logger and analytics dependencies when they own diagnostics or product events. They may default to the app-owned logger/analytics helpers at the service/store boundary, but tests and non-app processes should be able to inject their own observability adapters.
 
+## Current implementation amendment
+
+The domain-first, factory-DI, SQL-ownership, and runtime-separation decisions remain in force through workspace-owned paths:
+
+- Mobile List and Item product services live under `apps/mobile/src/features/list/` and `apps/mobile/src/features/item/`. They depend on the `ProductDatabase` seam at `apps/mobile/src/lib/product-database.ts`; `apps/mobile/src/session/powersync-app-database.ts` adapts the PowerSync database to that seam.
+- Authenticated App Session lifecycle and PowerSync ownership live under `apps/mobile/src/session/`, principally `apps/mobile/src/session/provider.tsx`, `apps/mobile/src/session/session-machine.ts`, and `apps/mobile/src/session/powersync/`. Screens borrow provider-owned session state and compose feature services only after a session exists.
+- The standalone Hono API composes routes in `apps/api/src/app.ts`. HTTP/auth behavior lives in same-domain `apps/api/src/<domain>/api.ts` modules and delegates to same-domain services; `/api/data` HTTP auth, payload, rate-limit, and response orchestration live under `apps/api/src/data/`.
+- Postgres schema, migrations, fixtures, test helpers, and the generic `/api/data` applicator live under `packages/db/`. API code consumes them only through declared `@dont-forget/db` exports.
+- `dont-forget/package-boundaries` enforces the workspace split: package-local aliases cannot cross package roots, and cross-workspace imports must use declared dependencies and exported `@dont-forget/*` entrypoints.
+
 ## Naming
 
 - Factory: `create<Domain>Service`
@@ -67,32 +79,35 @@ We will organize data access through a domain-first service layer under `lib/ser
 The signed-in app runtime uses a separate session service area; product storage and domain operations sit in the domain service areas over the shared PowerSync `ProductDatabase` seam:
 
 ```txt
-lib/services/session/
+apps/mobile/src/session/
   bootstrap.ts
-  controller.ts             # composes list/item services over the PowerSync store
-  powersync-app-database.ts # wraps the PowerSync handle as the ProductDatabase seam
+  provider.tsx
+  session-machine.ts
+  powersync-app-database.ts
   sign-out.ts
-  server/
-    bootstrap.ts
+  powersync/
+    connector.ts
+    provider.tsx
+    powersync.ts
+    schema.ts
 
-lib/services/household/
-  server/
-    household-service.ts
+apps/mobile/src/features/list/list-service.ts
+apps/mobile/src/features/item/item-service.ts
+apps/mobile/src/lib/product-database.ts
 
-lib/services/list/list-service.ts
-lib/services/item/item-service.ts
-lib/services/shared/product-database.ts   # the ProductDatabase seam
+apps/api/src/households/household-service.ts
+packages/db/src/sync/applicator.ts
 ```
 
 As part of that slice:
 
 - Keep reusable UI contracts explicit: loaded List state plus callbacks for loading, adding Items, and checking Items.
-- The session controller opens the PowerSync database once and injects the `ProductDatabase` seam into the List and Item services; there is no per-Household resource set, cache, or lease to compose.
+- The session provider and state machine own the signed-in lifecycle. Feature hooks construct List and Item services over the app-owned `ProductDatabase` adapter; there is no per-Household resource set, cache, or lease to compose.
 - Keep List and Item data loading route-owned by explicit List ID after the Authenticated App Session exists.
-- Keep Household domain server services (create, rename, membership, join code) under `lib/services/household/server/`; the two-phase provisioning service is deleted (ADR-0018, Decision 6).
-- Keep the `/api/data` write applicator and the server Postgres client under `db/server/`, not the Household service layer.
+- Keep Household domain server services (create, rename, membership, join code) under `apps/api/src/households/`; the two-phase provisioning service is deleted (ADR-0018, Decision 6).
+- Keep the `/api/data` write applicator and its Postgres transaction under `packages/db/src/sync/`, not the Household service layer.
 
-[ADR-0012](0012-authenticated-app-session-controller.md) supersedes the Home-owned resource ownership from the initial Home/List/Item slice. Authenticated App Session resource composition belongs to `lib/services/session/controller.ts`, with screens borrowing provider-owned session state and actions.
+[ADR-0012](0012-authenticated-app-session-controller.md) supersedes the Home-owned resource ownership from the initial Home/List/Item slice. Authenticated App Session resource composition belongs to `apps/mobile/src/session/provider.tsx` and `session-machine.ts`, with screens borrowing provider-owned session state and actions.
 
 ## Considered options
 
@@ -106,5 +121,5 @@ As part of that slice:
 - New product data access should be easier to place: choose the domain first, then the runtime-specific subfolder only if needed.
 - Future agents and humans must consult `docs/code-standards/architecture.md` and `docs/how-things-work/services.md` before adding data-access code.
 - The ESLint boundary rule becomes part of the architecture, not merely style.
-- Some existing files will remain in legacy locations until migrated by vertical slices.
-- The service layer does not remove the Expo API Route lazy-import requirement.
+- Workspace ownership makes client/server placement explicit: mobile features and session runtime cannot reach into API or DB source trees, and cross-workspace contracts travel through curated package exports.
+- The standalone Hono composition root keeps route registration mechanical while same-domain API modules and services own HTTP and domain behavior.

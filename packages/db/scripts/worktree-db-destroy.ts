@@ -4,6 +4,7 @@
  *
  * Run with: make worktree-db-destroy
  */
+import path from "node:path";
 import { loadEnvFile } from "@dont-forget/shared/node";
 import { REPOSITORY_ROOT } from "../src/repository-root";
 
@@ -17,7 +18,12 @@ async function main(): Promise<void> {
 	);
 }
 
-if (require.main === module) {
+// pnpm runs this package entrypoint with packages/db as the working directory.
+if (
+	process.argv[1] &&
+	path.resolve(process.argv[1]) ===
+		path.resolve("scripts/worktree-db-destroy.ts")
+) {
 	main().catch((error) => {
 		console.error(error);
 		process.exit(1);

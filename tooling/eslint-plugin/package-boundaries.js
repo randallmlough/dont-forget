@@ -1,5 +1,6 @@
 const { existsSync, readFileSync, readdirSync } = require("node:fs");
 const path = require("node:path");
+const { parse: parseYaml } = require("yaml");
 
 const {
 	dynamicImportSource,
@@ -19,6 +20,10 @@ module.exports = {
 		messages: {
 			crossPackageAlias:
 				'Alias import "{{ source }}" reaches source owned by {{ packageName }}.',
+			devOnlyWorkspacePackage:
+				'Workspace package "{{ targetName }}" is a dev dependency of {{ packageName }} and cannot be imported by production source.',
+			escapingAliasTarget:
+				'Alias import "{{ source }}" resolves outside the {{ packageName }} package.',
 			relativeEscape:
 				'Relative import "{{ source }}" escapes the {{ packageName }} package.',
 			undeclaredWorkspacePackage:
@@ -37,6 +42,7 @@ module.exports = {
 		const workspace = loadWorkspace(repositoryRoot);
 		const importer = workspace.byRoot.get(packageRoot);
 		if (!importer) return {};
+		const toolingImporter = isToolingImporter(filename, importer);
 
 		function check(node, source) {
 			if (!source) return;
@@ -53,17 +59,37 @@ module.exports = {
 				return;
 			}
 
-			const aliasOwner = workspace.aliases.find(({ pattern }) =>
+			const matchingAliases = workspace.aliases.filter(({ pattern }) =>
 				matchesPattern(pattern, source),
 			);
-			if (aliasOwner) {
-				if (aliasOwner.packageRoot !== importer.root) {
+			const ownedAlias = matchingAliases.find(
+				(alias) => alias.packageRoot === importer.root,
+			);
+			if (ownedAlias) {
+				if (
+					ownedAlias.targets.some(
+						(target) =>
+							!isWithin(
+								importer.root,
+								resolveAliasTarget(ownedAlias, target, source),
+							),
+					)
+				) {
 					context.report({
 						node,
-						messageId: "crossPackageAlias",
-						data: { source, packageName: aliasOwner.packageName },
+						messageId: "escapingAliasTarget",
+						data: { source, packageName: importer.name },
 					});
 				}
+				return;
+			}
+			const foreignAlias = matchingAliases[0];
+			if (foreignAlias) {
+				context.report({
+					node,
+					messageId: "crossPackageAlias",
+					data: { source, packageName: foreignAlias.packageName },
+				});
 				return;
 			}
 
@@ -73,16 +99,27 @@ module.exports = {
 			);
 			if (!target) return;
 
-			if (
-				target.root !== importer.root &&
-				!declaresDependency(importer.manifest, target.name)
-			) {
-				context.report({
-					node,
-					messageId: "undeclaredWorkspacePackage",
-					data: { packageName: importer.name, targetName: target.name },
-				});
-				return;
+			if (target.root !== importer.root) {
+				const declaration = dependencyDeclaration(
+					importer.manifest,
+					target.name,
+				);
+				if (declaration === "missing") {
+					context.report({
+						node,
+						messageId: "undeclaredWorkspacePackage",
+						data: { packageName: importer.name, targetName: target.name },
+					});
+					return;
+				}
+				if (declaration === "dev" && !toolingImporter) {
+					context.report({
+						node,
+						messageId: "devOnlyWorkspacePackage",
+						data: { packageName: importer.name, targetName: target.name },
+					});
+					return;
+				}
 			}
 
 			const subpath =
@@ -137,20 +174,18 @@ function loadWorkspace(repositoryRoot) {
 	const cached = workspaceCache.get(repositoryRoot);
 	if (cached) return cached;
 
-	const packageRoots = [
-		...childDirectories(path.join(repositoryRoot, "apps")),
-		...childDirectories(path.join(repositoryRoot, "packages")),
-		path.join(repositoryRoot, "tooling"),
-	].filter((root) => existsSync(path.join(root, "package.json")));
+	const packageRoots = workspacePackageRoots(repositoryRoot);
 	const packages = packageRoots.map((root) => ({
 		root,
 		manifest: readJson(path.join(root, "package.json")),
 	}));
-	const packageRecords = packages.map(({ root, manifest }) => ({
-		root,
-		manifest,
-		name: manifest.name,
-	}));
+	const packageRecords = packages
+		.filter(({ manifest }) => typeof manifest.name === "string")
+		.map(({ root, manifest }) => ({
+			root,
+			manifest,
+			name: manifest.name,
+		}));
 	const aliases = packageRecords.flatMap((packageRecord) =>
 		readPathAliases(packageRecord),
 	);
@@ -163,22 +198,118 @@ function loadWorkspace(repositoryRoot) {
 	return workspace;
 }
 
+function workspacePackageRoots(repositoryRoot) {
+	const workspaceFile = path.join(repositoryRoot, "pnpm-workspace.yaml");
+	const config = parseYaml(readFileSync(workspaceFile, "utf8"));
+	const patterns = Array.isArray(config?.packages) ? config.packages : [];
+	const roots = new Set();
+	for (const pattern of patterns) {
+		if (typeof pattern !== "string" || pattern.startsWith("!")) continue;
+		for (const root of expandWorkspacePattern(repositoryRoot, pattern)) {
+			if (existsSync(path.join(root, "package.json"))) roots.add(root);
+		}
+	}
+	for (const pattern of patterns) {
+		if (typeof pattern !== "string" || !pattern.startsWith("!")) continue;
+		for (const root of expandWorkspacePattern(
+			repositoryRoot,
+			pattern.slice(1),
+		)) {
+			roots.delete(root);
+		}
+	}
+	return [...roots];
+}
+
+function expandWorkspacePattern(repositoryRoot, pattern) {
+	const segments = pattern
+		.replaceAll("\\", "/")
+		.split("/")
+		.filter((segment) => segment && segment !== ".");
+	return expandDirectorySegments(repositoryRoot, segments, 0).filter((root) =>
+		isWithin(repositoryRoot, root),
+	);
+}
+
+function expandDirectorySegments(current, segments, index) {
+	if (index === segments.length) return [current];
+	const segment = segments[index];
+	if (segment === "**") {
+		return [
+			...expandDirectorySegments(current, segments, index + 1),
+			...childDirectories(current).flatMap((child) =>
+				expandDirectorySegments(child, segments, index),
+			),
+		];
+	}
+	if (!segment.includes("*") && !segment.includes("?")) {
+		const child = path.join(current, segment);
+		return existsSync(child)
+			? expandDirectorySegments(child, segments, index + 1)
+			: [];
+	}
+	const matcher = globSegmentRegExp(segment);
+	return childDirectories(current)
+		.filter((child) => matcher.test(path.basename(child)))
+		.flatMap((child) => expandDirectorySegments(child, segments, index + 1));
+}
+
 function childDirectories(parent) {
 	if (!existsSync(parent)) return [];
 	return readdirSync(parent, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
+		.filter(
+			(entry) =>
+				entry.isDirectory() &&
+				entry.name !== "node_modules" &&
+				entry.name !== ".git",
+		)
 		.map((entry) => path.join(parent, entry.name));
+}
+
+function globSegmentRegExp(segment) {
+	const source = [...segment]
+		.map((character) => {
+			if (character === "*") return ".*";
+			if (character === "?") return ".";
+			return character.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+		})
+		.join("");
+	return new RegExp(`^${source}$`);
 }
 
 function readPathAliases(packageRecord) {
 	const tsconfigPath = path.join(packageRecord.root, "tsconfig.json");
 	if (!existsSync(tsconfigPath)) return [];
-	const paths = readJson(tsconfigPath).compilerOptions?.paths ?? {};
-	return Object.keys(paths).map((pattern) => ({
-		pattern,
-		packageName: packageRecord.name,
-		packageRoot: packageRecord.root,
-	}));
+	const compilerOptions = readJson(tsconfigPath).compilerOptions ?? {};
+	const paths = compilerOptions.paths ?? {};
+	const targetBase = path.resolve(
+		packageRecord.root,
+		compilerOptions.baseUrl ?? ".",
+	);
+	return Object.entries(paths).flatMap(([pattern, targets]) =>
+		Array.isArray(targets) &&
+		targets.every((target) => typeof target === "string")
+			? [
+					{
+						pattern,
+						targets,
+						targetBase,
+						packageName: packageRecord.name,
+						packageRoot: packageRecord.root,
+					},
+				]
+			: [],
+	);
+}
+
+function resolveAliasTarget(alias, targetPattern, source) {
+	const star = alias.pattern.indexOf("*");
+	const wildcard =
+		star === -1
+			? ""
+			: source.slice(star, source.length - (alias.pattern.length - star - 1));
+	const target = targetPattern.replace("*", wildcard);
+	return path.resolve(alias.targetBase, target);
 }
 
 function readJson(filename) {
@@ -199,13 +330,33 @@ function isWithin(root, target) {
 	return relative !== ".." && !relative.startsWith(`..${path.sep}`);
 }
 
-function declaresDependency(manifest, packageName) {
-	return [
-		manifest.dependencies,
-		manifest.devDependencies,
-		manifest.optionalDependencies,
-		manifest.peerDependencies,
-	].some((dependencies) => dependencies?.[packageName] !== undefined);
+function dependencyDeclaration(manifest, packageName) {
+	if (
+		[
+			manifest.dependencies,
+			manifest.optionalDependencies,
+			manifest.peerDependencies,
+		].some((dependencies) => dependencies?.[packageName] !== undefined)
+	) {
+		return "runtime";
+	}
+	if (manifest.devDependencies?.[packageName] !== undefined) return "dev";
+	return "missing";
+}
+
+function isToolingImporter(filename, importer) {
+	if (importer.name === "@dont-forget/tooling") return true;
+	const relative = path
+		.relative(importer.root, filename)
+		.replaceAll(path.sep, "/");
+	return (
+		/(^|\/)(?:__tests__|test|tests|stories)(?:\/|$)/.test(relative) ||
+		/\.(?:test|spec|stories)\.[cm]?[jt]sx?$/.test(relative) ||
+		/(^|\/)(?:scripts|tooling|\.storybook|\.rnstorybook)(?:\/|$)/.test(
+			relative,
+		) ||
+		/(^|\/)[^/]*config\.[cm]?[jt]sx?$/.test(relative)
+	);
 }
 
 function isExported(exportsField, subpath) {

@@ -27,6 +27,7 @@
 		"worktree:db:destroy": "tsx scripts/worktree-db-destroy.ts"
 	},
 	"dependencies": {
+		"@clerk/backend": "^3.4.7",
 		"@dont-forget/shared": "workspace:*",
 		"drizzle-orm": "^0.45.2",
 		"pg": "^8.22.0",

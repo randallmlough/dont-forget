@@ -1,4 +1,6 @@
-export type PublicWebPath = "/invitations/accept" | "/households/join";
+import type { PublicEntryPath } from "@dont-forget/shared";
+
+export type PublicWebPath = PublicEntryPath;
 
 export type BuildAppEntryHrefInput = {
 	scheme: string;

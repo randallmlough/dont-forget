@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
 	type AppEnv,
-	appSchemeForEnv,
+	appIdentityForEnv,
 	readApiPort,
 	readIosAssociatedDomains,
 	readPublicExpoConfigIfPresent,
@@ -20,12 +20,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 	// and the second, env-injected evaluation fills the extras and entitlement.
 	const publicConfig = readPublicExpoConfigIfPresent();
 	const associatedDomains = publicConfig
-		? readIosAssociatedDomains(appEnv, publicConfig.apiBaseUrl)
+		? readIosAssociatedDomains(appEnv, publicConfig.publicWebBaseUrl)
 		: undefined;
-	const baseBundleIdentifier =
-		config.ios?.bundleIdentifier ?? "com.dont-forget.app";
-	const baseScheme =
-		typeof config.scheme === "string" ? config.scheme : "dontforget";
+	const identity = appIdentityForEnv(appEnv);
 
 	return {
 		...config,
@@ -34,13 +31,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			process.env.EXPO_APP_NAME ??
 			appNameForEnv(config.name ?? "Don't Forget", appEnv),
 		slug: config.slug ?? "dont-forget",
-		scheme: process.env.EXPO_SCHEME ?? appSchemeForEnv(baseScheme, appEnv),
+		scheme: identity.scheme,
 		ios: {
 			...config.ios,
 			associatedDomains,
-			bundleIdentifier:
-				process.env.IOS_BUNDLE_IDENTIFIER ??
-				bundleIdentifierForEnv(baseBundleIdentifier, appEnv),
+			bundleIdentifier: identity.bundleIdentifier,
 		},
 		extra: {
 			...config.extra,
@@ -95,17 +90,6 @@ function appNameForEnv(baseName: string, appEnv: AppEnv): string {
 	}
 
 	return `${baseName} ${labelForEnv(appEnv)}`;
-}
-
-function bundleIdentifierForEnv(
-	baseBundleIdentifier: string,
-	appEnv: AppEnv,
-): string {
-	if (appEnv === "production") {
-		return baseBundleIdentifier;
-	}
-
-	return `${baseBundleIdentifier}.${appEnv}`;
 }
 
 function labelForEnv(appEnv: AppEnv): string {

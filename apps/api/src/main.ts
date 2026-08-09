@@ -1,8 +1,10 @@
 import type { Server } from "node:http";
 import path from "node:path";
+import { createServerAnalytics, installServerAnalytics } from "@api/analytics";
 import { createApiApp } from "@api/app";
 import { readApiServerConfig } from "@api/config";
 import { defaultAuthenticate } from "@api/data/authenticate";
+import { createClerkGateway } from "@api/http";
 import { createGracefulShutdown } from "@api/lifecycle";
 import { defaultWithTransaction, directoryDb } from "@dont-forget/db";
 import { asError, redactAttributes } from "@dont-forget/shared";
@@ -34,12 +36,21 @@ export async function startApiServer(): Promise<void> {
 		await pool.end();
 		throw error;
 	}
+	const clerk = createClerkGateway({ secretKey: config.clerkSecretKey });
+	const analytics = createServerAnalytics({
+		appEnv: config.appEnv,
+		posthog: config.posthog,
+	});
+	installServerAnalytics(analytics);
+	const directory = directoryDb(pool);
 
 	const app = createApiApp({
-		directory: directoryDb(pool),
+		directory,
 		publicWebBaseUrl: config.publicWebBaseUrl,
+		clerk,
+		analytics: analytics.analytics,
 		data: {
-			authenticate: (request) => defaultAuthenticate(request, pool),
+			authenticate: (request) => defaultAuthenticate(request, directory, clerk),
 			withTransaction: (run) => defaultWithTransaction(pool, run),
 		},
 	});
@@ -65,6 +76,7 @@ export async function startApiServer(): Promise<void> {
 		closeServer: () => closeServer(server),
 		forceCloseServer: () => server.closeAllConnections(),
 		endPool: () => pool.end(),
+		flushAnalytics: analytics.flush,
 		exit: (code) => process.exit(code),
 		logError: logOperationalError,
 	});

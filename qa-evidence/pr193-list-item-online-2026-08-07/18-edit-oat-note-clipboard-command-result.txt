@@ -1,2 +1,0 @@
-printf %s 'Unsweetened' | xcrun simctl pbcopy 261F6427-153A-4C7B-8528-E6E8C542E15D
-exit code: 0

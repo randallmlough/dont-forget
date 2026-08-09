@@ -10,6 +10,9 @@ describe("createGracefulShutdown", () => {
 		const endPool = jest.fn(async () => {
 			order.push("end Pool");
 		});
+		const flushAnalytics = jest.fn(async () => {
+			order.push("flush analytics");
+		});
 		const exit = jest.fn((code: number) => {
 			order.push(`exit ${code}`);
 		});
@@ -17,15 +20,22 @@ describe("createGracefulShutdown", () => {
 			closeServer,
 			forceCloseServer: jest.fn(),
 			endPool,
+			flushAnalytics,
 			exit,
 			logError: jest.fn(),
 		});
 
 		await shutdown();
 
-		expect(order).toEqual(["close server", "end Pool", "exit 0"]);
+		expect(order).toEqual([
+			"close server",
+			"end Pool",
+			"flush analytics",
+			"exit 0",
+		]);
 		expect(closeServer).toHaveBeenCalledTimes(1);
 		expect(endPool).toHaveBeenCalledTimes(1);
+		expect(flushAnalytics).toHaveBeenCalledTimes(1);
 		expect(exit).toHaveBeenCalledTimes(1);
 	});
 
@@ -38,6 +48,7 @@ describe("createGracefulShutdown", () => {
 			closeServer,
 			forceCloseServer: jest.fn(),
 			endPool,
+			flushAnalytics: jest.fn(async () => {}),
 			exit,
 			logError: jest.fn(),
 		});
@@ -70,6 +81,7 @@ describe("createGracefulShutdown", () => {
 				closeServer: jest.fn(() => serverDrain.promise),
 				forceCloseServer,
 				endPool,
+				flushAnalytics: jest.fn(async () => {}),
 				exit,
 				logError,
 			});
@@ -104,6 +116,7 @@ describe("createGracefulShutdown", () => {
 				endPool: jest.fn(async () => {
 					throw poolError;
 				}),
+				flushAnalytics: jest.fn(async () => {}),
 				exit,
 				logError,
 			});
@@ -123,6 +136,59 @@ describe("createGracefulShutdown", () => {
 		}
 	});
 
+	it("logs an analytics flush failure and exits nonzero once", async () => {
+		const analyticsError = new Error("synthetic analytics failure");
+		const exit = jest.fn();
+		const logError = jest.fn();
+		const shutdown = createGracefulShutdown({
+			closeServer: jest.fn(async () => {}),
+			forceCloseServer: jest.fn(),
+			endPool: jest.fn(async () => {}),
+			flushAnalytics: jest.fn(async () => {
+				throw analyticsError;
+			}),
+			exit,
+			logError,
+		});
+
+		await expect(shutdown()).resolves.toBeUndefined();
+
+		expect(logError).toHaveBeenCalledWith(
+			"api analytics shutdown failed",
+			analyticsError,
+		);
+		expect(exit).toHaveBeenCalledWith(1);
+		expect(exit).toHaveBeenCalledTimes(1);
+	});
+
+	it("enforces the shared deadline while analytics is flushing", async () => {
+		jest.useFakeTimers();
+		try {
+			const analyticsDrain = deferred<void>();
+			const forceCloseServer = jest.fn();
+			const exit = jest.fn();
+			const shutdown = createGracefulShutdown({
+				closeServer: jest.fn(async () => {}),
+				forceCloseServer,
+				endPool: jest.fn(async () => {}),
+				flushAnalytics: jest.fn(() => analyticsDrain.promise),
+				exit,
+				logError: jest.fn(),
+			});
+
+			const run = shutdown();
+			await Promise.resolve();
+			await Promise.resolve();
+			jest.advanceTimersByTime(SHUTDOWN_DEADLINE_MS);
+
+			await expect(run).resolves.toBeUndefined();
+			expect(forceCloseServer).toHaveBeenCalledTimes(1);
+			expect(exit).toHaveBeenCalledWith(1);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	it("attempts to end the Pool after a server-close failure", async () => {
 		jest.useFakeTimers();
 		try {
@@ -136,6 +202,7 @@ describe("createGracefulShutdown", () => {
 				}),
 				forceCloseServer: jest.fn(),
 				endPool,
+				flushAnalytics: jest.fn(async () => {}),
 				exit,
 				logError,
 			});
@@ -163,6 +230,7 @@ describe("createGracefulShutdown", () => {
 				closeServer: jest.fn(async () => {}),
 				forceCloseServer,
 				endPool: jest.fn(async () => {}),
+				flushAnalytics: jest.fn(async () => {}),
 				exit: jest.fn(),
 				logError: jest.fn(),
 			});
@@ -191,6 +259,7 @@ describe("createGracefulShutdown", () => {
 				closeServer: jest.fn(async () => {}),
 				forceCloseServer: jest.fn(),
 				endPool: jest.fn(() => poolEnd.promise),
+				flushAnalytics: jest.fn(async () => {}),
 				exit,
 				logError,
 			});

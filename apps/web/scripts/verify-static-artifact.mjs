@@ -2,27 +2,20 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+	APPLE_APP_SITE_ASSOCIATION_PATH,
+	appleAppSiteAssociationForEnv,
+	PUBLIC_HOUSEHOLD_JOIN_CODE_ENTRY,
+	PUBLIC_INVITATION_ENTRY,
+	readAppEnv,
+} from "@dont-forget/shared";
 
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const clientRoot = resolve(webRoot, "dist/client");
 
-const expectedAasa = {
-	applinks: {
-		apps: [],
-		details: [
-			{
-				appID: "D64V4GPNLJ.com.dont-forget.app.staging",
-				paths: ["/invitations/accept", "/households/join"],
-			},
-			{
-				appID: "D64V4GPNLJ.com.dont-forget.app",
-				paths: ["/invitations/accept", "/households/join"],
-			},
-		],
-	},
-};
+const expectedAasa = appleAppSiteAssociationForEnv(readAppEnv());
 
-const aasaPath = resolve(clientRoot, ".well-known/apple-app-site-association");
+const aasaPath = resolve(clientRoot, APPLE_APP_SITE_ASSOCIATION_PATH.slice(1));
 await access(aasaPath);
 assert.equal(
 	aasaPath.endsWith("apple-app-site-association"),
@@ -38,11 +31,11 @@ assert.deepEqual(
 await assertNoHandAuthoredIndexRoute();
 
 await verifyPublicPage({
-	path: "invitations/accept/index.html",
+	path: `${PUBLIC_INVITATION_ENTRY.path.slice(1)}/index.html`,
 	expectedCopy: "This Invitation opens in the Don&#x27;t Forget app.",
 });
 await verifyPublicPage({
-	path: "households/join/index.html",
+	path: `${PUBLIC_HOUSEHOLD_JOIN_CODE_ENTRY.path.slice(1)}/index.html`,
 	expectedCopy: "This Household Join Code opens in the Don&#x27;t Forget app.",
 });
 

@@ -8,5 +8,6 @@ apps/mobile/.expo
 .env*
 plans
 docs
+qa-evidence
 # Production Postgres bind mounts (root-owned; unreadable during context transfer)
 infra/data

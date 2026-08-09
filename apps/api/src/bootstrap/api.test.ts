@@ -3,11 +3,7 @@ import {
 	bootstrapAuthenticatedAppSession,
 	createProductionAuthenticatedAppSessionBootstrapDeps,
 } from "@api/bootstrap/bootstrap-service";
-import {
-	type ServerUserProfile,
-	UnauthorizedError,
-	verifyClerkRequest,
-} from "@api/http";
+import { type ServerUserProfile, UnauthorizedError } from "@api/http";
 import { type DirectoryDb, postgresPool } from "@dont-forget/db";
 import type { BootstrapResponse } from "@dont-forget/shared";
 import { handleBootstrap } from "./api";
@@ -21,7 +17,6 @@ jest.mock("@dont-forget/db", () => ({
 }));
 jest.mock("@api/http", () => ({
 	UnauthorizedError: class UnauthorizedError extends Error {},
-	verifyClerkRequest: jest.fn(),
 }));
 
 const profile = {
@@ -63,7 +58,6 @@ const bootstrapResponse = {
 describe("bootstrap API handler", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		jest.mocked(verifyClerkRequest).mockResolvedValue(profile);
 		jest
 			.mocked(bootstrapAuthenticatedAppSession)
 			.mockResolvedValue(bootstrapResponse);
@@ -82,7 +76,7 @@ describe("bootstrap API handler", () => {
 
 		const response = await handleBootstrap(
 			new Request("https://api.invalid/api/bootstrap", { method: "POST" }),
-			{ directory },
+			{ directory, authenticateRequest: jest.fn(async () => profile) },
 		);
 
 		expect(response.status).toBe(200);
@@ -98,14 +92,16 @@ describe("bootstrap API handler", () => {
 	});
 
 	it("returns 401 for an invalid Clerk session", async () => {
-		jest
-			.mocked(verifyClerkRequest)
-			.mockRejectedValue(new UnauthorizedError("Invalid Clerk session token"));
 		const directory = Object.freeze({}) as DirectoryDb;
 
 		const response = await handleBootstrap(
 			new Request("https://api.invalid/api/bootstrap", { method: "POST" }),
-			{ directory },
+			{
+				directory,
+				authenticateRequest: jest.fn(async () => {
+					throw new UnauthorizedError("Invalid Clerk session token");
+				}),
+			},
 		);
 
 		expect(response.status).toBe(401);

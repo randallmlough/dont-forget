@@ -1,1 +1,0 @@
-Search matrix not executable: the visible Search control did not open after a Computer Use tap. Source inspection confirms the Home toolbar reserves Search but searching Lists/Items does not exist yet; no query states were reachable. Saved data remained unchanged: Primary 3 Items, 0 checked, Synced.

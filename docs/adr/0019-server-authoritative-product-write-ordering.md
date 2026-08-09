@@ -1,8 +1,10 @@
 # Server-authoritative product write ordering
 
-This ADR records the plan-031 spike decision and commissions the follow-on build
-in `plans/044-server-authoritative-product-write-ordering.md`. It is not a
-product-write implementation.
+_Amended 2026-08-09: current-state paths now reflect the mobile/API/DB workspace split. Server-authoritative ordering is still a future decision; the live implementation remains client-`updated_at` LWW._
+
+This ADR records the plan-031 spike decision and originally commissioned a
+follow-on plan 044. That historical planning artifact is no longer retained.
+This ADR is not a product-write implementation.
 
 ## Decision
 
@@ -18,7 +20,8 @@ supporting one User on multiple devices, and before hardening multi-Member
 conflict correctness, product write ordering must move to a server-owned
 monotonic sequence.
 
-When plan 044 lands, `updated_at` remains client-authored action/display time,
+When an equivalent follow-on build lands, `updated_at` remains client-authored
+action/display time,
 but it stops being the product conflict-ordering authority. Add a server-owned
 sequence column to `lists`, `items`, and `item_checks`; stamp it in `/api/data`
 as uploaded operations are accepted; and make that sequence the sole product
@@ -39,25 +42,25 @@ device.
 
 ### Current state
 
-The live code was re-verified on 2026-07-07:
+The live code was re-verified on 2026-08-09:
 
-- `src/server/sync/applicator.ts` still compares incoming client `updated_at`
+- `packages/db/src/sync/applicator.ts` still compares incoming client `updated_at`
   with the stored row and uses `clampUpdatedAt` only to cap future client
   timestamps at upload time. It never stamps server time.
-- `src/server/sync/pg-transaction.ts` still uses SQL `updated_at <= ...` guards
+- `packages/db/src/sync/pg-transaction.ts` still uses SQL `updated_at <= ...` guards
   in `patch`, `tombstone`, `uncheckItemCheck`, and the `item_checks`
   `ON CONFLICT (item_id)` update path.
-- `src/server/db/schema/postgres/sync-columns.ts` has explicit
+- `packages/db/src/schema/postgres/sync-columns.ts` has explicit
   `CLIENT_WRITABLE` and `SERVER_OWNED` declarations. `SERVER_OWNED` is empty,
   and `updated_at` is client-writable for all product tables.
-- `src/client/features/item/item-service.ts` and
-  `src/client/features/list/list-service.ts` still stamp product `updated_at`
+- `apps/mobile/src/features/item/item-service.ts` and
+  `apps/mobile/src/features/list/list-service.ts` still stamp product `updated_at`
   from the device clock via `Date.now()` and local monotonic helpers.
 - `infra/powersync/sync-config.yaml` streams `SELECT *` from `lists`, `items`,
   and `item_checks` to every active Member whose Membership grants access to the
   owning Household. The `powersync` publication is table-level, with no column
   list.
-- `src/client/session/powersync/connector.ts` uploads only `{ op, table, id,
+- `apps/mobile/src/session/powersync/connector.ts` uploads only `{ op, table, id,
   data }` to `/api/data`; it currently drops the stable PowerSync CRUD operation
   fields available on `@powersync/common` `CrudEntry`.
 
@@ -221,7 +224,7 @@ Sources:
   cross-device ordering; it is tolerated because likely conflicts are
   user-recoverable, soft-deleted, and limited to same-row cross-Member races
   within the clock-skew window.
-- Plan 044, or an equivalent server-sequence build, is required before same-User
+- An equivalent server-sequence build is required before same-User
   multi-device support and before hardening multi-Member conflict correctness.
 - **Delete-beats-newer-edit:** server sequence means server-receipt order. This
   deliberately inverts the current stale-action invariant: a week-old offline

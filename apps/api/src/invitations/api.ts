@@ -27,11 +27,13 @@ import type {
 	InvitationPreview,
 	ListInvitationsResponse,
 	RevokeInvitationResponse,
+	ServiceAnalytics,
 } from "@dont-forget/shared";
 import { asError, redactAttributes } from "@dont-forget/shared";
 
 export type InvitationApiDeps = PublicWebApiHandlerDeps & {
 	createInvitationService?: (directory: DirectoryDb) => InvitationService;
+	analytics?: ServiceAnalytics;
 };
 
 export async function handleCreateInvitation(
@@ -154,13 +156,18 @@ function invitationService(
 		return deps.createInvitationService(directory);
 	}
 	return createInvitationService(
-		productionInvitationServiceDeps(directory, deps.publicWebBaseUrl),
+		productionInvitationServiceDeps(
+			directory,
+			deps.publicWebBaseUrl,
+			deps.analytics,
+		),
 	);
 }
 
 function productionInvitationServiceDeps(
 	directory: DirectoryDb,
 	publicWebBaseUrl: string,
+	analytics: ServiceAnalytics | undefined,
 ): InvitationServiceDeps {
 	const { buildInvitationAcceptUrl } = publicWebLinkBuilders({
 		publicWebBaseUrl,
@@ -168,6 +175,7 @@ function productionInvitationServiceDeps(
 	return {
 		directory,
 		buildAcceptUrl: buildInvitationAcceptUrl,
+		analytics,
 	};
 }
 

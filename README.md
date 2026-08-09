@@ -40,9 +40,11 @@ Create the local environment file and fill in every required value:
 cp .env.example .env.local
 ```
 
-Keep one environment file per backend:
+Keep one environment file per backend. The `infra-*` Make targets derive the
+Compose file from `APP_ENV`; environment files do not select deployment
+topology:
 
-| Environment | File | `COMPOSE_FILE` |
+| Environment | File | Compose file selected by Make |
 | --- | --- | --- |
 | Local | `.env.local` | `infra/docker-compose.yaml` |
 | Staging | `.env.staging` | `infra/compose.staging.yaml` |
@@ -124,6 +126,14 @@ Ensure `EXPO_PUBLIC_POWERSYNC_URL` in `.env.local` is an HTTPS endpoint the
 iPhone can reach. For LAN development, Metro supplies the reachable host and the
 app uses the generated local `API_PORT` for the standalone API process.
 
+The generated `PUBLIC_WEB_BASE_URL=http://localhost:<WEB_PORT>` is only for the
+Simulator and a browser on the Mac. On an iPhone, `localhost` is the iPhone
+itself. Public-link QA on a physical iPhone therefore requires a separately
+reachable HTTPS web origin (or the deployed staging origin) configured as
+`PUBLIC_WEB_BASE_URL` for both the API process and the app's selected EAS
+environment. Starting the local Vite server does not expose that origin to the
+device.
+
 Start the standalone API and public web link surface:
 
 ```sh
@@ -135,7 +145,7 @@ Then start Metro without the Makefile's `--localhost` flag so the QR code
 advertises a LAN-reachable host:
 
 ```sh
-APP_ENV=local EXPO_NO_DOTENV=1 NODE_OPTIONS=--dns-result-order=ipv4first pnpm exec expo start --dev-client
+APP_ENV=local EXPO_NO_DOTENV=1 NODE_OPTIONS=--dns-result-order=ipv4first pnpm --filter @dont-forget/mobile exec expo start --dev-client
 ```
 
 Scan the terminal QR code with the iPhone Camera app and open it in the
@@ -147,7 +157,7 @@ For a USB-connected device, Xcode can create and install the development build
 directly:
 
 ```sh
-APP_ENV=local pnpm exec expo run:ios --device
+APP_ENV=local pnpm --filter @dont-forget/mobile exec expo run:ios --device
 ```
 
 ## Run against staging
@@ -205,15 +215,16 @@ deploy:
 git clone <repo-url>
 cd <checkout-directory>
 cp .env.example .env.staging
-# Fill in .env.staging and set COMPOSE_FILE=infra/compose.staging.yaml.
+# Fill in .env.staging with staging-only values.
 make infra-deploy APP_ENV=staging
 make infra-ps APP_ENV=staging
 ```
 
 Configure the hosting platform to expose the staging API, web, and PowerSync
 services at separate public HTTPS origins. Put the web origin in
-`PUBLIC_WEB_BASE_URL` in `.env.staging`; put the API and PowerSync origins in
-the corresponding `EXPO_PUBLIC_*` values in the EAS `preview` environment.
+`PUBLIC_WEB_BASE_URL` in `.env.staging` and the EAS `preview` environment; put
+the API and PowerSync origins in the corresponding `EXPO_PUBLIC_*` preview
+values.
 Clerk authenticates app requests, so the API and PowerSync endpoints must
 remain directly reachable by the mobile app.
 
@@ -231,22 +242,23 @@ credentials and deploy:
 
 ```sh
 cp .env.example .env.production
-# Fill in .env.production and set COMPOSE_FILE=infra/compose.production.yaml.
-make infra-deploy APP_ENV=production
+# Fill in .env.production with production-only values.
+make infra-deploy APP_ENV=production CONFIRM_APP_ENV=production
 make infra-ps APP_ENV=production
 ```
 
 Configure the hosting platform to expose the production API, web, and
 PowerSync services at separate public HTTPS origins. Set `PUBLIC_WEB_BASE_URL`
-to the web origin and use the API and PowerSync origins in the corresponding
-EAS `production` values. Production Postgres data is stored under `infra/data/`;
+to the web origin in both `.env.production` and the EAS `production`
+environment, and use the API and PowerSync origins in the corresponding EAS
+values. Production Postgres data is stored under `infra/data/`;
 include it in backups. Never run `make infra-destroy APP_ENV=production`.
 
 Redeploy production after pulling changes:
 
 ```sh
 git pull --ff-only
-make infra-deploy APP_ENV=production
+make infra-deploy APP_ENV=production CONFIRM_APP_ENV=production
 ```
 
 ## Build and deploy the mobile app

@@ -8,7 +8,9 @@ APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
 # .env.$(APP_ENV); loadEnvFile() in app.config.ts is the single env loader.
 export EXPO_NO_DOTENV = 1
 PORT_ARG = $(if $(PORT),--port $(PORT),)
-COMPOSE = docker compose --env-file .env.$(APP_ENV_VALUE)
+COMPOSE ?= docker compose
+override INFRA_COMPOSE_FILE = $(if $(filter local,$(APP_ENV_VALUE)),infra/docker-compose.yaml,$(if $(filter staging,$(APP_ENV_VALUE)),infra/compose.staging.yaml,$(if $(filter production,$(APP_ENV_VALUE)),infra/compose.production.yaml,)))
+INFRA_COMPOSE = $(COMPOSE) --env-file .env.$(APP_ENV_VALUE) -f $(INFRA_COMPOSE_FILE)
 
 .DEFAULT_GOAL := help
 
@@ -174,54 +176,70 @@ db-reseed: ## Reset, migrate, and seed local deterministic development data
 
 ##@ Infrastructure
 
+.PHONY: _infra-require-environment
+_infra-require-environment:
+	@case "$(APP_ENV_VALUE)" in local|staging|production) ;; *) echo "infra targets require APP_ENV=local, staging, or production"; exit 1 ;; esac
+
+.PHONY: _infra-require-deployment-environment
+_infra-require-deployment-environment: _infra-require-environment
+	@case "$(APP_ENV_VALUE)" in staging|production) ;; *) echo "this infra target requires APP_ENV=staging or production"; exit 1 ;; esac
+
+.PHONY: _infra-require-production-confirmation
+_infra-require-production-confirmation: _infra-require-deployment-environment
+	@test "$(APP_ENV_VALUE)" != "production" || test "$(CONFIRM_APP_ENV)" = "production" || (echo "production migration requires CONFIRM_APP_ENV=production" && exit 1)
+
 .PHONY: infra-up
-infra-up: ## Start the PowerSync stack for the selected environment (APP_ENV, default local)
-	@$(COMPOSE) up -d
+infra-up: _infra-require-environment ## Start the PowerSync stack for the selected environment (APP_ENV, default local)
+	@$(INFRA_COMPOSE) up -d
 
 .PHONY: infra-down
-infra-down: ## Stop the PowerSync stack (keeps data volumes)
-	@$(COMPOSE) down
+infra-down: _infra-require-environment ## Stop the PowerSync stack (keeps data volumes)
+	@$(INFRA_COMPOSE) down
 
 .PHONY: infra-destroy
-infra-destroy: ## Stop the stack and DELETE its Postgres volumes
-	@$(COMPOSE) down --volumes
+infra-destroy: _infra-require-environment ## Stop the stack and DELETE its Postgres volumes
+	@test "$(APP_ENV_VALUE)" != "production" || (echo "infra-destroy refuses APP_ENV=production" && exit 1)
+	@$(INFRA_COMPOSE) down --volumes
 
 .PHONY: infra-restart
-infra-restart: ## Restart the stack. Optional: SERVICE=powersync
-	@$(COMPOSE) restart $(SERVICE)
+infra-restart: _infra-require-environment ## Restart the stack. Optional: SERVICE=powersync
+	@$(INFRA_COMPOSE) restart $(SERVICE)
 
 .PHONY: infra-ps
-infra-ps: ## Show PowerSync stack container status
-	@$(COMPOSE) ps
+infra-ps: _infra-require-environment ## Show PowerSync stack container status
+	@$(INFRA_COMPOSE) ps
 
 .PHONY: infra-logs
-infra-logs: ## Follow stack logs. Optional: SERVICE=powersync
-	@$(COMPOSE) logs --follow $(SERVICE)
+infra-logs: _infra-require-environment ## Follow stack logs. Optional: SERVICE=powersync
+	@$(INFRA_COMPOSE) logs --follow $(SERVICE)
 
 .PHONY: infra-pull
-infra-pull: ## Pull the latest stack images
-	@$(COMPOSE) pull
+infra-pull: _infra-require-environment ## Pull the latest stack images
+	@$(INFRA_COMPOSE) pull
 
 .PHONY: infra-build
-infra-build: ## Build stack images (staging/production api). Optional: SERVICE=api
-	@$(COMPOSE) build $(SERVICE)
+infra-build: _infra-require-deployment-environment ## Build stack images (staging/production api). Optional: SERVICE=api
+	@$(INFRA_COMPOSE) build $(SERVICE)
 
 .PHONY: infra-migrate
-infra-migrate: ## Apply migrations via the stack's one-off migrate container (staging/production)
-	@$(COMPOSE) --profile tools run --build --rm migrate
+infra-migrate: _infra-require-production-confirmation ## Apply migrations via the stack's one-off migrate container (staging/production)
+	@CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" $(INFRA_COMPOSE) --profile tools run --build --rm migrate
 
 .PHONY: infra-seed
-infra-seed: ## Seed one confirmed email-backed staging QA fixture
+infra-seed: _infra-require-environment ## Seed one confirmed email-backed staging QA fixture
 	@test "$${APP_ENV:-}" = "staging" || (echo "infra-seed requires APP_ENV=staging" && exit 1)
 	@case "$${EMAIL:-}" in *[![:space:]]*) ;; *) echo "infra-seed requires a nonblank EMAIL"; exit 1 ;; esac
-	@$(COMPOSE) --profile tools run --build --rm seed
+	@$(INFRA_COMPOSE) --profile tools run --build --rm seed
 
 .PHONY: infra-deploy
-infra-deploy: infra-build infra-up infra-migrate ## Build images, start the stack, and migrate (staging/production)
+infra-deploy: _infra-require-production-confirmation ## Build images, start the stack, and migrate (staging/production)
+	@$(INFRA_COMPOSE) build
+	@$(INFRA_COMPOSE) up -d
+	@CONFIRM_APP_ENV="$(CONFIRM_APP_ENV)" $(INFRA_COMPOSE) --profile tools run --build --rm migrate
 
 .PHONY: pg-shell
-pg-shell: ## Open psql on the source Postgres
-	@$(COMPOSE) exec pg-source sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+pg-shell: _infra-require-environment ## Open psql on the source Postgres
+	@$(INFRA_COMPOSE) exec pg-source sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
 .PHONY: ps-token-test
 ps-token-test: ## Probe PowerSync /sync/stream with a real Clerk token (powersync JWT template)

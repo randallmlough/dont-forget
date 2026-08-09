@@ -1,2 +1,0 @@
-Fresh command: rocketsim elements --agent --agent-mode act
-Result: no output; process hung and was interrupted with Ctrl-C (exit 130). No screen hash or target id returned; guarded interact command was not attempted.

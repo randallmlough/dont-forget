@@ -1,4 +1,4 @@
-import { bearerToken, UnauthorizedError, updateClerkUserName } from "@api/http";
+import { bearerToken, createClerkGateway, UnauthorizedError } from "@api/http";
 import { createClerkClient } from "@clerk/backend";
 
 jest.mock("@clerk/backend", () => ({
@@ -18,19 +18,8 @@ describe("bearerToken", () => {
 	});
 });
 
-describe("updateClerkUserName", () => {
-	const originalEnv = process.env;
-
-	beforeEach(() => {
-		process.env = {
-			...originalEnv,
-			APP_ENV: "test",
-			CLERK_SECRET_KEY: "sk_test_secret",
-		};
-	});
-
+describe("createClerkGateway", () => {
 	afterEach(() => {
-		process.env = originalEnv;
 		jest.mocked(createClerkClient).mockReset();
 	});
 
@@ -47,8 +36,9 @@ describe("updateClerkUserName", () => {
 		// @ts-expect-error Partial Clerk client mock for the updateUser seam.
 		jest.mocked(createClerkClient).mockReturnValue(clerkClient);
 
+		const gateway = createClerkGateway({ secretKey: "sk_test_secret" });
 		await expect(
-			updateClerkUserName({
+			gateway.updateUserName({
 				clerkUserId: "clerk_avery",
 				firstName: "Avery",
 				lastName: "Lough",
@@ -79,7 +69,8 @@ describe("updateClerkUserName", () => {
 		// @ts-expect-error Partial Clerk client mock for the updateUser seam.
 		jest.mocked(createClerkClient).mockReturnValue(clerkClient);
 
-		await updateClerkUserName({
+		const gateway = createClerkGateway({ secretKey: "sk_test_secret" });
+		await gateway.updateUserName({
 			clerkUserId: "clerk_avery",
 			firstName: null,
 			lastName: "Lough",
