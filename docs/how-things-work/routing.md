@@ -5,7 +5,7 @@ Don't Forget uses Expo Router with route groups. Route groups organize files wit
 ## File Tree
 
 ```text
-src/app/
+apps/mobile/app/
   _layout.tsx
   (app)/
     _layout.tsx
@@ -26,55 +26,27 @@ src/app/
     join.tsx
   invitations/
     accept.tsx
-  api/
-    bootstrap+api.ts
-    data+api.ts
-    households+api.ts
-    households/
-      [householdId]+api.ts
-      [householdId]/
-        invitations+api.ts
-        join-code+api.ts
-        join-code/
-          regenerate+api.ts
-        members+api.ts
-        members/
-          [membershipId]+api.ts
-          me/
-            leave+api.ts
-      join-code/
-        join+api.ts
-        preview+api.ts
-    invitations+api.ts
-    invitations/
-      [invitationId]+api.ts
-      accept+api.ts
-      preview+api.ts
-    users/
-      me+api.ts
-      me/
-        active-household+api.ts
 ```
 
 Current screen routes:
 
 | URL | Route File | Screen |
 | --- | --- | --- |
-| `/` | `src/app/(app)/index.tsx` | `src/client/screens/app/home-screen.tsx` |
-| `/settings` | `src/app/(app)/settings.tsx` | `src/client/screens/app/settings-screen.tsx` |
-| `/settings/appearance` | `src/app/(app)/settings/appearance.tsx` | `src/client/screens/app/settings/appearance-screen.tsx` |
-| `/profile` | `src/app/(app)/profile.tsx` | `src/client/screens/app/profile-screen.tsx` |
-| `/household/settings` | `src/app/(app)/household/settings.tsx` | `src/client/screens/app/household/household-settings-screen.tsx` |
-| `/household/members` | `src/app/(app)/household/members.tsx` | `src/client/screens/app/household/members-invitations-screen.tsx` |
-| `/household/switch` | `src/app/(app)/household/switch.tsx` | `src/client/screens/app/household/household-switch-screen.tsx` |
-| `/sign-in` | `src/app/(auth)/sign-in.tsx` | `src/client/screens/auth/sign-in-screen.tsx` |
-| `/sign-up` | `src/app/(auth)/sign-up.tsx` | `src/client/screens/auth/sign-up-screen.tsx` |
-| `/households/join` | `src/app/households/join.tsx` | `src/client/screens/households/join-screen.tsx` |
-| `/invitations/accept` | `src/app/invitations/accept.tsx` | `src/client/screens/invitations/accept-screen.tsx` |
+| `/` | `apps/mobile/app/(app)/index.tsx` | `apps/mobile/src/screens/app/home-screen.tsx` |
+| `/settings` | `apps/mobile/app/(app)/settings.tsx` | `apps/mobile/src/screens/app/settings-screen.tsx` |
+| `/settings/appearance` | `apps/mobile/app/(app)/settings/appearance.tsx` | `apps/mobile/src/screens/app/settings/appearance-screen.tsx` |
+| `/profile` | `apps/mobile/app/(app)/profile.tsx` | `apps/mobile/src/screens/app/profile-screen.tsx` |
+| `/household/settings` | `apps/mobile/app/(app)/household/settings.tsx` | `apps/mobile/src/screens/app/household/household-settings-screen.tsx` |
+| `/household/members` | `apps/mobile/app/(app)/household/members.tsx` | `apps/mobile/src/screens/app/household/members-invitations-screen.tsx` |
+| `/household/switch` | `apps/mobile/app/(app)/household/switch.tsx` | `apps/mobile/src/screens/app/household/household-switch-screen.tsx` |
+| `/sign-in` | `apps/mobile/app/(auth)/sign-in.tsx` | `apps/mobile/src/screens/auth/sign-in-screen.tsx` |
+| `/sign-up` | `apps/mobile/app/(auth)/sign-up.tsx` | `apps/mobile/src/screens/auth/sign-up-screen.tsx` |
+| `/households/join` | `apps/mobile/app/households/join.tsx` | `apps/mobile/src/screens/households/join-screen.tsx` |
+| `/invitations/accept` | `apps/mobile/app/invitations/accept.tsx` | `apps/mobile/src/screens/invitations/accept-screen.tsx` |
 
 ## Root Layout
 
-`src/app/_layout.tsx` owns app-wide providers and routing side effects:
+`apps/mobile/app/_layout.tsx` owns app-wide providers and routing side effects:
 
 - PostHog provider
 - Safe area provider
@@ -89,7 +61,7 @@ Do not add duplicate Clerk or PostHog providers inside route groups.
 
 ## Authenticated Layout
 
-`src/app/(app)/_layout.tsx` owns signed-in product providers. It mounts the Authenticated App Session provider around signed-in routes, and that provider activates the app-owned Authenticated App Session and exposes session state/actions to screens.
+`apps/mobile/app/(app)/_layout.tsx` owns signed-in product providers. It mounts the Authenticated App Session provider around signed-in routes, and that provider activates the app-owned Authenticated App Session and exposes session state/actions to screens.
 
 Screens consume `useAuthenticatedAppSession()`. They should not manage the PowerSync connection or session resources directly, and they should not own sync lifecycle.
 
@@ -114,16 +86,16 @@ PowerSync cleanup, session hint clearing, and signed-out User Current List selec
 
 ## Adding Routes
 
-Add authenticated app routes under `src/app/(app)`. Add signed-out auth routes under `src/app/(auth)`. Create another route group only when that group needs shared navigation options, providers, or a clear route boundary.
+Add authenticated app routes under `apps/mobile/app/(app)`. Add signed-out auth routes under `apps/mobile/app/(auth)`. Create another route group only when that group needs shared navigation options, providers, or a clear route boundary.
 
 Keep route files thin. Prefer this shape:
 
 ```tsx
-export { default } from "@/client/screens/app/example-screen";
+export { default } from "@mobile/screens/app/example-screen";
 ```
 
-Put screen-owned code in `src/client/screens/`. Keep feature UI, hooks, and services in `src/client/features/<feature>/`; put reusable UI primitives in `src/client/ui/`.
+Put screen-owned code in `apps/mobile/src/screens/`. Keep feature UI, hooks, and services in `apps/mobile/src/features/<feature>/`; put reusable UI primitives in `apps/mobile/src/ui/`.
 
 ## Tests
 
-Do not put tests in `src/app/`; Expo Router treats files there as route entries. Route and screen behavior tests live next to the relevant screen outside `src/app/`.
+Do not put tests in `apps/mobile/app/`; Expo Router treats files there as route entries. Route and screen behavior tests live next to the relevant screen outside that route tree.

@@ -37,13 +37,13 @@ const itemService = useItemService({
 const syncStatus = useSyncState();
 ```
 
-`useListServices` lives in `src/client/features/list/use-list-services.ts` and constructs the List service plus Current List selection store. `useItemService` lives in `src/client/features/item/use-item-service.ts` and constructs the Item service. Both service hooks use `appProductDatabase`, the plain `ProductDatabase` singleton in `src/client/session/powersync-app-database.ts`. Reactive reads use `ProductQuery<T>` values from those services with `useProductQuery` in `src/client/lib/use-product-query.ts`, a thin wrapper over PowerSync watched queries.
+`useListServices` lives in `apps/mobile/src/features/list/use-list-services.ts` and constructs the List service plus Current List selection store. `useItemService` lives in `apps/mobile/src/features/item/use-item-service.ts` and constructs the Item service. Both service hooks use `appProductDatabase`, the plain `ProductDatabase` singleton in `apps/mobile/src/session/powersync-app-database.ts`. Reactive reads use `ProductQuery<T>` values from those services with `useProductQuery` in `apps/mobile/src/lib/use-product-query.ts`, a thin wrapper over PowerSync watched queries.
 
 There is no public `view` property and no nested `state.session`.
 
 ## Session Machine
 
-`src/client/session/session-machine.ts` owns the pure state transitions. `reduceSessionMachine` consumes auth, reload, sign-out, and activation events and returns the next state plus effects. The provider in `src/client/session/provider.tsx` runs those effects.
+`apps/mobile/src/session/session-machine.ts` owns the pure state transitions. `reduceSessionMachine` consumes auth, reload, sign-out, and activation events and returns the next state plus effects. The provider in `apps/mobile/src/session/provider.tsx` runs those effects.
 
 Effects are limited to:
 
@@ -71,7 +71,7 @@ Revocation is server-authoritative. When a fresh session or live sync-rule re-ev
 
 PowerSync streams continuously; there is no sync coordinator to start, stop, or replace. The provider connects the PowerSync database with the session connector on activation and disconnects it on sign-out.
 
-- `PowerSyncProvider` in `src/client/session/powersync/provider.tsx` exposes the raw PowerSync `db` singleton through `PowerSyncContext.Provider`.
+- `PowerSyncProvider` in `apps/mobile/src/session/powersync/provider.tsx` exposes the raw PowerSync `db` singleton through `PowerSyncContext.Provider`.
 - Local List and Item writes land in the local database immediately; PowerSync's connector uploads them to `/api/data` in the background and streams remote changes back.
 - Reactive reads use `useProductQuery(query)`, where `query` is a service-owned `ProductQuery<T>`.
 - Sync status comes from `useSyncState()`, which maps PowerSync connection state to `"synced" | "pending" | "offline" | "failed"`.

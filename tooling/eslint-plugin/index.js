@@ -1,9 +1,9 @@
-const noClientServerImports = require("./no-client-server-imports");
+const packageBoundaries = require("./package-boundaries");
 const noRawColorLiterals = require("./no-raw-color-literals");
 
 module.exports = {
 	rules: {
-		"no-client-server-imports": noClientServerImports,
+		"package-boundaries": packageBoundaries,
 		"no-raw-color-literals": noRawColorLiterals,
 	},
 };

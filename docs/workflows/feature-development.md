@@ -12,11 +12,11 @@ Ship the smallest vertical slice that satisfies the requested behavior, with tes
 2. Read the relevant `docs/code-standards/` files.
 3. Search `docs/adr/` and `docs/how-things-work/` for the owning system, and `docs/guides/` for artifact-specific recipes.
 4. Identify the owner boundary:
-   - route wiring in `src/app/`;
-   - route-owned screens in `src/client/screens/` and feature UI, hooks, and services in `src/client/features/<feature>/`;
-   - reusable UI primitives in `src/client/ui/`;
-   - product data access in client feature services or server domain modules;
-   - migrations and database helpers in `src/server/db/`.
+   - mobile route wiring in `apps/mobile/app/`;
+   - route-owned screens in `apps/mobile/src/screens/` and feature UI, hooks, and services in `apps/mobile/src/features/<feature>/`;
+   - reusable UI primitives in `apps/mobile/src/ui/`;
+   - product data access in mobile feature services or API domain modules;
+   - migrations and database helpers in `packages/db/`.
 5. Define the user-visible outcome and the verification plan.
 6. Choose the lowest integration harness that proves the product collaboration:
    - temp local databases plus real services for database/service behavior;
@@ -34,7 +34,7 @@ Ship the smallest vertical slice that satisfies the requested behavior, with tes
 5. Use domain-shaped names and avoid generic group/team/account/todo/task language.
 6. Remove only unused code created by the change; do not opportunistically refactor adjacent code.
 
-Use focused unit tests only for pure helpers, narrow adapters, or precise race-control cases where an integration harness would hide the assertion. For database-backed behavior, seed a temp local database with `src/server/db/fixtures/` builders/scenarios instead of mocking query results.
+Use focused unit tests only for pure helpers, narrow adapters, or precise race-control cases where an integration harness would hide the assertion. For database-backed behavior, seed a temp local database with builders/scenarios from `@dont-forget/db/fixtures` instead of mocking query results.
 
 ## Native UI Checks
 

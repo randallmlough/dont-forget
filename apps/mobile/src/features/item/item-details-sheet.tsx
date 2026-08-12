@@ -1,0 +1,304 @@
+import { BottomSheet } from "@mobile/ui/bottom-sheet";
+import { Button } from "@mobile/ui/button";
+import { ButtonIconGlass } from "@mobile/ui/button-icon-glass";
+import { ItemSeparator } from "@mobile/ui/item";
+import { themedAlert } from "@mobile/ui/native-dialogs";
+import { ScreenSection } from "@mobile/ui/screen-section.tsx";
+import { SymbolView } from "expo-symbols";
+import { useRef } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import type { ItemEditorDetailsPresentation } from "./item-editor-reducer";
+import { ItemListSelectorSheet } from "./item-list-selector-sheet";
+import type { ItemEditor } from "./use-item-editor";
+
+export type ItemDetailsSheetProps = {
+	editor: ItemEditor;
+	onReturnToInline: () => void;
+};
+
+export function ItemDetailsSheet({
+	editor,
+	onReturnToInline,
+}: ItemDetailsSheetProps) {
+	const presentation = editor.details;
+	const refocusAfterDismissRef = useRef(false);
+
+	function cancelDetails() {
+		if (!presentation || presentation.saving) return;
+		refocusAfterDismissRef.current = true;
+		editor.actions.cancelDetails();
+	}
+
+	return (
+		<BottomSheet
+			header={
+				presentation
+					? {
+							title: "Details",
+							leadingAction: (
+								<ButtonIconGlass
+									accessibilityHint="Discards detail changes and returns to inline editing"
+									accessibilityLabel="Cancel Item Details"
+									disabled={presentation.saving}
+									onPress={cancelDetails}
+									showTint={false}
+									systemImage="xmark"
+								/>
+							),
+							trailingAction: (
+								<ButtonIconGlass
+									accessibilityHint="Saves this Item"
+									accessibilityLabel="Save Item"
+									disabled={!editor.meta.canSaveDetails}
+									loading={presentation.saving}
+									onPress={() => {
+										void editor.actions.saveDetails();
+									}}
+									systemImage="checkmark"
+								/>
+							),
+						}
+					: undefined
+			}
+			interactiveDismissDisabled={presentation?.saving ?? false}
+			isPresented={presentation !== null}
+			onDismiss={() => {
+				if (!refocusAfterDismissRef.current) return;
+				refocusAfterDismissRef.current = false;
+				onReturnToInline();
+			}}
+			onIsPresentedChange={(presented) => {
+				if (!presented && presentation && !presentation.saving) {
+					cancelDetails();
+				}
+			}}
+			showDragIndicator={false}
+			snapPoints={["full"]}
+			testID="item-details-sheet"
+		>
+			{presentation ? (
+				<ItemDetailsSheetContent editor={editor} presentation={presentation} />
+			) : null}
+		</BottomSheet>
+	);
+}
+
+function ItemDetailsSheetContent({
+	editor,
+	presentation,
+}: {
+	editor: ItemEditor;
+	presentation: ItemEditorDetailsPresentation;
+}) {
+	const { theme } = useUnistyles();
+	const listOptions = editor.meta.listOptions;
+	const selectedList = listOptions.find(
+		(option) => option.id === presentation.draft.selectedListId,
+	);
+	const canChooseList = listOptions.length > 1;
+	const sourceListId =
+		presentation.source.kind === "existing"
+			? presentation.source.sourceListId
+			: null;
+
+	return (
+		<>
+			<ScrollView
+				contentContainerStyle={styles.content}
+				keyboardShouldPersistTaps="handled"
+				nestedScrollEnabled
+				style={styles.scroll}
+			>
+				<ScreenSection title="Item Details">
+					<View style={styles.fieldGroup}>
+						<TextInput
+							accessibilityLabel="Item name"
+							autoCapitalize="sentences"
+							autoCorrect
+							editable={!presentation.saving}
+							multiline
+							onChangeText={editor.actions.changeName}
+							placeholder="Item name"
+							placeholderTextColor={theme.colors.mutedForeground}
+							scrollEnabled={false}
+							style={styles.nameInput}
+							value={presentation.draft.name}
+						/>
+						<ItemSeparator />
+						<TextInput
+							accessibilityLabel="Item notes"
+							autoCapitalize="sentences"
+							autoCorrect
+							editable={!presentation.saving}
+							multiline
+							onChangeText={editor.actions.changeNotes}
+							placeholder="Notes"
+							placeholderTextColor={theme.colors.mutedForeground}
+							style={styles.notesInput}
+							value={presentation.draft.notes}
+						/>
+						<ItemSeparator />
+						<TextInput
+							accessibilityLabel="Item quantity"
+							autoCapitalize="sentences"
+							autoCorrect
+							editable={!presentation.saving}
+							onChangeText={editor.actions.changeQuantity}
+							placeholder="Quantity, such as 2 kg"
+							placeholderTextColor={theme.colors.mutedForeground}
+							style={styles.quantityInput}
+							value={presentation.draft.quantity}
+						/>
+					</View>
+					<View style={styles.fieldGroup}>
+						<Pressable
+							accessibilityHint={
+								canChooseList
+									? "Opens the available Lists"
+									: "This is the only active List"
+							}
+							accessibilityLabel={`List, ${selectedList?.name ?? "Unavailable"}`}
+							accessibilityRole="button"
+							accessibilityState={{
+								disabled: !canChooseList || presentation.saving,
+							}}
+							disabled={!canChooseList || presentation.saving}
+							onPress={editor.actions.openListSelector}
+							style={({ pressed }) => [
+								styles.listRow,
+								pressed ? styles.pressed : undefined,
+							]}
+						>
+							<SymbolView
+								name="list.bullet"
+								size={22}
+								tintColor={theme.colors.primary}
+							/>
+							<Text style={styles.listLabel}>List</Text>
+							<Text
+								numberOfLines={1}
+								style={[
+									styles.listValue,
+									selectedList ? undefined : styles.unavailable,
+								]}
+							>
+								{selectedList?.name ?? "Unavailable"}
+							</Text>
+							{canChooseList ? (
+								<SymbolView
+									name="chevron.right"
+									size={14}
+									tintColor={theme.colors.subtleForeground}
+									weight="semibold"
+								/>
+							) : null}
+						</Pressable>
+					</View>
+				</ScreenSection>
+
+				{presentation.source.kind === "existing" ? (
+					<Button
+						accessibilityHint="Deletes this Item"
+						accessibilityLabel="Delete Item"
+						disabled={presentation.saving}
+						onPress={() => confirmItemDeletion(editor)}
+						style={styles.deleteButton}
+						variant="destructive"
+					>
+						Delete Item
+					</Button>
+				) : null}
+			</ScrollView>
+
+			<ItemListSelectorSheet
+				isPresented={presentation.listSelectorPresented}
+				lists={listOptions}
+				selectedListId={presentation.draft.selectedListId}
+				sourceListId={sourceListId}
+				onClose={editor.actions.closeListSelector}
+				onSelectList={editor.actions.selectList}
+			/>
+		</>
+	);
+}
+
+function confirmItemDeletion(editor: ItemEditor) {
+	themedAlert("Delete Item", "This action cannot be undone.", [
+		{ text: "Cancel", style: "cancel" },
+		{
+			text: "Delete",
+			style: "destructive",
+			onPress: () => {
+				void editor.actions.deleteItem();
+			},
+		},
+	]);
+}
+
+const styles = StyleSheet.create((theme) => ({
+	scroll: {
+		flex: 1,
+	},
+	content: {
+		flexGrow: 1,
+		gap: theme.spacing(5),
+		paddingHorizontal: theme.spacing(4),
+		paddingBottom: theme.spacing(8),
+	},
+	fieldGroup: {
+		overflow: "hidden",
+		borderRadius: theme.radii.xl,
+		backgroundColor: theme.colors.card,
+	},
+	nameInput: {
+		minHeight: theme.spacing(14),
+		paddingHorizontal: theme.spacing(4),
+		paddingVertical: theme.spacing(3),
+		color: theme.colors.foreground,
+		fontFamily: theme.fontFamilies.serif,
+		fontSize: theme.fontSizes["2xl"],
+	},
+	notesInput: {
+		minHeight: theme.spacing(20),
+		paddingHorizontal: theme.spacing(4),
+		paddingVertical: theme.spacing(3),
+		color: theme.colors.foreground,
+		textAlignVertical: "top",
+		...theme.typography.body,
+	},
+	quantityInput: {
+		minHeight: theme.spacing(13),
+		paddingHorizontal: theme.spacing(4),
+		color: theme.colors.foreground,
+		...theme.typography.body,
+	},
+	listRow: {
+		minHeight: theme.spacing(14),
+		flexDirection: "row",
+		alignItems: "center",
+		gap: theme.spacing(3),
+		paddingHorizontal: theme.spacing(4),
+	},
+	listLabel: {
+		...theme.typography.body,
+		color: theme.colors.foreground,
+	},
+	listValue: {
+		...theme.typography.body,
+		flex: 1,
+		minWidth: 0,
+		color: theme.colors.mutedForeground,
+		textAlign: "right",
+	},
+	unavailable: {
+		color: theme.colors.destructive,
+	},
+	deleteButton: {
+		alignSelf: "stretch",
+		marginTop: "auto",
+	},
+	pressed: {
+		opacity: theme.opacities.pressed,
+	},
+}));

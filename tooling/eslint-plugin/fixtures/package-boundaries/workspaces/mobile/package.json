@@ -1,0 +1,7 @@
+{
+	"name": "@fixture/mobile",
+	"private": true,
+	"devDependencies": {
+		"@fixture/db": "workspace:*"
+	}
+}

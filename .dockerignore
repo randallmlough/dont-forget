@@ -1,10 +1,13 @@
 node_modules
-ios
+apps/mobile/ios
+apps/mobile/android
 dist
 .git
-.expo
+apps/mobile/.expo
+.turbo
 .env*
 plans
 docs
+qa-evidence
 # Production Postgres bind mounts (root-owned; unreadable during context transfer)
 infra/data

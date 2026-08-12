@@ -57,8 +57,11 @@ Before simulator QA in a fresh worktree:
    registry or the pnpm store, request escalation for the same command instead of
    skipping verification.
 2. Link or copy a real local env file with `make worktree-env`. By default the
-   helper finds another git worktree with `.env.local` and symlinks it. To use an
-   explicit source, run:
+   helper finds another git worktree with `.env.local` and symlinks it, then
+   creates an ignored `.env.worktree` with checkout-local `API_PORT`, `WEB_PORT`,
+   and `PUBLIC_WEB_BASE_URL`. Inspect `.env.worktree` only; `.env.local` may be
+   a shared symlink and must not be edited for checkout-specific ports. To use
+   an explicit source, run:
 
    ```bash
    WORKTREE_ENV_FILE=/path/to/.env.local make worktree-env
@@ -70,13 +73,21 @@ Before simulator QA in a fresh worktree:
    WORKTREE_ENV_MODE=copy WORKTREE_ENV_FILE=/path/to/.env.local make worktree-env
    ```
 
-3. Use a non-default Metro port when another checkout is already running:
+3. Use a non-default Metro port when another checkout is already running.
+   `PORT`, `API_PORT`, and `WEB_PORT` are distinct process ports:
 
    ```bash
    make ios PORT=8090
    ```
 
-4. Request approval for CoreSimulator, Xcode, or RocketSim access when the
+4. For simultaneous-worktree smoke testing, run `make worktree-env` in both
+   checkouts, confirm each `.env.worktree` has a distinct API/web pair, then
+   start `make api` and `make web` from each checkout. Curl each generated
+   `/health` API URL and each generated web URL. Both API calls should return
+   200, both web pages should keep the public response headers, and neither
+   Vite process should silently increment its configured port.
+
+5. Request approval for CoreSimulator, Xcode, or RocketSim access when the
    sandbox blocks those tools. Do not downgrade simulator QA to source-only
    review just because these tools need approval.
 

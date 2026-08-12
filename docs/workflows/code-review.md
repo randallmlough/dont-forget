@@ -41,8 +41,8 @@ Check each applicable lane.
 ### Architecture and Boundaries
 
 - Are route files thin?
-- Do route-owned screens live under `src/client/screens/`, with feature UI, hooks, and services under `src/client/features/<feature>/`?
-- Does reusable UI belong under `src/client/ui/`?
+- Do mobile route-owned screens live under `apps/mobile/src/screens/`, with feature UI, hooks, and services under `apps/mobile/src/features/<feature>/`?
+- Does reusable mobile UI belong under `apps/mobile/src/ui/`?
 - Is product data access behind client feature services or server domain modules?
 - Are server-only imports kept out of app-safe entrypoints?
 - Does the change avoid hidden coupling or unnecessary abstraction?

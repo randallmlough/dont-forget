@@ -1,40 +1,39 @@
 # API Routes
 
-Expo API Routes are the HTTP boundary for server behavior. Keep them thin so native route registration stays safe and domain behavior stays in services.
+The standalone Hono Node API is the HTTP boundary for server behavior. Keep route composition and handlers thin so domain behavior stays in services.
 
 ## Boundary
 
 Use this flow for API behavior:
 
 ```txt
-src/app/api/**/+api.ts -> src/server/<domain>/api.ts -> same-domain services
+apps/api/src/app.ts -> apps/api/src/<domain>/api.ts -> same-domain services
 ```
 
 Responsibilities:
 
-- `src/app/api/**/+api.ts` exports HTTP method functions and lazy-loads server-only API handlers inside those functions.
-- `src/server/<domain>/api.ts` parses requests, verifies auth, shapes HTTP responses, maps expected domain errors to status codes, and orchestrates service calls.
+- `apps/api/src/app.ts` creates the Hono app and statically registers each method/path with its domain handler.
+- `apps/api/src/<domain>/api.ts` parses requests, verifies auth, shapes HTTP responses, maps expected domain errors to status codes, and orchestrates service calls.
 - Same-domain server services own domain behavior, database access, Membership checks, Invitation behavior, Household Join Code behavior, and active Household selection.
 
 API handlers are not a data-access layer. If a handler needs directory or product data access, call the appropriate service instead of adding SQL to the handler.
 
-The PowerSync write endpoint `/api/data` follows this rule. Its handler (`src/server/data/api.ts`) is a thin HTTP shim — authenticate, parse the batch, run the applicator in one transaction, map errors to status codes. The write logic, the batch contract, rate limiting, transaction helper, and SQL live in `src/server/sync/` as data-store infrastructure ([ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md)). The applicator is a generic, schema-agnostic write engine for the sync transport, not domain data access, so it is not a domain service.
+The PowerSync write endpoint `/api/data` is deliberately split. `apps/api/src/data/` owns HTTP auth, bounded payload parsing, rate limiting, transaction orchestration, and response mapping. The batch contract, write applicator, allow-lists, and Postgres transaction live under `packages/db/src/sync/` and are consumed through `@dont-forget/db` ([ADR-0016](../adr/0016-data-write-applicator-in-db-layer.md), [ADR-0014](../adr/0014-db-layer-owns-data-store-infrastructure.md)). The applicator is a generic, schema-agnostic write engine for the sync transport, not a domain service.
 
-Request and response schemas can live with the server API handler when they are only HTTP-boundary contracts. Put schemas in `src/shared/contracts/` only when client code must parse the same shape. Bootstrap follows the same route wrapper pattern: `src/app/api/bootstrap+api.ts` lazy-imports `@/server/bootstrap/api`.
+Request and response schemas can live with the API handler when they are only HTTP-boundary contracts. Put cross-workspace schemas in `packages/shared/src/contracts/` and export them through `@dont-forget/shared` when mobile or web code must parse the same shape.
 
-## Route Wrappers
+## Hono Composition
 
-Route files under `src/app/api` must lazy-load server-only code inside the HTTP method function:
+Register routes in `apps/api/src/app.ts` and pass the raw `Request` plus explicit dependencies to the owning handler:
 
 ```ts
-export async function POST(request: Request): Promise<Response> {
-  const { handleDataUpload } = await import("@/server/data/api");
-
-  return handleDataUpload(request);
-}
+const app = new Hono();
+app.post("/api/bootstrap", (context) =>
+  handleBootstrap(context.req.raw, { directory: deps.directory }),
+);
 ```
 
-Avoid static imports from `src/server/`, server services, directory DB clients, Clerk server SDKs, or Resend in route files. Tests may import `src/server/<domain>/api.ts` handlers directly.
+Keep registration mechanical. Domain handlers own request parsing and response policy; same-domain services own domain behavior and directory DB access. Import API internals with `@api/*`. Consume shared and DB packages only through declared/exported `@dont-forget/*` entrypoints.
 
 ## Auth And Errors
 
@@ -216,7 +215,7 @@ Analytics properties must be safe and minimal. Include Household, Member role, o
 
 ## Testing
 
-Test `src/server/<domain>/api.ts` handlers directly where practical, with real directory DB behavior and injected dependencies for external services such as email delivery. Current examples include `src/server/bootstrap/api.test.ts`, `src/server/data/api.test.ts`, `src/server/households/api.test.ts`, `src/server/invitations/api.test.ts`, and `src/server/users/api.test.ts`. Keep route-wrapper tests focused on native registration safety and lazy-loading behavior.
+Test `apps/api/src/<domain>/api.ts` handlers directly where practical, with real directory DB behavior and injected dependencies for external services such as email delivery. Current examples include `apps/api/src/bootstrap/api.test.ts`, `apps/api/src/data/api.test.ts`, `apps/api/src/households/api.test.ts`, `apps/api/src/invitations/api.test.ts`, and `apps/api/src/users/api.test.ts`. `apps/api/src/app.test.ts` proves Hono route registration and delegation.
 
 API coverage should include:
 
@@ -226,6 +225,6 @@ API coverage should include:
 - status-code policy;
 - response shapes;
 - Invitation email delivery status behavior;
-- no server-only imports during route registration for Expo API route wrappers.
+- Hono route registration and handler delegation.
 
-Shared API test helpers should live under `src/test/api/` and should stay minimal until duplication proves a helper is needed.
+Shared API test helpers live under `apps/api/src/test/api/` and should stay minimal until duplication proves a helper is needed.

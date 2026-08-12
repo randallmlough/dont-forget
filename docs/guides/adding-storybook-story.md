@@ -18,20 +18,20 @@ Read:
 
 Inspect nearby examples:
 
-- `src/client/screens/app/home-screen.stories.tsx`
-- `src/client/features/auth/auth-screen.stories.tsx`
-- `src/client/features/list/list-parts.stories.tsx`
+- `apps/mobile/src/screens/app/home-screen.stories.tsx`
+- `apps/mobile/src/features/auth/auth-screen.stories.tsx`
+- `apps/mobile/src/features/list/list-parts.stories.tsx`
 
 ## Files and naming
 
-Put stories next to the component or screen they exercise, outside `src/app/`:
+Put stories next to the component or screen they exercise, outside `apps/mobile/app/`:
 
 ```text
-src/client/screens/<route-group>/<surface>.stories.tsx
-src/client/ui/<component>.stories.tsx
+apps/mobile/src/screens/<route-group>/<surface>.stories.tsx
+apps/mobile/src/ui/<component>.stories.tsx
 ```
 
-Do not put stories under `src/app/`; Expo Router treats files there as routes.
+Do not put stories under `apps/mobile/app/`; Expo Router treats files there as routes.
 
 ## Story shape
 
@@ -55,8 +55,8 @@ Use `args` for simple presentational states. Use `render` when the story needs l
 ## Recipe
 
 1. **Choose the right story target.**
-   - Feature component stories belong beside the owning feature under `src/client/features/<feature>/`; route screen stories belong beside the screen under `src/client/screens/`.
-   - Shared UI primitive stories belong beside the primitive under `src/client/ui/`.
+   - Feature component stories belong beside the owning feature under `apps/mobile/src/features/<feature>/`; route screen stories belong beside the screen under `apps/mobile/src/screens/`.
+   - Shared UI primitive stories belong beside the primitive under `apps/mobile/src/ui/`.
    - Route screen stories should target extracted view components when possible, not route files.
    - Keep auth, analytics, navigation, and database side effects out of Storybook stories.
 
@@ -72,7 +72,7 @@ Use `args` for simple presentational states. Use `render` when the story needs l
 
 4. **Add decorators only for missing app context.**
    - Wrap stories in a themed canvas when needed.
-   - Add safe-area or provider wrappers only when the component normally receives that context from `src/app/_layout.tsx` or a route shell.
+   - Add safe-area or provider wrappers only when the component normally receives that context from `apps/mobile/app/_layout.tsx` or a route shell.
 
 5. **Use `parameters.noSafeArea` for route shells that already own safe areas.**
    - `ListsScreenView` uses this because `ScreenScaffold` already applies safe-area handling.
@@ -99,8 +99,8 @@ make format
 Run focused tests when the story accompanies component or screen behavior changes:
 
 ```bash
-pnpm exec jest --runInBand --runTestsByPath src/client/screens/app/home-screen.test.tsx
-pnpm exec jest --runInBand --runTestsByPath src/client/features/list/list-parts.test.tsx
+pnpm --filter @dont-forget/mobile exec jest --runInBand --runTestsByPath ./src/screens/app/home-screen.test.tsx
+pnpm --filter @dont-forget/mobile exec jest --runInBand --runTestsByPath ./src/features/list/list-parts.test.tsx
 ```
 
 Before handoff:
@@ -119,7 +119,7 @@ make storybook
 
 ## Review checklist
 
-- Story file lives next to the component/screen and outside `src/app/`.
+- Story file lives next to the component/screen and outside `apps/mobile/app/`.
 - Story title follows the existing naming style.
 - Fixtures use Don't Forget domain language.
 - Stories cover meaningful UI states, not only the ideal state.

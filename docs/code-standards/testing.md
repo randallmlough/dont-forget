@@ -40,19 +40,19 @@ See also: [`docs/how-things-work/testing.md`](../how-things-work/testing.md).
 
 ## Test Location
 
-- **Must** colocate tests next to the module they exercise outside `src/app/`.
-- **Must** not put tests in `src/app/`; Expo Router treats files there as routes/layouts.
-- **Should** keep reusable Jest setup and mock modules under `src/test`.
+- **Must** colocate tests next to the module they exercise outside `apps/mobile/app/`.
+- **Must** not put tests in `apps/mobile/app/`; Expo Router treats files there as routes/layouts.
+- **Should** keep reusable mobile Jest setup and mock modules under `apps/mobile/src/test`.
 
 ## Test Organization And Shared Fixtures
 
-- **Must** move reusable cross-feature test fixtures into a domain-owned shared fixture folder, such as `src/server/db/fixtures/`, instead of duplicating fixture builders across test files.
-- **Must** keep `src/server/db/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and product databases.
-- **Must** not return services, providers, app sessions, or UI model objects from `src/server/db/fixtures/`.
+- **Must** move reusable persistence fixtures into `packages/db/src/fixtures/`, exported by `@dont-forget/db/fixtures`, instead of duplicating fixture builders across test files.
+- **Must** keep `packages/db/src/fixtures/` limited to persisted database facts: Drizzle insert-shaped builders and scenario helpers that seed caller-provided directory and product databases.
+- **Must** not return services, providers, app sessions, or UI model objects from `packages/db/src/fixtures/`.
 - **Should** keep shared fixtures domain-shaped and product-language-first: Household, Member, User, List, Item, and Invitation.
 - **Should** allow narrow overrides for test-specific facts while preserving realistic defaults.
 - **Should** split large test files by behavior theme when a single file starts covering several independent concerns.
-- **Should** name focused test files after the behavior under test, for example `src/client/session/provider.activation.test.tsx`, `src/client/session/provider.sign-out.test.tsx`, or `src/client/session/provider.resource-lifecycle.test.tsx`.
+- **Should** name focused test files after the behavior under test, for example `apps/mobile/src/session/provider.activation.test.tsx`, `apps/mobile/src/session/provider.sign-out.test.tsx`, or `apps/mobile/src/session/provider.resource-lifecycle.test.tsx`.
 - **Should** keep each focused test file readable as a behavior spec for one concern.
 - **Avoid** extracting one-off setup into shared fixtures. Promote only fixtures used across multiple modules or likely to support future domain tests.
 - **Avoid** hiding behavior in fixtures. Database fixtures should create rows, not encode product logic or runtime composition.

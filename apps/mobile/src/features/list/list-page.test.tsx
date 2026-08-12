@@ -1,0 +1,248 @@
+import type { ListSummary } from "@mobile/features/list/list-service";
+import {
+	activeListPage,
+	authenticatedAppSession,
+	groceriesListSummary,
+	pantryListSummary,
+} from "@mobile/features/list/list-test-support";
+import { useListPage } from "@mobile/features/list/use-list-page";
+import { TestSafeAreaProvider } from "@mobile/test/safe-area";
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react-native";
+import { useCallback, useMemo, useState } from "react";
+import { FlatList } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
+import {
+	ListPage,
+	type ListPageEditorEvent,
+	type ListPageEditorOwnerToken,
+} from "./list-page";
+
+jest.mock("@mobile/features/list/use-list-page", () => ({
+	useListPage: jest.fn(),
+}));
+
+beforeEach(() => {
+	jest
+		.mocked(useListPage)
+		.mockImplementation((_session, summary) => activeListPage(summary));
+});
+
+describe("ListPage", () => {
+	it("renders the active List surface", async () => {
+		await render(<TestListPage focused summary={groceriesListSummary} />, {
+			wrapper: TestSafeAreaProvider,
+		});
+
+		expect(await screen.findByText("Tap + to add an Item.")).toBeTruthy();
+	});
+
+	it("resets both List pages to the toolbar inset when focus changes", async () => {
+		const scrollToOffset = jest
+			.spyOn(FlatList.prototype, "scrollToOffset")
+			.mockImplementation();
+
+		try {
+			const view = await render(
+				<TestListPages focusedListId="lst_groceries" />,
+				{ wrapper: TestSafeAreaProvider },
+			);
+			await waitFor(() => {
+				expect(scrollToOffset).toHaveBeenCalledWith({
+					animated: false,
+					offset: 0,
+				});
+			});
+			expect(scrollToOffset).toHaveBeenCalledTimes(2);
+			scrollToOffset.mockClear();
+
+			await view.rerender(<TestListPages focusedListId="lst_pantry" />);
+
+			await waitFor(() => {
+				expect(scrollToOffset).toHaveBeenCalledWith({
+					animated: false,
+					offset: 0,
+				});
+			});
+			expect(scrollToOffset).toHaveBeenCalledTimes(2);
+		} finally {
+			scrollToOffset.mockRestore();
+		}
+	});
+
+	it("restores the initial List position when native content becomes scrollable", async () => {
+		const scrollToOffset = jest
+			.spyOn(FlatList.prototype, "scrollToOffset")
+			.mockImplementation();
+
+		try {
+			await render(
+				<TestListPage
+					focused
+					summary={groceriesListSummary}
+					topContentInset={116}
+				/>,
+				{ wrapper: TestSafeAreaProvider },
+			);
+			scrollToOffset.mockClear();
+
+			fireEvent(
+				screen.getByTestId("home-list-items-lst_groceries"),
+				"contentSizeChange",
+				390,
+				1200,
+			);
+
+			expect(scrollToOffset).toHaveBeenCalledWith({
+				animated: false,
+				offset: 0,
+			});
+		} finally {
+			scrollToOffset.mockRestore();
+		}
+	});
+
+	it("adds Items through the Current List action with normalized optional fields", async () => {
+		const addItem = jest.fn(async () => undefined);
+		jest
+			.mocked(useListPage)
+			.mockReturnValue(
+				activeListPage(groceriesListSummary, { actions: { addItem } }),
+			);
+		await render(
+			<TestListPage
+				focused
+				addItemRequestKey={1}
+				summary={groceriesListSummary}
+			/>,
+			{ wrapper: TestSafeAreaProvider },
+		);
+
+		await fireEvent.changeText(
+			await screen.findByLabelText("Item name"),
+			" Milk ",
+		);
+		await fireEvent(screen.getByLabelText("Item name"), "submitEditing");
+
+		await waitFor(() => {
+			expect(addItem).toHaveBeenCalledWith({
+				listId: "lst_groceries",
+				name: "Milk",
+				quantity: null,
+				notes: null,
+			});
+		});
+	});
+
+	it("keeps the focused List on its watched Item data", async () => {
+		jest.mocked(useListPage).mockReturnValue(
+			activeListPage(pantryListSummary, {
+				list: {
+					items: [
+						{
+							id: "itm_shelf_stable",
+							name: "Shelf stable",
+							quantity: null,
+							notes: null,
+							checked: false,
+							checkedByMemberName: null,
+						},
+					],
+				},
+			}),
+		);
+
+		await render(<TestListPage focused summary={pantryListSummary} />, {
+			wrapper: TestSafeAreaProvider,
+		});
+
+		expect(
+			within(screen.getByTestId("home-list-items-lst_pantry")).getByText(
+				"Shelf stable",
+			),
+		).toBeTruthy();
+	});
+
+	it("retries the failed page's Items query from its own error surface", async () => {
+		const retry = jest.fn();
+		jest.mocked(useListPage).mockReturnValue({
+			status: "error",
+			message: "Unable to load this List. Please try again.",
+			retry,
+		});
+
+		await render(<TestListPage focused summary={groceriesListSummary} />, {
+			wrapper: TestSafeAreaProvider,
+		});
+
+		await fireEvent.press(
+			await screen.findByRole("button", { name: "Try again" }),
+		);
+
+		expect(retry).toHaveBeenCalledTimes(1);
+	});
+});
+
+function TestListPages({ focusedListId }: { focusedListId: string }) {
+	return (
+		<>
+			<TestListPage
+				focused={focusedListId === groceriesListSummary.id}
+				summary={groceriesListSummary}
+				topContentInset={116}
+			/>
+			<TestListPage
+				focused={focusedListId === pantryListSummary.id}
+				summary={pantryListSummary}
+				topContentInset={116}
+			/>
+		</>
+	);
+}
+
+function TestListPage({
+	focused,
+	summary,
+	addItemRequestKey = null,
+	topContentInset = 0,
+}: {
+	focused: boolean;
+	summary: ListSummary;
+	addItemRequestKey?: number | null;
+	topContentInset?: number;
+}) {
+	const offsetY = useSharedValue(0);
+	const largeTitleHeight = useSharedValue(0);
+	const scrollState = useMemo(
+		() => ({ offsetY, largeTitleHeight }),
+		[offsetY, largeTitleHeight],
+	);
+	const [ownerToken, setOwnerToken] = useState<ListPageEditorOwnerToken | null>(
+		null,
+	);
+	const handleEditorEvent = useCallback((event: ListPageEditorEvent) => {
+		if (event.type === "registered") setOwnerToken(event.ownerToken);
+	}, []);
+	return (
+		<ListPage
+			addItemRequest={
+				addItemRequestKey === null || ownerToken === null
+					? null
+					: { key: addItemRequestKey, ownerToken }
+			}
+			focused={focused}
+			listSummaries={[groceriesListSummary, pantryListSummary]}
+			scrollState={scrollState}
+			session={authenticatedAppSession}
+			summary={summary}
+			syncState="synced"
+			topContentInset={topContentInset}
+			onItemEditorEvent={handleEditorEvent}
+		/>
+	);
+}

@@ -12,8 +12,9 @@
 			"!!.agents",
 			"!!.claude",
 			"!!.omx",
-			"!!src/server/db/migrations/**/meta/*.json",
-			"!!.rnstorybook/storybook.requires.ts",
+			"!!apps/web/src/routeTree.gen.ts",
+			"!!packages/db/src/migrations/**/meta/*.json",
+			"!!apps/mobile/.rnstorybook/storybook.requires.ts",
 			"!!skills-lock.json"
 		]
 	},

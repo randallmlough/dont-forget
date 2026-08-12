@@ -11,8 +11,9 @@ module.exports = defineConfig([
 		ignores: [
 			".agents/**",
 			".claude/**",
-			".rnstorybook/storybook.requires.ts",
-			"dist/**",
+			"apps/mobile/.rnstorybook/storybook.requires.ts",
+			"apps/web/src/routeTree.gen.ts",
+			"**/dist/**",
 		],
 	},
 	{
@@ -22,7 +23,7 @@ module.exports = defineConfig([
 			"react-native-a11y": reactNativeA11y,
 		},
 		rules: {
-			"dont-forget/no-client-server-imports": "error",
+			"dont-forget/package-boundaries": "error",
 			"dont-forget/no-raw-color-literals": "error",
 			"react-hooks/exhaustive-deps": "error",
 			"@typescript-eslint/no-unused-vars": "error",

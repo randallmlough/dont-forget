@@ -1,6 +1,8 @@
 ---
 paths:
-  - "lib/**/*.ts"
+  - "apps/mobile/src/features/**/*.ts"
+  - "apps/mobile/src/session/**/*.ts"
+  - "apps/api/src/**/*.ts"
 ---
 
 You are working on library or service code. Read the relevant standards BEFORE writing:
@@ -9,4 +11,4 @@ You are working on library or service code. Read the relevant standards BEFORE w
 - `docs/code-standards/typescript.md` — boundary validation with Zod, no assertions
 - `docs/guides/creating-domain-service.md` — when creating a new domain service
 
-Product data access belongs in domain-first services under `lib/services/<domain>/`.
+Mobile product services live with their feature under `apps/mobile/src/features/<feature>/`; Authenticated App Session services live under `apps/mobile/src/session/`; API domain services live under `apps/api/src/<domain>/`. Consume shared and DB code only through declared, exported `@dont-forget/*` package entrypoints.

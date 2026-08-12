@@ -2,20 +2,19 @@
 # Postgres for PowerSync bucket storage (no MongoDB) + the PowerSync service.
 #
 # SCHEMA AUTHORITY: the source Postgres schema is owned by the Drizzle pg
-# migrations (db/migrations/postgres), NOT a hand-written init script. After the
-# stack is up, apply schema with a one-shot drizzle-kit migrate against
-# PS_DATA_SOURCE_URI, then the PowerSync publication:
-#   DATABASE_URL=$PS_DATA_SOURCE_URI pnpm exec drizzle-kit migrate \
-#     --config=db/drizzle/postgres.config.ts
+# migrations in packages/db/src/migrations/postgres, NOT a hand-written init
+# script. After the stack is up, apply them through packages/db with:
+#   make db-migrate APP_ENV=local
 # (0001_powersync_publication.sql runs as part of that migrate sequence.)
 #
 # REPLICATION COUPLING: both wal_level=logical (the pg-source command below) AND
-# the `powersync` publication (db/migrations/postgres/0001_*.sql) must be present
-# or logical replication silently never starts.
+# the `powersync` publication
+# (packages/db/src/migrations/postgres/0001_*.sql) must be present or logical
+# replication silently never starts.
 #
 # This is a working LOCAL stack only; VPS hardening / private networking / route
-# relocation is PR-E. The /api/data write endpoint lives in the app's Expo API
-# routes (app/api/data+api.ts), so there is no backend container here.
+# relocation is PR-E. The Hono API, including apps/api/src/data, runs separately,
+# so there is no API container here.
 
 services:
   # ---- Source Postgres: holds users/households/memberships/lists/items/item_checks

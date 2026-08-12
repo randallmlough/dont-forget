@@ -1,6 +1,6 @@
 # Commands
 
-Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm` or `yarn` unless you are explicitly fixing package scripts. Don't Forget is iOS-only: Android and Web targets are unsupported.
+Prefer `make` for project commands. The `Makefile` wraps `pnpm`; do not use `npm` or `yarn` unless you are explicitly fixing package scripts. The Don't Forget mobile application is iOS-only. A dedicated web package supports only the public Invitation and Household Join Code link surface; it is not a general web version of the app.
 
 App and Storybook make targets default to `APP_ENV=local` unless you pass another environment. Database migrations are the exception: they require an explicit `APP_ENV`.
 
@@ -12,6 +12,21 @@ make start PORT=8090
 make ios PORT=8090
 ```
 
+`PORT` controls Metro/iOS only. The standalone API uses `API_PORT` and defaults
+to `8080`; the dedicated web package uses `WEB_PORT` and defaults to `3000`:
+
+```bash
+make api API_PORT=8088
+make api-build
+make web WEB_PORT=3010
+make web-build
+```
+
+Fresh linked worktrees should run `make worktree-env` once. It preserves the
+shared `.env.local` link/copy behavior and creates an ignored, secret-free
+`.env.worktree` with checkout-local `API_PORT`, `WEB_PORT`, and matching
+`PUBLIC_WEB_BASE_URL` values.
+
 <!-- ==================================================================================== -->
 <!-- COMMANDS                                                                              -->
 <!-- ==================================================================================== -->
@@ -21,8 +36,11 @@ make ios PORT=8090
 | Command | Description |
 | --- | --- |
 | `make install` | Install dependencies. |
-| `make worktree-env` | Link or copy a local `.env.local` into a fresh worktree. |
+| `make worktree-env` | Link/copy local `.env.local` and generate checkout-local API/web ports in `.env.worktree`. |
 | `make start` | Start the Expo development server for the app. |
+| `make api` | Start the standalone API in watch mode. |
+| `make api-build` | Build and mechanically verify the standalone Node 22 API bundle. |
+| `make web` | Start the dedicated public web link surface. |
 | `make ios` | Build and run the app on iOS. |
 | `make storybook` | Start Storybook for an installed native iOS build/dev client. |
 | `make verify` | Run typecheck, Biome, local ESLint rule tests, whole-project ESLint, and tests. |
@@ -34,6 +52,20 @@ make ios PORT=8090
 | --- | --- |
 | `make start` | Start Expo for normal app development. |
 | `make ios` | Run the native iOS target. |
+
+## API
+
+| Command | Description |
+| --- | --- |
+| `make api` | Start the standalone API in watch mode. Pass `API_PORT=<number>` to override port 8080. |
+| `make api-build` | Independently build and verify `dist/main.mjs`; the artifact excludes mobile and web application inputs. |
+
+## Web
+
+| Command | Description |
+| --- | --- |
+| `make web` | Start the dedicated public Invitation and Household Join Code link surface. Pass `WEB_PORT=<number>` to override port 3000. |
+| `make web-build` | Independently build and mechanically verify the dedicated public static web artifact. |
 
 ## Storybook
 
@@ -72,11 +104,22 @@ make ios PORT=8090
 
 | Command | Description |
 | --- | --- |
-| `make db-generate` | Generate migrations for every Drizzle config in `src/server/db/drizzle`. |
+| `make db-generate` | Generate Postgres migrations from the Drizzle config in `packages/db/src/drizzle/`. |
 | `make db-migrate APP_ENV=staging` | Apply migrations to the selected environment. Only run when intentionally migrating real configured targets. Production also requires `CONFIRM_APP_ENV=production`. |
 | `make db-reset APP_ENV=local CONFIRM_DB_RESET=local` | Delete app data from the selected environment's Postgres database (directory and product tables). Production also requires `CONFIRM_APP_ENV=production`. |
-| `make db-seed` | Seed local data without resetting. Pass `EMAIL=<address>` to add an email-scoped Clerk-backed seed Household for Owner and plain Member sign-in. |
-| `make db-reseed` | Reset, migrate, and seed local deterministic development data. Pass `EMAIL=<address>` only when you intentionally want the destructive reset followed by the Clerk-backed seed path. |
+| `make db-seed` | Seed local data without resetting. Pass `EMAIL=<address>` to add an email-scoped Clerk-backed seed Household for Owner and plain Member sign-in. This command remains local-only. |
+| `make db-reseed` | Reset, migrate, and seed local deterministic development data. Pass `EMAIL=<address>` only when you intentionally want the destructive local reset followed by the Clerk-backed seed path. This command remains local-only. |
+
+## Infrastructure
+
+| Command | Description |
+| --- | --- |
+| `make infra-seed APP_ENV=staging` | After capturing `EMAIL` with the protected silent-prompt workflow in `infra/README.md`, add one confirmed EMAIL-backed QA fixture through `packages/db/scripts/seed.ts` inside staging's private network. The one-off container is removed afterward; the command does not reset, reseed, deploy, restart, or destroy volumes. Test and production are forbidden, and production Compose has no seed service. |
+
+`infra-seed` rejects a non-staging environment or blank `EMAIL` before Compose
+runs. The staging Compose service defaults an unset email to blank only so its
+inactive tools profile cannot break ordinary staging commands; the source
+policy independently refuses blank/deterministic staging seed mode.
 
 <!-- ==================================================================================== -->
 <!-- UTILITIES                                                                             -->
@@ -87,10 +130,10 @@ make ios PORT=8090
 | Command | Description |
 | --- | --- |
 | `make help` | Display Makefile targets grouped by section. |
-| `make worktree-env` | Create `.env.local` for a worktree from another checkout or `WORKTREE_ENV_FILE`. Use `WORKTREE_ENV_MODE=copy` to copy instead of symlink. |
+| `make worktree-env` | Create `.env.local` for a worktree from another checkout or `WORKTREE_ENV_FILE`, then generate ignored checkout-local API/web port overrides in `.env.worktree`. Use `WORKTREE_ENV_MODE=copy` to copy instead of symlink. |
 | `make expo-config` | Print the public Expo config after dynamic config resolution. |
 | `make why PKG=<package>` | Inspect why a package is installed. |
 | `make outdated` | Show dependencies with available newer versions. |
 | `pnpm exec <bin>` | Run a package binary directly from the project dependency graph. |
-| `rg "<term>" docs src tooling` | Search docs and source for a term. |
+| `rg "<term>" docs apps packages tooling` | Search docs and workspace source for a term. |
 | `make status` | Check the current worktree without verbose output. |
