@@ -241,8 +241,7 @@ describe("reduceSessionMachine", () => {
 		expect(result.state.view).toBe(initialSessionMachineState.view);
 		expect(result.state.localData).toEqual({
 			status: "differentUserBlocked",
-			isRemoving: false,
-			errorMessage: null,
+			phase: "idle",
 		});
 		expect(result.state.blockedActivation).toEqual({
 			attempt: 1,
@@ -250,6 +249,61 @@ describe("reduceSessionMachine", () => {
 			session,
 		});
 		expect(result.effects).toEqual([]);
+	});
+
+	it("preserves a live same-User block across activation route toggles and keeps both recovery actions usable", () => {
+		const session = sessionFixture({ userId: "usr_blake" });
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ clerkUserId: "user_blake" }),
+		);
+		const blocked = reduceSessionMachine(activating.state, {
+			type: "activationBlocked",
+			attempt: 1,
+			clerkUserId: "user_blake",
+			session,
+		});
+
+		const disabled = reduceSessionMachine(
+			blocked.state,
+			authStateChanged({
+				clerkUserId: "user_blake",
+				activationEnabled: false,
+			}),
+		);
+		const enabled = reduceSessionMachine(
+			disabled.state,
+			authStateChanged({ clerkUserId: "user_blake" }),
+		);
+
+		expect(disabled.state.attempt).toBe(1);
+		expect(disabled.state.blockedActivation).toBe(
+			blocked.state.blockedActivation,
+		);
+		expect(disabled.state.localData).toBe(blocked.state.localData);
+		expect(disabled.effects).toEqual([]);
+		expect(enabled.state.attempt).toBe(1);
+		expect(enabled.state.blockedActivation).toBe(
+			blocked.state.blockedActivation,
+		);
+		expect(enabled.state.localData).toBe(blocked.state.localData);
+		expect(enabled.effects).toEqual([]);
+
+		const removal = reduceSessionMachine(enabled.state, {
+			type: "localDataRemovalRequested",
+			attempt: 1,
+		});
+		const previousUserSignIn = reduceSessionMachine(enabled.state, {
+			type: "blockedIncomingUserSignOutRequested",
+			attempt: 1,
+		});
+		expect(removal.state.localData).toEqual({
+			status: "differentUserBlocked",
+			phase: "removing",
+		});
+		expect(
+			previousUserSignIn.state.pendingBlockedIncomingUserSignOutAttempt,
+		).toBe(1);
 	});
 
 	it("keeps removal failures blocked and retries activation only after removal succeeds", () => {
@@ -271,8 +325,7 @@ describe("reduceSessionMachine", () => {
 		});
 		expect(removing.state.localData).toEqual({
 			status: "differentUserBlocked",
-			isRemoving: true,
-			errorMessage: null,
+			phase: "removing",
 		});
 
 		const failed = reduceSessionMachine(removing.state, {
@@ -282,7 +335,7 @@ describe("reduceSessionMachine", () => {
 		});
 		expect(failed.state.localData).toEqual({
 			status: "differentUserBlocked",
-			isRemoving: false,
+			phase: "failed",
 			errorMessage: "Unable to remove data.",
 		});
 
@@ -415,7 +468,7 @@ describe("reduceSessionMachine", () => {
 		expect(failed.state.blockedActivation).not.toBeNull();
 		expect(failed.state.localData).toEqual({
 			status: "differentUserBlocked",
-			isRemoving: false,
+			phase: "failed",
 			errorMessage: "Unable to return to sign in. Please try again.",
 		});
 		expect(failed.effects).toEqual([]);
@@ -676,7 +729,6 @@ describe("reduceSessionMachine", () => {
 		});
 		const signedOut = reduceSessionMachine(signingOut.state, {
 			type: "signOutSucceeded",
-			signedIn: false,
 		});
 		const blockedAfterSignOut = reduceSessionMachine(signedOut.state, {
 			type: "sessionRestoreRequested",
@@ -998,7 +1050,7 @@ describe("reduceSessionMachine", () => {
 		expect(failed.effects).toEqual([]);
 	});
 
-	it("clears the view and last-known User on sign-out success while suppressing only if still signed in", () => {
+	it("clears the view and last-known User while distinguishing delayed auth from observed sign-out", () => {
 		const signingOut = reduceSessionMachine(
 			activatedWith(sessionFixture()).state,
 			{
@@ -1007,11 +1059,13 @@ describe("reduceSessionMachine", () => {
 		);
 		const stillSignedIn = reduceSessionMachine(signingOut.state, {
 			type: "signOutSucceeded",
-			signedIn: true,
 		});
-		const alreadySignedOut = reduceSessionMachine(signingOut.state, {
+		const observedSignedOut = reduceSessionMachine(
+			signingOut.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const alreadySignedOut = reduceSessionMachine(observedSignedOut.state, {
 			type: "signOutSucceeded",
-			signedIn: false,
 		});
 
 		expect(stillSignedIn.state.view).toBe(initialSessionMachineState.view);
@@ -1031,7 +1085,6 @@ describe("reduceSessionMachine", () => {
 		);
 		const suppressed = reduceSessionMachine(signingOut.state, {
 			type: "signOutSucceeded",
-			signedIn: true,
 		});
 		const signedInAgain = reduceSessionMachine(
 			suppressed.state,
@@ -1064,7 +1117,6 @@ describe("reduceSessionMachine", () => {
 		);
 		const suppressed = reduceSessionMachine(signingOut.state, {
 			type: "signOutSucceeded",
-			signedIn: true,
 		});
 		const result = reduceSessionMachine(
 			suppressed.state,
@@ -1085,7 +1137,6 @@ describe("reduceSessionMachine", () => {
 		);
 		const suppressed = reduceSessionMachine(signingOut.state, {
 			type: "signOutSucceeded",
-			signedIn: true,
 		});
 		const result = reduceSessionMachine(suppressed.state, reloadRequested());
 
@@ -1094,14 +1145,18 @@ describe("reduceSessionMachine", () => {
 		expect(result.effects).toEqual([]);
 	});
 
-	it("clears the last-known User without activation when sign-out fails after auth is signed out", () => {
+	it("disconnects and requires sign-in when Sign Out rejects after auth was observed signed out", () => {
 		const signingOut = reduceSessionMachine(
 			activatedWith(sessionFixture()).state,
 			{
 				type: "signOutRequested",
 			},
 		);
-		const result = reduceSessionMachine(signingOut.state, {
+		const observedSignedOut = reduceSessionMachine(
+			signingOut.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const result = reduceSessionMachine(observedSignedOut.state, {
 			type: "signOutFailed",
 			authReady: true,
 			signedIn: false,
@@ -1110,7 +1165,83 @@ describe("reduceSessionMachine", () => {
 		expect(result.state.view).toBe(initialSessionMachineState.view);
 		expect(result.state.lastKnownUserId).toBeNull();
 		expect(result.state.signingOut).toBe(false);
-		expect(result.effects).toEqual([]);
+		expect(result.state.signOutObservedSignedOut).toBe(false);
+		expect(result.state.signInRequired).toBe(true);
+		expect(result.effects).toEqual([{ type: "disconnect" }]);
+	});
+
+	it.each([
+		{
+			name: "User A",
+			clerkUserId: "user_avery",
+			session: sessionFixture(),
+			blocked: false,
+		},
+		{
+			name: "User B",
+			clerkUserId: "user_blake",
+			session: sessionFixture({ userId: "usr_blake" }),
+			blocked: true,
+		},
+	])("starts fresh ownership-gated activation for $name reauthentication observed during Sign Out cleanup", ({
+		clerkUserId,
+		session,
+		blocked,
+	}) => {
+		const signingOut = reduceSessionMachine(
+			activatedWith(sessionFixture()).state,
+			{ type: "signOutRequested" },
+		);
+		const observedSignedOut = reduceSessionMachine(
+			signingOut.state,
+			authStateChanged({
+				signedIn: false,
+				activationEnabled: false,
+			}),
+		);
+		const reauthenticatedWhileDisabled = reduceSessionMachine(
+			observedSignedOut.state,
+			authStateChanged({ clerkUserId, activationEnabled: false }),
+		);
+		const enabledDuringCleanup = reduceSessionMachine(
+			reauthenticatedWhileDisabled.state,
+			authStateChanged({ clerkUserId }),
+		);
+
+		expect(enabledDuringCleanup.state.signingOut).toBe(true);
+		expect(enabledDuringCleanup.state.signOutObservedSignedOut).toBe(true);
+		expect(enabledDuringCleanup.effects).toEqual([]);
+
+		const completed = reduceSessionMachine(enabledDuringCleanup.state, {
+			type: "signOutSucceeded",
+		});
+		expect(completed.state.suppressActivationUntilSignedOut).toBe(false);
+		expect(completed.state.signOutObservedSignedOut).toBe(false);
+		expect(completed.effects).toEqual([
+			{ type: "activate", attempt: 3, allowCached: false },
+		]);
+
+		const activated = reduceSessionMachine(
+			completed.state,
+			blocked
+				? {
+						type: "activationBlocked",
+						attempt: 3,
+						clerkUserId,
+						session,
+					}
+				: {
+						type: "activationSucceeded",
+						attempt: 3,
+						session,
+					},
+		);
+		expect(activated.state.view.state.status).toBe(
+			blocked ? "loading" : "ready",
+		);
+		expect(activated.state.localData.status).toBe(
+			blocked ? "differentUserBlocked" : "ready",
+		);
 	});
 
 	it("records auth observations during sign-out without starting activation", () => {
@@ -1162,7 +1293,6 @@ describe("reduceSessionMachine", () => {
 		});
 		const signedOut = reduceSessionMachine(signingOut.state, {
 			type: "signOutSucceeded",
-			signedIn: true,
 		});
 
 		const result = reduceSessionMachine(signedOut.state, {
@@ -1175,14 +1305,17 @@ describe("reduceSessionMachine", () => {
 		expect(result.effects).toEqual([{ type: "disconnect" }]);
 	});
 
-	it("disconnects non-destructively when Clerk flipped signed out before the next auth observation", () => {
+	it("disconnects non-destructively after Clerk was observed signed out", () => {
 		const session = sessionFixture();
 		const signingOut = reduceSessionMachine(activatedWith(session).state, {
 			type: "signOutRequested",
 		});
-		const signedOut = reduceSessionMachine(signingOut.state, {
+		const observedSignedOut = reduceSessionMachine(
+			signingOut.state,
+			authStateChanged({ signedIn: false }),
+		);
+		const signedOut = reduceSessionMachine(observedSignedOut.state, {
 			type: "signOutSucceeded",
-			signedIn: false,
 		});
 
 		const result = reduceSessionMachine(signedOut.state, {
@@ -1228,7 +1361,6 @@ describe("reduceSessionMachine", () => {
 		});
 		const signOutSucceeded = reduceSessionMachine(signingOut.state, {
 			type: "signOutSucceeded",
-			signedIn: true,
 		});
 		const signedOut = reduceSessionMachine(
 			signOutSucceeded.state,
@@ -1265,7 +1397,6 @@ describe("reduceSessionMachine", () => {
 		});
 		const signOutSucceeded = reduceSessionMachine(signingOut.state, {
 			type: "signOutSucceeded",
-			signedIn: true,
 		});
 		const signedOut = reduceSessionMachine(
 			signOutSucceeded.state,
@@ -1434,28 +1565,54 @@ function restoredWith(session: SessionBootstrap): {
 	);
 }
 
+type AuthStateChangedOverrides =
+	| {
+			authReady?: true;
+			signedIn?: true;
+			clerkUserId?: string;
+			activationEnabled?: boolean;
+	  }
+	| {
+			authReady?: true;
+			signedIn: false;
+			clerkUserId?: null;
+			activationEnabled?: boolean;
+	  }
+	| {
+			authReady: false;
+			signedIn?: false;
+			clerkUserId?: null;
+			activationEnabled?: boolean;
+	  };
+
 function authStateChanged(
-	overrides: Partial<{
-		authReady: boolean;
-		signedIn: boolean;
-		activationEnabled: boolean;
-		clerkUserId: string | null;
-	}> = {},
+	overrides: AuthStateChangedOverrides = {},
 ): SessionMachineEvent {
-	const signedIn = overrides.signedIn ?? true;
-	const clerkUserId =
-		overrides.clerkUserId !== undefined
-			? overrides.clerkUserId
-			: signedIn
-				? "user_avery"
-				: null;
+	const activationEnabled = overrides.activationEnabled ?? true;
+	if (overrides.authReady === false) {
+		return {
+			type: "authStateChanged",
+			authReady: false,
+			signedIn: false,
+			clerkUserId: null,
+			activationEnabled,
+		};
+	}
+	if (overrides.signedIn === false) {
+		return {
+			type: "authStateChanged",
+			authReady: true,
+			signedIn: false,
+			clerkUserId: null,
+			activationEnabled,
+		};
+	}
 	return {
 		type: "authStateChanged",
 		authReady: true,
-		signedIn,
-		activationEnabled: true,
-		...overrides,
-		clerkUserId,
+		signedIn: true,
+		clerkUserId: overrides.clerkUserId ?? "user_avery",
+		activationEnabled,
 	};
 }
 

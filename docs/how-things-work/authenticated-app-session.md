@@ -35,10 +35,12 @@ type AuthenticatedAppSessionState =
 ```ts
 type LocalDataState =
   | { status: "ready" }
+  | { status: "differentUserBlocked"; phase: "idle" }
+  | { status: "differentUserBlocked"; phase: "removing" }
   | {
       status: "differentUserBlocked";
-      isRemoving: boolean;
-      errorMessage: string | null;
+      phase: "failed";
+      errorMessage: string;
     };
 ```
 
@@ -133,7 +135,16 @@ The Authenticated App Session sign-out module owns sign-out order. The provider 
 
 Critical failure emits no successful Sign Out analytics. If Clerk sign-out
 fails, the provider dispatches `signOutFailed`; while auth still reports signed
-in, the machine restarts activation so the app can recover a valid session.
+in, the machine restarts activation so the app can recover a valid session. If
+Clerk already reports signed out when Sign Out fails, the provider still runs a
+non-destructive disconnect and publishes the sign-in-required state.
+
+Sign Out completion distinguishes Clerk's delayed auth flip from a real
+reauthentication. A completion that has not observed signed out suppresses
+activation until that observation arrives. If signed out was observed and a
+valid signed-in User arrived while serialized cleanup was still running, the
+provider resumes fresh ownership-gated activation; the same User reconnects,
+while a different User reaches the normal local-data block before connect.
 Normal Sign Out never calls `disconnectAndClear()` and preserves product rows,
 queued writes, and the database-owner marker. Only the confirmed
 different-User recovery action may clear them.

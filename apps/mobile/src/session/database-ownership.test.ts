@@ -166,17 +166,55 @@ describe("database ownership", () => {
 		expect(disconnectAndClear).not.toHaveBeenCalled();
 	});
 
+	it("rejects an invalid decoded local User row before fallback or mutation", async () => {
+		const storage = createMemoryStorage();
+		const readPersistedAuthenticatedAppSession = jest.fn(async () => null);
+		const disconnectAndClear = jest.fn(async () => undefined);
+		const ownership = createDatabaseOwnership({
+			getStorageItem: storage.getItem,
+			setStorageItem: storage.setItem,
+			readLocalUserRows: async () => [{ id: "" }],
+			readPersistedAuthenticatedAppSession,
+			disconnectAndClear,
+		});
+
+		await expect(ownership.prepareForUser("usr_avery")).rejects.toThrow();
+		expect(storage.setItem).not.toHaveBeenCalled();
+		expect(readPersistedAuthenticatedAppSession).not.toHaveBeenCalled();
+		expect(disconnectAndClear).not.toHaveBeenCalled();
+	});
+
+	it("rejects an invalid decoded durable owner before inference or mutation", async () => {
+		const setStorageItem = jest.fn(async () => undefined);
+		const readLocalUserRows = jest.fn(async () => []);
+		const disconnectAndClear = jest.fn(async () => undefined);
+		const ownership = createDatabaseOwnership({
+			getStorageItem: async () => JSON.stringify({ internalUserId: "" }),
+			setStorageItem,
+			readLocalUserRows,
+			readPersistedAuthenticatedAppSession: async () => null,
+			disconnectAndClear,
+		});
+
+		await expect(ownership.prepareForUser("usr_avery")).rejects.toThrow();
+		expect(setStorageItem).not.toHaveBeenCalled();
+		expect(readLocalUserRows).not.toHaveBeenCalled();
+		expect(disconnectAndClear).not.toHaveBeenCalled();
+	});
+
 	it("rejects an unreadable durable owner marker", async () => {
+		const setStorageItem = jest.fn(async () => undefined);
 		const disconnectAndClear = jest.fn(async () => undefined);
 		const ownership = createDatabaseOwnership({
 			getStorageItem: async () => "{not json",
-			setStorageItem: jest.fn(async () => undefined),
+			setStorageItem,
 			readLocalUserRows: async () => [],
 			readPersistedAuthenticatedAppSession: async () => null,
 			disconnectAndClear,
 		});
 
 		await expect(ownership.prepareForUser("usr_avery")).rejects.toThrow();
+		expect(setStorageItem).not.toHaveBeenCalled();
 		expect(disconnectAndClear).not.toHaveBeenCalled();
 	});
 

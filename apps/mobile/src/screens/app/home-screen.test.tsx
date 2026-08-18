@@ -14,7 +14,11 @@ import type {
 } from "@mobile/features/list/use-list-collection";
 import { useListCollection } from "@mobile/features/list/use-list-collection";
 import { useListPage } from "@mobile/features/list/use-list-page";
-import { useAuthenticatedAppSession, useSyncState } from "@mobile/session";
+import {
+	type LocalDataState,
+	useAuthenticatedAppSession,
+	useSyncState,
+} from "@mobile/session";
 import { deferred } from "@mobile/test/async";
 import { panBegin, panEnd, panMove } from "@mobile/test/mocks/gesture-handler";
 import { settleAnimations } from "@mobile/test/mocks/reanimated";
@@ -31,7 +35,10 @@ import {
 import { selectionAsync } from "expo-haptics";
 import type { PropsWithChildren } from "react";
 import { Dimensions, FlatList } from "react-native";
-import HomeScreen, { HomeScreenView } from "./home-screen";
+import HomeScreen, {
+	HomeScreenView,
+	type HomeScreenViewProps,
+} from "./home-screen";
 
 const mockReplace = jest.fn();
 const mockRetry = jest.fn();
@@ -194,9 +201,29 @@ beforeEach(() => {
 
 describe("HomeScreenView", () => {
 	it("renders the loading Authenticated App Session state", async () => {
-		await render(<HomeScreenView state={{ status: "loading" }} />);
+		const props = {
+			state: { status: "loading" },
+		} satisfies HomeScreenViewProps;
+		await render(<HomeScreenView {...props} />);
 
 		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
+	});
+
+	it("renders a blocked state with both required recovery actions", async () => {
+		const props = {
+			state: { status: "loading" },
+			localData: { status: "differentUserBlocked", phase: "idle" },
+			onSignInAsPreviousUser: jest.fn(),
+			onRemovePreviousUserDataAndContinue: jest.fn(),
+		} satisfies HomeScreenViewProps;
+		await render(<HomeScreenView {...props} />);
+
+		expect(
+			screen.getByRole("button", { name: "Sign In as Previous User" }),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: "Remove Previous User's Data" }),
+		).toBeTruthy();
 	});
 
 	it("renders the retry action for Authenticated App Session errors", async () => {
@@ -285,7 +312,7 @@ describe("HomeScreen", () => {
 	});
 
 	it("disables both blocked actions while removal is in progress", async () => {
-		showBlockedLocalData({ isRemoving: true });
+		showBlockedLocalData({ phase: "removing" });
 		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
 
 		expect(
@@ -299,6 +326,7 @@ describe("HomeScreen", () => {
 
 	it("keeps a failed removal blocked and allows confirmation to retry", async () => {
 		showBlockedLocalData({
+			phase: "failed",
 			errorMessage:
 				"Unable to remove the previous User's data. Please try again.",
 		});
@@ -1260,17 +1288,32 @@ function homeScreenSurface() {
 	);
 }
 
-function showBlockedLocalData(
-	overrides: { isRemoving?: boolean; errorMessage?: string | null } = {},
-): void {
+type BlockedLocalDataOverrides =
+	| { phase?: "idle" }
+	| { phase: "removing" }
+	| { phase: "failed"; errorMessage: string };
+
+function showBlockedLocalData(overrides: BlockedLocalDataOverrides = {}): void {
+	const localData: Extract<LocalDataState, { status: "differentUserBlocked" }> =
+		overrides.phase === "failed"
+			? {
+					status: "differentUserBlocked",
+					phase: "failed",
+					errorMessage: overrides.errorMessage,
+				}
+			: overrides.phase === "removing"
+				? {
+						status: "differentUserBlocked",
+						phase: "removing",
+					}
+				: {
+						status: "differentUserBlocked",
+						phase: "idle",
+					};
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "loading" },
 		session: authenticatedAppSession,
-		localData: {
-			status: "differentUserBlocked",
-			isRemoving: overrides.isRemoving ?? false,
-			errorMessage: overrides.errorMessage ?? null,
-		},
+		localData,
 		retry: jest.fn(),
 		reloadSession: jest.fn(),
 		signOut: jest.fn(),

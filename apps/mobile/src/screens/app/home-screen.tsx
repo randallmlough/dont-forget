@@ -34,13 +34,18 @@ import { HomeListToolbar } from "./home-list-toolbar";
 
 const FALLBACK_TITLE = "Home";
 
-export type HomeScreenViewProps = {
-	state: AuthenticatedAppSessionState;
-	localData?: LocalDataState;
-	onRetry?: () => void;
-	onSignInAsPreviousUser?: () => void;
-	onRemovePreviousUserDataAndContinue?: () => void;
-};
+export type HomeScreenViewProps =
+	| {
+			state: AuthenticatedAppSessionState;
+			localData?: Extract<LocalDataState, { status: "ready" }>;
+			onRetry?: () => void;
+	  }
+	| {
+			state: AuthenticatedAppSessionState;
+			localData: Extract<LocalDataState, { status: "differentUserBlocked" }>;
+			onSignInAsPreviousUser: () => void;
+			onRemovePreviousUserDataAndContinue: () => void;
+	  };
 
 export default function HomeScreen() {
 	const {
@@ -495,29 +500,25 @@ function CollapsedListTitle({
 	);
 }
 
-export function HomeScreenView({
-	state,
-	localData = { status: "ready" },
-	onRetry,
-	onSignInAsPreviousUser,
-	onRemovePreviousUserDataAndContinue,
-}: HomeScreenViewProps) {
-	if (localData.status === "differentUserBlocked") {
+export function HomeScreenView(props: HomeScreenViewProps) {
+	if (isBlockedHomeScreenViewProps(props)) {
 		return (
 			<HomeLocalDataBlocked
-				localData={localData}
-				onSignInAsPreviousUser={onSignInAsPreviousUser}
+				localData={props.localData}
+				onSignInAsPreviousUser={props.onSignInAsPreviousUser}
 				onRemovePreviousUserDataAndContinue={
-					onRemovePreviousUserDataAndContinue
+					props.onRemovePreviousUserDataAndContinue
 				}
 			/>
 		);
 	}
 	return (
 		<View style={styles.root}>
-			{state.status === "error" ? (
-				<StatusCard title="Household unavailable" body={state.message}>
-					{onRetry ? <Button onPress={onRetry}>Try again</Button> : null}
+			{props.state.status === "error" ? (
+				<StatusCard title="Household unavailable" body={props.state.message}>
+					{props.onRetry ? (
+						<Button onPress={props.onRetry}>Try again</Button>
+					) : null}
 				</StatusCard>
 			) : (
 				<StatusCard
@@ -531,15 +532,25 @@ export function HomeScreenView({
 	);
 }
 
+function isBlockedHomeScreenViewProps(
+	props: HomeScreenViewProps,
+): props is Extract<
+	HomeScreenViewProps,
+	{ localData: { status: "differentUserBlocked" } }
+> {
+	return props.localData?.status === "differentUserBlocked";
+}
+
 function HomeLocalDataBlocked({
 	localData,
 	onSignInAsPreviousUser,
 	onRemovePreviousUserDataAndContinue,
 }: {
 	localData: Extract<LocalDataState, { status: "differentUserBlocked" }>;
-	onSignInAsPreviousUser?: () => void;
-	onRemovePreviousUserDataAndContinue?: () => void;
+	onSignInAsPreviousUser: () => void;
+	onRemovePreviousUserDataAndContinue: () => void;
 }) {
+	const removalInProgress = localData.phase === "removing";
 	return (
 		<View style={styles.root}>
 			<StatusCard
@@ -547,10 +558,10 @@ function HomeLocalDataBlocked({
 				body="This device still has Lists, Items, or unsynced changes from the previously signed-in User. Sign in as that User to preserve them, or remove the local data to continue."
 			>
 				<View style={styles.blockedActions}>
-					{localData.errorMessage ? (
+					{localData.phase === "failed" ? (
 						<Text style={styles.blockedError}>{localData.errorMessage}</Text>
 					) : null}
-					{localData.isRemoving ? (
+					{removalInProgress ? (
 						<View style={styles.blockedProgress}>
 							<ActivityIndicator />
 							<Text style={styles.blockedProgressText}>
@@ -558,21 +569,17 @@ function HomeLocalDataBlocked({
 							</Text>
 						</View>
 					) : null}
-					<Button
-						disabled={localData.isRemoving}
-						onPress={onSignInAsPreviousUser}
-					>
+					<Button disabled={removalInProgress} onPress={onSignInAsPreviousUser}>
 						Sign In as Previous User
 					</Button>
 					<Button
-						disabled={localData.isRemoving}
+						disabled={removalInProgress}
 						variant="destructive"
-						onPress={() => {
-							if (!onRemovePreviousUserDataAndContinue) return;
+						onPress={() =>
 							confirmPreviousUserDataRemoval(
 								onRemovePreviousUserDataAndContinue,
-							);
-						}}
+							)
+						}
 					>
 						{"Remove Previous User's Data"}
 					</Button>

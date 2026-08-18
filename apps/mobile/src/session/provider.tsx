@@ -77,14 +77,28 @@ export type AuthenticatedAppSessionReloadOptions =
 	| { mode: "freshOnly" }
 	| { mode: "retireCurrent" };
 
-export type AuthenticatedAppSessionProviderAuth = {
+type AuthenticatedAppSessionProviderAuthBase = {
 	getToken: GetSessionToken;
 	getPowerSyncToken?: GetSessionToken;
-	authReady: boolean;
-	signedIn: boolean;
-	clerkUserId: string | null;
 	signOut: () => Promise<void>;
 };
+
+export type AuthenticatedAppSessionProviderAuth =
+	| (AuthenticatedAppSessionProviderAuthBase & {
+			authReady: false;
+			signedIn: false;
+			clerkUserId: null;
+	  })
+	| (AuthenticatedAppSessionProviderAuthBase & {
+			authReady: true;
+			signedIn: false;
+			clerkUserId: null;
+	  })
+	| (AuthenticatedAppSessionProviderAuthBase & {
+			authReady: true;
+			signedIn: true;
+			clerkUserId: string;
+	  });
 
 export type AuthenticatedAppSessionConnectDatabase = (input: {
 	getToken: GetSessionToken;
@@ -149,27 +163,42 @@ export function AuthenticatedAppSessionProvider({
 	const bootstrapService = bootstrapServiceProp ?? defaultBootstrapService;
 	const clerkGetToken = clerkAuth.getToken;
 	const clerkSignOut = clerkAuth.signOut;
-	const defaultAuth = useMemo(
-		() => ({
+	const defaultAuth = useMemo<AuthenticatedAppSessionProviderAuth>(() => {
+		const base: AuthenticatedAppSessionProviderAuthBase = {
 			getToken: clerkGetToken,
 			getPowerSyncToken: () => clerkGetToken({ template: "powersync" }),
-			authReady: clerkAuth.isLoaded,
-			signedIn: Boolean(clerkAuth.isSignedIn),
-			clerkUserId: clerkAuth.userId ?? null,
 			signOut: clerkSignOut,
-		}),
-		[
-			clerkAuth.isLoaded,
-			clerkAuth.isSignedIn,
-			clerkAuth.userId,
-			clerkGetToken,
-			clerkSignOut,
-		],
-	);
+		};
+		if (!clerkAuth.isLoaded) {
+			return {
+				...base,
+				authReady: false,
+				signedIn: false,
+				clerkUserId: null,
+			};
+		}
+		if (!clerkAuth.isSignedIn || !clerkAuth.userId) {
+			return {
+				...base,
+				authReady: true,
+				signedIn: false,
+				clerkUserId: null,
+			};
+		}
+		return {
+			...base,
+			authReady: true,
+			signedIn: true,
+			clerkUserId: clerkAuth.userId,
+		};
+	}, [
+		clerkAuth.isLoaded,
+		clerkAuth.isSignedIn,
+		clerkAuth.userId,
+		clerkGetToken,
+		clerkSignOut,
+	]);
 	const auth = authProp ?? defaultAuth;
-	const authReady = auth.authReady;
-	const signedIn = auth.signedIn;
-	const clerkUserId = auth.clerkUserId;
 	const authRef = useRef(auth);
 	const analyticsRef = useRef(analytics);
 	const machineRef = useRef(initialSessionMachineState);
@@ -178,10 +207,9 @@ export function AuthenticatedAppSessionProvider({
 	);
 	const getToken = useCallback(() => authRef.current.getToken(), []);
 	const sessionForCurrentAuth =
-		authReady &&
-		signedIn &&
-		clerkUserId !== null &&
-		publishedSession.observedClerkUserId !== clerkUserId
+		auth.authReady &&
+		auth.signedIn &&
+		publishedSession.observedClerkUserId !== auth.clerkUserId
 			? INITIAL_PROVIDER_SNAPSHOT
 			: publishedSession;
 
@@ -388,11 +416,13 @@ export function AuthenticatedAppSessionProvider({
 				}
 				if (preparation === null) return;
 				if (preparation.status === "differentUserBlocked") {
+					const currentAuth = authRef.current;
+					if (!currentAuth.authReady || !currentAuth.signedIn) return;
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
 							type: "activationBlocked",
 							attempt,
-							clerkUserId: authRef.current.clerkUserId,
+							clerkUserId: currentAuth.clerkUserId,
 							session,
 						}),
 					);
@@ -438,7 +468,7 @@ export function AuthenticatedAppSessionProvider({
 					if (preparation.status === "differentUserBlocked") {
 						const currentAuth = authRef.current;
 						applyResult(
-							currentAuth.signedIn && currentAuth.clerkUserId
+							currentAuth.authReady && currentAuth.signedIn
 								? reduceSessionMachine(machineRef.current, {
 										type: "activationBlocked",
 										attempt,
@@ -495,14 +525,8 @@ export function AuthenticatedAppSessionProvider({
 	}, [auth]);
 
 	useEffect(() => {
-		void dispatch({
-			type: "authStateChanged",
-			authReady,
-			signedIn,
-			clerkUserId,
-			activationEnabled,
-		});
-		if (!authReady || signedIn) return;
+		void dispatch(authStateChangedEvent(auth, activationEnabled));
+		if (!auth.authReady || auth.signedIn) return;
 		if (
 			machineRef.current.restoreSuppressedUntilSignedIn ||
 			machineRef.current.pendingBlockedIncomingUserSignOutAttempt !== null
@@ -514,17 +538,7 @@ export function AuthenticatedAppSessionProvider({
 		void readPersistedAuthenticatedAppSessionProp()
 			.then(async (persistedSession) => {
 				if (cancelled || !persistedSession) return;
-				if (!clerkUserId || persistedSession.clerkUserId !== clerkUserId) {
-					await clearAuthenticatedAppSessionPresentProp().catch(
-						() => undefined,
-					);
-					return;
-				}
-				if (cancelled) return;
-				void dispatch({
-					type: "sessionRestoreRequested",
-					session: persistedSession.session,
-				});
+				await clearAuthenticatedAppSessionPresentProp().catch(() => undefined);
 			})
 			.catch((error) => {
 				if (cancelled) return;
@@ -537,9 +551,7 @@ export function AuthenticatedAppSessionProvider({
 			cancelled = true;
 		};
 	}, [
-		authReady,
-		signedIn,
-		clerkUserId,
+		auth,
 		activationEnabled,
 		clearAuthenticatedAppSessionPresentProp,
 		dispatch,
@@ -584,10 +596,7 @@ export function AuthenticatedAppSessionProvider({
 		});
 		try {
 			await signOutFlow.run();
-			void dispatch({
-				type: "signOutSucceeded",
-				signedIn: authRef.current.signedIn,
-			});
+			void dispatch({ type: "signOutSucceeded" });
 		} catch (error) {
 			await dispatch(
 				{
@@ -644,7 +653,7 @@ export function AuthenticatedAppSessionProvider({
 			!blocked ||
 			!blockedActivationIsCurrent(blocked) ||
 			machineRef.current.localData.status !== "differentUserBlocked" ||
-			machineRef.current.localData.isRemoving ||
+			machineRef.current.localData.phase === "removing" ||
 			machineRef.current.pendingBlockedIncomingUserSignOutAttempt !== null
 		) {
 			return;
@@ -685,15 +694,15 @@ export function AuthenticatedAppSessionProvider({
 		>,
 	): boolean {
 		const current = machineRef.current.blockedActivation;
+		const currentAuth = authRef.current;
 		return (
-			blocked.clerkUserId !== null &&
 			machineRef.current.attempt === blocked.attempt &&
 			current?.attempt === blocked.attempt &&
 			current.clerkUserId === blocked.clerkUserId &&
 			current.session.user.id === blocked.session.user.id &&
-			authRef.current.signedIn &&
-			authRef.current.clerkUserId === blocked.clerkUserId &&
-			authRef.current.clerkUserId !== null
+			currentAuth.authReady &&
+			currentAuth.signedIn &&
+			currentAuth.clerkUserId === blocked.clerkUserId
 		);
 	}
 
@@ -741,6 +750,37 @@ export function useAuthenticatedAppSession(): AuthenticatedAppSessionContextValu
 
 export function useAuthenticatedAppSessionMeta(): AuthenticatedAppSessionMeta {
 	return use(AuthenticatedAppSessionContext)?.meta ?? INITIAL_SESSION_META;
+}
+
+function authStateChangedEvent(
+	auth: AuthenticatedAppSessionProviderAuth,
+	activationEnabled: boolean,
+): Extract<SessionMachineEvent, { type: "authStateChanged" }> {
+	if (!auth.authReady) {
+		return {
+			type: "authStateChanged",
+			authReady: false,
+			signedIn: false,
+			clerkUserId: null,
+			activationEnabled,
+		};
+	}
+	if (!auth.signedIn) {
+		return {
+			type: "authStateChanged",
+			authReady: true,
+			signedIn: false,
+			clerkUserId: null,
+			activationEnabled,
+		};
+	}
+	return {
+		type: "authStateChanged",
+		authReady: true,
+		signedIn: true,
+		clerkUserId: auth.clerkUserId,
+		activationEnabled,
+	};
 }
 
 function sessionProviderSnapshot(state: typeof initialSessionMachineState): {
