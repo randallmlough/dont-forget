@@ -14,7 +14,7 @@ minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - '@expo/ui@56.0.23'
   # High-severity security release, exempted before the 7-day cooldown expires.
-  - 'nanoid@3.3.17'
+  - 'nanoid@3.3.18'
 
 auditConfig:
   # No patched image-size release exists for these advisories as of 2026-08-07.
@@ -58,5 +58,5 @@ overrides:
   'js-yaml@>=4.0.0 <4.3.1': '^4.3.1'
   'uuid@<11.1.1': '>=11.1.1'
   'fast-uri@<3.1.5': '^3.1.5'
-  'nanoid@<3.3.17': '^3.3.17'
+  'nanoid@<3.3.18': '^3.3.18'
   'postcss@<8.5.18': '^8.5.18'
