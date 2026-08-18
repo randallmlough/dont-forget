@@ -43,6 +43,7 @@ app-example
 .turbo/
 .codex/environments/
 .claude/worktrees/
+.pi/
 .vscode
 .idea/
 /.pnpm-store/
