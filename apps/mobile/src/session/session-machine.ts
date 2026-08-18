@@ -84,6 +84,7 @@ export type SessionMachineEvent =
 	| {
 			type: "blockedIncomingUserSignOutFailed";
 			attempt: number;
+			signedIn: boolean;
 			message: string;
 	  }
 	| {
@@ -366,22 +367,7 @@ export function reduceSessionMachine(
 			) {
 				return noChange(state);
 			}
-			return {
-				state: {
-					...state,
-					attempt: state.attempt + 1,
-					view: LOADING_VIEW,
-					localData: { status: "ready" },
-					blockedActivation: null,
-					pendingBlockedIncomingUserSignOutAttempt: event.signedIn
-						? event.attempt
-						: null,
-					signInRequired: true,
-					suppressActivationUntilSignedOut: event.signedIn,
-					restoreSuppressedUntilSignedIn: true,
-				},
-				effects: [],
-			};
+			return completeBlockedIncomingUserSignOut(state, event);
 		case "blockedIncomingUserSignOutFailed":
 			if (
 				state.blockedActivation?.attempt !== event.attempt ||
@@ -389,6 +375,9 @@ export function reduceSessionMachine(
 				state.localData.status !== "differentUserBlocked"
 			) {
 				return noChange(state);
+			}
+			if (!event.signedIn) {
+				return completeBlockedIncomingUserSignOut(state, event);
 			}
 			return {
 				state: {
@@ -519,6 +508,31 @@ export function reduceSessionMachine(
 	}
 }
 
+function completeBlockedIncomingUserSignOut(
+	state: SessionMachineState,
+	event: {
+		attempt: number;
+		signedIn: boolean;
+	},
+): SessionMachineResult {
+	return {
+		state: {
+			...state,
+			attempt: state.attempt + 1,
+			view: LOADING_VIEW,
+			localData: { status: "ready" },
+			blockedActivation: null,
+			pendingBlockedIncomingUserSignOutAttempt: event.signedIn
+				? event.attempt
+				: null,
+			signInRequired: true,
+			suppressActivationUntilSignedOut: event.signedIn,
+			restoreSuppressedUntilSignedIn: true,
+		},
+		effects: [],
+	};
+}
+
 function reduceAuthStateChanged(
 	state: SessionMachineState,
 	event: { type: "authStateChanged" } & ObservedAuth,
@@ -560,21 +574,28 @@ function reduceAuthStateChanged(
 		event.clerkUserId !== null &&
 		previousAuth.clerkUserId !== event.clerkUserId;
 	if (directUserChange && !next.signingOut) {
-		const activation = startActivation(
-			{
-				...next,
-				localData: { status: "ready" },
-				blockedActivation: null,
-				view: LOADING_VIEW,
-				readySessionSource: null,
-				pendingActivationRestoredUserId: null,
-				pendingRestoreAttempt: null,
-				restorableSession: null,
-				restoreFailed: false,
-				signInRequired: false,
-			},
-			true,
-		);
+		const retired: SessionMachineState = {
+			...next,
+			localData: { status: "ready" },
+			blockedActivation: null,
+			pendingBlockedIncomingUserSignOutAttempt: null,
+			pendingActivationAttempt: null,
+			view: LOADING_VIEW,
+			readySessionSource: null,
+			pendingActivationRestoredUserId: null,
+			pendingRestoreAttempt: null,
+			restorableSession: null,
+			restoreFailed: false,
+			signInRequired: false,
+			restoreSuppressedUntilSignedIn: false,
+		};
+		if (!event.activationEnabled) {
+			return {
+				state: { ...retired, attempt: state.attempt + 1 },
+				effects: [{ type: "disconnect" }],
+			};
+		}
+		const activation = startActivation(retired, true);
 		return {
 			state: activation.state,
 			effects: [{ type: "disconnect" }, ...activation.effects],

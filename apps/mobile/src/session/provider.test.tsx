@@ -527,7 +527,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(analytics.reset).toHaveBeenCalledTimes(1);
 	});
 
-	it("preserves previous-User state when Clerk reports signed out before incoming User sign-out resolves", async () => {
+	it("completes previous-User recovery when Clerk reports signed out before incoming User sign-out rejects", async () => {
 		const clerkSignOut = deferred<void>();
 		const auth = authFixture({
 			clerkUserId: "user_blake",
@@ -570,6 +570,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				)}
 			>
 				<LocalDataActionsView />
+				<SessionPathState />
 			</AuthenticatedAppSessionProvider>,
 		);
 		await waitFor(() =>
@@ -595,6 +596,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				)}
 			>
 				<LocalDataActionsView />
+				<SessionPathState />
 			</AuthenticatedAppSessionProvider>,
 		);
 		await act(async () => {
@@ -610,11 +612,12 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(currentListSelection).toBe("lst_groceries");
 
 		await act(async () => {
-			clerkSignOut.resolve(undefined);
-			await clerkSignOut.promise;
+			clerkSignOut.reject(new Error("Clerk completion failed"));
+			await clerkSignOut.promise.catch(() => undefined);
 		});
 
 		await waitFor(() => expect(analytics.reset).toHaveBeenCalledTimes(1));
+		expect(screen.getByText("ready:signInRequired")).toBeTruthy();
 		expect(clearSessionHint).not.toHaveBeenCalled();
 		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
 		expect(disconnect).not.toHaveBeenCalled();
@@ -677,6 +680,29 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await view.rerender(
 			<AuthenticatedAppSessionProvider
 				auth={userCAuth}
+				activationEnabled={false}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+		expect(screen.getByText("loading")).toBeTruthy();
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+		expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).not.toHaveBeenCalled();
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={userCAuth}
+				activationEnabled
 				analytics={analytics}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
@@ -692,6 +718,8 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(screen.getByText("Casey")).toBeTruthy());
 		expect(disconnect).toHaveBeenCalledTimes(1);
 		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+		expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(2);
 
 		await act(async () => {
 			clerkSignOut.resolve(undefined);
@@ -1140,6 +1168,8 @@ describe("AuthenticatedAppSessionProvider", () => {
 			displayName: "Blake",
 			userId: "usr_blake",
 		});
+		const consumerRenders: (string | null)[] = [];
+		const homeProductHookRenders: string[] = [];
 		const order: string[] = [];
 		const analytics = createMockAnalytics();
 		const bootstrapService = bootstrapServiceFixture(freshSession);
@@ -1176,9 +1206,15 @@ describe("AuthenticatedAppSessionProvider", () => {
 			>
 				<CurrentState />
 				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
 			</AuthenticatedAppSessionProvider>,
 		);
 		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
+		consumerRenders.length = 0;
+		homeProductHookRenders.length = 0;
 
 		await view.rerender(
 			<AuthenticatedAppSessionProvider
@@ -1196,9 +1232,15 @@ describe("AuthenticatedAppSessionProvider", () => {
 			>
 				<CurrentState />
 				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
 			</AuthenticatedAppSessionProvider>,
 		);
 
+		expect(consumerRenders).not.toContain("usr_avery");
+		expect(homeProductHookRenders).not.toContain("usr_avery");
 		await waitFor(() =>
 			expect(screen.getByText("differentUserBlocked")).toBeTruthy(),
 		);
@@ -2115,6 +2157,11 @@ function LocalDataActionsView() {
 			</Pressable>
 		</>
 	);
+}
+
+function SessionPathState() {
+	const { localData, meta } = useAuthenticatedAppSession();
+	return <Text>{`${localData.status}:${meta?.restore.status}`}</Text>;
 }
 
 function SignOutButton({

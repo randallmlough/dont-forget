@@ -307,7 +307,7 @@ describe("reduceSessionMachine", () => {
 		expect(signedOut.effects).toEqual([]);
 	});
 
-	it("pre-arms previous-User recovery across auth loss and unwinds it on failure", () => {
+	it("completes previous-User recovery when Clerk signs out before sign-out rejects", () => {
 		const session = sessionFixture({ userId: "usr_blake" });
 		const activating = reduceSessionMachine(
 			initialSessionMachineState,
@@ -337,8 +337,43 @@ describe("reduceSessionMachine", () => {
 		const failed = reduceSessionMachine(signedOutBeforeCompletion.state, {
 			type: "blockedIncomingUserSignOutFailed",
 			attempt: 1,
+			signedIn: false,
 			message: "Unable to return to sign in. Please try again.",
 		});
+		expect(failed.state.attempt).toBe(2);
+		expect(failed.state.pendingBlockedIncomingUserSignOutAttempt).toBeNull();
+		expect(failed.state.blockedActivation).toBeNull();
+		expect(failed.state.localData).toEqual({ status: "ready" });
+		expect(failed.state.signInRequired).toBe(true);
+		expect(failed.state.restoreSuppressedUntilSignedIn).toBe(true);
+		expect(failed.state.suppressActivationUntilSignedOut).toBe(false);
+		expect(failed.effects).toEqual([]);
+	});
+
+	it("keeps previous-User recovery blocked when incoming User sign-out rejects while still signed in", () => {
+		const session = sessionFixture({ userId: "usr_blake" });
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ clerkUserId: "user_blake" }),
+		);
+		const blocked = reduceSessionMachine(activating.state, {
+			type: "activationBlocked",
+			attempt: 1,
+			clerkUserId: "user_blake",
+			session,
+		});
+		const requested = reduceSessionMachine(blocked.state, {
+			type: "blockedIncomingUserSignOutRequested",
+			attempt: 1,
+		});
+
+		const failed = reduceSessionMachine(requested.state, {
+			type: "blockedIncomingUserSignOutFailed",
+			attempt: 1,
+			signedIn: true,
+			message: "Unable to return to sign in. Please try again.",
+		});
+
 		expect(failed.state.pendingBlockedIncomingUserSignOutAttempt).toBeNull();
 		expect(failed.state.blockedActivation).not.toBeNull();
 		expect(failed.state.localData).toEqual({
@@ -379,10 +414,8 @@ describe("reduceSessionMachine", () => {
 		).toBeNull();
 		expect(changedUser.state.blockedActivation).toBeNull();
 		expect(changedUser.state.attempt).toBe(2);
-		expect(changedUser.effects).toEqual([
-			{ type: "disconnect" },
-			{ type: "activate", attempt: 2, allowCached: true },
-		]);
+		expect(changedUser.state.pendingActivationAttempt).toBeNull();
+		expect(changedUser.effects).toEqual([{ type: "disconnect" }]);
 		const staleCompletion = reduceSessionMachine(changedUser.state, {
 			type: "blockedIncomingUserSignOutSucceeded",
 			attempt: 1,
@@ -390,6 +423,22 @@ describe("reduceSessionMachine", () => {
 		});
 		expect(staleCompletion.state).toBe(changedUser.state);
 		expect(staleCompletion.effects).toEqual([]);
+
+		const enabled = reduceSessionMachine(
+			staleCompletion.state,
+			authStateChanged({ clerkUserId: "user_casey" }),
+		);
+		expect(enabled.state.attempt).toBe(3);
+		expect(enabled.effects).toEqual([
+			{ type: "activate", attempt: 3, allowCached: true },
+		]);
+
+		const duplicate = reduceSessionMachine(
+			enabled.state,
+			authStateChanged({ clerkUserId: "user_casey" }),
+		);
+		expect(duplicate.state).toBe(enabled.state);
+		expect(duplicate.effects).toEqual([]);
 	});
 
 	it("restores a persisted session after signed-in cold-start activation fails", () => {

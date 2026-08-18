@@ -181,7 +181,6 @@ export function AuthenticatedAppSessionProvider({
 		authReady &&
 		signedIn &&
 		clerkUserId !== null &&
-		publishedSession.observedSignedIn &&
 		publishedSession.observedClerkUserId !== clerkUserId
 			? INITIAL_PROVIDER_SNAPSHOT
 			: publishedSession;
@@ -621,13 +620,17 @@ export function AuthenticatedAppSessionProvider({
 				signedIn: authRef.current.signedIn,
 			});
 		} catch (error) {
+			if (!blockedIncomingUserSignOutIsPending(blocked)) return;
+			const currentSignedIn = authRef.current.signedIn;
 			logger.error(
 				"authenticated app session blocked incoming User sign-out failed",
 				{ error: asError(error) },
 			);
+			if (!currentSignedIn) analyticsRef.current.reset();
 			void dispatch({
 				type: "blockedIncomingUserSignOutFailed",
 				attempt: blocked.attempt,
+				signedIn: currentSignedIn,
 				message: RETURN_TO_PREVIOUS_USER_ERROR,
 			});
 		}
