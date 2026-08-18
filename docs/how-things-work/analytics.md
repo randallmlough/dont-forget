@@ -101,7 +101,7 @@ You don't call `identify` from sign-in/sign-up code. After `setActive(...)`, Cle
 
 `identify(userId, traits)` is exported for the day you build a settings screen that lets users update analytics-only traits (preferred name, subscription tier, etc.). Until that day, leave it alone.
 
-`reset()` is paired with sign-out. The Authenticated App Session sign-out action calls `track("user_signed_out", {})` *then* `reset()` *then* Authenticated App Session cleanup *then* Clerk `signOut()` — order matters. Reset before the event fires would tag the event against the next anonymous distinct_id; reset after Clerk fully signs out would race the next anonymous session.
+`reset()` is paired with sign-out. The Authenticated App Session sign-out action captures the outgoing internal User ID, critically clears the persisted Authenticated App Session envelope, critically completes Clerk `signOut()`, performs best-effort PowerSync `disconnect()` and Current List selection cleanup, then calls `track("user_signed_out", {})` followed by `reset()`. Tracking must precede reset so the event remains attributed to the outgoing User, and successful Sign Out analytics are emitted only after both critical steps succeed.
 
 ## Where data ends up
 
