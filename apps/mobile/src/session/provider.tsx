@@ -29,6 +29,7 @@ import {
 } from "react";
 import {
 	type DatabaseOwnership,
+	type DatabasePreparation,
 	databaseOwnership as defaultDatabaseOwnership,
 } from "./database-ownership";
 import {
@@ -176,10 +177,14 @@ export function AuthenticatedAppSessionProvider({
 		sessionProviderSnapshot(initialSessionMachineState),
 	);
 	const getToken = useCallback(() => authRef.current.getToken(), []);
-	const getPowerSyncToken = useCallback(
-		() => (authRef.current.getPowerSyncToken ?? authRef.current.getToken)(),
-		[],
-	);
+	const sessionForCurrentAuth =
+		authReady &&
+		signedIn &&
+		clerkUserId !== null &&
+		publishedSession.observedSignedIn &&
+		publishedSession.observedClerkUserId !== clerkUserId
+			? INITIAL_PROVIDER_SNAPSHOT
+			: publishedSession;
 
 	// The auth observation effect depends on dispatch, so keep it intentionally stable while preserving honest hook deps.
 	const dispatch = useCallback(
@@ -254,17 +259,57 @@ export function AuthenticatedAppSessionProvider({
 			// in-flight connect for good (@powersync/common ConnectionManager);
 			// re-verify that guarantee when upgrading the SDK.
 			function connectDatabaseForAttempt(attempt: number): Promise<boolean> {
+				const expectedClerkUserId =
+					machineRef.current.lastObservedAuth?.clerkUserId ?? null;
+				const sessionToken = tokenGetterForAttempt(
+					attempt,
+					expectedClerkUserId,
+					"session",
+				);
+				const powerSyncToken = tokenGetterForAttempt(
+					attempt,
+					expectedClerkUserId,
+					"powersync",
+				);
 				return databaseOperationChain.then(async () => {
 					if (activationSuperseded(attempt)) return false;
-					await connectDatabase({ getToken, getPowerSyncToken });
+					await connectDatabase({
+						getToken: sessionToken,
+						getPowerSyncToken: powerSyncToken,
+					});
 					return true;
 				});
 			}
 
-			async function prepareAndConnectForAttempt(
+			function tokenGetterForAttempt(
+				attempt: number,
+				expectedClerkUserId: string | null,
+				tokenType: "session" | "powersync",
+			): GetSessionToken {
+				return async () => {
+					const currentAuth = authRef.current;
+					if (
+						activationSuperseded(attempt) ||
+						currentAuth.clerkUserId !== expectedClerkUserId
+					) {
+						return null;
+					}
+					const tokenGetter =
+						tokenType === "powersync"
+							? (currentAuth.getPowerSyncToken ?? currentAuth.getToken)
+							: currentAuth.getToken;
+					const token = await tokenGetter();
+					return activationSuperseded(attempt) ||
+						authRef.current.clerkUserId !== expectedClerkUserId
+						? null
+						: token;
+				};
+			}
+
+			async function prepareForAttempt(
 				attempt: number,
 				session: SessionBootstrap,
-			): Promise<"blocked" | "connected" | "stale"> {
+			): Promise<DatabasePreparation | null> {
 				const preparation = await enqueueDatabaseOperation(async () => {
 					if (activationSuperseded(attempt)) return null;
 					const result = await databaseOwnership.prepareForUser(
@@ -272,11 +317,7 @@ export function AuthenticatedAppSessionProvider({
 					);
 					return activationSuperseded(attempt) ? null : result;
 				});
-				if (preparation === null) return "stale";
-				if (preparation.status === "differentUserBlocked") return "blocked";
-				return (await connectDatabaseForAttempt(attempt))
-					? "connected"
-					: "stale";
+				return preparation;
 			}
 
 			async function executeActivation(attempt: number, allowCached: boolean) {
@@ -326,26 +367,42 @@ export function AuthenticatedAppSessionProvider({
 					return;
 				}
 
+				let preparation: DatabasePreparation | null;
+				try {
+					preparation = await prepareForAttempt(attempt, session);
+				} catch (error) {
+					logger.error("authenticated app session activation failed", {
+						error: asError(error),
+					});
+					applyResult(
+						reduceSessionMachine(machineRef.current, {
+							type: "activationFailed",
+							attempt,
+							allowCached: false,
+						}),
+					);
+					return;
+				}
+				if (preparation === null) return;
+				if (preparation.status === "differentUserBlocked") {
+					applyResult(
+						reduceSessionMachine(machineRef.current, {
+							type: "activationBlocked",
+							attempt,
+							clerkUserId: authRef.current.clerkUserId,
+							session,
+						}),
+					);
+					return;
+				}
+
 				try {
 					// `attempt` is the machine's only cancellation token: consult it before
 					// starting the next side effect; terminal results are always dispatched
 					// and the reducer alone decides what a stale one means (including
 					// undoing a stale connect).
 					if (activationSuperseded(attempt)) return;
-					const outcome = await prepareAndConnectForAttempt(attempt, session);
-					if (outcome === "stale") return;
-					if (outcome === "blocked") {
-						applyResult(
-							reduceSessionMachine(machineRef.current, {
-								type: "activationBlocked",
-								attempt,
-								clerkUserId: authRef.current.clerkUserId,
-								session,
-								source: "online",
-							}),
-						);
-						return;
-					}
+					if (!(await connectDatabaseForAttempt(attempt))) return;
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
 							type: "activationSucceeded",
@@ -373,9 +430,9 @@ export function AuthenticatedAppSessionProvider({
 			) {
 				try {
 					if (activationSuperseded(attempt)) return;
-					const outcome = await prepareAndConnectForAttempt(attempt, session);
-					if (outcome === "stale") return;
-					if (outcome === "blocked") {
+					const preparation = await prepareForAttempt(attempt, session);
+					if (preparation === null) return;
+					if (preparation.status === "differentUserBlocked") {
 						const currentAuth = authRef.current;
 						applyResult(
 							currentAuth.signedIn && currentAuth.clerkUserId
@@ -384,7 +441,6 @@ export function AuthenticatedAppSessionProvider({
 										attempt,
 										clerkUserId: currentAuth.clerkUserId,
 										session,
-										source: "restored",
 									})
 								: reduceSessionMachine(machineRef.current, {
 										type: "sessionRestoreFailed",
@@ -393,6 +449,7 @@ export function AuthenticatedAppSessionProvider({
 						);
 						return;
 					}
+					if (!(await connectDatabaseForAttempt(attempt))) return;
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
 							type: "sessionRestoreSucceeded",
@@ -423,7 +480,6 @@ export function AuthenticatedAppSessionProvider({
 			connectDatabase,
 			databaseOwnership,
 			disconnect,
-			getPowerSyncToken,
 			getToken,
 			logger,
 			persistAuthenticatedAppSessionProp,
@@ -444,6 +500,12 @@ export function AuthenticatedAppSessionProvider({
 			activationEnabled,
 		});
 		if (!authReady || signedIn) return;
+		if (
+			machineRef.current.restoreSuppressedUntilSignedIn ||
+			machineRef.current.pendingBlockedIncomingUserSignOutAttempt !== null
+		) {
+			return;
+		}
 		let cancelled = false;
 
 		void readPersistedAuthenticatedAppSessionProp()
@@ -514,7 +576,7 @@ export function AuthenticatedAppSessionProvider({
 				clearAuthenticatedAppSessionPresentProp,
 			clearCurrentListSelectionsForUser,
 			logger,
-			disconnect,
+			disconnect: () => enqueueDatabaseOperation(disconnect),
 			getSessionUserId: () => machineRef.current.lastKnownUserId,
 		});
 		try {
@@ -538,9 +600,21 @@ export function AuthenticatedAppSessionProvider({
 
 	async function signInAsPreviousUser() {
 		const blocked = machineRef.current.blockedActivation;
-		if (!blocked || !blockedActivationIsCurrent(blocked)) return;
+		if (
+			!blocked ||
+			!blockedActivationIsCurrent(blocked) ||
+			machineRef.current.pendingBlockedIncomingUserSignOutAttempt !== null
+		) {
+			return;
+		}
+		void dispatch({
+			type: "blockedIncomingUserSignOutRequested",
+			attempt: blocked.attempt,
+		});
 		try {
 			await authRef.current.signOut();
+			if (!blockedIncomingUserSignOutIsPending(blocked)) return;
+			analyticsRef.current.reset();
 			void dispatch({
 				type: "blockedIncomingUserSignOutSucceeded",
 				attempt: blocked.attempt,
@@ -552,7 +626,7 @@ export function AuthenticatedAppSessionProvider({
 				{ error: asError(error) },
 			);
 			void dispatch({
-				type: "localDataRemovalFailed",
+				type: "blockedIncomingUserSignOutFailed",
 				attempt: blocked.attempt,
 				message: RETURN_TO_PREVIOUS_USER_ERROR,
 			});
@@ -565,7 +639,8 @@ export function AuthenticatedAppSessionProvider({
 			!blocked ||
 			!blockedActivationIsCurrent(blocked) ||
 			machineRef.current.localData.status !== "differentUserBlocked" ||
-			machineRef.current.localData.isRemoving
+			machineRef.current.localData.isRemoving ||
+			machineRef.current.pendingBlockedIncomingUserSignOutAttempt !== null
 		) {
 			return;
 		}
@@ -617,10 +692,24 @@ export function AuthenticatedAppSessionProvider({
 		);
 	}
 
+	function blockedIncomingUserSignOutIsPending(
+		blocked: NonNullable<
+			(typeof initialSessionMachineState)["blockedActivation"]
+		>,
+	): boolean {
+		const current = machineRef.current;
+		return (
+			current.attempt === blocked.attempt &&
+			current.blockedActivation?.attempt === blocked.attempt &&
+			current.blockedActivation.clerkUserId === blocked.clerkUserId &&
+			current.pendingBlockedIncomingUserSignOutAttempt === blocked.attempt
+		);
+	}
+
 	const value: AuthenticatedAppSessionContextValue = {
-		...publishedSession.view,
-		localData: publishedSession.localData,
-		meta: publishedSession.meta,
+		...sessionForCurrentAuth.view,
+		localData: sessionForCurrentAuth.localData,
+		meta: sessionForCurrentAuth.meta,
 		retry,
 		reloadSession,
 		signOut: runSignOut,
@@ -653,11 +742,15 @@ function sessionProviderSnapshot(state: typeof initialSessionMachineState): {
 	view: SessionView;
 	localData: LocalDataState;
 	meta: AuthenticatedAppSessionMeta;
+	observedSignedIn: boolean;
+	observedClerkUserId: string | null;
 } {
 	return {
 		view: state.view,
 		localData: state.localData,
 		meta: sessionMetaForState(state),
+		observedSignedIn: state.lastObservedAuth?.signedIn === true,
+		observedClerkUserId: state.lastObservedAuth?.clerkUserId ?? null,
 	};
 }
 
@@ -668,11 +761,17 @@ function samePublishedSession(
 	return (
 		current.view === state.view &&
 		current.localData === state.localData &&
-		current.meta.restore.status === sessionMetaForState(state).restore.status
+		current.meta.restore.status === sessionMetaForState(state).restore.status &&
+		current.observedSignedIn === (state.lastObservedAuth?.signedIn === true) &&
+		current.observedClerkUserId ===
+			(state.lastObservedAuth?.clerkUserId ?? null)
 	);
 }
 
 const INITIAL_SESSION_META = sessionMetaForState(initialSessionMachineState);
+const INITIAL_PROVIDER_SNAPSHOT = sessionProviderSnapshot(
+	initialSessionMachineState,
+);
 
 function sessionMetaForState(
 	state: typeof initialSessionMachineState,
