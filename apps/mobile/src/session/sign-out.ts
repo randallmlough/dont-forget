@@ -23,7 +23,7 @@ export type AuthenticatedAppSessionSignOutDeps = {
 	clearAuthenticatedAppSessionPresent?: typeof clearAuthenticatedAppSessionPresent;
 	clearCurrentListSelectionsForUser?: (userId: string) => Promise<void>;
 	logger?: Logger;
-	disconnectAndClear?: () => Promise<void>;
+	disconnect?: () => Promise<void>;
 	getSessionUserId: () => string | null;
 };
 
@@ -39,7 +39,7 @@ export function createAuthenticatedAppSessionSignOut({
 		clearAuthenticatedAppSessionPresentProp = clearAuthenticatedAppSessionPresent,
 	clearCurrentListSelectionsForUser = clearUserCurrentListSelections,
 	logger = defaultLogger,
-	disconnectAndClear = () => db.disconnectAndClear(),
+	disconnect = () => db.disconnect(),
 	getSessionUserId,
 }: AuthenticatedAppSessionSignOutDeps): AuthenticatedAppSessionSignOut {
 	async function run() {
@@ -54,24 +54,21 @@ export function createAuthenticatedAppSessionSignOut({
 		const signOut = getAuth().signOut;
 		const signedOutUserId = getSessionUserId();
 
-		analytics.track("user_signed_out", {});
-		analytics.reset();
-
-		// The persisted restore payload must be cleared before the destructive
-		// PowerSync wipe, so a storage failure leaves the signed-in User's local
-		// data intact for recovery. Clerk sign-out is also critical: its failure
-		// must propagate so the provider's signOutFailed path can recover the
-		// session. Remaining local cleanup is best-effort.
+		// The persisted restore payload and Clerk session are critical. Once both
+		// are cleared, disconnect sync and remove per-User selection preferences
+		// as best-effort cleanup while retaining local product data and uploads.
+		// Analytics records only the completed outcome.
 		const steps: SignOutStep[] = [
 			{
 				critical: true,
 				run: clearAuthenticatedAppSessionPresentProp,
 			},
+			{ critical: true, run: signOut },
 			{
 				critical: false,
 				failureLogMessage:
 					"authenticated app session sign-out disconnect failed",
-				run: disconnectAndClear,
+				run: disconnect,
 			},
 		];
 		if (signedOutUserId) {
@@ -82,8 +79,6 @@ export function createAuthenticatedAppSessionSignOut({
 				run: () => clearCurrentListSelectionsForUser(signedOutUserId),
 			});
 		}
-		steps.push({ critical: true, run: signOut });
-
 		for (const step of steps) {
 			if (step.critical) {
 				await step.run();
@@ -95,6 +90,8 @@ export function createAuthenticatedAppSessionSignOut({
 				logger.error(step.failureLogMessage, { error: asError(error) });
 			}
 		}
+		analytics.track("user_signed_out", {});
+		analytics.reset();
 	}
 
 	return {

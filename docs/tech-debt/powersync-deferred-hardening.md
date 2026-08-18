@@ -4,8 +4,8 @@
 
 The PowerSync migration ([ADR-0018](../adr/0018-single-postgres-self-hosted-powersync.md)) shipped as a
 single-device MVP with a clean cut-over. Several hardening items were consciously deferred at cut-over —
-four settled during the migration design (the "Fast Follow" list, Decisions 7 and 8) and two surfaced by
-the PR-C2 review (PR #134). They are recorded here so they are not lost.
+four settled during the migration design (the "Fast Follow" list, Decisions 7 and 8) and one remaining
+item surfaced by the PR-C2 review (PR #134). They are recorded here so they are not lost.
 
 ## Why This Is Debt
 
@@ -38,17 +38,16 @@ deliberate trades, not oversights.
    upload-queue-drained signal (`getUploadQueueStats` / `getNextCrudTransaction`) plumbed through the
    session plus a bounded, offline-safe drain-before-leave gate — and must not reintroduce a blocking
    pre-action barrier. (PR #134 review: discussion r3496682829.)
-6. **Offline cold-start session restoration.** The cold-start hint now persists only a boolean, so a
-   signed-in User opening the app offline hits the generic error state (`bootstrap.getSession` needs the
-   network) instead of reopening the last Household/List from local PowerSync data. Needs the
-   directory-identity bootstrap payload re-persisted and read on activation failure. Intentionally
-   dropped by PR-C2 (maximum debt removal). (PR #134 review: discussion r3496488837.)
 
+The former offline cold-start restoration item is complete: the app persists a
+validated, Clerk-subject-bound Authenticated App Session payload and can use it
+on the existing restore/fallback paths. [ADR-0020](../adr/0020-preserve-local-data-across-auth-transitions.md)
+adds durable internal-User ownership preparation before any restored session
+can connect; it does not broaden when offline restore is selected.
 ## Revisit When
 
 - Before the app supports a User on more than one device, or before hardening multi-Member conflict
   correctness: item 1.
-- Before the app supports a User on more than one device: item 6.
 - Before opening `/api/data` to real users or untrusted traffic: items 2 and 3.
 - If duplicate pending Invitations are observed in practice: item 4.
 - Before Member leave/removal becomes a common, data-loss-sensitive flow: item 5.
@@ -56,6 +55,6 @@ deliberate trades, not oversights.
 ## Desired Direction
 
 Address each item as a focused follow-up, smallest-first. Items 2–4 are small server-side guards. Items
-1, 5, and 6 touch the sync/session plumbing and should be designed together with the multi-device story,
+1 and 5 touch the sync/session plumbing and should be designed together with the multi-device story,
 since that is what makes them matter. None should reintroduce a blocking pre-action sync barrier
 (Decision 4 removed the pre-switch barrier deliberately).

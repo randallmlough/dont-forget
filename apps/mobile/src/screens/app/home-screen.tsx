@@ -5,10 +5,12 @@ import { useListCollection } from "@mobile/features/list/use-list-collection";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionState,
+	type LocalDataState,
 	useAuthenticatedAppSession,
 	useSyncState,
 } from "@mobile/session";
 import { Button } from "@mobile/ui/button";
+import { themedAlert } from "@mobile/ui/native-dialogs";
 import { StatusCard } from "@mobile/ui/status-card";
 import { Stack, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/build/react-navigation/elements";
@@ -32,16 +34,50 @@ import { HomeListToolbar } from "./home-list-toolbar";
 
 const FALLBACK_TITLE = "Home";
 
-export type HomeScreenViewProps = {
-	state: AuthenticatedAppSessionState;
-	onRetry?: () => void;
-};
+export type HomeScreenViewProps =
+	| {
+			state: AuthenticatedAppSessionState;
+			localData?: Extract<LocalDataState, { status: "ready" }>;
+			onRetry?: () => void;
+	  }
+	| {
+			state: AuthenticatedAppSessionState;
+			localData: Extract<LocalDataState, { status: "differentUserBlocked" }>;
+			onSignInAsPreviousUser: () => void;
+			onRemovePreviousUserDataAndContinue: () => void;
+	  };
 
 export default function HomeScreen() {
-	const { state, session, retry } = useAuthenticatedAppSession();
+	const {
+		state,
+		session,
+		localData,
+		retry,
+		signInAsPreviousUser,
+		removePreviousUserDataAndContinue,
+	} = useAuthenticatedAppSession();
 	const { open } = useNavigationDrawer();
 	const router = useRouter();
 	const openLists = () => router.replace("/lists");
+	if (localData.status === "differentUserBlocked") {
+		return (
+			<>
+				<HomeStackHeader
+					title={FALLBACK_TITLE}
+					onOpenNavigation={open}
+					onOpenLists={openLists}
+				/>
+				<HomeScreenView
+					state={state}
+					localData={localData}
+					onSignInAsPreviousUser={() => void signInAsPreviousUser()}
+					onRemovePreviousUserDataAndContinue={() =>
+						void removePreviousUserDataAndContinue()
+					}
+				/>
+			</>
+		);
+	}
 
 	if (session) {
 		return (
@@ -464,12 +500,25 @@ function CollapsedListTitle({
 	);
 }
 
-export function HomeScreenView({ state, onRetry }: HomeScreenViewProps) {
+export function HomeScreenView(props: HomeScreenViewProps) {
+	if (isBlockedHomeScreenViewProps(props)) {
+		return (
+			<HomeLocalDataBlocked
+				localData={props.localData}
+				onSignInAsPreviousUser={props.onSignInAsPreviousUser}
+				onRemovePreviousUserDataAndContinue={
+					props.onRemovePreviousUserDataAndContinue
+				}
+			/>
+		);
+	}
 	return (
 		<View style={styles.root}>
-			{state.status === "error" ? (
-				<StatusCard title="Household unavailable" body={state.message}>
-					{onRetry ? <Button onPress={onRetry}>Try again</Button> : null}
+			{props.state.status === "error" ? (
+				<StatusCard title="Household unavailable" body={props.state.message}>
+					{props.onRetry ? (
+						<Button onPress={props.onRetry}>Try again</Button>
+					) : null}
 				</StatusCard>
 			) : (
 				<StatusCard
@@ -483,6 +532,78 @@ export function HomeScreenView({ state, onRetry }: HomeScreenViewProps) {
 	);
 }
 
+function isBlockedHomeScreenViewProps(
+	props: HomeScreenViewProps,
+): props is Extract<
+	HomeScreenViewProps,
+	{ localData: { status: "differentUserBlocked" } }
+> {
+	return props.localData?.status === "differentUserBlocked";
+}
+
+function HomeLocalDataBlocked({
+	localData,
+	onSignInAsPreviousUser,
+	onRemovePreviousUserDataAndContinue,
+}: {
+	localData: Extract<LocalDataState, { status: "differentUserBlocked" }>;
+	onSignInAsPreviousUser: () => void;
+	onRemovePreviousUserDataAndContinue: () => void;
+}) {
+	const removalInProgress = localData.phase === "removing";
+	return (
+		<View style={styles.root}>
+			<StatusCard
+				title="Data from Another User Is on This Device"
+				body="This device still has Lists, Items, or unsynced changes from the previously signed-in User. Sign in as that User to preserve them, or remove the local data to continue."
+			>
+				<View style={styles.blockedActions}>
+					{localData.phase === "failed" ? (
+						<Text style={styles.blockedError}>{localData.errorMessage}</Text>
+					) : null}
+					{removalInProgress ? (
+						<View style={styles.blockedProgress}>
+							<ActivityIndicator />
+							<Text style={styles.blockedProgressText}>
+								Removing local data…
+							</Text>
+						</View>
+					) : null}
+					<Button disabled={removalInProgress} onPress={onSignInAsPreviousUser}>
+						Sign In as Previous User
+					</Button>
+					<Button
+						disabled={removalInProgress}
+						variant="destructive"
+						onPress={() =>
+							confirmPreviousUserDataRemoval(
+								onRemovePreviousUserDataAndContinue,
+							)
+						}
+					>
+						{"Remove Previous User's Data"}
+					</Button>
+				</View>
+			</StatusCard>
+		</View>
+	);
+}
+
+function confirmPreviousUserDataRemoval(onConfirm: () => void) {
+	themedAlert(
+		"Remove Previous User's Data?",
+		"This permanently removes the previous User's local Lists, Items, and unsynced changes from this device.",
+		[
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Remove and Continue",
+				style: "destructive",
+				onPress: onConfirm,
+			},
+		],
+	);
+}
+
 const styles = StyleSheet.create((theme) => ({
 	root: {
 		flex: 1,
@@ -490,6 +611,25 @@ const styles = StyleSheet.create((theme) => ({
 	},
 	content: {
 		flex: 1,
+	},
+	blockedActions: {
+		width: "100%",
+		gap: theme.spacing(3),
+	},
+	blockedError: {
+		...theme.typography.caption,
+		color: theme.colors.destructive,
+		textAlign: "center",
+	},
+	blockedProgress: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: theme.spacing(2),
+	},
+	blockedProgressText: {
+		...theme.typography.caption,
+		color: theme.colors.mutedForeground,
 	},
 	collapsedListTitle: {
 		...theme.typography.headline,

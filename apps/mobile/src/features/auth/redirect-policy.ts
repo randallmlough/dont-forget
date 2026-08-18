@@ -8,7 +8,8 @@ export type CachedSessionRedirectStatus =
 	| "available"
 	| "unavailable"
 	| "restoreFailed"
-	| "signInRequired";
+	| "signInRequired"
+	| "differentUserBlocked";
 
 export type AuthRedirectInput = {
 	pathname: string;
@@ -32,6 +33,9 @@ export function authRedirectTarget({
 	cachedSessionStatus,
 }: AuthRedirectInput): Href | null {
 	const onAuthPath = AUTH_PATHS.has(pathname);
+	if (cachedSessionStatus === "differentUserBlocked") {
+		return pathname === "/" ? null : "/";
+	}
 
 	if (isSignedIn) {
 		return onAuthPath ? signedInAuthPathTarget(params) : null;

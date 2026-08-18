@@ -11,6 +11,7 @@ import {
 	waitFor,
 } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
+import type { DatabaseOwnership } from "./database-ownership";
 import {
 	type AuthenticatedAppSession,
 	type AuthenticatedAppSessionConnectDatabase,
@@ -36,6 +37,13 @@ jest.mock("@mobile/lib/logger", () =>
 jest.mock("@mobile/lib/analytics", () =>
 	jest.requireActual("@mobile/test/mocks/analytics"),
 );
+
+jest.mock("./database-ownership", () => ({
+	databaseOwnership: {
+		prepareForUser: jest.fn(async () => ({ status: "ready" })),
+		removePreviousUserDataAndPrepare: jest.fn(async () => undefined),
+	},
+}));
 
 jest.mock("./session-hint", () => ({
 	clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
@@ -90,10 +98,1050 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 	});
 
-	it("restores a persisted Authenticated App Session when Clerk is ready but signed out", async () => {
-		const session = appSessionFixture({ displayName: "Cached Avery" });
+	it("blocks a different database owner before connecting or persisting the incoming session", async () => {
+		const session = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(async () => ({
+				status: "differentUserBlocked" as const,
+			})),
+		});
+		const connectDatabase = connectDatabaseFixture();
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture({ clerkUserId: "user_blake" })}
+				bootstrapService={bootstrapServiceFixture(session)}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<LocalDataStateView />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked")).toBeTruthy(),
+		);
+		expect(databaseOwnership.prepareForUser).toHaveBeenCalledWith("usr_blake");
+		expect(connectDatabase).not.toHaveBeenCalled();
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		"Previous User",
+		"Remove data",
+	])("preserves a live block across route toggles and keeps the %s recovery action usable", async (actionName) => {
+		const session = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const bootstrapService = bootstrapServiceFixture(session);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "differentUserBlocked" })
+				.mockResolvedValueOnce({ status: "ready" }),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const auth = authFixture({ clerkUserId: "user_blake" });
+		const readPersistedSession = jest.fn(async () => null);
+		const clearSessionHint = jest.fn(async () => undefined);
+		const surface = (activationEnabled: boolean) => (
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				activationEnabled={activationEnabled}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				readPersistedAuthenticatedAppSession={readPersistedSession}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>
+		);
+
+		const view = await render(surface(true));
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		await view.rerender(surface(false));
+		await view.rerender(surface(true));
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+		expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).not.toHaveBeenCalled();
+		expect(readPersistedSession).not.toHaveBeenCalled();
+		expect(clearSessionHint).not.toHaveBeenCalled();
+
+		await fireEvent.press(screen.getByRole("button", { name: actionName }));
+		if (actionName === "Previous User") {
+			await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+			expect(
+				databaseOwnership.removePreviousUserDataAndPrepare,
+			).not.toHaveBeenCalled();
+			return;
+		}
+
+		await waitFor(() =>
+			expect(
+				databaseOwnership.removePreviousUserDataAndPrepare,
+			).toHaveBeenCalledWith("usr_blake"),
+		);
+		await waitFor(() =>
+			expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(2),
+		);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+	});
+
+	it("disconnects a directly replaced User and blocks the incoming User before connect", async () => {
+		const userASession = appSessionFixture();
+		const userBSession = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const consumerRenders: (string | null)[] = [];
+		const homeProductHookRenders: string[] = [];
+		const bootstrapService = bootstrapServiceFixture(userASession);
+		bootstrapService.getSession
+			.mockResolvedValueOnce(userASession)
+			.mockResolvedValueOnce(userBSession);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "ready" })
+				.mockResolvedValueOnce({ status: "differentUserBlocked" }),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const disconnect = jest.fn(async () => undefined);
+		const userAAuth = authFixture();
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={userAAuth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+		await waitFor(() =>
+			expect(persistAuthenticatedAppSession).toHaveBeenCalledWith(
+				persistedSessionFixture(userASession),
+			),
+		);
+		consumerRenders.length = 0;
+		homeProductHookRenders.length = 0;
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...userAAuth, clerkUserId: "user_blake" }}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		expect(consumerRenders).not.toContain("usr_avery");
+		expect(homeProductHookRenders).not.toContain("usr_avery");
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked")).toBeTruthy(),
+		);
+		expect(disconnect).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("Blake")).toBeNull();
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalledWith(
+			persistedSessionFixture(userBSession, "user_blake"),
+		);
+	});
+
+	it("retires a ready User before deferring a different User while activation is disabled", async () => {
+		const userASession = appSessionFixture();
+		const userBSession = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const consumerRenders: (string | null)[] = [];
+		const homeProductHookRenders: string[] = [];
+		const bootstrapService = bootstrapServiceFixture(userASession);
+		bootstrapService.getSession
+			.mockResolvedValueOnce(userASession)
+			.mockResolvedValueOnce(userBSession);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "ready" })
+				.mockResolvedValueOnce({ status: "differentUserBlocked" }),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const disconnect = jest.fn(async () => undefined);
+		const userAAuth = authFixture();
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={userAAuth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+		consumerRenders.length = 0;
+		homeProductHookRenders.length = 0;
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...userAAuth, clerkUserId: "user_blake" }}
+				activationEnabled={false}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(screen.getAllByText("loading").length).toBeGreaterThan(0);
+		expect(consumerRenders).not.toContain("usr_avery");
+		expect(homeProductHookRenders).not.toContain("usr_avery");
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+		expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...userAAuth, clerkUserId: "user_blake" }}
+				activationEnabled
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked")).toBeTruthy(),
+		);
+		expect(disconnect).toHaveBeenCalledTimes(1);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+		expect(databaseOwnership.prepareForUser).toHaveBeenNthCalledWith(
+			2,
+			"usr_blake",
+		);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(screen.queryByText("Blake")).toBeNull();
+		expect(consumerRenders).not.toContain("usr_avery");
+		expect(homeProductHookRenders).not.toContain("usr_avery");
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalledWith(
+			persistedSessionFixture(userBSession, "user_blake"),
+		);
+	});
+
+	it("prevents an outgoing User connector from obtaining the incoming User's tokens", async () => {
+		const userASession = appSessionFixture();
+		const userBSession = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const bootstrapService = bootstrapServiceFixture(userASession);
+		bootstrapService.getSession
+			.mockResolvedValueOnce(userASession)
+			.mockResolvedValueOnce(userBSession);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "ready" })
+				.mockResolvedValueOnce({ status: "differentUserBlocked" }),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const userAAuth = authFixture();
+		const userBAuth = authFixture({
+			clerkUserId: "user_blake",
+			getToken: jest.fn(async () => "blake-session-token"),
+			getPowerSyncToken: jest.fn(async () => "blake-powersync-token"),
+		});
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={userAAuth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<LocalDataStateView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(1));
+		const outgoingConnector = connectDatabase.mock.calls[0]?.[0];
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={userBAuth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<LocalDataStateView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked")).toBeTruthy(),
+		);
+
+		await expect(outgoingConnector?.getToken()).resolves.toBeNull();
+		await expect(outgoingConnector?.getPowerSyncToken()).resolves.toBeNull();
+		expect(userBAuth.getToken).not.toHaveBeenCalled();
+		expect(userBAuth.getPowerSyncToken).not.toHaveBeenCalled();
+	});
+
+	it("publishes a retryable error when ownership preparation fails", async () => {
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(async () => {
+				throw new Error("owner marker unavailable");
+			}),
+		});
+		const connectDatabase = connectDatabaseFixture();
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(connectDatabase).not.toHaveBeenCalled();
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
+	});
+
+	it("fails closed instead of republishing a cached session when refresh ownership preparation fails", async () => {
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "ready" })
+				.mockRejectedValueOnce(new Error("owner marker unavailable")),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const session = appSessionFixture();
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture()}
+				bootstrapService={bootstrapServiceFixture(session)}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<CurrentState />
+				<ReloadState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+
+		await waitFor(() =>
+			expect(
+				screen.getByText("Unable to prepare your Household. Please try again."),
+			).toBeTruthy(),
+		);
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(persistAuthenticatedAppSession).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not connect when ownership preparation becomes stale", async () => {
+		const preparation = deferred<{ status: "ready" }>();
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(() => preparation.promise),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const auth = authFixture();
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(1),
+		);
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, clerkUserId: null, signedIn: false }}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await act(async () => {
+			preparation.resolve({ status: "ready" });
+			await preparation.promise;
+		});
+
+		expect(connectDatabase).not.toHaveBeenCalled();
+		expect(screen.getByText("loading")).toBeTruthy();
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
+	});
+
+	it("removes confirmed previous-User data before activating the incoming User", async () => {
+		const session = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "differentUserBlocked" })
+				.mockResolvedValueOnce({ status: "ready" }),
+		});
+		const connectDatabase = connectDatabaseFixture();
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture({ clerkUserId: "user_blake" })}
+				bootstrapService={bootstrapServiceFixture(session)}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<CurrentState />
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Remove data" }));
+
+		await waitFor(() => expect(screen.getByText("Blake")).toBeTruthy());
+		expect(
+			databaseOwnership.removePreviousUserDataAndPrepare,
+		).toHaveBeenCalledWith("usr_blake");
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(persistAuthenticatedAppSession).toHaveBeenCalledWith(
+			persistedSessionFixture(session, "user_blake"),
+		);
+	});
+
+	it("stays blocked with a retryable error when previous-User removal fails", async () => {
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(async () => ({
+				status: "differentUserBlocked" as const,
+			})),
+			removePreviousUserDataAndPrepare: jest.fn(async () => {
+				throw new Error("clear failed");
+			}),
+		});
+		const connectDatabase = connectDatabaseFixture();
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={authFixture({ clerkUserId: "user_blake" })}
+				bootstrapService={bootstrapServiceFixture(
+					appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+				)}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+			>
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Remove data" }));
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"differentUserBlocked:failed:Unable to remove the previous User's data. Please try again.",
+				),
+			).toBeTruthy(),
+		);
+		expect(connectDatabase).not.toHaveBeenCalled();
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
+	});
+
+	it("preserves the previous User's persisted session and Current List selection through incoming User sign-out", async () => {
+		const auth = authFixture({ clerkUserId: "user_blake" });
 		const analytics = createMockAnalytics();
-		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		const previousSession = appSessionFixture();
+		const previousPersistedSession = persistedSessionFixture(previousSession);
+		let persistedSession: ReturnType<typeof persistedSessionFixture> | null =
+			previousPersistedSession;
+		let currentListSelection: string | null = "lst_groceries";
+		const clearSessionHint = jest.fn(async () => {
+			persistedSession = null;
+		});
+		const readPersistedSession = jest.fn(async () => persistedSession);
+		const clearCurrentListSelectionsForUser = jest.fn(async () => {
+			currentListSelection = null;
+		});
+		const disconnect = jest.fn(async () => undefined);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(async () => ({
+				status: "differentUserBlocked" as const,
+			})),
+		});
+
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				analytics={analytics}
+				bootstrapService={bootstrapServiceFixture(
+					appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+				)}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+				readPersistedAuthenticatedAppSession={readPersistedSession}
+			>
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Previous User" }),
+		);
+
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: false, clerkUserId: null }}
+				analytics={analytics}
+				bootstrapService={bootstrapServiceFixture(
+					appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+				)}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+				readPersistedAuthenticatedAppSession={readPersistedSession}
+			>
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+
+		expect(
+			databaseOwnership.removePreviousUserDataAndPrepare,
+		).not.toHaveBeenCalled();
+		expect(clearSessionHint).not.toHaveBeenCalled();
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+		expect(disconnect).not.toHaveBeenCalled();
+		expect(persistedSession).toEqual(previousPersistedSession);
+		expect(currentListSelection).toBe("lst_groceries");
+		expect(analytics.track).not.toHaveBeenCalledWith("user_signed_out", {});
+		expect(analytics.reset).toHaveBeenCalledTimes(1);
+	});
+
+	it("completes previous-User recovery when Clerk reports signed out before incoming User sign-out rejects", async () => {
+		const clerkSignOut = deferred<void>();
+		const auth = authFixture({
+			clerkUserId: "user_blake",
+			signOut: jest.fn(() => clerkSignOut.promise),
+		});
+		const analytics = createMockAnalytics();
+		const previousPersistedSession = persistedSessionFixture(
+			appSessionFixture(),
+		);
+		let persistedSession: ReturnType<typeof persistedSessionFixture> | null =
+			previousPersistedSession;
+		let currentListSelection: string | null = "lst_groceries";
+		const clearSessionHint = jest.fn(async () => {
+			persistedSession = null;
+		});
+		const clearCurrentListSelectionsForUser = jest.fn(async () => {
+			currentListSelection = null;
+		});
+		const disconnect = jest.fn(async () => undefined);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(async () => ({
+				status: "differentUserBlocked" as const,
+			})),
+		});
+		const bootstrapService = bootstrapServiceFixture(
+			appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+		);
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+				readPersistedAuthenticatedAppSession={jest.fn(
+					async () => persistedSession,
+				)}
+			>
+				<LocalDataActionsView />
+				<SessionPathState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Previous User" }),
+		);
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: false, clerkUserId: null }}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+				readPersistedAuthenticatedAppSession={jest.fn(
+					async () => persistedSession,
+				)}
+			>
+				<LocalDataActionsView />
+				<SessionPathState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+
+		expect(clearSessionHint).not.toHaveBeenCalled();
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+		expect(disconnect).not.toHaveBeenCalled();
+		expect(screen.getByText("ready:signInRequired")).toBeTruthy();
+		expect(analytics.reset).toHaveBeenCalledTimes(1);
+		expect(persistedSession).toEqual(previousPersistedSession);
+		expect(currentListSelection).toBe("lst_groceries");
+
+		await act(async () => {
+			clerkSignOut.reject(new Error("Clerk completion failed"));
+			await clerkSignOut.promise.catch(() => undefined);
+		});
+
+		await waitFor(() => expect(analytics.reset).toHaveBeenCalledTimes(1));
+		expect(screen.getByText("ready:signInRequired")).toBeTruthy();
+		expect(clearSessionHint).not.toHaveBeenCalled();
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+		expect(disconnect).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalledWith("user_signed_out", {});
+		expect(persistedSession).toEqual(previousPersistedSession);
+		expect(currentListSelection).toBe("lst_groceries");
+	});
+
+	it("retires rejected previous-User recovery when Clerk later reports signed out", async () => {
+		const clerkSignOut = deferred<void>();
+		const auth = authFixture({
+			clerkUserId: "user_blake",
+			signOut: jest.fn(() => clerkSignOut.promise),
+		});
+		const analytics = createMockAnalytics();
+		const previousPersistedSession = persistedSessionFixture(
+			appSessionFixture(),
+		);
+		let persistedSession: ReturnType<typeof persistedSessionFixture> | null =
+			previousPersistedSession;
+		let currentListSelection: string | null = "lst_groceries";
+		const clearSessionHint = jest.fn(async () => {
+			persistedSession = null;
+		});
+		const clearCurrentListSelectionsForUser = jest.fn(async () => {
+			currentListSelection = null;
+		});
+		const disconnect = jest.fn(async () => undefined);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(async () => ({
+				status: "differentUserBlocked" as const,
+			})),
+		});
+		const bootstrapService = bootstrapServiceFixture(
+			appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+		);
+		const readPersistedSession = jest.fn(async () => persistedSession);
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+				readPersistedAuthenticatedAppSession={readPersistedSession}
+			>
+				<LocalDataActionsView />
+				<SessionPathState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Previous User" }),
+		);
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await act(async () => {
+			clerkSignOut.reject(new Error("Clerk completion failed"));
+			await clerkSignOut.promise.catch(() => undefined);
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"differentUserBlocked:failed:Unable to return to sign in. Please try again.",
+				),
+			).toBeTruthy(),
+		);
+		expect(analytics.reset).not.toHaveBeenCalled();
+		expect(persistedSession).toEqual(previousPersistedSession);
+		expect(currentListSelection).toBe("lst_groceries");
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: false, clerkUserId: null }}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+				readPersistedAuthenticatedAppSession={readPersistedSession}
+			>
+				<LocalDataActionsView />
+				<SessionPathState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(screen.getByText("ready:signInRequired")).toBeTruthy(),
+		);
+		expect(screen.getByText("ready")).toBeTruthy();
+		expect(analytics.reset).toHaveBeenCalledTimes(1);
+		expect(analytics.track).not.toHaveBeenCalledWith("user_signed_out", {});
+		expect(clearSessionHint).not.toHaveBeenCalled();
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+		expect(disconnect).not.toHaveBeenCalled();
+		expect(
+			databaseOwnership.removePreviousUserDataAndPrepare,
+		).not.toHaveBeenCalled();
+		expect(persistedSession).toEqual(previousPersistedSession);
+		expect(currentListSelection).toBe("lst_groceries");
+	});
+
+	it("supersedes pending previous-User recovery when another signed-in Clerk User arrives", async () => {
+		const clerkSignOut = deferred<void>();
+		const userBAuth = authFixture({
+			clerkUserId: "user_blake",
+			signOut: jest.fn(() => clerkSignOut.promise),
+		});
+		const userCAuth = authFixture({ clerkUserId: "user_casey" });
+		const analytics = createMockAnalytics();
+		const userBSession = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const userCSession = appSessionFixture({
+			displayName: "Casey",
+			userId: "usr_casey",
+		});
+		const bootstrapService = bootstrapServiceFixture(userBSession);
+		bootstrapService.getSession
+			.mockResolvedValueOnce(userBSession)
+			.mockResolvedValueOnce(userCSession);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "differentUserBlocked" })
+				.mockResolvedValueOnce({ status: "ready" }),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const disconnect = jest.fn(async () => undefined);
+		const clearSessionHint = jest.fn(async () => undefined);
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={userBAuth}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Previous User" }),
+		);
+		await waitFor(() => expect(userBAuth.signOut).toHaveBeenCalledTimes(1));
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={userCAuth}
+				activationEnabled={false}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+		expect(screen.getByText("loading")).toBeTruthy();
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+		expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).not.toHaveBeenCalled();
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={userCAuth}
+				activationEnabled
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+			>
+				<CurrentState />
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(screen.getByText("Casey")).toBeTruthy());
+		expect(disconnect).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+		expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			clerkSignOut.resolve(undefined);
+			await clerkSignOut.promise;
+		});
+
+		expect(screen.getByText("Casey")).toBeTruthy();
+		expect(analytics.reset).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalledWith("user_signed_out", {});
+		expect(clearSessionHint).not.toHaveBeenCalled();
+	});
+
+	it("keeps previous-User recovery blocked without resetting analytics when incoming User sign-out fails", async () => {
+		const auth = authFixture({
+			clerkUserId: "user_blake",
+			signOut: jest.fn(async () => {
+				throw new Error("Clerk unavailable");
+			}),
+		});
+		const analytics = createMockAnalytics();
+		const clearSessionHint = jest.fn(async () => undefined);
+		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(async () => ({
+				status: "differentUserBlocked" as const,
+			})),
+		});
+
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				analytics={analytics}
+				bootstrapService={bootstrapServiceFixture(
+					appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+				)}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+			>
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Previous User" }),
+		);
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"differentUserBlocked:failed:Unable to return to sign in. Please try again.",
+				),
+			).toBeTruthy(),
+		);
+		expect(clearSessionHint).not.toHaveBeenCalled();
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalledWith("user_signed_out", {});
+		expect(analytics.reset).not.toHaveBeenCalled();
+	});
+
+	it("rechecks blocked identity before a queued confirmed removal starts", async () => {
+		const staleConnect = deferred<void>();
+		const correctiveDisconnect = deferred<void>();
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "ready" })
+				.mockResolvedValueOnce({ status: "differentUserBlocked" }),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		connectDatabase.mockReturnValueOnce(staleConnect.promise);
+		const disconnect = jest
+			.fn<Promise<void>, []>()
+			.mockReturnValueOnce(correctiveDisconnect.promise)
+			.mockResolvedValue(undefined);
+		const auth = authFixture({ clerkUserId: "user_blake" });
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapServiceFixture(
+					appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+				)}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<ReloadState />
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(1));
+
+		await fireEvent.press(screen.getByRole("button", { name: "Reload" }));
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:idle:none")).toBeTruthy(),
+		);
+		await act(async () => {
+			staleConnect.resolve(undefined);
+			await staleConnect.promise;
+		});
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+
+		await fireEvent.press(screen.getByRole("button", { name: "Remove data" }));
+		await waitFor(() =>
+			expect(
+				screen.getByText("differentUserBlocked:removing:none"),
+			).toBeTruthy(),
+		);
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, clerkUserId: null, signedIn: false }}
+				bootstrapService={bootstrapServiceFixture(
+					appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+				)}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<ReloadState />
+				<LocalDataActionsView />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await act(async () => {
+			correctiveDisconnect.resolve(undefined);
+			await correctiveDisconnect.promise;
+		});
+
+		expect(disconnect).toHaveBeenCalledTimes(1);
+		expect(
+			databaseOwnership.removePreviousUserDataAndPrepare,
+		).not.toHaveBeenCalled();
+	});
+
+	it("refuses a signed-out null-subject restore before ownership preparation", async () => {
+		const session = appSessionFixture({ displayName: "Cached Avery" });
+		const clearSessionHint = jest.fn(async () => undefined);
+		const databaseOwnership = databaseOwnershipFixture();
 		const connectDatabase = connectDatabaseFixture();
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
@@ -102,29 +1150,20 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await render(
 			<AuthenticatedAppSessionProvider
 				auth={authFixture({ signedIn: false })}
-				analytics={analytics}
-				bootstrapService={bootstrapService}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
 				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
-		expect(screen.getByText("hh_avery")).toBeTruthy();
-		expect(screen.getByText("ready")).toBeTruthy();
-		expect(bootstrapService.getSession).not.toHaveBeenCalled();
-		expect(connectDatabase).toHaveBeenCalledTimes(1);
-		expect(analytics.track).toHaveBeenCalledWith(
-			"authenticated_app_session_loaded",
-			{
-				household_id: "hh_avery",
-				member_role: "owner",
-				member_count: 1,
-				source: "cached",
-			},
-		);
-		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
+		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
+		expect(screen.getByText("loading")).toBeTruthy();
+		expect(screen.queryByText("Cached Avery")).toBeNull();
+		expect(databaseOwnership.prepareForUser).not.toHaveBeenCalled();
+		expect(connectDatabase).not.toHaveBeenCalled();
 	});
 
 	it("restores a persisted Authenticated App Session when signed-in bootstrap is offline during cold start", async () => {
@@ -232,39 +1271,13 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(readPersistedAuthenticatedAppSession).toHaveBeenCalledTimes(1);
 	});
 
-	it("clears and refuses a signed-out cold restore cached for another Clerk subject", async () => {
-		const cachedSession = appSessionFixture({ displayName: "Cached User A" });
-		const clearSessionHint = jest.fn(async () => undefined);
-		const connectDatabase = connectDatabaseFixture();
-		jest
-			.mocked(readPersistedAuthenticatedAppSession)
-			.mockResolvedValueOnce(
-				persistedSessionFixture(cachedSession, "user_clerk_a"),
-			);
-
-		await render(
-			<AuthenticatedAppSessionProvider
-				auth={authFixture({
-					clerkUserId: "user_clerk_b",
-					signedIn: false,
-				})}
-				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
-				connectDatabase={connectDatabase}
-				clearAuthenticatedAppSessionPresent={clearSessionHint}
-			>
-				<CurrentState />
-			</AuthenticatedAppSessionProvider>,
-		);
-
-		await waitFor(() => expect(clearSessionHint).toHaveBeenCalledTimes(1));
-		expect(screen.queryByText("Cached User A")).toBeNull();
-		expect(connectDatabase).not.toHaveBeenCalled();
-	});
-
-	it("surfaces restore connect failures and retries the retained payload", async () => {
+	it("surfaces cached fallback connect failures and retries with a fresh activation", async () => {
 		const connectError = new Error("restore connect failed");
 		const session = appSessionFixture({ displayName: "Cached Avery" });
-		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		const bootstrapService = bootstrapServiceFixture(
+			appSessionFixture({ displayName: "Online Avery" }),
+		);
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
 		const connectDatabase = connectDatabaseFixture();
 		connectDatabase
 			.mockRejectedValueOnce(connectError)
@@ -275,7 +1288,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await render(
 			<AuthenticatedAppSessionProvider
-				auth={authFixture({ signedIn: false })}
+				auth={authFixture()}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
 			>
@@ -295,10 +1308,10 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
 
-		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
+		await waitFor(() => expect(screen.getByText("Online Avery")).toBeTruthy());
 		expect(readPersistedAuthenticatedAppSession).toHaveBeenCalledTimes(1);
 		expect(connectDatabase).toHaveBeenCalledTimes(2);
-		expect(bootstrapService.getSession).not.toHaveBeenCalled();
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
 	});
 
 	it("logs persisted payload read failures without starting restore", async () => {
@@ -359,102 +1372,116 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(analytics.track).not.toHaveBeenCalled();
 	});
 
-	it("replaces a restored session with a fresh session from a different User", async () => {
+	it("blocks a different signed-in User after disconnecting a restored session", async () => {
 		const cachedSession = appSessionFixture({ displayName: "Cached Avery" });
 		const freshSession = appSessionFixture({
 			displayName: "Blake",
 			userId: "usr_blake",
 		});
+		const consumerRenders: (string | null)[] = [];
+		const homeProductHookRenders: string[] = [];
 		const order: string[] = [];
 		const analytics = createMockAnalytics();
 		const bootstrapService = bootstrapServiceFixture(freshSession);
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
 		const connectDatabase = connectDatabaseFixture();
-		let connectCount = 0;
 		connectDatabase.mockImplementation(async () => {
-			connectCount += 1;
-			order.push(connectCount === 1 ? "restoreConnect" : "freshConnect");
+			order.push("restoreConnect");
 		});
 		const clearSessionHint = jest.fn(async () => {
 			order.push("clear");
 		});
-		const replacementWipe = deferred<void>();
-		const disconnectAndClear = jest.fn(() => {
-			order.push("wipe");
-			return replacementWipe.promise;
+		const disconnect = jest.fn(async () => {
+			order.push("disconnect");
 		});
-		const signedOutAuth = authFixture({ signedIn: false });
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "ready" })
+				.mockResolvedValueOnce({ status: "differentUserBlocked" }),
+		});
+		const userAAuth = authFixture();
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
 			.mockResolvedValueOnce(persistedSessionFixture(cachedSession));
 
 		const view = await render(
 			<AuthenticatedAppSessionProvider
-				auth={signedOutAuth}
+				auth={userAAuth}
 				analytics={analytics}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
 				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
 			</AuthenticatedAppSessionProvider>,
 		);
 		await waitFor(() => expect(screen.getByText("Cached Avery")).toBeTruthy());
+		consumerRenders.length = 0;
+		homeProductHookRenders.length = 0;
 
 		await view.rerender(
 			<AuthenticatedAppSessionProvider
-				auth={{ ...signedOutAuth, signedIn: true }}
+				auth={authFixture({ clerkUserId: "user_blake" })}
 				analytics={analytics}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
 				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
 				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
 			</AuthenticatedAppSessionProvider>,
 		);
 
-		await waitFor(() => expect(disconnectAndClear).toHaveBeenCalledTimes(1));
-		await Promise.resolve();
-		expect(clearSessionHint).toHaveBeenCalledTimes(1);
-		expect(connectDatabase).toHaveBeenCalledTimes(1);
-		expect(order).toEqual(["restoreConnect", "clear", "wipe"]);
-		expect(screen.queryByText("Blake")).toBeNull();
-
-		await act(async () => {
-			replacementWipe.resolve(undefined);
-			await replacementWipe.promise;
-		});
-
-		await waitFor(() => expect(screen.getByText("Blake")).toBeTruthy());
-		expect(screen.queryByText("Cached Avery")).toBeNull();
-		expect(connectDatabase).toHaveBeenCalledTimes(2);
-		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
-		expect(order).toEqual(["restoreConnect", "clear", "wipe", "freshConnect"]);
-		expect(persistAuthenticatedAppSession).toHaveBeenLastCalledWith(
-			persistedSessionFixture(freshSession),
+		expect(consumerRenders).not.toContain("usr_avery");
+		expect(homeProductHookRenders).not.toContain("usr_avery");
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked")).toBeTruthy(),
 		);
+		expect(disconnect).toHaveBeenCalledTimes(1);
+		expect(clearSessionHint).not.toHaveBeenCalled();
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(order).toEqual(["restoreConnect", "disconnect"]);
+		expect(screen.queryByText("Blake")).toBeNull();
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalled();
+		expect(
+			databaseOwnership.removePreviousUserDataAndPrepare,
+		).not.toHaveBeenCalled();
 	});
 
-	it("replaces a restored session with the same User without wiping local data", async () => {
+	it("reconnects a restored session for the same User without removing local data", async () => {
 		const cachedSession = appSessionFixture({ displayName: "Cached Avery" });
 		const freshSession = appSessionFixture({ displayName: "Online Avery" });
 		const analytics = createMockAnalytics();
 		const bootstrapService = bootstrapServiceFixture(freshSession);
+		bootstrapService.getSession.mockRejectedValueOnce(new Error("offline"));
 		const connectDatabase = connectDatabaseFixture();
-		const disconnectAndClear = jest.fn(async () => undefined);
-		const signedOutAuth = authFixture({ signedIn: false });
+		const disconnect = jest.fn(async () => undefined);
+		const signedInAuth = authFixture();
 		jest
 			.mocked(readPersistedAuthenticatedAppSession)
 			.mockResolvedValueOnce(persistedSessionFixture(cachedSession));
 
 		const view = await render(
 			<AuthenticatedAppSessionProvider
-				auth={signedOutAuth}
+				auth={signedInAuth}
 				analytics={analytics}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
@@ -463,11 +1490,24 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await view.rerender(
 			<AuthenticatedAppSessionProvider
-				auth={{ ...signedOutAuth, signedIn: true }}
+				auth={{ ...signedInAuth, clerkUserId: null, signedIn: false }}
 				analytics={analytics}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("loading")).toBeTruthy());
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={signedInAuth}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				disconnect={disconnect}
 			>
 				<CurrentState />
 			</AuthenticatedAppSessionProvider>,
@@ -476,7 +1516,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await waitFor(() => expect(screen.getByText("Online Avery")).toBeTruthy());
 		expect(screen.queryByText("Cached Avery")).toBeNull();
 		expect(connectDatabase).toHaveBeenCalledTimes(2);
-		expect(disconnectAndClear).not.toHaveBeenCalled();
+		expect(disconnect).toHaveBeenCalledTimes(1);
 		expect(persistAuthenticatedAppSession).toHaveBeenLastCalledWith(
 			persistedSessionFixture(freshSession),
 		);
@@ -555,7 +1595,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await rerender(
 			<AuthenticatedAppSessionProvider
-				auth={{ ...auth, signedIn: false }}
+				auth={{ ...auth, signedIn: false, clerkUserId: null }}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
 				clearAuthenticatedAppSessionPresent={clearSessionHint}
@@ -809,7 +1849,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(screen.queryByText("Stale")).toBeNull();
 	});
 
-	it("signs out through analytics, hint cleanup, local wipe, and Clerk", async () => {
+	it("signs out through analytics, hint cleanup, Clerk, and disconnect", async () => {
 		const order: string[] = [];
 		const analytics = createMockAnalytics();
 		analytics.track.mockImplementation(() => order.push("track"));
@@ -817,7 +1857,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const clearSessionHint = jest.fn(async () => {
 			order.push("clear");
 		});
-		const disconnectAndClear = jest.fn(async () => {
+		const disconnect = jest.fn(async () => {
 			order.push("disconnect");
 		});
 		const auth = authFixture({
@@ -830,7 +1870,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
 				analytics={analytics}
 				clearAuthenticatedAppSessionPresent={clearSessionHint}
 			>
@@ -843,15 +1883,155 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
-		expect(order).toEqual(["track", "reset", "clear", "disconnect", "clerk"]);
+		expect(order).toEqual(["clear", "clerk", "disconnect", "track", "reset"]);
 		expect(analytics.track).toHaveBeenCalledWith("user_signed_out", {});
 		expect(clearSessionHint).toHaveBeenCalledWith();
+	});
+
+	it.each([
+		{
+			name: "User A",
+			clerkUserId: "user_avery",
+			session: appSessionFixture({ displayName: "Avery Reauthenticated" }),
+			preparation: { status: "ready" as const },
+		},
+		{
+			name: "User B",
+			clerkUserId: "user_blake",
+			session: appSessionFixture({
+				displayName: "Blake",
+				userId: "usr_blake",
+			}),
+			preparation: { status: "differentUserBlocked" as const },
+		},
+	])("resumes fresh ownership-gated activation for $name reauthentication observed during queued Sign Out cleanup", async ({
+		name,
+		clerkUserId,
+		session,
+		preparation,
+	}) => {
+		const queuedDisconnect = deferred<void>();
+		const disconnect = jest.fn(() => queuedDisconnect.promise);
+		const bootstrapService = bootstrapServiceFixture(appSessionFixture());
+		bootstrapService.getSession
+			.mockResolvedValueOnce(appSessionFixture())
+			.mockResolvedValueOnce(session);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "ready" })
+				.mockResolvedValueOnce(preparation),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const auth = authFixture();
+		const surface = (
+			currentAuth: AuthenticatedAppSessionProviderAuth,
+			activationEnabled: boolean,
+		) => (
+			<AuthenticatedAppSessionProvider
+				auth={currentAuth}
+				activationEnabled={activationEnabled}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>
+		);
+		const view = await render(surface(auth, true));
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+
+		await view.rerender(
+			surface({ ...auth, signedIn: false, clerkUserId: null }, false),
+		);
+		await view.rerender(
+			surface({ ...auth, clerkUserId, signedIn: true }, false),
+		);
+		await view.rerender(
+			surface({ ...auth, clerkUserId, signedIn: true }, true),
+		);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			queuedDisconnect.resolve(undefined);
+			await queuedDisconnect.promise;
+		});
+		await waitFor(() =>
+			expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(2),
+		);
+
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+		if (name === "User A") {
+			await waitFor(() =>
+				expect(screen.getByText("Avery Reauthenticated")).toBeTruthy(),
+			);
+			expect(connectDatabase).toHaveBeenCalledTimes(2);
+			expect(screen.getAllByText("ready")).toHaveLength(2);
+			return;
+		}
+
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked")).toBeTruthy(),
+		);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("Blake")).toBeNull();
+	});
+
+	it("disconnects exactly once and requires sign-in when Clerk rejects after auth was observed signed out", async () => {
+		const signOutFinished = deferred<void>();
+		const signOutErrors: unknown[] = [];
+		const auth = authFixture({
+			signOut: jest.fn(() => signOutFinished.promise),
+		});
+		const disconnect = jest.fn(async () => undefined);
+		const databaseOwnership = databaseOwnershipFixture();
+		const surface = (currentAuth: AuthenticatedAppSessionProviderAuth) => (
+			<AuthenticatedAppSessionProvider
+				auth={currentAuth}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<SessionPathState />
+				<SignOutButton onError={(error) => signOutErrors.push(error)} />
+			</AuthenticatedAppSessionProvider>
+		);
+		const view = await render(surface(auth));
+		await waitFor(() => expect(screen.getByText("ready:idle")).toBeTruthy());
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await view.rerender(
+			surface({ ...auth, signedIn: false, clerkUserId: null }),
+		);
+		await act(async () => {
+			signOutFinished.reject(new Error("Clerk rejected after signing out"));
+			await signOutFinished.promise.catch(() => undefined);
+		});
+
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+		expect(screen.getByText("ready:signInRequired")).toBeTruthy();
+		expect(signOutErrors).toHaveLength(1);
+		expect(
+			databaseOwnership.removePreviousUserDataAndPrepare,
+		).not.toHaveBeenCalled();
 	});
 
 	it("ignores duplicate sign-out requests while Clerk sign-out is pending", async () => {
 		const clerkSignOut = deferred<void>();
 		const analytics = createMockAnalytics();
-		const disconnectAndClear = jest.fn(async () => undefined);
+		const disconnect = jest.fn(async () => undefined);
 		const clearSessionHint = jest.fn(async () => undefined);
 		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
 		const auth = authFixture({
@@ -862,7 +2042,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
 				analytics={analytics}
 				clearAuthenticatedAppSessionPresent={clearSessionHint}
 				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
@@ -877,16 +2057,20 @@ describe("AuthenticatedAppSessionProvider", () => {
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
 
-		expect(analytics.track).toHaveBeenCalledTimes(1);
-		expect(analytics.reset).toHaveBeenCalledTimes(1);
-		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+		expect(analytics.track).not.toHaveBeenCalled();
+		expect(analytics.reset).not.toHaveBeenCalled();
+		expect(disconnect).not.toHaveBeenCalled();
 		expect(clearSessionHint).toHaveBeenCalledTimes(1);
-		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledTimes(1);
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
 
 		await act(async () => {
 			clerkSignOut.resolve(undefined);
 			await clerkSignOut.promise;
 		});
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledTimes(1);
+		expect(analytics.track).toHaveBeenCalledTimes(1);
+		expect(analytics.reset).toHaveBeenCalledTimes(1);
 	});
 
 	it("recovers the Authenticated App Session before rethrowing when Clerk sign-out fails", async () => {
@@ -907,7 +2091,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -960,7 +2144,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -990,7 +2174,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1007,11 +2191,11 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await rerender(
 			<AuthenticatedAppSessionProvider
-				auth={{ ...auth, signedIn: false }}
+				auth={{ ...auth, signedIn: false, clerkUserId: null }}
 				activationEnabled={false}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1027,7 +2211,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				activationEnabled={false}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1045,7 +2229,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				activationEnabled
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1073,7 +2257,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1110,7 +2294,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
@@ -1148,7 +2332,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 				auth={auth}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1163,10 +2347,10 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await rerender(
 			<AuthenticatedAppSessionProvider
-				auth={{ ...auth, signedIn: false }}
+				auth={{ ...auth, signedIn: false, clerkUserId: null }}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabaseFixture()}
-				disconnectAndClear={jest.fn(async () => undefined)}
+				disconnect={jest.fn(async () => undefined)}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1186,14 +2370,14 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const connect = deferred<void>();
 		const connectDatabase = connectDatabaseFixture();
 		connectDatabase.mockReturnValueOnce(connect.promise);
-		const disconnectAndClear = jest.fn(async () => undefined);
+		const disconnect = jest.fn(async () => undefined);
 		const auth = authFixture();
 		await render(
 			<AuthenticatedAppSessionProvider
 				auth={auth}
 				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1205,14 +2389,14 @@ describe("AuthenticatedAppSessionProvider", () => {
 
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+		expect(disconnect).toHaveBeenCalledTimes(1);
 
 		await act(async () => {
 			connect.resolve(undefined);
 			await connect.promise;
 		});
 
-		await waitFor(() => expect(disconnectAndClear).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(2));
 		expect(screen.getByText("loading")).toBeTruthy();
 	});
 
@@ -1220,13 +2404,13 @@ describe("AuthenticatedAppSessionProvider", () => {
 		const staleConnect = deferred<void>();
 		const connectDatabase = connectDatabaseFixture();
 		connectDatabase.mockReturnValueOnce(staleConnect.promise);
-		const disconnectAndClear = jest.fn(async () => undefined);
+		const disconnect = jest.fn(async () => undefined);
 		await render(
 			<AuthenticatedAppSessionProvider
 				auth={authFixture()}
 				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
 			>
 				<CurrentState />
 				<ReloadState />
@@ -1242,7 +2426,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			await staleConnect.promise;
 		});
 
-		expect(disconnectAndClear).toHaveBeenCalledTimes(0);
+		expect(disconnect).toHaveBeenCalledTimes(0);
 		expect(screen.getByText("Avery Chen")).toBeTruthy();
 		expect(mockLogger.error).not.toHaveBeenCalledWith(
 			"authenticated app session stale connect cleanup failed",
@@ -1270,6 +2454,71 @@ function CurrentState() {
 			</Text>
 		</>
 	);
+}
+
+function SessionRenderRecorder({
+	consumerRenders,
+	homeProductHookRenders,
+}: {
+	consumerRenders: (string | null)[];
+	homeProductHookRenders: string[];
+}) {
+	const { session } = useAuthenticatedAppSession();
+	consumerRenders.push(session?.user.id ?? null);
+	if (!session) return null;
+	return (
+		<HomeProductHookRenderRecorder
+			homeProductHookRenders={homeProductHookRenders}
+			userId={session.user.id}
+		/>
+	);
+}
+
+function HomeProductHookRenderRecorder({
+	homeProductHookRenders,
+	userId,
+}: {
+	homeProductHookRenders: string[];
+	userId: string;
+}) {
+	homeProductHookRenders.push(userId);
+	return null;
+}
+
+function LocalDataStateView() {
+	const { localData } = useAuthenticatedAppSession();
+	return <Text>{localData.status}</Text>;
+}
+
+function LocalDataActionsView() {
+	const { localData, signInAsPreviousUser, removePreviousUserDataAndContinue } =
+		useAuthenticatedAppSession();
+	return (
+		<>
+			<Text>
+				{localData.status === "differentUserBlocked"
+					? `${localData.status}:${localData.phase}:${localData.phase === "failed" ? localData.errorMessage : "none"}`
+					: localData.status}
+			</Text>
+			<Pressable
+				accessibilityRole="button"
+				onPress={() => void signInAsPreviousUser()}
+			>
+				<Text>Previous User</Text>
+			</Pressable>
+			<Pressable
+				accessibilityRole="button"
+				onPress={() => void removePreviousUserDataAndContinue()}
+			>
+				<Text>Remove data</Text>
+			</Pressable>
+		</>
+	);
+}
+
+function SessionPathState() {
+	const { localData, meta } = useAuthenticatedAppSession();
+	return <Text>{`${localData.status}:${meta?.restore.status}`}</Text>;
 }
 
 function SignOutButton({
@@ -1348,17 +2597,88 @@ function RetireSessionState() {
 	);
 }
 
+type AuthFixtureCommonOverrides = Partial<
+	Pick<
+		AuthenticatedAppSessionProviderAuth,
+		"getToken" | "getPowerSyncToken" | "signOut"
+	>
+>;
+
+type SignedInProviderAuth = Extract<
+	AuthenticatedAppSessionProviderAuth,
+	{ signedIn: true }
+>;
+type SignedOutProviderAuth = Extract<
+	AuthenticatedAppSessionProviderAuth,
+	{ authReady: true; signedIn: false }
+>;
+type NotReadyProviderAuth = Extract<
+	AuthenticatedAppSessionProviderAuth,
+	{ authReady: false }
+>;
+
+type SignedInAuthFixtureOverrides = AuthFixtureCommonOverrides & {
+	authReady?: true;
+	signedIn?: true;
+	clerkUserId?: string;
+};
+type SignedOutAuthFixtureOverrides = AuthFixtureCommonOverrides & {
+	authReady?: true;
+	signedIn: false;
+	clerkUserId?: null;
+};
+type NotReadyAuthFixtureOverrides = AuthFixtureCommonOverrides & {
+	authReady: false;
+	signedIn?: false;
+	clerkUserId?: null;
+};
+type AuthFixtureOverrides =
+	| SignedInAuthFixtureOverrides
+	| SignedOutAuthFixtureOverrides
+	| NotReadyAuthFixtureOverrides;
+
 function authFixture(
-	overrides: Partial<AuthenticatedAppSessionProviderAuth> = {},
+	overrides: NotReadyAuthFixtureOverrides,
+): NotReadyProviderAuth;
+function authFixture(
+	overrides: SignedOutAuthFixtureOverrides,
+): SignedOutProviderAuth;
+function authFixture(
+	overrides?: SignedInAuthFixtureOverrides,
+): SignedInProviderAuth;
+function authFixture(
+	overrides: AuthFixtureOverrides = {},
 ): AuthenticatedAppSessionProviderAuth {
+	const common: Pick<
+		AuthenticatedAppSessionProviderAuth,
+		"getToken" | "getPowerSyncToken" | "signOut"
+	> = {
+		getToken: overrides.getToken ?? jest.fn(async () => "token"),
+		getPowerSyncToken:
+			overrides.getPowerSyncToken ?? jest.fn(async () => "powersync-token"),
+		signOut: overrides.signOut ?? jest.fn(async () => undefined),
+	};
+	if (overrides.authReady === false) {
+		return {
+			...common,
+			authReady: false,
+			signedIn: false,
+			clerkUserId: null,
+		};
+	}
+	if (overrides.signedIn === false) {
+		return {
+			...common,
+			authReady: true,
+			signedIn: false,
+			clerkUserId: null,
+		};
+	}
 	return {
-		getToken: jest.fn(async () => "token"),
-		getPowerSyncToken: jest.fn(async () => "powersync-token"),
+		...common,
 		authReady: true,
 		signedIn: true,
-		clerkUserId: "user_avery",
-		signOut: jest.fn(async () => undefined),
-		...overrides,
+		clerkUserId: overrides.clerkUserId ?? "user_avery",
 	};
 }
 
@@ -1421,6 +2741,21 @@ function connectDatabaseFixture(): jest.MockedFunction<AuthenticatedAppSessionCo
 	>(async () => undefined);
 }
 
+function databaseOwnershipFixture(
+	overrides: Partial<DatabaseOwnership> = {},
+): jest.Mocked<DatabaseOwnership> {
+	return {
+		prepareForUser: jest.fn<
+			ReturnType<DatabaseOwnership["prepareForUser"]>,
+			Parameters<DatabaseOwnership["prepareForUser"]>
+		>(overrides.prepareForUser ?? (async () => ({ status: "ready" }))),
+		removePreviousUserDataAndPrepare: jest.fn<
+			ReturnType<DatabaseOwnership["removePreviousUserDataAndPrepare"]>,
+			Parameters<DatabaseOwnership["removePreviousUserDataAndPrepare"]>
+		>(overrides.removePreviousUserDataAndPrepare ?? (async () => undefined)),
+	};
+}
+
 async function resolveActivation(
 	activation: ReturnType<typeof deferred<AuthenticatedAppSession>>,
 	session: AuthenticatedAppSession,
@@ -1439,9 +2774,49 @@ describe("AuthenticatedAppSessionProvider database operation ordering", () => {
 		jest.mocked(useLogger).mockReturnValue(mockLogger);
 	});
 
-	it("orders a stale corrective wipe before the next User database connect", async () => {
+	it("serializes normal Sign Out disconnect behind ownership preparation", async () => {
+		const preparation = deferred<{ status: "ready" }>();
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(() => preparation.promise),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const disconnect = jest.fn(async () => undefined);
+		const auth = authFixture();
+		await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				bootstrapService={bootstrapServiceFixture(appSessionFixture())}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				analytics={createMockAnalytics()}
+				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
+			>
+				<SignOutButton />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(1),
+		);
+
+		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+
+		expect(disconnect).not.toHaveBeenCalled();
+		expect(connectDatabase).not.toHaveBeenCalled();
+
+		await act(async () => {
+			preparation.resolve({ status: "ready" });
+			await preparation.promise;
+		});
+
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+		expect(connectDatabase).not.toHaveBeenCalled();
+	});
+
+	it("orders a stale corrective disconnect before the next User database connect", async () => {
 		const staleConnect = deferred<void>();
-		const correctiveWipe = deferred<void>();
+		const correctiveDisconnect = deferred<void>();
 		const initialSession = appSessionFixture();
 		const nextSession = appSessionFixture({ displayName: "Blake" });
 		const bootstrapService = bootstrapServiceFixture(initialSession);
@@ -1450,17 +2825,17 @@ describe("AuthenticatedAppSessionProvider database operation ordering", () => {
 			.mockResolvedValueOnce(nextSession);
 		const connectDatabase = connectDatabaseFixture();
 		connectDatabase.mockReturnValueOnce(staleConnect.promise);
-		const disconnectAndClear = jest
+		const disconnect = jest
 			.fn<Promise<void>, []>()
 			.mockResolvedValueOnce(undefined)
-			.mockReturnValueOnce(correctiveWipe.promise);
+			.mockReturnValueOnce(correctiveDisconnect.promise);
 		const auth = authFixture();
 		const { rerender } = await render(
 			<AuthenticatedAppSessionProvider
 				auth={auth}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1472,20 +2847,20 @@ describe("AuthenticatedAppSessionProvider database operation ordering", () => {
 
 		await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
 		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
-		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+		expect(disconnect).toHaveBeenCalledTimes(1);
 
 		await act(async () => {
 			staleConnect.resolve(undefined);
 			await staleConnect.promise;
 		});
-		await waitFor(() => expect(disconnectAndClear).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(2));
 
 		await rerender(
 			<AuthenticatedAppSessionProvider
-				auth={{ ...auth, signedIn: false }}
+				auth={{ ...auth, signedIn: false, clerkUserId: null }}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1500,7 +2875,7 @@ describe("AuthenticatedAppSessionProvider database operation ordering", () => {
 				auth={{ ...auth, signedIn: true }}
 				bootstrapService={bootstrapService}
 				connectDatabase={connectDatabase}
-				disconnectAndClear={disconnectAndClear}
+				disconnect={disconnect}
 				analytics={createMockAnalytics()}
 				clearAuthenticatedAppSessionPresent={jest.fn(async () => undefined)}
 			>
@@ -1517,8 +2892,8 @@ describe("AuthenticatedAppSessionProvider database operation ordering", () => {
 		expect(screen.getByText("loading")).toBeTruthy();
 
 		await act(async () => {
-			correctiveWipe.resolve(undefined);
-			await correctiveWipe.promise;
+			correctiveDisconnect.resolve(undefined);
+			await correctiveDisconnect.promise;
 		});
 
 		await waitFor(() => expect(connectDatabase).toHaveBeenCalledTimes(2));

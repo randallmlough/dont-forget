@@ -68,9 +68,12 @@ beforeEach(() => {
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: authenticatedAppSessionFixture(),
+		localData: { status: "ready" },
 		retry: jest.fn(),
 		reloadSession: jest.fn(),
 		signOut: jest.fn(),
+		signInAsPreviousUser: jest.fn(),
+		removePreviousUserDataAndContinue: jest.fn(),
 	});
 	jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
 	jest.mocked(AsyncStorage.setItem).mockResolvedValue(undefined);

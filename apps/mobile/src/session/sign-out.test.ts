@@ -30,7 +30,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 			clearCurrentListSelectionsForUser:
 				selectionStore.clearUserCurrentListSelections,
 			logger: createMockLogger(),
-			disconnectAndClear: jest.fn(async () => undefined),
+			disconnect: jest.fn(async () => undefined),
 			getSessionUserId: () => "usr_avery",
 		});
 
@@ -45,11 +45,21 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		expect(auth.signOut).toHaveBeenCalledTimes(1);
 	});
 
-	it("wipes the local PowerSync data and clears the persisted restore payload", async () => {
+	it("disconnects while preserving local rows, ownership, and queued writes", async () => {
 		const order: string[] = [];
-		const disconnectAndClear = jest.fn(async () => {
-			order.push("disconnect");
-		});
+		const database = {
+			rows: ["item_local"],
+			owner: "usr_avery",
+			queuedWrites: ["write_local"],
+			disconnect: jest.fn(async () => {
+				order.push("disconnect");
+			}),
+			disconnectAndClear: jest.fn(async () => {
+				database.rows = [];
+				database.owner = "";
+				database.queuedWrites = [];
+			}),
+		};
 		const clearPersistedSession = jest.fn(async () => {
 			order.push("hint");
 		});
@@ -60,34 +70,40 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 			clearAuthenticatedAppSessionPresent: clearPersistedSession,
 			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
 			logger: createMockLogger(),
-			disconnectAndClear,
+			disconnect: database.disconnect,
 			getSessionUserId: () => "usr_avery",
 		});
 
 		await signOutFlow.run();
 
-		expect(disconnectAndClear).toHaveBeenCalledTimes(1);
+		expect(database.disconnect).toHaveBeenCalledTimes(1);
+		expect(database.disconnectAndClear).not.toHaveBeenCalled();
+		expect(database.rows).toEqual(["item_local"]);
+		expect(database.owner).toBe("usr_avery");
+		expect(database.queuedWrites).toEqual(["write_local"]);
 		expect(clearPersistedSession).toHaveBeenCalledTimes(1);
 		expect(order).toEqual(["hint", "disconnect"]);
 	});
 
-	it("captures the userId before local data is wiped", async () => {
+	it("captures the User ID before Clerk sign-out", async () => {
 		let currentUserId: string | null = "usr_avery";
 		const clearCurrentListSelectionsForUser = jest.fn(
 			async (_userId: string) => {
 				expect(currentUserId).toBeNull();
 			},
 		);
-		const auth = authFixture();
+		const auth = authFixture({
+			signOut: jest.fn(async () => {
+				currentUserId = null;
+			}),
+		});
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
 			getAuth: () => auth,
 			analytics: createMockAnalytics(),
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
 			clearCurrentListSelectionsForUser,
 			logger: createMockLogger(),
-			disconnectAndClear: jest.fn(async () => {
-				currentUserId = null;
-			}),
+			disconnect: jest.fn(async () => undefined),
 			getSessionUserId: () => currentUserId,
 		});
 
@@ -105,7 +121,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
 			clearCurrentListSelectionsForUser,
 			logger: createMockLogger(),
-			disconnectAndClear: jest.fn(async () => undefined),
+			disconnect: jest.fn(async () => undefined),
 			getSessionUserId: () => null,
 		});
 
@@ -117,6 +133,9 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 
 	it("rethrows when Clerk sign-out fails", async () => {
 		const signOutError = new Error("network down");
+		const analytics = createMockAnalytics();
+		const disconnect = jest.fn(async () => undefined);
+		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
 		const auth = authFixture({
 			signOut: jest.fn(async () => {
 				throw signOutError;
@@ -124,15 +143,19 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		});
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
 			getAuth: () => auth,
-			analytics: createMockAnalytics(),
+			analytics,
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
-			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
+			clearCurrentListSelectionsForUser,
 			logger: createMockLogger(),
-			disconnectAndClear: jest.fn(async () => undefined),
+			disconnect,
 			getSessionUserId: () => "usr_avery",
 		});
 
 		await expect(signOutFlow.run()).rejects.toThrow("network down");
+		expect(disconnect).not.toHaveBeenCalled();
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalled();
+		expect(analytics.reset).not.toHaveBeenCalled();
 	});
 
 	it("can retry after Clerk sign-out fails", async () => {
@@ -142,29 +165,32 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 				.mockRejectedValueOnce(new Error("network down"))
 				.mockResolvedValueOnce(undefined),
 		});
-		const disconnectAndClear = jest.fn(async () => undefined);
+		const analytics = createMockAnalytics();
+		const disconnect = jest.fn(async () => undefined);
 		const clearHint = jest.fn(async () => undefined);
 		const clearCurrentListSelectionsForUser = jest.fn(async () => undefined);
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
 			getAuth: () => auth,
-			analytics: createMockAnalytics(),
+			analytics,
 			clearAuthenticatedAppSessionPresent: clearHint,
 			clearCurrentListSelectionsForUser,
 			logger: createMockLogger(),
-			disconnectAndClear,
+			disconnect,
 			getSessionUserId: () => "usr_avery",
 		});
 
 		await expect(signOutFlow.run()).rejects.toThrow("network down");
 		await expect(signOutFlow.run()).resolves.toBeUndefined();
 
-		expect(disconnectAndClear).toHaveBeenCalledTimes(2);
+		expect(disconnect).toHaveBeenCalledTimes(1);
 		expect(clearHint).toHaveBeenCalledTimes(2);
-		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledTimes(2);
+		expect(clearCurrentListSelectionsForUser).toHaveBeenCalledTimes(1);
 		expect(auth.signOut).toHaveBeenCalledTimes(2);
+		expect(analytics.track).toHaveBeenCalledTimes(1);
+		expect(analytics.reset).toHaveBeenCalledTimes(1);
 	});
 
-	it("runs cleanup in order: track, reset, hint, disconnect, selections, Clerk sign-out", async () => {
+	it("runs critical sign-out, cleanup, and analytics in order", async () => {
 		const order: string[] = [];
 		const analytics = createMockAnalytics();
 		analytics.track.mockImplementation(() => {
@@ -188,7 +214,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 				order.push("selections");
 			}),
 			logger: createMockLogger(),
-			disconnectAndClear: jest.fn(async () => {
+			disconnect: jest.fn(async () => {
 				order.push("disconnect");
 			}),
 			getSessionUserId: () => "usr_avery",
@@ -197,12 +223,12 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		await signOutFlow.run();
 
 		expect(order).toEqual([
-			"track",
-			"reset",
 			"hint",
+			"clerkSignOut",
 			"disconnect",
 			"selections",
-			"clerkSignOut",
+			"track",
+			"reset",
 		]);
 	});
 
@@ -239,7 +265,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 			clearAuthenticatedAppSessionPresent: clearHint,
 			clearCurrentListSelectionsForUser,
 			logger: createMockLogger(),
-			disconnectAndClear: jest.fn(() => {
+			disconnect: jest.fn(() => {
 				order.push("disconnect");
 				return disconnect.promise;
 			}),
@@ -247,67 +273,68 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 		});
 
 		const run = signOutFlow.run();
-		await waitForAsync(() => expect(order).toEqual(["track", "reset", "hint"]));
+		await waitForAsync(() => expect(order).toEqual(["hint"]));
 		expect(clearHint).toHaveBeenCalledTimes(1);
 		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
 
 		hint.resolve(undefined);
+		await waitForAsync(() => expect(order).toEqual(["hint", "clerkSignOut"]));
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+
+		clerkSignOut.resolve(undefined);
 		await waitForAsync(() =>
-			expect(order).toEqual(["track", "reset", "hint", "disconnect"]),
+			expect(order).toEqual(["hint", "clerkSignOut", "disconnect"]),
 		);
 		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
 
 		disconnect.resolve(undefined);
 		await waitForAsync(() =>
 			expect(order).toEqual([
-				"track",
-				"reset",
 				"hint",
+				"clerkSignOut",
 				"disconnect",
 				"selections",
 			]),
 		);
-		expect(auth.signOut).not.toHaveBeenCalled();
 
 		selections.resolve(undefined);
-		await waitForAsync(() =>
-			expect(order).toEqual([
-				"track",
-				"reset",
-				"hint",
-				"disconnect",
-				"selections",
-				"clerkSignOut",
-			]),
-		);
-
-		clerkSignOut.resolve(undefined);
 		await expect(run).resolves.toBeUndefined();
+		expect(order).toEqual([
+			"hint",
+			"clerkSignOut",
+			"disconnect",
+			"selections",
+			"track",
+			"reset",
+		]);
 	});
 
 	it("does not call Clerk sign-out when the persisted restore payload cannot be cleared", async () => {
 		const auth = authFixture();
 		const clearError = new Error("cleanup failed");
-		const disconnectAndClear = jest.fn(async () => undefined);
+		const analytics = createMockAnalytics();
+		const disconnect = jest.fn(async () => undefined);
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
 			getAuth: () => auth,
-			analytics: createMockAnalytics(),
+			analytics,
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => {
 				throw clearError;
 			}),
 			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
 			logger: createMockLogger(),
-			disconnectAndClear,
+			disconnect,
 			getSessionUserId: () => "usr_avery",
 		});
 
 		await expect(signOutFlow.run()).rejects.toThrow("cleanup failed");
 
-		expect(disconnectAndClear).not.toHaveBeenCalled();
+		expect(disconnect).not.toHaveBeenCalled();
 		expect(auth.signOut).not.toHaveBeenCalled();
+		expect(analytics.track).not.toHaveBeenCalled();
+		expect(analytics.reset).not.toHaveBeenCalled();
 	});
 
-	it("continues Clerk sign-out when disconnect fails", async () => {
+	it("completes Sign Out when disconnect fails", async () => {
 		const logger = createMockLogger();
 		const auth = authFixture();
 		const signOutFlow = createAuthenticatedAppSessionSignOut({
@@ -316,7 +343,7 @@ describe("createAuthenticatedAppSessionSignOut", () => {
 			clearAuthenticatedAppSessionPresent: jest.fn(async () => undefined),
 			clearCurrentListSelectionsForUser: jest.fn(async () => undefined),
 			logger,
-			disconnectAndClear: jest.fn(async () => {
+			disconnect: jest.fn(async () => {
 				throw new Error("disconnect failed");
 			}),
 			getSessionUserId: () => "usr_avery",

@@ -92,9 +92,12 @@ beforeEach(() => {
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: sessionFixture(),
+		localData: { status: "ready" },
 		retry: jest.fn(),
 		reloadSession: jest.fn(),
 		signOut: jest.fn(),
+		signInAsPreviousUser: jest.fn(),
+		removePreviousUserDataAndContinue: jest.fn(),
 	});
 	showCollection({
 		status: "active",

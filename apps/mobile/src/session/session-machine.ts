@@ -10,14 +10,47 @@ export type SessionView = {
 	session: SessionBootstrap | null;
 };
 
-type ObservedAuth = {
-	authReady: boolean;
-	signedIn: boolean;
-	activationEnabled: boolean;
+export type LocalDataState =
+	| { status: "ready" }
+	| { status: "differentUserBlocked"; phase: "idle" }
+	| { status: "differentUserBlocked"; phase: "removing" }
+	| {
+			status: "differentUserBlocked";
+			phase: "failed";
+			errorMessage: string;
+	  };
+
+export type BlockedActivation = {
+	attempt: number;
+	clerkUserId: string;
+	session: SessionBootstrap;
 };
+
+type ObservedAuth =
+	| {
+			authReady: false;
+			signedIn: false;
+			clerkUserId: null;
+			activationEnabled: boolean;
+	  }
+	| {
+			authReady: true;
+			signedIn: false;
+			clerkUserId: null;
+			activationEnabled: boolean;
+	  }
+	| {
+			authReady: true;
+			signedIn: true;
+			clerkUserId: string;
+			activationEnabled: boolean;
+	  };
 
 export type SessionMachineState = {
 	view: SessionView;
+	localData: LocalDataState;
+	blockedActivation: BlockedActivation | null;
+	pendingBlockedIncomingUserSignOutAttempt: number | null;
 	readySessionSource: "online" | "restored" | null;
 	lastKnownUserId: string | null;
 	attempt: number;
@@ -31,6 +64,7 @@ export type SessionMachineState = {
 	restoreFailed: boolean;
 	signInRequired: boolean;
 	signingOut: boolean;
+	signOutObservedSignedOut: boolean;
 	suppressActivationUntilSignedOut: boolean;
 	restoreSuppressedUntilSignedIn: boolean;
 	queuedReloadMode: "normal" | "freshOnly" | null;
@@ -46,9 +80,29 @@ export type SessionMachineEvent =
 			signedIn: boolean;
 	  }
 	| { type: "signOutRequested" }
-	| { type: "signOutSucceeded"; signedIn: boolean }
+	| { type: "signOutSucceeded" }
 	| { type: "signOutFailed"; authReady: boolean; signedIn: boolean }
 	| { type: "activationSucceeded"; attempt: number; session: SessionBootstrap }
+	| ({ type: "activationBlocked" } & BlockedActivation)
+	| { type: "blockedIncomingUserSignOutRequested"; attempt: number }
+	| { type: "localDataRemovalRequested"; attempt: number }
+	| { type: "localDataRemovalSucceeded"; attempt: number }
+	| {
+			type: "localDataRemovalFailed";
+			attempt: number;
+			message: string;
+	  }
+	| {
+			type: "blockedIncomingUserSignOutSucceeded";
+			attempt: number;
+			signedIn: boolean;
+	  }
+	| {
+			type: "blockedIncomingUserSignOutFailed";
+			attempt: number;
+			signedIn: boolean;
+			message: string;
+	  }
 	| {
 			type: "activationFallbackRequested";
 			attempt: number;
@@ -68,8 +122,8 @@ export type SessionMachineEffect =
 	| { type: "clearSessionHint" }
 	| { type: "disconnect" }
 	| { type: "markSessionHint"; session: SessionBootstrap }
+	| { type: "resetAnalytics" }
 	| { type: "restoreSession"; attempt: number; session: SessionBootstrap }
-	| { type: "disconnectAndClear" }
 	| {
 			type: "trackSessionLoaded";
 			source: "cached";
@@ -92,6 +146,9 @@ const LOADING_VIEW: SessionView = {
 
 export const initialSessionMachineState: SessionMachineState = {
 	view: LOADING_VIEW,
+	localData: { status: "ready" },
+	blockedActivation: null,
+	pendingBlockedIncomingUserSignOutAttempt: null,
 	readySessionSource: null,
 	lastKnownUserId: null,
 	attempt: 0,
@@ -102,6 +159,7 @@ export const initialSessionMachineState: SessionMachineState = {
 	restoreFailed: false,
 	signInRequired: false,
 	signingOut: false,
+	signOutObservedSignedOut: false,
 	suppressActivationUntilSignedOut: false,
 	restoreSuppressedUntilSignedIn: false,
 	queuedReloadMode: null,
@@ -125,45 +183,66 @@ export function reduceSessionMachine(
 					signingOut: true,
 					// This invalidates every in-flight activation before cleanup starts.
 					attempt: state.attempt + 1,
+					pendingBlockedIncomingUserSignOutAttempt: null,
 					readySessionSource: null,
 					pendingActivationRestoredUserId: null,
 					pendingRestoreAttempt: null,
 					restorableSession: null,
 					restoreFailed: false,
 					signInRequired: false,
+					signOutObservedSignedOut: false,
 					queuedReloadMode: null,
 				},
 				effects: [],
 			};
-		case "signOutSucceeded":
-			return {
-				state: {
-					...state,
-					signingOut: false,
-					view: LOADING_VIEW,
-					readySessionSource: null,
-					lastKnownUserId: null,
-					pendingActivationRestoredUserId: null,
-					pendingRestoreAttempt: null,
-					restorableSession: null,
-					restoreFailed: false,
-					signInRequired: false,
-					queuedReloadMode: null,
-					// Clerk may still report signed-in until its auth flip lands.
-					suppressActivationUntilSignedOut: event.signedIn,
-					restoreSuppressedUntilSignedIn: true,
-				},
-				effects: [],
+		case "signOutSucceeded": {
+			const latestAuth = state.lastObservedAuth;
+			const reauthenticated =
+				state.signOutObservedSignedOut &&
+				latestAuth?.authReady === true &&
+				latestAuth.signedIn;
+			const base: SessionMachineState = {
+				...state,
+				localData: { status: "ready" },
+				blockedActivation: null,
+				pendingBlockedIncomingUserSignOutAttempt: null,
+				signingOut: false,
+				signOutObservedSignedOut: false,
+				view: LOADING_VIEW,
+				readySessionSource: null,
+				lastKnownUserId: null,
+				pendingActivationRestoredUserId: null,
+				pendingRestoreAttempt: null,
+				restorableSession: null,
+				restoreFailed: false,
+				signInRequired: false,
+				queuedReloadMode: reauthenticated ? "freshOnly" : null,
+				// Without an observed signed-out state, Clerk may still be
+				// reporting the outgoing User until its delayed auth flip lands.
+				suppressActivationUntilSignedOut:
+					!state.signOutObservedSignedOut &&
+					latestAuth?.authReady === true &&
+					latestAuth.signedIn,
+				restoreSuppressedUntilSignedIn: !reauthenticated,
 			};
+			if (!reauthenticated || !latestAuth.activationEnabled) {
+				return { state: base, effects: [] };
+			}
+			return startActivation(base, false);
+		}
 		case "signOutFailed": {
 			const base: SessionMachineState = {
 				...state,
+				localData: { status: "ready" },
+				blockedActivation: null,
+				pendingBlockedIncomingUserSignOutAttempt: null,
 				view: LOADING_VIEW,
 				readySessionSource: null,
 				pendingActivationRestoredUserId: null,
 				pendingRestoreAttempt: null,
 				restoreFailed: false,
 				signInRequired: false,
+				signOutObservedSignedOut: false,
 				queuedReloadMode: null,
 			};
 			if (!event.authReady || !event.signedIn) {
@@ -176,7 +255,7 @@ export function reduceSessionMachine(
 						signInRequired: true,
 						restoreSuppressedUntilSignedIn: true,
 					},
-					effects: [],
+					effects: [{ type: "disconnect" }],
 				};
 			}
 			const mode = state.queuedReloadMode ?? "freshOnly";
@@ -189,6 +268,8 @@ export function reduceSessionMachine(
 			return {
 				state: {
 					...state,
+					localData: { status: "ready" },
+					blockedActivation: null,
 					pendingActivationAttempt: null,
 					pendingActivationRestoredUserId: null,
 					signingOut: false,
@@ -207,6 +288,139 @@ export function reduceSessionMachine(
 				effects: [{ type: "markSessionHint", session: event.session }],
 			};
 		}
+		case "activationBlocked":
+			if (event.attempt !== state.attempt) return noChange(state);
+			return {
+				state: {
+					...state,
+					view: LOADING_VIEW,
+					readySessionSource: null,
+					pendingActivationAttempt: null,
+					pendingActivationRestoredUserId: null,
+					pendingRestoreAttempt: null,
+					restorableSession: null,
+					restoreFailed: false,
+					signInRequired: false,
+					localData: {
+						status: "differentUserBlocked",
+						phase: "idle",
+					},
+					blockedActivation: {
+						attempt: event.attempt,
+						clerkUserId: event.clerkUserId,
+						session: event.session,
+					},
+				},
+				effects: [],
+			};
+		case "blockedIncomingUserSignOutRequested":
+			if (
+				state.blockedActivation?.attempt !== event.attempt ||
+				state.pendingBlockedIncomingUserSignOutAttempt !== null
+			) {
+				return noChange(state);
+			}
+			return {
+				state: {
+					...state,
+					pendingBlockedIncomingUserSignOutAttempt: event.attempt,
+				},
+				effects: [],
+			};
+		case "localDataRemovalRequested":
+			if (
+				state.blockedActivation?.attempt !== event.attempt ||
+				state.localData.status !== "differentUserBlocked" ||
+				state.localData.phase === "removing"
+			) {
+				return noChange(state);
+			}
+			return {
+				state: {
+					...state,
+					localData: {
+						status: "differentUserBlocked",
+						phase: "removing",
+					},
+				},
+				effects: [],
+			};
+		case "localDataRemovalFailed":
+			if (
+				state.blockedActivation?.attempt !== event.attempt ||
+				state.localData.status !== "differentUserBlocked"
+			) {
+				return noChange(state);
+			}
+			return {
+				state: {
+					...state,
+					localData: {
+						status: "differentUserBlocked",
+						phase: "failed",
+						errorMessage: event.message,
+					},
+				},
+				effects: [],
+			};
+		case "localDataRemovalSucceeded": {
+			if (
+				state.blockedActivation?.attempt !== event.attempt ||
+				state.localData.status !== "differentUserBlocked" ||
+				state.localData.phase !== "removing"
+			) {
+				return noChange(state);
+			}
+			const prepared: SessionMachineState = {
+				...state,
+				localData: { status: "ready" },
+				blockedActivation: null,
+			};
+			const auth = state.lastObservedAuth;
+			if (auth?.authReady && auth.signedIn && auth.activationEnabled) {
+				return startActivation(prepared, false);
+			}
+			return {
+				state: {
+					...prepared,
+					attempt: state.attempt + 1,
+					signInRequired: true,
+					restoreSuppressedUntilSignedIn: true,
+				},
+				effects: [],
+			};
+		}
+		case "blockedIncomingUserSignOutSucceeded":
+			if (
+				state.blockedActivation?.attempt !== event.attempt ||
+				state.pendingBlockedIncomingUserSignOutAttempt !== event.attempt
+			) {
+				return noChange(state);
+			}
+			return completeBlockedIncomingUserSignOut(state, event);
+		case "blockedIncomingUserSignOutFailed":
+			if (
+				state.blockedActivation?.attempt !== event.attempt ||
+				state.pendingBlockedIncomingUserSignOutAttempt !== event.attempt ||
+				state.localData.status !== "differentUserBlocked"
+			) {
+				return noChange(state);
+			}
+			if (!event.signedIn) {
+				return completeBlockedIncomingUserSignOut(state, event);
+			}
+			return {
+				state: {
+					...state,
+					pendingBlockedIncomingUserSignOutAttempt: null,
+					localData: {
+						status: "differentUserBlocked",
+						phase: "failed",
+						errorMessage: event.message,
+					},
+				},
+				effects: [],
+			};
 		case "activationFallbackRequested":
 			if (
 				event.attempt !== state.attempt ||
@@ -231,6 +445,8 @@ export function reduceSessionMachine(
 				return {
 					state: {
 						...state,
+						localData: { status: "ready" },
+						blockedActivation: null,
 						pendingActivationAttempt: null,
 						pendingActivationRestoredUserId: null,
 						signingOut: false,
@@ -245,6 +461,8 @@ export function reduceSessionMachine(
 			return {
 				state: {
 					...state,
+					localData: { status: "ready" },
+					blockedActivation: null,
 					pendingActivationAttempt: null,
 					pendingActivationRestoredUserId: null,
 					signingOut: false,
@@ -271,6 +489,8 @@ export function reduceSessionMachine(
 			return {
 				state: {
 					...state,
+					localData: { status: "ready" },
+					blockedActivation: null,
 					pendingActivationAttempt: null,
 					pendingActivationRestoredUserId: null,
 					pendingRestoreAttempt: null,
@@ -318,18 +538,112 @@ export function reduceSessionMachine(
 	}
 }
 
+function completeBlockedIncomingUserSignOut(
+	state: SessionMachineState,
+	event: {
+		attempt: number;
+		signedIn: boolean;
+	},
+): SessionMachineResult {
+	return {
+		state: {
+			...state,
+			attempt: state.attempt + 1,
+			view: LOADING_VIEW,
+			localData: { status: "ready" },
+			blockedActivation: null,
+			pendingBlockedIncomingUserSignOutAttempt: event.attempt,
+			signInRequired: true,
+			suppressActivationUntilSignedOut: event.signedIn,
+			restoreSuppressedUntilSignedIn: true,
+		},
+		effects: [{ type: "resetAnalytics" }],
+	};
+}
+
 function reduceAuthStateChanged(
 	state: SessionMachineState,
 	event: { type: "authStateChanged" } & ObservedAuth,
 ): SessionMachineResult {
-	const observed: ObservedAuth = {
-		authReady: event.authReady,
-		signedIn: event.signedIn,
-		activationEnabled: event.activationEnabled,
-	};
+	const observed = observedAuthFromEvent(event);
+	const signOutObservedSignedOut =
+		state.signOutObservedSignedOut ||
+		(state.signingOut && event.authReady && !event.signedIn);
 	// Identical observations should not restart the session lifecycle.
 	if (sameObservedAuth(state.lastObservedAuth, observed)) {
+		if (signOutObservedSignedOut !== state.signOutObservedSignedOut) {
+			return {
+				state: { ...state, signOutObservedSignedOut },
+				effects: [],
+			};
+		}
 		return noChange(state);
+	}
+	const next: SessionMachineState = {
+		...state,
+		lastObservedAuth: observed,
+		signOutObservedSignedOut,
+	};
+	if (
+		next.localData.status === "differentUserBlocked" &&
+		next.blockedActivation !== null &&
+		(!event.authReady || !event.signedIn)
+	) {
+		const completed = completeBlockedIncomingUserSignOut(next, {
+			attempt: next.blockedActivation.attempt,
+			signedIn: false,
+		});
+		return {
+			state: {
+				...completed.state,
+				pendingBlockedIncomingUserSignOutAttempt: null,
+			},
+			effects: completed.effects,
+		};
+	}
+	const previousAuth = state.lastObservedAuth;
+	const directUserChange =
+		previousAuth?.authReady === true &&
+		previousAuth.signedIn &&
+		event.authReady &&
+		event.signedIn &&
+		previousAuth.clerkUserId !== event.clerkUserId;
+	if (directUserChange && !next.signingOut) {
+		const retired: SessionMachineState = {
+			...next,
+			localData: { status: "ready" },
+			blockedActivation: null,
+			pendingBlockedIncomingUserSignOutAttempt: null,
+			pendingActivationAttempt: null,
+			view: LOADING_VIEW,
+			readySessionSource: null,
+			pendingActivationRestoredUserId: null,
+			pendingRestoreAttempt: null,
+			restorableSession: null,
+			restoreFailed: false,
+			signInRequired: false,
+			restoreSuppressedUntilSignedIn: false,
+		};
+		if (!event.activationEnabled) {
+			return {
+				state: { ...retired, attempt: state.attempt + 1 },
+				effects: [{ type: "disconnect" }],
+			};
+		}
+		const activation = startActivation(retired, true);
+		return {
+			state: activation.state,
+			effects: [{ type: "disconnect" }, ...activation.effects],
+		};
+	}
+	if (
+		next.localData.status === "differentUserBlocked" &&
+		next.blockedActivation !== null &&
+		event.authReady &&
+		event.signedIn &&
+		event.clerkUserId === next.blockedActivation.clerkUserId
+	) {
+		return { state: next, effects: [] };
 	}
 	if (
 		event.authReady &&
@@ -338,9 +652,8 @@ function reduceAuthStateChanged(
 		!state.signingOut &&
 		!state.suppressActivationUntilSignedOut
 	) {
-		return { state: { ...state, lastObservedAuth: observed }, effects: [] };
+		return { state: next, effects: [] };
 	}
-	const next: SessionMachineState = { ...state, lastObservedAuth: observed };
 	if (
 		next.signingOut &&
 		(!event.authReady || !event.signedIn) &&
@@ -349,8 +662,11 @@ function reduceAuthStateChanged(
 		return {
 			state: {
 				...next,
+				localData: { status: "ready" },
+				blockedActivation: null,
 				attempt: next.attempt + 1,
 				signingOut: false,
+				signOutObservedSignedOut: false,
 				suppressActivationUntilSignedOut: false,
 				restoreSuppressedUntilSignedIn: true,
 				queuedReloadMode: null,
@@ -362,11 +678,23 @@ function reduceAuthStateChanged(
 				restoreFailed: false,
 				signInRequired: true,
 			},
-			effects: [{ type: "disconnectAndClear" }],
+			effects: [{ type: "disconnect" }],
 		};
 	}
 	if (next.signingOut) {
 		return { state: next, effects: [] };
+	}
+	if (next.pendingBlockedIncomingUserSignOutAttempt !== null) {
+		if (!event.authReady || !event.signedIn) {
+			if (next.blockedActivation === null) {
+				next.pendingBlockedIncomingUserSignOutAttempt = null;
+				next.suppressActivationUntilSignedOut = false;
+			}
+			return { state: next, effects: [] };
+		}
+		if (event.clerkUserId === next.blockedActivation?.clerkUserId) {
+			return { state: next, effects: [] };
+		}
 	}
 	if (next.suppressActivationUntilSignedOut) {
 		if (event.signedIn) return { state: next, effects: [] };
@@ -382,6 +710,8 @@ function reduceAuthStateChanged(
 		return {
 			state: {
 				...next,
+				localData: { status: "ready" },
+				blockedActivation: null,
 				attempt: next.attempt + 1,
 				view: LOADING_VIEW,
 				readySessionSource: null,
@@ -395,7 +725,9 @@ function reduceAuthStateChanged(
 				restoreSuppressedUntilSignedIn:
 					next.restoreSuppressedUntilSignedIn || authLossRequiresSignIn,
 			},
-			effects: authLossRequiresSignIn ? [{ type: "clearSessionHint" }] : [],
+			effects: authLossRequiresSignIn
+				? [{ type: "clearSessionHint" }, { type: "disconnect" }]
+				: [],
 		};
 	}
 	if (!event.activationEnabled) {
@@ -408,7 +740,46 @@ function reduceAuthStateChanged(
 	) {
 		return { state: next, effects: [] };
 	}
-	return startActivation(next, true);
+	const replacesRestoredConnection =
+		(next.readySessionSource === "restored" && next.view.session !== null) ||
+		next.pendingRestoreAttempt === next.attempt;
+	const activation = startActivation(
+		next,
+		next.queuedReloadMode !== "freshOnly",
+	);
+	return replacesRestoredConnection
+		? {
+				state: activation.state,
+				effects: [{ type: "disconnect" }, ...activation.effects],
+			}
+		: activation;
+}
+
+function observedAuthFromEvent(
+	event: { type: "authStateChanged" } & ObservedAuth,
+): ObservedAuth {
+	if (!event.authReady) {
+		return {
+			authReady: false,
+			signedIn: false,
+			clerkUserId: null,
+			activationEnabled: event.activationEnabled,
+		};
+	}
+	if (!event.signedIn) {
+		return {
+			authReady: true,
+			signedIn: false,
+			clerkUserId: null,
+			activationEnabled: event.activationEnabled,
+		};
+	}
+	return {
+		authReady: true,
+		signedIn: true,
+		clerkUserId: event.clerkUserId,
+		activationEnabled: event.activationEnabled,
+	};
 }
 
 function reduceReloadRequested(
@@ -491,6 +862,7 @@ function startActivation(
 			...state,
 			attempt,
 			pendingActivationAttempt: attempt,
+			pendingBlockedIncomingUserSignOutAttempt: null,
 			pendingActivationRestoredUserId,
 			pendingRestoreAttempt: null,
 			view,
@@ -499,6 +871,7 @@ function startActivation(
 			restoreFailed: false,
 			signInRequired: false,
 			restoreSuppressedUntilSignedIn: false,
+			queuedReloadMode: null,
 		},
 		effects: [{ type: "activate", attempt, allowCached }],
 	};
@@ -512,6 +885,7 @@ function startRestore(
 		state: {
 			...state,
 			pendingRestoreAttempt: state.attempt,
+			pendingBlockedIncomingUserSignOutAttempt: null,
 			restorableSession: session,
 			restoreFailed: false,
 			signInRequired: false,
@@ -557,12 +931,9 @@ function reduceStaleSessionConnection(
 
 function staleConnectionCleanupEffect(
 	state: SessionMachineState,
-): Extract<
-	SessionMachineEffect,
-	{ type: "disconnect" | "disconnectAndClear" }
-> | null {
+): Extract<SessionMachineEffect, { type: "disconnect" }> | null {
 	if (databaseMustBeDisconnected(state)) {
-		return { type: "disconnectAndClear" };
+		return { type: "disconnect" };
 	}
 	if (state.readySessionSource === "restored" && state.view.session !== null) {
 		return { type: "disconnect" };
@@ -619,6 +990,7 @@ function sameObservedAuth(a: ObservedAuth | null, b: ObservedAuth): boolean {
 		a !== null &&
 		a.authReady === b.authReady &&
 		a.signedIn === b.signedIn &&
+		a.clerkUserId === b.clerkUserId &&
 		a.activationEnabled === b.activationEnabled
 	);
 }

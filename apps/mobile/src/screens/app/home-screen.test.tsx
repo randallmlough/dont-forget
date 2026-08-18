@@ -14,7 +14,11 @@ import type {
 } from "@mobile/features/list/use-list-collection";
 import { useListCollection } from "@mobile/features/list/use-list-collection";
 import { useListPage } from "@mobile/features/list/use-list-page";
-import { useAuthenticatedAppSession, useSyncState } from "@mobile/session";
+import {
+	type LocalDataState,
+	useAuthenticatedAppSession,
+	useSyncState,
+} from "@mobile/session";
 import { deferred } from "@mobile/test/async";
 import { panBegin, panEnd, panMove } from "@mobile/test/mocks/gesture-handler";
 import { settleAnimations } from "@mobile/test/mocks/reanimated";
@@ -31,10 +35,15 @@ import {
 import { selectionAsync } from "expo-haptics";
 import type { PropsWithChildren } from "react";
 import { Dimensions, FlatList } from "react-native";
-import HomeScreen, { HomeScreenView } from "./home-screen";
+import HomeScreen, {
+	HomeScreenView,
+	type HomeScreenViewProps,
+} from "./home-screen";
 
 const mockReplace = jest.fn();
 const mockRetry = jest.fn();
+const mockSignInAsPreviousUser = jest.fn(async () => undefined);
+const mockRemovePreviousUserDataAndContinue = jest.fn(async () => undefined);
 const mockSelectList = jest.fn(
 	async (_input: { listId: string }): Promise<SelectListOutcome> => ({
 		status: "selected",
@@ -168,13 +177,18 @@ jest.mock("@mobile/ui/toast", () => ({
 beforeEach(() => {
 	mockReplace.mockReset();
 	mockRetry.mockReset();
+	mockSignInAsPreviousUser.mockReset();
+	mockRemovePreviousUserDataAndContinue.mockReset();
 	mockStackScreenOptions.mockClear();
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: authenticatedAppSession,
+		localData: { status: "ready" },
 		retry: jest.fn(),
 		reloadSession: jest.fn(),
 		signOut: jest.fn(),
+		signInAsPreviousUser: mockSignInAsPreviousUser,
+		removePreviousUserDataAndContinue: mockRemovePreviousUserDataAndContinue,
 	});
 	jest.mocked(useSyncState).mockReturnValue("synced");
 	jest
@@ -187,9 +201,29 @@ beforeEach(() => {
 
 describe("HomeScreenView", () => {
 	it("renders the loading Authenticated App Session state", async () => {
-		await render(<HomeScreenView state={{ status: "loading" }} />);
+		const props = {
+			state: { status: "loading" },
+		} satisfies HomeScreenViewProps;
+		await render(<HomeScreenView {...props} />);
 
 		expect(await screen.findByText("Preparing your Household")).toBeTruthy();
+	});
+
+	it("renders a blocked state with both required recovery actions", async () => {
+		const props = {
+			state: { status: "loading" },
+			localData: { status: "differentUserBlocked", phase: "idle" },
+			onSignInAsPreviousUser: jest.fn(),
+			onRemovePreviousUserDataAndContinue: jest.fn(),
+		} satisfies HomeScreenViewProps;
+		await render(<HomeScreenView {...props} />);
+
+		expect(
+			screen.getByRole("button", { name: "Sign In as Previous User" }),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: "Remove Previous User's Data" }),
+		).toBeTruthy();
 	});
 
 	it("renders the retry action for Authenticated App Session errors", async () => {
@@ -208,6 +242,110 @@ describe("HomeScreenView", () => {
 });
 
 describe("HomeScreen", () => {
+	it("renders blocked recovery before retained content or product queries", async () => {
+		showBlockedLocalData();
+		jest.mocked(useListCollection).mockClear();
+		jest.mocked(useListPage).mockClear();
+
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(
+			await screen.findByText("Data from Another User Is on This Device"),
+		).toBeTruthy();
+		expect(
+			screen.getByText(
+				"This device still has Lists, Items, or unsynced changes from the previously signed-in User. Sign in as that User to preserve them, or remove the local data to continue.",
+			),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: "Sign In as Previous User" }),
+		).toBeTruthy();
+		expect(
+			screen.getByRole("button", { name: "Remove Previous User's Data" }),
+		).toBeTruthy();
+		expect(screen.queryByText("Groceries")).toBeNull();
+		expect(useListCollection).not.toHaveBeenCalled();
+		expect(useListPage).not.toHaveBeenCalled();
+	});
+
+	it("uses only the non-destructive action to return to the previous User", async () => {
+		showBlockedLocalData();
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Sign In as Previous User" }),
+		);
+
+		expect(mockSignInAsPreviousUser).toHaveBeenCalledTimes(1);
+		expect(mockRemovePreviousUserDataAndContinue).not.toHaveBeenCalled();
+		expect(themedAlert).not.toHaveBeenCalled();
+	});
+
+	it("requires confirmation and supports cancel before removing local data", async () => {
+		showBlockedLocalData();
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Remove Previous User's Data" }),
+		);
+
+		expect(themedAlert).toHaveBeenCalledWith(
+			"Remove Previous User's Data?",
+			"This permanently removes the previous User's local Lists, Items, and unsynced changes from this device.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				expect.objectContaining({
+					text: "Remove and Continue",
+					style: "destructive",
+					onPress: expect.any(Function),
+				}),
+			],
+		);
+		expect(mockRemovePreviousUserDataAndContinue).not.toHaveBeenCalled();
+
+		const buttons = jest.mocked(themedAlert).mock.calls[0]?.[2];
+		buttons?.[0]?.onPress?.();
+		expect(mockRemovePreviousUserDataAndContinue).not.toHaveBeenCalled();
+
+		buttons?.[1]?.onPress?.();
+		expect(mockRemovePreviousUserDataAndContinue).toHaveBeenCalledTimes(1);
+	});
+
+	it("disables both blocked actions while removal is in progress", async () => {
+		showBlockedLocalData({ phase: "removing" });
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(
+			screen.getByRole("button", { name: "Sign In as Previous User" }),
+		).toBeDisabled();
+		expect(
+			screen.getByRole("button", { name: "Remove Previous User's Data" }),
+		).toBeDisabled();
+		expect(screen.getByText("Removing local data…")).toBeTruthy();
+	});
+
+	it("keeps a failed removal blocked and allows confirmation to retry", async () => {
+		showBlockedLocalData({
+			phase: "failed",
+			errorMessage:
+				"Unable to remove the previous User's data. Please try again.",
+		});
+		await render(homeScreenSurface(), { wrapper: TestSafeAreaProvider });
+
+		expect(
+			screen.getByText(
+				"Unable to remove the previous User's data. Please try again.",
+			),
+		).toBeTruthy();
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Remove Previous User's Data" }),
+		);
+		const confirm = jest.mocked(themedAlert).mock.calls[0]?.[2]?.[1]?.onPress;
+		confirm?.();
+
+		expect(mockRemovePreviousUserDataAndContinue).toHaveBeenCalledTimes(1);
+	});
+
 	it("renders the Current List page title and wires the drawer button", async () => {
 		const open = jest.fn();
 
@@ -625,9 +763,12 @@ describe("HomeScreen", () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "loading" },
 			session: null,
+			localData: { status: "ready" },
 			retry: jest.fn(),
 			reloadSession: jest.fn(),
 			signOut: jest.fn(),
+			signInAsPreviousUser: jest.fn(),
+			removePreviousUserDataAndContinue: jest.fn(),
 		});
 
 		await render(
@@ -1145,6 +1286,40 @@ function homeScreenSurface() {
 			<HomeScreen />
 		</NavigationDrawerProvider>
 	);
+}
+
+type BlockedLocalDataOverrides =
+	| { phase?: "idle" }
+	| { phase: "removing" }
+	| { phase: "failed"; errorMessage: string };
+
+function showBlockedLocalData(overrides: BlockedLocalDataOverrides = {}): void {
+	const localData: Extract<LocalDataState, { status: "differentUserBlocked" }> =
+		overrides.phase === "failed"
+			? {
+					status: "differentUserBlocked",
+					phase: "failed",
+					errorMessage: overrides.errorMessage,
+				}
+			: overrides.phase === "removing"
+				? {
+						status: "differentUserBlocked",
+						phase: "removing",
+					}
+				: {
+						status: "differentUserBlocked",
+						phase: "idle",
+					};
+	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
+		state: { status: "loading" },
+		session: authenticatedAppSession,
+		localData,
+		retry: jest.fn(),
+		reloadSession: jest.fn(),
+		signOut: jest.fn(),
+		signInAsPreviousUser: mockSignInAsPreviousUser,
+		removePreviousUserDataAndContinue: mockRemovePreviousUserDataAndContinue,
+	});
 }
 
 /** The List title in the native header, hidden from assistive technology. */

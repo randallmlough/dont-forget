@@ -1,4 +1,7 @@
-import { HomeScreenView } from "@mobile/screens/app/home-screen";
+import {
+	HomeScreenView,
+	type HomeScreenViewProps,
+} from "@mobile/screens/app/home-screen";
 import type { Meta, StoryObj } from "@storybook/react-native";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -13,16 +16,18 @@ const meta = {
 			</View>
 		),
 	],
-} satisfies Meta<typeof HomeScreenView>;
+} satisfies Meta<HomeScreenViewProps>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<HomeScreenViewProps>;
+
+const loadingArgs = {
+	state: { status: "loading" },
+} satisfies HomeScreenViewProps;
 
 export const Loading: Story = {
-	args: {
-		state: { status: "loading" },
-	},
+	args: loadingArgs,
 };
 
 export const AuthenticatedAppSessionError: Story = {
@@ -32,6 +37,42 @@ export const AuthenticatedAppSessionError: Story = {
 			message: "Unable to prepare your Household. Please try again.",
 		},
 		onRetry: noop,
+	},
+};
+
+const differentUserBlockedArgs = {
+	state: { status: "loading" },
+	localData: {
+		status: "differentUserBlocked",
+		phase: "idle",
+	},
+	onSignInAsPreviousUser: noop,
+	onRemovePreviousUserDataAndContinue: noop,
+} satisfies HomeScreenViewProps;
+
+export const DifferentUserBlocked: Story = {
+	args: differentUserBlockedArgs,
+};
+
+export const PreviousUserDataRemovalInProgress: Story = {
+	args: {
+		...DifferentUserBlocked.args,
+		localData: {
+			status: "differentUserBlocked",
+			phase: "removing",
+		},
+	},
+};
+
+export const PreviousUserDataRemovalFailed: Story = {
+	args: {
+		...DifferentUserBlocked.args,
+		localData: {
+			status: "differentUserBlocked",
+			phase: "failed",
+			errorMessage:
+				"Unable to remove the previous User's data. Please try again.",
+		},
 	},
 };
 

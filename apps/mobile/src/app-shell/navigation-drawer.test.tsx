@@ -93,9 +93,12 @@ beforeEach(() => {
 	jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 		state: { status: "ready", refreshing: false },
 		session: sessionFixture(),
+		localData: { status: "ready" },
 		retry: jest.fn(),
 		reloadSession: jest.fn(),
 		signOut: jest.fn(),
+		signInAsPreviousUser: jest.fn(),
+		removePreviousUserDataAndContinue: jest.fn(),
 	});
 });
 
@@ -196,9 +199,12 @@ describe("NavigationDrawer", () => {
 		jest.mocked(useAuthenticatedAppSession).mockReturnValue({
 			state: { status: "loading" },
 			session: null,
+			localData: { status: "ready" },
 			retry: jest.fn(),
 			reloadSession: jest.fn(),
 			signOut: jest.fn(),
+			signInAsPreviousUser: jest.fn(),
+			removePreviousUserDataAndContinue: jest.fn(),
 		});
 
 		await render(<NavigationDrawer isOpen onClose={jest.fn()} />);
