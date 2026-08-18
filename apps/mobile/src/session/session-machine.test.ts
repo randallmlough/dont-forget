@@ -302,7 +302,7 @@ describe("reduceSessionMachine", () => {
 		expect(result.state.signInRequired).toBe(true);
 		expect(result.state.restoreSuppressedUntilSignedIn).toBe(true);
 		expect(result.state.suppressActivationUntilSignedOut).toBe(true);
-		expect(result.effects).toEqual([]);
+		expect(result.effects).toEqual([{ type: "resetAnalytics" }]);
 		expect(signedOut.state.suppressActivationUntilSignedOut).toBe(false);
 		expect(signedOut.effects).toEqual([]);
 	});
@@ -330,9 +330,15 @@ describe("reduceSessionMachine", () => {
 
 		expect(
 			signedOutBeforeCompletion.state.pendingBlockedIncomingUserSignOutAttempt,
-		).toBe(1);
-		expect(signedOutBeforeCompletion.state.blockedActivation).not.toBeNull();
-		expect(signedOutBeforeCompletion.effects).toEqual([]);
+		).toBeNull();
+		expect(signedOutBeforeCompletion.state.blockedActivation).toBeNull();
+		expect(signedOutBeforeCompletion.state.localData).toEqual({
+			status: "ready",
+		});
+		expect(signedOutBeforeCompletion.state.signInRequired).toBe(true);
+		expect(signedOutBeforeCompletion.effects).toEqual([
+			{ type: "resetAnalytics" },
+		]);
 
 		const failed = reduceSessionMachine(signedOutBeforeCompletion.state, {
 			type: "blockedIncomingUserSignOutFailed",
@@ -340,7 +346,7 @@ describe("reduceSessionMachine", () => {
 			signedIn: false,
 			message: "Unable to return to sign in. Please try again.",
 		});
-		expect(failed.state.attempt).toBe(2);
+		expect(failed.state).toBe(signedOutBeforeCompletion.state);
 		expect(failed.state.pendingBlockedIncomingUserSignOutAttempt).toBeNull();
 		expect(failed.state.blockedActivation).toBeNull();
 		expect(failed.state.localData).toEqual({ status: "ready" });
@@ -382,6 +388,42 @@ describe("reduceSessionMachine", () => {
 			errorMessage: "Unable to return to sign in. Please try again.",
 		});
 		expect(failed.effects).toEqual([]);
+	});
+
+	it("retires a rejected previous-User recovery when Clerk later reports signed out", () => {
+		const session = sessionFixture({ userId: "usr_blake" });
+		const activating = reduceSessionMachine(
+			initialSessionMachineState,
+			authStateChanged({ clerkUserId: "user_blake" }),
+		);
+		const blocked = reduceSessionMachine(activating.state, {
+			type: "activationBlocked",
+			attempt: 1,
+			clerkUserId: "user_blake",
+			session,
+		});
+		const requested = reduceSessionMachine(blocked.state, {
+			type: "blockedIncomingUserSignOutRequested",
+			attempt: 1,
+		});
+		const failedWhileSignedIn = reduceSessionMachine(requested.state, {
+			type: "blockedIncomingUserSignOutFailed",
+			attempt: 1,
+			signedIn: true,
+			message: "Unable to return to sign in. Please try again.",
+		});
+
+		const result = reduceSessionMachine(
+			failedWhileSignedIn.state,
+			authStateChanged({ signedIn: false, clerkUserId: null }),
+		);
+
+		expect(failedWhileSignedIn.effects).toEqual([]);
+		expect(result.state.localData).toEqual({ status: "ready" });
+		expect(result.state.blockedActivation).toBeNull();
+		expect(result.state.signInRequired).toBe(true);
+		expect(result.state.restoreSuppressedUntilSignedIn).toBe(true);
+		expect(result.effects).toEqual([{ type: "resetAnalytics" }]);
 	});
 
 	it("supersedes pre-armed previous-User recovery for an unrelated signed-in Clerk User", () => {

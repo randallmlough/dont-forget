@@ -227,6 +227,10 @@ export function AuthenticatedAppSessionProvider({
 						);
 					});
 				}
+				if (effect.type === "resetAnalytics") {
+					analyticsRef.current.reset();
+					return Promise.resolve();
+				}
 				if (effect.type === "trackSessionLoaded") {
 					analyticsRef.current.track("authenticated_app_session_loaded", {
 						...sessionAnalyticsProperties(effect.session),
@@ -613,7 +617,6 @@ export function AuthenticatedAppSessionProvider({
 		try {
 			await authRef.current.signOut();
 			if (!blockedIncomingUserSignOutIsPending(blocked)) return;
-			analyticsRef.current.reset();
 			void dispatch({
 				type: "blockedIncomingUserSignOutSucceeded",
 				attempt: blocked.attempt,
@@ -626,7 +629,6 @@ export function AuthenticatedAppSessionProvider({
 				"authenticated app session blocked incoming User sign-out failed",
 				{ error: asError(error) },
 			);
-			if (!currentSignedIn) analyticsRef.current.reset();
 			void dispatch({
 				type: "blockedIncomingUserSignOutFailed",
 				attempt: blocked.attempt,

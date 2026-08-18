@@ -106,6 +106,7 @@ export type SessionMachineEffect =
 	| { type: "clearSessionHint" }
 	| { type: "disconnect" }
 	| { type: "markSessionHint"; session: SessionBootstrap }
+	| { type: "resetAnalytics" }
 	| { type: "restoreSession"; attempt: number; session: SessionBootstrap }
 	| {
 			type: "trackSessionLoaded";
@@ -522,14 +523,12 @@ function completeBlockedIncomingUserSignOut(
 			view: LOADING_VIEW,
 			localData: { status: "ready" },
 			blockedActivation: null,
-			pendingBlockedIncomingUserSignOutAttempt: event.signedIn
-				? event.attempt
-				: null,
+			pendingBlockedIncomingUserSignOutAttempt: event.attempt,
 			signInRequired: true,
 			suppressActivationUntilSignedOut: event.signedIn,
 			restoreSuppressedUntilSignedIn: true,
 		},
-		effects: [],
+		effects: [{ type: "resetAnalytics" }],
 	};
 }
 
@@ -564,6 +563,23 @@ function reduceAuthStateChanged(
 		return { state: { ...state, lastObservedAuth: observed }, effects: [] };
 	}
 	const next: SessionMachineState = { ...state, lastObservedAuth: observed };
+	if (
+		next.localData.status === "differentUserBlocked" &&
+		next.blockedActivation !== null &&
+		(!event.authReady || !event.signedIn)
+	) {
+		const completed = completeBlockedIncomingUserSignOut(next, {
+			attempt: next.blockedActivation.attempt,
+			signedIn: false,
+		});
+		return {
+			state: {
+				...completed.state,
+				pendingBlockedIncomingUserSignOutAttempt: null,
+			},
+			effects: completed.effects,
+		};
+	}
 	const previousAuth = state.lastObservedAuth;
 	const directUserChange =
 		previousAuth?.authReady === true &&

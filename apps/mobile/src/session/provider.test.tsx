@@ -607,7 +607,8 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(clearSessionHint).not.toHaveBeenCalled();
 		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
 		expect(disconnect).not.toHaveBeenCalled();
-		expect(analytics.reset).not.toHaveBeenCalled();
+		expect(screen.getByText("ready:signInRequired")).toBeTruthy();
+		expect(analytics.reset).toHaveBeenCalledTimes(1);
 		expect(persistedSession).toEqual(previousPersistedSession);
 		expect(currentListSelection).toBe("lst_groceries");
 
@@ -622,6 +623,108 @@ describe("AuthenticatedAppSessionProvider", () => {
 		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
 		expect(disconnect).not.toHaveBeenCalled();
 		expect(analytics.track).not.toHaveBeenCalledWith("user_signed_out", {});
+		expect(persistedSession).toEqual(previousPersistedSession);
+		expect(currentListSelection).toBe("lst_groceries");
+	});
+
+	it("retires rejected previous-User recovery when Clerk later reports signed out", async () => {
+		const clerkSignOut = deferred<void>();
+		const auth = authFixture({
+			clerkUserId: "user_blake",
+			signOut: jest.fn(() => clerkSignOut.promise),
+		});
+		const analytics = createMockAnalytics();
+		const previousPersistedSession = persistedSessionFixture(
+			appSessionFixture(),
+		);
+		let persistedSession: ReturnType<typeof persistedSessionFixture> | null =
+			previousPersistedSession;
+		let currentListSelection: string | null = "lst_groceries";
+		const clearSessionHint = jest.fn(async () => {
+			persistedSession = null;
+		});
+		const clearCurrentListSelectionsForUser = jest.fn(async () => {
+			currentListSelection = null;
+		});
+		const disconnect = jest.fn(async () => undefined);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest.fn(async () => ({
+				status: "differentUserBlocked" as const,
+			})),
+		});
+		const bootstrapService = bootstrapServiceFixture(
+			appSessionFixture({ displayName: "Blake", userId: "usr_blake" }),
+		);
+		const readPersistedSession = jest.fn(async () => persistedSession);
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={auth}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+				readPersistedAuthenticatedAppSession={readPersistedSession}
+			>
+				<LocalDataActionsView />
+				<SessionPathState />
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked:false:none")).toBeTruthy(),
+		);
+
+		await fireEvent.press(
+			screen.getByRole("button", { name: "Previous User" }),
+		);
+		await waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+		await act(async () => {
+			clerkSignOut.reject(new Error("Clerk completion failed"));
+			await clerkSignOut.promise.catch(() => undefined);
+		});
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"differentUserBlocked:false:Unable to return to sign in. Please try again.",
+				),
+			).toBeTruthy(),
+		);
+		expect(analytics.reset).not.toHaveBeenCalled();
+		expect(persistedSession).toEqual(previousPersistedSession);
+		expect(currentListSelection).toBe("lst_groceries");
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...auth, signedIn: false, clerkUserId: null }}
+				analytics={analytics}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabaseFixture()}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+				clearAuthenticatedAppSessionPresent={clearSessionHint}
+				clearCurrentListSelectionsForUser={clearCurrentListSelectionsForUser}
+				readPersistedAuthenticatedAppSession={readPersistedSession}
+			>
+				<LocalDataActionsView />
+				<SessionPathState />
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(screen.getByText("ready:signInRequired")).toBeTruthy(),
+		);
+		expect(screen.getByText("ready")).toBeTruthy();
+		expect(analytics.reset).toHaveBeenCalledTimes(1);
+		expect(analytics.track).not.toHaveBeenCalledWith("user_signed_out", {});
+		expect(clearSessionHint).not.toHaveBeenCalled();
+		expect(clearCurrentListSelectionsForUser).not.toHaveBeenCalled();
+		expect(disconnect).not.toHaveBeenCalled();
+		expect(
+			databaseOwnership.removePreviousUserDataAndPrepare,
+		).not.toHaveBeenCalled();
 		expect(persistedSession).toEqual(previousPersistedSession);
 		expect(currentListSelection).toBe("lst_groceries");
 	});
@@ -851,7 +954,7 @@ describe("AuthenticatedAppSessionProvider", () => {
 			await correctiveDisconnect.promise;
 		});
 
-		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(2));
+		expect(disconnect).toHaveBeenCalledTimes(1);
 		expect(
 			databaseOwnership.removePreviousUserDataAndPrepare,
 		).not.toHaveBeenCalled();
