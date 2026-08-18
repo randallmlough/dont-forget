@@ -546,22 +546,6 @@ function reduceAuthStateChanged(
 	if (sameObservedAuth(state.lastObservedAuth, observed)) {
 		return noChange(state);
 	}
-	const supersedesPendingBlockedSignOut =
-		state.pendingBlockedIncomingUserSignOutAttempt !== null &&
-		event.authReady &&
-		event.signedIn &&
-		event.clerkUserId !== null &&
-		event.clerkUserId !== state.blockedActivation?.clerkUserId;
-	if (
-		event.authReady &&
-		event.signedIn &&
-		!event.activationEnabled &&
-		!state.signingOut &&
-		!state.suppressActivationUntilSignedOut &&
-		!supersedesPendingBlockedSignOut
-	) {
-		return { state: { ...state, lastObservedAuth: observed }, effects: [] };
-	}
 	const next: SessionMachineState = { ...state, lastObservedAuth: observed };
 	if (
 		next.localData.status === "differentUserBlocked" &&
@@ -616,6 +600,15 @@ function reduceAuthStateChanged(
 			state: activation.state,
 			effects: [{ type: "disconnect" }, ...activation.effects],
 		};
+	}
+	if (
+		event.authReady &&
+		event.signedIn &&
+		!event.activationEnabled &&
+		!state.signingOut &&
+		!state.suppressActivationUntilSignedOut
+	) {
+		return { state: next, effects: [] };
 	}
 	if (
 		next.signingOut &&

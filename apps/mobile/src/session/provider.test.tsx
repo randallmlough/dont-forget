@@ -205,6 +205,111 @@ describe("AuthenticatedAppSessionProvider", () => {
 		);
 	});
 
+	it("retires a ready User before deferring a different User while activation is disabled", async () => {
+		const userASession = appSessionFixture();
+		const userBSession = appSessionFixture({
+			displayName: "Blake",
+			userId: "usr_blake",
+		});
+		const consumerRenders: (string | null)[] = [];
+		const homeProductHookRenders: string[] = [];
+		const bootstrapService = bootstrapServiceFixture(userASession);
+		bootstrapService.getSession
+			.mockResolvedValueOnce(userASession)
+			.mockResolvedValueOnce(userBSession);
+		const databaseOwnership = databaseOwnershipFixture({
+			prepareForUser: jest
+				.fn()
+				.mockResolvedValueOnce({ status: "ready" })
+				.mockResolvedValueOnce({ status: "differentUserBlocked" }),
+		});
+		const connectDatabase = connectDatabaseFixture();
+		const disconnect = jest.fn(async () => undefined);
+		const userAAuth = authFixture();
+		const view = await render(
+			<AuthenticatedAppSessionProvider
+				auth={userAAuth}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+		await waitFor(() => expect(screen.getByText("Avery Chen")).toBeTruthy());
+		consumerRenders.length = 0;
+		homeProductHookRenders.length = 0;
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...userAAuth, clerkUserId: "user_blake" }}
+				activationEnabled={false}
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(screen.getAllByText("loading").length).toBeGreaterThan(0);
+		expect(consumerRenders).not.toContain("usr_avery");
+		expect(homeProductHookRenders).not.toContain("usr_avery");
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(1);
+		expect(databaseOwnership.prepareForUser).toHaveBeenCalledTimes(1);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+
+		await view.rerender(
+			<AuthenticatedAppSessionProvider
+				auth={{ ...userAAuth, clerkUserId: "user_blake" }}
+				activationEnabled
+				bootstrapService={bootstrapService}
+				connectDatabase={connectDatabase}
+				databaseOwnership={databaseOwnership}
+				disconnect={disconnect}
+			>
+				<CurrentState />
+				<LocalDataStateView />
+				<SessionRenderRecorder
+					consumerRenders={consumerRenders}
+					homeProductHookRenders={homeProductHookRenders}
+				/>
+			</AuthenticatedAppSessionProvider>,
+		);
+
+		await waitFor(() =>
+			expect(screen.getByText("differentUserBlocked")).toBeTruthy(),
+		);
+		expect(disconnect).toHaveBeenCalledTimes(1);
+		expect(bootstrapService.getSession).toHaveBeenCalledTimes(2);
+		expect(databaseOwnership.prepareForUser).toHaveBeenNthCalledWith(
+			2,
+			"usr_blake",
+		);
+		expect(connectDatabase).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText("Avery Chen")).toBeNull();
+		expect(screen.queryByText("Blake")).toBeNull();
+		expect(consumerRenders).not.toContain("usr_avery");
+		expect(homeProductHookRenders).not.toContain("usr_avery");
+		expect(persistAuthenticatedAppSession).not.toHaveBeenCalledWith(
+			persistedSessionFixture(userBSession, "user_blake"),
+		);
+	});
+
 	it("prevents an outgoing User connector from obtaining the incoming User's tokens", async () => {
 		const userASession = appSessionFixture();
 		const userBSession = appSessionFixture({

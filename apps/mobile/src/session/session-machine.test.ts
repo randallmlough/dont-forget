@@ -51,6 +51,37 @@ describe("reduceSessionMachine", () => {
 		]);
 	});
 
+	it("retires a ready User when a different Clerk User is observed while activation is disabled", () => {
+		const ready = activatedWith(sessionFixture());
+		const disabled = reduceSessionMachine(
+			ready.state,
+			authStateChanged({ activationEnabled: false }),
+		);
+
+		const changedUser = reduceSessionMachine(
+			disabled.state,
+			authStateChanged({
+				clerkUserId: "user_blake",
+				activationEnabled: false,
+			}),
+		);
+
+		expect(changedUser.state.view).toBe(initialSessionMachineState.view);
+		expect(changedUser.state.attempt).toBe(2);
+		expect(changedUser.state.pendingActivationAttempt).toBeNull();
+		expect(changedUser.effects).toEqual([{ type: "disconnect" }]);
+
+		const enabled = reduceSessionMachine(
+			changedUser.state,
+			authStateChanged({ clerkUserId: "user_blake" }),
+		);
+
+		expect(enabled.state.attempt).toBe(3);
+		expect(enabled.effects).toEqual([
+			{ type: "activate", attempt: 3, allowCached: true },
+		]);
+	});
+
 	it("defers activation when activation is disabled and no reload has been requested", () => {
 		const result = reduceSessionMachine(
 			initialSessionMachineState,
