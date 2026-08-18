@@ -29,6 +29,7 @@ export function AuthGate({
 	);
 	const cachedSessionRedirectStatus = cachedSessionRedirectStatusFor({
 		cachedSessionStatus,
+		localDataStatus: sessionMeta.localDataStatus,
 		restoreStatus: sessionMeta.restore.status,
 	});
 
@@ -109,11 +110,16 @@ function cachedSessionStatusReducer(
 
 function cachedSessionRedirectStatusFor({
 	cachedSessionStatus,
+	localDataStatus,
 	restoreStatus,
 }: {
 	cachedSessionStatus: CachedSessionStatus;
+	localDataStatus: "ready" | "differentUserBlocked";
 	restoreStatus: "idle" | "restoring" | "failed" | "signInRequired";
 }): CachedSessionRedirectStatus {
+	if (localDataStatus === "differentUserBlocked") {
+		return "differentUserBlocked";
+	}
 	if (restoreStatus === "signInRequired") return "signInRequired";
 	if (restoreStatus === "failed") return "restoreFailed";
 	if (restoreStatus === "restoring") return "available";

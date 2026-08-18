@@ -18,6 +18,7 @@ jest.mock("@mobile/session/session-hint", () => ({
 jest.mock("@mobile/session", () => ({
 	useAuthenticatedAppSessionMeta: jest.fn(() => ({
 		restore: { status: "idle" },
+		localDataStatus: "ready",
 	})),
 }));
 
@@ -47,10 +48,28 @@ beforeEach(() => {
 	jest.mocked(hasAuthenticatedAppSessionHint).mockResolvedValue(false);
 	jest.mocked(useAuthenticatedAppSessionMeta).mockReturnValue({
 		restore: { status: "idle" },
+		localDataStatus: "ready",
 	});
 });
 
 describe("AuthGate", () => {
+	it("routes a blocked signed-in User to Home before public-route intent", async () => {
+		jest.mocked(useAuthenticatedAppSessionMeta).mockReturnValue({
+			restore: { status: "idle" },
+			localDataStatus: "differentUserBlocked",
+		});
+		setMockAuthState({ isLoaded: true, isSignedIn: true });
+
+		await render(
+			<AuthGate
+				pathname="/invitations/accept"
+				params={{ token: "token-123" }}
+			/>,
+		);
+
+		await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+	});
+
 	it("keeps Home mounted while auth is unknown and a persisted signed-in hint exists", async () => {
 		jest.mocked(hasAuthenticatedAppSessionHint).mockResolvedValue(true);
 		setMockAuthState({ isLoaded: false, isSignedIn: false });
@@ -79,6 +98,7 @@ describe("AuthGate", () => {
 		jest.mocked(hasAuthenticatedAppSessionHint).mockResolvedValue(true);
 		jest.mocked(useAuthenticatedAppSessionMeta).mockReturnValue({
 			restore: { status: "failed" },
+			localDataStatus: "ready",
 		});
 		setMockAuthState({ isLoaded: true, isSignedIn: false });
 
@@ -94,6 +114,7 @@ describe("AuthGate", () => {
 		jest.mocked(hasAuthenticatedAppSessionHint).mockResolvedValue(true);
 		jest.mocked(useAuthenticatedAppSessionMeta).mockReturnValue({
 			restore: { status: "signInRequired" },
+			localDataStatus: "ready",
 		});
 		setMockAuthState({ isLoaded: true, isSignedIn: false });
 

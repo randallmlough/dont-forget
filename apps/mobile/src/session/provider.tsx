@@ -28,6 +28,10 @@ import {
 	useState,
 } from "react";
 import {
+	type DatabaseOwnership,
+	databaseOwnership as defaultDatabaseOwnership,
+} from "./database-ownership";
+import {
 	clearAuthenticatedAppSessionPresent,
 	persistAuthenticatedAppSession,
 	readPersistedAuthenticatedAppSession,
@@ -35,6 +39,7 @@ import {
 import {
 	type AuthenticatedAppSessionState,
 	initialSessionMachineState,
+	type LocalDataState,
 	reduceSessionMachine,
 	type SessionMachineEffect,
 	type SessionMachineEvent,
@@ -43,21 +48,28 @@ import {
 
 export type AuthenticatedAppSession = SessionBootstrap;
 
-export type { AuthenticatedAppSessionState } from "./session-machine";
+export type {
+	AuthenticatedAppSessionState,
+	LocalDataState,
+} from "./session-machine";
 
 export type AuthenticatedAppSessionContextValue = {
 	state: AuthenticatedAppSessionState;
 	session: AuthenticatedAppSession | null;
+	localData: LocalDataState;
 	meta?: AuthenticatedAppSessionMeta;
 	retry: () => void;
 	reloadSession: (options?: AuthenticatedAppSessionReloadOptions) => void;
 	signOut: () => Promise<void>;
+	signInAsPreviousUser: () => Promise<void>;
+	removePreviousUserDataAndContinue: () => Promise<void>;
 };
 
 export type AuthenticatedAppSessionMeta = {
 	restore: {
 		status: "idle" | "restoring" | "failed" | "signInRequired";
 	};
+	localDataStatus: LocalDataState["status"];
 };
 
 export type AuthenticatedAppSessionReloadOptions =
@@ -88,8 +100,8 @@ type AuthenticatedAppSessionProviderProps = PropsWithChildren<{
 	activationEnabled?: boolean;
 	bootstrapService?: SessionBootstrapService;
 	connectDatabase?: AuthenticatedAppSessionConnectDatabase;
+	databaseOwnership?: DatabaseOwnership;
 	disconnect?: () => Promise<void>;
-	disconnectAndClear?: () => Promise<void>;
 }>;
 
 type DispatchOptions = {
@@ -100,6 +112,11 @@ const defaultAnalytics: AuthenticatedAppSessionSignOutAnalytics = {
 	track,
 	reset,
 };
+
+const REMOVE_PREVIOUS_USER_DATA_ERROR =
+	"Unable to remove the previous User's data. Please try again.";
+const RETURN_TO_PREVIOUS_USER_ERROR =
+	"Unable to return to sign in. Please try again.";
 
 let databaseOperationChain: Promise<void> = Promise.resolve();
 
@@ -120,8 +137,8 @@ export function AuthenticatedAppSessionProvider({
 	activationEnabled = true,
 	bootstrapService: bootstrapServiceProp,
 	connectDatabase = defaultConnectDatabase,
+	databaseOwnership = defaultDatabaseOwnership,
 	disconnect = defaultDisconnect,
-	disconnectAndClear = defaultDisconnectAndClear,
 }: AuthenticatedAppSessionProviderProps) {
 	const clerkAuth = useAuth();
 	const logger = useLogger();
@@ -206,16 +223,6 @@ export function AuthenticatedAppSessionProvider({
 						);
 					});
 				}
-				if (effect.type === "disconnectAndClear") {
-					return enqueueDatabaseOperation(disconnectAndClear).catch((error) => {
-						logger.error(
-							"authenticated app session stale connect cleanup failed",
-							{
-								error: asError(error),
-							},
-						);
-					});
-				}
 				if (effect.type === "trackSessionLoaded") {
 					analyticsRef.current.track("authenticated_app_session_loaded", {
 						...sessionAnalyticsProperties(effect.session),
@@ -241,27 +248,9 @@ export function AuthenticatedAppSessionProvider({
 				return machineRef.current.attempt !== attempt;
 			}
 
-			function restoredUserIdForActivation(attempt: number): string | null {
-				const machine = machineRef.current;
-				if (machine.pendingActivationAttempt !== attempt) return null;
-				return machine.pendingActivationRestoredUserId;
-			}
-
-			async function prepareRestoredUserReplacement(
-				attempt: number,
-				session: SessionBootstrap,
-			) {
-				const restoredUserId = restoredUserIdForActivation(attempt);
-				if (!restoredUserId || restoredUserId === session.user.id) return;
-				if (activationSuperseded(attempt)) return;
-				await clearAuthenticatedAppSessionPresentProp();
-				if (activationSuperseded(attempt)) return;
-				await enqueueDatabaseOperation(disconnectAndClear);
-			}
-
 			// Waits on the chain but deliberately does not extend it: a hung
 			// connect (PowerSync retries on bad networks) must never block a
-			// later cleanup wipe. Safe because a later disconnect aborts an
+			// later cleanup disconnect. Safe because a later disconnect aborts an
 			// in-flight connect for good (@powersync/common ConnectionManager);
 			// re-verify that guarantee when upgrading the SDK.
 			function connectDatabaseForAttempt(attempt: number): Promise<boolean> {
@@ -270,6 +259,24 @@ export function AuthenticatedAppSessionProvider({
 					await connectDatabase({ getToken, getPowerSyncToken });
 					return true;
 				});
+			}
+
+			async function prepareAndConnectForAttempt(
+				attempt: number,
+				session: SessionBootstrap,
+			): Promise<"blocked" | "connected" | "stale"> {
+				const preparation = await enqueueDatabaseOperation(async () => {
+					if (activationSuperseded(attempt)) return null;
+					const result = await databaseOwnership.prepareForUser(
+						session.user.id,
+					);
+					return activationSuperseded(attempt) ? null : result;
+				});
+				if (preparation === null) return "stale";
+				if (preparation.status === "differentUserBlocked") return "blocked";
+				return (await connectDatabaseForAttempt(attempt))
+					? "connected"
+					: "stale";
 			}
 
 			async function executeActivation(attempt: number, allowCached: boolean) {
@@ -325,9 +332,20 @@ export function AuthenticatedAppSessionProvider({
 					// and the reducer alone decides what a stale one means (including
 					// undoing a stale connect).
 					if (activationSuperseded(attempt)) return;
-					await prepareRestoredUserReplacement(attempt, session);
-					const connected = await connectDatabaseForAttempt(attempt);
-					if (!connected) return;
+					const outcome = await prepareAndConnectForAttempt(attempt, session);
+					if (outcome === "stale") return;
+					if (outcome === "blocked") {
+						applyResult(
+							reduceSessionMachine(machineRef.current, {
+								type: "activationBlocked",
+								attempt,
+								clerkUserId: authRef.current.clerkUserId,
+								session,
+								source: "online",
+							}),
+						);
+						return;
+					}
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
 							type: "activationSucceeded",
@@ -355,8 +373,26 @@ export function AuthenticatedAppSessionProvider({
 			) {
 				try {
 					if (activationSuperseded(attempt)) return;
-					const connected = await connectDatabaseForAttempt(attempt);
-					if (!connected) return;
+					const outcome = await prepareAndConnectForAttempt(attempt, session);
+					if (outcome === "stale") return;
+					if (outcome === "blocked") {
+						const currentAuth = authRef.current;
+						applyResult(
+							currentAuth.signedIn && currentAuth.clerkUserId
+								? reduceSessionMachine(machineRef.current, {
+										type: "activationBlocked",
+										attempt,
+										clerkUserId: currentAuth.clerkUserId,
+										session,
+										source: "restored",
+									})
+								: reduceSessionMachine(machineRef.current, {
+										type: "sessionRestoreFailed",
+										attempt,
+									}),
+						);
+						return;
+					}
 					applyResult(
 						reduceSessionMachine(machineRef.current, {
 							type: "sessionRestoreSucceeded",
@@ -385,8 +421,8 @@ export function AuthenticatedAppSessionProvider({
 			bootstrapService,
 			clearAuthenticatedAppSessionPresentProp,
 			connectDatabase,
+			databaseOwnership,
 			disconnect,
-			disconnectAndClear,
 			getPowerSyncToken,
 			getToken,
 			logger,
@@ -396,10 +432,15 @@ export function AuthenticatedAppSessionProvider({
 	);
 
 	useEffect(() => {
+		authRef.current = auth;
+	}, [auth]);
+
+	useEffect(() => {
 		void dispatch({
 			type: "authStateChanged",
 			authReady,
 			signedIn,
+			clerkUserId,
 			activationEnabled,
 		});
 		if (!authReady || signedIn) return;
@@ -442,10 +483,6 @@ export function AuthenticatedAppSessionProvider({
 	]);
 
 	useEffect(() => {
-		authRef.current = auth;
-	}, [auth]);
-
-	useEffect(() => {
 		analyticsRef.current = analytics;
 	}, [analytics]);
 
@@ -477,7 +514,7 @@ export function AuthenticatedAppSessionProvider({
 				clearAuthenticatedAppSessionPresentProp,
 			clearCurrentListSelectionsForUser,
 			logger,
-			disconnectAndClear,
+			disconnect,
 			getSessionUserId: () => machineRef.current.lastKnownUserId,
 		});
 		try {
@@ -499,12 +536,96 @@ export function AuthenticatedAppSessionProvider({
 		}
 	}
 
+	async function signInAsPreviousUser() {
+		const blocked = machineRef.current.blockedActivation;
+		if (!blocked || !blockedActivationIsCurrent(blocked)) return;
+		try {
+			await authRef.current.signOut();
+			void dispatch({
+				type: "blockedIncomingUserSignOutSucceeded",
+				attempt: blocked.attempt,
+				signedIn: authRef.current.signedIn,
+			});
+		} catch (error) {
+			logger.error(
+				"authenticated app session blocked incoming User sign-out failed",
+				{ error: asError(error) },
+			);
+			void dispatch({
+				type: "localDataRemovalFailed",
+				attempt: blocked.attempt,
+				message: RETURN_TO_PREVIOUS_USER_ERROR,
+			});
+		}
+	}
+
+	async function removePreviousUserDataAndContinue() {
+		const blocked = machineRef.current.blockedActivation;
+		if (
+			!blocked ||
+			!blockedActivationIsCurrent(blocked) ||
+			machineRef.current.localData.status !== "differentUserBlocked" ||
+			machineRef.current.localData.isRemoving
+		) {
+			return;
+		}
+		void dispatch({
+			type: "localDataRemovalRequested",
+			attempt: blocked.attempt,
+		});
+		try {
+			const removed = await enqueueDatabaseOperation(async () => {
+				if (!blockedActivationIsCurrent(blocked)) return false;
+				await databaseOwnership.removePreviousUserDataAndPrepare(
+					blocked.session.user.id,
+				);
+				return true;
+			});
+			if (!removed || !blockedActivationIsCurrent(blocked)) return;
+			void dispatch({
+				type: "localDataRemovalSucceeded",
+				attempt: blocked.attempt,
+			});
+		} catch (error) {
+			logger.error(
+				"authenticated app session previous User data removal failed",
+				{ error: asError(error) },
+			);
+			void dispatch({
+				type: "localDataRemovalFailed",
+				attempt: blocked.attempt,
+				message: REMOVE_PREVIOUS_USER_DATA_ERROR,
+			});
+		}
+	}
+
+	function blockedActivationIsCurrent(
+		blocked: NonNullable<
+			(typeof initialSessionMachineState)["blockedActivation"]
+		>,
+	): boolean {
+		const current = machineRef.current.blockedActivation;
+		return (
+			blocked.clerkUserId !== null &&
+			machineRef.current.attempt === blocked.attempt &&
+			current?.attempt === blocked.attempt &&
+			current.clerkUserId === blocked.clerkUserId &&
+			current.session.user.id === blocked.session.user.id &&
+			authRef.current.signedIn &&
+			authRef.current.clerkUserId === blocked.clerkUserId &&
+			authRef.current.clerkUserId !== null
+		);
+	}
+
 	const value: AuthenticatedAppSessionContextValue = {
 		...publishedSession.view,
+		localData: publishedSession.localData,
 		meta: publishedSession.meta,
 		retry,
 		reloadSession,
 		signOut: runSignOut,
+		signInAsPreviousUser,
+		removePreviousUserDataAndContinue,
 	};
 
 	return (
@@ -530,10 +651,12 @@ export function useAuthenticatedAppSessionMeta(): AuthenticatedAppSessionMeta {
 
 function sessionProviderSnapshot(state: typeof initialSessionMachineState): {
 	view: SessionView;
+	localData: LocalDataState;
 	meta: AuthenticatedAppSessionMeta;
 } {
 	return {
 		view: state.view,
+		localData: state.localData,
 		meta: sessionMetaForState(state),
 	};
 }
@@ -544,6 +667,7 @@ function samePublishedSession(
 ): boolean {
 	return (
 		current.view === state.view &&
+		current.localData === state.localData &&
 		current.meta.restore.status === sessionMetaForState(state).restore.status
 	);
 }
@@ -553,20 +677,21 @@ const INITIAL_SESSION_META = sessionMetaForState(initialSessionMachineState);
 function sessionMetaForState(
 	state: typeof initialSessionMachineState,
 ): AuthenticatedAppSessionMeta {
-	if (state.signInRequired) return { restore: { status: "signInRequired" } };
-	if (state.restoreFailed) return { restore: { status: "failed" } };
-	if (state.pendingRestoreAttempt === state.attempt) {
-		return { restore: { status: "restoring" } };
+	const localDataStatus = state.localData.status;
+	if (state.signInRequired) {
+		return { restore: { status: "signInRequired" }, localDataStatus };
 	}
-	return { restore: { status: "idle" } };
+	if (state.restoreFailed) {
+		return { restore: { status: "failed" }, localDataStatus };
+	}
+	if (state.pendingRestoreAttempt === state.attempt) {
+		return { restore: { status: "restoring" }, localDataStatus };
+	}
+	return { restore: { status: "idle" }, localDataStatus };
 }
 
 function defaultDisconnect() {
 	return db.disconnect();
-}
-
-function defaultDisconnectAndClear() {
-	return db.disconnectAndClear();
 }
 
 function enqueueDatabaseOperation<T>(operation: () => Promise<T>): Promise<T> {

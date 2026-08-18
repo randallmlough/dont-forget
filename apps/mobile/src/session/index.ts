@@ -4,6 +4,7 @@ export {
 	AuthenticatedAppSessionProvider,
 	type AuthenticatedAppSessionReloadOptions,
 	type AuthenticatedAppSessionState,
+	type LocalDataState,
 	useAuthenticatedAppSession,
 	useAuthenticatedAppSessionMeta,
 } from "./provider";

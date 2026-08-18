@@ -9,8 +9,16 @@ Home currently renders the selected Current List, but Home is a consumer. It doe
 Screens consume the public hook:
 
 ```ts
-const { state, session, retry, reloadSession, signOut } =
-  useAuthenticatedAppSession();
+const {
+  state,
+  session,
+  localData,
+  retry,
+  reloadSession,
+  signOut,
+  signInAsPreviousUser,
+  removePreviousUserDataAndContinue,
+} = useAuthenticatedAppSession();
 ```
 
 Public state is lifecycle/UI metadata only:
@@ -21,6 +29,22 @@ type AuthenticatedAppSessionState =
   | { status: "ready"; refreshing: boolean }
   | { status: "error"; message: string };
 ```
+
+`localData` is either ready or a different-User block:
+
+```ts
+type LocalDataState =
+  | { status: "ready" }
+  | {
+      status: "differentUserBlocked";
+      isRemoving: boolean;
+      errorMessage: string | null;
+    };
+```
+
+The recovery actions sign out only the authenticated incoming Clerk User, or
+run confirmed local-data removal and retry activation. Database owner and
+incoming internal User IDs remain private to the provider.
 
 `session` is top-level and nullable. It is the parsed `/api/bootstrap` payload: `user`, `activeHousehold`, `activeMember`, `members`, and `households`. `session.households` lists every active Household associated with the signed-in User. Each entry includes `id`, `name`, the User's Member `role`, and `isActive`.
 
@@ -47,15 +71,27 @@ There is no public `view` property and no nested `state.session`.
 
 Effects are limited to:
 
-- `activate`: fetch bootstrap, connect PowerSync with `db.connect(new PowerSyncConnector(...))`, then publish the session.
+- `activate`: fetch bootstrap, prepare durable internal-User database ownership, connect PowerSync with `db.connect(new PowerSyncConnector(...))`, then publish the session.
 - `markSessionHint`: record that a signed-in app session exists.
-- `disconnectAndClear`: clear stale local PowerSync state when an activation loses a race to sign-out or auth changes.
+- `disconnect`: stop sync without clearing local rows or queued writes when auth is lost, a User changes, or an activation loses a race.
 
 The machine uses an attempt counter as its cancellation token. A stale activation result cannot publish an older session over a newer request. Reloads that still have a previous session render as `state: { status: "ready", refreshing: true }` plus the existing top-level `session`; reloads without one render loading with `session: null`.
 
 ## Boundary
 
-The provider owns Authenticated App Session loading and composes the signed-in lifecycle in one place: bootstrap, PowerSync connection, session hinting, and sign-out. Activation publishes directory identity without loading the Current List, Lists, or Items. Consumers never manage the PowerSync connection or delete local data directly.
+The provider owns Authenticated App Session loading and composes the signed-in lifecycle in one place: bootstrap, durable database ownership preparation, PowerSync connection, session hinting, and sign-out. Activation publishes directory identity without loading the Current List, Lists, or Items. Consumers never manage the PowerSync connection or delete local data directly.
+
+`database-ownership.ts` owns the durable marker and rollout inference. On an
+install without a marker, it can infer exactly one local internal User, use the
+validated persisted session only when the local Users table is empty, or claim
+a genuinely empty database for the incoming User. Multiple or contradictory
+Users fail closed. After the marker exists, it is the only ownership source.
+
+Every bootstrap, persisted restore, and signed-in fallback prepares ownership
+before connect. Matching ownership can connect. A mismatch while an incoming
+Clerk User is authenticated publishes the blocked Home state. A signed-out
+mismatch refuses restore through the existing failure/sign-in path and never
+offers destructive recovery.
 
 The Home screen calls `useListCollection(session)` once. The collection owns List summaries, Current List resolution and selection, and List CRUD policy; the screen passes its single state to the screen-owned `HomeListPager`. Each feature-owned `ListPage` watches its explicit List's Items through `useListPage`, so one List's failed Items query cannot gate the pager. Item actions and watched-query results remain behind `ListPage`, which owns `useItemEditor` and passes the resulting editor and Items to `ListItems`. `ListItems` composes the Item-owned `ItemRow`, `ItemInlineForm`, and details and List-selector sheets.
 
@@ -67,9 +103,15 @@ There is one local PowerSync database holding every Household the User is an act
 
 Revocation is server-authoritative. When a fresh session or live sync-rule re-evaluation shows the User is no longer an active Member of a Household, PowerSync stops streaming and purges that Household's rows from local SQLite. There is no cached-Household invalidation path to run and no local per-Household database file to delete.
 
+User identity transitions are different from Household switching. Same-User
+reauthentication retains the database and reconnects. A direct signed-in
+User-A-to-User-B transition retires A, disconnects without clearing, bootstraps
+B, and blocks B before connect when durable ownership still belongs to A. The
+blocked Home state mounts before all product-query hooks.
+
 ## Sync
 
-PowerSync streams continuously; there is no sync coordinator to start, stop, or replace. The provider connects the PowerSync database with the session connector on activation and disconnects it on sign-out.
+PowerSync streams continuously; there is no sync coordinator to start, stop, or replace. The provider connects the PowerSync database with the session connector only after ownership preparation and disconnects it on auth transitions without clearing retained data.
 
 - `PowerSyncProvider` in `apps/mobile/src/session/powersync/provider.tsx` exposes the raw PowerSync `db` singleton through `PowerSyncContext.Provider`.
 - Local List and Item writes land in the local database immediately; PowerSync's connector uploads them to `/api/data` in the background and streams remote changes back.
@@ -82,11 +124,16 @@ Screens and route-owned hooks can read sync status, but they cannot manage the c
 
 The Authenticated App Session sign-out module owns sign-out order. The provider adapts Clerk auth and exposes the session-owned action:
 
-1. Track `user_signed_out`.
-2. Reset analytics identity.
-3. Best-effort PowerSync `disconnectAndClear()`; failures are logged and do not abort.
-4. Best-effort session hint clear; failures are logged and do not abort.
-5. Best-effort Current List selection clear for the signed-out User; failures are logged and do not abort.
-6. Clerk `signOut()`; this is the critical step and its failure propagates.
+1. Capture the outgoing internal User ID.
+2. Clear the persisted Authenticated App Session; this is critical.
+3. Call Clerk `signOut()`; this is critical.
+4. Best-effort PowerSync `disconnect()`.
+5. Best-effort Current List selection clear for the outgoing User.
+6. Track `user_signed_out`, then reset analytics identity.
 
-If Clerk sign-out fails after local cleanup, the provider dispatches `signOutFailed`. While auth still reports signed-in, the machine restarts activation so the app can recover a valid signed-in session.
+Critical failure emits no successful Sign Out analytics. If Clerk sign-out
+fails, the provider dispatches `signOutFailed`; while auth still reports signed
+in, the machine restarts activation so the app can recover a valid session.
+Normal Sign Out never calls `disconnectAndClear()` and preserves product rows,
+queued writes, and the database-owner marker. Only the confirmed
+different-User recovery action may clear them.

@@ -69,20 +69,30 @@ See [Authenticated App Session](./authenticated-app-session.md) for the provider
 
 ## Auth Gate
 
-`AuthGate` uses the current pathname to detect signed-out auth routes. Signed-out Users are redirected to `/sign-in`; signed-in Users are redirected away from auth routes to `/`.
+`AuthGate` uses the current pathname, Clerk state, persisted-session status, and
+Authenticated App Session metadata. A different-User local-data block has first
+precedence and forces `/`, where Home renders recovery before mounting any
+product queries. Next, a session that requires sign-in keeps auth routes
+reachable. Existing ready/loading, onboarding, public-link intent, and
+signed-out redirect behavior follows after those states.
 
 The session-owned sign-out action runs in this order:
 
 ```ts
+await clearAuthenticatedAppSessionPresent();
+await signOut();
+await bestEffort(db.disconnect());
+await bestEffort(clearUserCurrentListSelections(userId));
 track("user_signed_out", {});
 reset();
-await db.disconnectAndClear();
-await clearAuthenticatedAppSessionPresent();
-await clearUserCurrentListSelections(userId);
-await signOut();
 ```
 
-PowerSync cleanup, session hint clearing, and signed-out User Current List selection clearing are best-effort; failures are logged and do not block Clerk sign-out. Clerk sign-out is the critical step. If it fails, the provider dispatches the failed sign-out event and restarts activation while auth still reports signed-in.
+Persisted-session clearing and Clerk Sign Out are critical. PowerSync disconnect
+and the outgoing User's Current List selection cleanup are best effort. Sign Out
+retains local product rows, queued writes, and durable database ownership. If a
+critical step fails, successful Sign Out analytics are not emitted; the
+provider dispatches the failed event and can restart activation while auth
+still reports signed in.
 
 ## Adding Routes
 

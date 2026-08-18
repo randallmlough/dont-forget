@@ -5,6 +5,18 @@ import {
 } from "@mobile/features/auth/redirect-policy";
 
 describe("authRedirectTarget", () => {
+	it("forces the blocked local-data recovery state to Home before public-route intent", () => {
+		expect(
+			authRedirectTarget({
+				pathname: "/invitations/accept",
+				params: { token: "tok_123" },
+				isSignedIn: true,
+				isAuthLoaded: true,
+				cachedSessionStatus: "differentUserBlocked",
+			}),
+		).toBe("/");
+	});
+
 	it("keeps public Invitation routes reachable for signed-out Users", () => {
 		expect(
 			authRedirectTarget({
