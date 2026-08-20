@@ -1,6 +1,7 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-.env
-.env.*
+.[eE][nN][vV]
+.[eE][nN][vV].*
+.[eE][nN][vV][rR][cC]*
 !.env.example
 # dependencies
 node_modules/
@@ -43,6 +44,8 @@ app-example
 .turbo/
 .codex/environments/
 .claude/worktrees/
+/.pi/
+/artifacts/
 .vscode
 .idea/
 /.pnpm-store/
@@ -53,6 +56,9 @@ storybook-static
 
 docs/.local
 plans/
+
+# QA evidence is local-only, including sanitized summaries.
+/qa-evidence/
 
 # Production Postgres bind mounts (server-only data, root-owned)
 infra/data/

@@ -3,6 +3,7 @@
 # ==================================================================================== #
 
 PNPM ?= pnpm
+GITLEAKS ?= gitleaks
 APP_ENV_VALUE = $(if $(APP_ENV),$(APP_ENV),local)
 # Expo CLI's built-in dotenv support always loads .env.local, which would shadow
 # .env.$(APP_ENV); loadEnvFile() in app.config.ts is the single env loader.
@@ -123,6 +124,18 @@ format: ## Apply Biome formatting and safe fixes
 .PHONY: audit
 audit: ## Audit dependencies for high-severity vulnerabilities
 	@$(PNPM) audit --audit-level high
+
+.PHONY: secrets-scan
+secrets-scan: ## Scan Git history for secrets with Gitleaks v8
+	@command -v "$(GITLEAKS)" > /dev/null || (echo "Gitleaks v8 is required: https://github.com/gitleaks/gitleaks#installing" >&2; exit 127)
+	@"$(GITLEAKS)" git --redact .
+
+.PHONY: public-release-structure-check
+public-release-structure-check: ## Reject tracked files that are unsafe for a public snapshot
+	@./tooling/scripts/check_public_release.sh
+
+.PHONY: public-release-check
+public-release-check: public-release-structure-check secrets-scan ## Run structural and secret checks before a public snapshot
 
 .PHONY: expo-check
 expo-check: ## Check Expo SDK package compatibility
