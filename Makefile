@@ -130,13 +130,6 @@ secrets-scan: ## Scan Git history for secrets with Gitleaks v8
 	@command -v "$(GITLEAKS)" > /dev/null || (echo "Gitleaks v8 is required: https://github.com/gitleaks/gitleaks#installing" >&2; exit 127)
 	@"$(GITLEAKS)" git --redact .
 
-.PHONY: public-release-structure-check
-public-release-structure-check: ## Reject tracked files that are unsafe for a public snapshot
-	@./tooling/scripts/check_public_release.sh
-
-.PHONY: public-release-check
-public-release-check: public-release-structure-check secrets-scan ## Run structural and secret checks before a public snapshot
-
 .PHONY: expo-check
 expo-check: ## Check Expo SDK package compatibility
 	@$(PNPM) --filter @dont-forget/mobile expo:check
